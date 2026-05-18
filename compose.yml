@@ -1,6 +1,14 @@
 services:
   login:
-    build: ./login-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: login-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./docker/config/myls.properties:/app/login-server/config/myls.properties:ro
     ports:
       - "2106:2106"
       - "9014:9014"
@@ -8,20 +16,38 @@ services:
       - aion-net
 
   game:
-    build: ./game-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: game-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      login:
+        condition: service_started
+    volumes:
+      - ./docker/config/mygs.properties:/app/game-server/config/mygs.properties:ro
     ports:
       - "7777:7777"
-    depends_on:
-      - login
     networks:
       - aion-net
 
   chat:
-    build: ./chat-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: chat-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      login:
+        condition: service_started
+    volumes:
+      - ./docker/config/mycs.properties:/app/chat-server/config/mycs.properties:ro
     ports:
       - "10241:10241"
-    depends_on:
-      - login
     networks:
       - aion-net
 
