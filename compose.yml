@@ -1,0 +1,30 @@
+services:
+  login:
+    build: ./login-server
+    ports:
+      - "2106:2106"
+      - "9014:9014"
+    networks:
+      - aion-net
+
+  game:
+    build: ./game-server
+    ports:
+      - "7777:7777"
+    depends_on:
+      - login
+    networks:
+      - aion-net
+
+  chat:
+    build: ./chat-server
+    ports:
+      - "10241:10241"
+    depends_on:
+      - login
+    networks:
+      - aion-net
+
+networks:
+  aion-net:
+    driver: bridge
