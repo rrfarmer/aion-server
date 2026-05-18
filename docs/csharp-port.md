@@ -7,7 +7,8 @@
 | Phase 0: Starter Workspace | ✅ COMPLETE | May 18, 2026 | Solution structure, projects, and entry points scaffolded. See [PHASE-0-COMPLETION.md](PHASE-0-COMPLETION.md) |
 | Phase 1: Parity Harness | ✅ COMPLETE | May 18, 2026 | Packet tests (16✓), config tests (12✓), database fixtures, XML tool. See [PHASE-1-COMPLETION.md](PHASE-1-COMPLETION.md) |
 | Phase 2: Port Commons | 🔄 IN PROGRESS | — | Logging, crypto, threading, scheduler primitives |
-| Phase 3: Port Login Server | ⏳ PENDING | — | Authentication, server registration, session management |
+  | Phase 2: Port Commons | ✅ COMPLETE | May 18, 2026 | Logging, crypto (XOR cipher), socket server base, scheduler. 56 tests passing. See [PHASE-2-COMPLETION.md](PHASE-2-COMPLETION.md) |
+  | Phase 3: Port Login Server | 🔄 IN PROGRESS | — | Authentication, server registration, session management |
 | Phase 4: Port Chat Server | ⏳ PENDING | — | Chat protocol, channels, player messaging |
 | Phase 5: Port Game Infrastructure | ⏳ PENDING | — | World, scheduler, object factory, data loading |
 | Phase 6: Port Game Core | ⏳ PENDING | — | Characters, movement, combat, loot, quests |
