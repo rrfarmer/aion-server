@@ -154,11 +154,24 @@
   - scheduled new-task verification matching Java's 10-second initial delay and 7-minute interval
   - transfer request/error/ok/task-stop state transitions
 - Added player-transfer packet tests for all newly modeled response shapes.
+- Added external authentication success/failure handling:
+  - posts Java-compatible JSON payload with `User-Agent: AionLS`
+  - maps external `aionAuthResponseId` to `AionAuthResponse`
+  - uses returned `accountId` as the DB account key
+  - auto-creates external-auth accounts with an empty password hash
+- Added brute-force escalation parity:
+  - `loginserver.network.client.logintrybeforeban`
+  - `loginserver.network.client.bantimeforbruteforcing`
+  - Java-compatible counter timing, where the ban happens on the next failed attempt after the configured threshold is reached
+  - localhost exemption
+  - blocked-IP response plus connection close after an escalation ban
+- Added auth tests for external auth success/failure/unavailable and brute-force ban timing.
+- Fixed the opt-in MySQL integration test schema path lookup so it works from the .NET test output directory.
+- Validated `AccountRepository` against the Java `aion_ls.sql` schema in a Dockerized MySQL 8.4 container.
 
 ## Remaining Gaps
 
-- `CM_LOGIN` now reaches a DB-backed auth service, but not every Java auth branch is ported yet.
-- Full Java `AccountController` parity is not complete yet: external auth success path and brute-force ban escalation remain.
+- `CM_LOGIN` now reaches a DB-backed auth service and the known Java auth branches are ported, but live client validation is still pending.
 - Account/game-server bridge parity is still partial: core auth, reconnect, disconnect, account-list, character-count, premium/toll, MAC/HDD bans, allowed-HDD, account/IP ban control, player transfer, and LS control paths are present, but real mixed Java GS/client interoperability is still unvalidated.
 - C# login server is not ready for Java game-server or real client interoperability yet.
 
@@ -167,7 +180,7 @@
 - The Java `CryptEngine.verifyChecksum` source in this repository reads the final checksum block but does not compare or XOR it before returning. The C# port compares the calculated checksum against the appended checksum so packets produced by the same algorithm verify correctly. This must be validated against a real Java login/client exchange before Phase 3 can be called complete.
 - Java compilation tools are not installed in this workspace, so Java-generated crypto golden vectors could not be produced locally yet.
 - `LoginClientConnection` now uses encrypted frames, but live client interoperability has not been validated yet.
-- Docker CLI is installed, but Docker Desktop's Linux engine was not running during this slice, so the MySQL container integration test could not be executed here. The normal test suite keeps the integration test dormant unless `AION_LOGIN_DB_INTEGRATION=1`.
+- Dockerized MySQL integration now runs locally through `dotnetConversion/scripts/start-login-db.ps1`; the normal test suite keeps it dormant unless `AION_LOGIN_DB_INTEGRATION=1`.
 
 ## Remaining Phase 3 Parity Checklist
 
@@ -216,7 +229,7 @@
 
 - Port `AccountController.login` branch-for-branch:
   - banned IP check (ported)
-  - optional external auth
+  - optional external auth (ported)
   - account auto-create (ported)
   - password mismatch responses (ported)
   - activation check (ported)
@@ -224,6 +237,7 @@
   - forced IP mask check (ported)
   - double-login behavior against LS and GS (ported for request-kick behavior)
   - `updateOnLogin`, last IP update, membership expiry update (ported)
+  - brute-force ban escalation (ported)
 - Port reconnect behavior:
   - `ReconnectingAccount` (ported)
   - `CM_UPDATE_SESSION` (ported)
@@ -288,7 +302,9 @@
 ## Verification
 
 - `dotnet test AionServer.slnx`
-- Result: all tests passing, 100 total.
+- Result: all tests passing, 104 total.
+- `AION_LOGIN_DB_INTEGRATION=1 dotnet test tests\Aion.LoginServer.Tests\Aion.LoginServer.Tests.csproj --filter LoginDatabaseIntegrationTests`
+- Result: passed against MySQL 8.4 on localhost:3307.
 
 ## Optional MySQL Integration Test
 
