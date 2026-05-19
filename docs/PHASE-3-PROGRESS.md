@@ -113,12 +113,35 @@
 - Added `CM_GS_CHARACTER` and `SM_GS_CHARACTER_RESPONSE`.
 - Updated `CM_SERVER_LIST` to request per-game-server character counts and send `SM_SERVER_LIST` only once every registered server has a count.
 - Added packet and registry tests for account-list parsing, request-kick packets, reconnect state, and character-count fanout.
+- Added Java-style game-server ping/pong lifecycle:
+  - `SM_PING` every 5 seconds after GS auth
+  - `CM_GS_PONG` resets the unanswered counter
+  - connection closes after more than two unanswered pings
+- Added account metadata/control bridge handling:
+  - `CM_ACCOUNT_CONNECTION_INFO`
+  - `CM_ACCOUNT_TOLL_INFO`
+  - `CM_PREMIUM_CONTROL`
+  - `CM_CHANGE_ALLOWED_HDD_SERIAL`
+- Added premium response packet `SM_PREMIUM_RESPONSE`.
+- Added DB-backed repositories and services for:
+  - `AccountsLogDAO`
+  - `BannedMacDAO`
+  - `BannedHddDAO`
+- Added MAC/HDD ban bridge handling:
+  - `CM_MACBAN_CONTROL`
+  - `CM_HDDBAN_CONTROL`
+  - `SM_MACBAN_LIST`
+  - `SM_HDDBAN_LIST`
+- Added startup loading for MAC/HDD ban maps.
+- Updated `CM_ACCOUNT_LIST` to send MAC/HDD ban lists after account sync, matching Java's follow-up packet sequence.
+- Aligned `PremiumDAO.getPoints` reward consumption with Java's single-row `rs.next()` behavior.
+- Added packet tests for ping, account connection info, premium control/response, and ban-list payloads.
 
 ## Remaining Gaps
 
 - `CM_LOGIN` now reaches a DB-backed auth service, but not every Java auth branch is ported yet.
 - Full Java `AccountController` parity is not complete yet: external auth success path, brute-force ban escalation, admin kick/ban side effects, and every game-server control packet still need porting.
-- Account/game-server bridge parity is still partial: core auth, reconnect, disconnect, account-list, and character-count paths are present, but MAC/HDD ban lists, premium/toll controls, player transfer, LS control, and allowed-HDD updates remain.
+- Account/game-server bridge parity is still partial: core auth, reconnect, disconnect, account-list, character-count, premium/toll, MAC/HDD bans, and allowed-HDD paths are present, but account ban control, account connection-info responses, player transfer, and LS control remain.
 - C# login server is not ready for Java game-server or real client interoperability yet.
 
 ## Parity Watch Notes
@@ -197,25 +220,25 @@
 - Enforce registered server ID, password, and IP mask in `CM_GS_AUTH`. (ported)
 - Track online/offline game-server state and clear accounts on disconnect. (ported)
 - Port ping/pong lifecycle:
-  - send `SM_PING` every 5 seconds
-  - close after more than 2 unanswered pings
+  - send `SM_PING` every 5 seconds (ported)
+  - close after more than 2 unanswered pings (ported)
 - Port account bridge packets:
   - account auth response (ported)
   - account reconnect key (ported)
   - account disconnected (ported)
-  - account list sync (core sync ported; MAC/HDD follow-up packets still pending)
-  - account connection info
+  - account list sync (ported)
+  - account connection info (ported for DB update/log path)
   - GS character count response (ported)
 - Port admin/control bridge packets:
   - LS control
   - ban control
-  - mac ban control/list
-  - HDD ban control/list
-  - allowed HDD serial change
-  - premium control
-  - account toll info
+  - mac ban control/list (ported)
+  - HDD ban control/list (ported)
+  - allowed HDD serial change (ported)
+  - premium control (ported)
+  - account toll info (ported)
   - player transfer control
-  - request kick account
+  - request kick account (ported)
 
 ### 6. Server List And Play Flow
 
@@ -247,7 +270,7 @@
 ## Verification
 
 - `dotnet test AionServer.slnx`
-- Result: all tests passing, 90 total.
+- Result: all tests passing, 96 total.
 
 ## Optional MySQL Integration Test
 
