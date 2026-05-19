@@ -180,6 +180,13 @@
   - localhost exemption
   - blocked-IP response plus connection close after an escalation ban
 - Added auth tests for external auth success/failure/unavailable and brute-force ban timing.
+- Added auth parity coverage for the remaining Java `AccountController.login` account-state branches:
+  - missing account with auto-create disabled and empty account name return `STR_L2AUTH_S_ACCOUNT_LOAD_FAIL`
+  - inactive accounts return `STR_L2AUTH_S_AGREE_GAME`
+  - expired accounts return `STR_L2AUTH_S_TIME_EXHAUSTED`
+  - active/permanent account penalties return the `SM_ACCOUNT_BANNED_2` signal path
+  - forced-IP mismatches return `STR_L2AUTH_S_BLOCKED_IP`
+  - previous-day successful login resets accumulated online/rest counters before persistence
 - Ported Java `BannedIpController` semantics into `BannedIpService`:
   - startup clean/load into an in-memory mask-keyed ban list
   - login blocked-IP checks read the cached list instead of re-querying the DB
@@ -200,6 +207,7 @@
   - premium points and first unclaimed reward consumption
   - account login history
   - player transfer task load/update
+- Re-ran the opt-in MySQL integration suite against the Dockerized MySQL 8.4 login schema after the broader auth/bridge parity additions; all 4 integration tests pass.
 - Added login-server options coverage for the known Java config keys, including `loginserver.network.nio.threads`.
 - Added Java `DatabaseConfig`/`DatabaseFactory.init()` startup parity:
   - `database.url`, `database.user`, `database.password`, `database.connectionpool.connections.max`, and `database.connectionpool.timeout` load from the same cascading `.properties` set as Java
@@ -250,7 +258,7 @@
 ## Remaining Gaps
 
 - `CM_LOGIN` now reaches a DB-backed auth service and the known Java auth branches are ported; local encrypted socket smoke reaches `SM_LOGIN_OK` with fake auth and opt-in MySQL-backed auth, but live client validation is still pending.
-- Account/game-server bridge parity is still pending live validation: core auth, reconnect, disconnect, account-list, character-count, premium/toll, MAC/HDD bans, allowed-HDD, account/IP ban control, player transfer, LS control, and fake-GS loopback server-list/play routing are present with targeted pre-client behavior coverage, but real mixed Java GS/client interoperability is still unvalidated.
+- Account/game-server bridge parity is still pending live validation: core auth, reconnect, disconnect, account-list, character-count, premium/toll, MAC/HDD bans, allowed-HDD, account/IP ban control, player transfer, LS control, ping/pong, and fake-GS loopback server-list/play routing are present with targeted pre-client behavior coverage, but real mixed Java GS/client interoperability is still unvalidated.
 - C# login server is not ready for Java game-server or real client interoperability yet.
 
 ## Parity Watch Notes
@@ -349,7 +357,7 @@
   - allowed HDD serial change (ported)
   - premium control (ported)
   - account toll info (ported)
-  - player transfer control (ported; covered with service-level DB/GS collaborator tests; live GS validation pending)
+  - player transfer control (ported; covered with parser tests, hosted bridge dispatch, and service-level DB/GS collaborator tests; live GS validation pending)
   - request kick account (ported)
 
 ### 6. Server List And Play Flow
@@ -370,7 +378,7 @@
 
 ### 7. Startup, Shutdown, And Validation
 
-- Match Java startup ordering: config, DB factory, game-server table, key generation, player-transfer scheduler, listener startup. (partially ported; Java database config initializes `DatabaseFactory` before repository-backed hosted-service startup; registered game servers and banned IP load before listeners; MAC/HDD expired-ban cleanup before listeners with lazy map load on first use; player-transfer scheduler starts before listeners)
+- Match Java startup ordering: config, DB factory, game-server table, key generation, player-transfer scheduler, listener startup. (locally ported for Phase 3 responsibilities; Java database config initializes `DatabaseFactory` before repository-backed hosted-service startup; registered game servers and banned IP load before listeners; MAC/HDD expired-ban cleanup before listeners with lazy map load on first use; player-transfer scheduler starts before listeners; live mixed-mode startup validation pending)
 - Load Java `.properties` from `config/main`, `config/network`, and `config/myls.properties` using identical keys. (ported and covered for current login and database options)
 - Add graceful shutdown behavior equivalent to Java pending-close semantics where packet sends must complete before closing. (ported at connection send/close, player-transfer-before-network shutdown order, and listener shutdown level; local loopback smoke covered, live shutdown smoke still pending)
 - Validate with:
@@ -382,7 +390,7 @@
 ## Verification
 
 - `dotnet test AionServer.slnx`
-- Result: all tests passing, 171 total.
+- Result: all tests passing, 178 total.
 - `AION_LOGIN_DB_INTEGRATION=1 dotnet test tests\Aion.LoginServer.Tests\Aion.LoginServer.Tests.csproj --filter LoginDatabaseIntegrationTests`
 - Result: 4 tests passed against MySQL 8.4 on localhost:3307.
 
