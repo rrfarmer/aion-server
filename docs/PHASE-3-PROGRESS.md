@@ -46,7 +46,7 @@
   - checksum append/verify for later packets
 - Added crypto tests for Blowfish reversibility, first-packet padding/key update, later packet decrypt, tamper rejection, and Java-generated encrypted golden vectors.
 - Added a Java-generated encrypted `SM_INIT` frame vector covering the first real client-visible login packet.
-- Added Java-generated packet payload vectors from the original Java packet classes for `SM_AUTH_GG`, `SM_LOGIN_OK`, `SM_PLAY_OK`, `SM_SERVER_LIST`, `SM_GS_CHARACTER_RESPONSE`, and `SM_REQUEST_KICK_ACCOUNT`.
+- Added Java-generated packet payload vectors from the original Java packet classes for currently modeled login-client and game-server bridge server packets, including auth/login/play/session responses, account ban/kick packets, game-server auth/account/reconnect responses, ban/control/premium/transfer responses, ban-list packets, ping, character-count requests, and kick requests.
 - Corrected C# `SM_GS_CHARACTER_RESPONSE` to opcode `0x08` after the Java-generated vector exposed the previous `0x04` mismatch.
 - Added login RSA keypair generation with Java-compatible 1024-bit/F4 keys.
 - Added RSA modulus scrambling matching Java `EncryptedRSAKeyPair.encryptModulus`.
@@ -171,6 +171,11 @@
   - localhost exemption
   - blocked-IP response plus connection close after an escalation ban
 - Added auth tests for external auth success/failure/unavailable and brute-force ban timing.
+- Ported Java `BannedIpController` semantics into `BannedIpService`:
+  - startup clean/load into an in-memory mask-keyed ban list
+  - login blocked-IP checks read the cached list instead of re-querying the DB
+  - brute-force bans and game-server `CM_BAN` update the cached list and DB together
+  - duplicate exact masks follow Java `HashSet<BannedIP>` behavior
 - Fixed the opt-in MySQL integration test schema path lookup so it works from the .NET test output directory.
 - Validated `AccountRepository` against the Java `aion_ls.sql` schema in a Dockerized MySQL 8.4 container.
 - Generated login crypto vectors from the repository's Java `BlowfishCipher` and `CryptEngine` sources in a Docker JDK container, then pinned C# tests to those bytes.
@@ -187,7 +192,7 @@
   - close waits for any in-flight send before tearing down the socket
   - packets requested after the connection is closed are ignored instead of racing a disposed stream
 - Added listener shutdown tracking so login-client and game-server bridge sockets actively close child connections before waiting for the active connection count to drain.
-- Added hosted-service startup coverage proving game-server DB registration and MAC/HDD ban-map loads complete before the login-client and game-server bridge listeners open their sockets.
+- Added hosted-service startup coverage proving game-server DB registration and banned IP/MAC/HDD ban-map loads complete before the login-client and game-server bridge listeners open their sockets.
 - Added player-transfer service integration coverage with fake DB/GS collaborators:
   - new waiting tasks become active and send perform-action packets to the source game server
   - source-account-online tasks are skipped without DB update or GS packet
@@ -229,7 +234,7 @@
 - Port Java `EncryptedRSAKeyPair.encryptModulus` scrambling exactly. (ported and covered with Java-generated vector)
 - Wire encrypted frame read/write in `LoginClientConnection`. (ported; needs real client validation)
 - Add golden tests for encrypted `SM_INIT`, checksum verification, key update timing, and decrypt failure behavior. (covered with Java vectors for static Blowfish, encrypted `SM_INIT`, first server-packet encryption/key update, later checksum-packet encryption, and C# tamper rejection; live client smoke still pending)
-- Add Java-generated packet vectors for common login and game-server bridge packets. (covered for `SM_AUTH_GG`, `SM_LOGIN_OK`, `SM_PLAY_OK`, `SM_SERVER_LIST`, `SM_GS_CHARACTER_RESPONSE`, and `SM_REQUEST_KICK_ACCOUNT`)
+- Add Java-generated packet vectors for common login and game-server bridge packets. (covered for the currently modeled login-client and game-server bridge server packet set; remaining work is live packet exchange validation)
 
 ### 2. Login Credential Authentication
 
@@ -259,7 +264,7 @@
 ### 4. AccountController Flow
 
 - Port `AccountController.login` branch-for-branch:
-  - banned IP check (ported)
+  - banned IP check through startup-loaded `BannedIpController` cache semantics (ported)
   - optional external auth (ported)
   - account auto-create (ported)
   - password mismatch responses (ported)
@@ -321,7 +326,7 @@
 
 ### 7. Startup, Shutdown, And Validation
 
-- Match Java startup ordering: config, DB factory, game-server table, key generation, listener startup. (partially ported; registered game servers and ban maps load before listeners)
+- Match Java startup ordering: config, DB factory, game-server table, key generation, listener startup. (partially ported; registered game servers and banned IP/MAC/HDD maps load before listeners)
 - Load Java `.properties` from `config/main`, `config/network`, and `config/myls.properties` using identical keys. (ported and covered for current login options)
 - Add graceful shutdown behavior equivalent to Java pending-close semantics where packet sends must complete before closing. (ported at connection send/close and listener shutdown level; local loopback smoke covered, live shutdown smoke still pending)
 - Validate with:
@@ -333,7 +338,7 @@
 ## Verification
 
 - `dotnet test AionServer.slnx`
-- Result: all tests passing, 123 total.
+- Result: all tests passing, 129 total.
 - `AION_LOGIN_DB_INTEGRATION=1 dotnet test tests\Aion.LoginServer.Tests\Aion.LoginServer.Tests.csproj --filter LoginDatabaseIntegrationTests`
 - Result: 3 tests passed against MySQL 8.4 on localhost:3307.
 
