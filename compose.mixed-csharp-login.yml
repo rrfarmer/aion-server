@@ -1,0 +1,37 @@
+services:
+  chat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: chat-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./docker/config/mycs.csharp-login.properties:/app/chat-server/config/mycs.properties:ro
+    ports:
+      - "10241:10241"
+    networks:
+      - aion-mixed-net
+
+  game:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: game-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      chat:
+        condition: service_started
+    volumes:
+      - ./docker/config/mygs.csharp-login.properties:/app/game-server/config/mygs.properties:ro
+    ports:
+      - "7777:7777"
+    networks:
+      - aion-mixed-net
+
+networks:
+  aion-mixed-net:
+    driver: bridge

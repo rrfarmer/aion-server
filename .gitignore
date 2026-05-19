@@ -16,6 +16,8 @@ login-server/target/
 **/.classpath
 **/.project
 /dotnetConversion/AionServer/.vs
+/dotnetConversion/.vs
+/dotnetConversion/DebugData
 /dotnetConversion/AionServer/obj
 /dotnetConversion/src/Aion.ChatServer/bin
 /dotnetConversion/src/Aion.ChatServer/obj

@@ -50,6 +50,7 @@
 - Added crypto tests for Blowfish reversibility, first-packet padding/key update, later packet decrypt, tamper rejection, and Java-generated encrypted golden vectors.
 - Added a Java-generated encrypted `SM_INIT` frame vector covering the first real client-visible login packet.
 - Added Java-generated packet payload vectors from the original Java packet classes for currently modeled login-client and game-server bridge server packets, including auth/login/play/session responses, account ban/kick packets, game-server auth/account/reconnect responses, ban/control/premium/transfer responses, ban-list packets, ping, character-count requests, and kick requests.
+- Aligned login-client checksum verification with the Java server's live client-packet behavior using the captured `CM_AUTH_GG` payload from `dotnetConversion/DebugData/AionLoginChecksum.csv`; Blowfish decrypt produced the correct opcode, and the mismatch was the verifier rule, not decryption.
 - Corrected C# `SM_GS_CHARACTER_RESPONSE` to opcode `0x08` after the Java-generated vector exposed the previous `0x04` mismatch.
 - Added login RSA keypair generation with Java-compatible 1024-bit/F4 keys.
 - Added RSA modulus scrambling matching Java `EncryptedRSAKeyPair.encryptModulus`.
@@ -194,6 +195,7 @@
   - duplicate exact masks follow Java `HashSet<BannedIP>` behavior
 - Fixed the opt-in MySQL integration test schema path lookup so it works from the .NET test output directory.
 - Validated `AccountRepository` against the Java `aion_ls.sql` schema in a Dockerized MySQL 8.4 container.
+- Added and smoke-validated a mixed-mode runbook plus Docker/script support for running the Java chat and game servers against the C# login server with Java SQL schemas initialized from the repo SQL files.
 - Generated login crypto vectors from the repository's Java `BlowfishCipher` and `CryptEngine` sources in a Docker JDK container, then pinned C# tests to those bytes.
 - Added Java-style server-list refresh fanout for logged-in, not-yet-joined clients after `CM_ACCOUNT_LIST` and game-server disconnect.
 - Added Java `BaseClientPacket` malformed-read parity for live login/client and game-server bridge packet buffers:
@@ -258,12 +260,12 @@
 ## Remaining Gaps
 
 - `CM_LOGIN` now reaches a DB-backed auth service and the known Java auth branches are ported; local encrypted socket smoke reaches `SM_LOGIN_OK` with fake auth and opt-in MySQL-backed auth, but live client validation is still pending.
-- Account/game-server bridge parity is still pending live validation: core auth, reconnect, disconnect, account-list, character-count, premium/toll, MAC/HDD bans, allowed-HDD, account/IP ban control, player transfer, LS control, ping/pong, and fake-GS loopback server-list/play routing are present with targeted pre-client behavior coverage, but real mixed Java GS/client interoperability is still unvalidated.
-- C# login server is not ready for Java game-server or real client interoperability yet.
+- Account/game-server bridge parity now has a mixed Java GS / C# LS startup smoke: the Java game server reaches `Connected to login server` against the seeded C# login DB. Remaining live validation needs the real client path through server-list, play selection, account auth, reconnect, disconnect, character-count, premium/toll, MAC/HDD bans, allowed-HDD, account/IP ban control, player transfer, LS control, and ping/pong while a real Java GS is attached.
+- C# login server is ready for pre-client Java game-server smoke; real client interoperability is still pending.
 
 ## Parity Watch Notes
 
-- The Java `CryptEngine.verifyChecksum` source in this repository reads the final checksum block but does not compare or XOR it before returning. The C# port compares the calculated checksum against the appended checksum so packets produced by the same algorithm verify correctly. This must be validated against a real Java login/client exchange before Phase 3 can be called complete.
+- Login-client checksum verification now matches the Java server's live client-packet path: after Blowfish decrypt, Java XORs all 4-byte words except the final ignored word and requires that XOR to be zero. Server-packet encryption still uses the Java append-checksum path.
 - Host `javac` is not installed, but Java crypto golden vectors were produced through `eclipse-temurin:8-jdk` in Docker using `dotnetConversion/tools/java-login-crypto-vectors`.
 - `LoginClientConnection` now uses encrypted frames, but live client interoperability has not been validated yet.
 - Dockerized MySQL integration now runs locally through `dotnetConversion/scripts/start-login-db.ps1`; the normal test suite keeps it dormant unless `AION_LOGIN_DB_INTEGRATION=1`.
@@ -276,7 +278,7 @@
   - static first Blowfish key: `6B 60 CB 5B 82 CE 90 B1 CC 2B 6C 55 6C 6C 6C 6C` (ported)
   - first server packet special path: add checksum space, align to 8 bytes, XOR pass, encrypt with static key, then update to generated Blowfish key (ported)
   - later packet path: checksum append, 8-byte alignment, encrypt with current key (ported)
-  - decrypt path: Blowfish decrypt plus checksum verification (ported, needs Java/client validation)
+  - decrypt path: Blowfish decrypt plus Java live client checksum verification (ported and covered with captured `CM_AUTH_GG` payload)
 - Port or prove byte parity for Java `BlowfishCipher` (direct port added; Java-generated vector covered).
 - Port Java `KeyGen` behavior:
   - 10 cached RSA keypairs (ported)
@@ -284,7 +286,7 @@
   - generated 16-byte Blowfish keys (ported)
 - Port Java `EncryptedRSAKeyPair.encryptModulus` scrambling exactly. (ported and covered with Java-generated vector)
 - Wire encrypted frame read/write in `LoginClientConnection`. (ported; needs real client validation)
-- Add golden tests for encrypted `SM_INIT`, checksum verification, key update timing, and decrypt failure behavior. (covered with Java vectors for static Blowfish, encrypted `SM_INIT`, first server-packet encryption/key update, later checksum-packet encryption, and C# tamper rejection; live client smoke still pending)
+- Add golden tests for encrypted `SM_INIT`, checksum verification, key update timing, and decrypt failure behavior. (covered with Java vectors for static Blowfish, encrypted `SM_INIT`, first server-packet encryption/key update, later checksum-packet encryption, captured live-client `CM_AUTH_GG` checksum shape, and C# tamper rejection; live client smoke still pending)
 - Add Java-generated packet vectors for common login and game-server bridge packets. (covered for the currently modeled login-client and game-server bridge server packet set; remaining work is live packet exchange validation)
 
 ### 2. Login Credential Authentication
@@ -378,19 +380,19 @@
 
 ### 7. Startup, Shutdown, And Validation
 
-- Match Java startup ordering: config, DB factory, game-server table, key generation, player-transfer scheduler, listener startup. (locally ported for Phase 3 responsibilities; Java database config initializes `DatabaseFactory` before repository-backed hosted-service startup; registered game servers and banned IP load before listeners; MAC/HDD expired-ban cleanup before listeners with lazy map load on first use; player-transfer scheduler starts before listeners; live mixed-mode startup validation pending)
+- Match Java startup ordering: config, DB factory, game-server table, key generation, player-transfer scheduler, listener startup. (locally ported for Phase 3 responsibilities; Java database config initializes `DatabaseFactory` before repository-backed hosted-service startup; registered game servers and banned IP load before listeners; MAC/HDD expired-ban cleanup before listeners with lazy map load on first use; player-transfer scheduler starts before listeners; mixed Java GS / C# LS startup smoke validated)
 - Load Java `.properties` from `config/main`, `config/network`, and `config/myls.properties` using identical keys. (ported and covered for current login and database options)
 - Add graceful shutdown behavior equivalent to Java pending-close semantics where packet sends must complete before closing. (ported at connection send/close, player-transfer-before-network shutdown order, and listener shutdown level; local loopback smoke covered, live shutdown smoke still pending)
 - Validate with:
   - packet golden tests for encrypted and unencrypted frames
   - DAO fixture tests against the current login schema
-  - C# login server plus Java game server mixed mode
+  - C# login server plus Java game server mixed mode (startup smoke validated; client-driven flows pending)
   - real client login, server list, and server select smoke test
 
 ## Verification
 
 - `dotnet test AionServer.slnx`
-- Result: all tests passing, 178 total.
+- Result: all tests passing, 179 total.
 - `AION_LOGIN_DB_INTEGRATION=1 dotnet test tests\Aion.LoginServer.Tests\Aion.LoginServer.Tests.csproj --filter LoginDatabaseIntegrationTests`
 - Result: 4 tests passed against MySQL 8.4 on localhost:3307.
 
