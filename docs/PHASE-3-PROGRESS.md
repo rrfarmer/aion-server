@@ -45,8 +45,10 @@
   - 8-byte padding behavior
   - checksum append/verify for later packets
 - Added crypto tests for Blowfish reversibility, first-packet padding/key update, later packet decrypt, tamper rejection, and Java-generated encrypted golden vectors.
+- Added a Java-generated encrypted `SM_INIT` frame vector covering the first real client-visible login packet.
 - Added login RSA keypair generation with Java-compatible 1024-bit/F4 keys.
 - Added RSA modulus scrambling matching Java `EncryptedRSAKeyPair.encryptModulus`.
+- Added a Java-generated RSA modulus scrambling vector for deterministic `EncryptedRSAKeyPair` parity.
 - Added raw RSA no-padding decrypt for `CM_LOGIN` credential blocks.
 - Added a cached 10-key `LoginKeyGenerator` equivalent to Java `KeyGen`.
 - Added normal-login credential decrypt tests for username, password, and OTP extraction.
@@ -182,10 +184,18 @@
   - close waits for any in-flight send before tearing down the socket
   - packets requested after the connection is closed are ignored instead of racing a disposed stream
 - Added listener shutdown tracking so login-client and game-server bridge sockets actively close child connections before waiting for the active connection count to drain.
+- Added player-transfer service integration coverage with fake DB/GS collaborators:
+  - new waiting tasks become active and send perform-action packets to the source game server
+  - source-account-online tasks are skipped without DB update or GS packet
+  - source transfer requests disable both accounts and send transfer info to the target game server
+  - target OK/error responses update task status, reactivate accounts, and notify the expected game server
+- Added loopback socket smoke coverage for the hosted login listeners:
+  - login-client listener sends an encrypted Java-sized `SM_INIT` frame, completes encrypted `CM_AUTH_GG` -> `SM_AUTH_GG`, completes encrypted RSA `CM_LOGIN` -> `SM_LOGIN_OK` with a fake auth service, and closes the active child socket during shutdown
+  - game-server bridge accepts a Java-framed `CM_GS_AUTH`, returns `SM_GS_AUTH_RESPONSE`, marks the registered server online, and marks it offline during shutdown
 
 ## Remaining Gaps
 
-- `CM_LOGIN` now reaches a DB-backed auth service and the known Java auth branches are ported, but live client validation is still pending.
+- `CM_LOGIN` now reaches a DB-backed auth service and the known Java auth branches are ported; local encrypted socket smoke reaches `SM_LOGIN_OK` with fake auth, but live client validation is still pending.
 - Account/game-server bridge parity is still partial: core auth, reconnect, disconnect, account-list, character-count, premium/toll, MAC/HDD bans, allowed-HDD, account/IP ban control, player transfer, and LS control paths are present, but real mixed Java GS/client interoperability is still unvalidated.
 - C# login server is not ready for Java game-server or real client interoperability yet.
 
@@ -210,13 +220,13 @@
   - 10 cached RSA keypairs (ported)
   - 1024-bit RSA with public exponent F4 (ported)
   - generated 16-byte Blowfish keys (ported)
-- Port Java `EncryptedRSAKeyPair.encryptModulus` scrambling exactly. (ported)
+- Port Java `EncryptedRSAKeyPair.encryptModulus` scrambling exactly. (ported and covered with Java-generated vector)
 - Wire encrypted frame read/write in `LoginClientConnection`. (ported; needs real client validation)
-- Add golden tests for encrypted `SM_INIT`, checksum verification, key update timing, and decrypt failure behavior. (partially covered: Java vectors now prove static Blowfish, first server-packet encryption/key update, later checksum-packet encryption, and C# tamper rejection; full real-client `SM_INIT` smoke still pending)
+- Add golden tests for encrypted `SM_INIT`, checksum verification, key update timing, and decrypt failure behavior. (covered with Java vectors for static Blowfish, encrypted `SM_INIT`, first server-packet encryption/key update, later checksum-packet encryption, and C# tamper rejection; live client smoke still pending)
 
 ### 2. Login Credential Authentication
 
-- Port `CM_LOGIN` RSA no-padding credential decrypt in 128-byte blocks. (ported)
+- Port `CM_LOGIN` RSA no-padding credential decrypt in 128-byte blocks. (ported; covered by decrypt tests and encrypted loopback login smoke)
 - Preserve normal login and `-loginex` layout:
   - normal content offset 94, username 14 bytes, password 16 bytes
   - `-loginex` content offset 78, username 64 bytes, password 32 bytes
@@ -283,7 +293,7 @@
   - allowed HDD serial change (ported)
   - premium control (ported)
   - account toll info (ported)
-  - player transfer control (ported; needs DB/GS integration validation)
+  - player transfer control (ported; covered with service-level DB/GS collaborator tests; live GS validation pending)
   - request kick account (ported)
 
 ### 6. Server List And Play Flow
@@ -306,7 +316,7 @@
 
 - Match Java startup ordering: config, DB factory, game-server table, key generation, listener startup. (partially ported; registered game servers and ban maps load before listeners)
 - Load Java `.properties` from `config/main`, `config/network`, and `config/myls.properties` using identical keys. (ported and covered for current login options)
-- Add graceful shutdown behavior equivalent to Java pending-close semantics where packet sends must complete before closing. (ported at connection send/close and listener shutdown level; live shutdown smoke still pending)
+- Add graceful shutdown behavior equivalent to Java pending-close semantics where packet sends must complete before closing. (ported at connection send/close and listener shutdown level; local loopback smoke covered, live shutdown smoke still pending)
 - Validate with:
   - packet golden tests for encrypted and unencrypted frames
   - DAO fixture tests against the current login schema
@@ -316,7 +326,7 @@
 ## Verification
 
 - `dotnet test AionServer.slnx`
-- Result: all tests passing, 110 total.
+- Result: all tests passing, 117 total.
 - `AION_LOGIN_DB_INTEGRATION=1 dotnet test tests\Aion.LoginServer.Tests\Aion.LoginServer.Tests.csproj --filter LoginDatabaseIntegrationTests`
 - Result: 2 tests passed against MySQL 8.4 on localhost:3307.
 
