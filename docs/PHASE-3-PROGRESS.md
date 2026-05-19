@@ -189,6 +189,11 @@
 - Validated `AccountRepository` against the Java `aion_ls.sql` schema in a Dockerized MySQL 8.4 container.
 - Generated login crypto vectors from the repository's Java `BlowfishCipher` and `CryptEngine` sources in a Docker JDK container, then pinned C# tests to those bytes.
 - Added Java-style server-list refresh fanout for logged-in, not-yet-joined clients after `CM_ACCOUNT_LIST` and game-server disconnect.
+- Added Java `BaseClientPacket` malformed-read parity for live login/client and game-server bridge packet buffers:
+  - network packet reads can return Java-style default zero/empty values on primitive underflow without closing the socket
+  - structurally impossible packet reads are skipped instead of running their handler
+  - short encrypted `CM_LOGIN` packets are ignored while keeping the client connection usable
+  - short `CM_GS_AUTH` packets follow Java default-read behavior and close with `SM_GS_AUTH_RESPONSE(NOT_AUTHED)`
 - Expanded the opt-in MySQL integration suite to round-trip the auxiliary login repositories against the Java schema:
   - game servers
   - banned IP/MAC/HDD entries
@@ -196,6 +201,10 @@
   - account login history
   - player transfer task load/update
 - Added login-server options coverage for the known Java config keys, including `loginserver.network.nio.threads`.
+- Added Java `DatabaseConfig`/`DatabaseFactory.init()` startup parity:
+  - `database.url`, `database.user`, `database.password`, `database.connectionpool.connections.max`, and `database.connectionpool.timeout` load from the same cascading `.properties` set as Java
+  - JDBC MySQL URLs are parsed into `MySqlConnector` connection settings
+  - login-server program startup now initializes `DatabaseFactory` before repository-backed hosted-service startup work
 - Added Java-style send/close protection on login-client and game-server connections:
   - packet serialization and writes are guarded by a per-connection send lock
   - close waits for any in-flight send before tearing down the socket
@@ -212,14 +221,36 @@
   - target OK/error responses update task status, reactivate accounts, and notify the expected game server
 - Added loopback socket smoke coverage for the hosted login listeners:
   - login-client listener sends an encrypted Java-sized `SM_INIT` frame, completes encrypted `CM_AUTH_GG` -> `SM_AUTH_GG`, completes encrypted RSA `CM_LOGIN` -> `SM_LOGIN_OK` with a fake auth service, and closes the active child socket during shutdown
+  - login-client listener returns encrypted `SM_LOGIN_FAIL(STR_L2AUTH_S_SYSTEM_ERROR)` and closes when `CM_AUTH_GG` carries the wrong session id
+  - login-client listener returns encrypted `SM_ACCOUNT_BANNED_2` and closes when account penalty auth returns Java's banned-account path
+  - login-client listener kicks an existing login-server session with `SM_ACCOUNT_KICK(STR_L2AUTH_S_KICKED_DOUBLE_LOGIN)` and returns `SM_LOGIN_FAIL(STR_L2AUTH_S_ALREADY_LOGIN)` to the duplicate login
+  - login-client listener returns encrypted `SM_LOGIN_FAIL(STR_L2AUTH_S_NO_SERVER_LIST)` and closes when a logged-in client requests a server list with no registered game servers
+  - login-client listener returns encrypted `SM_LOGIN_FAIL(STR_L2AUTH_S_SYSTEM_ERROR)` and closes when `CM_SERVER_LIST` carries the wrong session key
+  - login-client listener includes registered offline game servers in `SM_SERVER_LIST` with Java-style zero character counts
+  - login-client listener accepts encrypted `CM_UPDATE_SESSION`, consumes Java-style reconnect keys, returns `SM_UPDATE_SESSION`, registers the restored login session, and closes without a packet when the reconnect key is wrong
+  - login-client listener returns the Java `SM_PLAY_FAIL` branches for server-down, restricted-access, and full-server `CM_PLAY` requests, and closes with `SM_LOGIN_FAIL(STR_L2AUTH_S_SYSTEM_ERROR)` when the play session key is wrong
   - game-server bridge accepts a Java-framed `CM_GS_AUTH`, returns `SM_GS_AUTH_RESPONSE`, marks the registered server online, and marks it offline during shutdown
-  - combined fake-client/fake-GS loopback flow routes `CM_SERVER_LIST` character-count requests through the game-server bridge, returns `SM_SERVER_LIST`, and completes `CM_PLAY` -> `SM_PLAY_OK`
+  - game-server bridge rejects unregistered IDs, wrong passwords, wrong source IPs, and duplicate registrations with the Java `SM_GS_AUTH_RESPONSE` failure codes and closes only the rejected socket
+  - combined fake-client/fake-GS loopback flow routes `CM_SERVER_LIST` character-count requests through the game-server bridge, returns `SM_SERVER_LIST`, completes `CM_PLAY` -> `SM_PLAY_OK`, and completes GS `CM_ACCOUNT_AUTH` -> `SM_ACCOUNT_AUTH_RESPONSE` with last-server/toll/allowed-HDD side effects
+- Added game-server bridge behavior parity coverage through the real hosted bridge socket for:
+  - `CM_ACCOUNT_CONNECTION_INFO` updating last MAC/HDD serials and writing login history before a following response packet
+  - `CM_ACCOUNT_RECONNECT_KEY` removing the account from the game-server account map, registering a reconnect key, and returning `SM_ACCOUNT_RECONNECT_KEY`
+  - `CM_ACCOUNT_DISCONNECTED` removing the account from the game-server account map and applying logout/account-time update before the next response
+  - `CM_ACCOUNT_TOLL_INFO` updating account toll points with Java `PremiumDAO.updatePoints(accountId, toll, 0)` semantics
+  - `CM_CHANGE_ALLOWED_HDD_SERIAL` updating `account_data.allowed_hdd_serial`
+  - `CM_LS_CONTROL` updating access level and returning `SM_LS_CONTROL_RESPONSE`
+  - `CM_BAN` full account/IP bans, account-only permanent bans, and IP-only unbans using Java response/result semantics
+  - `CM_PREMIUM_CONTROL` purchase, low-points, and toll-add result codes through the registered game-server session
+  - `CM_ACCOUNT_LIST` loading new local accounts, requesting duplicate-account kicks, and sending MAC/HDD ban lists
+  - `SM_PING`/`CM_GS_PONG` live ping loop behavior, including pong reset and close after the Java missed-pong threshold
+  - `CM_MACBAN_CONTROL` and `CM_HDDBAN_CONTROL` applying Java manager-style ban/unban side effects before the next response packet
+  - `CM_PTRANSFER_CONTROL` dispatching request, error, OK, and task-stop actions to the player-transfer service from the hosted bridge read path
 - Added opt-in MySQL-backed encrypted login socket smoke that initializes the Java schema, authenticates through `LoginAuthService`/repositories, and verifies `last_ip` persistence.
 
 ## Remaining Gaps
 
 - `CM_LOGIN` now reaches a DB-backed auth service and the known Java auth branches are ported; local encrypted socket smoke reaches `SM_LOGIN_OK` with fake auth and opt-in MySQL-backed auth, but live client validation is still pending.
-- Account/game-server bridge parity is still partial: core auth, reconnect, disconnect, account-list, character-count, premium/toll, MAC/HDD bans, allowed-HDD, account/IP ban control, player transfer, and LS control paths are present, and fake-GS loopback server-list/play routing is covered, but real mixed Java GS/client interoperability is still unvalidated.
+- Account/game-server bridge parity is still pending live validation: core auth, reconnect, disconnect, account-list, character-count, premium/toll, MAC/HDD bans, allowed-HDD, account/IP ban control, player transfer, LS control, and fake-GS loopback server-list/play routing are present with targeted pre-client behavior coverage, but real mixed Java GS/client interoperability is still unvalidated.
 - C# login server is not ready for Java game-server or real client interoperability yet.
 
 ## Parity Watch Notes
@@ -339,8 +370,8 @@
 
 ### 7. Startup, Shutdown, And Validation
 
-- Match Java startup ordering: config, DB factory, game-server table, key generation, player-transfer scheduler, listener startup. (partially ported; registered game servers and banned IP load before listeners; MAC/HDD expired-ban cleanup before listeners with lazy map load on first use; player-transfer scheduler starts before listeners)
-- Load Java `.properties` from `config/main`, `config/network`, and `config/myls.properties` using identical keys. (ported and covered for current login options)
+- Match Java startup ordering: config, DB factory, game-server table, key generation, player-transfer scheduler, listener startup. (partially ported; Java database config initializes `DatabaseFactory` before repository-backed hosted-service startup; registered game servers and banned IP load before listeners; MAC/HDD expired-ban cleanup before listeners with lazy map load on first use; player-transfer scheduler starts before listeners)
+- Load Java `.properties` from `config/main`, `config/network`, and `config/myls.properties` using identical keys. (ported and covered for current login and database options)
 - Add graceful shutdown behavior equivalent to Java pending-close semantics where packet sends must complete before closing. (ported at connection send/close, player-transfer-before-network shutdown order, and listener shutdown level; local loopback smoke covered, live shutdown smoke still pending)
 - Validate with:
   - packet golden tests for encrypted and unencrypted frames
@@ -351,7 +382,7 @@
 ## Verification
 
 - `dotnet test AionServer.slnx`
-- Result: all tests passing, 139 total.
+- Result: all tests passing, 171 total.
 - `AION_LOGIN_DB_INTEGRATION=1 dotnet test tests\Aion.LoginServer.Tests\Aion.LoginServer.Tests.csproj --filter LoginDatabaseIntegrationTests`
 - Result: 4 tests passed against MySQL 8.4 on localhost:3307.
 
