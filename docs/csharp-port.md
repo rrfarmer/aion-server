@@ -4,16 +4,15 @@
 
 | Phase | Status | Completion Date | Notes |
 |-------|--------|-----------------|-------|
-| Phase 0: Starter Workspace | ✅ COMPLETE | May 18, 2026 | Solution structure, projects, and entry points scaffolded. See [PHASE-0-COMPLETION.md](PHASE-0-COMPLETION.md) |
-| Phase 1: Parity Harness | ✅ COMPLETE | May 18, 2026 | Packet tests (16✓), config tests (12✓), database fixtures, XML tool. See [PHASE-1-COMPLETION.md](PHASE-1-COMPLETION.md) |
-| Phase 2: Port Commons | 🔄 IN PROGRESS | — | Logging, crypto, threading, scheduler primitives |
-  | Phase 2: Port Commons | ✅ COMPLETE | May 18, 2026 | Logging, crypto (XOR cipher), socket server base, scheduler. 56 tests passing. See [PHASE-2-COMPLETION.md](PHASE-2-COMPLETION.md) |
-  | Phase 3: Port Login Server | 🔄 IN PROGRESS | — | Authentication, server registration, session management |
-| Phase 4: Port Chat Server | ⏳ PENDING | — | Chat protocol, channels, player messaging |
-| Phase 5: Port Game Infrastructure | ⏳ PENDING | — | World, scheduler, object factory, data loading |
-| Phase 6: Port Game Core | ⏳ PENDING | — | Characters, movement, combat, loot, quests |
-| Phase 7: Port Dynamic Handlers | ⏳ PENDING | — | Commands, zones, instances, AI, quests |
-| Phase 8: Replacement Readiness | ⏳ PENDING | — | Docker, soak tests, rollback plan |
+| Phase 0: Starter Workspace | COMPLETE | May 18, 2026 | Solution structure, projects, and entry points scaffolded. See [PHASE-0-COMPLETION.md](PHASE-0-COMPLETION.md) |
+| Phase 1: Parity Harness | COMPLETE | May 18, 2026 | Packet tests, config tests, database fixtures, XML tool. See [PHASE-1-COMPLETION.md](PHASE-1-COMPLETION.md) |
+| Phase 2: Port Commons | COMPLETE | May 18, 2026 | Logging, crypto, socket server base, scheduler. 56 tests passing. See [PHASE-2-COMPLETION.md](PHASE-2-COMPLETION.md) |
+| Phase 3: Port Login Server | COMPLETE | May 19, 2026 | Authentication, game-server registration, session management, Java GS mixed mode, and real-client login/create/logout validated. See [PHASE-3-PROGRESS.md](PHASE-3-PROGRESS.md) |
+| Phase 4: Port Chat Server | PENDING | - | Chat protocol, channels, player messaging |
+| Phase 5: Port Game Infrastructure | PENDING | - | World, scheduler, object factory, data loading |
+| Phase 6: Port Game Core | PENDING | - | Characters, movement, combat, loot, quests |
+| Phase 7: Port Dynamic Handlers | PENDING | - | Commands, zones, instances, AI, quests |
+| Phase 8: Replacement Readiness | PENDING | - | Docker, soak tests, rollback plan |
 
 ## Goal
 
@@ -59,13 +58,13 @@ The Java implementation is the oracle. When behavior is unclear, inspect and mat
 
 ## Target C# Workspace
 
-Use `csharp/` as the C# workspace. Keep Java and C# side by side until the C# server is production-ready.
+Use `dotnetConversion/` as the C# workspace. Keep Java and C# side by side until the C# server is production-ready.
 
-Suggested layout:
+Current layout:
 
 ```text
-csharp/
-  AionServer.sln
+dotnetConversion/
+  AionServer.slnx
   src/
     Aion.Commons/
     Aion.LoginServer/
@@ -95,11 +94,11 @@ Avoid ORM adoption during parity work. Keep SQL close to the Java DAO layer so b
 
 ### Phase 0: Starter Workspace
 
-Create the initial `.NET` solution under `csharp/`.
+Create the initial `.NET` solution under `dotnetConversion/`.
 
 Deliverables:
 
-- `AionServer.sln`
+- `AionServer.slnx`
 - Empty service entrypoints for login, chat, and game
 - Shared `Aion.Commons` project
 - Test projects
@@ -161,10 +160,12 @@ Port login-server first because it is relatively small and protocol-heavy.
 
 Current status:
 
+- Phase 3 is complete for known login-server parity work as of May 19, 2026.
 - Login client crypto, RSA key/modulus handling, encrypted frame read/write, and Java-generated crypto/RSA/`SM_INIT` plus currently modeled login-client and game-server bridge server-packet golden vectors are in place.
 - DB-backed account authentication, Java database config/`DatabaseFactory` startup initialization, Java-shaped account insert and auto-create defaults, startup-loaded banned-IP controller semantics, opt-in DB-backed encrypted login socket smoke, normal and `-loginex` RSA credential layouts, external auth, brute-force ban escalation, core account-state/account-time/penalty behavior, and mixed-mode Java chat+GS / C# LS validation setup are ported and smoke-validated.
 - Game-server registration, GS auth failure/duplicate close behavior, Java-style malformed packet read/default handling for live login/GS buffers, hosted-service startup ordering, player-transfer scheduler startup/shutdown ordering, encrypted fake-auth login socket smoke, Java-style live client checksum verification from captured `CM_AUTH_GG`, Java-style `CM_AUTH_GG`/`CM_LOGIN`/`CM_SERVER_LIST` session-id rejection, encrypted account-banned and duplicate-login client handling, encrypted `CM_UPDATE_SESSION` reconnect success/failure, no-server-list and offline-server-list behavior, fake-GS server-list/play/account-auth socket smoke, `CM_PLAY` failure branch coverage, login handoff, reconnect, account reconnect/disconnect lifecycle, toll/allowed-HDD/account-list sync, server-list refresh fanout, character-count fanout, ping/pong live loop, IP/MAC/HDD ban lists with Java-style startup cleanup plus lazy map load, account controls, player-transfer bridge slices, pre-client GS bridge behavior coverage for LS control/ban/premium/player-transfer/account-list/account-connection/MAC-HDD ban side effects, client and game-server packet parser parity audits, connection shutdown send/close protection, and loopback listener smoke coverage are ported.
-- Full .NET suite passes with 179 tests; the opt-in MySQL schema integration tests pass against a Dockerized MySQL 8.4 instance.
+- Full .NET suite passes with 180 tests; the opt-in MySQL schema integration tests pass against a Dockerized MySQL 8.4 instance.
+- Mixed-mode validation passed with Java chat and game servers in Docker, C# login server locally, and a real client completing login, character creation, and logout.
 
 Deliverables:
 
@@ -179,8 +180,8 @@ Deliverables:
 
 Validation:
 
-- C# login server can interoperate with the existing Java game server.
-- Real client can authenticate and receive server-list responses.
+- C# login server interoperates with the existing Java game server.
+- Real client authenticates, receives server-list/play responses, creates a character through the Java game server, and logs out cleanly.
 - Existing login database schema works without migration.
 - Packet golden tests pass for login protocol packets.
 
@@ -384,10 +385,10 @@ The C# port is not considered ready until all of these are true:
 ## Starting Instructions For The Next Agent
 
 1. Read this document fully.
-2. Inspect the Java modules and current Docker config.
-3. Create `csharp/` only when beginning Phase 0.
-4. Keep the Java project building and runnable.
-5. Build the parity harness before porting large gameplay areas.
-6. Start with `Aion.Commons`, then login-server.
+2. Treat Phase 3 login-server parity as complete unless new client or Java GS testing exposes a mismatch.
+3. Continue with Phase 4: port chat-server behavior into `dotnetConversion/src/Aion.ChatServer`.
+4. Use the Java chat-server module as the oracle for packet order, bridge behavior, channel state, and database access.
+5. Keep the Java project building and runnable for mixed-mode validation.
+6. Add or extend parity tests before changing shared protocol behavior.
 7. Add short implementation notes as each phase discovers differences from Java.
 

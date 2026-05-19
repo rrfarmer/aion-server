@@ -45,6 +45,7 @@ With the default Java login config, it binds:
 - client listener: `0.0.0.0:2106`
 - game-server listener: `0.0.0.0:9014`
 - database: `localhost:3306/aion_ls`, user `root`, password `Farmer598!`
+- logs: `login-server/log/server_console.log`, `login-server/log/server_warnings.log`, and `login-server/log/server_errors.log`
 
 If you need a different local DB port or password, create ignored local override file `login-server/config/myls.properties`.
 
@@ -104,3 +105,5 @@ Validated on May 19, 2026:
 - Java game built, started, connected to `aion_gs`, listened on `7777`, logged `Connected to login server`, and logged `Connected to chat server`.
 - Java chat logged `Gameserver #1 is now online`.
 - The C# login server loaded one registered game server and accepted the Java GS bridge connection on `9014`.
+- A real client completed login through the C# login server, selected/entered the Java game server, created a character, and logged out successfully.
+- This closes the known Phase 3 mixed-mode validation gap.
