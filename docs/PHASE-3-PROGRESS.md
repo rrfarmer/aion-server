@@ -72,12 +72,53 @@
 - Added a Docker helper script for a local login MySQL container: `dotnetConversion/scripts/start-login-db.ps1`.
 - Added an opt-in MySQL integration test that initializes `login-server/sql/aion_ls.sql` and round-trips `AccountRepository`.
 - Added in-memory auth service tests for fast development coverage.
+- Added `LoginSessionRegistry` for Java-style `accountsOnLS` tracking.
+- Added duplicate login behavior for accounts already on the login server:
+  - existing login-server session receives `SM_ACCOUNT_KICK`
+  - incoming login receives `SM_LOGIN_FAIL(STR_L2AUTH_S_ALREADY_LOGIN)`
+- Added login disconnect cleanup for sessions that have not joined a game server yet:
+  - remove account from login-server session registry
+  - update account time on logout
+- Added `CM_SERVER_LIST` handling for authenticated sessions:
+  - session key validation
+  - no-server-list failure
+  - `SM_SERVER_LIST` response using registered game servers
+- Added `CM_PLAY` handling for authenticated sessions:
+  - session key validation
+  - server-down failure
+  - min-access-level failure
+  - full-server failure
+  - successful `SM_PLAY_OK` and joined-GS marker
+- Added game-server registration IP mask enforcement in `GameServerRegistry`.
+- Added unit tests for login session registration, duplicate login rejection, and game-server registration auth.
+- Added startup loading for registered game servers via `GameServersRepository`.
+- Added Java-style live game-server session tracking:
+  - game-server disconnect marks the server offline and clears tracked accounts
+  - duplicate game-server registration is rejected
+  - `SM_REQUEST_KICK_ACCOUNT` can be sent to the owning game server
+- Added `CM_ACCOUNT_AUTH` handling from game server to login server:
+  - validates the full `SessionKey` against `accountsOnLS`
+  - consumes the login-server session after successful game-server auth
+  - adds the account to the selected game server
+  - updates `account_data.last_server`
+  - includes account time, membership, toll, access level, and allowed HDD serial in `SM_ACCOUNT_AUTH_RESPONSE`
+- Added reconnect flow parity for the core handoff:
+  - `ReconnectingAccount`
+  - `CM_ACCOUNT_RECONNECT_KEY`
+  - `SM_ACCOUNT_RECONNECT_KEY`
+  - `CM_UPDATE_SESSION`
+  - `SM_UPDATE_SESSION`
+- Added `CM_ACCOUNT_DISCONNECTED` cleanup to remove accounts from the game-server registry and update account time.
+- Added initial `CM_ACCOUNT_LIST` sync handling and corrected its count field to Java's 32-bit integer shape.
+- Added `CM_GS_CHARACTER` and `SM_GS_CHARACTER_RESPONSE`.
+- Updated `CM_SERVER_LIST` to request per-game-server character counts and send `SM_SERVER_LIST` only once every registered server has a count.
+- Added packet and registry tests for account-list parsing, request-kick packets, reconnect state, and character-count fanout.
 
 ## Remaining Gaps
 
 - `CM_LOGIN` now reaches a DB-backed auth service, but not every Java auth branch is ported yet.
-- Full Java `AccountController` parity is not complete yet: double-login handling, GS kick behavior, external auth success path, brute-force ban escalation, reconnect maps, and account logout cleanup remain.
-- Game-server IP mask validation is deferred until registered game servers are loaded from the existing login database.
+- Full Java `AccountController` parity is not complete yet: external auth success path, brute-force ban escalation, admin kick/ban side effects, and every game-server control packet still need porting.
+- Account/game-server bridge parity is still partial: core auth, reconnect, disconnect, account-list, and character-count paths are present, but MAC/HDD ban lists, premium/toll controls, player transfer, LS control, and allowed-HDD updates remain.
 - C# login server is not ready for Java game-server or real client interoperability yet.
 
 ## Parity Watch Notes
@@ -140,31 +181,31 @@
   - activation check (ported)
   - account expiry and penalty checks (ported)
   - forced IP mask check (ported)
-  - double-login behavior against LS and GS
+  - double-login behavior against LS and GS (ported for request-kick behavior)
   - `updateOnLogin`, last IP update, membership expiry update (ported)
 - Port reconnect behavior:
-  - `ReconnectingAccount`
-  - `CM_UPDATE_SESSION`
-  - `SM_UPDATE_SESSION`
+  - `ReconnectingAccount` (ported)
+  - `CM_UPDATE_SESSION` (ported)
+  - `SM_UPDATE_SESSION` (ported)
 - Port disconnect cleanup:
-  - remove LS account if not joined GS
-  - update account time on logout
+  - remove LS account if not joined GS (ported)
+  - update account time on logout (ported)
 
 ### 5. Game-Server Bridge
 
-- Load registered game servers from DB on startup.
-- Enforce registered server ID, password, and IP mask in `CM_GS_AUTH`.
-- Track online/offline game-server state and clear accounts on disconnect.
+- Load registered game servers from DB on startup. (ported)
+- Enforce registered server ID, password, and IP mask in `CM_GS_AUTH`. (ported)
+- Track online/offline game-server state and clear accounts on disconnect. (ported)
 - Port ping/pong lifecycle:
   - send `SM_PING` every 5 seconds
   - close after more than 2 unanswered pings
 - Port account bridge packets:
-  - account auth response
-  - account reconnect key
-  - account disconnected
-  - account list sync
+  - account auth response (ported)
+  - account reconnect key (ported)
+  - account disconnected (ported)
+  - account list sync (core sync ported; MAC/HDD follow-up packets still pending)
   - account connection info
-  - GS character count response
+  - GS character count response (ported)
 - Port admin/control bridge packets:
   - LS control
   - ban control
@@ -179,17 +220,17 @@
 ### 6. Server List And Play Flow
 
 - Preserve Java `CM_SERVER_LIST` behavior:
-  - validate session key
-  - close with no-server response when no GS exists
-  - request per-GS character counts
-  - send `SM_SERVER_LIST` only after all counts are known
+  - validate session key (ported)
+  - close with no-server response when no GS exists (ported)
+  - request per-GS character counts (ported)
+  - send `SM_SERVER_LIST` only after all counts are known (ported)
 - Preserve Java `CM_PLAY` behavior:
-  - validate session key
-  - check GS online state
-  - check min access level
-  - check full server
-  - mark client as joined GS
-  - send exact `SM_PLAY_OK` / `SM_PLAY_FAIL` response
+  - validate session key (ported)
+  - check GS online state (ported)
+  - check min access level (ported)
+  - check full server (ported)
+  - mark client as joined GS (ported)
+  - send exact `SM_PLAY_OK` / `SM_PLAY_FAIL` response (ported for core cases)
 - Update server lists for logged-in players when GS state changes.
 
 ### 7. Startup, Shutdown, And Validation
@@ -206,7 +247,7 @@
 ## Verification
 
 - `dotnet test AionServer.slnx`
-- Result: all tests passing, 76 total.
+- Result: all tests passing, 90 total.
 
 ## Optional MySQL Integration Test
 
