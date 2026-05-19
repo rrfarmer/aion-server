@@ -162,9 +162,9 @@ Port login-server first because it is relatively small and protocol-heavy.
 Current status:
 
 - Login client crypto, RSA key/modulus handling, encrypted frame read/write, and Java-generated crypto/RSA/`SM_INIT` plus currently modeled login-client and game-server bridge server-packet golden vectors are in place.
-- DB-backed account authentication, startup-loaded banned-IP controller semantics, opt-in DB-backed encrypted login socket smoke, normal and `-loginex` RSA credential layouts, external auth, brute-force ban escalation, and core account-time/penalty behavior are ported.
-- Game-server registration, hosted-service startup ordering, encrypted fake-auth login socket smoke, fake-GS server-list/play socket smoke, login handoff, reconnect, account-list sync, server-list refresh fanout, character-count fanout, ping/pong, IP/MAC/HDD ban lists, account controls, player-transfer bridge slices, connection shutdown send/close protection, and loopback listener smoke coverage are ported.
-- Full .NET suite passes with 129 tests; the opt-in MySQL schema integration tests pass against a Dockerized MySQL 8.4 instance.
+- DB-backed account authentication, Java-shaped account insert and auto-create defaults, startup-loaded banned-IP controller semantics, opt-in DB-backed encrypted login socket smoke, normal and `-loginex` RSA credential layouts, external auth, brute-force ban escalation, and core account-time/penalty behavior are ported.
+- Game-server registration, hosted-service startup ordering, player-transfer scheduler startup/shutdown ordering, encrypted fake-auth login socket smoke, Java-style `CM_LOGIN` session-id rejection, fake-GS server-list/play socket smoke, login handoff, reconnect, account-list sync, server-list refresh fanout, character-count fanout, ping/pong, IP/MAC/HDD ban lists with Java-style startup cleanup plus lazy map load, account controls, player-transfer bridge slices, client and game-server packet parser parity audits, connection shutdown send/close protection, and loopback listener smoke coverage are ported.
+- Full .NET suite passes with 139 tests; the opt-in MySQL schema integration tests pass against a Dockerized MySQL 8.4 instance.
 
 Deliverables:
 

@@ -21,6 +21,7 @@
   - `CM_SERVER_LIST`
   - `CM_PLAY`
   - `CM_UPDATE_SESSION`
+- Audited the login-client parser read order against Java `CM_*` packets and added focused parser coverage for login, server-list, play, and update-session payload shapes.
 - Added game-server bridge packet models for the first registration/auth slice:
   - `CM_GS_AUTH`
   - `CM_ACCOUNT_AUTH`
@@ -32,6 +33,8 @@
   - `SM_ACCOUNT_AUTH_RESPONSE`
   - `SM_ACCOUNT_RECONNECT_KEY`
   - `SM_PING`
+- Audited the game-server bridge parser read order against Java `CM_*` packets and added focused parser coverage for account auth/reconnect/disconnect/list, toll, bans, allowed-HDD, premium, player-transfer, ping/pong, and control packets.
+- Aligned unknown authed game-server opcodes with Java by returning no packet instead of materializing and consuming an `UnknownGsClientPacket`.
 - Added length-prefixed packet frame helpers matching the Java dispatcher framing rule: packet length includes the two-byte length field.
 - Added hosted login client and game-server socket listener scaffolding under `Aion.LoginServer`.
 - Added an in-memory game-server registry seam for tests and later DB-backed `GameServersDAO` parity.
@@ -57,13 +60,16 @@
 - Fixed and covered the `-loginex` two-RSA-block credential compaction path so it matches Java's in-place block shifting behavior across the chunk boundary.
 - Wired encrypted server packet serialization into `LoginClientConnection`.
 - Wired encrypted client packet reads and checksum rejection into `LoginClientConnection`.
+- Added Java-style `CM_LOGIN` session-id validation so mismatched login packets return `SM_LOGIN_FAIL(STR_L2AUTH_S_SYSTEM_ERROR)` before RSA decrypt/auth.
 - Added direct MySQL repository ports for core login schema access:
   - `AccountRepository`
   - `AccountTimeRepository`
   - `BannedIpRepository`
   - `GameServersRepository`
   - `PremiumRepository`
+- Aligned `AccountRepository.InsertAccountAsync` with Java `AccountDAO.insertAccount` by inserting only `account_data`, hardcoding inserted toll to `0`, and leaving the first `account_time` DB write to the normal login/account-time update path.
 - Added Java-compatible SHA-1/Base64 password hashing via `AccountUtils.EncodePassword`.
+- Aligned auto-created account defaults with Java `AccountController.createAccount`, including the implicit `last_server = 0` value from the Java model default.
 - Added `LoginAuthService` for the first DB-backed `AccountController.login` slice:
   - banned IP check
   - auto-create account
@@ -137,7 +143,10 @@
   - `CM_HDDBAN_CONTROL`
   - `SM_MACBAN_LIST`
   - `SM_HDDBAN_LIST`
-- Added startup loading for MAC/HDD ban maps.
+- Aligned MAC/HDD ban lifecycle with Java:
+  - startup deletes expired bans through the DAO
+  - in-memory MAC/HDD ban maps are loaded lazily on first manager/service use
+  - ban/unban controls load the current map before mutating it
 - Updated `CM_ACCOUNT_LIST` to send MAC/HDD ban lists after account sync, matching Java's follow-up packet sequence.
 - Aligned `PremiumDAO.getPoints` reward consumption with Java's single-row `rs.next()` behavior.
 - Added packet tests for ping, account connection info, premium control/response, and ban-list payloads.
@@ -192,7 +201,10 @@
   - close waits for any in-flight send before tearing down the socket
   - packets requested after the connection is closed are ignored instead of racing a disposed stream
 - Added listener shutdown tracking so login-client and game-server bridge sockets actively close child connections before waiting for the active connection count to drain.
-- Added hosted-service startup coverage proving game-server DB registration and banned IP/MAC/HDD ban-map loads complete before the login-client and game-server bridge listeners open their sockets.
+- Added hosted-service startup coverage proving game-server DB registration, banned IP load, MAC/HDD expired-ban cleanup, and player-transfer scheduler startup complete before the login-client and game-server bridge listeners open their sockets.
+- Aligned player-transfer scheduler lifecycle with Java `LoginServer` startup/shutdown ordering:
+  - scheduler startup now happens after game-server load and ban cleanup but before login-client/game-server bridge sockets open
+  - scheduler shutdown now completes before listener/network teardown begins
 - Added player-transfer service integration coverage with fake DB/GS collaborators:
   - new waiting tasks become active and send perform-action packets to the source game server
   - source-account-online tasks are skipped without DB update or GS packet
@@ -239,6 +251,7 @@
 ### 2. Login Credential Authentication
 
 - Port `CM_LOGIN` RSA no-padding credential decrypt in 128-byte blocks. (ported; covered by decrypt tests and encrypted loopback login smoke)
+- Reject `CM_LOGIN` packets whose embedded session id does not match the connection session id before decrypting credentials. (ported and covered through encrypted loopback socket smoke)
 - Preserve normal login and `-loginex` layout:
   - normal content offset 94, username 14 bytes, password 16 bytes
   - `-loginex` content offset 78, username 64 bytes, password 32 bytes
@@ -249,7 +262,7 @@
 ### 3. Existing Database Schema Integration
 
 - Add direct SQL DAO ports for:
-  - `AccountDAO` (core load/insert/update fields ported)
+  - `AccountDAO` (core load/insert/update fields ported; insert shape aligned with Java's account-data-only write)
   - `AccountTimeDAO` (ported)
   - `GameServersDAO` (ported)
   - `PremiumDAO` (ported)
@@ -266,7 +279,7 @@
 - Port `AccountController.login` branch-for-branch:
   - banned IP check through startup-loaded `BannedIpController` cache semantics (ported)
   - optional external auth (ported)
-  - account auto-create (ported)
+  - account auto-create (ported, including Java default `last_server`)
   - password mismatch responses (ported)
   - activation check (ported)
   - account expiry and penalty checks (ported)
@@ -326,9 +339,9 @@
 
 ### 7. Startup, Shutdown, And Validation
 
-- Match Java startup ordering: config, DB factory, game-server table, key generation, listener startup. (partially ported; registered game servers and banned IP/MAC/HDD maps load before listeners)
+- Match Java startup ordering: config, DB factory, game-server table, key generation, player-transfer scheduler, listener startup. (partially ported; registered game servers and banned IP load before listeners; MAC/HDD expired-ban cleanup before listeners with lazy map load on first use; player-transfer scheduler starts before listeners)
 - Load Java `.properties` from `config/main`, `config/network`, and `config/myls.properties` using identical keys. (ported and covered for current login options)
-- Add graceful shutdown behavior equivalent to Java pending-close semantics where packet sends must complete before closing. (ported at connection send/close and listener shutdown level; local loopback smoke covered, live shutdown smoke still pending)
+- Add graceful shutdown behavior equivalent to Java pending-close semantics where packet sends must complete before closing. (ported at connection send/close, player-transfer-before-network shutdown order, and listener shutdown level; local loopback smoke covered, live shutdown smoke still pending)
 - Validate with:
   - packet golden tests for encrypted and unencrypted frames
   - DAO fixture tests against the current login schema
@@ -338,9 +351,9 @@
 ## Verification
 
 - `dotnet test AionServer.slnx`
-- Result: all tests passing, 129 total.
+- Result: all tests passing, 139 total.
 - `AION_LOGIN_DB_INTEGRATION=1 dotnet test tests\Aion.LoginServer.Tests\Aion.LoginServer.Tests.csproj --filter LoginDatabaseIntegrationTests`
-- Result: 3 tests passed against MySQL 8.4 on localhost:3307.
+- Result: 4 tests passed against MySQL 8.4 on localhost:3307.
 
 ## Optional MySQL Integration Test
 
