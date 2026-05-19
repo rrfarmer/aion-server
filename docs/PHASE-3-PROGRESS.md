@@ -44,7 +44,7 @@
   - first-packet XOR pass
   - 8-byte padding behavior
   - checksum append/verify for later packets
-- Added crypto tests for Blowfish reversibility, first-packet padding/key update, later packet decrypt, and tamper rejection.
+- Added crypto tests for Blowfish reversibility, first-packet padding/key update, later packet decrypt, tamper rejection, and Java-generated encrypted golden vectors.
 - Added login RSA keypair generation with Java-compatible 1024-bit/F4 keys.
 - Added RSA modulus scrambling matching Java `EncryptedRSAKeyPair.encryptModulus`.
 - Added raw RSA no-padding decrypt for `CM_LOGIN` credential blocks.
@@ -168,6 +168,8 @@
 - Added auth tests for external auth success/failure/unavailable and brute-force ban timing.
 - Fixed the opt-in MySQL integration test schema path lookup so it works from the .NET test output directory.
 - Validated `AccountRepository` against the Java `aion_ls.sql` schema in a Dockerized MySQL 8.4 container.
+- Generated login crypto vectors from the repository's Java `BlowfishCipher` and `CryptEngine` sources in a Docker JDK container, then pinned C# tests to those bytes.
+- Added Java-style server-list refresh fanout for logged-in, not-yet-joined clients after `CM_ACCOUNT_LIST` and game-server disconnect.
 
 ## Remaining Gaps
 
@@ -178,7 +180,7 @@
 ## Parity Watch Notes
 
 - The Java `CryptEngine.verifyChecksum` source in this repository reads the final checksum block but does not compare or XOR it before returning. The C# port compares the calculated checksum against the appended checksum so packets produced by the same algorithm verify correctly. This must be validated against a real Java login/client exchange before Phase 3 can be called complete.
-- Java compilation tools are not installed in this workspace, so Java-generated crypto golden vectors could not be produced locally yet.
+- Host `javac` is not installed, but Java crypto golden vectors were produced through `eclipse-temurin:8-jdk` in Docker using `dotnetConversion/tools/java-login-crypto-vectors`.
 - `LoginClientConnection` now uses encrypted frames, but live client interoperability has not been validated yet.
 - Dockerized MySQL integration now runs locally through `dotnetConversion/scripts/start-login-db.ps1`; the normal test suite keeps it dormant unless `AION_LOGIN_DB_INTEGRATION=1`.
 
@@ -191,14 +193,14 @@
   - first server packet special path: add checksum space, align to 8 bytes, XOR pass, encrypt with static key, then update to generated Blowfish key (ported)
   - later packet path: checksum append, 8-byte alignment, encrypt with current key (ported)
   - decrypt path: Blowfish decrypt plus checksum verification (ported, needs Java/client validation)
-- Port or prove byte parity for Java `BlowfishCipher` (direct port added; needs Java-generated vectors).
+- Port or prove byte parity for Java `BlowfishCipher` (direct port added; Java-generated vector covered).
 - Port Java `KeyGen` behavior:
   - 10 cached RSA keypairs (ported)
   - 1024-bit RSA with public exponent F4 (ported)
   - generated 16-byte Blowfish keys (ported)
 - Port Java `EncryptedRSAKeyPair.encryptModulus` scrambling exactly. (ported)
 - Wire encrypted frame read/write in `LoginClientConnection`. (ported; needs real client validation)
-- Add golden tests for encrypted `SM_INIT`, checksum verification, key update timing, and decrypt failure behavior.
+- Add golden tests for encrypted `SM_INIT`, checksum verification, key update timing, and decrypt failure behavior. (partially covered: Java vectors now prove static Blowfish, first server-packet encryption/key update, later checksum-packet encryption, and C# tamper rejection; full real-client `SM_INIT` smoke still pending)
 
 ### 2. Login Credential Authentication
 
@@ -217,12 +219,12 @@
   - `AccountTimeDAO` (ported)
   - `GameServersDAO` (ported)
   - `PremiumDAO` (ported)
-  - `BannedIpDAO`
-  - `BannedMacDAO`
-  - `BannedHddDAO`
-  - `AccountsLogDAO`
-  - `PlayerTransferDAO`
-- Use existing `account_data`, `account_time`, `gameservers`, and related login DB tables without schema migration.
+  - `BannedIpDAO` (ported)
+  - `BannedMacDAO` (ported)
+  - `BannedHddDAO` (ported)
+  - `AccountsLogDAO` (ported)
+  - `PlayerTransferDAO` (ported)
+- Use existing `account_data`, `account_time`, `gameservers`, and related login DB tables without schema migration. (ported for current DAO set; MySQL integration covers `AccountRepository`)
 - Preserve Java SQL strings and autocommit behavior unless a verified difference is documented.
 
 ### 4. AccountController Flow
@@ -286,12 +288,12 @@
   - check full server (ported)
   - mark client as joined GS (ported)
   - send exact `SM_PLAY_OK` / `SM_PLAY_FAIL` response (ported for core cases)
-- Update server lists for logged-in players when GS state changes.
+- Update server lists for logged-in players when GS state changes. (ported for account-list sync and GS disconnect)
 
 ### 7. Startup, Shutdown, And Validation
 
-- Match Java startup ordering: config, DB factory, game-server table, key generation, listener startup.
-- Load Java `.properties` from `config/main`, `config/network`, and `config/myls.properties` using identical keys.
+- Match Java startup ordering: config, DB factory, game-server table, key generation, listener startup. (partially ported; registered game servers and ban maps load before listeners)
+- Load Java `.properties` from `config/main`, `config/network`, and `config/myls.properties` using identical keys. (ported for current login options)
 - Add graceful shutdown behavior equivalent to Java pending-close semantics where packet sends must complete before closing.
 - Validate with:
   - packet golden tests for encrypted and unencrypted frames
@@ -302,7 +304,7 @@
 ## Verification
 
 - `dotnet test AionServer.slnx`
-- Result: all tests passing, 104 total.
+- Result: all tests passing, 108 total.
 - `AION_LOGIN_DB_INTEGRATION=1 dotnet test tests\Aion.LoginServer.Tests\Aion.LoginServer.Tests.csproj --filter LoginDatabaseIntegrationTests`
 - Result: passed against MySQL 8.4 on localhost:3307.
 
