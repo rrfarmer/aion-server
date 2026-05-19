@@ -136,12 +136,30 @@
 - Updated `CM_ACCOUNT_LIST` to send MAC/HDD ban lists after account sync, matching Java's follow-up packet sequence.
 - Aligned `PremiumDAO.getPoints` reward consumption with Java's single-row `rs.next()` behavior.
 - Added packet tests for ping, account connection info, premium control/response, and ban-list payloads.
+- Added account/IP ban bridge handling:
+  - `CM_BAN`
+  - `SM_BAN_RESPONSE`
+  - account penalty time updates
+  - banned IP insert/remove path
+  - account kick after ban request
+- Added login-server control handling:
+  - `CM_LS_CONTROL`
+  - `SM_LS_CONTROL_RESPONSE`
+  - access-level and membership updates through `AccountRepository.UpdateAccountAsync`
+- Added player-transfer bridge spine:
+  - `CM_PTRANSFER_CONTROL`
+  - `SM_PTRANSFER_RESPONSE`
+  - `PlayerTransferRepository`
+  - `PlayerTransferService`
+  - scheduled new-task verification matching Java's 10-second initial delay and 7-minute interval
+  - transfer request/error/ok/task-stop state transitions
+- Added player-transfer packet tests for all newly modeled response shapes.
 
 ## Remaining Gaps
 
 - `CM_LOGIN` now reaches a DB-backed auth service, but not every Java auth branch is ported yet.
-- Full Java `AccountController` parity is not complete yet: external auth success path, brute-force ban escalation, admin kick/ban side effects, and every game-server control packet still need porting.
-- Account/game-server bridge parity is still partial: core auth, reconnect, disconnect, account-list, character-count, premium/toll, MAC/HDD bans, and allowed-HDD paths are present, but account ban control, account connection-info responses, player transfer, and LS control remain.
+- Full Java `AccountController` parity is not complete yet: external auth success path and brute-force ban escalation remain.
+- Account/game-server bridge parity is still partial: core auth, reconnect, disconnect, account-list, character-count, premium/toll, MAC/HDD bans, allowed-HDD, account/IP ban control, player transfer, and LS control paths are present, but real mixed Java GS/client interoperability is still unvalidated.
 - C# login server is not ready for Java game-server or real client interoperability yet.
 
 ## Parity Watch Notes
@@ -230,14 +248,14 @@
   - account connection info (ported for DB update/log path)
   - GS character count response (ported)
 - Port admin/control bridge packets:
-  - LS control
-  - ban control
+  - LS control (ported)
+  - ban control (ported)
   - mac ban control/list (ported)
   - HDD ban control/list (ported)
   - allowed HDD serial change (ported)
   - premium control (ported)
   - account toll info (ported)
-  - player transfer control
+  - player transfer control (ported; needs DB/GS integration validation)
   - request kick account (ported)
 
 ### 6. Server List And Play Flow
@@ -270,7 +288,7 @@
 ## Verification
 
 - `dotnet test AionServer.slnx`
-- Result: all tests passing, 96 total.
+- Result: all tests passing, 100 total.
 
 ## Optional MySQL Integration Test
 
