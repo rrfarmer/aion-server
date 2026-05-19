@@ -46,12 +46,15 @@
   - checksum append/verify for later packets
 - Added crypto tests for Blowfish reversibility, first-packet padding/key update, later packet decrypt, tamper rejection, and Java-generated encrypted golden vectors.
 - Added a Java-generated encrypted `SM_INIT` frame vector covering the first real client-visible login packet.
+- Added Java-generated packet payload vectors from the original Java packet classes for `SM_AUTH_GG`, `SM_LOGIN_OK`, `SM_PLAY_OK`, `SM_SERVER_LIST`, `SM_GS_CHARACTER_RESPONSE`, and `SM_REQUEST_KICK_ACCOUNT`.
+- Corrected C# `SM_GS_CHARACTER_RESPONSE` to opcode `0x08` after the Java-generated vector exposed the previous `0x04` mismatch.
 - Added login RSA keypair generation with Java-compatible 1024-bit/F4 keys.
 - Added RSA modulus scrambling matching Java `EncryptedRSAKeyPair.encryptModulus`.
 - Added a Java-generated RSA modulus scrambling vector for deterministic `EncryptedRSAKeyPair` parity.
 - Added raw RSA no-padding decrypt for `CM_LOGIN` credential blocks.
 - Added a cached 10-key `LoginKeyGenerator` equivalent to Java `KeyGen`.
 - Added normal-login credential decrypt tests for username, password, and OTP extraction.
+- Fixed and covered the `-loginex` two-RSA-block credential compaction path so it matches Java's in-place block shifting behavior across the chunk boundary.
 - Wired encrypted server packet serialization into `LoginClientConnection`.
 - Wired encrypted client packet reads and checksum rejection into `LoginClientConnection`.
 - Added direct MySQL repository ports for core login schema access:
@@ -184,6 +187,7 @@
   - close waits for any in-flight send before tearing down the socket
   - packets requested after the connection is closed are ignored instead of racing a disposed stream
 - Added listener shutdown tracking so login-client and game-server bridge sockets actively close child connections before waiting for the active connection count to drain.
+- Added hosted-service startup coverage proving game-server DB registration and MAC/HDD ban-map loads complete before the login-client and game-server bridge listeners open their sockets.
 - Added player-transfer service integration coverage with fake DB/GS collaborators:
   - new waiting tasks become active and send perform-action packets to the source game server
   - source-account-online tasks are skipped without DB update or GS packet
@@ -192,11 +196,13 @@
 - Added loopback socket smoke coverage for the hosted login listeners:
   - login-client listener sends an encrypted Java-sized `SM_INIT` frame, completes encrypted `CM_AUTH_GG` -> `SM_AUTH_GG`, completes encrypted RSA `CM_LOGIN` -> `SM_LOGIN_OK` with a fake auth service, and closes the active child socket during shutdown
   - game-server bridge accepts a Java-framed `CM_GS_AUTH`, returns `SM_GS_AUTH_RESPONSE`, marks the registered server online, and marks it offline during shutdown
+  - combined fake-client/fake-GS loopback flow routes `CM_SERVER_LIST` character-count requests through the game-server bridge, returns `SM_SERVER_LIST`, and completes `CM_PLAY` -> `SM_PLAY_OK`
+- Added opt-in MySQL-backed encrypted login socket smoke that initializes the Java schema, authenticates through `LoginAuthService`/repositories, and verifies `last_ip` persistence.
 
 ## Remaining Gaps
 
-- `CM_LOGIN` now reaches a DB-backed auth service and the known Java auth branches are ported; local encrypted socket smoke reaches `SM_LOGIN_OK` with fake auth, but live client validation is still pending.
-- Account/game-server bridge parity is still partial: core auth, reconnect, disconnect, account-list, character-count, premium/toll, MAC/HDD bans, allowed-HDD, account/IP ban control, player transfer, and LS control paths are present, but real mixed Java GS/client interoperability is still unvalidated.
+- `CM_LOGIN` now reaches a DB-backed auth service and the known Java auth branches are ported; local encrypted socket smoke reaches `SM_LOGIN_OK` with fake auth and opt-in MySQL-backed auth, but live client validation is still pending.
+- Account/game-server bridge parity is still partial: core auth, reconnect, disconnect, account-list, character-count, premium/toll, MAC/HDD bans, allowed-HDD, account/IP ban control, player transfer, and LS control paths are present, and fake-GS loopback server-list/play routing is covered, but real mixed Java GS/client interoperability is still unvalidated.
 - C# login server is not ready for Java game-server or real client interoperability yet.
 
 ## Parity Watch Notes
@@ -223,6 +229,7 @@
 - Port Java `EncryptedRSAKeyPair.encryptModulus` scrambling exactly. (ported and covered with Java-generated vector)
 - Wire encrypted frame read/write in `LoginClientConnection`. (ported; needs real client validation)
 - Add golden tests for encrypted `SM_INIT`, checksum verification, key update timing, and decrypt failure behavior. (covered with Java vectors for static Blowfish, encrypted `SM_INIT`, first server-packet encryption/key update, later checksum-packet encryption, and C# tamper rejection; live client smoke still pending)
+- Add Java-generated packet vectors for common login and game-server bridge packets. (covered for `SM_AUTH_GG`, `SM_LOGIN_OK`, `SM_PLAY_OK`, `SM_SERVER_LIST`, `SM_GS_CHARACTER_RESPONSE`, and `SM_REQUEST_KICK_ACCOUNT`)
 
 ### 2. Login Credential Authentication
 
@@ -231,7 +238,7 @@
   - normal content offset 94, username 14 bytes, password 16 bytes
   - `-loginex` content offset 78, username 64 bytes, password 32 bytes
   - OTP from little-endian int immediately after username/password
-- Keep Cp1252 string extraction and null termination behavior. (ported)
+- Keep Cp1252 string extraction and null termination behavior. (ported; normal and `-loginex` RSA layouts covered)
 - Port account password hashing from Java `AccountUtils.encodePassword`. (ported)
 
 ### 3. Existing Database Schema Integration
@@ -302,14 +309,14 @@
   - validate session key (ported)
   - close with no-server response when no GS exists (ported)
   - request per-GS character counts (ported)
-  - send `SM_SERVER_LIST` only after all counts are known (ported)
+  - send `SM_SERVER_LIST` only after all counts are known (ported; covered through fake-GS loopback socket smoke)
 - Preserve Java `CM_PLAY` behavior:
   - validate session key (ported)
   - check GS online state (ported)
   - check min access level (ported)
   - check full server (ported)
   - mark client as joined GS (ported)
-  - send exact `SM_PLAY_OK` / `SM_PLAY_FAIL` response (ported for core cases)
+  - send exact `SM_PLAY_OK` / `SM_PLAY_FAIL` response (ported for core cases; `SM_PLAY_OK` covered through fake-GS loopback socket smoke)
 - Update server lists for logged-in players when GS state changes. (ported for account-list sync and GS disconnect)
 
 ### 7. Startup, Shutdown, And Validation
@@ -326,9 +333,9 @@
 ## Verification
 
 - `dotnet test AionServer.slnx`
-- Result: all tests passing, 117 total.
+- Result: all tests passing, 123 total.
 - `AION_LOGIN_DB_INTEGRATION=1 dotnet test tests\Aion.LoginServer.Tests\Aion.LoginServer.Tests.csproj --filter LoginDatabaseIntegrationTests`
-- Result: 2 tests passed against MySQL 8.4 on localhost:3307.
+- Result: 3 tests passed against MySQL 8.4 on localhost:3307.
 
 ## Optional MySQL Integration Test
 

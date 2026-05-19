@@ -161,10 +161,10 @@ Port login-server first because it is relatively small and protocol-heavy.
 
 Current status:
 
-- Login client crypto, RSA key/modulus handling, encrypted frame read/write, and Java-generated crypto/RSA/`SM_INIT` golden vectors are in place.
-- DB-backed account authentication, external auth, brute-force ban escalation, and core account-time/penalty behavior are ported.
-- Game-server registration, encrypted fake-auth login socket smoke, login handoff, reconnect, account-list sync, server-list refresh fanout, character-count fanout, ping/pong, ban lists, account controls, player-transfer bridge slices, connection shutdown send/close protection, and loopback listener smoke coverage are ported.
-- Full .NET suite passes with 117 tests; the opt-in MySQL schema integration tests pass against a Dockerized MySQL 8.4 instance.
+- Login client crypto, RSA key/modulus handling, encrypted frame read/write, and Java-generated crypto/RSA/`SM_INIT` plus common packet golden vectors are in place.
+- DB-backed account authentication, opt-in DB-backed encrypted login socket smoke, normal and `-loginex` RSA credential layouts, external auth, brute-force ban escalation, and core account-time/penalty behavior are ported.
+- Game-server registration, hosted-service startup ordering, encrypted fake-auth login socket smoke, fake-GS server-list/play socket smoke, login handoff, reconnect, account-list sync, server-list refresh fanout, character-count fanout, ping/pong, ban lists, account controls, player-transfer bridge slices, connection shutdown send/close protection, and loopback listener smoke coverage are ported.
+- Full .NET suite passes with 123 tests; the opt-in MySQL schema integration tests pass against a Dockerized MySQL 8.4 instance.
 
 Deliverables:
 
