@@ -177,6 +177,11 @@
   - account login history
   - player transfer task load/update
 - Added login-server options coverage for the known Java config keys, including `loginserver.network.nio.threads`.
+- Added Java-style send/close protection on login-client and game-server connections:
+  - packet serialization and writes are guarded by a per-connection send lock
+  - close waits for any in-flight send before tearing down the socket
+  - packets requested after the connection is closed are ignored instead of racing a disposed stream
+- Added listener shutdown tracking so login-client and game-server bridge sockets actively close child connections before waiting for the active connection count to drain.
 
 ## Remaining Gaps
 
@@ -301,7 +306,7 @@
 
 - Match Java startup ordering: config, DB factory, game-server table, key generation, listener startup. (partially ported; registered game servers and ban maps load before listeners)
 - Load Java `.properties` from `config/main`, `config/network`, and `config/myls.properties` using identical keys. (ported and covered for current login options)
-- Add graceful shutdown behavior equivalent to Java pending-close semantics where packet sends must complete before closing.
+- Add graceful shutdown behavior equivalent to Java pending-close semantics where packet sends must complete before closing. (ported at connection send/close and listener shutdown level; live shutdown smoke still pending)
 - Validate with:
   - packet golden tests for encrypted and unencrypted frames
   - DAO fixture tests against the current login schema

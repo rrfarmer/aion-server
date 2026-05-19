@@ -163,7 +163,7 @@ Current status:
 
 - Login client crypto, RSA key/modulus handling, encrypted frame read/write, and Java-generated crypto golden vectors are in place.
 - DB-backed account authentication, external auth, brute-force ban escalation, and core account-time/penalty behavior are ported.
-- Game-server registration, login handoff, reconnect, account-list sync, server-list refresh fanout, character-count fanout, ping/pong, ban lists, account controls, and player-transfer bridge slices are ported.
+- Game-server registration, login handoff, reconnect, account-list sync, server-list refresh fanout, character-count fanout, ping/pong, ban lists, account controls, player-transfer bridge slices, and connection shutdown send/close protection are ported.
 - Full .NET suite passes with 110 tests; the opt-in MySQL schema integration tests pass against a Dockerized MySQL 8.4 instance.
 
 Deliverables:
