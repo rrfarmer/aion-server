@@ -170,6 +170,13 @@
 - Validated `AccountRepository` against the Java `aion_ls.sql` schema in a Dockerized MySQL 8.4 container.
 - Generated login crypto vectors from the repository's Java `BlowfishCipher` and `CryptEngine` sources in a Docker JDK container, then pinned C# tests to those bytes.
 - Added Java-style server-list refresh fanout for logged-in, not-yet-joined clients after `CM_ACCOUNT_LIST` and game-server disconnect.
+- Expanded the opt-in MySQL integration suite to round-trip the auxiliary login repositories against the Java schema:
+  - game servers
+  - banned IP/MAC/HDD entries
+  - premium points and first unclaimed reward consumption
+  - account login history
+  - player transfer task load/update
+- Added login-server options coverage for the known Java config keys, including `loginserver.network.nio.threads`.
 
 ## Remaining Gaps
 
@@ -224,7 +231,7 @@
   - `BannedHddDAO` (ported)
   - `AccountsLogDAO` (ported)
   - `PlayerTransferDAO` (ported)
-- Use existing `account_data`, `account_time`, `gameservers`, and related login DB tables without schema migration. (ported for current DAO set; MySQL integration covers `AccountRepository`)
+- Use existing `account_data`, `account_time`, `gameservers`, and related login DB tables without schema migration. (ported for current DAO set; MySQL integration covers account, game-server, ban, premium, account-log, and player-transfer repositories)
 - Preserve Java SQL strings and autocommit behavior unless a verified difference is documented.
 
 ### 4. AccountController Flow
@@ -293,7 +300,7 @@
 ### 7. Startup, Shutdown, And Validation
 
 - Match Java startup ordering: config, DB factory, game-server table, key generation, listener startup. (partially ported; registered game servers and ban maps load before listeners)
-- Load Java `.properties` from `config/main`, `config/network`, and `config/myls.properties` using identical keys. (ported for current login options)
+- Load Java `.properties` from `config/main`, `config/network`, and `config/myls.properties` using identical keys. (ported and covered for current login options)
 - Add graceful shutdown behavior equivalent to Java pending-close semantics where packet sends must complete before closing.
 - Validate with:
   - packet golden tests for encrypted and unencrypted frames
@@ -304,9 +311,9 @@
 ## Verification
 
 - `dotnet test AionServer.slnx`
-- Result: all tests passing, 108 total.
+- Result: all tests passing, 110 total.
 - `AION_LOGIN_DB_INTEGRATION=1 dotnet test tests\Aion.LoginServer.Tests\Aion.LoginServer.Tests.csproj --filter LoginDatabaseIntegrationTests`
-- Result: passed against MySQL 8.4 on localhost:3307.
+- Result: 2 tests passed against MySQL 8.4 on localhost:3307.
 
 ## Optional MySQL Integration Test
 
