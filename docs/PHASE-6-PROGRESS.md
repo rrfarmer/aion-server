@@ -12,10 +12,10 @@
 Last updated: May 20, 2026
 
 - Phase 5 is complete for automated infrastructure parity. Real-client validation is intentionally deferred to later readiness validation.
-- Current active work is Phase 6c enter-world. The C# path handles `CM_ENTER_WORLD`, validates missing/online/reentry/duplicate-world cases, loads the player common row, player-owned inventory rows, player skills, active skill cooldowns, active item cooldowns, working quests, motions, and client settings, marks the character online, stores it in the world container, transitions the connection to `InGame`, sends `SM_ENTER_WORLD_CHECK`, then sends the implemented post-enter packets `SM_SKILL_LIST`, `SM_SKILL_COOLDOWN`, `SM_ITEM_COOLDOWN`, `SM_QUEST_LIST`, current-title `SM_TITLE_INFO`, `SM_MOTION`, `SM_AFTER_TIME_CHECK_4_7_5`, and optional `SM_UI_SETTINGS` blobs.
+- Current active work is Phase 6c enter-world. The C# path handles `CM_ENTER_WORLD`, validates missing/online/reentry/duplicate-world cases, loads the player common row, player-owned inventory rows, player skills, active skill cooldowns, active item cooldowns, working quests, motions, client settings, and obelisk bind point, marks the character online, stores it in the world container, transitions the connection to `InGame`, sends `SM_ENTER_WORLD_CHECK`, then sends the implemented post-enter packets `SM_SKILL_LIST`, `SM_SKILL_COOLDOWN`, `SM_ITEM_COOLDOWN`, `SM_QUEST_LIST`, current-title `SM_TITLE_INFO`, `SM_MOTION`, `SM_AFTER_TIME_CHECK_4_7_5`, optional `SM_UI_SETTINGS` blobs, Java-split `SM_INVENTORY_INFO`, `SM_CHANNEL_INFO`, obelisk `SM_BIND_POINT_INFO`, baseline `SM_PLAYER_SPAWN`, and `SM_GAME_TIME`.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
-- Next implementation slice should expand enter-world object loading with recipes, title lists/completed quest list, life stats, bind point, warehouse/account data, then continue the Java retail packet sequence with inventory info.
+- Next implementation slice should expand enter-world object loading with item stones, recipes, title lists/completed quest list, life stats, warehouse/account data, then continue the Java retail packet sequence with warehouse/full-title/emotion/prices/recipe/friend/block/stats packets.
 - Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 258 tests.
 
 ---
@@ -61,7 +61,7 @@ From `csharp-port.md`, dependency order:
 - [x] Startup `IDFactory` preload from Java DAO-equivalent used-ID tables
 
 ### Phase 6c: Enter World
-- [ ] Load full player object graph (partial: common player row, inventory/equipment item rows, player skills, active skill/item cooldowns, working quests, motions, and client settings)
+- [ ] Load full player object graph (partial: common player row, inventory/equipment item rows, player skills, active skill/item cooldowns, working quests, motions, client settings, and obelisk bind point)
 - [x] Java-shaped `CM_ENTER_WORLD` gate checks for missing character, online/reentry state, duplicate world presence
 - [x] Mark player online, update `last_online`, transition connection to in-game, and send `SM_ENTER_WORLD_CHECK`
 - [x] Load `player_skills` and send Java-shaped `SM_SKILL_LIST`
@@ -71,7 +71,10 @@ From `csharp-port.md`, dependency order:
 - [x] Load `player_motions` and send Java-shaped login `SM_MOTION`
 - [x] Load `player_settings` client blobs and send Java-shaped `SM_UI_SETTINGS`
 - [x] Send current-title `SM_TITLE_INFO` and `SM_AFTER_TIME_CHECK_4_7_5`
-- [ ] Inventory/equipment load and stat application (partial: typed inventory rows loaded; stat application pending)
+- [ ] Inventory/equipment load and stat application (partial: typed inventory rows loaded and `SM_INVENTORY_INFO` sent; item stones/stat application pending)
+- [x] Send Java-shaped `SM_INVENTORY_INFO` with kinah-first ordering, 10-item splits, final empty packet, and current item-info blobs
+- [x] Load `player_bind_point` and send obelisk `SM_BIND_POINT_INFO`
+- [x] Send `SM_CHANNEL_INFO`, baseline `SM_PLAYER_SPAWN`, and `SM_GAME_TIME`
 - [x] Position/world placement baseline from `players.world_id`, `x`, `y`, `z`, and `heading`
 
 ---
@@ -127,10 +130,27 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 51 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 258 tests.
 
+### Session 7 (May 20, 2026)
+- Added item template metadata needed by item packets: client description ID/L10n string, item mask, equipment categorization, two-hand detection, cloth/equipment flags, and polish/stigma helpers.
+- Extended enter-world player common loading with `npc_expands`, `quest_expands`, and `item_expands`.
+- Added Java-shaped `SM_INVENTORY_INFO` packet creation for login: kinah is always first, cube equipment precedes unequipped cube items, packets split at 10 entries, and a final empty packet is emitted.
+- Added a current item-info blob writer mirroring Java `ItemInfoBlob.getFullBlob` for loaded fields: composite item, equipped slot, weapon/armor/shield/accessory/wing/plume slot blobs, enchant info, conditioning, polish, premium option, stigma shard, general info, and wrap count. Item stone/godstone/idiyan detail remains a follow-up because those tables are not loaded yet.
+- Wired inventory info after UI settings in the successful enter-world sequence and threaded `IDFactory` into the client connection path so missing zero-kinah objects can be allocated like Java `Storage.increaseKinah(0)`.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 51 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 258 tests.
+
+### Session 8 (May 20, 2026)
+- Added typed obelisk bind point loading from `player_bind_point`, matching `PlayerBindPointDAO.loadBindPoint`.
+- Added Java-shaped `SM_CHANNEL_INFO`, obelisk `SM_BIND_POINT_INFO`, baseline non-personal `SM_PLAYER_SPAWN`, and `SM_GAME_TIME` packet writers.
+- Wired the successful enter-world sequence after inventory info to send channel info, obelisk bind point info (falling back to `player_initial_data` spawn location), player spawn, and game time.
+- Current gaps in this cluster: kisk bind point/object state, beginner-channel metadata, personal-map sign handling, and richer world instance IDs.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 51 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 258 tests.
+
 ---
 
 ## Next Steps
 
-1. Expand enter-world object loading with recipes, title lists/completed quest list, life stats, bind point, warehouse/account data, and item stones.
-2. Continue the Java retail enter-world packet sequence with `SM_INVENTORY_INFO`, `SM_CHANNEL_INFO`, bind-point packets, player spawn, game time, warehouse info, full title list, emotion list, prices, recipe cooldown/list, friend/block lists, instance/abyss/stats info, and later macro/mail/housing/broker packets.
+1. Expand enter-world object loading with item stones/godstones/idiyans, recipes, title lists/completed quest list, life stats, warehouse/account data.
+2. Continue the Java retail enter-world packet sequence with warehouse info, full title list, emotion list, prices, recipe cooldown/list, friend/block lists, instance/abyss/stats info, and later macro/mail/housing/broker packets.
 3. Add focused live-DB opt-in coverage for creation and enter-world once local schema fixtures are ready.
