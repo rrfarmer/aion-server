@@ -419,10 +419,18 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: inventory-full rejection, NPC-targeting audit, and broader restriction checks are still absent until those support systems are ported; partial-purchase item defaults are approximate compared with Java `ItemFactory.newItem`.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 56 tests.
 
+### Session 39 (May 20, 2026)
+- Extended item template static-data summaries with Java `ItemTemplate.levelRestrictions` (`restrict`) and `ItemActions.getCraftLearnAction` (`<craftlearn recipeid>`) metadata so broker category filters can see the same data Java sees.
+- Completed the missing Java `BrokerItemMask` specializations: class-specific stigma/manual masks now use `BrokerPlayerClassExtraFilter` parity, including advanced-class fallback to the starting class, and craft design masks now use `BrokerRecipeFilter` parity through `RecipeTemplate.skillId`.
+- Wired broker list/search mask filtering to pass the loaded `RecipeTemplateTable`, preserving the existing numeric mask behavior while enabling recipe specialization masks `6040` through `6046`.
+- Added focused broker matcher coverage plus real Java static-data assertions for RANGER skillbook restrictions and `152200001 -> 155000001` craft-learn recipe parsing.
+- Current gaps in this cluster: inventory-full rejection, NPC-targeting audit, broader restriction checks, and exact `ItemFactory.newItem` defaults for split-created items are still deferred until those support systems are ported.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 57 tests.
+
 ---
 
 ## Next Steps
 
-1. Continue broker class/recipe filters, visible postman spawn/known-list support, or housing auction/bid flows.
+1. Continue visible postman spawn/known-list support, housing auction/bid flows, or broker support-system checks.
 2. Port equipment/item stat application once item stat functions and template modifiers are in scope.
 3. Add focused live-DB opt-in coverage for creation and enter-world once local schema fixtures are ready.
