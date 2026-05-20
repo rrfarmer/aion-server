@@ -12,11 +12,11 @@
 Last updated: May 20, 2026
 
 - Phase 5 is complete for automated infrastructure parity. Real-client validation is intentionally deferred to later readiness validation.
-- Current active work is Phase 6c enter-world. The C# path handles `CM_ENTER_WORLD`, validates missing/online/reentry/duplicate-world cases, loads the player common row, player-owned inventory rows, player skills, active skill cooldowns, active item cooldowns, working quests, motions, client settings, and obelisk bind point, marks the character online, stores it in the world container, transitions the connection to `InGame`, sends `SM_ENTER_WORLD_CHECK`, then sends the implemented post-enter packets `SM_SKILL_LIST`, `SM_SKILL_COOLDOWN`, `SM_ITEM_COOLDOWN`, `SM_QUEST_LIST`, current-title `SM_TITLE_INFO`, `SM_MOTION`, `SM_AFTER_TIME_CHECK_4_7_5`, optional `SM_UI_SETTINGS` blobs, Java-split `SM_INVENTORY_INFO`, `SM_CHANNEL_INFO`, obelisk `SM_BIND_POINT_INFO`, baseline `SM_PLAYER_SPAWN`, and `SM_GAME_TIME`.
+- Current active work is Phase 6c enter-world. The C# path handles `CM_ENTER_WORLD`, validates missing/online/reentry/duplicate-world cases, loads the player common row, cube inventory rows plus `item_stones` details, regular warehouse rows plus `item_stones` details, account warehouse rows plus `item_stones` details, player skills, active skill cooldowns, active item cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox rows with attached mailbox item template IDs/full item state, broker settlement summary, owned house rows, active craft cooldowns, active portal cooldowns, life stats, friends, blocked users, abyss rank, client settings, and obelisk bind point, marks the character online, stores it in the world container, transitions the connection to `InGame`, sends `SM_ENTER_WORLD_CHECK`, then sends the implemented post-enter packets `SM_SKILL_LIST`, `SM_SKILL_COOLDOWN`, `SM_ITEM_COOLDOWN`, `SM_QUEST_COMPLETED_LIST`, `SM_QUEST_LIST`, current-title and bonus-title `SM_TITLE_INFO`, `SM_MOTION`, `SM_AFTER_TIME_CHECK_4_7_5`, optional `SM_UI_SETTINGS` blobs, Java-split `SM_INVENTORY_INFO`, `SM_CHANNEL_INFO`, obelisk `SM_BIND_POINT_INFO`, baseline `SM_PLAYER_SPAWN`, `SM_GAME_TIME`, Java-shaped regular/account `SM_WAREHOUSE_INFO`, empty auxiliary warehouse placeholders, full-title `SM_TITLE_INFO`, `SM_EMOTION_LIST`, baseline `SM_PRICES`, optional `SM_RECIPE_COOLDOWN`, `SM_FRIEND_LIST`, `SM_BLOCK_LIST`, `SM_INSTANCE_INFO`, `SM_ABYSS_RANK`, baseline `SM_STATS_INFO`, mailbox-state `SM_MAIL_SERVICE`, auction-result refresh `SM_RECEIVE_BIDS`, Java-split `SM_MACRO_LIST`, `SM_RECIPE_LIST`, broker settled-icon `SM_BROKER_SERVICE`, and housing owner-state `SM_HOUSE_OWNER_INFO`. In-game mail packets now cover list/read/attachment/delete service responses: `CM_CHECK_MAIL_LIST` -> service `2`, `CM_READ_MAIL` -> service `3`, `CM_GET_MAIL_ATTACHMENT` -> service `5`, and `CM_DELETE_MAIL` -> service `6`. `CM_SEND_MAIL` is parsed and can send Java-shaped service `1` status, but durable send-mail behavior still needs recipient lookup, cross-player mailbox update, and DB persistence.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
-- Next implementation slice should expand enter-world object loading with item stones, recipes, title lists/completed quest list, life stats, warehouse/account data, then continue the Java retail packet sequence with warehouse/full-title/emotion/prices/recipe/friend/block/stats packets.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 258 tests.
+- Next implementation slice should continue durable mail persistence/recipient lookup, broker interaction packets, or housing auction-result notifications, then revisit equipment stat application once item templates/stat functions are in scope.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 261 tests.
 
 ---
 
@@ -61,18 +61,39 @@ From `csharp-port.md`, dependency order:
 - [x] Startup `IDFactory` preload from Java DAO-equivalent used-ID tables
 
 ### Phase 6c: Enter World
-- [ ] Load full player object graph (partial: common player row, inventory/equipment item rows, player skills, active skill/item cooldowns, working quests, motions, client settings, and obelisk bind point)
+- [ ] Load full player object graph (partial: common player row, cube inventory/equipment item rows with mana/fusion/godstone/idian details, regular warehouse rows with item-stone details, account warehouse rows with item-stone details, player skills, active skill/item cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox rows, broker settlement summary, owned house rows, active craft cooldowns, active portal cooldowns, life stats, friends, blocked users, abyss rank, client settings, and obelisk bind point)
 - [x] Java-shaped `CM_ENTER_WORLD` gate checks for missing character, online/reentry state, duplicate world presence
 - [x] Mark player online, update `last_online`, transition connection to in-game, and send `SM_ENTER_WORLD_CHECK`
 - [x] Load `player_skills` and send Java-shaped `SM_SKILL_LIST`
 - [x] Load future `player_cooldowns` rows and send Java-shaped `SM_SKILL_COOLDOWN`
 - [x] Load future `item_cooldowns` rows and send Java-shaped `SM_ITEM_COOLDOWN`
-- [x] Load `player_quests` working states and send Java-shaped `SM_QUEST_LIST`
+- [x] Load `player_quests` states and send Java-shaped `SM_QUEST_COMPLETED_LIST` plus `SM_QUEST_LIST`
+- [x] Load `player_titles` and send Java-shaped full-title `SM_TITLE_INFO`
+- [x] Load `player_emotions` and send Java-shaped `SM_EMOTION_LIST`
+- [x] Load `player_recipes` and send Java-shaped `SM_RECIPE_LIST`
+- [x] Load `player_macrosses` and send Java-shaped `SM_MACRO_LIST`
+- [x] Load `mail` rows with attached mailbox item template IDs and send Java-shaped mailbox-state `SM_MAIL_SERVICE`
+- [x] Handle `CM_CHECK_MAIL_LIST` and send Java-shaped mailbox-list `SM_MAIL_SERVICE` service ID `2`
+- [x] Handle `CM_READ_MAIL` and send Java-shaped read-letter `SM_MAIL_SERVICE` service ID `3`
+- [x] Handle `CM_GET_MAIL_ATTACHMENT` and send Java-shaped attachment-state `SM_MAIL_SERVICE` service ID `5` (in-memory mailbox/inventory update only)
+- [x] Handle `CM_DELETE_MAIL` and send Java-shaped delete `SM_MAIL_SERVICE` service ID `6` (in-memory mailbox update only)
+- [x] Parse `CM_SEND_MAIL` and send Java-shaped send-status `SM_MAIL_SERVICE` service ID `1` shell; full send persistence remains pending
+- [x] Load broker settlement summary and send Java-shaped settled-icon `SM_BROKER_SERVICE`
+- [x] Load owned `houses` rows and send Java-shaped owner-state `SM_HOUSE_OWNER_INFO`
+- [x] Send Java-shaped `SM_RECEIVE_BIDS` auction refresh on login when new unread house-auction system mail exists
+- [x] Load future `craft_cooldowns` rows and send Java-shaped `SM_RECIPE_COOLDOWN`
+- [x] Send baseline Java-shaped `SM_PRICES`
+- [x] Load `friends`/friend common rows and send Java-shaped `SM_FRIEND_LIST`
+- [x] Load `blocks`/blocked-player names and send Java-shaped `SM_BLOCK_LIST`
+- [x] Load future `portal_cooldowns` rows and send Java-shaped login `SM_INSTANCE_INFO`
+- [x] Load `abyss_rank` and send Java-shaped `SM_ABYSS_RANK`
+- [x] Load `player_life_stats` and send baseline Java-shaped `SM_STATS_INFO`
 - [x] Load `player_motions` and send Java-shaped login `SM_MOTION`
 - [x] Load `player_settings` client blobs and send Java-shaped `SM_UI_SETTINGS`
 - [x] Send current-title `SM_TITLE_INFO` and `SM_AFTER_TIME_CHECK_4_7_5`
-- [ ] Inventory/equipment load and stat application (partial: typed inventory rows loaded and `SM_INVENTORY_INFO` sent; item stones/stat application pending)
-- [x] Send Java-shaped `SM_INVENTORY_INFO` with kinah-first ordering, 10-item splits, final empty packet, and current item-info blobs
+- [ ] Inventory/equipment load and stat application (partial: typed inventory rows and `item_stones` rows loaded; item-stone packet display is implemented, stat application pending)
+- [x] Send Java-shaped `SM_INVENTORY_INFO` with kinah-first ordering, 10-item splits, final empty packet, and current item-info blobs including mana/fusion stones, godstone ID, idian polish number, and polish charge
+- [x] Load regular/account warehouse rows and send Java-shaped login `SM_WAREHOUSE_INFO`
 - [x] Load `player_bind_point` and send obelisk `SM_BIND_POINT_INFO`
 - [x] Send `SM_CHANNEL_INFO`, baseline `SM_PLAYER_SPAWN`, and `SM_GAME_TIME`
 - [x] Position/world placement baseline from `players.world_id`, `x`, `y`, `z`, and `heading`
@@ -147,10 +168,150 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 51 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 258 tests.
 
+### Session 9 (May 20, 2026)
+- Added typed player title and emotion models with Java expirable-style `secondsUntilExpiration` helpers.
+- Extended enter-world loading with `player_titles`, `player_emotions`, and `players.bonus_title_id`, matching `PlayerTitleListDAO.loadTitleList`, `PlayerEmotionListDAO.loadEmotions`, and `PlayerDAO.loadPlayerCommonData`.
+- Added Java-shaped `SM_QUEST_COMPLETED_LIST`, full-list and bonus-title variants of `SM_TITLE_INFO`, and `SM_EMOTION_LIST`.
+- Wired successful enter-world handling to send completed quests before working quests, bonus-title info after current-title info, then full-title and emotion lists after `SM_GAME_TIME` in the retail sequence.
+- Current gaps in this cluster: completed quest repeat flag still defaults to Java's non-repeat value until quest template repeat metadata is ported; membership-granted global emotions are not synthesized yet.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 51 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 258 tests.
+
+### Session 10 (May 20, 2026)
+- Added enter-world loading for `player_recipes` and future `craft_cooldowns`, matching `PlayerRecipesDAO.load` and `CraftCooldownsDAO.loadCraftCooldowns`.
+- Added Java-shaped `SM_PRICES`, `SM_RECIPE_COOLDOWN`, and `SM_RECIPE_LIST` packet writers.
+- Wired the implemented retail sequence after title/emotion to send baseline prices, optional recipe cooldowns, and the recipe list. `SM_RECIPE_LIST` is currently sent after skipped macro/mail/housing packets; it should move into the exact Java slot when those systems land.
+- Current gaps in this cluster: `SM_PRICES` uses Java config defaults (`100/100/100`) until siege influence pricing is ported.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 51 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 258 tests.
+
+### Session 11 (May 20, 2026)
+- Added typed friend and blocked-user models and enter-world loading from `friends`, `blocks`, and joined `players` rows, matching `FriendListDAO.load` and `BlockListDAO.load`.
+- Added Java-shaped `SM_FRIEND_LIST` and `SM_BLOCK_LIST` packet writers.
+- Wired the implemented retail sequence after recipe cooldowns to send friend and block lists before the deferred recipe-list tail packet.
+- Current gaps in this cluster: friend online status uses persisted/common-row online state; exact Java `World.getPlayer(...).getFriendList().getStatus()` behavior should be tightened when richer world/player social state lands. Friend house address/door fields remain zero until housing is ported.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 51 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 258 tests.
+
+### Session 12 (May 20, 2026)
+- Added typed abyss rank model and enter-world loading from `abyss_rank`, including Java's default grade-9 soldier fallback when no row exists.
+- Added Java-shaped `SM_ABYSS_RANK` packet writer.
+- Wired the implemented retail sequence to send abyss rank after friend/block lists. `SM_INSTANCE_INFO` is still skipped ahead of it until instance cooldown static data and portal cooldowns are ported.
+- Current gaps in this cluster: daily/weekly abyss rank rollover logic and ranking-cache position calculation are not ported yet; the C# packet uses persisted `rank_pos` as the available ranking position.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 51 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 258 tests.
+
+### Session 13 (May 20, 2026)
+- Added typed `InstanceCooltimeTable` parsing from Java `instance_cooltimes.xml`, including the `id`, `worldId`, `race`, and `maxcount` fields consumed by `SM_INSTANCE_INFO`.
+- Added typed `PlayerPortalCooldown` and enter-world loading from future `portal_cooldowns` rows, matching `PortalCooldownsDAO.loadPortalCooldowns`.
+- Added Java-shaped login `SM_INSTANCE_INFO` packet writer with update type `2`, active-player instance list, remaining reuse seconds, max counts, negative entry counts, and race visibility byte.
+- Wired the implemented retail sequence to send `SM_INSTANCE_INFO` after `SM_BLOCK_LIST` and before `SM_ABYSS_RANK`.
+- Current gaps in this cluster: targeted/single-instance update packets and multi-player instance-info fanout are not ported yet; the current implementation covers the login all-instance path used by enter-world.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 51 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 258 tests.
+
+### Session 14 (May 20, 2026)
+- Added typed `PlayerLifeStats` and enter-world loading from `player_life_stats`, matching `PlayerLifeStatsDAO.loadPlayerLifeStat` for loaded HP/MP/FP values.
+- Extended player common-row loading with `recoverexp`, `dp`, and `reposte_energy` so stats packets can include Java `PlayerCommonData` XP/DP/repose fields.
+- Added baseline Java-shaped `SM_STATS_INFO` packet writer in opcode `1`, including class base stats, Java base HP/MP formulas, loaded current HP/MP/FP, XP fields, DP, inventory capacity/size, repose values, and the base-stat tail.
+- Wired the implemented retail sequence to send `SM_STATS_INFO` after `SM_ABYSS_RANK`.
+- Current gaps in this cluster: equipment/item/effect stat functions are not applied yet, so the packet uses Java no-equipment/no-effect baseline stats; missing `player_life_stats` rows are treated as full baseline HP/MP/FP but are not auto-inserted yet.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 52 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 259 tests.
+
+### Session 15 (May 20, 2026)
+- Split enter-world item loading into Java-like cube inventory, regular warehouse, and account warehouse loads, matching `InventoryDAO.loadStorage` owner semantics for `CUBE`, `REGULAR_WAREHOUSE`, and `ACCOUNT_WAREHOUSE`.
+- Extended player common-row loading with `wh_npc_expands` and `wh_bonus_expands` so regular warehouse packets can carry Java's warehouse expansion level.
+- Added Java-shaped `SM_WAREHOUSE_INFO` packet writer in opcode `168`, including regular warehouse split packets, final empty packets, account warehouse with kinah-inclusive item list, and empty login placeholders for absent pet/housing warehouse IDs.
+- Wired the implemented retail sequence to send warehouse info after `SM_GAME_TIME` and before full-title/emotion info.
+- Current gaps in this cluster: legion warehouse open/use flows are not ported; pet/housing storage contents are not loaded yet, so login currently sends the Java-style empty placeholders for those storage IDs.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 52 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 259 tests.
+
+### Session 16 (May 20, 2026)
+- Added DB-backed item-stone models to `InventoryItem` for Java `ManaStone`, `GodStone`, fusion `ManaStone`, and `IdianStone` state restored by `ItemStoneListDAO.load`.
+- Extended cube, regular warehouse, and account warehouse item loading to hydrate `item_stones` rows for categories `MANASTONE`, `GODSTONE`, `FUSIONSTONE`, and `IDIANSTONE` after each Java-like storage load.
+- Updated item blob serialization to mirror Java `CompositeItemBlobEntry`, `EnchantInfoBlobEntry`, and `PolishInfoBlobEntry` for fusion stones, mana stones, godstone ID, idian stone ID/polish number, and idian polish charge.
+- Added focused packet coverage that parses a serialized `SM_INVENTORY_INFO` item blob and verifies the stone/godstone/idian fields at their Java-shaped offsets.
+- Current gaps in this cluster: Java's invalid-stone cleanup checks against item templates/socket counts are not ported yet; equipment/item stat application from stones remains pending for the later stats/equipment slice.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 53 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 260 tests.
+
+### Session 17 (May 20, 2026)
+- Added typed `PlayerMacro` state matching Java `Macros.Macro`.
+- Extended enter-world loading with `player_macrosses`, matching `PlayerMacrosDAO.loadMacros`.
+- Added Java-shaped `SM_MACRO_LIST` in opcode `231`, including the clear-list flag, negative macro count, UTF-16 macro XML body, empty-list clear packet, and Java-style dynamic packet splitting.
+- Wired the implemented retail sequence to send macro list packets after `SM_STATS_INFO` and before `SM_RECIPE_LIST`, matching `PlayerEnterWorldService.sendMacroList`'s relative slot after the still-deferred mail/housing/passport services.
+- Current gaps in this cluster: macro create/update/delete client packets and persistence are not ported yet; this covers login restore/display parity only.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 53 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 260 tests.
+
+### Session 18 (May 20, 2026)
+- Added typed `PlayerMail` state matching the mailbox `Letter` rows restored by `MailDAO.loadPlayerMailbox`.
+- Extended enter-world loading with `mail` rows for the active player, including unread state, attached item object ID, attached kinah, letter type, and received time.
+- Added Java-shaped mailbox-state `SM_MAIL_SERVICE` in opcode `161` for service ID `0`, writing total, unread, unread express, and unread Black Cloud counts.
+- Wired the implemented retail sequence to send mailbox state after `SM_STATS_INFO` and before macro/recipe restore, matching the login effect of `MailService.onPlayerLogin` while heavier mail services remain deferred.
+- Current gaps in this cluster: `CM_CHECK_MAIL_LIST`, mail list packet service ID `2`, read mail service ID `3`, attachment retrieval service ID `5`, delete service ID `6`, and send-mail persistence are not ported yet.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 53 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 260 tests.
+
+### Session 19 (May 20, 2026)
+- Added typed `PlayerBrokerSettlementSummary` state matching the login subset of `BrokerService.getSettledItemsForPlayer` and `extractEarnedKinahForSoldItems`.
+- Extended enter-world loading with a broker settlement summary query over `broker` rows for the player's Java broker race, counting settled rows and summing earned kinah for sold settled rows.
+- Added Java-shaped settled-icon `SM_BROKER_SERVICE` in opcode `146`, matching `SM_BROKER_SERVICE(boolean showSettledIcon, long settledKinah)` and `writeShowSettledIcon`.
+- Wired the implemented retail sequence to send the broker settled icon after `SM_RECIPE_LIST` when the player has any settled broker rows, matching `BrokerService.onPlayerLogin`.
+- Current gaps in this cluster: full broker startup cache, search/list/register/cancel/buy/settle interaction packets, settled item page details, and broker item persistence tasks are not ported yet.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 53 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 260 tests.
+
+### Session 20 (May 20, 2026)
+- Added typed `PlayerHouse` state for the owner-info subset of Java `House`: address ID, building ID, acquire time, next payment time, and active/inactive flag.
+- Extended enter-world loading with owned `houses` rows. Studio addresses `2001`/`3001` take precedence like `HousingService.findPlayerHouses`; otherwise custom houses are ordered by acquire time and the oldest is treated as active while later houses are marked inactive, matching Java startup inactive-state derivation.
+- Added Java-shaped `SM_HOUSE_OWNER_INFO` in opcode `263`, including active house address/building, owner-state flags, town level placeholder, Java-like weeks-until-next-pay calculation, inactive house address/building, and inactive grace seconds.
+- Wired the implemented retail sequence to send housing owner profile info after broker login notification, matching `HousingService.onPlayerLogin`'s final packet.
+- Current gaps in this cluster: exact town level, exact auction-end-based inactive-house grace scheduling, housing payment overdue/sequestrate system messages, house static-data ownership integration, house registry/scripts/objects, and housing interaction packets are not ported yet. Login `SM_RECEIVE_BIDS` auction refresh was added later in Session 24.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 53 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 260 tests.
+
+### Session 21 (May 20, 2026)
+- Extended `PlayerMail` with the attached item template ID needed by Java `SM_MAIL_SERVICE.writeLettersList`.
+- Updated mailbox loading to left-join attached mailbox inventory rows (`StorageType.MAILBOX`, ID `127`) so list packets can write both attached item object ID and template ID like Java `MailDAO.loadPlayerMailbox` plus `InventoryDAO.loadItems`.
+- Added Java-shaped `SM_MAIL_SERVICE` service ID `2` mailbox-list packets, including newest-first ordering, express-only unread express/Black Cloud filtering, negative final packet counts, UTF-16 sender/title sizing, and dynamic splitting against the Java static body size.
+- Added `CM_CHECK_MAIL_LIST` opcode `133` and wired in-game handling to answer from the active player, matching `CM_CHECK_MAIL_LIST.runImpl -> MailService.sendMailList(player, expressOnly, false)`.
+- Current gaps in this cluster: mail read service ID `3`, attachment retrieval service ID `5`, delete service ID `6`, send-mail persistence, and mailbox refresh packets remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 54 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 261 tests.
+
+### Session 22 (May 20, 2026)
+- Extended loaded `PlayerMail` state to carry the attached mailbox `InventoryItem` when present, including `item_stones` hydration, so read-mail packets can reuse the Java-shaped item-info blob writer.
+- Added Java-shaped `SM_MAIL_SERVICE` service ID `3` read-letter packets with Java mailbox count packing, sender/title/message strings, no-attachment zeros, attached item object/template/name/blob fields, attached kinah, timestamp seconds, and letter type.
+- Added `CM_READ_MAIL` opcode `134` and wired in-game handling to send the read-letter packet before marking the in-memory letter unread flag false, matching `MailService.readMail`.
+- Current gaps in this cluster: read state persistence is only in memory until logout/save persistence is ported; attachment retrieval service ID `5`, delete service ID `6`, send-mail persistence, and mailbox refresh packets remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 54 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 261 tests.
+
+### Session 23 (May 20, 2026)
+- Added Java-shaped `SM_MAIL_SERVICE` service ID `1`, `5`, and `6` writers for send-mail status, attachment retrieval state, and delete-mail state.
+- Added `CM_SEND_MAIL`, `CM_GET_MAIL_ATTACHMENT`, and `CM_DELETE_MAIL` opcode parsing for Java opcodes `132`, `136`, and `137`.
+- Wired attachment retrieval to the active player's in-memory mailbox: item attachments move from mailbox storage into the cube list and clear the letter attachment fields; kinah attachments increase or create the cube kinah item and clear attached kinah; both paths send service ID `5` after the state change like Java `MailService.getAttachments`.
+- Wired delete-mail handling to remove requested letters from the active player's in-memory mailbox and send service ID `6` with post-removal counts, matching Java `MailService.deleteMail` packet shape.
+- Wired `CM_SEND_MAIL` to the Java-shaped service ID `1` status response shell. It keeps Java's early no-response cases for unsupported/forbidden letter types and overlong recipients, but currently returns `NO_SUCH_CHARACTER_NAME` for normal attempts until recipient lookup, cross-player mailbox update, commission/inventory handling, and DB persistence are ported.
+- Current gaps in this cluster: durable read/attachment/delete persistence, complete send-mail behavior, mailbox reserve upload/refresh packets, express-postman `CM_READ_EXPRESS_MAIL`, and related system-message failure paths remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 54 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 261 tests.
+
+### Session 24 (May 20, 2026)
+- Added Java-shaped `SM_RECEIVE_BIDS` in opcode `259`, matching `network/aion/serverpackets/SM_RECEIVE_BIDS`.
+- Added login auction-result detection matching the refresh portion of `HousingBidService.onPlayerLogin`: unread `$$HS_AUCTION_MAIL` rows received since `LastOnline` with result IDs `FAILED_BID`, `FAILED_SALE`, `SUCCESS_SALE`, `WIN_BID`, `GRACE_START`, or `GRACE_SUCCESS` now trigger `SM_RECEIVE_BIDS(0)`.
+- Wired the refresh packet immediately after mailbox-state `SM_MAIL_SERVICE`, preserving the Java ordering where `HousingBidService.onPlayerLogin` runs after `MailService.onPlayerLogin`.
+- Current gaps in this cluster: the related housing system-message notifications are still deferred until `SM_SYSTEM_MESSAGE` is ported; full auction list/register/bid/cancel flows remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 54 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 261 tests.
+
 ---
 
 ## Next Steps
 
-1. Expand enter-world object loading with item stones/godstones/idiyans, recipes, title lists/completed quest list, life stats, warehouse/account data.
-2. Continue the Java retail enter-world packet sequence with warehouse info, full title list, emotion list, prices, recipe cooldown/list, friend/block lists, instance/abyss/stats info, and later macro/mail/housing/broker packets.
+1. Continue durable mail persistence/recipient lookup, broker interaction packets, or housing auction-result notifications.
+2. Port equipment/item stat application once item stat functions and template modifiers are in scope.
 3. Add focused live-DB opt-in coverage for creation and enter-world once local schema fixtures are ready.
