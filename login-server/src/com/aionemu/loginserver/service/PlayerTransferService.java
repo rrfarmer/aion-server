@@ -39,7 +39,7 @@ public class PlayerTransferService {
 	private final ScheduledExecutorService scheduledExecutorService;
 
 	private PlayerTransferService() {
-		scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+		 = Executors.newSingleThreadScheduledExecutor();
 		scheduledExecutorService.scheduleAtFixedRate(this::verifyNewTasks, 10, 7 * 60, TimeUnit.SECONDS);
 		log.info("PlayerTransferService will be initialized in 10 sec.");
 	}

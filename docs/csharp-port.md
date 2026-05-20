@@ -7,10 +7,10 @@
 | Phase 0: Starter Workspace | COMPLETE | May 18, 2026 | Solution structure, projects, and entry points scaffolded. See [PHASE-0-COMPLETION.md](PHASE-0-COMPLETION.md) |
 | Phase 1: Parity Harness | COMPLETE | May 18, 2026 | Packet tests, config tests, database fixtures, XML tool. See [PHASE-1-COMPLETION.md](PHASE-1-COMPLETION.md) |
 | Phase 2: Port Commons | COMPLETE | May 18, 2026 | Logging, crypto, socket server base, scheduler. 56 tests passing. See [PHASE-2-COMPLETION.md](PHASE-2-COMPLETION.md) |
-| Phase 3: Port Login Server | COMPLETE | May 19, 2026 | Authentication, game-server registration, session management, Java GS mixed mode, and real-client login/create/logout validated. See [PHASE-3-PROGRESS.md](PHASE-3-PROGRESS.md) |
-| Phase 4: Port Chat Server | PENDING | - | Chat protocol, channels, player messaging |
-| Phase 5: Port Game Infrastructure | PENDING | - | World, scheduler, object factory, data loading |
-| Phase 6: Port Game Core | PENDING | - | Characters, movement, combat, loot, quests |
+| Phase 3: Port Login Server | COMPLETE | May 19, 2026 | Authentication, game-server registration, session management, Java GS mixed mode, and real-client login/create/logout validated. See [PHASE-3-COMPLETION.md](PHASE-3-COMPLETION.md) |
+| Phase 4: Port Chat Server | COMPLETE | May 20, 2026 | Chat protocol, channels, game-server bridge, DB logging, handler pipeline, and real-client mixed mode validated. See [PHASE-4-COMPLETION.md](PHASE-4-COMPLETION.md) |
+| Phase 5: Port Game Infrastructure | COMPLETE | May 20, 2026 | Game socket, bridges, bootstrap, ID factory, static data, and character-selection infrastructure. See [PHASE-5-PROGRESS.md](PHASE-5-PROGRESS.md) |
+| Phase 6: Port Game Core | IN PROGRESS | - | Characters, movement, combat, loot, quests. See [PHASE-6-PROGRESS.md](PHASE-6-PROGRESS.md) |
 | Phase 7: Port Dynamic Handlers | PENDING | - | Commands, zones, instances, AI, quests |
 | Phase 8: Replacement Readiness | PENDING | - | Docker, soak tests, rollback plan |
 
@@ -188,6 +188,12 @@ Validation:
 ### Phase 4: Port Chat Server
 
 Port chat-server after login.
+
+Current status:
+
+- Phase 4 is complete as of May 20, 2026.
+- C# chat loads Java config/database settings, accepts client chat connections on `10241`, accepts Java/C# game-server bridge connections on `9021`, and uses the existing `aion_cs.chatlog` schema.
+- Chat packet models, frame codec behavior, channel logic, localized job-channel aliases, flood/filter/logging handlers, hosted listener smoke tests, opt-in live DB validation, and C# login + Java game + C# chat real-client mixed mode are validated.
 
 Deliverables:
 
@@ -386,9 +392,10 @@ The C# port is not considered ready until all of these are true:
 
 1. Read this document fully.
 2. Treat Phase 3 login-server parity as complete unless new client or Java GS testing exposes a mismatch.
-3. Continue with Phase 4: port chat-server behavior into `dotnetConversion/src/Aion.ChatServer`.
-4. Use the Java chat-server module as the oracle for packet order, bridge behavior, channel state, and database access.
-5. Keep the Java project building and runnable for mixed-mode validation.
-6. Add or extend parity tests before changing shared protocol behavior.
-7. Add short implementation notes as each phase discovers differences from Java.
+3. Treat Phase 4 chat-server parity as complete unless new client or Java GS testing exposes a mismatch.
+4. Treat Phase 5 game-server infrastructure as complete unless optional real-client shell validation exposes a mismatch.
+5. Continue with Phase 6: port game core behavior into `dotnetConversion/src/Aion.GameServer`.
+6. Keep the Java project building and runnable for mixed-mode validation.
+7. Add or extend parity tests before changing shared protocol behavior.
+8. Add short implementation notes as each phase discovers differences from Java.
 

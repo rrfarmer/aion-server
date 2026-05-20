@@ -99,9 +99,11 @@ The compose file mounts `docker/config/mygs.csharp-login-chat.properties`, where
 start /affinity 7FFFFFFF "" "bin64\AION.bin" -ip:127.0.0.1 -port:2106 -cc:2 -lang:ENG -loginex
 ```
 
-## Pending Smoke Result
+## Smoke Result
 
-Not yet run end-to-end after the C# chat socket implementation. Local automated coverage currently validates:
+Passed on May 20, 2026. A real Aion client connected through C# login, entered the Java game server, sent chat messages through C# chat, and displayed chat-window combat/info traffic during play.
+
+Local automated coverage also validates:
 - game-server auth/player registration over TCP
 - client chat init/auth/channel request over TCP
 - two-client channel broadcast over TCP

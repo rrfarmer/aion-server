@@ -1,8 +1,8 @@
-# Phase 4: Port Chat Server to C#
+﻿# Phase 4: Port Chat Server - Completion Notes
 
-**Status**: Implementation Started - Phase 4A-4F locally covered, chat DB live validation passed, real-client mixed-mode validation pending  
-**Start Date**: May 19, 2026  
-**Target Completion**: May 22-23, 2026 (4-5 days, 8 sub-phases)
+**Date**: May 20, 2026  
+**Status**: Complete  
+**Start Date**: May 19, 2026
 
 ---
 
@@ -32,9 +32,9 @@ Discoveries:
 - Game-server bridge opcodes from Java are `0x00` auth, `0x01` player auth, `0x02` player logout, and `0x03` player gag.
 - Server packet opcodes from Java are `0x02` player auth response, `0x11` channel response, `0x1A` channel message, and `0x31` chat init.
 
-Open follow-up:
-- `JobChannel` has the core class alias structure in C#, but the full localized alias table still needs exact Unicode parity extraction before final channel parity signoff.
-- Socket listeners and packet handlers are intentionally deferred to the next slice after this scaffold.
+Closed later in this phase:
+- Exact localized `JobChannel` aliases were extracted and covered.
+- Socket listeners and packet handlers were implemented and validated.
 
 ### May 20, 2026 - Phase 4B Packets + Phase 4C Socket Spine
 
@@ -65,10 +65,10 @@ New coverage:
 - Client chat init, auth, and channel request over loopback TCP.
 - Two-client channel message broadcast over loopback TCP.
 
-Open follow-up:
-- Phase 4C still needs mixed-mode validation with Java GS and a real client.
-- Phase 4E still needs live-client validation of any non-default filter configuration if configured in production.
-- Phase 4F still needs a live DB run of the opt-in chatlog integration test.
+Closed later in this phase:
+- Mixed-mode validation with Java GS and a real client passed.
+- The opt-in chatlog DB test passed against live MySQL.
+- Non-default production filters remain configuration-specific; the handler path is covered by automated tests.
 
 ### May 20, 2026 - Hosted Listener + Handler Pipeline
 
@@ -100,10 +100,10 @@ New coverage:
 - Logging handler writes to `IChatLogRepository` when DB logging is enabled.
 - Registry preserves handler execution order.
 
-Open follow-up:
-- Phase 4F opt-in MySQL test is present but still needs a live DB run.
-- Full localized `JobChannel` aliases still need exact Unicode parity extraction.
-- Mixed-mode validation with Java GS and the real client remains pending.
+Closed later in this phase:
+- Live MySQL validation passed.
+- Full localized `JobChannel` aliases were extracted and tested.
+- Mixed-mode validation with Java GS and a real client passed.
 
 ### May 20, 2026 - Phase 4F ChatLog Integration Harness
 
@@ -122,9 +122,9 @@ Validation:
 - `dotnet test tests\Aion.ChatServer.Tests\Aion.ChatServer.Tests.csproj` - 23 passed with DB integration disabled.
 - `dotnet test AionServer.slnx` - 202 passed total: 23 chat, 57 commons, 1 game, 121 login.
 
-Open follow-up:
-- Run the opt-in chat DB integration test against a live MySQL `aion_cs` database.
-- Mixed-mode validation with Java GS and the real client remains pending.
+Closed later in this phase:
+- The opt-in chat DB integration test passed against live MySQL.
+- Mixed-mode validation with Java GS and a real client passed.
 
 ### May 20, 2026 - Job Alias Parity + C# Chat Mixed-Mode Assets
 
@@ -140,9 +140,23 @@ Validation:
 - `dotnet test dotnetConversion/tests/Aion.ChatServer.Tests/Aion.ChatServer.Tests.csproj` - 28 passed.
 - `dotnet test dotnetConversion/AionServer.slnx` - 207 passed total: 28 chat, 57 commons, 1 game, 121 login.
 
-Open follow-up:
-- Execute the C# login + C# chat + Java GS mixed-mode runbook with a real client and capture the result.
-- Current local environment note: Java chat/game Docker containers are already occupying `10241` and `7777`; stop the Java mixed-mode stack before the C# chat validation run.
+Closed later in this phase:
+- The C# login + C# chat + Java GS mixed-mode runbook was executed with a real client.
+- Port conflicts with the older Java chat/game stack were documented in the mixed-mode validation runbook.
+
+### May 20, 2026 - Live Startup DI Fix
+
+Completed:
+- Fixed C# chat startup failure where `FilterHandler` had two DI-resolvable constructors.
+- Kept the keyword-list constructor for focused tests by changing it from `IEnumerable<string>` to `params string[]`.
+- Added a service-provider regression test that resolves the built-in handler pipeline with `ValidateOnBuild`.
+
+Validation:
+- `dotnet test dotnetConversion/tests/Aion.ChatServer.Tests/Aion.ChatServer.Tests.csproj` - 29 passed.
+- `dotnet test dotnetConversion/AionServer.slnx` - 208 passed total: 29 chat, 57 commons, 1 game, 121 login.
+
+Closed later in this phase:
+- C# chat was restarted after the DI fix and live validation passed.
 
 ### May 20, 2026 - Live Chat DB Validation + Bootstrap Hardening
 
@@ -155,8 +169,24 @@ Validation:
 - `powershell -ExecutionPolicy Bypass -File dotnetConversion/scripts/start-mixed-mode-db.ps1 -ContainerName aion-chat-integration-mysql -RootPassword aion -HostPort 3307 -ResetSchema` - passed.
 - `AION_CHAT_DB_INTEGRATION=1 dotnet test dotnetConversion/tests/Aion.ChatServer.Tests/Aion.ChatServer.Tests.csproj --filter ChatLogRepository_InsertsAgainstJavaChatSchema_WhenEnabled` - 1 passed.
 
-Open follow-up:
-- Execute the C# login + C# chat + Java GS mixed-mode runbook with a real client and capture the result.
+Closed later in this phase:
+- The C# login + C# chat + Java GS mixed-mode runbook passed with a real client.
+
+### May 20, 2026 - Real Client Mixed-Mode Validation
+
+Completed:
+- Ran the live validation path with C# login, C# chat, and Java game server in Docker.
+- Connected a real Aion client through the C# login server.
+- Entered the game through the Java game server and validated the C# chat server in the real client.
+- Sent chat messages successfully.
+- Confirmed chat-window traffic including combat/info messages displayed during play.
+
+Validation:
+- Real client smoke: passed.
+- Mixed-mode chain: C# LoginServer -> Java GameServer -> C# ChatServer passed.
+
+Final status:
+- No known Phase 4 chat-server parity blockers remain before Phase 5.
 
 ## Goal
 
@@ -172,22 +202,22 @@ Port the Java `chat-server` to C# (`Aion.ChatServer`) with 1:1 **full feature pa
 - Dynamic handler infrastructure (flood protection, filtering, logging)
 - Graceful shutdown and connection cleanup
 
-## Critical Dependency: Phase 3 Must Be Complete
+## Phase 3 Dependency: Satisfied
 
-**This phase CANNOT proceed without Phase 3 (C# Login Server) complete and passing all tests.**
+Phase 4 depended on the C# LoginServer from Phase 3. That dependency is satisfied:
 
 Mixed-mode validation and inter-server communication require:
 - C# LoginServer running and accepting client connections
 - LoginServer correctly forwarding players to Java GameServer
-- Phase 3 tests (180 tests) all passing
+- Phase 3 login-server tests remain passing
 
-If Phase 3 is not complete, skip mixed-mode validation (4G) and focus on integration tests (4G packet/service tests) using mock sockets.
+Phase 3 remained green through Phase 4 verification.
 
 ## Validation Strategy
 
 1. **Byte-level packet parity**: Golden tests enforce identical serialization to Java
 2. **Mixed-mode integration**: C# login server (Phase 3) + Java game server + C# chat server with real client
-3. **Real client smoke tests**: Full auth → join channel → send message → leave flow
+3. **Real client smoke tests**: Full auth â†’ join channel â†’ send message â†’ leave flow
 4. **No regressions**: Phase 3 (login server) tests remain passing
 5. **Automated test suite**: Run from Visual Studio; Docker for MySQL and Java game server
 
@@ -195,7 +225,7 @@ If Phase 3 is not complete, skip mixed-mode validation (4G) and focus on integra
 
 ## Prerequisites & Operational Setup
 
-### Before Starting Phase 4A
+### Operational Setup Used For Phase 4
 
 1. **Java Chat Server Reference**
    - Source: `chat-server/src/com/aionemu/chatserver/`
@@ -323,7 +353,7 @@ cd dotnetConversion && dotnet run --project src/Aion.LoginServer/Aion.LoginServe
 # In another terminal, start C# ChatServer (Phase 4)
 cd dotnetConversion && dotnet run --project src/Aion.ChatServer/Aion.ChatServer.csproj --no-build
 
-# Connect real Aion client to localhost:2104 (C# login) → 7777 (Java game) → 10241 (C# chat)
+# Connect real Aion client to localhost:2104 (C# login) â†’ 7777 (Java game) â†’ 10241 (C# chat)
 ```
 
 ---
@@ -351,7 +381,7 @@ cd dotnetConversion && dotnet run --project src/Aion.ChatServer/Aion.ChatServer.
 3. **Packet Base Classes**:
    - `AbstractClientPacket.cs`: Extends `PacketBuffer`, holds opcode, abstract `Task Run(ChatClient)`, deserialization
    - `AbstractServerPacket.cs`: Extends `PacketBuffer`, holds opcode, serialization, write factory
-   - `ClientPacketFactory.cs`: Static dispatcher by opcode → packet type
+   - `ClientPacketFactory.cs`: Static dispatcher by opcode â†’ packet type
    - `ServerPacketFactory.cs`: Static dispatcher for server-side packets
    - `GsClientPacket.cs`, `GsServerPacket.cs`: Base for game-server inter-server protocol
    - `GsPacketFactory.cs`: Dispatcher for GS packets
@@ -450,7 +480,7 @@ Program.cs (modified)
 
 5. **Golden Test File** (`tests/Aion.ChatServer.Tests/Network/ChatPacketParityTests.cs`):
    - Reference byte vectors (captured from real Java implementation or handcrafted from spec)
-   - Test: Deserialize from bytes → validate fields → serialize → compare bytes
+   - Test: Deserialize from bytes â†’ validate fields â†’ serialize â†’ compare bytes
    - Edge cases: empty strings, long names (UTF-16LE), special characters
    - Coverage: All 17 packet types (9 client + 4 server + 4 GS)
    - Expected result: All tests pass with 100% byte parity
@@ -487,9 +517,9 @@ Network/Packets/GameServer/SM_PLAYER_AUTH_RESPONSE.cs
 ```
 
 **Temporary Reference** (to be created during implementation):
-- `docs/TEMP-OPCODES.md` — Document extracted opcode constants, string formats, packet layouts. Delete after Phase 4B complete.
+- `docs/TEMP-OPCODES.md` â€” Document extracted opcode constants, string formats, packet layouts. Delete after Phase 4B complete.
 
-**Verification**: `dotnet test ChatPacketParityTests` — all 17 packet types deserialize/serialize with byte parity to golden vectors.
+**Verification**: `dotnet test ChatPacketParityTests` â€” all 17 packet types deserialize/serialize with byte parity to golden vectors.
 
 ---
 
@@ -501,36 +531,36 @@ Network/Packets/GameServer/SM_PLAYER_AUTH_RESPONSE.cs
 
 **ClientChannelHandler (Client Connection)**:
 ```
-┌─────────────┐
-│  CONNECTED  │  ← Initial state after TCP handshake
-└──────┬──────┘
-       │ CM_PLAYER_AUTH received + token verified
-       ▼
-┌─────────────┐
-│   AUTHED    │  ← Can join channels, send messages
-└──────┬──────┘
-       │ Connection closed or CM_CHANNEL_LEAVE on last channel
-       ▼
-┌──────────────────┐
-│  DISCONNECTED    │  ← Cleanup: remove from channels, logout
-└──────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  CONNECTED  â”‚  â† Initial state after TCP handshake
+â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜
+       â”‚ CM_PLAYER_AUTH received + token verified
+       â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚   AUTHED    â”‚  â† Can join channels, send messages
+â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜
+       â”‚ Connection closed or CM_CHANNEL_LEAVE on last channel
+       â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  DISCONNECTED    â”‚  â† Cleanup: remove from channels, logout
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 **GsConnection (Game-Server Connection)**:
 ```
-┌─────────────┐
-│  CONNECTED  │  ← Initial state after TCP handshake from GS
-└──────┬──────┘
-       │ CM_CS_AUTH received + password verified
-       ▼
-┌─────────────┐
-│   AUTHED    │  ← Can register/logout players
-└──────┬──────┘
-       │ Connection closed or auth failure
-       ▼
-┌──────────────────┐
-│  DISCONNECTED    │  ← Mark GS offline, cleanup
-└──────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  CONNECTED  â”‚  â† Initial state after TCP handshake from GS
+â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜
+       â”‚ CM_CS_AUTH received + password verified
+       â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚   AUTHED    â”‚  â† Can register/logout players
+â””â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”˜
+       â”‚ Connection closed or auth failure
+       â–¼
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚  DISCONNECTED    â”‚  â† Mark GS offline, cleanup
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 **Deliverables**:
@@ -544,14 +574,14 @@ Network/Packets/GameServer/SM_PLAYER_AUTH_RESPONSE.cs
      - `DISCONNECTED`: Cleanup on close
    - Frame codec: 2-byte LE length prefix (length includes itself), max 16384 bytes
    - Packet dispatch: Deserialize opcode, lookup in `ClientPacketFactory`, run `packet.Run(chatClient)`
-   - Error handling: Malformed packets → log warning, optional disconnect or skip
+   - Error handling: Malformed packets â†’ log warning, optional disconnect or skip
    - Graceful close: Notify `ChatService.PlayerLogoutAsync()` on socket close
 
 2. **Game-Server Bridge Socket Server** (`Network/GameServerSocketServer.cs`):
    - Extends `BaseSocketServer` from `Aion.Commons`
    - Listener: `ChatServerOptions.GameServerSocketAddress` (default: 0.0.0.0:9021)
    - Per-connection handler (`GsConnection.cs`):
-     - State: `CONNECTED` → `AUTHED`
+     - State: `CONNECTED` â†’ `AUTHED`
      - On `CM_CS_AUTH`: Verify password via `GameServerService.RegisterGameServerAsync()`, respond with `SM_GS_AUTH_RESPONSE`
      - On `CM_PLAYER_AUTH`: Register player via `ChatService.RegisterPlayerWithChannelAsync()`, respond with token
      - On `CM_PLAYER_LOGOUT`: Remove player from `ChatService`, cleanup
@@ -563,7 +593,7 @@ Network/Packets/GameServer/SM_PLAYER_AUTH_RESPONSE.cs
    - Deserialize incoming packets, dispatch via `ClientPacketFactory`
    - Catch exceptions: Log malformed packets, don't crash connection
    - Serialize outgoing packets via `ServerPacketFactory`
-   - Track connection state (CONNECTED → AUTHED)
+   - Track connection state (CONNECTED â†’ AUTHED)
 
 4. **Game-Server Connection Handler** (`Network/Handlers/GsConnection.cs`):
    - Netty-style handler for game-server peer connection
@@ -667,9 +697,9 @@ Network/Handlers/GsConnection.cs
 
 6. **Packet Handler Dispatch** (wire into `ClientChannelHandler`):
    - `ClientPacketFactory.Create(opcode, buffer)`: Deserialize and return packet instance
-   - Call `packet.Run(chatClient)` → await result
+   - Call `packet.Run(chatClient)` â†’ await result
    - Catch exceptions: Log malformed packet, optionally disconnect
-   - Handlers call appropriate service methods (e.g., `CM_CHANNEL_JOIN` → `ChatService.RegisterPlayerWithChannelAsync()`)
+   - Handlers call appropriate service methods (e.g., `CM_CHANNEL_JOIN` â†’ `ChatService.RegisterPlayerWithChannelAsync()`)
    - Background tasks (channel join, token generation) run via `Task` without blocking connection
 
 **Files to Create/Modify**:
@@ -706,7 +736,7 @@ Network/Packets/ClientPacketFactory.cs (finalize dispatch)
      - Support attribute-based registration: `[ChatHandler("flood_prevent")]`
      - `RegisterHandler(name, handler): void`
      - `GetHandlers(): IEnumerable<IChatMessageHandler>`
-     - `ExecuteHandlersAsync(message, sender, channel): Task` — iterate and execute all handlers
+     - `ExecuteHandlersAsync(message, sender, channel): Task` â€” iterate and execute all handlers
 
 2. **Built-in Handlers**:
    - `Handlers/Built-in/FloodProtectionHandler.cs`:
@@ -800,10 +830,10 @@ Program.cs (register repository)
      - Create `CM_PLAYER_AUTH` packet, serialize, deserialize, validate fields
      - Repeat for all 17 packet types
    - **Service Logic**:
-     - `ChatService.RegisterPlayerAsync()` → verify token is 48 bytes
-     - `ChatChannels.GetOrCreateAsync("@region_ALL\u00011.1.AION.KOR")` → verify `RegionChannel` created
-     - `ChatChannels.GetOrCreateAsync("@trade_210010000\u00012.1.AION.KOR")` → verify `TradeChannel` created
-     - `BroadcastService.BroadcastMessageAsync()` → verify all members receive packet
+     - `ChatService.RegisterPlayerAsync()` â†’ verify token is 48 bytes
+     - `ChatChannels.GetOrCreateAsync("@region_ALL\u00011.1.AION.KOR")` â†’ verify `RegionChannel` created
+     - `ChatChannels.GetOrCreateAsync("@trade_210010000\u00012.1.AION.KOR")` â†’ verify `TradeChannel` created
+     - `BroadcastService.BroadcastMessageAsync()` â†’ verify all members receive packet
    - **Database**:
      - Insert test chat log, verify in database
      - Verify connection pooling works
@@ -849,7 +879,7 @@ Program.cs (register repository)
      1. Real Aion client connects to C# login server on 2104
      2. Client authenticates via `CM_LOGIN` (account/password)
      3. C# login server verifies in MySQL
-     4. Client receives `SM_SERVER_LIST` → Java game server listed
+     4. Client receives `SM_SERVER_LIST` â†’ Java game server listed
      5. Client sends `CM_PLAY` to select game server
      6. C# login server connects to Java GS on 9898
      7. C# login server forwards player to Java GS
@@ -860,10 +890,10 @@ Program.cs (register repository)
      12. Client sends `CM_PLAYER_AUTH` with token from step 10
      13. C# chat server verifies token, sets AUTHED
      14. Client joins region channel
-     15. Client sends message → C# chat broadcasts to all members
+     15. Client sends message â†’ C# chat broadcasts to all members
      16. Other connected clients (if any) receive message
      17. Java GS remains operational throughout
-     18. Client logs out via Java GS → C# chat server receives `CM_PLAYER_LOGOUT`
+     18. Client logs out via Java GS â†’ C# chat server receives `CM_PLAYER_LOGOUT`
      19. All connections close cleanly
    - **Success Criteria**: All steps succeed; Java GS operational before, during, after; no crashes
 
@@ -886,14 +916,14 @@ tests/Aion.ChatServer.Tests/MIXED_MODE_VALIDATION.md
 **Deliverables**:
 
 1. **Packet Parity Validation**:
-   - `dotnet test ChatPacketParityTests` → All 17 packet types serialize/deserialize identically to golden vectors
+   - `dotnet test ChatPacketParityTests` â†’ All 17 packet types serialize/deserialize identically to golden vectors
    - Confirm opcodes documented and correct
 
 2. **Service Logic Validation**:
-   - `ChatService`: Token generation, player registration, logout → all correct
-   - `GameServerService`: Password auth, GS registration → all correct
-   - `BroadcastService`: Channel broadcast, member tracking → all correct
-   - `ChatChannels`: Identifier parsing, channel creation → all correct
+   - `ChatService`: Token generation, player registration, logout â†’ all correct
+   - `GameServerService`: Password auth, GS registration â†’ all correct
+   - `BroadcastService`: Channel broadcast, member tracking â†’ all correct
+   - `ChatChannels`: Identifier parsing, channel creation â†’ all correct
 
 3. **Socket Server Validation**:
    - Client server (10241): Accepts connections, frames packets, dispatches handlers
@@ -911,8 +941,8 @@ tests/Aion.ChatServer.Tests/MIXED_MODE_VALIDATION.md
    - Handler pipeline: Executes in order, veto aborts broadcast
 
 6. **No Regressions** (Phase 3):
-   - `dotnet test AionLoginServer.Tests` → All tests pass
-   - Login server functionality: authentication, game-server registration, session keys → all work
+   - `dotnet test AionLoginServer.Tests` â†’ All tests pass
+   - Login server functionality: authentication, game-server registration, session keys â†’ all work
 
 7. **Documentation**:
    - Update `docs/csharp-port.md`: Phase 4 marked COMPLETE
@@ -920,17 +950,17 @@ tests/Aion.ChatServer.Tests/MIXED_MODE_VALIDATION.md
    - Cleanup: Delete `TEMP-OPCODES.md` if created
 
 **Verification Checklist**:
-- [ ] All 17 packet types have golden tests passing
-- [ ] Socket servers accept connections, handle packets, close gracefully
-- [ ] All services functional: ChatService, GameServerService, BroadcastService
-- [ ] All 6 channel types working: RegionChannel, TradeChannel, RaceChannel, JobChannel, LfgChannel, LangChannel
-- [ ] Database: chatlog table exists, ChatLogRepository inserts records
-- [ ] Handlers: FloodProtectionHandler, FilterHandler, LoggingHandler all functional
-- [ ] Integration tests passing
-- [ ] Real client smoke test: Full auth → join → message → leave flow works
-- [ ] Mixed-mode validation: C# login + Java game + C# chat with real client succeeds
-- [ ] Phase 3 tests: No regressions, all LoginServer tests still passing
-- [ ] Documentation: Phase 4 status updated in `docs/csharp-port.md`
+- [x] All 17 packet types have golden tests passing
+- [x] Socket servers accept connections, handle packets, close gracefully
+- [x] All services functional: ChatService, GameServerService, BroadcastService
+- [x] All 6 channel types working: RegionChannel, TradeChannel, RaceChannel, JobChannel, LfgChannel, LangChannel
+- [x] Database: chatlog table exists, ChatLogRepository inserts records
+- [x] Handlers: FloodProtectionHandler, FilterHandler, LoggingHandler all functional
+- [x] Integration tests passing
+- [x] Real client smoke test: full auth, enter game, chat messages, and chat-window combat/info traffic validated
+- [x] Mixed-mode validation: C# login + Java game + C# chat with real client succeeds
+- [x] Phase 3 tests: no regressions, all LoginServer tests still passing
+- [x] Documentation: Phase 4 status updated in `docs/csharp-port.md`
 
 ---
 
@@ -957,11 +987,11 @@ grep -A5 "public.*getOpcode\|private.*opcode" chat-server/src/com/aionemu/chatse
 ```
 
 **Reference files**:
-- `chat-server/src/com/aionemu/chatserver/network/aion/AbstractClientPacket.java` — Base class with opcode field
-- `chat-server/src/com/aionemu/chatserver/network/aion/AbstractServerPacket.java` — Base class with opcode field
-- `chat-server/src/com/aionemu/chatserver/network/aion/` directory — All client/server packet implementations
-- `chat-server/src/com/aionemu/chatserver/network/gameserver/GsClientPacket.java` — GS client packet base
-- `chat-server/src/com/aionemu/chatserver/network/gameserver/GsServerPacket.java` — GS server packet base
+- `chat-server/src/com/aionemu/chatserver/network/aion/AbstractClientPacket.java` â€” Base class with opcode field
+- `chat-server/src/com/aionemu/chatserver/network/aion/AbstractServerPacket.java` â€” Base class with opcode field
+- `chat-server/src/com/aionemu/chatserver/network/aion/` directory â€” All client/server packet implementations
+- `chat-server/src/com/aionemu/chatserver/network/gameserver/GsClientPacket.java` â€” GS client packet base
+- `chat-server/src/com/aionemu/chatserver/network/gameserver/GsServerPacket.java` â€” GS server packet base
 
 **Document extracted opcodes in `TEMP-OPCODES.md` during Phase 4B**, then delete after implementation.
 
@@ -990,9 +1020,9 @@ grep -A5 "public.*getOpcode\|private.*opcode" chat-server/src/com/aionemu/chatse
 ### String Encoding
 - **All packets**: UTF-16LE, null-terminated strings (2-byte null terminator `\u0000`)
 - **Reference**: 
-  - `chat-server/src/com/aionemu/chatserver/network/netty/coder/LoginPacketDecoder.java` — Framing and string parsing
-  - `chat-server/src/com/aionemu/chatserver/network/aion/AbstractClientPacket.java` — `readS()` method
-  - `chat-server/src/com/aionemu/chatserver/network/aion/AbstractServerPacket.java` — `writeS()` method
+  - `chat-server/src/com/aionemu/chatserver/network/netty/coder/LoginPacketDecoder.java` â€” Framing and string parsing
+  - `chat-server/src/com/aionemu/chatserver/network/aion/AbstractClientPacket.java` â€” `readS()` method
+  - `chat-server/src/com/aionemu/chatserver/network/aion/AbstractServerPacket.java` â€” `writeS()` method
 - **C# equivalent**: Use `Encoding.Unicode` (UTF-16LE) for all string read/write operations in packet classes
 - **Gotcha**: Java `String.getBytes(Charset.forName("UTF-16LE"))` may include BOM; verify in actual Java packet encoding
 
@@ -1014,7 +1044,7 @@ grep -A5 "public.*getOpcode\|private.*opcode" chat-server/src/com/aionemu/chatse
 
 ### Real Client Smoke Tests
 - **Location**: Real Aion client, captured session or manual replay
-- **Approach**: Connect to C# chat server, full auth → join → message → leave flow
+- **Approach**: Connect to C# chat server, full auth â†’ join â†’ message â†’ leave flow
 - **Coverage**: End-to-end user journey
 - **Frequency**: Manual, before final validation
 
@@ -1026,43 +1056,30 @@ grep -A5 "public.*getOpcode\|private.*opcode" chat-server/src/com/aionemu/chatse
 
 ---
 
-## Known Gaps & Critical Discovery Points
+## Resolved Discovery Points & Remaining Notes
 
-1. **Opcode Constants** ⚠️ **CRITICAL**
-   - Exact opcode values TBD during Phase 4B
-   - Extract from Java source using grep commands in "Java Reference" section
-   - Document in temporary `docs/TEMP-OPCODES.md`
-   - Delete `TEMP-OPCODES.md` after Phase 4B complete
-   - **DO NOT GUESS OPCODES** — use captured Java traffic or source inspection
+1. **Opcode Constants** âš ï¸ **CRITICAL**
+   - Exact opcode values were extracted from Java source and pinned in packet factories/tests.
+   - No `TEMP-OPCODES.md` file remains.
 
-2. **Token Algorithm Details** ⚠️ **CRITICAL**
-   - Exact SHA256 concatenation order (accountName first vs. random first) TBD
-   - Verify in Java `ChatService.generateToken()` 
-   - Confirm string encoding (UTF-8 vs. UTF-16LE)
-   - **Phase 4B golden test must validate token generation** against captured Java output
+2. **Token Algorithm Details** âš ï¸ **CRITICAL**
+   - Token generation is `16 random bytes + SHA256(accountName UTF-8 bytes)`.
+   - Java hashes only the first `accountName.length()` bytes of the UTF-8 byte array, and the C# implementation matches that behavior.
 
-3. **Channel Identifier Parsing** ⚠️ **CRITICAL**
-   - Java's identifier matching uses regex/pattern logic
-   - Each channel type has different `matches()` implementation
-   - Verify format and pattern matching in all 6 channel types in `ChatChannels.java`
-   - **Test with exact identifier format**: `@region_ALL\u00011.1.AION.KOR`
+3. **Channel Identifier Parsing** âš ï¸ **CRITICAL**
+   - Java's identifier matching rules were mirrored for Region, Trade, Race, Job, LFG, and Language channels.
+   - Exact localized `JobChannel` aliases were extracted and tested.
 
 4. **GS Password Matching**
-   - The `chatserver.network.gameserver.password` value must match exactly what Java GS sends
-   - Verify in `chat-server/config/network/network.properties`
-   - If mismatch, GS connection will fail with auth error
-   - **Document the password value in TEMP-OPCODES.md for testing**
+   - The mixed-mode validation path uses `chatserver.network.gameserver.password = 1234`, matching the Java GS test config.
+   - A mismatch still fails GS auth by design.
 
 5. **Frame Codec Length Field**
-   - Verify: Is length field 2 bytes LE and includes itself in length count?
-   - Expected: `[length:2LE][opcode][data]` where `length` includes the 2-byte length field
-   - Reference: `chat-server/src/com/aionemu/chatserver/network/netty/coder/LoginPacketDecoder.java`
-   - **Phase 4B golden test must validate framing**
+   - Frame length is a two-byte little-endian field and includes the two-byte length header.
+   - Packet frame tests cover this behavior.
 
 6. **Inter-Server Packet Format**
-   - Game-server to chat-server uses same frame format as client-to-chat?
-   - Opcode size: 1 byte, 2 bytes, or 4 bytes for GS packets?
-   - **Extract from `GsClientPacket.java` and `GsServerPacket.java`**
+   - Game-server bridge packet format was extracted from Java `GsClientPacket`/`GsServerPacket` sources and covered by tests.
 
 7. **Handler Reload**
    - Phase 4E does NOT support hot-reloading (handlers compiled at startup)
@@ -1073,19 +1090,15 @@ grep -A5 "public.*getOpcode\|private.*opcode" chat-server/src/com/aionemu/chatse
    - Do NOT use Entity Framework during parity work
 
 9. **No Message Encryption**
-   - Chat packets sent unencrypted (unlike login protocol with RSA/Blowfish)
-   - Confirm this matches Java behavior by inspecting `ChatServer.java` network initialization
-   - If Java does encrypt chat, Phase 4B must discover cipher algorithm
+   - Chat packets are unencrypted, matching Java chat-server behavior.
 
 10. **Database Connection Pool**
-    - Verify MySQL connection pool size and timeout settings
-    - Reference: `database.connectionpool.max` and `database.connectionpool.timeout`
-    - C# must use same pool size to avoid connection exhaustion under load
+    - C# loads Java MySQL pool and timeout settings from the existing properties files.
+    - The DB bootstrap script now waits for the final MySQL TCP listener and fails loudly on schema import errors.
 
 11. **Real Client Testing**
-    - Aion client may require specific packet responses in specific order
-    - If real client testing fails, capture session with Wireshark and compare to Java
-    - Have Visual Studio debugger running for breakpoint inspection if needed
+    - Real client validation passed with C# login + Java game + C# chat.
+    - If a later client build exposes a mismatch, capture traffic and compare against Java as the oracle.
 
 ---
 
@@ -1093,85 +1106,85 @@ grep -A5 "public.*getOpcode\|private.*opcode" chat-server/src/com/aionemu/chatse
 
 ```
 dotnetConversion/src/Aion.ChatServer/
-├── Configuration/
-│   └── ChatServerOptions.cs
-├── Models/
-│   ├── ChatClient.cs
-│   ├── Message.cs
-│   ├── Channel.cs
-│   └── Channels/
-│       ├── RegionChannel.cs
-│       ├── TradeChannel.cs
-│       ├── RaceChannel.cs
-│       ├── JobChannel.cs
-│       ├── LfgChannel.cs
-│       ├── LangChannel.cs
-│       └── ChatChannels.cs
-├── Network/
-│   ├── ClientSocketServer.cs
-│   ├── GameServerSocketServer.cs
-│   ├── Handlers/
-│   │   ├── ClientChannelHandler.cs
-│   │   └── GsConnection.cs
-│   └── Packets/
-│       ├── AbstractClientPacket.cs
-│       ├── AbstractServerPacket.cs
-│       ├── ClientPacketFactory.cs
-│       ├── ServerPacketFactory.cs
-│       ├── Client/
-│       │   ├── CM_PLAYER_AUTH.cs
-│       │   ├── CM_CHAT_INI.cs
-│       │   ├── CM_PING.cs
-│       │   ├── CM_PLAYER_INFO.cs
-│       │   ├── CM_CHANNEL_REQUEST.cs
-│       │   ├── CM_CHANNEL_CREATE.cs
-│       │   ├── CM_CHANNEL_JOIN.cs
-│       │   ├── CM_CHANNEL_MESSAGE.cs
-│       │   └── CM_CHANNEL_LEAVE.cs
-│       ├── Server/
-│       │   ├── SM_PLAYER_AUTH_RESPONSE.cs
-│       │   ├── SM_CHAT_INI.cs
-│       │   ├── SM_CHANNEL_RESPONSE.cs
-│       │   └── SM_CHANNEL_MESSAGE.cs
-│       └── GameServer/
-│           ├── GsClientPacket.cs
-│           ├── GsServerPacket.cs
-│           ├── GsPacketFactory.cs
-│           ├── CM_CS_AUTH.cs
-│           ├── CM_PLAYER_AUTH.cs
-│           ├── CM_PLAYER_LOGOUT.cs
-│           ├── CM_PLAYER_GAG.cs
-│           ├── SM_GS_AUTH_RESPONSE.cs
-│           └── SM_PLAYER_AUTH_RESPONSE.cs
-├── Services/
-│   ├── IChatService.cs
-│   ├── ChatService.cs
-│   ├── IGameServerService.cs
-│   ├── GameServerService.cs
-│   ├── IBroadcastService.cs
-│   └── BroadcastService.cs
-├── Data/
-│   └── Repositories/
-│       ├── IChatLogRepository.cs
-│       └── ChatLogRepository.cs
-├── Handlers/
-│   ├── IChatMessageHandler.cs
-│   ├── ChatHandlerRegistry.cs
-│   ├── HandlerVetoException.cs
-│   └── Built-in/
-│       ├── FloodProtectionHandler.cs
-│       ├── FilterHandler.cs
-│       └── LoggingHandler.cs
-└── Program.cs
+â”œâ”€â”€ Configuration/
+â”‚   â””â”€â”€ ChatServerOptions.cs
+â”œâ”€â”€ Models/
+â”‚   â”œâ”€â”€ ChatClient.cs
+â”‚   â”œâ”€â”€ Message.cs
+â”‚   â”œâ”€â”€ Channel.cs
+â”‚   â””â”€â”€ Channels/
+â”‚       â”œâ”€â”€ RegionChannel.cs
+â”‚       â”œâ”€â”€ TradeChannel.cs
+â”‚       â”œâ”€â”€ RaceChannel.cs
+â”‚       â”œâ”€â”€ JobChannel.cs
+â”‚       â”œâ”€â”€ LfgChannel.cs
+â”‚       â”œâ”€â”€ LangChannel.cs
+â”‚       â””â”€â”€ ChatChannels.cs
+â”œâ”€â”€ Network/
+â”‚   â”œâ”€â”€ ClientSocketServer.cs
+â”‚   â”œâ”€â”€ GameServerSocketServer.cs
+â”‚   â”œâ”€â”€ Handlers/
+â”‚   â”‚   â”œâ”€â”€ ClientChannelHandler.cs
+â”‚   â”‚   â””â”€â”€ GsConnection.cs
+â”‚   â””â”€â”€ Packets/
+â”‚       â”œâ”€â”€ AbstractClientPacket.cs
+â”‚       â”œâ”€â”€ AbstractServerPacket.cs
+â”‚       â”œâ”€â”€ ClientPacketFactory.cs
+â”‚       â”œâ”€â”€ ServerPacketFactory.cs
+â”‚       â”œâ”€â”€ Client/
+â”‚       â”‚   â”œâ”€â”€ CM_PLAYER_AUTH.cs
+â”‚       â”‚   â”œâ”€â”€ CM_CHAT_INI.cs
+â”‚       â”‚   â”œâ”€â”€ CM_PING.cs
+â”‚       â”‚   â”œâ”€â”€ CM_PLAYER_INFO.cs
+â”‚       â”‚   â”œâ”€â”€ CM_CHANNEL_REQUEST.cs
+â”‚       â”‚   â”œâ”€â”€ CM_CHANNEL_CREATE.cs
+â”‚       â”‚   â”œâ”€â”€ CM_CHANNEL_JOIN.cs
+â”‚       â”‚   â”œâ”€â”€ CM_CHANNEL_MESSAGE.cs
+â”‚       â”‚   â””â”€â”€ CM_CHANNEL_LEAVE.cs
+â”‚       â”œâ”€â”€ Server/
+â”‚       â”‚   â”œâ”€â”€ SM_PLAYER_AUTH_RESPONSE.cs
+â”‚       â”‚   â”œâ”€â”€ SM_CHAT_INI.cs
+â”‚       â”‚   â”œâ”€â”€ SM_CHANNEL_RESPONSE.cs
+â”‚       â”‚   â””â”€â”€ SM_CHANNEL_MESSAGE.cs
+â”‚       â””â”€â”€ GameServer/
+â”‚           â”œâ”€â”€ GsClientPacket.cs
+â”‚           â”œâ”€â”€ GsServerPacket.cs
+â”‚           â”œâ”€â”€ GsPacketFactory.cs
+â”‚           â”œâ”€â”€ CM_CS_AUTH.cs
+â”‚           â”œâ”€â”€ CM_PLAYER_AUTH.cs
+â”‚           â”œâ”€â”€ CM_PLAYER_LOGOUT.cs
+â”‚           â”œâ”€â”€ CM_PLAYER_GAG.cs
+â”‚           â”œâ”€â”€ SM_GS_AUTH_RESPONSE.cs
+â”‚           â””â”€â”€ SM_PLAYER_AUTH_RESPONSE.cs
+â”œâ”€â”€ Services/
+â”‚   â”œâ”€â”€ IChatService.cs
+â”‚   â”œâ”€â”€ ChatService.cs
+â”‚   â”œâ”€â”€ IGameServerService.cs
+â”‚   â”œâ”€â”€ GameServerService.cs
+â”‚   â”œâ”€â”€ IBroadcastService.cs
+â”‚   â””â”€â”€ BroadcastService.cs
+â”œâ”€â”€ Data/
+â”‚   â””â”€â”€ Repositories/
+â”‚       â”œâ”€â”€ IChatLogRepository.cs
+â”‚       â””â”€â”€ ChatLogRepository.cs
+â”œâ”€â”€ Handlers/
+â”‚   â”œâ”€â”€ IChatMessageHandler.cs
+â”‚   â”œâ”€â”€ ChatHandlerRegistry.cs
+â”‚   â”œâ”€â”€ HandlerVetoException.cs
+â”‚   â””â”€â”€ Built-in/
+â”‚       â”œâ”€â”€ FloodProtectionHandler.cs
+â”‚       â”œâ”€â”€ FilterHandler.cs
+â”‚       â””â”€â”€ LoggingHandler.cs
+â””â”€â”€ Program.cs
 
 dotnetConversion/tests/Aion.ChatServer.Tests/
-├── Network/
-│   └── ChatPacketParityTests.cs
-└── Integration/
-    ├── ChatServerIntegrationTests.cs
-    ├── RealClientSmokeTest.cs
-    ├── GameServerBridgeSmokeTest.cs
-    └── MIXED_MODE_VALIDATION.md
+â”œâ”€â”€ Network/
+â”‚   â””â”€â”€ ChatPacketParityTests.cs
+â””â”€â”€ Integration/
+    â”œâ”€â”€ ChatServerIntegrationTests.cs
+    â”œâ”€â”€ RealClientSmokeTest.cs
+    â”œâ”€â”€ GameServerBridgeSmokeTest.cs
+    â””â”€â”€ MIXED_MODE_VALIDATION.md
 ```
 
 ---
@@ -1180,17 +1193,17 @@ dotnetConversion/tests/Aion.ChatServer.Tests/
 
 | Criterion | Status | Notes |
 |-----------|--------|-------|
-| All 17 packet types have golden tests | Locally covered | Packet shape and frame parity tests are passing. |
-| Socket servers accept, frame, dispatch packets | Locally covered | Loopback and hosted listener smoke tests are passing. |
-| All services functional | Locally covered | Chat, game-server, and broadcast service tests are passing. |
-| All 6 channel types working | Locally covered | Includes exact Java localized `JobChannel` aliases. |
+| All 17 packet types have golden tests | Complete | Packet shape and frame parity tests are passing. |
+| Socket servers accept, frame, dispatch packets | Complete | Loopback and hosted listener smoke tests are passing. |
+| All services functional | Complete | Chat, game-server, and broadcast service tests are passing. |
+| All 6 channel types working | Complete | Includes exact Java localized `JobChannel` aliases. |
 | Database persistence working | Live validated | Opt-in MySQL test passed against `aion_cs` on `localhost:3307`. |
-| Handlers execute correctly | Locally covered | Flood, filter, logging, and registry order tests are passing. |
-| Integration tests passing | Locally covered | Automated TCP integration tests pass; real client still pending. |
-| Real client smoke test succeeds | Pending | Phase 4G deliverable |
-| Mixed-mode validation succeeds | Pending | Phase 4G deliverable |
-| Phase 3 tests not regressed | Passing | `dotnet test dotnetConversion/AionServer.slnx` passes. |
-| Documentation complete | In Progress | Mixed-mode runbook added; final smoke results still need recording. |
+| Handlers execute correctly | Complete | Flood, filter, logging, and registry order tests are passing. |
+| Integration tests passing | Complete | Automated TCP integration tests and real-client mixed-mode validation pass. |
+| Real client smoke test succeeds | Complete | Live client sent chat messages and displayed chat-window combat/info traffic. |
+| Mixed-mode validation succeeds | Complete | C# login + Java game + C# chat passed with a real client. |
+| Phase 3 tests not regressed | Complete | `dotnet test dotnetConversion/AionServer.slnx` passes: 208 total. |
+| Documentation complete | Complete | Completion notes and master handoff status updated. |
 
 ---
 
@@ -1219,23 +1232,21 @@ dotnetConversion/tests/Aion.ChatServer.Tests/
 
 ## Next Steps
 
-**Current next step**: Phase 4G/H live validation.
+Phase 4 is complete. The next migration slice is Phase 5: Port Game Infrastructure.
 
-1. Run `docs/PHASE-4-MIXED-MODE-VALIDATION.md` with C# login + C# chat + Java GS.
-2. Capture the real-client chat smoke result and update this document plus `docs/csharp-port.md`.
-3. After live validation passes, mark Phase 4 complete and begin Phase 5 (Port Game Infrastructure).
+Carry forward the Phase 4 mixed-mode scripts and runbook for regression checks while the C# game-server infrastructure comes online.
 
 ---
 
 ## Handoff Checklist for Agent
 
-Before finishing Phase 4, verify:
+Phase 4 completion checklist:
 - [x] Phase 3 (C# LoginServer) is complete and solution tests pass
-- [ ] Java chat-server source is available and runnable
+- [x] Java chat-server source is available and runnable
 - [x] MySQL instance available (Docker or local)
-- [ ] Real Aion client available (optional but recommended)
-- [ ] Visual Studio or VS Code with C# debugging capability
-- [ ] This document has been read in full
-- [ ] Any questions about prerequisites answered above
+- [x] Real Aion client available and validated
+- [x] Visual Studio or VS Code with C# debugging capability available
+- [x] This document has been updated for completion
+- [x] Any questions about prerequisites answered above
 
-**Ready for Phase 4G live validation**.
+**Ready to proceed to Phase 5**.
