@@ -1,10 +1,74 @@
 # Phase 4: Port Chat Server to C#
 
-**Status**: Planning Complete, Ready for Implementation Phase 4A  
+**Status**: Implementation Started - Phase 4A/4B complete, Phase 4C socket layer smoke-covered  
 **Start Date**: May 19, 2026  
 **Target Completion**: May 22-23, 2026 (4-5 days, 8 sub-phases)
 
 ---
+
+## Implementation Log
+
+### May 20, 2026 - Phase 4A Scaffold
+
+Completed:
+- Added `ChatServerOptions` loading from Java chat-server config with `mycs.properties` and environment override support.
+- Added chat database option loading for `aion_cs` via the existing `DatabaseFactory`.
+- Added core models: `ChatClient`, `Message`, `Race`, `ChannelType`, `Channel`, `RaceChannel`, `RegionChannel`, `TradeChannel`, `LfgChannel`, `JobChannel`, `LangChannel`, and `ChatChannels`.
+- Added packet base/factory shells for client and game-server protocols, with opcode tables pinned from Java source.
+- Added service layer scaffold: `ChatService`, `GameServerService`, `BroadcastService`, and interfaces.
+- Added `ChatLogRepository` using direct SQL against `chatlog`.
+- Updated `Aion.ChatServer` startup to use Java config, initialize DB options, register services, and use Java-shaped file logging.
+- Added focused tests for config loading, channel parsing/reuse, token generation shape, player connection attach, and game-server auth state.
+
+Validation:
+- `dotnet test tests\Aion.ChatServer.Tests\Aion.ChatServer.Tests.csproj` - 7 passed.
+- `dotnet test AionServer.slnx` - 186 passed total: 7 chat, 57 commons, 1 game, 121 login.
+
+Discoveries:
+- Java chat client packets use a Netty `HeapChannelBufferFactory(ByteOrder.LITTLE_ENDIAN)`, so the C# packet buffer's little-endian behavior is correct for chat client traffic.
+- Frame length is a 2-byte little-endian field that includes the two-byte length header.
+- Client auth packet is the retail signature-login shape from `CM_PLAYER_AUTH`, not the simplified field list in the initial planning notes.
+- Token generation is `16 random bytes + SHA256(accountName UTF-8 bytes)`, with Java hashing only the first `accountName.length()` bytes of the UTF-8 byte array.
+- Game-server bridge opcodes from Java are `0x00` auth, `0x01` player auth, `0x02` player logout, and `0x03` player gag.
+- Server packet opcodes from Java are `0x02` player auth response, `0x11` channel response, `0x1A` channel message, and `0x31` chat init.
+
+Open follow-up:
+- `JobChannel` has the core class alias structure in C#, but the full localized alias table still needs exact Unicode parity extraction before final channel parity signoff.
+- Socket listeners and packet handlers are intentionally deferred to the next slice after this scaffold.
+
+### May 20, 2026 - Phase 4B Packets + Phase 4C Socket Spine
+
+Completed:
+- Added all concrete chat client packet models:
+  - `CM_CHAT_INI`, `CM_PLAYER_AUTH`, `CM_PING`, `CM_PLAYER_INFO`
+  - `CM_CHANNEL_CREATE`, `CM_CHANNEL_JOIN`, `CM_CHANNEL_REQUEST`, `CM_CHANNEL_LEAVE`, `CM_CHANNEL_MESSAGE`
+- Added all client-facing server packet models:
+  - `SM_PLAYER_AUTH_RESPONSE`, `SM_CHAT_INI`, `SM_CHANNEL_RESPONSE`, `SM_CHANNEL_MESSAGE`
+- Added chat game-server bridge packet models:
+  - inbound: `CM_CS_AUTH`, `CM_PLAYER_AUTH`, `CM_PLAYER_LOGOUT`, `CM_PLAYER_GAG`
+  - outbound: `SM_GS_AUTH_RESPONSE`, `SM_PLAYER_AUTH_RESPONSE`
+- Replaced packet factory placeholders with concrete state-aware dispatch.
+- Added `ClientChannelHandler` and `GsConnection` socket handlers with Java-style frame reading.
+- Added `ClientSocketServer`, `GameServerSocketServer`, and `ChatServerHostedService`.
+- Wired chat listeners into `Aion.ChatServer` startup.
+- Implemented live client auth, channel request/leave, channel message flood/gag handling, broadcast, and optional chat DB logging path.
+- Implemented GS auth, player registration/token response, logout cleanup, and gag updates.
+
+Validation:
+- `dotnet test tests\Aion.ChatServer.Tests\Aion.ChatServer.Tests.csproj` - 16 passed.
+- `dotnet test AionServer.slnx` - 195 passed total: 16 chat, 57 commons, 1 game, 121 login.
+
+New coverage:
+- Packet parity tests for all client, server, and game-server bridge packet shapes added so far.
+- Client-facing server packet frame length validation.
+- Game-server auth and player registration over loopback TCP.
+- Client chat init, auth, and channel request over loopback TCP.
+- Two-client channel message broadcast over loopback TCP.
+
+Open follow-up:
+- Phase 4C still needs full hosted-listener tests through `ClientSocketServer`/`GameServerSocketServer` rather than direct connection-handler harnesses.
+- Phase 4D/4E still need formal handler pipeline types for flood/filter/logging even though the Java-equivalent gag/flood/logging behavior is already present in the socket handler.
+- Phase 4F still needs DB integration coverage against the Java `chatlog` schema.
 
 ## Goal
 
