@@ -1,6 +1,6 @@
 # Phase 4: Port Chat Server to C#
 
-**Status**: Implementation Started - Phase 4A/4B complete, Phase 4C socket layer smoke-covered  
+**Status**: Implementation Started - Phase 4A-4F locally covered, chat DB live validation passed, real-client mixed-mode validation pending  
 **Start Date**: May 19, 2026  
 **Target Completion**: May 22-23, 2026 (4-5 days, 8 sub-phases)
 
@@ -66,13 +66,101 @@ New coverage:
 - Two-client channel message broadcast over loopback TCP.
 
 Open follow-up:
-- Phase 4C still needs full hosted-listener tests through `ClientSocketServer`/`GameServerSocketServer` rather than direct connection-handler harnesses.
-- Phase 4D/4E still need formal handler pipeline types for flood/filter/logging even though the Java-equivalent gag/flood/logging behavior is already present in the socket handler.
-- Phase 4F still needs DB integration coverage against the Java `chatlog` schema.
+- Phase 4C still needs mixed-mode validation with Java GS and a real client.
+- Phase 4E still needs live-client validation of any non-default filter configuration if configured in production.
+- Phase 4F still needs a live DB run of the opt-in chatlog integration test.
+
+### May 20, 2026 - Hosted Listener + Handler Pipeline
+
+Completed:
+- Added hosted listener smoke tests through the actual `ClientSocketServer` and `GameServerSocketServer` classes using ephemeral loopback ports.
+- Added `LocalEndPoint` observability on chat socket servers for port-0 tests.
+- Added formal chat handler infrastructure:
+  - `IChatMessageHandler`
+  - `ChatHandlerAttribute`
+  - `ChatHandlerRegistry`
+  - `HandlerVetoException`
+- Added built-in handlers:
+  - `FloodProtectionHandler`
+  - `FilterHandler`
+  - `LoggingHandler`
+- Moved Java-style flood protection and chat logging out of `ClientChannelHandler` and into the handler registry.
+- Kept Java-style gag behavior in `ClientChannelHandler` because it is player state from the game-server bridge rather than a dynamic message handler.
+- Added optional comma-separated keyword config key `chatserver.chat.filter.keywords` for the built-in filter.
+
+Validation:
+- `dotnet test tests\Aion.ChatServer.Tests\Aion.ChatServer.Tests.csproj` - 22 passed.
+- `dotnet test AionServer.slnx` - 201 passed total: 22 chat, 57 commons, 1 game, 121 login.
+
+New coverage:
+- Hosted client listener accepts a Java-framed `CM_CHAT_INI` and returns `SM_CHAT_INI`.
+- Hosted game-server listener accepts `CM_CS_AUTH`, returns `SM_GS_AUTH_RESPONSE`, and marks GS online.
+- Flood handler updates the first message timestamp and vetoes immediate repeats with the Java client-facing text.
+- Filter handler replaces configured keywords.
+- Logging handler writes to `IChatLogRepository` when DB logging is enabled.
+- Registry preserves handler execution order.
+
+Open follow-up:
+- Phase 4F opt-in MySQL test is present but still needs a live DB run.
+- Full localized `JobChannel` aliases still need exact Unicode parity extraction.
+- Mixed-mode validation with Java GS and the real client remains pending.
+
+### May 20, 2026 - Phase 4F ChatLog Integration Harness
+
+Completed:
+- Added opt-in MySQL integration coverage for `ChatLogRepository`.
+- The integration test initializes the Java `chat-server/sql/aion_cs.sql` schema and verifies inserted sender/message/type values against `chatlog`.
+- Environment gate: `AION_CHAT_DB_INTEGRATION=1`.
+- Default integration DB settings:
+  - host: `localhost`
+  - port: `3307`
+  - database: `aion_cs`
+  - user: `root`
+  - password: `aion`
+
+Validation:
+- `dotnet test tests\Aion.ChatServer.Tests\Aion.ChatServer.Tests.csproj` - 23 passed with DB integration disabled.
+- `dotnet test AionServer.slnx` - 202 passed total: 23 chat, 57 commons, 1 game, 121 login.
+
+Open follow-up:
+- Run the opt-in chat DB integration test against a live MySQL `aion_cs` database.
+- Mixed-mode validation with Java GS and the real client remains pending.
+
+### May 20, 2026 - Job Alias Parity + C# Chat Mixed-Mode Assets
+
+Completed:
+- Replaced the C# `JobChannel` alias table with the exact Java localized class aliases.
+- Added channel reuse coverage for localized Gladiator aliases across Turkish, Russian, Chinese, and Korean class names.
+- Added `compose.mixed-csharp-login-chat.yml` to run only the Java game server while C# login and C# chat run on the host.
+- Added `docker/config/mygs.csharp-login-chat.properties` for Java GS -> host C# login (`9014`) and host C# chat (`9021`) validation.
+- Added `dotnetConversion/scripts/start-mixed-mode-csharp-chat.ps1` and `dotnetConversion/scripts/stop-mixed-mode-csharp-chat.ps1`.
+- Added `docs/PHASE-4-MIXED-MODE-VALIDATION.md` as the focused runbook for C# login + C# chat + Java GS.
+
+Validation:
+- `dotnet test dotnetConversion/tests/Aion.ChatServer.Tests/Aion.ChatServer.Tests.csproj` - 28 passed.
+- `dotnet test dotnetConversion/AionServer.slnx` - 207 passed total: 28 chat, 57 commons, 1 game, 121 login.
+
+Open follow-up:
+- Execute the C# login + C# chat + Java GS mixed-mode runbook with a real client and capture the result.
+- Current local environment note: Java chat/game Docker containers are already occupying `10241` and `7777`; stop the Java mixed-mode stack before the C# chat validation run.
+
+### May 20, 2026 - Live Chat DB Validation + Bootstrap Hardening
+
+Completed:
+- Ran the opt-in `ChatLogRepository` integration test against a live MySQL 8.4 container on `localhost:3307`.
+- Hardened `dotnetConversion/scripts/start-mixed-mode-db.ps1` so it waits for the final MySQL TCP listener instead of the temporary init socket server.
+- Added explicit failure checks around database creation, schema copy/import, schema inspection, and login game-server seed insertion.
+
+Validation:
+- `powershell -ExecutionPolicy Bypass -File dotnetConversion/scripts/start-mixed-mode-db.ps1 -ContainerName aion-chat-integration-mysql -RootPassword aion -HostPort 3307 -ResetSchema` - passed.
+- `AION_CHAT_DB_INTEGRATION=1 dotnet test dotnetConversion/tests/Aion.ChatServer.Tests/Aion.ChatServer.Tests.csproj --filter ChatLogRepository_InsertsAgainstJavaChatSchema_WhenEnabled` - 1 passed.
+
+Open follow-up:
+- Execute the C# login + C# chat + Java GS mixed-mode runbook with a real client and capture the result.
 
 ## Goal
 
-Port the Java `chat-server` to C# (`Aion.ChatServer`) with 1:1 **full feature parity** 1including:
+Port the Java `chat-server` to C# (`Aion.ChatServer`) with 1:1 **full feature parity**, including:
 
 - Client socket listener (TCP 10241) for real Aion clients
 - Game-server bridge listener (TCP 9021) for Java/C# game servers
@@ -1092,17 +1180,17 @@ dotnetConversion/tests/Aion.ChatServer.Tests/
 
 | Criterion | Status | Notes |
 |-----------|--------|-------|
-| All 17 packet types have golden tests | Pending | Phase 4B deliverable |
-| Socket servers accept, frame, dispatch packets | Pending | Phase 4C deliverable |
-| All services functional | Pending | Phase 4D deliverable |
-| All 6 channel types working | Pending | Phase 4D deliverable |
-| Database persistence working | Pending | Phase 4F deliverable |
-| Handlers execute correctly | Pending | Phase 4E deliverable |
-| Integration tests passing | Pending | Phase 4G deliverable |
+| All 17 packet types have golden tests | Locally covered | Packet shape and frame parity tests are passing. |
+| Socket servers accept, frame, dispatch packets | Locally covered | Loopback and hosted listener smoke tests are passing. |
+| All services functional | Locally covered | Chat, game-server, and broadcast service tests are passing. |
+| All 6 channel types working | Locally covered | Includes exact Java localized `JobChannel` aliases. |
+| Database persistence working | Live validated | Opt-in MySQL test passed against `aion_cs` on `localhost:3307`. |
+| Handlers execute correctly | Locally covered | Flood, filter, logging, and registry order tests are passing. |
+| Integration tests passing | Locally covered | Automated TCP integration tests pass; real client still pending. |
 | Real client smoke test succeeds | Pending | Phase 4G deliverable |
 | Mixed-mode validation succeeds | Pending | Phase 4G deliverable |
-| Phase 3 tests not regressed | Pending | Phase 4H verification |
-| Documentation complete | Pending | Phase 4H verification |
+| Phase 3 tests not regressed | Passing | `dotnet test dotnetConversion/AionServer.slnx` passes. |
+| Documentation complete | In Progress | Mixed-mode runbook added; final smoke results still need recording. |
 
 ---
 
@@ -1131,25 +1219,23 @@ dotnetConversion/tests/Aion.ChatServer.Tests/
 
 ## Next Steps
 
-**Phase 4A begins**: Create config, models, packet base classes, services (stubs), DI setup.
+**Current next step**: Phase 4G/H live validation.
 
-**Estimated duration**: 4-5 days (sub-phases 4A → 4H with pauses between).
-
-**Testing validation**: Golden tests first (4B), then integration (4G), then mixed-mode (4G).
-
-**Handoff**: Upon Phase 4H completion, Phase 5 (Port Game Infrastructure) begins.
+1. Run `docs/PHASE-4-MIXED-MODE-VALIDATION.md` with C# login + C# chat + Java GS.
+2. Capture the real-client chat smoke result and update this document plus `docs/csharp-port.md`.
+3. After live validation passes, mark Phase 4 complete and begin Phase 5 (Port Game Infrastructure).
 
 ---
 
 ## Handoff Checklist for Agent
 
-Before starting Phase 4A, verify:
-- [ ] Phase 3 (C# LoginServer) is complete and all 180 tests pass
+Before finishing Phase 4, verify:
+- [x] Phase 3 (C# LoginServer) is complete and solution tests pass
 - [ ] Java chat-server source is available and runnable
-- [ ] MySQL instance available (Docker or local)
+- [x] MySQL instance available (Docker or local)
 - [ ] Real Aion client available (optional but recommended)
 - [ ] Visual Studio or VS Code with C# debugging capability
 - [ ] This document has been read in full
 - [ ] Any questions about prerequisites answered above
 
-**Ready to proceed with Phase 4A** ✓
+**Ready for Phase 4G live validation**.

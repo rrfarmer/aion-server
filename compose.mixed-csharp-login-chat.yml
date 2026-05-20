@@ -1,0 +1,19 @@
+services:
+  game:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        MODULE: game-server
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./docker/config/mygs.csharp-login-chat.properties:/app/game-server/config/mygs.properties:ro
+    ports:
+      - "7777:7777"
+    networks:
+      - aion-mixed-net
+
+networks:
+  aion-mixed-net:
+    driver: bridge
