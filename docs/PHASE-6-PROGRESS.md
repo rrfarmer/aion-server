@@ -12,11 +12,11 @@
 Last updated: May 20, 2026
 
 - Phase 5 is complete for automated infrastructure parity. Real-client validation is intentionally deferred to later readiness validation.
-- Current active work is Phase 6c enter-world. The C# path handles `CM_ENTER_WORLD`, validates missing/online/reentry/duplicate-world cases, loads the player common row, cube inventory rows plus `item_stones` details, regular warehouse rows plus `item_stones` details, account warehouse rows plus `item_stones` details, player skills, active skill cooldowns, active item cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox rows with attached mailbox item template IDs/full item state, broker settlement summary, owned house rows, active craft cooldowns, active portal cooldowns, life stats, friends, blocked users, abyss rank, client settings, and obelisk bind point, marks the character online, stores it in the world container, transitions the connection to `InGame`, sends `SM_ENTER_WORLD_CHECK`, then sends the implemented post-enter packets `SM_SKILL_LIST`, `SM_SKILL_COOLDOWN`, `SM_ITEM_COOLDOWN`, `SM_QUEST_COMPLETED_LIST`, `SM_QUEST_LIST`, current-title and bonus-title `SM_TITLE_INFO`, `SM_MOTION`, `SM_AFTER_TIME_CHECK_4_7_5`, optional `SM_UI_SETTINGS` blobs, Java-split `SM_INVENTORY_INFO`, `SM_CHANNEL_INFO`, obelisk `SM_BIND_POINT_INFO`, baseline `SM_PLAYER_SPAWN`, `SM_GAME_TIME`, Java-shaped regular/account `SM_WAREHOUSE_INFO`, empty auxiliary warehouse placeholders, full-title `SM_TITLE_INFO`, `SM_EMOTION_LIST`, baseline `SM_PRICES`, optional `SM_RECIPE_COOLDOWN`, `SM_FRIEND_LIST`, `SM_BLOCK_LIST`, `SM_INSTANCE_INFO`, `SM_ABYSS_RANK`, baseline `SM_STATS_INFO`, mailbox-state `SM_MAIL_SERVICE`, auction-result refresh `SM_RECEIVE_BIDS`, Java-split `SM_MACRO_LIST`, `SM_RECIPE_LIST`, broker settled-icon `SM_BROKER_SERVICE`, and housing owner-state `SM_HOUSE_OWNER_INFO`. In-game mail packets now cover list/read/attachment/delete service responses: `CM_CHECK_MAIL_LIST` -> service `2`, `CM_READ_MAIL` -> service `3`, `CM_GET_MAIL_ATTACHMENT` -> service `5`, and `CM_DELETE_MAIL` -> service `6`. `CM_SEND_MAIL` is parsed and can send Java-shaped service `1` status, but durable send-mail behavior still needs recipient lookup, cross-player mailbox update, and DB persistence.
+- Current active work is Phase 6c enter-world. The C# path handles `CM_ENTER_WORLD`, validates missing/online/reentry/duplicate-world cases, loads the player common row, cube inventory rows plus `item_stones` details, regular warehouse rows plus `item_stones` details, account warehouse rows plus `item_stones` details, player skills, active skill cooldowns, active item cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox rows with attached mailbox item template IDs/full item state, broker settlement summary, owned house rows, active craft cooldowns, active portal cooldowns, life stats, friends, blocked users, abyss rank, client settings, and obelisk bind point, marks the character online, stores it in the world container, transitions the connection to `InGame`, sends `SM_ENTER_WORLD_CHECK`, then sends the implemented post-enter packets `SM_SKILL_LIST`, `SM_SKILL_COOLDOWN`, `SM_ITEM_COOLDOWN`, `SM_QUEST_COMPLETED_LIST`, `SM_QUEST_LIST`, current-title and bonus-title `SM_TITLE_INFO`, `SM_MOTION`, `SM_AFTER_TIME_CHECK_4_7_5`, optional `SM_UI_SETTINGS` blobs, Java-split `SM_INVENTORY_INFO`, `SM_CHANNEL_INFO`, obelisk `SM_BIND_POINT_INFO`, baseline `SM_PLAYER_SPAWN`, `SM_GAME_TIME`, Java-shaped regular/account `SM_WAREHOUSE_INFO`, empty auxiliary warehouse placeholders, full-title `SM_TITLE_INFO`, `SM_EMOTION_LIST`, baseline `SM_PRICES`, optional `SM_RECIPE_COOLDOWN`, `SM_FRIEND_LIST`, `SM_BLOCK_LIST`, `SM_INSTANCE_INFO`, `SM_ABYSS_RANK`, baseline `SM_STATS_INFO`, mailbox-state `SM_MAIL_SERVICE`, housing auction-result `SM_SYSTEM_MESSAGE` notifications plus refresh `SM_RECEIVE_BIDS`, Java-split `SM_MACRO_LIST`, `SM_RECIPE_LIST`, broker settled-icon `SM_BROKER_SERVICE`, and housing owner-state `SM_HOUSE_OWNER_INFO`. In-game mail packets now cover list/read/attachment/delete service responses: `CM_CHECK_MAIL_LIST` -> service `2`, `CM_READ_MAIL` -> service `3`, `CM_GET_MAIL_ATTACHMENT` -> service `5`, and `CM_DELETE_MAIL` -> service `6`, with read/attachment/delete final state persisted through `IMailRepository`. `CM_SEND_MAIL` now performs DB-backed recipient validation and normal/kinah/tradeable-item/courier-pass item mail persistence with service `1` status responses plus Java-shaped `SM_SYSTEM_MESSAGE` failure packets for not-enough-money and early item validation, and refreshes an online recipient's mailbox state/list after sender success. `CM_READ_EXPRESS_MAIL` is registered with duplicate/cooldown postman state tracking; visible postman spawning still needs the spawn/known-list engine. Broker client opcodes `117`, `123`-`130` now parse with Java field layouts, with read-only empty response packets for sell-window, search/list, registered-list, and settled-list shells. Remaining item-send gaps are richer `AdminService.canOperate` restrictions and exact `ItemFactory.newItem` defaults for split stacks.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
-- Next implementation slice should continue durable mail persistence/recipient lookup, broker interaction packets, or housing auction-result notifications, then revisit equipment stat application once item templates/stat functions are in scope.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 261 tests.
+- Next implementation slice should continue broker repository-backed search/settled/register/buy/cancel flows, visible postman spawn/known-list support, housing auction/bid flows, or equipment stat application once item templates/stat functions are in scope.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 262 tests.
 
 ---
 
@@ -74,13 +74,16 @@ From `csharp-port.md`, dependency order:
 - [x] Load `player_macrosses` and send Java-shaped `SM_MACRO_LIST`
 - [x] Load `mail` rows with attached mailbox item template IDs and send Java-shaped mailbox-state `SM_MAIL_SERVICE`
 - [x] Handle `CM_CHECK_MAIL_LIST` and send Java-shaped mailbox-list `SM_MAIL_SERVICE` service ID `2`
-- [x] Handle `CM_READ_MAIL` and send Java-shaped read-letter `SM_MAIL_SERVICE` service ID `3`
-- [x] Handle `CM_GET_MAIL_ATTACHMENT` and send Java-shaped attachment-state `SM_MAIL_SERVICE` service ID `5` (in-memory mailbox/inventory update only)
-- [x] Handle `CM_DELETE_MAIL` and send Java-shaped delete `SM_MAIL_SERVICE` service ID `6` (in-memory mailbox update only)
-- [x] Parse `CM_SEND_MAIL` and send Java-shaped send-status `SM_MAIL_SERVICE` service ID `1` shell; full send persistence remains pending
+- [x] Handle `CM_READ_MAIL` and send Java-shaped read-letter `SM_MAIL_SERVICE` service ID `3`; persisted read flag through `IMailRepository`
+- [x] Handle `CM_GET_MAIL_ATTACHMENT` and send Java-shaped attachment-state `SM_MAIL_SERVICE` service ID `5`; persisted final attached item/kinah state through `IMailRepository`
+- [x] Handle `CM_DELETE_MAIL` and send Java-shaped delete `SM_MAIL_SERVICE` service ID `6`; persisted delete through `IMailRepository`
+- [x] Handle `CM_SEND_MAIL` service ID `1` for DB-backed normal/kinah/tradeable-item/courier-pass item mail with recipient lookup, race/full/block validation, sender kinah deduction, item full-move/partial-split persistence, courier-pass consumption, mail insert, mailbox count update, sender inventory delete/update packets, and online recipient mailbox refresh
+- [x] Handle `CM_READ_EXPRESS_MAIL` action parsing with duplicate/cooldown postman state and Java system-message responses; visible postman spawn remains pending until spawn/known-list support
 - [x] Load broker settlement summary and send Java-shaped settled-icon `SM_BROKER_SERVICE`
+- [x] Register and parse broker client opcodes `117`, `123`-`130`; read-only empty response shells exist for broker sell/search/list/registered/settled-list windows
 - [x] Load owned `houses` rows and send Java-shaped owner-state `SM_HOUSE_OWNER_INFO`
 - [x] Send Java-shaped `SM_RECEIVE_BIDS` auction refresh on login when new unread house-auction system mail exists
+- [x] Send Java-shaped housing auction-result `SM_SYSTEM_MESSAGE` notifications before login `SM_RECEIVE_BIDS`
 - [x] Load future `craft_cooldowns` rows and send Java-shaped `SM_RECIPE_COOLDOWN`
 - [x] Send baseline Java-shaped `SM_PRICES`
 - [x] Load `friends`/friend common rows and send Java-shaped `SM_FRIEND_LIST`
@@ -296,7 +299,7 @@ From `csharp-port.md`, dependency order:
 - Wired attachment retrieval to the active player's in-memory mailbox: item attachments move from mailbox storage into the cube list and clear the letter attachment fields; kinah attachments increase or create the cube kinah item and clear attached kinah; both paths send service ID `5` after the state change like Java `MailService.getAttachments`.
 - Wired delete-mail handling to remove requested letters from the active player's in-memory mailbox and send service ID `6` with post-removal counts, matching Java `MailService.deleteMail` packet shape.
 - Wired `CM_SEND_MAIL` to the Java-shaped service ID `1` status response shell. It keeps Java's early no-response cases for unsupported/forbidden letter types and overlong recipients, but currently returns `NO_SUCH_CHARACTER_NAME` for normal attempts until recipient lookup, cross-player mailbox update, commission/inventory handling, and DB persistence are ported.
-- Current gaps in this cluster: durable read/attachment/delete persistence, complete send-mail behavior, mailbox reserve upload/refresh packets, express-postman `CM_READ_EXPRESS_MAIL`, and related system-message failure paths remain pending.
+- Then-current gaps in this cluster were durable read/attachment/delete persistence, complete send-mail behavior, mailbox reserve upload/refresh packets, express-postman `CM_READ_EXPRESS_MAIL`, and related system-message failure paths. Sessions 25-28 cover the persistence, normal/kinah/tradeable-item send-mail, express-mail parser/state shell, and first mail system-message paths; mailbox refresh and courier-pass item mail remain pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 54 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 261 tests.
 
@@ -304,14 +307,77 @@ From `csharp-port.md`, dependency order:
 - Added Java-shaped `SM_RECEIVE_BIDS` in opcode `259`, matching `network/aion/serverpackets/SM_RECEIVE_BIDS`.
 - Added login auction-result detection matching the refresh portion of `HousingBidService.onPlayerLogin`: unread `$$HS_AUCTION_MAIL` rows received since `LastOnline` with result IDs `FAILED_BID`, `FAILED_SALE`, `SUCCESS_SALE`, `WIN_BID`, `GRACE_START`, or `GRACE_SUCCESS` now trigger `SM_RECEIVE_BIDS(0)`.
 - Wired the refresh packet immediately after mailbox-state `SM_MAIL_SERVICE`, preserving the Java ordering where `HousingBidService.onPlayerLogin` runs after `MailService.onPlayerLogin`.
-- Current gaps in this cluster: the related housing system-message notifications are still deferred until `SM_SYSTEM_MESSAGE` is ported; full auction list/register/bid/cancel flows remain pending.
+- Current gaps in this cluster: full auction list/register/bid/cancel flows remain pending. Session 30 adds the login auction-result system-message notifications.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 54 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 261 tests.
+
+### Session 25 (May 20, 2026)
+- Added `IMailRepository`/`MySqlMailRepository` for final-state persistence of the mail actions already ported from Java.
+- Wired `CM_READ_MAIL` handling to persist `unread=false` after sending the read-letter packet, matching the final state of `Letter.setReadLetter` plus `MailDAO.storeLetter`.
+- Wired `CM_GET_MAIL_ATTACHMENT` item retrieval to persist the attached item moving from `StorageType.MAILBOX` (`127`) to cube storage and clear `mail.attached_item_id`; kinah retrieval now persists `attached_kinah_count=0`.
+- Wired `CM_DELETE_MAIL` handling to delete selected `mail` rows through the repository after the active mailbox removes them, matching `MailDAO.deleteLetter` final state.
+- Registered the repository in GameServer DI and threaded it into `GameServerConnection`.
+- Current gaps in this cluster: complete send-mail persistence/recipient lookup/commission handling is still pending; exact item slot allocation on attachment retrieval uses the current C# first-available placeholder until full inventory add semantics are ported.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 54 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 261 tests.
+
+### Session 26 (May 20, 2026)
+- Extended `IMailRepository` with recipient common-data lookup, recipient block-list check, and transactional sent-mail storage.
+- Upgraded `CM_SEND_MAIL` handling from a status shell to DB-backed normal/kinah mail: Java early no-response cases are preserved for overlong recipients, Black Cloud sends, negative kinah, unsupported letter types, and item-attached sends.
+- Added Java-like recipient validation for missing character, race mismatch, full mailbox, and recipient block-list membership, returning `SM_MAIL_SERVICE` service ID `1` statuses.
+- Added normal/express mail fee calculation for non-item mail, sender cube kinah deduction, `mail` row insert, and recipient `players.mailbox_letters` increment in one transaction.
+- Current gaps in this cluster: item-attached send mail remains pending until full inventory split/tradeability/disposition handling is ported; online-recipient mailbox push/refresh is not implemented yet. Session 27 added the generic `SM_SYSTEM_MESSAGE` packet and wired the not-enough-money mail path.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 54 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 261 tests.
+
+### Session 27 (May 20, 2026)
+- Added generic Java-shaped `SM_SYSTEM_MESSAGE` opcode `25` support for golden-yellow client message IDs and wired the mail slice to use it for `STR_NOT_ENOUGH_MONEY`, `STR_MAIL_SEND_USED_ITEM`, `STR_MAIL_SEND_CAN_NOT_SEND_EQUIPPED_ITEM`, `STR_POSTMAN_ALREADY_SUMMONED`, and `STR_POSTMAN_UNABLE_IN_COOLTIME`.
+- Registered and parsed `CM_READ_EXPRESS_MAIL` opcode `162`, matching Java's action byte.
+- Added express/Black Cloud postman state tracking on the loaded `Player` and handled close/icon-click actions with Java-like duplicate summon and express cooldown checks. Actual postman visible-object spawning, flight-state rejection, and known-list fanout remain pending until the spawn/movement engine slice.
+- Tightened `CM_SEND_MAIL` failure behavior so insufficient sender kinah now returns Java's `SM_SYSTEM_MESSAGE.STR_NOT_ENOUGH_MONEY`; item-attached attempts now perform the Java invalid/missing/equipped-item checks before stopping at the still-pending mutation path.
+- Then-current gaps in this cluster: item-attached send mail still needed item move/split, item-stone/DB handling, sender item delete/update packets, and DB transaction support. Session 28 covers the tradeable item move/split path; courier-pass disposition and express/Black Cloud courier spawning remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 54 tests.
+
+### Session 28 (May 20, 2026)
+- Added Java-shaped `SM_DELETE_ITEM` opcode `28` and `SM_INVENTORY_UPDATE_ITEM` opcode `29` for the mail send paths that remove or reduce sender inventory items.
+- Extended item template summaries with Java `ItemMask.TRADEABLE` parity so mail item eligibility can distinguish loaded tradeable items from normally untradeable/soul-bound items.
+- Extended `IMailRepository` with a transactional item-attached send-mail path: full-count sends move the existing inventory row to mailbox storage `127`; partial-stack sends insert a new mailbox item row and reduce the sender's original stack; both paths update sender kinah, insert the `mail` row, and increment recipient `mailbox_letters`.
+- Upgraded `CM_SEND_MAIL` item handling from validation-only to persisted tradeable item attachments. It now applies Java-like item quality commission, moves or splits the sender item, updates in-memory inventory/mailbox state, sends sender kinah/item update packets, and returns service ID `1` success.
+- Then-current gaps in this cluster: courier-pass `Disposition` support for normally untradeable cash items was not parsed yet; `AdminService.canOperate` restrictions and online-recipient mailbox state/list refresh were still pending. Session 29 covers the courier-pass path.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 54 tests.
+
+### Session 29 (May 20, 2026)
+- Extended item template static-data loading to preserve nested `<disposition id count>` data, matching Java `ItemTemplate.getDisposition`.
+- Added a real Java static-data assertion for item `100000216`, which carries courier pass `188950002 x6`, so the parser is covered by fixture data.
+- Upgraded `CM_SEND_MAIL` item handling for normally untradeable/soul-bound items with courier-pass disposition data: the send path now requires enough pass items, consumes them with Java-like `decreaseByItemId` semantics across cube stacks, persists pass stack updates/deletes in the same mail transaction, and sends the corresponding inventory update/delete packets before the mailed item/kinah updates.
+- Current gaps in this cluster: `AdminService.canOperate` restrictions are still absent; exact `ItemFactory.newItem` defaults for partial stack mail are approximate. Session 31 covers online-recipient mailbox state/list refresh.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 54 tests.
+
+### Session 30 (May 20, 2026)
+- Added Java-shaped housing auction-result `SM_SYSTEM_MESSAGE` helpers for `STR_MSG_HOUSING_BID_CANCEL`, `STR_MSG_HOUSING_BID_WIN`, `STR_MSG_HOUSING_AUCTION_SUCCESS`, and `STR_MSG_HOUSING_AUCTION_FAIL`.
+- Refactored login house-auction mail detection so `SM_RECEIVE_BIDS` refresh and the new system-message notifications share the same unread `$$HS_AUCTION_MAIL` parsing, matching `HousingBidService.onPlayerLogin`.
+- Wired enter-world to send those housing auction-result system messages immediately after mailbox-state `SM_MAIL_SERVICE` and before `SM_RECEIVE_BIDS`, preserving Java ordering.
+- Current gaps in this cluster: full auction list/register/bid/cancel flows, housing payment overdue/sequestrate messages, and house registry/scripts/objects remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 54 tests.
+
+### Session 31 (May 20, 2026)
+- Added a game-client connection registry so online players can be found by object ID, matching the `World.getPlayer` lookup used by `SystemMailService.updateRecipientMailbox`.
+- Registered/unregistered active player connections on enter-world and connection close, and tracked regular/express mailbox state from `CM_CHECK_MAIL_LIST` using Java `PlayerMailboxState` values.
+- Upgraded successful `CM_SEND_MAIL` to send the sender's success packet first, then append the new letter to an online recipient's mailbox and push Java-shaped mailbox-state/list refresh packets. Express mail now also sends `SM_SYSTEM_MESSAGE.STR_POSTMAN_NOTIFY` to the online recipient.
+- Current gaps in this cluster: visible postman object spawning/known-list fanout remains pending; exact `AdminService.canOperate` and exact partial-stack `ItemFactory.newItem` defaults remain approximate.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 54 tests.
+
+### Session 32 (May 20, 2026)
+- Added Java-shaped broker client packet parsers and opcode registrations for `CM_BROKER_SELL_WINDOW` (`117`), `CM_BROKER_LIST` (`123`), `CM_BROKER_SEARCH` (`124`), `CM_BROKER_REGISTERED` (`125`), `CM_BUY_BROKER_ITEM` (`126`), `CM_REGISTER_BROKER_ITEM` (`127`), `CM_BROKER_CANCEL_REGISTERED` (`128`), `CM_BROKER_SETTLE_LIST` (`129`), and `CM_BROKER_SETTLE_ACCOUNT` (`130`).
+- Expanded `SM_BROKER_SERVICE` beyond the login settled icon with Java-shaped empty searched-items, registered-items, settled-items, remove-settled-icon, and sell-window payload writers.
+- Wired the read-only broker requests to safe empty response shells so the packet surfaces are present while the repository-backed broker cache, item filtering, register, buy, cancel, and settle mutations remain deferred.
+- Current gaps in this cluster: full broker startup cache, search filtering/sorting, registered/settled item detail pages, sell price history, register/buy/cancel/settle persistence, and broker item inventory mutations are not ported yet.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 55 tests.
 
 ---
 
 ## Next Steps
 
-1. Continue durable mail persistence/recipient lookup, broker interaction packets, or housing auction-result notifications.
+1. Continue broker repository-backed search/settled/register/buy/cancel flows, visible postman spawn/known-list support, or housing auction/bid flows.
 2. Port equipment/item stat application once item stat functions and template modifiers are in scope.
 3. Add focused live-DB opt-in coverage for creation and enter-world once local schema fixtures are ready.
