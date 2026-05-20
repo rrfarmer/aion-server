@@ -12,11 +12,11 @@
 Last updated: May 20, 2026
 
 - Phase 5 is complete for automated infrastructure parity. Real-client validation is intentionally deferred to later readiness validation.
-- Current active work is Phase 6c enter-world. The C# path handles `CM_ENTER_WORLD`, validates missing/online/reentry/duplicate-world cases, loads the player common row and player-owned inventory rows, marks the character online, stores it in the world container, transitions the connection to `InGame`, and sends `SM_ENTER_WORLD_CHECK`.
+- Current active work is Phase 6c enter-world. The C# path handles `CM_ENTER_WORLD`, validates missing/online/reentry/duplicate-world cases, loads the player common row, player-owned inventory rows, player skills, active skill cooldowns, active item cooldowns, working quests, motions, and client settings, marks the character online, stores it in the world container, transitions the connection to `InGame`, sends `SM_ENTER_WORLD_CHECK`, then sends the implemented post-enter packets `SM_SKILL_LIST`, `SM_SKILL_COOLDOWN`, `SM_ITEM_COOLDOWN`, `SM_QUEST_LIST`, current-title `SM_TITLE_INFO`, `SM_MOTION`, `SM_AFTER_TIME_CHECK_4_7_5`, and optional `SM_UI_SETTINGS` blobs.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
-- Next implementation slice should expand enter-world object loading with skills, quests, recipes, settings, life stats, cooldowns, bind point, warehouse/account data, then begin the Java retail packet sequence after `SM_ENTER_WORLD_CHECK`.
-- Latest validation before this housekeeping pass: `dotnet test dotnetConversion\AionServer.slnx` passed with 258 tests.
+- Next implementation slice should expand enter-world object loading with recipes, title lists/completed quest list, life stats, bind point, warehouse/account data, then continue the Java retail packet sequence with inventory info.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 258 tests.
 
 ---
 
@@ -61,9 +61,16 @@ From `csharp-port.md`, dependency order:
 - [x] Startup `IDFactory` preload from Java DAO-equivalent used-ID tables
 
 ### Phase 6c: Enter World
-- [ ] Load full player object graph (partial: common player row plus inventory/equipment item rows)
+- [ ] Load full player object graph (partial: common player row, inventory/equipment item rows, player skills, active skill/item cooldowns, working quests, motions, and client settings)
 - [x] Java-shaped `CM_ENTER_WORLD` gate checks for missing character, online/reentry state, duplicate world presence
 - [x] Mark player online, update `last_online`, transition connection to in-game, and send `SM_ENTER_WORLD_CHECK`
+- [x] Load `player_skills` and send Java-shaped `SM_SKILL_LIST`
+- [x] Load future `player_cooldowns` rows and send Java-shaped `SM_SKILL_COOLDOWN`
+- [x] Load future `item_cooldowns` rows and send Java-shaped `SM_ITEM_COOLDOWN`
+- [x] Load `player_quests` working states and send Java-shaped `SM_QUEST_LIST`
+- [x] Load `player_motions` and send Java-shaped login `SM_MOTION`
+- [x] Load `player_settings` client blobs and send Java-shaped `SM_UI_SETTINGS`
+- [x] Send current-title `SM_TITLE_INFO` and `SM_AFTER_TIME_CHECK_4_7_5`
 - [ ] Inventory/equipment load and stat application (partial: typed inventory rows loaded; stat application pending)
 - [x] Position/world placement baseline from `players.world_id`, `x`, `y`, `z`, and `heading`
 
@@ -97,10 +104,33 @@ From `csharp-port.md`, dependency order:
 - Covered Phase 5/6 GameServer areas already touched: config/bootstrap, static-data load/merge, ID factory, game packet frame/crypto/parsers/writers, login/chat bridge packets, character selection, character creation, and first enter-world gate.
 - Clarified this resume snapshot and the ongoing comment convention for future GameServer work.
 
+### Session 4 (May 20, 2026)
+- Added `PlayerSkill` and enter-world repository loading from `player_skills`, matching Java `PlayerSkillListDAO.loadSkillList`.
+- Added Java-shaped `SM_SKILL_LIST` and `SkillEntryWriter` payload mapping for loaded skills.
+- Wired successful `CM_ENTER_WORLD` handling to send `SM_SKILL_LIST` immediately after `SM_ENTER_WORLD_CHECK`, matching the next implemented step in `PlayerEnterWorldService.enterWorld`.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 51 tests.
+
+### Session 5 (May 20, 2026)
+- Added `cooldownId` to typed skill template summaries so Java `SkillTemplate.getCooldownId()` lookups can map DB cooldown rows back to learned skills.
+- Added enter-world loading for future `player_cooldowns` rows, matching `PlayerCooldownsDAO.loadPlayerCooldowns` filtering against current time.
+- Added Java-shaped `SM_SKILL_COOLDOWN` packet serialization, including learned-skill lookup by cooldown ID, login `notify=false`, remaining seconds, duration milliseconds, and Java's duration sort.
+- Wired successful enter-world handling to send `SM_SKILL_COOLDOWN` after `SM_SKILL_LIST` when loaded cooldowns map to learned skills.
+- Added enter-world loading for future `item_cooldowns` rows, matching `ItemCooldownsDAO.loadItemCooldowns`, and Java-shaped `SM_ITEM_COOLDOWN` packet serialization.
+- Wired successful enter-world handling to send `SM_ITEM_COOLDOWN` after skill cooldowns when item cooldowns exist.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 51 tests.
+
+### Session 6 (May 20, 2026)
+- Added typed player quest, motion, and client-settings models with Java parity comments for their source DAO/model behavior.
+- Extended enter-world loading with `player_quests`, `player_motions`, and `player_settings` rows, plus `players.title_id`.
+- Added Java-shaped packet writers for `SM_QUEST_LIST`, current-title `SM_TITLE_INFO`, login-list `SM_MOTION`, `SM_AFTER_TIME_CHECK_4_7_5`, and padded `SM_UI_SETTINGS`.
+- Wired the successful enter-world sequence after cooldowns to send working quests, current title, motions, after-time check, and optional UI/shortcut/house-buddy setting blobs in Java order.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 51 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 258 tests.
+
 ---
 
 ## Next Steps
 
-1. Expand enter-world object loading with skills, quests, recipes, settings, life stats, cooldowns, bind point, and warehouse/account data.
-2. Start the Java retail enter-world packet sequence after `SM_ENTER_WORLD_CHECK`, beginning with skill list and inventory info.
+1. Expand enter-world object loading with recipes, title lists/completed quest list, life stats, bind point, warehouse/account data, and item stones.
+2. Continue the Java retail enter-world packet sequence with `SM_INVENTORY_INFO`, `SM_CHANNEL_INFO`, bind-point packets, player spawn, game time, warehouse info, full title list, emotion list, prices, recipe cooldown/list, friend/block lists, instance/abyss/stats info, and later macro/mail/housing/broker packets.
 3. Add focused live-DB opt-in coverage for creation and enter-world once local schema fixtures are ready.
