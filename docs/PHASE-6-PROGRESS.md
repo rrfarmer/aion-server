@@ -23,6 +23,7 @@ Last updated: May 21, 2026
 - `CM_MANASTONE` opcode `74` now covers Java's stigma charge-stone branch: matching charge stones consume with Java `DEC_STIGMA_USE`, success increments `inventory.enchant`, equipped stigmas refresh temporary stigma skills, failure destroys the stigma and removes its skills, and Java-shaped animation/system/inventory side effects are emitted. Exact 5s delayed task cancellation observers remain pending.
 - Enter-world now applies Java `StigmaService.onPlayerLogin` membership `STIGMA_AUTOLEARN` before `SM_ENTER_WORLD_CHECK`/`SM_SKILL_LIST`, learning temporary stigma skills from level 20 through the player's current level with normal/linked stigma skill types.
 - Stigma removal now mirrors Java `StigmaService.removeLinkedStigmaSkills` hidden-skill deletion notices: linked stigma skills are removed by stack and emit `STR_MSG_STIGMA_DELETE_HIDDEN_SKILL` (`1402895`) through equip/unequip and stigma-charge mutation flows.
+- Non-autolearn stigma login now mirrors Java `StigmaService.onPlayerLogin`: equipped stigma stones are validated for slot permission, class, and same-slot conflicts, invalid stones are persisted as unequipped, and valid equipped stigma stones rebuild normal/linked temporary skills before the first enter-world skill list.
 - Movement packet surface now covers Java movement masks/glide flags, `CM_MOVE` opcode `48`, `CM_MOVE_IN_AIR` opcode `49`, `SM_MOVE` opcode `55`, mutable player position, and PlayerMoveController-style target/vector/glide/vehicle state. A first known-list bridge now broadcasts `SM_MOVE`, baseline player enter `SM_PLAYER_INFO` plus companion `SM_MOTION` action `7`, player logout `SM_DELETE`, postman `SM_NPC_INFO`, and postman `SM_DELETE` to active players in the same world within Java's default 95m visible distance. Persistent cached KnownList membership, full player-info dependent state, anti-hack, protection/fall/glide side effects, and strict flying-state gates remain pending.
 - Housing auction timing now includes Java `AuctionEndTask.tryProlongAuction` parity for the default Sunday-noon auction end: late bids can prolong individual house auctions by five-minute windows up to thirty minutes, and `SM_HOUSE_BIDS` countdowns use that per-house state.
 - Housing auction and maintenance timing now parse the Java weekly cron strings from `housing.properties`, so auction countdown/prolongation math and rent due-date advancement are no longer limited to the default Sunday-noon and Monday-midnight schedules.
@@ -1354,12 +1355,20 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 163 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 370 tests.
 
+### Session 147 (May 21, 2026)
+- Added the non-autolearn branch of Java `StigmaService.onPlayerLogin`: normal accounts now validate equipped stigma stones for allowed regular/advanced slots, class specificity, and duplicate same-slot conflicts before packets are sent.
+- Invalid equipped login stigmas are copied to cube slot `0`, persisted through `SaveEquipmentMutationAsync`, and reflected in the loaded player inventory before `SM_ENTER_WORLD_CHECK`; valid equipped stigmas rebuild their temporary normal and linked stigma skills for the initial `SM_SKILL_LIST`.
+- Preserved Java's `STIGMA_AUTOLEARN` early return: membership-qualified players still autolearn stigma skills and skip the equipped-stigma cleanup branch.
+- Current gaps in this cluster: full SkillEngine effect application after temporary skill mutations, exact 5s item-use scheduling/abort observers, and broader account permission surfaces remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 166 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 373 tests.
+
 ---
 
 ## Next Steps
 
 1. Continue equipment/item-use parity around exact Java 5s delayed item-use timing, movement/cancel observers, soul-bind stance/state denials, power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
-2. Finish the remaining stigma login/mutation slices: Java's non-autolearn login validation/unequip pass and full SkillEngine effect application after temporary skill mutations.
+2. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 3. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
 4. Choose the next skill/effect stat slice beyond mastery and bonus titles: generic passive `BufEffect` stat parsing, transform/title movement-speed serialization, or a fuller Java `Stat2` bridge.
 5. Continue housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
