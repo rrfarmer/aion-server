@@ -5,7 +5,7 @@
 **Project rule**: This is a 1:1 parity rewrite from the Java project to C#. Java remains the source of truth for packet layouts, guard order, persistence behavior, side effects, and naming.
 **Workflow rule**: Do one focused unit of work, validate it, commit it, then repeat for as long as useful work remains.
 **Code trace rule**: New C# GameServer parity methods should include a short `Java parity: path::method` comment pointing at the Java source behavior being mirrored.
-**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 356 tests.
+**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 358 tests.
 
 ---
 
@@ -17,14 +17,15 @@
 - Added Java-shaped system message helpers for equip guard failures, including `AbyssRankEnum.getRankL10n` / `ChatUtil.l10n` token generation for invalid-rank denial.
 - Added Java `ItemGroup.getRequiredSkills` parity as an item-group skill map used by `Equipment.checkAvailableEquipSkills`.
 - Added Java `Item.isIdentified()` parity from `tune_count`, including the silent `CM_EQUIP_ITEM` unidentified guard, item-info blob hiding for unresolved tuning data, and idian polish identify denial.
-- Kept `docs/PHASE-6-PROGRESS.md` current through Session 138.
+- Added soul-bind confirmation foundation for `CM_EQUIP_ITEM`: Java question-window code `95006`, accept/cancel handling, start/finish item-use animations, success/cancel/retry messages, `inventory.is_soul_bound` persistence, and final equip mutation.
+- Kept `docs/PHASE-6-PROGRESS.md` current through Session 139.
 
 ---
 
 ## Important Limits
 
 - `CM_EQUIP_ITEM` now covers the mutation path and Java class/level/max-level/race/gender/AP-rank/required-skill/unidentified guards, but full StigmaService handling is still pending.
-- Soul-bind confirmation is still pending and needs the Java response-request flow, 5s item-use animation, cancellation observers, persistence of `inventory.is_soul_bound`, and retry/stance system messages.
+- Soul-bind confirmation has a first response/persistence/equip foundation, but exact Java 5s delayed task timing, movement cancellation observer, and stance/state denials are still pending.
 - Power-shard equip/unequip emotion side effects, quest/summon observers, exact speed/emotion fanout, and full Java `CreatureGameStats` lifecycle remain pending.
 - Charge and idian burn observers are still not wired into combat or skill execution.
 - `CM_DIALOG_SELECT` charge-all still lacks full NPC known-list lookup, NPC template action/function validation, distance/protection/audit checks, and generalized response-request state.
@@ -33,7 +34,7 @@
 
 ## Suggested Next Units
 
-1. Continue `CM_EQUIP_ITEM` parity with a consciously scoped branch: start soul-bind confirmation if response-request/item-use scheduling is the desired next foundation, or move into a narrow StigmaService equip/unequip slice.
+1. Continue `CM_EQUIP_ITEM` parity with a consciously scoped branch: move into a narrow StigmaService equip/unequip slice, or tighten exact soul-bind timing/cancel/stance behavior once player state support exists.
 2. Port StigmaService equip/unequip behavior in slices: slot-open checks, stigma-shard/cost handling, linked skill add/remove, and Java stigma system messages.
 3. Wire charge and idian burn triggers into future combat/skill observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
 4. Choose the next passive skill/effect stat slice beyond mastery/title modifiers: generic passive `BufEffect` stat parsing, transform/title movement-speed serialization, or a fuller Java `Stat2` bridge.
