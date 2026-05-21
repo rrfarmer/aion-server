@@ -1057,6 +1057,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 118 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 325 tests.
 
+### Session 111 (May 21, 2026)
+- Registered and parsed Java `CM_OBJECT_SEARCH` opcode `11`, `CM_POSITION_SELF` opcode `17`, `CM_PLAYER_LISTENER` opcode `40`, and `CM_DELETE_QUEST` opcode `80`.
+- Routed each through `GameServerConnection` with Java parity breadcrumbs and deferred behavior for spawn search, position-self acknowledgement, web rewards, and quest abandonment.
+- Extended combined packet factory coverage for each field layout and invalid-state rejection.
+- Current gaps in this cluster: `SPAWNS_DATA` nearest-NPC search plus `SM_SHOW_NPC_ON_MAP`, web reward delivery, timed quest cancellation, `SM_QUEST_ACTION`, and `QuestService.abandonQuest` remain pending with their owning systems.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 118 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 325 tests.
+
 ---
 
 ## Next Steps

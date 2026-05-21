@@ -15,6 +15,7 @@
 - Phase 6 active area is GameServer gameplay parity, especially enter-world, inventory/equipment, movement/known-list, housing, logout/save, and later core gameplay systems.
 - Current C# GameServer already has broad enter-world coverage: common player row, appearance, inventory/warehouse item rows with item-stone detail display, skills, cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox, broker settlement summary, houses, craft/portal cooldowns, life stats, social lists with friend active-house fields, abyss rank, client settings, bind point, enter-world packet sequence, movement basics, social/chat/mail/broker/housing surfaces, and logout baseline persistence.
 - Most recent completed slices:
+  - Deferred world/quest utility packet parsers now cover Java `CM_OBJECT_SEARCH` (`11`), `CM_POSITION_SELF` (`17`), `CM_PLAYER_LISTENER` (`40`), and `CM_DELETE_QUEST` (`80`) with explicit owner-system gaps.
   - `CM_RECIPE_DELETE` opcode `89` now mirrors Java `RecipeList.deleteRecipe`: deletes the loaded recipe from `player_recipes`, updates `Player.Recipes`, and sends `SM_RECIPE_DELETE` opcode `242`.
   - `CM_SECURITY_TOKEN` opcode `92` now mirrors Java's no-payload web session-key request and returns `SM_SECURITY_TOKEN` opcode `152` using a per-connection Base64 token.
   - `CM_TIME_CHECK_QUIT` opcode `209` now mirrors Java's subclass of `CM_TIME_CHECK` and reuses the existing time-check response path.
