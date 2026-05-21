@@ -1024,6 +1024,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 115 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 322 tests.
 
+### Session 107 (May 21, 2026)
+- Registered and parsed Java utility packet layouts for `CM_TELEPORT_ANIMATION_DONE` opcode `15`, `CM_CHECK_PAK` opcode `62`, `CM_PLAY_MOVIE_END` opcode `81`, `CM_SHOW_MAP` opcode `196`, and `CM_CHECK_MAIL_UNK` opcode `213`.
+- Routed each through `GameServerConnection` with explicit Java parity breadcrumbs and deferred behavior for teleport task execution, pak audit logging, quest/instance movie-end hooks, Conqueror/Protector map scans, and Java's TODO mail-shop packet.
+- Added combined packet factory coverage for field layouts and invalid-state rejection.
+- Current gaps in this cluster: actual teleport task execution, audit policy persistence, cutscene quest/instance callbacks, Conqueror/Protector intruder scans, and any future Java behavior for `CM_CHECK_MAIL_UNK` remain pending with their owning systems.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 116 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 323 tests.
+
 ---
 
 ## Next Steps
