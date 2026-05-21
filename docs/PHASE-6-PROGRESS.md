@@ -1508,6 +1508,10 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GamePacketTests|GameServerBootstrapTests|EquipmentServiceTests"` passes with 89 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 404 tests.
 
+### Session 169 (May 21, 2026)
+- Created `docs/Phase-6M-Completion.md` as the next handoff after the 6L delayed-item-use continuation, summarizing Sessions 164-168, the five committed delayed item-use units, the current 404-test validation baseline, and the next focused unit queue.
+- Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx --no-restore` passing with 404 tests from Session 168.
+
 ---
 
 ## Next Steps
