@@ -1032,6 +1032,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 116 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 323 tests.
 
+### Session 108 (May 21, 2026)
+- Registered Java `CM_TIME_CHECK_QUIT` opcode `209` as a C# subclass of `CmTimeCheck`, matching Java's `CM_TIME_CHECK_QUIT extends CM_TIME_CHECK` inheritance.
+- Reused the existing `CM_TIME_CHECK` parser and `GameServerConnection` response sequence (`SM_AFTER_TIME_CHECK_4_7_5`, then `SM_TIME_CHECK(nanoTime)`).
+- Extended packet factory coverage for the opcode `209` in-game state and authed-state rejection.
+- Current gaps in this cluster: none specific to this packet; it intentionally shares the already ported time-check behavior.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 116 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 323 tests.
+
 ---
 
 ## Next Steps

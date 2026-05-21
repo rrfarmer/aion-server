@@ -15,6 +15,7 @@
 - Phase 6 active area is GameServer gameplay parity, especially enter-world, inventory/equipment, movement/known-list, housing, logout/save, and later core gameplay systems.
 - Current C# GameServer already has broad enter-world coverage: common player row, appearance, inventory/warehouse item rows with item-stone detail display, skills, cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox, broker settlement summary, houses, craft/portal cooldowns, life stats, social lists with friend active-house fields, abyss rank, client settings, bind point, enter-world packet sequence, movement basics, social/chat/mail/broker/housing surfaces, and logout baseline persistence.
 - Most recent completed slices:
+  - `CM_TIME_CHECK_QUIT` opcode `209` now mirrors Java's subclass of `CM_TIME_CHECK` and reuses the existing time-check response path.
   - Deferred utility packet parsers now cover Java `CM_TELEPORT_ANIMATION_DONE` (`15`), `CM_CHECK_PAK` (`62`), `CM_PLAY_MOVIE_END` (`81`), `CM_SHOW_MAP` (`196`), and `CM_CHECK_MAIL_UNK` (`213`) with explicit deferred handler breadcrumbs.
   - `CM_REPORT_PLAYER` opcode `191` now parses Java report requests and returns the current Java system-message surface for report submit/count, invalid self-target, and cross-race report guards.
   - `CM_CHECK_NICKNAME` opcode `177` now mirrors Java's authenticated name-availability check and sends `SM_NICKNAME_CHECK_RESPONSE` opcode `233` with Java character-creation response codes.
