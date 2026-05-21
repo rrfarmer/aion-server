@@ -1000,6 +1000,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 112 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 319 tests.
 
+### Session 104 (May 21, 2026)
+- Registered Java `CM_SHOW_RESTRICTIONS` opcode `194`, the bodyless `/restriction` packet.
+- Routed it through `GameServerConnection` to send `SM_SYSTEM_MESSAGE.STR_MSG_ACCUSE_INFO_NORMAL`, preserving Java's current normal-state response and documenting the future accusation-level variants.
+- Added system-message ID coverage for `1400076` and packet factory coverage for in-game parsing plus invalid-state rejection.
+- Current gaps in this cluster: actual accusation/restriction-level tracking and non-normal `STR_MSG_ACCUSE_INFO_*_LEVEL` responses remain pending until report/restriction state is ported.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 113 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 320 tests.
+
 ---
 
 ## Next Steps
