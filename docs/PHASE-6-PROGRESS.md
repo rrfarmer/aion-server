@@ -26,6 +26,7 @@ Last updated: May 21, 2026
 - Login auth membership is now attached to active `Player` state and written to Java's `SM_CHAT_WINDOW` VIP byte plus `SM_PLAYER_INFO` membership marker.
 - Player enter-world now loads legion membership/name from `legion_members`/`legions`, and personal `SM_CHAT_WINDOW` writes the Java legion-name field.
 - `CM_HEADING_UPDATE` opcode `147` now parses Java's spin/heading byte and intentionally keeps Java's no-op `runImpl` behavior.
+- `SM_PLAYER_INFO` now writes Java's legion member block with loaded legion ID/name and emblem type/color fields.
 - Housing maintenance timing now includes Java `MaintenanceTask.calculateImpoundDate` and overdue mail stage selection from `MailFormatter.sendHouseMaintenanceMail`.
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
@@ -142,7 +143,7 @@ From `csharp-port.md`, dependency order:
 - [x] Broadcast player enter `SM_MOTION` action `7` active-motion payload after `SM_PLAYER_INFO`
 - [ ] Port movement anti-hack, protection, fall/glide side effects, and exact flying-state gates
 - [ ] Add persistent known-list object enter/leave/update fanout for players/NPCs
-- [ ] Complete `SM_PLAYER_INFO` dependent state for legion, transforms, exact stats, store, ride/stance, team/mentor, CP, and viewer-specific enemy race handling
+- [ ] Complete `SM_PLAYER_INFO` dependent state for transforms, exact stats, store, ride/stance, team/mentor, CP, and viewer-specific enemy race handling
 
 ### Phase 6k: Logout And Saves
 - [x] Register and parse `CM_QUIT` opcode `3` and `CM_MAY_QUIT` opcode `4`
@@ -564,7 +565,7 @@ From `csharp-port.md`, dependency order:
 - Added baseline Java-shaped `SM_PLAYER_INFO` opcode `32` for known-list player enter visibility.
 - The first pass writes Java field order using loaded position/common data, race/class/gender/template IDs, player name/title/DP, loaded appearance, equipped cube items for the visible equipment mask, movement vector/current position, level from the experience table when available, abyss rank, and safe defaults for systems not ported yet.
 - Wired successful enter-world to broadcast `SM_PLAYER_INFO` to nearby same-world active players through the visible-player bridge after the entering player's own `SM_PLAYER_SPAWN`.
-- Current gaps in this cluster: the packet still uses defaults for legion, transforms, exact calculated stats/speeds, private store, flight transport, team/mentor, CP info, ride/stance follow-up packets, and viewer-specific enemy race/icon handling.
+- Current gaps in this cluster: the packet still uses defaults for transforms, exact calculated stats/speeds, private store, flight transport, team/mentor, CP info, ride/stance follow-up packets, and viewer-specific enemy race/icon handling.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 66 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 273 tests.
 
@@ -903,7 +904,7 @@ From `csharp-port.md`, dependency order:
 ### Session 92 (May 21, 2026)
 - Filled Java `SM_PLAYER_INFO` target and active-house tail fields using loaded `Player.TargetObjectId` and the first non-inactive loaded `PlayerHouse`.
 - Extended packet coverage to read through the full `SM_PLAYER_INFO` tail, asserting abyss rank, target, team/mentor defaults, active-house address, membership baseline, and CP placeholders.
-- Current gaps in this cluster: real team ID, mentor flag/state, CP info, legion, transforms, exact calculated stats, and viewer-specific enemy race handling remain pending.
+- Current gaps in this cluster: real team ID, mentor flag/state, CP info, transforms, exact calculated stats, and viewer-specific enemy race handling remain pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 106 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 313 tests.
 
@@ -926,6 +927,14 @@ From `csharp-port.md`, dependency order:
 - Registered Java `CM_HEADING_UPDATE` opcode `147` and parsed the single heading byte sent by the spin packet.
 - Routed the packet through `GameServerConnection` as an intentional no-op, matching Java `CM_HEADING_UPDATE.runImpl`.
 - Current gaps in this cluster: movement anti-hack, protection/fall/glide side effects, exact flying-state gates, and full known-list movement state remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 106 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 313 tests.
+
+### Session 96 (May 21, 2026)
+- Loaded `legion_emblems` visible fields with enter-world legion data, including Java `LegionEmblemType` values (`DEFAULT=0`, `CUSTOM=0x80`).
+- Updated `SM_PLAYER_INFO` to write Java's legion member block when the player has loaded legion data, falling back to the existing 12-byte empty block otherwise.
+- Extended packet coverage to assert legion ID, emblem ID/type/colors, and legion name before the HP/DP/equipment section.
+- Current gaps in this cluster: custom emblem data transfer packets, transforms, exact calculated stats, private store, team/mentor, CP info, and viewer-specific enemy race handling remain pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 106 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 313 tests.
 
