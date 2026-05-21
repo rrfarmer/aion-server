@@ -1276,6 +1276,11 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "EquipmentServiceTests|DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 13 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 353 tests.
 
+### Session 137 (May 21, 2026)
+- Created `docs/Phase-6G-Completion.md` as the next handoff, carrying forward the Java-source-of-truth rule, the 6F `CM_EQUIP_ITEM` mutation/guard work, the latest 353-test validation baseline, and the next unit queue.
+- Next best focused units: identified item-state modeling plus equip identify guard, soul-bind confirmation foundation, StigmaService equip/unequip slices, charge/idian burn observers, broader passive skill/effect stat strategy, housing/known-list work, or full NPC/dialog validation.
+- Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx --no-restore` passing with 353 tests from Session 136.
+
 ---
 
 ## Next Steps
