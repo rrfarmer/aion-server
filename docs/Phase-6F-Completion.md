@@ -5,7 +5,7 @@
 **Project rule**: This is a 1:1 parity rewrite from the Java project to C#. Java remains the source of truth for packet layouts, guard order, persistence behavior, side effects, and naming.
 **Workflow rule**: Do one focused unit of work, validate it, commit it, then repeat for as long as useful work remains.
 **Code trace rule**: New C# GameServer parity methods should include a short `Java parity: path::method` comment pointing at the Java source behavior being mirrored.
-**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 340 tests.
+**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 346 tests.
 
 ---
 
@@ -19,7 +19,8 @@
 - Parsed Java `player_titles.xml` into `TitleTemplateTable` and applied Java bonus-title stat modifiers through `SM_STATS_INFO`.
 - Parsed Java `wpnmastery` and `shieldmastery` skill effects, then applied a limited `WeaponMasteryEffect` / `StatWeaponMasteryFunction` and `ShieldMasteryEffect` / `StatShieldMasteryFunction` bridge to current stats.
 - Parsed Java `wpndual` effect metadata into `SkillTemplateSummary`, preserving the fields needed by future `WeaponDualEffect.hasDualWieldEffect` equip gates and attack stat behavior.
-- Kept `docs/PHASE-6-PROGRESS.md` current through Session 131.
+- Ported a first-pass Java `CM_EQUIP_ITEM` opcode `38` path: parser/registration, equip/unequip/switch action routing, `WeaponDualEffect.hasDualWieldEffect` gate from parsed `wpndual` metadata, slot collision mutation, full-inventory rejection for the modeled cases, `inventory.is_equipped`/`slot` persistence, `SM_INVENTORY_UPDATE_ITEM`, `SM_STATS_INFO`, and `SM_UPDATE_PLAYER_APPEARANCE`.
+- Kept `docs/PHASE-6-PROGRESS.md` current through Session 133.
 
 ---
 
@@ -29,7 +30,7 @@
 - Most new stat behavior affects the current-stat half of `SM_STATS_INFO`; full Java base/current ordering and owner-scoped stat lifetimes remain pending.
 - Exact Java item-use delay/cancel observers, cooldown plumbing, identify/attack-mode guards, and combat/skill burn trigger integration remain pending.
 - Charge and idian burn observers are not wired into combat or skill execution yet.
-- Equip/unequip packet behavior is still pending. The C# side now has weapon-dual metadata, but it does not yet enforce `WeaponDualEffect.hasDualWieldEffect`, slot collision rules, inventory-full guards, persistence, appearance broadcast, or stat fanout for `CM_EQUIP_ITEM`.
+- `CM_EQUIP_ITEM` is now present as a first-pass slot mutation path, but full Java equip validation remains pending: class/level/max-level/race/gender/AP-rank guards, required equip skills, stigma handling, soul-bind confirmation, identified-item checks, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, and full Java stat lifecycle.
 - `CM_DIALOG_SELECT` charge-all still lacks full NPC known-list lookup, NPC template action/function validation, distance/protection/audit checks, and generalized response-request state.
 - Bonus title stat application is present on stat packet creation, but title learn/remove expiration side effects and dynamic stat recompute fanout remain pending.
 
@@ -37,7 +38,7 @@
 
 ## Suggested Next Units
 
-1. Port `CM_EQUIP_ITEM` in a narrow first pass: parser/registration, Java action routing, `WeaponDualEffect.hasDualWieldEffect` gate using parsed `wpndual` metadata, slot mutation persistence, `SM_INVENTORY_UPDATE_ITEM`, and `SM_STATS_INFO` refresh. Appearance broadcast may require a new `SM_UPDATE_PLAYER_APPEARANCE` packet.
+1. Finish full `CM_EQUIP_ITEM` parity beyond the first-pass slot mutation path: class/level/max-level/race/gender/AP-rank guards, required equip skills, stigma handling, soul-bind confirmation, identify checks, power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
 2. Wire charge and idian burn triggers into future combat/skill observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
 3. Choose the next passive skill/effect stat slice beyond mastery/title modifiers: generic passive `BufEffect` stat parsing, transform/title movement-speed serialization, or a fuller Java `Stat2` bridge.
 4. Continue housing auction settlement/maintenance/sign/appearance flows or persistent known-list membership when the next slice should stay out of the stat engine.

@@ -1240,12 +1240,21 @@ From `csharp-port.md`, dependency order:
 - Next best focused units: `CM_EQUIP_ITEM` with the parsed weapon-dual gate, charge/idian burn observers, broader passive skill/effect stat strategy, housing/known-list work, or full NPC/dialog validation.
 - Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx --no-restore` passing with 340 tests from Session 131.
 
+### Session 133 (May 21, 2026)
+- Registered and parsed Java `CM_EQUIP_ITEM` opcode `38`, preserving the Java payload order `action`, `slotRead`, and `itemObjId`.
+- Added a first-pass `EquipmentService` for Java `Equipment.equipItem`, `unEquipItem`, and `switchHands` routing: one-hand weapons are forced to main hand unless learned `wpndual` metadata proves `WeaponDualEffect.hasDualWieldEffect`, two-hand weapons occupy main/sub hand, colliding slots are unequipped, inventory-full rejection is modeled for unequip and two-hand swaps, and switch-weapons toggles active/off weapon slots.
+- Added equipment mutation persistence for `inventory.is_equipped` and `inventory.slot`, Java `ItemUpdateType.EQUIP_UNEQUIP` inventory update packets, post-change `SM_STATS_INFO` refresh, and Java-shaped `SM_UPDATE_PLAYER_APPEARANCE` opcode `36` visible-equipment fanout.
+- Added focused coverage for parser registration, one-hand/dual-wield gates, colliding-slot unequip, full-inventory rejection, and two-hand appearance mask serialization.
+- Current gaps in this cluster: full Java equip guards for class/level/max-level/race/gender/AP-rank, item required equip skills, StigmaService, soul-bind confirmation, identified-item checks, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, and full Java `CreatureGameStats` lifecycle remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "EquipmentServiceTests|ClientPacketFactory_ParsesEquipItem|SmMailService_WritesJavaShapedAttachmentAndInventoryPackets"` passes with 6 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 346 tests.
+
 ---
 
 ## Next Steps
 
-1. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-2. Choose the next skill/effect stat slice beyond mastery and bonus titles: generic passive `BufEffect` stat parsing, transform/title movement-speed serialization, or a fuller Java `Stat2` bridge.
-3. Port equip/unequip behavior and stat refresh side effects, including `WeaponDualEffect.hasDualWieldEffect` gates, `SM_STATS_INFO` recompute/fanout, and speed/emotion updates where Java sends them.
+1. Finish full `CM_EQUIP_ITEM` parity beyond the first-pass slot mutation path: class/level/max-level/race/gender/AP-rank guards, required equip skills, stigma handling, soul-bind confirmation, identify checks, power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
+2. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
+3. Choose the next skill/effect stat slice beyond mastery and bonus titles: generic passive `BufEffect` stat parsing, transform/title movement-speed serialization, or a fuller Java `Stat2` bridge.
 4. Continue housing auction settlement/maintenance/sign/appearance flows or persistent known-list membership when the next slice should stay out of the stat engine.
 5. Fill in full NPC/dialog known-list/function validation around the now-parsed `CM_DIALOG_SELECT` surface.
