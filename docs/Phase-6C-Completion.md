@@ -2,10 +2,19 @@
 
 **Created**: May 21, 2026
 **Status**: Phase 6 is still in progress; this document captures the completed 6C equipment-stat slice and the remaining enter-world/player-graph work.
-**Project rule**: This is a 1:1 parity rewrite from the Java project to C#. Java remains the source of truth.
-**Workflow rule**: Do one focused unit of work, validate it, commit it, then repeat.
+**Project rule**: This is a 1:1 parity rewrite from the Java project to C#. Java remains the source of truth for packet layouts, guard order, persistence behavior, side effects, and naming.
+**Workflow rule**: Do one focused unit of work, validate it, commit it, then repeat for as long as useful work remains.
 **Code trace rule**: New C# GameServer parity methods should include a short `Java parity: path::method` comment pointing at the Java source behavior being mirrored.
 **Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 327 tests.
+
+---
+
+## Operating Instructions
+
+- Treat Java as the authoritative implementation. Check the Java class/method before porting behavior, and prefer faithful parity over convenient C# guesses.
+- Keep each unit narrow enough to validate cleanly: one packet surface, one persistence path, one stat/equipment slice, or one known-list/housing slice.
+- After each unit, update the progress/handoff docs, run the relevant focused tests plus full solution validation when feasible, commit the unit, and then continue with the next slice.
+- When behavior is deferred because dependencies are not ported yet, leave explicit Java breadcrumbs and name the remaining owner system.
 
 ---
 

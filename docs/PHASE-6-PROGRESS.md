@@ -3,6 +3,8 @@
 **Status**: IN PROGRESS (started May 20, 2026)  
 **Target**: Port gameplay systems in Java dependency order while keeping database and packet behavior compatible.  
 **Validation Approach**: Parity/unit/integration tests first; real-client validation remains an end-of-port readiness step.  
+**Workflow Cadence**: Do one focused unit of work, validate it, commit it, then repeat for as long as useful work remains.
+**Source Of Truth**: Java remains authoritative for packet layouts, guard order, persistence behavior, side effects, naming, and deferred-system boundaries.
 **Code Trace Convention**: GameServer parity methods should include a short `Java parity: path::method` comment pointing at the Java source behavior they mirror.
 
 ---
@@ -1086,6 +1088,8 @@ From `csharp-port.md`, dependency order:
 
 ## Next Steps
 
-1. Continue housing maintenance task, auction-end settlement/appearance fanout flows, full known-list fanout, or the next high-value chat/group packet surface.
-2. Deepen equipment/item stat application with mana stones, random bonuses, item sets, enchantment, tempering, conditioning, and eventual Java stat-container parity.
-3. Add focused live-DB opt-in coverage for creation and enter-world once local schema fixtures are ready.
+1. Deepen equipment/item stat parity from the Java source: mana stones, fusion/random bonus modifiers, item sets, enchantment, tempering, conditioning, armor mastery, and the eventual `CreatureGameStats`/`Stat2` container.
+2. Port equip/unequip behavior and stat refresh side effects, including `SM_STATS_INFO` recompute/fanout and speed/emotion updates where Java sends them.
+3. Continue persistent known-list membership and richer `SM_PLAYER_INFO` dependent state once more stat/transform/team data is available.
+4. Continue housing maintenance, auction-end settlement, sign/appearance fanout, or a compact chat/group surface when a smaller independent slice is preferable.
+5. Add focused live-DB opt-in coverage for creation and enter-world once local schema fixtures are ready.
