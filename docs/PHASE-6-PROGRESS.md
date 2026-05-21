@@ -1501,12 +1501,19 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GamePacketTests|GameServerBootstrapTests|IdianPolishServiceTests"` passes with 74 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 404 tests.
 
+### Session 168 (May 21, 2026)
+- Migrated soul-bind confirmation accept flow onto the C# one-shot `TaskId.ITEM_USE` scheduler: accepting the Java `SM_QUESTION_WINDOW` now starts the 5s soul-bind animation immediately, then confirmed soul-bound equipment mutation, success end state `6`, success message, inventory/equipment persistence, appearance fanout, skill/stat side effects, and final equip packets run after the scheduled delay.
+- Added soul-bind movement-cancel parity to the shared pending item-use slot with end state `8` item-use animation plus `STR_SOUL_BOUND_ITEM_CANCELED`.
+- Current gaps in this cluster: soul-bind stance-denial messages are still pending, item cooldown abort cleanup is still not wired for generic item-use aborts, and full Java `SkillEngine` effect lifecycle/stat fanout remains pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GamePacketTests|GameServerBootstrapTests|EquipmentServiceTests"` passes with 89 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 404 tests.
+
 ---
 
 ## Next Steps
 
-1. Continue migrating soul-bind confirmation onto Java `TaskId.ITEM_USE` delayed execution: 5s accept timing, movement cancel end state `8`, success end state `6`, and stance denial messages.
-2. Continue remaining item-use parity around soul-bind timing/cancel/stance denials, power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
+1. Add the remaining soul-bind stance-denial guard/messages from Java `Equipment.soulBindItem`: dead, ride, chair, resting, gliding, flying, and weapon-equipped state checks.
+2. Continue remaining item-use parity around item cooldown abort cleanup, power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
 3. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
 5. Continue housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
