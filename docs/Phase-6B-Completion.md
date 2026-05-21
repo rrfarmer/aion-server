@@ -5,7 +5,7 @@
 **Project rule**: This is a 1:1 parity rewrite from the Java project to C#. Java remains the source of truth.
 **Workflow rule**: Do one focused unit of work, validate it, commit it, then repeat.
 **Code trace rule**: New C# GameServer parity methods should include a short `Java parity: path::method` comment pointing at the Java source behavior being mirrored.
-**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx` passes with 310 tests.
+**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx` passes with 311 tests.
 
 ---
 
@@ -15,6 +15,7 @@
 - Phase 6 active area is GameServer gameplay parity, especially enter-world, inventory/equipment, movement/known-list, housing, logout/save, and later core gameplay systems.
 - Current C# GameServer already has broad enter-world coverage: common player row, appearance, inventory/warehouse item rows with item-stone detail display, skills, cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox, broker settlement summary, houses, craft/portal cooldowns, life stats, social lists with friend active-house fields, abyss rank, client settings, bind point, enter-world packet sequence, movement basics, social/chat/mail/broker/housing surfaces, and logout baseline persistence.
 - Most recent completed slices:
+  - `CM_FRIEND_ADD` now honors Java `DeniedStatus.FRIEND` target-side settings loaded from `player_settings` rows, returning `STR_MSG_REJECTED_FRIEND` before question-window creation.
   - `SM_FRIEND_LIST` now writes Java `HousingService.findActiveHouse` address and door-state fields for friends, backed by loaded DB house settings and online friend snapshot refreshes.
   - Housing maintenance timing now has Java `MaintenanceTask.calculateImpoundDate` and `MailFormatter.sendHouseMaintenanceMail` stage-selection parity, and rent payment uses the shared maintenance timing service.
   - Housing auction startup-recovery timing now mirrors Java `AuctionEndTask.shouldRunOnStart`, including the 30-minute post-auction prolongation recovery window.
@@ -70,7 +71,7 @@
 - Whisper still lacks no-whispers custom state, `PlayerRestrictions.canChat`, `NameRestrictionService.filterMessage`, GM/staff chat logging, exact `ChatUtil` name-tag parsing, and per-recipient staff race-filter suppression.
 - Chat info still lacks real group/alliance chat-window branches, legion name, player note, account membership/VIP level, persistent known-list membership, and exact name-tag parsing.
 - Chat auth still lacks chat-ban/gag follow-up, bridge reconnect replay for pending player auths, and real-client validation of the ChatServer endpoint advertised by `SM_VERSION_CHECK`.
-- Social still lacks target-side denied-friend setting, offline social request handling, and generic `ResponseRequester` support beyond buddy requests.
+- Social still lacks offline social request handling and generic `ResponseRequester` support beyond buddy requests.
 
 ### Movement And Known List
 - Port movement anti-hack, protection, fall/glide side effects, and exact flying-state gates.

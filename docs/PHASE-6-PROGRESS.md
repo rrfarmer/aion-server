@@ -26,7 +26,7 @@ Last updated: May 21, 2026
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
 - Next implementation slice should continue housing auction settlement/maintenance/sign/appearance flows, full known-list fanout/movement broadcast, broader chat packet surfaces, or equipment stat application once item templates/stat functions are in scope.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 310 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 311 tests.
 
 ---
 
@@ -100,7 +100,7 @@ From `csharp-port.md`, dependency order:
 - [x] Send baseline Java-shaped `SM_PRICES`
 - [x] Load `friends`/friend common rows with active-house address/door state and send Java-shaped `SM_FRIEND_LIST`
 - [x] Load `blocks`/blocked-player names and send Java-shaped `SM_BLOCK_LIST`
-- [x] Handle `CM_FRIEND_ADD` with Java question-window request/response flow and DB-backed reciprocal friend insert
+- [x] Handle `CM_FRIEND_ADD` with Java target-side denied-friend setting, question-window request/response flow, and DB-backed reciprocal friend insert
 - [x] Handle `CM_BLOCK_ADD` with DB-backed target lookup/insert, Java denial order, `SM_BLOCK_LIST`, and `SM_BLOCK_RESPONSE`
 - [x] Handle `CM_FRIEND_DEL` with DB-backed bidirectional friend delete, active-player list refresh, online friend list refresh, `SM_FRIEND_NOTIFY`, and `SM_FRIEND_RESPONSE`
 - [x] Handle `CM_BLOCK_DEL` with DB-backed block delete, `SM_BLOCK_LIST`, and `SM_BLOCK_RESPONSE`
@@ -726,7 +726,7 @@ From `csharp-port.md`, dependency order:
 - Extended `ISocialRepository`/`MySqlSocialRepository` with `FriendListDAO.addFriends`-style reciprocal `friends` inserts.
 - Routed friend add through Java's available denial order: offline target, self/busy, GM restriction, already friend, cross-race hidden target, requester-blocked target, target-blocked requester, requester full, target full, and busy target prompt.
 - Routed buddy question accept/deny responses: denial sends `SM_FRIEND_RESPONSE.TARGET_DENIED` to the requester; acceptance persists both rows, refreshes both in-memory friend lists, and sends `SM_FRIEND_LIST` plus `SM_FRIEND_RESPONSE.TARGET_ADDED` to both players.
-- Current gaps in this cluster: target-side denied-friend setting is not modeled yet, offline social request handling remains pending, and generic `ResponseRequester` support beyond buddy requests is still unported.
+- Then-current gaps in this cluster: target-side denied-friend setting, offline social request handling, and generic `ResponseRequester` support beyond buddy requests. Session 88 covers target-side denied-friend settings.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 82 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 289 tests.
 
@@ -856,9 +856,17 @@ From `csharp-port.md`, dependency order:
 - Filled the previously reserved `SM_FRIEND_LIST` house address and door-state fields using Java `HousingService.findActiveHouse` parity: studio rows win first, otherwise the oldest loaded custom house is active.
 - Extended loaded `PlayerFriend` snapshots with active-house state from DB `houses.settings`, and refresh online reciprocal friend snapshots when friend status changes or a friend request is accepted.
 - Updated packet coverage so friend-list serialization asserts the nonzero house address and friends-only door byte.
-- Current gaps in this cluster: target-side denied-friend setting, offline social request handling, and generic `ResponseRequester` support beyond buddy requests remain pending.
+- Current gaps in this cluster: offline social request handling and generic `ResponseRequester` support beyond buddy requests remain pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 103 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 310 tests.
+
+### Session 88 (May 21, 2026)
+- Extended `PlayerSettings` with Java `DeniedStatus` deny/display integer fields and loaded `player_settings` rows `-1` and `-2` alongside the existing client setting blobs.
+- Routed `CM_FRIEND_ADD` through Java's target-side `DeniedStatus.FRIEND` guard after list-full checks and before question-window creation, sending `STR_MSG_REJECTED_FRIEND`.
+- Added focused mask coverage for `PlayerSettings.DeniesFriendRequests`.
+- Current gaps in this cluster: offline social request handling and generic `ResponseRequester` support beyond buddy requests remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 104 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 311 tests.
 
 ---
 
