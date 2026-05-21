@@ -1399,6 +1399,10 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "ItemSocketServiceTests|StaticDataLoadingTests"` passes with 12 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 385 tests.
 
+### Session 153 (May 21, 2026)
+- Created `docs/Phase-6J-Completion.md` as the next handoff after the 6I continuation, summarizing Sessions 149-152, the four committed `CM_MANASTONE`/item socket units, the current 385-test validation baseline, and the next focused unit queue.
+- Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx --no-restore` passing with 385 tests from Session 152.
+
 ---
 
 ## Next Steps
