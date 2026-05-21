@@ -1314,6 +1314,11 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "EquipmentServiceTests|StaticDataLoadingTests|GamePackets_AreSerializedWithExpectedOpcodesAndPayloads"` passes with 22 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 362 tests.
 
+### Session 142 (May 21, 2026)
+- Created `docs/Phase-6H-Completion.md` as the next handoff, carrying forward the Java-source-of-truth rule, the identified-item/soul-bind/stigma work from 6G, the latest 362-test validation baseline, and the next unit queue.
+- Next best focused units: stigma enchant/charge-stone flow, membership stigma-slot overrides, exact soul-bind timing/cancel/stance behavior, charge/idian burn observers, broader passive skill/effect stat strategy, housing/known-list work, or full NPC/dialog validation.
+- Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx --no-restore` passing with 362 tests from Session 141.
+
 ---
 
 ## Next Steps
