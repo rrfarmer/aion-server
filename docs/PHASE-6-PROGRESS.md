@@ -18,6 +18,7 @@ Last updated: May 21, 2026
 - ItemTemplateSummary now also parses Java `attack_type`, `<weapon_stats>`, stat bonus set IDs, enchant/tempering template names, idian polish set IDs, godstone proc metadata, and direct item stat modifiers; `SM_STATS_INFO` applies first-pass equipped item template weapon stats/modifiers, socketed mana/fusion stone template modifiers, fusioned weapon template modifiers/10% weapon stat bonuses, selected random bonus modifiers, Java item-set part/full bonuses, Java enchant-template stat effects, Java tempering/plume stat effects, and Java idian POLISH random-bonus stat effects to current stats on login while full Java stat-container parity remains pending.
 - Java charge-conditioned item modifiers under `<conditions><charge value="..."/>` now load into `ItemStatModifier.ChargeCondition`; the `SM_STATS_INFO` equipment bridge validates them with Java `ItemChargeCondition`/`ChargeInfo` thresholds so conditioning-gated template stats only apply at the required equipped-item charge level.
 - Conditioning service flow now covers Java `CM_CHARGE_ITEM` opcode `78` for selected cube items: static `<improve>` and `recommend_rank` metadata, Java `ItemChargeService` price/rank math, kinah/AP payment mutation, `inventory.charge` persistence, AP rank persistence for AP payments, charge-only `SM_INVENTORY_UPDATE_ITEM` blobs, success/all-complete charge system messages, and post-charge `SM_STATS_INFO` refresh.
+- Idian polish flow now covers Java `CM_USE_ITEM` opcode `37` type `2` for polish idians, static `<idian>` burn metadata, Java weighted POLISH random-bonus selection, source idian consumption, target idian replacement in `item_stones`, full target inventory update, polish system messages, Java-shaped item-use animation completion, `POLISH_CHARGE` inventory blobs, and a reusable `IdianPolishService.decreasePolishCharge` bridge for future skill/combat observers. Exact 5s item-use scheduling/abort observers, identify/attack-mode guards, and combat/skill burn trigger integration remain pending.
 - Movement packet surface now covers Java movement masks/glide flags, `CM_MOVE` opcode `48`, `CM_MOVE_IN_AIR` opcode `49`, `SM_MOVE` opcode `55`, mutable player position, and PlayerMoveController-style target/vector/glide/vehicle state. A first known-list bridge now broadcasts `SM_MOVE`, baseline player enter `SM_PLAYER_INFO` plus companion `SM_MOTION` action `7`, player logout `SM_DELETE`, postman `SM_NPC_INFO`, and postman `SM_DELETE` to active players in the same world within Java's default 95m visible distance. Persistent cached KnownList membership, full player-info dependent state, anti-hack, protection/fall/glide side effects, and strict flying-state gates remain pending.
 - Housing auction timing now includes Java `AuctionEndTask.tryProlongAuction` parity for the default Sunday-noon auction end: late bids can prolong individual house auctions by five-minute windows up to thirty minutes, and `SM_HOUSE_BIDS` countdowns use that per-house state.
 - Housing auction and maintenance timing now parse the Java weekly cron strings from `housing.properties`, so auction countdown/prolongation math and rent due-date advancement are no longer limited to the default Sunday-noon and Monday-midnight schedules.
@@ -43,8 +44,8 @@ Last updated: May 21, 2026
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
-- Next implementation slice should start from the remaining 6E queue: idian polish burn/update persistence, armor mastery after a skill/effect strategy is chosen, equip/unequip recompute fanout, housing auction settlement/maintenance/sign/appearance flows, or persistent known-list membership.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 331 tests.
+- Next implementation slice should start from the remaining 6E queue: equipped-item conditioning entry points, idian burn trigger integration through future skill/combat observers, armor mastery after a skill/effect strategy is chosen, equip/unequip recompute fanout, housing auction settlement/maintenance/sign/appearance flows, or persistent known-list membership.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 335 tests.
 
 ---
 
@@ -1177,12 +1178,22 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 124 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 331 tests.
 
+### Session 125 (May 21, 2026)
+- Registered and parsed Java `CM_USE_ITEM` opcode `37` for the target-item branch used by idian polish actions.
+- Parsed Java item-template `<idian burn_attack="..." burn_defend="...">` into `ItemTemplateSummary.IdianInfo`, and extended `ItemRandomBonusTable` with Java `selectRandomBonusNumber` weighted modifier-group selection.
+- Added `IdianPolishService` for Java `PolishAction` and `IdianStone.decreasePolishCharge` parity decisions: polish target validation, source idian consumption, new `PlayerIdianStone` creation at `1000000` charge, low-charge threshold detection, and zero-charge idian removal.
+- Routed the implemented polish branch through inventory state mutation and persistence: source count update/delete, idian row delete/insert in `item_stones` category `3`, Java-shaped `SM_DELETE_ITEM`/`SM_INVENTORY_UPDATE_ITEM`, polish success/failure system messages, item-use animation completion, and equipped-target `SM_STATS_INFO` refresh.
+- Added Java `ItemUpdateType.POLISH_CHARGE` behavior to `SM_INVENTORY_UPDATE_ITEM`: polish-only blob with no trailing update type.
+- Current gaps in this cluster: exact Java 5s item-use task/cancel observer/cooldown behavior, identify and attack-mode guards once those item/player flags exist, `PolishChargeCondition` skill hook-in, `IdianStone.onEquip` attack/defend observer burn triggers, and combat-driven persistence fanout remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 128 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 335 tests.
+
 ---
 
 ## Next Steps
 
-1. Port idian polish item-use and burn/update persistence: `PolishAction`, `IdianStone.decreasePolishCharge`, `PolishChargeCondition`, and `ItemStoneListDAO.storeIdianStones`.
-2. Port equipped-item conditioning entry points (`ChargeAction` / “charge all equipped”) now that selected cube-item `CM_CHARGE_ITEM` is implemented.
+1. Port equipped-item conditioning entry points (`ChargeAction` / "charge all equipped") now that selected cube-item `CM_CHARGE_ITEM` is implemented.
+2. Wire idian burn triggers into the future skill/combat observer paths: `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge `POLISH_CHARGE`, zero-charge idian deletion, and stat refresh fanout.
 3. Add an armor mastery slice only after deciding whether to parse the relevant skill effects or introduce an explicitly limited packet-facing bridge.
 4. Port equip/unequip behavior and stat refresh side effects, including `SM_STATS_INFO` recompute/fanout and speed/emotion updates where Java sends them.
 5. Continue housing auction settlement/maintenance/sign/appearance flows or persistent known-list membership when the next slice should stay out of the stat engine.
