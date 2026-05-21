@@ -27,6 +27,7 @@ Last updated: May 21, 2026
 - Player enter-world now loads legion membership/name from `legion_members`/`legions`, and personal `SM_CHAT_WINDOW` writes the Java legion-name field.
 - `CM_HEADING_UPDATE` opcode `147` now parses Java's spin/heading byte and intentionally keeps Java's no-op `runImpl` behavior.
 - `SM_PLAYER_INFO` now writes Java's legion member block with loaded legion ID/name and emblem type/color fields.
+- `CM_REJECT_REVIVE` opcode `146` now mirrors Java's empty-payload, no-op packet.
 - Housing maintenance timing now includes Java `MaintenanceTask.calculateImpoundDate` and overdue mail stage selection from `MailFormatter.sendHouseMaintenanceMail`.
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
@@ -935,6 +936,13 @@ From `csharp-port.md`, dependency order:
 - Updated `SM_PLAYER_INFO` to write Java's legion member block when the player has loaded legion data, falling back to the existing 12-byte empty block otherwise.
 - Extended packet coverage to assert legion ID, emblem ID/type/colors, and legion name before the HP/DP/equipment section.
 - Current gaps in this cluster: custom emblem data transfer packets, transforms, exact calculated stats, private store, team/mentor, CP info, and viewer-specific enemy race handling remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 106 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 313 tests.
+
+### Session 97 (May 21, 2026)
+- Registered Java `CM_REJECT_REVIVE` opcode `146`.
+- Added the empty-payload parser and routed it through `GameServerConnection` as an intentional no-op, matching Java `CM_REJECT_REVIVE.readImpl/runImpl`.
+- Current gaps in this cluster: full resurrection/revive services and related effect-state cleanup remain pending with combat/effect systems.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 106 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 313 tests.
 

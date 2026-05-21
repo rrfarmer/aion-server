@@ -15,6 +15,7 @@
 - Phase 6 active area is GameServer gameplay parity, especially enter-world, inventory/equipment, movement/known-list, housing, logout/save, and later core gameplay systems.
 - Current C# GameServer already has broad enter-world coverage: common player row, appearance, inventory/warehouse item rows with item-stone detail display, skills, cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox, broker settlement summary, houses, craft/portal cooldowns, life stats, social lists with friend active-house fields, abyss rank, client settings, bind point, enter-world packet sequence, movement basics, social/chat/mail/broker/housing surfaces, and logout baseline persistence.
 - Most recent completed slices:
+  - `CM_REJECT_REVIVE` opcode `146` now mirrors Java's empty-payload, no-op packet.
   - `SM_PLAYER_INFO` now writes Java's legion member block with loaded legion ID/name and emblem type/color fields.
   - `CM_HEADING_UPDATE` opcode `147` now parses Java's spin/heading byte and remains a no-op like Java `runImpl`.
   - Player enter-world now loads legion membership/name from `legion_members`/`legions`, and personal `SM_CHAT_WINDOW` writes Java's legion-name field.
@@ -84,7 +85,7 @@
 ### Movement And Known List
 - Port movement anti-hack, protection, fall/glide side effects, and exact flying-state gates.
 - Add persistent known-list object enter/leave/update fanout for players and NPCs.
-- Complete `SM_PLAYER_INFO` dependent state for legion, transforms, exact stats, store, ride/stance, display settings, target/team/house, and viewer-specific enemy race handling.
+- Complete `SM_PLAYER_INFO` dependent state for transforms, exact stats, store, ride/stance, team/mentor, CP, and viewer-specific enemy race handling.
 - Broaden the known-list bridge beyond current visible-player broadcasts for movement, enter, logout, and postman spawn/delete.
 
 ### Logout, Saves, And Recovery
