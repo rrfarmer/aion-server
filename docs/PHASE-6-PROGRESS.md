@@ -1520,12 +1520,20 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "EquipmentServiceTests|GamePackets_AreSerializedWithExpectedOpcodesAndPayloads"` passes with 27 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 411 tests.
 
+### Session 171 (May 21, 2026)
+- Added Java `ItemUseLimits.usedelay/usedelayid` parsing to `ItemTemplateSummary`, with static-data coverage proving food-style item templates load `usedelay="5000"` / `usedelayid="21"`.
+- Added C# player item-cooldown helpers mirroring Java `Player.addItemCoolDown` / `removeItemCoolDown`, including Java millisecond reuse time and integer-second use delay storage.
+- Extended the shared `TaskId.ITEM_USE` scheduler path to set/clear Java-style per-player `usingItem` state and to support action-specific cooldown removal on abort; idian `PolishAction` now removes its item cooldown on movement cancel while `ChargeAction` keeps the Java no-remove behavior.
+- Current gaps in this cluster: broader `CM_USE_ITEM` action routing still needs Java cooldown application as more item actions are ported; power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticDataLoadingTests|PlayerStateTests|GameServerBootstrapTests"` passes with 11 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 412 tests.
+
 ---
 
 ## Next Steps
 
-1. Add shared delayed item-use abort cleanup for item cooldowns and any per-player using-item state now that enchant, manastone, godstone, stigma charge, charge action, idian polish, and soul-bind all use the scheduler.
-2. Continue remaining item-use parity around power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
-3. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
-4. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-5. Continue housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
+1. Continue remaining item-use parity around power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
+2. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
+3. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
+4. Continue housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
+5. Broaden Java `CM_USE_ITEM` action routing and cooldown application as additional item actions are ported beyond the current polish/charge subset.
