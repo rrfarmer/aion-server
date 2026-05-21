@@ -1065,6 +1065,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 118 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 325 tests.
 
+### Session 112 (May 21, 2026)
+- Registered and parsed Java `CM_CLIENT_COMMAND_ROLL` opcode `107`.
+- Added Java `SM_SYSTEM_MESSAGE` helpers for `STR_MSG_DICE_CUSTOM_ME` and `STR_MSG_DICE_CUSTOM_OTHER`.
+- Routed `/roll` through Java behavior: non-positive max rolls become `100`, the sender receives the self roll message, and visible players receive the other-player roll message.
+- Current gaps in this cluster: exact Java RNG stream is not shared; the C# path preserves the same inclusive range and packet side effects.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 119 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 326 tests.
+
 ---
 
 ## Next Steps
