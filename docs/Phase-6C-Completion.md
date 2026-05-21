@@ -25,8 +25,10 @@
 - Updated static data loading so real item templates expose weapon damage, attack speed, accuracy, crit, parry, magical boost, magical accuracy, range, hit count, reduce-max, and template modifiers.
 - Threaded `StaticData.ItemTemplates` into the enter-world login stats path.
 - Updated `SM_STATS_INFO` so the current-stat half applies equipped item template weapon stats and direct item modifiers for first-pass player combat stats on login.
+- Added Java `ItemEquipmentListener.addStonesStats` parity to the same `SM_STATS_INFO` bridge, so socketed mana stones and fusion stones contribute their item template modifiers.
 - Added focused packet coverage proving equipped weapon and armor templates affect current HP, physical attack, physical defense, magic resist, attack speed, parry, block, crit, physical accuracy, and magical accuracy.
 - Added static-data coverage using real item `100000125`, proving the XML loader sees the Java sword's physical attack type, weapon stats, and direct `PHYSICAL_ATTACK +7` modifier.
+- Added focused coverage proving real manastone template modifiers load from Java XML and socketed stones affect current HP, physical accuracy, and magical boost.
 - Focused GameServer validation also passes with 120 tests.
 
 ---
@@ -35,7 +37,7 @@
 
 - This is not the full Java `CreatureGameStats` / `Stat2` container yet. It is a pragmatic packet-facing bridge for equipped item template stats.
 - The current-stat half of `SM_STATS_INFO` now includes first-pass equipment stats, while the base-stat half remains the existing baseline. Revisit this when the full stat container is ported and real-client expectations are checked.
-- Mana stones, fusion stones, godstones, idian, random bonuses, item sets, enchantment, tempering, conditioning, armor mastery, titles, skills, effects, transforms, and class-specific stat functions are still pending.
+- Godstones, idian, random bonuses, item sets, enchantment, tempering, conditioning, armor mastery, titles, skills, effects, transforms, class-specific stat functions, and the full stat container are still pending.
 - Equip/unequip recomputation and fanout are still pending until item-use/equipment packets and stat refresh side effects are ported.
 - `SM_PLAYER_INFO` still needs exact stats and dependent state such as transforms, ride/stance, private store, team/mentor, CP fields, and viewer-specific enemy race handling.
 - The implementation intentionally favors safe first-pass parity over inventing a new stat architecture before more Java dependencies are available.
@@ -44,7 +46,7 @@
 
 ## Suggested Next Units
 
-1. Add deeper equipped-item effects: mana stones, random bonus modifiers, item sets, enchantment, tempering, conditioning, and fusion item stats.
+1. Add deeper equipped-item effects: fusion weapon item stats, random bonus modifiers, item sets, enchantment, tempering, conditioning, idian/godstone effects, and full stat-container parity.
 2. Port equip/unequip packet behavior and recompute/fanout side effects, including `SM_STATS_INFO` refreshes and speed/emotion updates where Java sends them.
 3. Continue richer known-list and `SM_PLAYER_INFO` dependent state once more player stat and transform data is available.
 4. Continue housing auction settlement/maintenance/sign/appearance flows if the next slice should stay out of the stat engine.
