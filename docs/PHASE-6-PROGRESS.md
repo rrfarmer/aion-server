@@ -28,12 +28,13 @@ Last updated: May 21, 2026
 - `CM_HEADING_UPDATE` opcode `147` now parses Java's spin/heading byte and intentionally keeps Java's no-op `runImpl` behavior.
 - `SM_PLAYER_INFO` now writes Java's legion member block with loaded legion ID/name and emblem type/color fields.
 - `CM_REJECT_REVIVE` opcode `146` now mirrors Java's empty-payload, no-op packet.
+- Macro create/delete now covers Java `CM_MACRO_CREATE`, `CM_MACRO_DELETE`, `SM_MACRO_RESULT`, loaded macro mutation, and `player_macrosses` persistence.
 - Housing maintenance timing now includes Java `MaintenanceTask.calculateImpoundDate` and overdue mail stage selection from `MailFormatter.sendHouseMaintenanceMail`.
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
 - Next implementation slice should continue housing auction settlement/maintenance/sign/appearance flows, full known-list fanout/movement broadcast, broader chat packet surfaces, or equipment stat application once item templates/stat functions are in scope.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 313 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 315 tests.
 
 ---
 
@@ -302,7 +303,7 @@ From `csharp-port.md`, dependency order:
 - Extended enter-world loading with `player_macrosses`, matching `PlayerMacrosDAO.loadMacros`.
 - Added Java-shaped `SM_MACRO_LIST` in opcode `231`, including the clear-list flag, negative macro count, UTF-16 macro XML body, empty-list clear packet, and Java-style dynamic packet splitting.
 - Wired the implemented retail sequence to send macro list packets after `SM_STATS_INFO` and before `SM_RECIPE_LIST`, matching `PlayerEnterWorldService.sendMacroList`'s relative slot after the still-deferred mail/housing/passport services.
-- Current gaps in this cluster: macro create/update/delete client packets and persistence are not ported yet; this covers login restore/display parity only.
+- Then-current gaps in this cluster were macro create/update/delete client packets and persistence; Session 98 covers those packet and persistence paths.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 53 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 260 tests.
 
@@ -945,6 +946,14 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: full resurrection/revive services and related effect-state cleanup remain pending with combat/effect systems.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 106 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 313 tests.
+
+### Session 98 (May 21, 2026)
+- Registered and parsed Java `CM_MACRO_CREATE` opcode `175` and `CM_MACRO_DELETE` opcode `176`.
+- Added Java-shaped `SM_MACRO_RESULT` opcode `232` for created/deleted responses.
+- Added macro mutation helpers mirroring `PlayerService.addMacro/removeMacro`, updating loaded `Player.Macros` and persisting `player_macrosses` with Java `PlayerMacrosDAO` add/update/delete parity.
+- Current gaps in this cluster: exact Java invalid macro ID exception behavior is guarded as a safe no-op; broader macro UI refresh is still login/list-packet based like the current C# surface.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 108 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 315 tests.
 
 ---
 
