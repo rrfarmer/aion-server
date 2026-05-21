@@ -23,15 +23,16 @@
 - Wired Java `EmotionList.canUse` custom-emote fanout for default, housing-style, and learned player emotes.
 - Added Java `Equipment.unEquipItem` power-shard side-effect parity: successful power-shard unequip unsets `CreatureState.POWERSHARD` and sends owner-only `SM_EMOTION(POWERSHARD_OFF)` after C# persistence succeeds.
 - Parsed Java `<learnemotion emotionid="...">` item actions into the static item-template table and replaced the `CM_EMOTION` custom-emote range shortcut with exact `EmotionLearnAction.isLearnable` / `EmotionList.canUse` parity.
+- Added Java `CM_EMOTION` no-mutation branch parity for `SELECT_TARGET`, `JUMP`, `OPEN_DOOR`, and `CLOSE_DOOR`, including item-use cancellation semantics and the drawn-weapon jump guard.
 - Confirmed Java `EnchantService.amplifyItem` is immediate and should remain immediate in C# unless a different Java branch is later identified.
-- Kept `docs/PHASE-6-PROGRESS.md` current through Session 176.
+- Kept `docs/PHASE-6-PROGRESS.md` current through Session 177.
 
 ---
 
 ## Important Limits
 
 - Broader `CM_USE_ITEM` action routing still needs Java cooldown application as additional item actions are ported beyond the current polish/charge subset.
-- Broader `CM_EMOTION` behavior still needs abnormal-state/stance guards, select-target/jump/open-door pass-through behavior, fly/land/fly-teleport/sprint controller behavior, sit observers, quest/summon observers, and exact movement/attack speed fanout.
+- Broader `CM_EMOTION` behavior still needs abnormal-state/stance guards, fly/land/fly-teleport/sprint controller behavior, sit observers, quest/summon observers, and exact movement/attack speed fanout.
 - The delayed item-use plans are precomputed at start time, matching the current C# service shape; broader live revalidation of source/target item state at completion remains future hardening if Java parity requires it.
 - Manastone removal still has only first-pass NPC validation by current target object; Java talk-range, known-list, template-function, and audit checks remain future work.
 - Godstone socketing has persistence and packet foundation, but combat proc activation and future SkillEngine hooks are not ported.
@@ -44,7 +45,7 @@
 
 ## Suggested Next Units
 
-1. Continue broader `CM_EMOTION` parity: abnormal-state/stance guards, select-target/jump/open-door pass-through behavior, fly/land/fly-teleport/sprint controller behavior, sit observers, quest/summon observers, and exact movement/attack speed fanout.
+1. Continue broader `CM_EMOTION` parity: abnormal-state/stance guards, fly/land/fly-teleport/sprint controller behavior, sit observers, quest/summon observers, and exact movement/attack speed fanout.
 2. Continue the remaining stigma/effect slice: full `SkillEngine` effect apply/remove for temporary skills and corresponding stat/effect removal fanout.
 3. Wire charge, power-shard, and idian burn triggers into future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, low-charge update packets, zero-charge deletion, and stat refresh fanout.
 4. Continue persistent known-list/NPC/dialog validation, housing maintenance/settlement/sign/appearance flows, or broader stat-container lifecycle when the next slice should stay out of item-use timing.
