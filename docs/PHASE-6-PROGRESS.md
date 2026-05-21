@@ -50,7 +50,7 @@ Last updated: May 21, 2026
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
 - Next implementation slice should start from the remaining equipment/gameplay queue: full SkillEngine effect application after temporary skill mutations, `CM_MANASTONE` action `1` enchant handling, exact item-use scheduling/cancel/stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 393 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 394 tests.
 
 ---
 
@@ -1417,12 +1417,20 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "EnchantServiceTests|StaticDataLoadingTests|ClientPacketFactory_ParsesManastone|GamePackets_AreSerializedWithExpectedOpcodesAndPayloads"` passes with 15 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 393 tests.
 
+### Session 156 (May 21, 2026)
+- Surfaced Java `ItemTemplate.getMaxTuneCount()` as `ItemTemplateSummary.MaxTuneCount`, preserving the Java `afterUnmarshal` behavior that normalizes non-equipment and non-tunable templates to zero while leaving tunable/randomizable equipment intact.
+- Added Java `Item.removeRemainingTuningCountIfPossible()` parity to manastone socketing: successful `ItemSocketService.addManaStone` updates and failed `EnchantService.socketManastoneAct` outcomes now consume remaining tuning attempts when the target is identified and has unused tune count.
+- Persisted the target `inventory.tune_count` inside the DB-backed manastone socket mutation so immediate C# mutations do not depend on a future dirty-inventory save loop.
+- Current gaps in this cluster: exact Java delayed-task cancellation observers are still first-pass immediate, and Java enchant-stone action `1` is still pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "EnchantServiceTests|ItemSocketServiceTests|StaticDataLoadingTests"` passes with 24 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 394 tests.
+
 ---
 
 ## Next Steps
 
 1. Continue equipment/item-use parity around exact Java 5s delayed item-use timing, movement/cancel observers, soul-bind stance/state denials, power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
-2. Continue `CM_MANASTONE` beyond stigma charge/removal/godstone/amplification/manastone foundations: enchant-stone action `1` success/failure, delayed use animations, abort cleanup, and remaining tune-count removal on manastone failure.
+2. Continue `CM_MANASTONE` beyond stigma charge/removal/godstone/amplification/manastone foundations: enchant-stone action `1` success/failure, delayed use animations, and abort cleanup.
 3. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
 5. Continue housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
