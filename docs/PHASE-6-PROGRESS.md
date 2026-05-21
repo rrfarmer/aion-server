@@ -23,6 +23,7 @@ Last updated: May 21, 2026
 - Friend-list serialization now fills Java `HousingService.findActiveHouse` address and door-state fields in `SM_FRIEND_LIST`, using loaded DB house settings and online friend snapshot refreshes.
 - Player notes now load/save through `players.note`; `CM_SET_NOTE` updates the loaded common data, refreshes online friends with `SM_FRIEND_LIST`, broadcasts Java-shaped `SM_UPDATE_NOTE`, and note strings are present in `SM_CHAT_WINDOW` and `SM_PLAYER_INFO`.
 - `SM_PLAYER_INFO` now fills Java's selected-target object ID and active-house address fields from loaded player state; team and mentor fields are still explicit defaults pending team/mentor model parity.
+- Login auth membership is now attached to active `Player` state and written to Java's `SM_CHAT_WINDOW` VIP byte plus `SM_PLAYER_INFO` membership marker.
 - Housing maintenance timing now includes Java `MaintenanceTask.calculateImpoundDate` and overdue mail stage selection from `MailFormatter.sendHouseMaintenanceMail`.
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
@@ -139,7 +140,7 @@ From `csharp-port.md`, dependency order:
 - [x] Broadcast player enter `SM_MOTION` action `7` active-motion payload after `SM_PLAYER_INFO`
 - [ ] Port movement anti-hack, protection, fall/glide side effects, and exact flying-state gates
 - [ ] Add persistent known-list object enter/leave/update fanout for players/NPCs
-- [ ] Complete `SM_PLAYER_INFO` dependent state for legion, transforms, exact stats, store, ride/stance, team/mentor, account membership/CP, and viewer-specific enemy race handling
+- [ ] Complete `SM_PLAYER_INFO` dependent state for legion, transforms, exact stats, store, ride/stance, team/mentor, CP, and viewer-specific enemy race handling
 
 ### Phase 6k: Logout And Saves
 - [x] Register and parse `CM_QUIT` opcode `3` and `CM_MAY_QUIT` opcode `4`
@@ -561,7 +562,7 @@ From `csharp-port.md`, dependency order:
 - Added baseline Java-shaped `SM_PLAYER_INFO` opcode `32` for known-list player enter visibility.
 - The first pass writes Java field order using loaded position/common data, race/class/gender/template IDs, player name/title/DP, loaded appearance, equipped cube items for the visible equipment mask, movement vector/current position, level from the experience table when available, abyss rank, and safe defaults for systems not ported yet.
 - Wired successful enter-world to broadcast `SM_PLAYER_INFO` to nearby same-world active players through the visible-player bridge after the entering player's own `SM_PLAYER_SPAWN`.
-- Current gaps in this cluster: the packet still uses defaults for legion, transforms, exact calculated stats/speeds, private store, flight transport, team/mentor, CP info, account membership, ride/stance follow-up packets, and viewer-specific enemy race/icon handling.
+- Current gaps in this cluster: the packet still uses defaults for legion, transforms, exact calculated stats/speeds, private store, flight transport, team/mentor, CP info, ride/stance follow-up packets, and viewer-specific enemy race/icon handling.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 66 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 273 tests.
 
@@ -669,7 +670,7 @@ From `csharp-port.md`, dependency order:
 - Registered Java chat info request packets: `CM_CHAT_PLAYER_INFO` opcode `39` and `CM_CHAT_GROUP_INFO` opcode `61`.
 - Added Java-shaped `SM_CHAT_WINDOW` opcode `99` with the currently available baseline branches: personal player info (`isGroup=false`) and no-group group info (`isGroup=true` when target lacks C# team state).
 - Routed chat info requests through online name lookup with `STR_NO_SUCH_USER` fallback; player info uses visibility as the current KnownList approximation before sending the personal chat window.
-- Current gaps in this cluster: real group/alliance chat-window branches, legion name, account membership/VIP level, persistent KnownList membership, and exact name-tag parsing remain pending.
+- Current gaps in this cluster: real group/alliance chat-window branches, legion name, persistent KnownList membership, and exact name-tag parsing remain pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 79 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 286 tests.
 
@@ -900,7 +901,15 @@ From `csharp-port.md`, dependency order:
 ### Session 92 (May 21, 2026)
 - Filled Java `SM_PLAYER_INFO` target and active-house tail fields using loaded `Player.TargetObjectId` and the first non-inactive loaded `PlayerHouse`.
 - Extended packet coverage to read through the full `SM_PLAYER_INFO` tail, asserting abyss rank, target, team/mentor defaults, active-house address, membership baseline, and CP placeholders.
-- Current gaps in this cluster: real team ID, mentor flag/state, account membership, CP info, legion, transforms, exact calculated stats, and viewer-specific enemy race handling remain pending.
+- Current gaps in this cluster: real team ID, mentor flag/state, CP info, legion, transforms, exact calculated stats, and viewer-specific enemy race handling remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 106 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 313 tests.
+
+### Session 93 (May 21, 2026)
+- Added `Player.AccountMembership` and set it from the authenticated LoginServer membership byte when a player enters world.
+- Updated Java `SM_CHAT_WINDOW` personal info to write the target membership/VIP byte instead of the previous zero placeholder.
+- Updated Java `SM_PLAYER_INFO` membership marker to write `1` for normal accounts and `3 + membership` for membership accounts.
+- Current gaps in this cluster: legion name in chat info, real group/alliance chat-window branches, CP info, team/mentor state, and persistent KnownList membership remain pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 106 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 313 tests.
 
