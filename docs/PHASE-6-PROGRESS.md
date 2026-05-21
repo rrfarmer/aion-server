@@ -26,7 +26,7 @@ Last updated: May 21, 2026
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
 - Next implementation slice should continue housing auction settlement/maintenance/sign/appearance flows, full known-list fanout/movement broadcast, broader chat packet surfaces, or equipment stat application once item templates/stat functions are in scope.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 312 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 313 tests.
 
 ---
 
@@ -112,7 +112,7 @@ From `csharp-port.md`, dependency order:
 - [x] Load `player_life_stats` and send baseline Java-shaped `SM_STATS_INFO`
 - [x] Load `player_motions` and send Java-shaped login `SM_MOTION`
 - [x] Handle `CM_MOTION` with Java motion-type active-slot replacement/removal, `player_motions.active` persistence, self `SM_MOTION(action=5)`, and visible-player active-motion `SM_MOTION(action=7)` broadcast
-- [x] Load `player_settings` client blobs, send Java-shaped `SM_UI_SETTINGS`, handle `CM_UI_SETTINGS`, and persist settings on logout
+- [x] Load `player_settings` client/display/deny settings, send Java-shaped `SM_UI_SETTINGS`, handle `CM_UI_SETTINGS`/`CM_CUSTOM_SETTINGS`, broadcast `SM_CUSTOM_SETTINGS`, and persist settings on logout
 - [x] Send current-title `SM_TITLE_INFO` and `SM_AFTER_TIME_CHECK_4_7_5`
 - [ ] Inventory/equipment load and stat application (partial: typed inventory rows and `item_stones` rows loaded; item-stone packet display is implemented, stat application pending)
 - [x] Send Java-shaped `SM_INVENTORY_INFO` with kinah-first ordering, 10-item splits, final empty packet, and current item-info blobs including mana/fusion stones, godstone ID, idian polish number, and polish charge
@@ -876,6 +876,15 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: exact periodic save timing remains pending with the broader periodic save task.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 105 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 312 tests.
+
+### Session 90 (May 21, 2026)
+- Registered and parsed Java `CM_CUSTOM_SETTINGS` opcode `12` for display and deny bitmasks.
+- Added Java-shaped `SM_CUSTOM_SETTINGS` opcode `184` and routed custom setting changes through self/visible-player fanout.
+- Reused the logout settings persistence path so updated display/deny rows are saved with the rest of `PlayerSettingsDAO.saveSettings` parity.
+- Added packet coverage for both the client parser and server response payload.
+- Current gaps in this cluster: exact persistent known-list fanout remains pending with the broader known-list work.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 106 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 313 tests.
 
 ---
 
