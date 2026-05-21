@@ -1478,11 +1478,19 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GamePacketTests|GameServerBootstrapTests|ItemSocketServiceTests"` passes with 79 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 404 tests.
 
+### Session 165 (May 21, 2026)
+- Migrated Java stigma charge (`CM_MANASTONE` stigma source + stigma target) onto the C# one-shot `TaskId.ITEM_USE` scheduler: the Java 5s start animation remains immediate, while source charge-stone consume/delete, target enchant/delete, temporary stigma skill add/remove packets, success/failure messages, target item-info refresh, and stats refresh now run after the scheduled delay.
+- Generalized the pending item-use cancellation record so branches can carry Java-specific cancel animation target/source/end-state fields; stigma charge movement abort now sends the Java-shaped target-stigma/charge-stone animation with end state `2` plus generic `STR_ITEM_CANCELED`.
+- Added `SM_SYSTEM_MESSAGE.STR_ITEM_CANCELED` packet coverage (`1300427`) beside the branch-specific item-use cancel messages.
+- Current gaps in this cluster: charge actions, idian polish, soul-bind, and amplification still need migration onto delayed `TaskId.ITEM_USE`; item cooldown abort cleanup and full Java `SkillEngine` effect lifecycle/stat fanout remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GamePacketTests|GameServerBootstrapTests|ItemSocketServiceTests|StigmaServiceTests"` passes with 88 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 404 tests.
+
 ---
 
 ## Next Steps
 
-1. Continue migrating remaining item-use paths onto Java `TaskId.ITEM_USE` delayed execution: stigma charge, charge actions, idian polish, soul-bind, and amplification.
+1. Continue migrating remaining item-use paths onto Java `TaskId.ITEM_USE` delayed execution: charge actions, idian polish, soul-bind, and amplification.
 2. Continue remaining item-use parity around soul-bind timing/cancel/stance denials, power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
 3. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
