@@ -15,6 +15,7 @@
 - Phase 6 active area is GameServer gameplay parity, especially enter-world, inventory/equipment, movement/known-list, housing, logout/save, and later core gameplay systems.
 - Current C# GameServer already has broad enter-world coverage: common player row, appearance, inventory/warehouse item rows with item-stone detail display, skills, cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox, broker settlement summary, houses, craft/portal cooldowns, life stats, social lists with friend active-house fields, abyss rank, client settings, bind point, enter-world packet sequence, movement basics, social/chat/mail/broker/housing surfaces, and logout baseline persistence.
 - Most recent completed slices:
+  - Player enter-world now loads legion membership/name from `legion_members`/`legions`, and personal `SM_CHAT_WINDOW` writes Java's legion-name field.
   - Account membership from login auth is now attached to the active C# player and serialized in Java's `SM_CHAT_WINDOW` VIP byte and `SM_PLAYER_INFO` membership marker.
   - `SM_PLAYER_INFO` now fills Java's selected-target object ID and active-house address fields from loaded player state; team and mentor fields remain explicit defaults until team/mentor systems are ported.
   - `CM_SET_NOTE` and `SM_UPDATE_NOTE` now mirror Java note updates: `players.note` loads/saves with common data, chat-window/player-info packets write the note, online friends get refreshed friend-list snapshots, and visible players receive the note update.
@@ -74,7 +75,7 @@
 ### Chat And Social
 - Public chat still lacks chat commands, full `PlayerRestrictions.canChat`, message name filtering, group/alliance/league/legion/commander/channel chat, per-recipient staff race-filter suppression, and full chat logging.
 - Whisper still lacks no-whispers custom state, `PlayerRestrictions.canChat`, `NameRestrictionService.filterMessage`, GM/staff chat logging, exact `ChatUtil` name-tag parsing, and per-recipient staff race-filter suppression.
-- Chat info still lacks real group/alliance chat-window branches, legion name, persistent known-list membership, and exact name-tag parsing.
+- Chat info still lacks real group/alliance chat-window branches, persistent known-list membership, and exact name-tag parsing.
 - Chat auth still lacks chat-ban/gag follow-up, bridge reconnect replay for pending player auths, and real-client validation of the ChatServer endpoint advertised by `SM_VERSION_CHECK`.
 - Social still lacks offline social request handling and generic `ResponseRequester` support beyond buddy requests.
 
