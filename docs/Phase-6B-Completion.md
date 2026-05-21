@@ -5,7 +5,7 @@
 **Project rule**: This is a 1:1 parity rewrite from the Java project to C#. Java remains the source of truth.
 **Workflow rule**: Do one focused unit of work, validate it, commit it, then repeat.
 **Code trace rule**: New C# GameServer parity methods should include a short `Java parity: path::method` comment pointing at the Java source behavior being mirrored.
-**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx` passes with 292 tests.
+**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx` passes with 296 tests.
 
 ---
 
@@ -15,6 +15,7 @@
 - Phase 6 active area is GameServer gameplay parity, especially enter-world, inventory/equipment, movement/known-list, housing, logout/save, and later core gameplay systems.
 - Current C# GameServer already has broad enter-world coverage: common player row, appearance, inventory/warehouse item rows with item-stone detail display, skills, cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox, broker settlement summary, houses, craft/portal cooldowns, life stats, social lists, abyss rank, client settings, bind point, enter-world packet sequence, movement basics, social/chat/mail/broker/housing surfaces, and logout baseline persistence.
 - Most recent completed slices:
+  - Housing auction timing now mirrors Java `AuctionEndTask.tryProlongAuction` for the default Sunday-noon auction end, including per-house five-minute prolongations capped at thirty minutes and prolonged `SM_HOUSE_BIDS` countdowns.
   - `CM_HOUSE_SETTINGS` with DB-backed door/show-owner/sign state, `SM_HOUSE_ACQUIRE`, and Java door-order system messages.
   - `CM_TITLE_SET` and `CM_BONUS_TITLE` with loaded-title validation and Java-shaped `SM_TITLE_INFO`.
   - `CM_MOTION` with Java motion-type active slots, DB-backed `player_motions.active` updates, self `SM_MOTION(action=5)`, and visible-player `SM_MOTION(action=7)` broadcast.
@@ -46,8 +47,8 @@
 - Continue housing maintenance task parity:
   - Full `MaintenanceTask` impound/auction behavior.
   - Custom cron parsing beyond the currently modeled Java default schedule.
-- Continue auction end/prolongation parity:
-  - `AuctionEndTask.tryProlongAuction`.
+- Continue auction-end settlement parity:
+  - Scheduled `AuctionEndTask.endAuction` execution and startup recovery around prolonged auctions.
   - Auction-end settlement.
   - Seller/buyer result mail beyond failed-bid refunds.
   - Auto-fill behavior.
@@ -87,7 +88,7 @@
 
 ## Suggested Next Units
 
-1. Housing auction end/prolongation or maintenance task parity, because housing mutation surfaces are already partially ported.
+1. Housing auction settlement/end or maintenance task parity, because housing mutation surfaces are already partially ported.
 2. Equipment stat application, because inventory/equipment loading and item template summaries are already in place.
 3. Persistent known-list membership and richer `SM_PLAYER_INFO`, because movement and visible-player broadcast scaffolding already exists.
 4. A compact remaining chat/group packet surface if a smaller next commit is preferred.
