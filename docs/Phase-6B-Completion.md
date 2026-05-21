@@ -5,7 +5,7 @@
 **Project rule**: This is a 1:1 parity rewrite from the Java project to C#. Java remains the source of truth.
 **Workflow rule**: Do one focused unit of work, validate it, commit it, then repeat.
 **Code trace rule**: New C# GameServer parity methods should include a short `Java parity: path::method` comment pointing at the Java source behavior being mirrored.
-**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx` passes with 317 tests.
+**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx` passes with 318 tests.
 
 ---
 
@@ -15,6 +15,7 @@
 - Phase 6 active area is GameServer gameplay parity, especially enter-world, inventory/equipment, movement/known-list, housing, logout/save, and later core gameplay systems.
 - Current C# GameServer already has broad enter-world coverage: common player row, appearance, inventory/warehouse item rows with item-stone detail display, skills, cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox, broker settlement summary, houses, craft/portal cooldowns, life stats, social lists with friend active-house fields, abyss rank, client settings, bind point, enter-world packet sequence, movement basics, social/chat/mail/broker/housing surfaces, and logout baseline persistence.
 - Most recent completed slices:
+  - `PeriodicSaveService` now mirrors Java's `ServerRunTimeSaveTask` by periodically storing `server_variables.serverLastRun` and writing it again on shutdown.
   - Game-time periodic updates now broadcast Java-shaped `SM_GAME_TIME` to all online players through a new world-wide packet fanout helper before saving `server_variables.time`.
   - `GameTimeService` now mirrors Java `ServerVariablesDAO` time recovery/persistence by loading `server_variables.time`, periodically storing it, and saving again on shutdown.
   - `CM_REVIVE`, `CM_QUESTIONNAIRE`, `CM_START_LOOT`, `CM_LOOT_ITEM`, `CM_SUBZONE_CHANGE`, and `CM_CHANGE_CHANNEL` now parse Java wire layouts and route through explicit deferred handlers until revive, reward, drop, zone, and channel services are ported.
@@ -94,7 +95,7 @@
 
 ### Logout, Saves, And Recovery
 - Persist effects, quests, inventory dirty state, and social/group/legion logout side effects.
-- Add periodic player/inventory save task and broader recovery behavior. Game-time recovery/persistence is now ported.
+- Add periodic player/inventory save task and broader recovery behavior. Game-time recovery/persistence and `serverLastRun` runtime saves are now ported.
 - Align dirty-save behavior with Java for houses, inventory, quest state, effects, and social/team systems as those systems come online.
 
 ### Later Phase 6 Core Gameplay

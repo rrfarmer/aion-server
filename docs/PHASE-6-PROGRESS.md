@@ -32,12 +32,13 @@ Last updated: May 21, 2026
 - Deferred gameplay parser coverage now includes Java `CM_REVIVE`, `CM_QUESTIONNAIRE`, `CM_START_LOOT`, `CM_LOOT_ITEM`, `CM_SUBZONE_CHANGE`, and `CM_CHANGE_CHANNEL`, with explicit handlers left as no-ops until revive/reward/drop/zone/channel systems are ported.
 - `GameTimeService` now loads and stores Java `server_variables.time` through a C# `ServerVariablesDAO` equivalent, including periodic saves and shutdown save.
 - Game-time periodic updates now broadcast Java-shaped `SM_GAME_TIME` to all online players through a world-wide packet fanout helper before saving time.
+- `PeriodicSaveService` now mirrors Java `ServerRunTimeSaveTask`, storing `server_variables.serverLastRun` periodically and on shutdown.
 - Housing maintenance timing now includes Java `MaintenanceTask.calculateImpoundDate` and overdue mail stage selection from `MailFormatter.sendHouseMaintenanceMail`.
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
 - Next implementation slice should continue housing auction settlement/maintenance/sign/appearance flows, full known-list fanout/movement broadcast, broader chat packet surfaces, or equipment stat application once item templates/stat functions are in scope.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 317 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 318 tests.
 
 ---
 
@@ -981,6 +982,14 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: broader player/inventory dirty-save periodic tasks remain pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 110 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 317 tests.
+
+### Session 102 (May 21, 2026)
+- Added `PeriodicSaveService` as a GameEngine bootstrap service, matching Java `PeriodicSaveService` startup scheduling.
+- Ported Java `ServerRunTimeSaveTask` behavior by periodically storing `server_variables.serverLastRun` with the current Unix milliseconds and storing it again on shutdown.
+- Added focused coverage for periodic store plus shutdown store using the C# `ServerVariablesDAO` parity repository interface.
+- Current gaps in this cluster: Java legion warehouse periodic saves and player general/item dirty-save tasks remain pending until those storage and dirty-state models are ported.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 111 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 318 tests.
 
 ---
 
