@@ -49,8 +49,8 @@ Last updated: May 21, 2026
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
-- Next implementation slice should start from the remaining equipment/gameplay queue: full SkillEngine effect application after temporary skill mutations, exact item-use scheduling/cancel/stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 402 tests.
+- Next implementation slice should start from the remaining equipment/gameplay queue: wiring the new one-shot scheduler into Java `TaskId.ITEM_USE` delayed item-use/cancel paths, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 404 tests.
 
 ---
 
@@ -1444,12 +1444,19 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "EnchantServiceTests|StaticDataLoadingTests|GamePacketTests"` passes with 84 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 402 tests.
 
+### Session 160 (May 21, 2026)
+- Added a Java `ThreadPoolManager.schedule` foundation to the C# scheduler beside the existing fixed-rate scheduler, returning a cancellable one-shot `ScheduledTask` handle for delayed gameplay work.
+- Added scheduler coverage for executing a delayed task and cancelling a delayed task before execution, which gives the upcoming Java `TaskId.ITEM_USE` item-use timing/cancel paths a tested primitive.
+- Current gaps in this cluster: `CM_MANASTONE`, stigma charge, charge actions, idian polish, soul-bind, and other item-use paths still need to be moved from immediate execution onto this one-shot scheduler with Java movement/cancel observer cleanup.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GameServerBootstrapTests"` passes with 7 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 404 tests.
+
 ---
 
 ## Next Steps
 
-1. Continue equipment/item-use parity around exact Java 5s delayed item-use timing, movement/cancel observers, soul-bind stance/state denials, power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
-2. Continue `CM_MANASTONE` beyond the immediate first-pass branches: delayed use animations, movement/cancel observer cleanup, item cooldown abort cleanup, richer NPC known-list/range validation, and future combat proc/effect integration for godstones/enchant effects.
+1. Wire Java `TaskId.ITEM_USE` delayed execution onto the new one-shot scheduler for `CM_MANASTONE` action `1`/`2`, including movement cancel observer cleanup and Java cancel/end `SM_ITEM_USAGE_ANIMATION` behavior.
+2. Continue remaining item-use parity around soul-bind timing/cancel/stance denials, power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
 3. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
 5. Continue housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
