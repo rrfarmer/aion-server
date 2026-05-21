@@ -1008,6 +1008,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 113 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 320 tests.
 
+### Session 105 (May 21, 2026)
+- Registered Java `CM_CHECK_NICKNAME` opcode `177` for authenticated character-selection sessions and added Java-shaped `SM_NICKNAME_CHECK_RESPONSE` opcode `233`.
+- Reused the C# character creation validation path to mirror Java `CM_CHECK_NICKNAME.runImpl`: `Util.convertName`, `PlayerService.isNameUsedOrReserved`, `NameRestrictionService.isValidName`, `NameRestrictionService.isForbidden`, then the one-byte creation response code.
+- Added packet coverage for nickname request parsing/state rejection, response serialization, and service coverage for used, reserved, invalid, forbidden, and OK nickname responses.
+- Current gaps in this cluster: this path still relies on the existing C# approximation of Java name reservation lookup; live-DB opt-in coverage remains pending with the broader creation/enter-world fixtures.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 114 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 321 tests.
+
 ---
 
 ## Next Steps
