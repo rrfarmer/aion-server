@@ -1470,11 +1470,19 @@ From `csharp-port.md`, dependency order:
 - Created `docs/Phase-6L-Completion.md` as the next handoff after the 6K continuation, summarizing the five committed enchant-stone, exceed-buff, scheduler, and delayed item-use units, the current 404-test validation baseline, and the next focused unit queue.
 - Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx --no-restore` passing with 404 tests from Session 162.
 
+### Session 164 (May 21, 2026)
+- Migrated Java `CM_MANASTONE` action `4` godstone socketing onto the C# one-shot `TaskId.ITEM_USE` scheduler: start animation is still sent immediately, and source consume/delete, target godstone persistence, success messaging, target item-info refresh, and finish animation now run after the Java 2s delay.
+- Extended the shared pending item-use cancellation slot with a godstone-specific cancel message, preserving Java `ItemSocketService.socketGodstone` movement abort behavior with end-state `3` item-use animation plus `STR_MSG_GIVE_PROC_CANCEL`.
+- Added `SM_SYSTEM_MESSAGE.STR_MSG_GIVE_PROC_CANCEL` packet coverage (`1402238`) beside the existing enchant/manastone cancel messages.
+- Current gaps in this cluster: stigma charge, charge actions, idian polish, soul-bind, and amplification still need migration onto delayed `TaskId.ITEM_USE`; item cooldown abort cleanup and full Java `SkillEngine` effect lifecycle/stat fanout remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GamePacketTests|GameServerBootstrapTests|ItemSocketServiceTests"` passes with 79 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 404 tests.
+
 ---
 
 ## Next Steps
 
-1. Continue migrating remaining item-use paths onto Java `TaskId.ITEM_USE` delayed execution: stigma charge, charge actions, idian polish, soul-bind, godstone socketing, and amplification.
+1. Continue migrating remaining item-use paths onto Java `TaskId.ITEM_USE` delayed execution: stigma charge, charge actions, idian polish, soul-bind, and amplification.
 2. Continue remaining item-use parity around soul-bind timing/cancel/stance denials, power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
 3. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
