@@ -1040,6 +1040,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 116 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 323 tests.
 
+### Session 109 (May 21, 2026)
+- Registered Java `CM_SECURITY_TOKEN` opcode `92` across connected, authenticated, and in-game states.
+- Added Java-shaped `SM_SECURITY_TOKEN` opcode `152`, writing region byte `0`, the token bytes, and the zero-filled mirror block.
+- Added per-connection token generation matching Java `SecurityTokenService.generateToken` shape: 16 random bytes encoded as Base64, returned once an account is authenticated.
+- Current gaps in this cluster: Java stores the token on the account object; the C# path keeps it per connection until a fuller account/session object is ported.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 116 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 323 tests.
+
 ---
 
 ## Next Steps
