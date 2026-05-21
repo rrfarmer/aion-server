@@ -15,6 +15,7 @@
 - Phase 6 active area is GameServer gameplay parity, especially enter-world, inventory/equipment, movement/known-list, housing, logout/save, and later core gameplay systems.
 - Current C# GameServer already has broad enter-world coverage: common player row, appearance, inventory/warehouse item rows with item-stone detail display, skills, cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox, broker settlement summary, houses, craft/portal cooldowns, life stats, social lists with friend active-house fields, abyss rank, client settings, bind point, enter-world packet sequence, movement basics, social/chat/mail/broker/housing surfaces, and logout baseline persistence.
 - Most recent completed slices:
+  - `SM_PLAYER_INFO` now fills Java's selected-target object ID and active-house address fields from loaded player state; team and mentor fields remain explicit defaults until team/mentor systems are ported.
   - `CM_SET_NOTE` and `SM_UPDATE_NOTE` now mirror Java note updates: `players.note` loads/saves with common data, chat-window/player-info packets write the note, online friends get refreshed friend-list snapshots, and visible players receive the note update.
   - `CM_CUSTOM_SETTINGS` and `SM_CUSTOM_SETTINGS` now update and fan out Java display/deny bitmasks, sharing the settings persistence path.
   - `CM_UI_SETTINGS` now mirrors Java client setting updates for UI/shortcut/house-buddy blobs, and logout persistence writes Java `PlayerSettingsDAO.saveSettings` rows.
@@ -48,7 +49,7 @@
 ### Phase 6c: Enter World And Player Graph
 - Finish full player object graph loading. Current graph is broad but still partial.
 - Inventory/equipment stat application remains pending. Item rows and item-stone packet display are loaded/serialized, but equipped item stats are not applied.
-- Equipment-dependent player state needs more Java parity, including exact stats, transforms, ride/stance, store/display settings, target/team/house data, legion fields, and enemy-race viewer handling in `SM_PLAYER_INFO`.
+- Equipment-dependent player state needs more Java parity, including exact stats, transforms, ride/stance, store state, team/mentor data, legion fields, account membership/CP fields, and enemy-race viewer handling in `SM_PLAYER_INFO`.
 - Broker paths still need Java's full NPC `DialogAction.OPEN_VENDOR` function validation once NPC/known-list systems are ported.
 - `CM_READ_EXPRESS_MAIL` postman spawn/delete works for the owner, but full sight-range known-list fanout remains incomplete.
 - Title gaps: bonus-title stat modifier application and nearby quest refresh side effects remain pending.
