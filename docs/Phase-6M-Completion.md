@@ -5,7 +5,7 @@
 **Project rule**: This is a 1:1 parity rewrite from the Java project to C#. Java remains the source of truth for packet layouts, guard order, persistence behavior, side effects, and naming.
 **Workflow rule**: Do one focused unit of work, validate it, commit it, then repeat for as long as useful work remains.
 **Code trace rule**: New C# GameServer parity methods should include a short `Java parity: path::method` comment pointing at the Java source behavior being mirrored.
-**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 404 tests.
+**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 413 tests.
 
 ---
 
@@ -18,14 +18,16 @@
 - Migrated soul-bind confirmation accept flow to Java 5s delayed execution, including start animation end-state `4`, movement cancel end-state `8`, success end-state `6`, delayed equipment mutation, and appearance/stat/skill fanout through the existing equip path.
 - Added Java `Equipment.soulBindItem` invalid-stance guard/message parity before the soul-bind question path: dead, ride, chair, resting, gliding, flying, and weapon-equipped checks now emit `STR_SOUL_BOUND_INVALID_STANCE(ChatUtil.l10n(...))`.
 - Added Java `ItemUseLimits.usedelay/usedelayid` parsing plus C# player item-cooldown/using-item cleanup support in the shared delayed item-use scheduler; idian `PolishAction` removes its cooldown on movement abort while `ChargeAction` keeps Java's no-remove behavior.
+- Added Java `CM_EMOTION` opcode `43` / `SM_EMOTION` opcode `37` foundation and wired the power-shard on/off side effects: equipped-shard guard/message, `CreatureState.POWERSHARD` toggle, item-use cancel, and visible broadcast including self.
 - Confirmed Java `EnchantService.amplifyItem` is immediate and should remain immediate in C# unless a different Java branch is later identified.
-- Kept `docs/PHASE-6-PROGRESS.md` current through Session 171.
+- Kept `docs/PHASE-6-PROGRESS.md` current through Session 172.
 
 ---
 
 ## Important Limits
 
 - Broader `CM_USE_ITEM` action routing still needs Java cooldown application as additional item actions are ported beyond the current polish/charge subset.
+- Broader `CM_EMOTION` behavior still needs abnormal-state/stance guards, sit/stand/fly/weapon/walk/sprint side effects, quest/summon observers, and exact movement/attack speed fanout; only the power-shard toggle is currently wired.
 - The delayed item-use plans are precomputed at start time, matching the current C# service shape; broader live revalidation of source/target item state at completion remains future hardening if Java parity requires it.
 - Manastone removal still has only first-pass NPC validation by current target object; Java talk-range, known-list, template-function, and audit checks remain future work.
 - Godstone socketing has persistence and packet foundation, but combat proc activation and future SkillEngine hooks are not ported.
@@ -37,7 +39,7 @@
 
 ## Suggested Next Units
 
-1. Continue remaining item-use parity around power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
+1. Continue broader `CM_EMOTION` parity beyond the power-shard toggle: abnormal-state/stance guards, sit/stand/fly/weapon/walk/sprint state changes, quest/summon observers, and exact movement/attack speed fanout.
 2. Continue the remaining stigma/effect slice: full `SkillEngine` effect apply/remove for temporary skills and corresponding stat/effect removal fanout.
 3. Wire charge and idian burn triggers into future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, low-charge update packets, zero-charge deletion, and stat refresh fanout.
 4. Continue persistent known-list/NPC/dialog validation, housing maintenance/settlement/sign/appearance flows, or broader stat-container lifecycle when the next slice should stay out of item-use timing.

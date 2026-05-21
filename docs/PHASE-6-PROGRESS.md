@@ -1528,11 +1528,19 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticDataLoadingTests|PlayerStateTests|GameServerBootstrapTests"` passes with 11 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 412 tests.
 
+### Session 172 (May 21, 2026)
+- Added Java `CM_EMOTION` opcode `43` parsing and `SM_EMOTION` opcode `37` serialization foundation, including the Java `EmotionType` IDs and no-tail `POWERSHARD_ON` / `POWERSHARD_OFF` packet shape.
+- Wired the Java power-shard emotion side effects into the C# connection path: dead players are ignored, pending item-use is cancelled like Java `PlayerController.cancelUseItem`, missing equipped power shards send `STR_WEAPON_BOOST_NO_BOOSTER_EQUIPED`, and successful toggles set/unset Java `CreatureState.POWERSHARD` before broadcasting `SM_EMOTION` to visible players including self.
+- Added Java `STR_WEAPON_BOOST_*` system-message coverage (`1300490`-`1300492`) and packet-factory tests for power-shard, emote, and chair emotion payload branches.
+- Current gaps in this cluster: broader `CM_EMOTION` behavior still needs abnormal-state/stance guards, sit/stand/fly/weapon/walk/sprint side effects, quest/summon observers, and exact movement/attack speed fanout; broader `CM_USE_ITEM` action routing still needs Java cooldown application as more item actions are ported.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "CharacterSelectionServerPackets_WriteJavaShapedPayloads|ClientPacketFactory_ParsesEmotionPacket"` passes with 2 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 413 tests.
+
 ---
 
 ## Next Steps
 
-1. Continue remaining item-use parity around power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
+1. Continue broader `CM_EMOTION` parity beyond the power-shard toggle: abnormal-state/stance guards, sit/stand/fly/weapon/walk/sprint state changes, quest/summon observers, and exact movement/attack speed fanout.
 2. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 3. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
 4. Continue housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
