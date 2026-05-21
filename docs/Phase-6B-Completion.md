@@ -5,7 +5,7 @@
 **Project rule**: This is a 1:1 parity rewrite from the Java project to C#. Java remains the source of truth.
 **Workflow rule**: Do one focused unit of work, validate it, commit it, then repeat.
 **Code trace rule**: New C# GameServer parity methods should include a short `Java parity: path::method` comment pointing at the Java source behavior being mirrored.
-**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx` passes with 321 tests.
+**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx` passes with 322 tests.
 
 ---
 
@@ -15,6 +15,7 @@
 - Phase 6 active area is GameServer gameplay parity, especially enter-world, inventory/equipment, movement/known-list, housing, logout/save, and later core gameplay systems.
 - Current C# GameServer already has broad enter-world coverage: common player row, appearance, inventory/warehouse item rows with item-stone detail display, skills, cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox, broker settlement summary, houses, craft/portal cooldowns, life stats, social lists with friend active-house fields, abyss rank, client settings, bind point, enter-world packet sequence, movement basics, social/chat/mail/broker/housing surfaces, and logout baseline persistence.
 - Most recent completed slices:
+  - `CM_REPORT_PLAYER` opcode `191` now parses Java report requests and returns the current Java system-message surface for report submit/count, invalid self-target, and cross-race report guards.
   - `CM_CHECK_NICKNAME` opcode `177` now mirrors Java's authenticated name-availability check and sends `SM_NICKNAME_CHECK_RESPONSE` opcode `233` with Java character-creation response codes.
   - `CM_SHOW_RESTRICTIONS` opcode `194` now mirrors Java `/restriction` handling by returning `SM_SYSTEM_MESSAGE.STR_MSG_ACCUSE_INFO_NORMAL` (`1400076`) for the active player.
   - `CM_INSTANCE_INFO` opcode `192` now parses Java's request layout and returns `SM_INSTANCE_INFO(updateType, player)` for the current no-team player branch.

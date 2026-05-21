@@ -1016,6 +1016,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 114 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 321 tests.
 
+### Session 106 (May 21, 2026)
+- Registered and parsed Java `CM_REPORT_PLAYER` opcode `191`, including the unsigned report-type byte and reported-player name.
+- Added Java system-message helpers for `STR_MSG_DO_NOT_ACCUSE`, `STR_INVALID_TARGET`, `STR_MSG_ACCUSE_SUBMIT`, and `STR_MSG_ACCUSE_COUNT_INFO`.
+- Routed report type `0` through the current Java guard order for online cross-race/self checks, then returns the Java submit response with the current unlimited-report marker; report type `1` returns the Java count-info response.
+- Current gaps in this cluster: real accusation counters, restrictions, audit persistence, offline target lookup nuances, and report abuse policy remain pending until the report/restriction subsystem is ported.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 115 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 322 tests.
+
 ---
 
 ## Next Steps
