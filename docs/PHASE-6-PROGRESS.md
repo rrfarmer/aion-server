@@ -1512,12 +1512,20 @@ From `csharp-port.md`, dependency order:
 - Created `docs/Phase-6M-Completion.md` as the next handoff after the 6L delayed-item-use continuation, summarizing Sessions 164-168, the five committed delayed item-use units, the current 404-test validation baseline, and the next focused unit queue.
 - Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx --no-restore` passing with 404 tests from Session 168.
 
+### Session 170 (May 21, 2026)
+- Added Java `Equipment.soulBindItem` invalid-stance guard parity before the C# soul-bind question path: dead, ride, chair, resting, gliding, flying, and weapon-equipped checks now return Java `STR_SOUL_BOUND_INVALID_STANCE(ChatUtil.l10n(...))` message IDs in the Java order.
+- Added C# player creature-state breadcrumbs for Java `CreatureState` bit checks plus `PlayerMode.RIDE`, and wired `CM_MOVE` gliding updates into that state so movement can block soul-bind requests like Java.
+- Added `ChatUtil.L10n(int)` for Java-shaped client l10n parameters and packet coverage for `STR_SOUL_BOUND_INVALID_STANCE`.
+- Current gaps in this cluster: item cooldown abort cleanup is still not wired for generic item-use aborts, power-shard/quest/summon observers and exact speed/emotion fanout remain pending, and full Java `SkillEngine` effect lifecycle/stat fanout is still future work.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "EquipmentServiceTests|GamePackets_AreSerializedWithExpectedOpcodesAndPayloads"` passes with 27 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 411 tests.
+
 ---
 
 ## Next Steps
 
-1. Add the remaining soul-bind stance-denial guard/messages from Java `Equipment.soulBindItem`: dead, ride, chair, resting, gliding, flying, and weapon-equipped state checks.
-2. Continue remaining item-use parity around item cooldown abort cleanup, power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
+1. Add shared delayed item-use abort cleanup for item cooldowns and any per-player using-item state now that enchant, manastone, godstone, stigma charge, charge action, idian polish, and soul-bind all use the scheduler.
+2. Continue remaining item-use parity around power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
 3. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
 5. Continue housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
