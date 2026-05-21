@@ -25,6 +25,7 @@ Last updated: May 21, 2026
 - `SM_PLAYER_INFO` now fills Java's selected-target object ID and active-house address fields from loaded player state; team and mentor fields are still explicit defaults pending team/mentor model parity.
 - Login auth membership is now attached to active `Player` state and written to Java's `SM_CHAT_WINDOW` VIP byte plus `SM_PLAYER_INFO` membership marker.
 - Player enter-world now loads legion membership/name from `legion_members`/`legions`, and personal `SM_CHAT_WINDOW` writes the Java legion-name field.
+- `CM_HEADING_UPDATE` opcode `147` now parses Java's spin/heading byte and intentionally keeps Java's no-op `runImpl` behavior.
 - Housing maintenance timing now includes Java `MaintenanceTask.calculateImpoundDate` and overdue mail stage selection from `MailFormatter.sendHouseMaintenanceMail`.
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
@@ -918,6 +919,13 @@ From `csharp-port.md`, dependency order:
 - Added loaded `Player.LegionId` and `Player.LegionName` from `legion_members` joined to `legions` during enter-world common-data loading.
 - Updated Java `SM_CHAT_WINDOW` personal info to write the target legion name instead of the previous empty placeholder.
 - Current gaps in this cluster: `SM_PLAYER_INFO` legion emblem/title payload, real group/alliance chat-window branches, persistent KnownList membership, and exact name-tag parsing remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 106 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 313 tests.
+
+### Session 95 (May 21, 2026)
+- Registered Java `CM_HEADING_UPDATE` opcode `147` and parsed the single heading byte sent by the spin packet.
+- Routed the packet through `GameServerConnection` as an intentional no-op, matching Java `CM_HEADING_UPDATE.runImpl`.
+- Current gaps in this cluster: movement anti-hack, protection/fall/glide side effects, exact flying-state gates, and full known-list movement state remain pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 106 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 313 tests.
 
