@@ -21,6 +21,7 @@ Last updated: May 21, 2026
 - Housing login now mirrors Java `HousingService.onPlayerLogin` overdue/sequestration notices before `SM_HOUSE_OWNER_INFO`.
 - Housing auction timing now includes Java `AuctionEndTask.shouldRunOnStart` startup recovery for missed auction ends and the 30-minute prolongation window.
 - Friend-list serialization now fills Java `HousingService.findActiveHouse` address and door-state fields in `SM_FRIEND_LIST`, using loaded DB house settings and online friend snapshot refreshes.
+- Player notes now load/save through `players.note`; `CM_SET_NOTE` updates the loaded common data, refreshes online friends with `SM_FRIEND_LIST`, broadcasts Java-shaped `SM_UPDATE_NOTE`, and note strings are present in `SM_CHAT_WINDOW` and `SM_PLAYER_INFO`.
 - Housing maintenance timing now includes Java `MaintenanceTask.calculateImpoundDate` and overdue mail stage selection from `MailFormatter.sendHouseMaintenanceMail`.
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
@@ -883,6 +884,15 @@ From `csharp-port.md`, dependency order:
 - Reused the logout settings persistence path so updated display/deny rows are saved with the rest of `PlayerSettingsDAO.saveSettings` parity.
 - Added packet coverage for both the client parser and server response payload.
 - Current gaps in this cluster: exact persistent known-list fanout remains pending with the broader known-list work.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 106 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 313 tests.
+
+### Session 91 (May 21, 2026)
+- Loaded and persisted Java `PlayerCommonData.note` via the `players.note` column during enter-world/logout saves.
+- Registered and parsed Java `CM_SET_NOTE` opcode `58`, updating the active player's note only when it changes.
+- Added Java-shaped `SM_UPDATE_NOTE` opcode `104`, plus friend-list refreshes for online friends and visible-player fanout matching `PacketSendUtility.broadcastPacketAndReceive`.
+- Filled note fields in `SM_CHAT_WINDOW` personal info and `SM_PLAYER_INFO`, alongside the recently ported display/deny settings fields.
+- Current gaps in this cluster: exact persistent known-list fanout remains pending with the broader known-list work; chat group/alliance chat-window branches and exact name-tag parsing are still pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 106 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 313 tests.
 
