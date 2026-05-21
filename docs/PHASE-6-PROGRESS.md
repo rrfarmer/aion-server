@@ -13,10 +13,11 @@ Last updated: May 20, 2026
 
 - Phase 5 is complete for automated infrastructure parity. Real-client validation is intentionally deferred to later readiness validation.
 - Current active work is Phase 6c enter-world. The C# path handles `CM_ENTER_WORLD`, validates missing/online/reentry/duplicate-world cases, loads the player common row, cube inventory rows plus `item_stones` details, regular warehouse rows plus `item_stones` details, account warehouse rows plus `item_stones` details, player skills, active skill cooldowns, active item cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox rows with attached mailbox item template IDs/full item state, broker settlement summary, owned house rows, active craft cooldowns, active portal cooldowns, life stats, friends, blocked users, abyss rank, client settings, and obelisk bind point, marks the character online, stores it in the world container, transitions the connection to `InGame`, sends `SM_ENTER_WORLD_CHECK`, then sends the implemented post-enter packets `SM_SKILL_LIST`, `SM_SKILL_COOLDOWN`, `SM_ITEM_COOLDOWN`, `SM_QUEST_COMPLETED_LIST`, `SM_QUEST_LIST`, current-title and bonus-title `SM_TITLE_INFO`, `SM_MOTION`, `SM_AFTER_TIME_CHECK_4_7_5`, optional `SM_UI_SETTINGS` blobs, Java-split `SM_INVENTORY_INFO`, `SM_CHANNEL_INFO`, obelisk `SM_BIND_POINT_INFO`, baseline `SM_PLAYER_SPAWN`, `SM_GAME_TIME`, Java-shaped regular/account `SM_WAREHOUSE_INFO`, empty auxiliary warehouse placeholders, full-title `SM_TITLE_INFO`, `SM_EMOTION_LIST`, baseline `SM_PRICES`, optional `SM_RECIPE_COOLDOWN`, `SM_FRIEND_LIST`, `SM_BLOCK_LIST`, `SM_INSTANCE_INFO`, `SM_ABYSS_RANK`, baseline `SM_STATS_INFO`, mailbox-state `SM_MAIL_SERVICE`, housing auction-result `SM_SYSTEM_MESSAGE` notifications plus refresh `SM_RECEIVE_BIDS`, Java-split `SM_MACRO_LIST`, `SM_RECIPE_LIST`, broker settled-icon `SM_BROKER_SERVICE`, and housing owner-state `SM_HOUSE_OWNER_INFO`. In-game mail packets now cover list/read/attachment/delete service responses: `CM_CHECK_MAIL_LIST` -> service `2`, `CM_READ_MAIL` -> service `3`, `CM_GET_MAIL_ATTACHMENT` -> service `5`, and `CM_DELETE_MAIL` -> service `6`, with read/attachment/delete final state persisted through `IMailRepository`. `CM_SEND_MAIL` now performs DB-backed recipient validation and normal/kinah/tradeable-item/courier-pass item mail persistence with service `1` status responses plus Java-shaped `SM_SYSTEM_MESSAGE` failure packets for not-enough-money and early item validation, and refreshes an online recipient's mailbox state/list after sender success. `CM_READ_EXPRESS_MAIL` now spawns and dismisses a Java-shaped zephyr postman object for the requesting player via `SM_NPC_INFO`/`SM_DELETE`, with full sight-range known-list fanout still pending. Broker client opcodes `117`, `123`-`130` now parse with Java field layouts; sell-window price range, registered-items, settled-items, item-ID search (`CM_BROKER_SEARCH` mask `0`), numeric and class/recipe category-mask list/search, cancel-registered returns, settle-account collection, register-item persistence, buy-item persistence, and cube-full rejection are backed by the `broker`/broker-storage `inventory` tables. Broker mutation paths still lack Java's NPC-target audit and full restriction coverage until targeting/AdminService systems are ported. Remaining item-send gaps are richer `AdminService.canOperate` restrictions and exact `ItemFactory.newItem` defaults for split stacks.
+- Movement packet surface now covers Java movement masks/glide flags, `CM_MOVE` opcode `48`, `CM_MOVE_IN_AIR` opcode `49`, `SM_MOVE` opcode `55`, mutable player position, and PlayerMoveController-style target/vector/glide/vehicle state. Movement currently updates the active player's in-memory position only; Java sight-range broadcast, anti-hack, protection/fall/glide side effects, and strict flying-state gates remain pending with the known-list/movement-controller slice.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
-- Next implementation slice should continue full known-list fanout, housing auction/bid flows, broker targeting/restriction checks, or equipment stat application once item templates/stat functions are in scope.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 265 tests.
+- Next implementation slice should continue full known-list fanout/movement broadcast, housing auction/bid flows, broker targeting/restriction checks, or equipment stat application once item templates/stat functions are in scope.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 268 tests.
 
 ---
 
@@ -100,6 +101,17 @@ From `csharp-port.md`, dependency order:
 - [x] Load `player_bind_point` and send obelisk `SM_BIND_POINT_INFO`
 - [x] Send `SM_CHANNEL_INFO`, baseline `SM_PLAYER_SPAWN`, and `SM_GAME_TIME`
 - [x] Position/world placement baseline from `players.world_id`, `x`, `y`, `z`, and `heading`
+
+### Phase 6d: Movement And Known List
+- [x] Register and parse Java-shaped `CM_MOVE` opcode `48`
+- [x] Register and parse Java-shaped `CM_MOVE_IN_AIR` opcode `49`
+- [x] Add Java movement mask and glide flag constants
+- [x] Track PlayerMoveController-style movement mask, target, vector, glide, geyser, vehicle, jumping, and flight-distance state
+- [x] Add Java-shaped `SM_MOVE` opcode `55` for player movement payloads
+- [x] Update active player position from movement packets
+- [ ] Broadcast `SM_MOVE` through sight-range known-list updates
+- [ ] Port movement anti-hack, protection, fall/glide side effects, and exact flying-state gates
+- [ ] Add known-list object enter/leave/update fanout for players/NPCs
 
 ---
 
@@ -442,6 +454,15 @@ From `csharp-port.md`, dependency order:
 - Added focused coverage for cube limit/free-slot calculation and the newly used system-message IDs.
 - Current gaps in this cluster: stack merging/special cube categories are still approximate until richer item add semantics and `ItemTemplate.getExtraInventoryId` are ported.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 58 tests.
+
+### Session 42 (May 20, 2026)
+- Added Java movement mask and glide flag constants from `controllers/movement/MovementMask` and `GlideFlag`.
+- Added PlayerMoveController-style movement state on `Player`, including current mask, target destination, relative vector, glide/geyser fields, vehicle fields, jump flag, and flight-path distance.
+- Registered and parsed `CM_MOVE` opcode `48` and `CM_MOVE_IN_AIR` opcode `49`, matching Java field layouts for absolute movement, relative vectors, glide geyser location IDs, and vehicle tails.
+- Added Java-shaped `SM_MOVE` opcode `55`, including manual-position relative-vector vs absolute-target tails, glide/geyser bytes, and Java's vehicle tail shape.
+- Wired active-player movement handling to update in-memory position and movement state from movement packets. Full sight-range broadcast, anti-hack, protection/fall/glide side effects, and strict flying-state gates remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 61 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 268 tests.
 
 ---
 
