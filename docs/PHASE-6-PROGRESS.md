@@ -1551,12 +1551,20 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "CharacterSelectionServerPackets_WriteJavaShapedPayloads|ClientPacketFactory_ParsesEmotionPacket"` passes with 2 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 414 tests.
 
+### Session 175 (May 21, 2026)
+- Added Java `Equipment.unEquipItem` power-shard side-effect parity to the C# equipment mutation path: unequipping a `POWER_SHARDS` item now carries a `PowerShardDeactivated` flag, and the connection unsets `CreatureState.POWERSHARD` after successful persistence before sending owner-only `SM_EMOTION(POWERSHARD_OFF)`.
+- Kept the mutation service side-effect-free until apply time so a failed C# persistence write does not clear player state earlier than the committed inventory change.
+- Added equipment-service coverage proving power-shard unequip requests the off emotion while leaving the live player state untouched until `ApplyEquipmentChangeAsync`.
+- Current gaps in this cluster: power-shard burn-out and automatic stack replacement from Java `Equipment.usePowerShard` remain future combat/observer work.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "ChangeEquipment_UnequippingPowerShardRequestsPowerShardOff|CharacterSelectionServerPackets_WriteJavaShapedPayloads"` passes with 2 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 415 tests.
+
 ---
 
 ## Next Steps
 
 1. Continue broader `CM_EMOTION` parity: abnormal-state/stance guards, fly/land/fly-teleport/sprint controller behavior, sit observers, quest/summon observers, exact movement/attack speed fanout, and eventually the exact `EmotionLearnAction` learnable-id table.
 2. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
-3. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
+3. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
 4. Continue housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
 5. Broaden Java `CM_USE_ITEM` action routing and cooldown application as additional item actions are ported beyond the current polish/charge subset.
