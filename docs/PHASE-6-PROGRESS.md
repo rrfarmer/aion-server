@@ -1235,6 +1235,11 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 1 test.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 340 tests.
 
+### Session 132 (May 21, 2026)
+- Created `docs/Phase-6F-Completion.md` as the next handoff, carrying forward the Java-source-of-truth rule, the 6E charge/idian/dialog/stat work, the latest 340-test validation baseline, and the next unit queue.
+- Next best focused units: `CM_EQUIP_ITEM` with the parsed weapon-dual gate, charge/idian burn observers, broader passive skill/effect stat strategy, housing/known-list work, or full NPC/dialog validation.
+- Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx --no-restore` passing with 340 tests from Session 131.
+
 ---
 
 ## Next Steps
