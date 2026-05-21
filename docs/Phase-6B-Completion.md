@@ -5,7 +5,7 @@
 **Project rule**: This is a 1:1 parity rewrite from the Java project to C#. Java remains the source of truth.
 **Workflow rule**: Do one focused unit of work, validate it, commit it, then repeat.
 **Code trace rule**: New C# GameServer parity methods should include a short `Java parity: path::method` comment pointing at the Java source behavior being mirrored.
-**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx` passes with 323 tests.
+**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx` passes with 325 tests.
 
 ---
 
@@ -15,6 +15,7 @@
 - Phase 6 active area is GameServer gameplay parity, especially enter-world, inventory/equipment, movement/known-list, housing, logout/save, and later core gameplay systems.
 - Current C# GameServer already has broad enter-world coverage: common player row, appearance, inventory/warehouse item rows with item-stone detail display, skills, cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox, broker settlement summary, houses, craft/portal cooldowns, life stats, social lists with friend active-house fields, abyss rank, client settings, bind point, enter-world packet sequence, movement basics, social/chat/mail/broker/housing surfaces, and logout baseline persistence.
 - Most recent completed slices:
+  - `CM_RECIPE_DELETE` opcode `89` now mirrors Java `RecipeList.deleteRecipe`: deletes the loaded recipe from `player_recipes`, updates `Player.Recipes`, and sends `SM_RECIPE_DELETE` opcode `242`.
   - `CM_SECURITY_TOKEN` opcode `92` now mirrors Java's no-payload web session-key request and returns `SM_SECURITY_TOKEN` opcode `152` using a per-connection Base64 token.
   - `CM_TIME_CHECK_QUIT` opcode `209` now mirrors Java's subclass of `CM_TIME_CHECK` and reuses the existing time-check response path.
   - Deferred utility packet parsers now cover Java `CM_TELEPORT_ANIMATION_DONE` (`15`), `CM_CHECK_PAK` (`62`), `CM_PLAY_MOVIE_END` (`81`), `CM_SHOW_MAP` (`196`), and `CM_CHECK_MAIL_UNK` (`213`) with explicit deferred handler breadcrumbs.

@@ -1048,6 +1048,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 116 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 323 tests.
 
+### Session 110 (May 21, 2026)
+- Registered and parsed Java `CM_RECIPE_DELETE` opcode `89`.
+- Added Java-shaped `SM_RECIPE_DELETE` opcode `242`.
+- Added `PlayerEnterWorldService.DeleteRecipeAsync` plus `PlayerRecipesDAO.delRecipe` parity repository deletion from `player_recipes`, updating the loaded `Player.Recipes` collection only after persistence succeeds.
+- Routed the packet through Java `RecipeList.deleteRecipe` behavior: ignore missing recipes, otherwise delete and send the remove-recipe packet.
+- Current gaps in this cluster: recipe acquisition/removal side effects from crafting, quests, and relinquish-craft flows remain pending beyond this direct client deletion path.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 118 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 325 tests.
+
 ---
 
 ## Next Steps
