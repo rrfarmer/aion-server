@@ -20,6 +20,7 @@ Last updated: May 21, 2026
 - `SM_HOUSE_OWNER_INFO` active-house town level now mirrors Java `House.getTownLevel`, backed by `HouseAddress.townId` from static housing data and `towns.level` from the game DB.
 - Housing login now mirrors Java `HousingService.onPlayerLogin` overdue/sequestration notices before `SM_HOUSE_OWNER_INFO`.
 - Housing auction timing now includes Java `AuctionEndTask.shouldRunOnStart` startup recovery for missed auction ends and the 30-minute prolongation window.
+- Friend-list serialization now fills Java `HousingService.findActiveHouse` address and door-state fields in `SM_FRIEND_LIST`, using loaded DB house settings and online friend snapshot refreshes.
 - Housing maintenance timing now includes Java `MaintenanceTask.calculateImpoundDate` and overdue mail stage selection from `MailFormatter.sendHouseMaintenanceMail`.
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
@@ -97,7 +98,7 @@ From `csharp-port.md`, dependency order:
 - [x] Handle `CM_HOUSE_SETTINGS` with DB-backed door/show-owner/sign state, Java-shaped `SM_HOUSE_ACQUIRE`, and Java door-order `SM_SYSTEM_MESSAGE` responses; house appearance fanout and visitor kick side effects remain pending
 - [x] Load future `craft_cooldowns` rows and send Java-shaped `SM_RECIPE_COOLDOWN`
 - [x] Send baseline Java-shaped `SM_PRICES`
-- [x] Load `friends`/friend common rows and send Java-shaped `SM_FRIEND_LIST`
+- [x] Load `friends`/friend common rows with active-house address/door state and send Java-shaped `SM_FRIEND_LIST`
 - [x] Load `blocks`/blocked-player names and send Java-shaped `SM_BLOCK_LIST`
 - [x] Handle `CM_FRIEND_ADD` with Java question-window request/response flow and DB-backed reciprocal friend insert
 - [x] Handle `CM_BLOCK_ADD` with DB-backed target lookup/insert, Java denial order, `SM_BLOCK_LIST`, and `SM_BLOCK_RESPONSE`
@@ -241,7 +242,7 @@ From `csharp-port.md`, dependency order:
 - Added typed friend and blocked-user models and enter-world loading from `friends`, `blocks`, and joined `players` rows, matching `FriendListDAO.load` and `BlockListDAO.load`.
 - Added Java-shaped `SM_FRIEND_LIST` and `SM_BLOCK_LIST` packet writers.
 - Wired the implemented retail sequence after recipe cooldowns to send friend and block lists before the deferred recipe-list tail packet.
-- Current gaps in this cluster: friend online status uses persisted/common-row online state; exact Java `World.getPlayer(...).getFriendList().getStatus()` behavior should be tightened when richer world/player social state lands. Friend house address/door fields remain zero until housing is ported.
+- Current gaps in this cluster: friend online status uses persisted/common-row online state; exact Java `World.getPlayer(...).getFriendList().getStatus()` behavior should be tightened when richer world/player social state lands.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 51 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 258 tests.
 
@@ -848,6 +849,14 @@ From `csharp-port.md`, dependency order:
 - Added Java `MailFormatter.sendHouseMaintenanceMail` overdue stage selection for `$$HS_OVERDUE_1ST`, `$$HS_OVERDUE_2ND`, and `$$HS_OVERDUE_3RD` senders.
 - Routed `CM_HOUSE_PAY_RENT` due-date advancement and four-week paid cap checks through the shared maintenance timing service.
 - Current gaps in this cluster: full `MaintenanceTask` overdue mail persistence/delivery, impound/auction behavior, scheduled `AuctionEndTask.endAuction` execution, seller/buyer result mail beyond failed-bid refunds, house sign/appearance fanout, auto-fill, and live-client packet timing remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 103 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 310 tests.
+
+### Session 87 (May 21, 2026)
+- Filled the previously reserved `SM_FRIEND_LIST` house address and door-state fields using Java `HousingService.findActiveHouse` parity: studio rows win first, otherwise the oldest loaded custom house is active.
+- Extended loaded `PlayerFriend` snapshots with active-house state from DB `houses.settings`, and refresh online reciprocal friend snapshots when friend status changes or a friend request is accepted.
+- Updated packet coverage so friend-list serialization asserts the nonzero house address and friends-only door byte.
+- Current gaps in this cluster: target-side denied-friend setting, offline social request handling, and generic `ResponseRequester` support beyond buddy requests remain pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 103 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 310 tests.
 
