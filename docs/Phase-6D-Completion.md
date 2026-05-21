@@ -26,6 +26,11 @@
 - Added Java `ItemEquipmentListener.recalculateItemSet` / `Equipment.itemSetPartsEquipped` parity to the current-stat bridge, including no double-counting by item ID and Java's alternate weapon-slot exclusion.
 - Added focused packet coverage proving equipped item-set part/full bonuses affect current HP and physical defense.
 - Added static-data coverage proving real Java item set ID `2` and its modifiers load from the XML data.
+- Added a C# `EnchantTable` parity holder for Java `EnchantData`, including `enchant_name` override resolution, item-group fallback, and Java's level-21 limitless bonus behavior.
+- Extended static-data loading for Java `enchant_templates.xml` and item template `enchant_name`.
+- Added Java `EnchantService.applyEnchantEffect` / `EnchantEffect` parity to the current-stat bridge for equipped items with enchant levels.
+- Added focused packet coverage proving enchant-template stats affect current physical attack and physical accuracy.
+- Added static-data coverage proving real Java sword enchant modifiers load from XML.
 
 ---
 
@@ -33,7 +38,7 @@
 
 - This is still not the full Java `CreatureGameStats` / `Stat2` container. It remains a packet-facing bridge for equipped item template stats.
 - The current-stat half of `SM_STATS_INFO` includes first-pass equipment and item-set stats, while the base-stat half remains the existing baseline.
-- Enchantment, tempering, conditioning, idian/godstone effects, armor mastery, titles, skills, effects, transforms, class-specific stat functions, and the full stat container are still pending.
+- Tempering, conditioning, idian/godstone effects, armor mastery, titles, skills, effects, transforms, class-specific stat functions, exact off-hand attack enchant routing, and the full stat container are still pending.
 - Equip/unequip recomputation and fanout are still pending until item-use/equipment packets and stat refresh side effects are ported.
 - `SM_PLAYER_INFO` still needs exact stats and dependent state such as transforms, ride/stance, private store, team/mentor, CP fields, and viewer-specific enemy race handling.
 
@@ -41,7 +46,7 @@
 
 ## Suggested Next Units
 
-1. Add Java enchantment stat-effect parity from `EnchantService.applyEnchantEffect` and the static enchant templates.
-2. Add tempering/conditioning stat effects if enchantment dependencies stay compact.
+1. Add tempering/conditioning stat effects if those dependencies stay compact.
+2. Add idian/godstone effect parsing and equipped-item stat application where it can stay packet-facing.
 3. Port equip/unequip packet behavior and recompute/fanout side effects, including `SM_STATS_INFO` refreshes and speed/emotion updates where Java sends them.
 4. Continue housing auction settlement/maintenance/sign/appearance flows if the next slice should stay out of the stat engine.
