@@ -33,12 +33,13 @@ Last updated: May 21, 2026
 - `GameTimeService` now loads and stores Java `server_variables.time` through a C# `ServerVariablesDAO` equivalent, including periodic saves and shutdown save.
 - Game-time periodic updates now broadcast Java-shaped `SM_GAME_TIME` to all online players through a world-wide packet fanout helper before saving time.
 - `PeriodicSaveService` now mirrors Java `ServerRunTimeSaveTask`, storing `server_variables.serverLastRun` periodically and on shutdown.
+- `CM_INSTANCE_INFO` opcode `192` now handles Java's current-player/no-team branch by returning `SM_INSTANCE_INFO(updateType, player)` from the loaded instance cooldown table.
 - Housing maintenance timing now includes Java `MaintenanceTask.calculateImpoundDate` and overdue mail stage selection from `MailFormatter.sendHouseMaintenanceMail`.
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
 - Next implementation slice should continue housing auction settlement/maintenance/sign/appearance flows, full known-list fanout/movement broadcast, broader chat packet surfaces, or equipment stat application once item templates/stat functions are in scope.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 318 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 319 tests.
 
 ---
 
@@ -990,6 +991,14 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: Java legion warehouse periodic saves and player general/item dirty-save tasks remain pending until those storage and dirty-state models are ported.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 111 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 318 tests.
+
+### Session 103 (May 21, 2026)
+- Registered and parsed Java `CM_INSTANCE_INFO` opcode `192`, including the ignored `readD()` field and update-type byte.
+- Routed the no-team/current-player branch through Java-shaped `SM_INSTANCE_INFO(updateType, player)` using the loaded static instance cooldown table.
+- Added packet factory coverage for the request layout and invalid-state rejection.
+- Current gaps in this cluster: Java's team-leader/member split responses for `updateType=1` remain pending until team membership models are ported.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 112 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 319 tests.
 
 ---
 
