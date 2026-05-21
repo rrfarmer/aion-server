@@ -1494,11 +1494,18 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GamePacketTests|GameServerBootstrapTests|ItemChargeServiceTests"` passes with 72 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 404 tests.
 
+### Session 167 (May 21, 2026)
+- Migrated Java `PolishAction` idian polish onto the C# one-shot `TaskId.ITEM_USE` scheduler: valid polish attempts now send the Java 5s start animation immediately, then source consume/delete, random-bonus failure or target idian replacement, success/failure messages, target item-info update, and equipped stat refresh run after the scheduled delay.
+- Reused the generic item-use cancellation path for idian polish movement aborts, preserving Java end state `2` item-use animation plus `STR_ITEM_CANCELED`.
+- Current gaps in this cluster: soul-bind still needs migration onto delayed `TaskId.ITEM_USE`; item cooldown abort cleanup and full Java `SkillEngine` effect lifecycle/stat fanout remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GamePacketTests|GameServerBootstrapTests|IdianPolishServiceTests"` passes with 74 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 404 tests.
+
 ---
 
 ## Next Steps
 
-1. Continue migrating remaining item-use paths onto Java `TaskId.ITEM_USE` delayed execution: idian polish and soul-bind.
+1. Continue migrating soul-bind confirmation onto Java `TaskId.ITEM_USE` delayed execution: 5s accept timing, movement cancel end state `8`, success end state `6`, and stance denial messages.
 2. Continue remaining item-use parity around soul-bind timing/cancel/stance denials, power-shard emotion side effects, quest/summon observers, and exact speed/emotion fanout.
 3. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Wire charge and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
