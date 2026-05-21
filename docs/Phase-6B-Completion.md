@@ -5,7 +5,7 @@
 **Project rule**: This is a 1:1 parity rewrite from the Java project to C#. Java remains the source of truth.
 **Workflow rule**: Do one focused unit of work, validate it, commit it, then repeat.
 **Code trace rule**: New C# GameServer parity methods should include a short `Java parity: path::method` comment pointing at the Java source behavior being mirrored.
-**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx` passes with 296 tests.
+**Current validation baseline**: `dotnet test dotnetConversion\AionServer.slnx` passes with 301 tests.
 
 ---
 
@@ -15,6 +15,7 @@
 - Phase 6 active area is GameServer gameplay parity, especially enter-world, inventory/equipment, movement/known-list, housing, logout/save, and later core gameplay systems.
 - Current C# GameServer already has broad enter-world coverage: common player row, appearance, inventory/warehouse item rows with item-stone detail display, skills, cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox, broker settlement summary, houses, craft/portal cooldowns, life stats, social lists, abyss rank, client settings, bind point, enter-world packet sequence, movement basics, social/chat/mail/broker/housing surfaces, and logout baseline persistence.
 - Most recent completed slices:
+  - Housing auction and maintenance timing now parse Java weekly `CronExpression` strings such as `0 0 12 ? * SUN` instead of hard-coding only the default schedules.
   - Housing auction timing now mirrors Java `AuctionEndTask.tryProlongAuction` for the default Sunday-noon auction end, including per-house five-minute prolongations capped at thirty minutes and prolonged `SM_HOUSE_BIDS` countdowns.
   - `CM_HOUSE_SETTINGS` with DB-backed door/show-owner/sign state, `SM_HOUSE_ACQUIRE`, and Java door-order system messages.
   - `CM_TITLE_SET` and `CM_BONUS_TITLE` with loaded-title validation and Java-shaped `SM_TITLE_INFO`.
@@ -46,7 +47,6 @@
 ### Housing
 - Continue housing maintenance task parity:
   - Full `MaintenanceTask` impound/auction behavior.
-  - Custom cron parsing beyond the currently modeled Java default schedule.
 - Continue auction-end settlement parity:
   - Scheduled `AuctionEndTask.endAuction` execution and startup recovery around prolonged auctions.
   - Auction-end settlement.
