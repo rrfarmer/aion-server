@@ -19,11 +19,12 @@ Last updated: May 21, 2026
 - `SM_HOUSE_OWNER_INFO` inactive-house grace seconds now mirror Java `House.findGraceEndTime`, using the configured auction-end schedule and the last auction end before the two-week inactive-house cap.
 - `SM_HOUSE_OWNER_INFO` active-house town level now mirrors Java `House.getTownLevel`, backed by `HouseAddress.townId` from static housing data and `towns.level` from the game DB.
 - Housing login now mirrors Java `HousingService.onPlayerLogin` overdue/sequestration notices before `SM_HOUSE_OWNER_INFO`.
+- Housing auction timing now includes Java `AuctionEndTask.shouldRunOnStart` startup recovery for missed auction ends and the 30-minute prolongation window.
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
 - Next implementation slice should continue housing auction settlement/maintenance/sign/appearance flows, full known-list fanout/movement broadcast, broader chat packet surfaces, or equipment stat application once item templates/stat functions are in scope.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 305 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 307 tests.
 
 ---
 
@@ -832,6 +833,14 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: full `MaintenanceTask` overdue mail generation, impound/auction behavior, scheduled auction-end settlement, startup recovery around prolonged auctions, seller/buyer result mail beyond failed-bid refunds, house sign/appearance fanout, auto-fill, and live-client packet timing remain pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 98 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 305 tests.
+
+### Session 85 (May 21, 2026)
+- Added strict previous-run support to the weekly Java cron helper so C# can model `AbstractCronTask.findLastPlannedRun` for housing schedules.
+- Added `HouseAuctionTimingService.ShouldRunAuctionEndOnStartup`, mirroring Java `AuctionEndTask.shouldRunOnStart`: run when the server was down across the planned auction end, or when it stopped within thirty minutes after the last planned auction end.
+- Added timing tests for the previous-run helper and the startup recovery/prolongation window.
+- Current gaps in this cluster: scheduled `AuctionEndTask.endAuction` execution, full `MaintenanceTask` overdue mail generation and impound/auction behavior, seller/buyer result mail beyond failed-bid refunds, house sign/appearance fanout, auto-fill, and live-client packet timing remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 100 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 307 tests.
 
 ---
 
