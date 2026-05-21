@@ -26,9 +26,11 @@
 - Threaded `StaticData.ItemTemplates` into the enter-world login stats path.
 - Updated `SM_STATS_INFO` so the current-stat half applies equipped item template weapon stats and direct item modifiers for first-pass player combat stats on login.
 - Added Java `ItemEquipmentListener.addStonesStats` parity to the same `SM_STATS_INFO` bridge, so socketed mana stones and fusion stones contribute their item template modifiers.
+- Added Java `ItemEquipmentListener.addWeaponStats` fusioned-weapon parity to the same bridge, including applicable fusion template modifiers and Java's 10% attack/magical-boost weapon stat bonuses.
 - Added focused packet coverage proving equipped weapon and armor templates affect current HP, physical attack, physical defense, magic resist, attack speed, parry, block, crit, physical accuracy, and magical accuracy.
 - Added static-data coverage using real item `100000125`, proving the XML loader sees the Java sword's physical attack type, weapon stats, and direct `PHYSICAL_ATTACK +7` modifier.
 - Added focused coverage proving real manastone template modifiers load from Java XML and socketed stones affect current HP, physical accuracy, and magical boost.
+- Added focused coverage proving fusioned weapon stats affect current physical attack/magical boost while Java-excluded attack-speed modifiers stay out of current attack speed.
 - Focused GameServer validation also passes with 120 tests.
 
 ---
@@ -46,7 +48,7 @@
 
 ## Suggested Next Units
 
-1. Add deeper equipped-item effects: fusion weapon item stats, random bonus modifiers, item sets, enchantment, tempering, conditioning, idian/godstone effects, and full stat-container parity.
+1. Add deeper equipped-item effects: random bonus modifiers, item sets, enchantment, tempering, conditioning, idian/godstone effects, and full stat-container parity.
 2. Port equip/unequip packet behavior and recompute/fanout side effects, including `SM_STATS_INFO` refreshes and speed/emotion updates where Java sends them.
 3. Continue richer known-list and `SM_PLAYER_INFO` dependent state once more player stat and transform data is available.
 4. Continue housing auction settlement/maintenance/sign/appearance flows if the next slice should stay out of the stat engine.
