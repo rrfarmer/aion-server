@@ -16,11 +16,12 @@ Last updated: May 21, 2026
 - Movement packet surface now covers Java movement masks/glide flags, `CM_MOVE` opcode `48`, `CM_MOVE_IN_AIR` opcode `49`, `SM_MOVE` opcode `55`, mutable player position, and PlayerMoveController-style target/vector/glide/vehicle state. A first known-list bridge now broadcasts `SM_MOVE`, baseline player enter `SM_PLAYER_INFO` plus companion `SM_MOTION` action `7`, player logout `SM_DELETE`, postman `SM_NPC_INFO`, and postman `SM_DELETE` to active players in the same world within Java's default 95m visible distance. Persistent cached KnownList membership, full player-info dependent state, anti-hack, protection/fall/glide side effects, and strict flying-state gates remain pending.
 - Housing auction timing now includes Java `AuctionEndTask.tryProlongAuction` parity for the default Sunday-noon auction end: late bids can prolong individual house auctions by five-minute windows up to thirty minutes, and `SM_HOUSE_BIDS` countdowns use that per-house state.
 - Housing auction and maintenance timing now parse the Java weekly cron strings from `housing.properties`, so auction countdown/prolongation math and rent due-date advancement are no longer limited to the default Sunday-noon and Monday-midnight schedules.
+- `SM_HOUSE_OWNER_INFO` inactive-house grace seconds now mirror Java `House.findGraceEndTime`, using the configured auction-end schedule and the last auction end before the two-week inactive-house cap.
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
 - Next implementation slice should continue housing auction settlement/maintenance/sign/appearance flows, full known-list fanout/movement broadcast, broader chat packet surfaces, or equipment stat application once item templates/stat functions are in scope.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 301 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 303 tests.
 
 ---
 
@@ -805,6 +806,14 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: full `MaintenanceTask` impound/auction behavior, scheduled auction-end settlement, startup recovery around prolonged auctions, seller/buyer result mail beyond failed-bid refunds, house sign/appearance fanout, auto-fill, and live-client packet timing remain pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 94 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 301 tests.
+
+### Session 82 (May 21, 2026)
+- Updated `PlayerHouse.GetGraceSeconds` to mirror Java `House.secondsUntilGraceEnd`/`findGraceEndTime`: inactive grace now ends at the last configured auction end before acquire time plus fourteen days, instead of using a flat fourteen-day delta.
+- Wired `SM_HOUSE_OWNER_INFO` through the configured auction-end schedule supplied by `HouseAuctionTimingService`, preserving Java behavior for custom housing auction cron values.
+- Updated packet and model tests for the auction-end-based inactive-house grace value.
+- Current gaps in this cluster: exact town level, full `MaintenanceTask` impound/auction behavior, scheduled auction-end settlement, startup recovery around prolonged auctions, seller/buyer result mail beyond failed-bid refunds, house sign/appearance fanout, auto-fill, and live-client packet timing remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 96 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 303 tests.
 
 ---
 
