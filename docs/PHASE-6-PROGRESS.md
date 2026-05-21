@@ -17,11 +17,12 @@ Last updated: May 21, 2026
 - Housing auction timing now includes Java `AuctionEndTask.tryProlongAuction` parity for the default Sunday-noon auction end: late bids can prolong individual house auctions by five-minute windows up to thirty minutes, and `SM_HOUSE_BIDS` countdowns use that per-house state.
 - Housing auction and maintenance timing now parse the Java weekly cron strings from `housing.properties`, so auction countdown/prolongation math and rent due-date advancement are no longer limited to the default Sunday-noon and Monday-midnight schedules.
 - `SM_HOUSE_OWNER_INFO` inactive-house grace seconds now mirror Java `House.findGraceEndTime`, using the configured auction-end schedule and the last auction end before the two-week inactive-house cap.
+- `SM_HOUSE_OWNER_INFO` active-house town level now mirrors Java `House.getTownLevel`, backed by `HouseAddress.townId` from static housing data and `towns.level` from the game DB.
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
 - Next implementation slice should continue housing auction settlement/maintenance/sign/appearance flows, full known-list fanout/movement broadcast, broader chat packet surfaces, or equipment stat application once item templates/stat functions are in scope.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 303 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx` passed with 304 tests.
 
 ---
 
@@ -814,6 +815,14 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: exact town level, full `MaintenanceTask` impound/auction behavior, scheduled auction-end settlement, startup recovery around prolonged auctions, seller/buyer result mail beyond failed-bid refunds, house sign/appearance fanout, auto-fill, and live-client packet timing remain pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 96 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 303 tests.
+
+### Session 83 (May 21, 2026)
+- Added housing address town IDs to the typed static-data cache from Java `HouseAddress.townId`.
+- Enriched loaded player houses with Java `House.getTownLevel` data by resolving each address town through the DB-backed `towns.level` table, with Java `TownService` level-1 startup seeding as the fallback for known towns.
+- Updated `SM_HOUSE_OWNER_INFO` to write the active house town level instead of the previous zero placeholder, and added a packet test for the town-level byte.
+- Current gaps in this cluster: full `MaintenanceTask` impound/auction behavior, scheduled auction-end settlement, startup recovery around prolonged auctions, seller/buyer result mail beyond failed-bid refunds, house sign/appearance fanout, auto-fill, and live-client packet timing remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 97 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 304 tests.
 
 ---
 
