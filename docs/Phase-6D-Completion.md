@@ -40,6 +40,10 @@
 - Added Java `StatFunction.validate` / `ItemChargeCondition` parity to the current-stat bridge so charge-conditioned item modifiers apply only when the equipped item reaches the required Java charge level.
 - Added static-data coverage proving real Java conditioned dagger `100201371` preserves its charge-gated attack-speed modifier.
 - Added focused packet coverage proving Java charge level 1 applies level-1 item modifiers and does not apply level-2 modifiers at exactly `500000` charge points.
+- Parsed Java idian item action `<polish set_id="..."/>` into `ItemTemplateSummary.PolishSetId`.
+- Added Java `IdianStone.onEquip` / `RandomBonusEffect(StatBonusType.POLISH)` parity to the current-stat bridge for charged idians attached to main-hand weapons.
+- Added static-data coverage proving real Java idian `166050001` maps to polish set `3` and loads POLISH HP modifiers.
+- Added focused packet coverage proving charged idian POLISH random-bonus stats affect current HP/MP.
 
 ---
 
@@ -47,7 +51,7 @@
 
 - This is still not the full Java `CreatureGameStats` / `Stat2` container. It remains a packet-facing bridge for equipped item template stats.
 - The current-stat half of `SM_STATS_INFO` includes first-pass equipment and item-set stats, while the base-stat half remains the existing baseline.
-- Conditioning service/payment/burn/update packet flow, idian/godstone effects, armor mastery, titles, skills, effects, transforms, class-specific stat functions, exact off-hand attack enchant routing, and the full stat container are still pending.
+- Conditioning service/payment/burn/update packet flow, idian charge burn and polish item-use/update flow, godstone combat procs, armor mastery, titles, skills, effects, transforms, class-specific stat functions, exact off-hand attack enchant routing, and the full stat container are still pending.
 - Equip/unequip recomputation and fanout are still pending until item-use/equipment packets and stat refresh side effects are ported.
 - `SM_PLAYER_INFO` still needs exact stats and dependent state such as transforms, ride/stance, private store, team/mentor, CP fields, and viewer-specific enemy race handling.
 
@@ -55,7 +59,7 @@
 
 ## Suggested Next Units
 
-1. Add idian/godstone effect parsing and equipped-item stat application where it can stay packet-facing.
-2. Continue the remaining conditioning service/payment/burn/update packet flow if the next slice should complete item charge behavior.
+1. Add godstone combat proc metadata parsing if the next slice can stay data-facing, or defer procs until combat skill execution is ported.
+2. Continue the remaining idian/conditioning service burn/update packet flow if the next slice should complete item charge behavior.
 3. Port equip/unequip packet behavior and recompute/fanout side effects, including `SM_STATS_INFO` refreshes and speed/emotion updates where Java sends them.
 4. Continue housing auction settlement/maintenance/sign/appearance flows if the next slice should stay out of the stat engine.
