@@ -31,6 +31,11 @@
 - Added Java `EnchantService.applyEnchantEffect` / `EnchantEffect` parity to the current-stat bridge for equipped items with enchant levels.
 - Added focused packet coverage proving enchant-template stats affect current physical attack and physical accuracy.
 - Added static-data coverage proving real Java sword enchant modifiers load from XML.
+- Added a C# `TemperingTable` parity holder for Java `TemperingData`, including `tempering_name` override resolution and item-group fallback.
+- Extended static-data loading for Java `tempering_templates.xml` and item template `tempering_name`.
+- Added Java `TemperingEffect.apply` parity to the current-stat bridge for equipped items with tempering levels, including the special plume formula from `PlumStatEnum`.
+- Added focused packet coverage proving tempering affects current HP, physical defense, and magical resist.
+- Added static-data coverage proving real Java tempering templates and physical plume formulas load/apply.
 
 ---
 
@@ -38,7 +43,7 @@
 
 - This is still not the full Java `CreatureGameStats` / `Stat2` container. It remains a packet-facing bridge for equipped item template stats.
 - The current-stat half of `SM_STATS_INFO` includes first-pass equipment and item-set stats, while the base-stat half remains the existing baseline.
-- Tempering, conditioning, idian/godstone effects, armor mastery, titles, skills, effects, transforms, class-specific stat functions, exact off-hand attack enchant routing, and the full stat container are still pending.
+- Conditioning, idian/godstone effects, armor mastery, titles, skills, effects, transforms, class-specific stat functions, exact off-hand attack enchant routing, and the full stat container are still pending.
 - Equip/unequip recomputation and fanout are still pending until item-use/equipment packets and stat refresh side effects are ported.
 - `SM_PLAYER_INFO` still needs exact stats and dependent state such as transforms, ride/stance, private store, team/mentor, CP fields, and viewer-specific enemy race handling.
 
@@ -46,7 +51,7 @@
 
 ## Suggested Next Units
 
-1. Add tempering/conditioning stat effects if those dependencies stay compact.
+1. Add conditioning stat effects if the `ItemConditioningInfo` dependency stays compact.
 2. Add idian/godstone effect parsing and equipped-item stat application where it can stay packet-facing.
 3. Port equip/unequip packet behavior and recompute/fanout side effects, including `SM_STATS_INFO` refreshes and speed/emotion updates where Java sends them.
 4. Continue housing auction settlement/maintenance/sign/appearance flows if the next slice should stay out of the stat engine.
