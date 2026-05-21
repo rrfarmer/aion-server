@@ -44,6 +44,8 @@
 - Added Java `IdianStone.onEquip` / `RandomBonusEffect(StatBonusType.POLISH)` parity to the current-stat bridge for charged idians attached to main-hand weapons.
 - Added static-data coverage proving real Java idian `166050001` maps to polish set `3` and loads POLISH HP modifiers.
 - Added focused packet coverage proving charged idian POLISH random-bonus stats affect current HP/MP.
+- Parsed Java `<godstone>` item-template metadata into `ItemGodstoneInfo`, mirroring `GodstoneInfo` proc skill, probability, and break fields.
+- Added static-data coverage proving real Java godstone item `168000001` loads skill `8255`, level `1`, and probability `1000`.
 
 ---
 
@@ -51,7 +53,7 @@
 
 - This is still not the full Java `CreatureGameStats` / `Stat2` container. It remains a packet-facing bridge for equipped item template stats.
 - The current-stat half of `SM_STATS_INFO` includes first-pass equipment and item-set stats, while the base-stat half remains the existing baseline.
-- Conditioning service/payment/burn/update packet flow, idian charge burn and polish item-use/update flow, godstone combat procs, armor mastery, titles, skills, effects, transforms, class-specific stat functions, exact off-hand attack enchant routing, and the full stat container are still pending.
+- Conditioning service/payment/burn/update packet flow, idian charge burn and polish item-use/update flow, godstone combat proc execution, armor mastery, titles, skills, effects, transforms, class-specific stat functions, exact off-hand attack enchant routing, and the full stat container are still pending.
 - Equip/unequip recomputation and fanout are still pending until item-use/equipment packets and stat refresh side effects are ported.
 - `SM_PLAYER_INFO` still needs exact stats and dependent state such as transforms, ride/stance, private store, team/mentor, CP fields, and viewer-specific enemy race handling.
 
@@ -59,7 +61,8 @@
 
 ## Suggested Next Units
 
-1. Add godstone combat proc metadata parsing if the next slice can stay data-facing, or defer procs until combat skill execution is ported.
+1. Continue armor mastery or another stat-facing slice if it can be kept independent of the full skill/effect container.
 2. Continue the remaining idian/conditioning service burn/update packet flow if the next slice should complete item charge behavior.
-3. Port equip/unequip packet behavior and recompute/fanout side effects, including `SM_STATS_INFO` refreshes and speed/emotion updates where Java sends them.
-4. Continue housing auction settlement/maintenance/sign/appearance flows if the next slice should stay out of the stat engine.
+3. Defer godstone combat proc execution until combat and skill execution can host `GodStone.tryActivate` and `CreatureController.applyGodStoneEffect`.
+4. Port equip/unequip packet behavior and recompute/fanout side effects, including `SM_STATS_INFO` refreshes and speed/emotion updates where Java sends them.
+5. Continue housing auction settlement/maintenance/sign/appearance flows if the next slice should stay out of the stat engine.
