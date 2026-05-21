@@ -42,7 +42,7 @@ Last updated: May 21, 2026
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
-- Next implementation slice should continue deeper equipment stat effects such as armor mastery, godstone combat proc execution once combat/skills are ready, the remaining idian/conditioning service burn/update packet flow, housing auction settlement/maintenance/sign/appearance flows, full known-list fanout/movement broadcast, or broader chat packet surfaces.
+- Next implementation slice should start from the 6E handoff queue: `CM_CHARGE_ITEM` / `ItemChargeService`, idian polish burn/update persistence, armor mastery after a skill/effect strategy is chosen, equip/unequip recompute fanout, housing auction settlement/maintenance/sign/appearance flows, or persistent known-list membership.
 - Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 327 tests.
 
 ---
@@ -1161,12 +1161,17 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 1 test.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 327 tests.
 
+### Session 123 (May 21, 2026)
+- Created `docs/Phase-6E-Completion.md` as the next handoff, carrying forward the Java-source-of-truth rule, 6D completed equipment-stat work, validation baseline, and the next unit queue.
+- Next best focused units: `CM_CHARGE_ITEM` / `ItemChargeService`, idian polish burn/update persistence, armor mastery after choosing a skill/effect strategy, equip/unequip recompute fanout, or housing/known-list work.
+- Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx --no-restore` passing with 327 tests from Session 122.
+
 ---
 
 ## Next Steps
 
-1. Deepen equipment/item stat parity from the Java source: armor mastery, godstone combat proc execution once combat/skills are ready, remaining idian/conditioning service burn/update flow, and the eventual `CreatureGameStats`/`Stat2` container.
-2. Port equip/unequip behavior and stat refresh side effects, including `SM_STATS_INFO` recompute/fanout and speed/emotion updates where Java sends them.
-3. Continue persistent known-list membership and richer `SM_PLAYER_INFO` dependent state once more stat/transform/team data is available.
-4. Continue housing maintenance, auction-end settlement, sign/appearance fanout, or a compact chat/group surface when a smaller independent slice is preferable.
-5. Add focused live-DB opt-in coverage for creation and enter-world once local schema fixtures are ready.
+1. Port `CM_CHARGE_ITEM` / `ItemChargeService` for conditioning payment and item charge updates, including Java system messages and `SM_INVENTORY_UPDATE_ITEM` charge blobs.
+2. Port idian polish item-use and burn/update persistence: `PolishAction`, `IdianStone.decreasePolishCharge`, `PolishChargeCondition`, and `ItemStoneListDAO.storeIdianStones`.
+3. Add an armor mastery slice only after deciding whether to parse the relevant skill effects or introduce an explicitly limited packet-facing bridge.
+4. Port equip/unequip behavior and stat refresh side effects, including `SM_STATS_INFO` recompute/fanout and speed/emotion updates where Java sends them.
+5. Continue housing auction settlement/maintenance/sign/appearance flows or persistent known-list membership when the next slice should stay out of the stat engine.
