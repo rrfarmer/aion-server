@@ -15,6 +15,7 @@
 - Phase 6 active area is GameServer gameplay parity, especially enter-world, inventory/equipment, movement/known-list, housing, logout/save, and later core gameplay systems.
 - Current C# GameServer already has broad enter-world coverage: common player row, appearance, inventory/warehouse item rows with item-stone detail display, skills, cooldowns, quests, titles, motions, emotions, recipes, macros, mailbox, broker settlement summary, houses, craft/portal cooldowns, life stats, social lists with friend active-house fields, abyss rank, client settings, bind point, enter-world packet sequence, movement basics, social/chat/mail/broker/housing surfaces, and logout baseline persistence.
 - Most recent completed slices:
+  - Game-time periodic updates now broadcast Java-shaped `SM_GAME_TIME` to all online players through a new world-wide packet fanout helper before saving `server_variables.time`.
   - `GameTimeService` now mirrors Java `ServerVariablesDAO` time recovery/persistence by loading `server_variables.time`, periodically storing it, and saving again on shutdown.
   - `CM_REVIVE`, `CM_QUESTIONNAIRE`, `CM_START_LOOT`, `CM_LOOT_ITEM`, `CM_SUBZONE_CHANGE`, and `CM_CHANGE_CHANNEL` now parse Java wire layouts and route through explicit deferred handlers until revive, reward, drop, zone, and channel services are ported.
   - `CM_MACRO_CREATE`, `CM_MACRO_DELETE`, and `SM_MACRO_RESULT` now mutate loaded macros and persist Java `player_macrosses` rows.
