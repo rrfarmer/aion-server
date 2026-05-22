@@ -66,10 +66,10 @@ Last updated: May 22, 2026
 - `CM_USE_ITEM` now routes Java `<apextract/>` runtime with source/target validation, tool level/quality/target-type checks, target deletion, tool consume/decrement, AP-rank persistence, AP gain system message, `SM_ABYSS_RANK`, and visible-player `SM_ABYSS_RANK_UPDATE` fanout on rank changes.
 - Java remodel now covers item-template `<remodel type/minutes>` metadata, opcode `90` `CM_ITEM_REMODEL` parsing, first-pass `ItemRemodelService.remodelItem` runtime validation, Kinah payment, extract item consumption, target `item_skin`/color mutation, inventory update/delete packets, and remodel system messages. NPC range/function validation remains pending with the broader NPC/dialog known-list work.
 - Direct Java NPC spawn data now loads group-level and spot-level `temporary_spawn` schedule windows; the C# `SpawnEngine.spawnAll` bridge evaluates Java `TemporarySpawn.isInSpawnTime` against persisted game time at startup, and game-time hour changes now run a first ordinary-NPC `TemporarySpawnEngine.onHourChange` bridge for group-temporary spawn/despawn with NPC known-list refreshes.
-- Direct Java NPC spawn data now also preserves `SpawnSpotTemplate` random-walk range, anchor, state, and AI-name metadata so later walker/AI/static-state work has typed source data instead of reopening raw XML.
+- Direct Java NPC spawn data now also preserves `SpawnSpotTemplate` random-walk range, anchor, state, and AI-name metadata so later walker/AI/static-state work has typed source data instead of reopening raw XML. Spawn group `difficult_id` is preserved and the world NPC spawn bridge honors Java `SpawnEngine.spawnInstance` difficulty filtering.
 - Housing kick opcode coverage now includes Java `CM_HOUSE_KICK` parsing/routing for owner-triggered kick-friends/all requests and the Java owner notification messages, while actual visitor selection/teleport side effects remain queued with house known-list/zone parity.
 - Next implementation slice should start from the remaining equipment/gameplay queue: finish AP rank-change side effects beyond current packets (`Equipment.checkRankLimitItems`, `AbyssSkillService.updateSkills`, legion contribution/siege callbacks), broaden expirable lifecycle coverage to pets and house-object rows once their models exist, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 517 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 518 tests.
 
 ---
 
@@ -2300,6 +2300,14 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: the typed metadata is now available, but random walking, walker formation, custom AI selection, anchor handling, and initial static state application still need runtime consumers.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticData_LoadsRegularNpcSpawnSpotSummaries|WorldNpcSpawnServiceTests"` passes with 6 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 517 tests.
+
+### Session 277 (May 22, 2026)
+- Added Java spawn group `difficult_id` preservation to `NpcSpawnSummary` and direct spawn XML parsing.
+- Updated `WorldNpcSpawnService` to apply Java `SpawnEngine.spawnInstance` difficulty filtering (`difficult_id != 0 && difficult_id != requested`) before materializing ordinary world NPCs.
+- Added coverage for static-data difficulty loading plus runtime difficult-id selection.
+- Current gaps in this cluster: instance spawning still has no C# world-map-instance model, so callers currently use difficulty `0` except focused tests; future instance entry should pass the selected difficulty into this bridge.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticData_LoadsRegularNpcSpawnSpotSummaries|WorldNpcSpawnServiceTests"` passes with 7 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 518 tests.
 
 ---
 
