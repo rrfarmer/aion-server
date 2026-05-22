@@ -1655,12 +1655,18 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: temporary title expiration timers and `STR_MSG_DELETE_CASH_TITLE_BY_TIMEOUT` removal messages remain pending with the broader expirable-task bridge.
 - Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 424 tests.
 
+### Session 195 (May 22, 2026)
+- Ported Java `SkillLearnAction` for `CM_USE_ITEM`: skill-book items now parse `skillid`, required level, and class metadata; validate player level/class/race/already-known guards; add Java item cooldowns; cancel pending item use before the instant animation; persist learned `player_skills`; emit Java-shaped `SM_SKILL_LIST` message IDs; and consume/delete or decrement the source book.
+- Added a C# `SkillLearnService.learnSkillBook` equivalent that uses the existing Java-shaped skill-tree projection and preserves Java's normal/stigma/profession learn-message selection, with real static-data coverage against the ELYOS ranger White Tiger skill book.
+- Current gaps in this cluster: passive SkillEngine effect application, profession level-up action animations, recipe autolearn side effects, and nearby-quest refreshes remain future SkillEngine/profession slices.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 425 tests.
+
 ---
 
 ## Next Steps
 
-1. Continue `CM_USE_ITEM` action routing with another self-contained Java action, preferably skill books if the next slice can stay within `SkillLearnService.learnSkillBook` persistence and packet fanout.
-2. Add a C# expirable-task bridge for temporary emotions/motions/titles, including timeout removal packets/messages, when taking on lifecycle timers.
+1. Add a C# expirable-task bridge for temporary emotions/motions/titles, including timeout removal packets/messages, when taking on lifecycle timers.
+2. Continue `CM_USE_ITEM` action routing with another bounded Java action such as inventory expansion, warehouse expansion, dye/remodel/cosmetic, or decomposition, after checking each action's persistence and packet fanout.
 3. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 4. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
