@@ -66,10 +66,10 @@ Last updated: May 22, 2026
 - `CM_USE_ITEM` now routes Java `<apextract/>` runtime with source/target validation, tool level/quality/target-type checks, target deletion, tool consume/decrement, AP-rank persistence, AP gain system message, `SM_ABYSS_RANK`, and visible-player `SM_ABYSS_RANK_UPDATE` fanout on rank changes.
 - Java remodel now covers item-template `<remodel type/minutes>` metadata, opcode `90` `CM_ITEM_REMODEL` parsing, first-pass `ItemRemodelService.remodelItem` runtime validation, Kinah payment, extract item consumption, target `item_skin`/color mutation, inventory update/delete packets, and remodel system messages. NPC range/function validation remains pending with the broader NPC/dialog known-list work.
 - Direct Java NPC spawn data now loads group-level and spot-level `temporary_spawn` schedule windows; the C# `SpawnEngine.spawnAll` bridge evaluates Java `TemporarySpawn.isInSpawnTime` against persisted game time at startup, and game-time hour changes now run a first ordinary-NPC `TemporarySpawnEngine.onHourChange` bridge for group-temporary spawn/despawn with NPC known-list refreshes.
-- Direct Java NPC spawn data now also preserves `SpawnSpotTemplate` random-walk range, anchor, state, and AI-name metadata so later walker/AI work has typed source data instead of reopening raw XML. Spawn group `difficult_id` is preserved and the world NPC spawn bridge honors Java `SpawnEngine.spawnInstance` difficulty filtering. `SM_NPC_INFO` now writes Java-style NPC state and static ID from spawn metadata, and runtime `WorldNpc` objects carry the Java template/spawn AI-name selection plus spawn-template random-walk, walker, anchor, static-id, and respawn fields.
+- Direct Java NPC spawn data now also preserves `SpawnSpotTemplate` random-walk range, anchor, state, and AI-name metadata so later walker/AI work has typed source data instead of reopening raw XML. Spawn group `difficult_id` is preserved and the world NPC spawn bridge honors Java `SpawnEngine.spawnInstance` difficulty filtering. `SM_NPC_INFO` now writes Java-style NPC state and static ID from spawn metadata, runtime `WorldNpc` objects carry the Java template/spawn AI-name selection plus spawn-template random-walk, walker, anchor, static-id, and respawn fields, and static-id NPC spawn/despawn paths now update a first C# GeoService-style placeable-state bridge.
 - Housing kick opcode coverage now includes Java `CM_HOUSE_KICK` parsing/routing for owner-triggered kick-friends/all requests and the Java owner notification messages, while actual visitor selection/teleport side effects remain queued with house known-list/zone parity.
 - Next implementation slice should start from the remaining equipment/gameplay queue: finish AP rank-change side effects beyond current packets (`Equipment.checkRankLimitItems`, `AbyssSkillService.updateSkills`, legion contribution/siege callbacks), broaden expirable lifecycle coverage to pets and house-object rows once their models exist, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 520 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 521 tests.
 
 ---
 
@@ -2340,6 +2340,14 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: static IDs are now carried and serialized for ordinary NPCs, but static placeable GeoService spawn/despawn hooks and static object models remain separate runtime work.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter FullyQualifiedName~GamePacketTests` passes with 67 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 520 tests.
+
+### Session 282 (May 22, 2026)
+- Added `StaticPlaceableStateService` as the first C# bridge for Java `GeoService.spawnPlaceableObject` / `despawnPlaceableObject`, tracking active spawn static IDs by world map until full collision geometry exists.
+- Registered the service in game-server DI and wired `WorldNpcSpawnService` to activate placeable state after successful ordinary NPC materialization and clear it when temporary NPCs despawn.
+- Added spawn-service coverage proving a static-id temporary NPC increments the placeable state at spawn time and decrements it on the Java-style temporary despawn hour.
+- Current gaps in this cluster: static placeable state is now tracked for NPC spawn/despawn, but full GeoService collision integration, NPC death/decay hooks, static object models, and respawn scheduling remain future runtime work.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter WorldNpcSpawnServiceTests` passes with 9 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 521 tests.
 
 ---
 
