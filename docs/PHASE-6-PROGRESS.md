@@ -2219,6 +2219,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter NpcDialogTargetingServiceTests` passes with 4 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 503 tests.
 
+### Session 267 (May 22, 2026)
+- Split studio loading from globally spawned custom-house loading in the C# housing world service, matching Java `HousingService`'s separate `customHouses` and owner-keyed `studios` maps.
+- Added `IHousingRepository.LoadWorldStudiosAsync` and the MySQL `HousesDAO.loadHouses(..., true)` equivalent query for addresses `2001` / `3001`, while keeping `LoadWorldHousesAsync` on the custom-house address filter.
+- Added `HousingWorldService.LoadWorldStudiosAsync`, `TryGetPlayerStudio`, and `TrySpawnStudio`: studios now cache by owner without entering the global world until an explicit spawn request for the matching studio map, preserving the Java `spawnStudio(worldId, instanceId, registeredId)` shape as far as the current no-instance `WorldPosition` model allows.
+- Current gaps in this cluster: studio instance IDs are still not modeled, multiple live studio instances with the same address cannot be represented in `World.GetHouses`, and future instance/teleport code still needs to call `TrySpawnStudio` at the Java `registeredId` spawn point.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter HousingWorldServiceTests` passes with 7 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 506 tests.
+
 ---
 
 ## Next Steps
@@ -2228,5 +2236,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house baseline: fill studio spawning, visitor kick side effects, populate ordinary `WorldNpc` spawns, and remove the broker object-id fallback once runtime NPC/dialog known-list validation has real spawned template objects.
+6. Continue housing/NPC work from the new world-house baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house visibility, add visitor kick side effects, populate ordinary `WorldNpc` spawns, and remove the broker object-id fallback once runtime NPC/dialog known-list validation has real spawned template objects.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
