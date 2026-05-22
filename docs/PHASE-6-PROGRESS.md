@@ -2390,6 +2390,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticData_LoadsWalkerTemplates|DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 2 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 526 tests.
 
+### Session 288 (May 22, 2026)
+- Added `WalkerVersionTable` static-data support for Java `walker_versions.xml`, mirroring `WalkerVersionsData.afterUnmarshal` by mapping each route-version ID to its parent route ID.
+- Exposed Java-style `IsRouteVersioned` and `GetRouteVersionId` helpers so future `WalkerTemplate.getVersionId` / `InstanceWalkerFormations` work can group route variants without reparsing XML.
+- Extended synthetic and real Java static-data coverage to assert route-version counts and a known parent/version mapping from `walker_versions.xml`.
+- Current gaps in this cluster: walker route grouping is now loadable, but C# still needs `InstanceWalkerFormations`, `WalkerGroup`, grouped spawn organization, route stepping, and AI `WalkManager` movement callbacks.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticData_LoadsWalkerTemplates|DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 2 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 526 tests.
+
 ---
 
 ## Next Steps
