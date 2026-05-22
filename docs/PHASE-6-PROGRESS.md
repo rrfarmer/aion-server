@@ -2171,6 +2171,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~StaticDataLoadingTests.DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 1 test.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 485 tests.
 
+### Session 261 (May 22, 2026)
+- Added a C# `EquipmentService.UsePowerShard` planner for Java `Equipment.usePowerShard` / `decreaseEquippedItemCount`: equipped power-shard stacks now decrement by the requested count, delete the exhausted equipped stack, equip the next same cube stack into the same shard slot when available, or report burn-out/deactivation when no replacement exists.
+- Added Java `STR_MSG_WEAPON_BOOST_MODE_BURN_OUT` system-message coverage so the future combat/stat path can send the same owner packet when `UsePowerShard` burns out the last stack.
+- Added equipment-service coverage for stack decrement, same-stack replacement equip, and no-replacement burn-out, preserving the current pattern where service planners return mutations and leave player state changes to the runtime caller.
+- Current gaps in this cluster: `UsePowerShard` is not yet invoked from combat/stat calculation and still needs a persistence/packet caller once C# has the `PlayerGameStats.getPowerShardDamage` entry point.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~EquipmentServiceTests|FullyQualifiedName~GamePacketTests"` passes with 100 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 488 tests.
+
 ---
 
 ## Next Steps
@@ -2179,6 +2187,6 @@ From `csharp-port.md`, dependency order:
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
-5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, weapon-boost damage consumption, and stat refresh fanout.
+5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard` invocation/persistence/packets, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, weapon-boost damage consumption, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house baseline: fill studio spawning, visitor kick side effects, and runtime NPC/dialog known-list validation now that NPC template function ids and talk distances are loaded.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
