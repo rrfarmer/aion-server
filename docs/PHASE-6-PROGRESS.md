@@ -66,7 +66,7 @@ Last updated: May 22, 2026
 - `CM_USE_ITEM` now routes Java `<apextract/>` runtime with source/target validation, tool level/quality/target-type checks, target deletion, tool consume/decrement, AP-rank persistence, AP gain system message, `SM_ABYSS_RANK`, and visible-player `SM_ABYSS_RANK_UPDATE` fanout on rank changes.
 - Java remodel now covers item-template `<remodel type/minutes>` metadata, opcode `90` `CM_ITEM_REMODEL` parsing, first-pass `ItemRemodelService.remodelItem` runtime validation, Kinah payment, extract item consumption, target `item_skin`/color mutation, inventory update/delete packets, and remodel system messages. NPC range/function validation remains pending with the broader NPC/dialog known-list work.
 - Next implementation slice should start from the remaining equipment/gameplay queue: finish AP rank-change side effects beyond current packets (`Equipment.checkRankLimitItems`, `AbyssSkillService.updateSkills`, legion contribution/siege callbacks), broaden expirable lifecycle coverage to pets and house-object rows once their models exist, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 480 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 482 tests.
 
 ---
 
@@ -2067,6 +2067,14 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: decoration set-used/delete mutations are still pending, action `16` renovation is still pending, quest callbacks/broadcasts for object placement are still pending, object ID release after registered-item deletion remains to be modeled, and future `CM_USE_HOUSE_OBJECT`/`CM_RELEASE_OBJECT` behavior still needs reward/use-count/cooldown mutation.
 - Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 480 tests.
 
+### Session 248 (May 22, 2026)
+- Registered and parsed Java `CM_HOUSE_DECORATE` opcode `75`, including object ID, ignored template ID, and unsigned line-number fields.
+- Added Java `PartType.getForLineNr` parity for decoration line mapping, including the client-line distinction for `ADDON`, plus render/update packet decoration resolution that now overlays used registered decorations on top of building defaults in Java `PartType.values()` room order.
+- Implemented DB-backed decoration apply/default-revert mutations: object ID `0` deletes any applied custom decoration for the part/room, nonzero object IDs apply a registered decoration to the room, delete any previous decoration of the same part/room, delete the source row when applying a default decor, refresh the cached registry/world-house snapshot, send Java duplicate `SM_HOUSE_EDIT(4, 2, objectId)` responses for nonzero applies and one response for default revert, and broadcast `SM_HOUSE_UPDATE` appearance refreshes.
+- Added `IHousingRepository.SaveHouseDecorationMutationAsync` as the C# equivalent of `PlayerRegisteredItemsDAO.storeDecors` update/delete branches.
+- Current gaps in this cluster: renovation action `16`, `CM_USE_HOUSE_OBJECT`/`CM_RELEASE_OBJECT`, quest callbacks, object/decor ID release after delete, and richer sighted-player house-object update side effects remain pending.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 482 tests.
+
 ---
 
 ## Next Steps
@@ -2076,5 +2084,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: add decoration set-used/delete behavior, add future `CM_USE_HOUSE_OBJECT`/`CM_RELEASE_OBJECT` mutation paths, add renovation action `16`, then spawn studio houses per personal instance, add GeoService door state updates, live-DB orphan-house validation, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
+6. Continue housing from the new world-house baseline: add future `CM_USE_HOUSE_OBJECT`/`CM_RELEASE_OBJECT` mutation paths, add renovation action `16`, then spawn studio houses per personal instance, add GeoService door state updates, live-DB orphan-house validation, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
