@@ -2908,6 +2908,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "NpcVisibilityServiceTests|NpcDialogSideEffectServiceTests|RiftPortalInteractionServiceTests|GamePacketTests"` passes with 82 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 657 tests.
 
+### Session 345 (May 22, 2026)
+- Wired the C# `WorldNpcSpawnService` respawn path back into `RiftService.UpdateSpawned`, matching Java `RespawnService.RespawnTask.respawn` calling `RiftService.updateSpawned(oldObjectId, respawn)` after `SpawnEngine.spawnObject`.
+- Added a lazy DI bridge `Func<int, WorldNpc, bool>` so the spawn service can notify rift state without introducing a constructor cycle, mirroring the existing lazy respawn-cancel bridge in the opposite direction.
+- The respawn notification runs only after a new `WorldNpc` is visible in the world container and after walker spawn-plan refresh, keeping the old object id plus new respawn object available to rift state replacement.
+- Added focused coverage that schedules an NPC death/respawn and asserts the callback receives the corpse/old object id and the newly spawned `WorldNpc`.
+- Current gaps in this cluster: future combat/life-stat NPC death callers still need to invoke the death bridge from real NPC death flow, and full drop-aware corpse cleanup remains pending with the loot system.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcSpawnServiceTests|RiftServiceTests|GameServerBootstrapTests"` passes with 40 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 658 tests.
+
 ---
 
 ## Next Steps
