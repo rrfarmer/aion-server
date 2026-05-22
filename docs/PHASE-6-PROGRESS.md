@@ -2017,6 +2017,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "PlayerHouseTests|StaticDataLoadingTests|CharacterSelectionServerPackets_WriteJavaShapedPayloads|ClientPacketFactory_ParsesHousingPackets|HousingWorldServiceTests"` passes with 10 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 479 tests.
 
+### Session 242 (May 22, 2026)
+- Added C# `SM_DELETE_HOUSE_OBJECT` opcode `269` parity for Java `SM_DELETE_HOUSE_OBJECT`, writing the house-object item ID used by `PlayerController.notSee`.
+- Converted loaded registry objects with stored coordinates/headings into `PlacedHouseObjectSummary` rows, preserving Java `HouseObject.isSpawnedByPlayer`, heading-to-rotation, NPC tail ID, dye/expiration/type fields, and use-item usage-data bytes.
+- Wired Java `CM_LEVEL_READY` active-house behavior so owners receive compact `SM_HOUSE_OBJECTS` for spawned active-house registry objects before the baseline self `SM_PLAYER_INFO` path.
+- Attached registries to persistent `WorldHouse` snapshots during housing bootstrap and refreshed owner world-house snapshots after lazy registry load, allowing house known-list appearance to send individual `SM_HOUSE_OBJECT` packets and disappearance to send `SM_DELETE_HOUSE_OBJECT` before `SM_DELETE_HOUSE`.
+- Current gaps in this cluster: known-list delivery is still tied to the first-pass world-house distance scan instead of true region-bucketed `KnownList`; house-object cooldown DB load/save and useable-object action check-type serialization are still pending, and mutation actions still need persistence.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "PlayerHouseTests|HousingWorldServiceTests|CharacterSelectionServerPackets_WriteJavaShapedPayloads|GameClientSocketServer|StaticDataLoadingTests"` passes with 12 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 480 tests.
+
 ---
 
 ## Next Steps
@@ -2026,5 +2035,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: emit loaded spawned registry objects through `SM_HOUSE_OBJECT`/`SM_HOUSE_OBJECTS` known-list paths, load/store house-object cooldowns and richer useable-object packet-tail data, implement `CM_HOUSE_EDIT` mutation actions on top of the loaded registry summaries, add renovation action `16`, then spawn studio houses per personal instance, add GeoService door state updates, live-DB orphan-house validation, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
+6. Continue housing from the new world-house baseline: load/store house-object cooldowns and richer useable-object packet-tail data, implement `CM_HOUSE_EDIT` mutation actions on top of the loaded registry summaries, add renovation action `16`, then spawn studio houses per personal instance, add GeoService door state updates, live-DB orphan-house validation, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
