@@ -2518,6 +2518,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcWalkerMovementStateServiceTests|WorldNpcWalkerRouteStepServiceTests|WorldNpcWalkerFormationServiceTests"` passes with 14 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 562 tests.
 
+### Session 303 (May 22, 2026)
+- Extended `SM_MOVE` packet serialization so it can write Java-shaped non-playable NPC movement payloads in addition to the existing player/playable path.
+- Added NPC overloads that serialize `CreatureMoveController` target coordinates from a `WorldNpcWalkerMovementState` or explicit target values, keeping Java's playable-only vector, geyser, and vehicle tails separate from NPC movement.
+- Added packet coverage proving walker movement state emits `NPC_STARTMOVE` target coordinates and that NPC masks with the glide bit write Java's non-playable zero glide flag.
+- Current gaps in this cluster: no live NPC movement caller emits `SM_MOVE` yet, movement state is not scheduled through timers, actual world position advancement is still absent, and `targetReached`/group wait callbacks remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~GamePacketTests"` passes with 69 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 564 tests.
+
 ---
 
 ## Next Steps
@@ -2527,5 +2535,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, connect future combat/life-stat NPC death callers to the new respawn/decay bridge, add registered-drop decay selection, invoke walker/formation variant swaps from future death/variant-change callbacks, wire walker movement state into live NPC AI/timers, movement broadcasts, target-reached callbacks, random-walk/anchor runtime movement, and continue special spawn parity for static objects, gatherables, rifts, town spawns, pooled respawns, and per-instance pool state.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, connect future combat/life-stat NPC death callers to the new respawn/decay bridge, add registered-drop decay selection, invoke walker/formation variant swaps from future death/variant-change callbacks, wire walker movement state into live NPC AI/timers and visible-player broadcasts, target-reached callbacks, random-walk/anchor runtime movement, and continue special spawn parity for static objects, gatherables, rifts, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
