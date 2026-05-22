@@ -2097,6 +2097,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 275 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 482 tests.
 
+### Session 252 (May 22, 2026)
+- Implemented the first Java `UseableItemObject.onUse` runtime path for normal use-item house objects with no final-reward handoff: C# now validates owner-only access, object cooldowns, owner/visitor use-count caps, required equipped/cube item checks, inventory-full guards, atomic occupants, delayed `SM_USE_OBJECT` gauge start/completion, and release/logout cancellation.
+- Added `IHousingRepository.SaveHouseObjectUseAsync` to persist the Java scheduled-use mutation boundary: required-item count updates/deletes, reward stack updates/inserts, `player_registered_items` owner/visitor use-count updates, and final-use row deletion are stored in one transaction.
+- Added `RegisteredHouseObjectSummary.WithUseCounts` so `UseableItemObject.writeUsageData` bytes are regenerated after owner/visitor count changes, matching Java's total-use-count plus action-check-type tail.
+- Normal reward completion now consumes the required item, adds the reward through the existing Java `ItemService.addItem`-style planner, sends Java house-object reward messages, broadcasts `SM_OBJECT_USE_UPDATE`, applies cooldowns, and deletes exhausted no-final-reward objects with the Java `HouseObject.despawnAndRemoveHouseObject(false)` packet sequence.
+- Current gaps in this cluster: final-reward / `mustGiveLastReward` behavior for expired useable items is intentionally blocked rather than approximated; cooking-placement duplicate-reward denial, delete-expire-time messaging, owner-only final-reward recovery, and fuller house-object expiration scheduling still need a dedicated Java-parity slice.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 275 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 482 tests.
+
 ---
 
 ## Next Steps
@@ -2106,5 +2115,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: implement the remaining `UseableItemObject` branch for `CM_USE_HOUSE_OBJECT`/`CM_RELEASE_OBJECT`, including owner/visitor use-count checks, required-item/remove-count consumption, delayed `SM_USE_OBJECT` completion, reward/final-reward grants, use-count persistence, cooldown mutation, and final-use deletion/cooldown cleanup; after that, continue studio spawning, GeoService door state updates, live-DB orphan-house validation, visitor kick side effects, or full NPC/dialog known-list/function validation.
+6. Continue housing from the new world-house baseline: finish Java `UseableItemObject` final-reward / `mustGiveLastReward` parity, cooking duplicate-reward denial, delete-expire-time messaging, owner-only expired final-reward recovery, and house-object expiration scheduling; after that, continue studio spawning, GeoService door state updates, live-DB orphan-house validation, visitor kick side effects, or full NPC/dialog known-list/function validation.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
