@@ -2243,6 +2243,13 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "NpcVisibilityServiceTests|WorldNpcSpawnServiceTests|FullyQualifiedName~GamePacketTests"` passes with 70 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 510 tests.
 
+### Session 270 (May 22, 2026)
+- Removed the temporary broker object-id compatibility fallback from `CM_BROKER_*` handling: broker operations now require the Java-equivalent `Player.isTargetingNpcWithFunction(brokerObjId, DialogAction.OPEN_VENDOR)` result from a spawned, visible, template-backed NPC.
+- This completes the first broker dialog parity bridge across static NPC template func-dialog metadata, Java spawn coordinates, runtime `WorldNpc` materialization, and first-pass NPC known-list packets.
+- Current gaps in this cluster: NPC visibility is still distance/map-only, so future instance-aware KnownList, hide/see flags, and richer AI state packets remain separate spawn-system work.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter NpcDialogTargetingServiceTests` passes with 4 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 510 tests.
+
 ---
 
 ## Next Steps
@@ -2252,5 +2259,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: remove the broker object-id fallback now that regular NPC spawns and first-pass NPC known-list packets exist, wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house visibility, add visitor kick side effects, and continue special spawn parity for static objects/gatherables/pools/rifts/town spawns.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, and continue special spawn parity for static objects/gatherables/pools/rifts/town spawns.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
