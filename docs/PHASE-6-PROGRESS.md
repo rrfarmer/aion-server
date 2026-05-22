@@ -1880,12 +1880,20 @@ From `csharp-port.md`, dependency order:
 - Added service coverage for Elyos minimum-rank grants, old-rank removal before new-rank grants, below-minimum cleanup, and Asmodian rank-specific skill sets.
 - Current gaps in this cluster: the C# path still uses Java's default `STAR5_OFFICER` transform threshold and does not yet load `RankingConfig.XFORM_MIN_RANK`; passive SkillEngine effect apply/remove fanout remains deferred with the broader SkillEngine slice.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "AbyssSkillServiceTests|GamePackets_AreSerializedWithExpectedOpcodesAndPayloads"` passes with 4 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 472 tests.
+
+### Session 224 (May 22, 2026)
+- Loaded Java `RankingConfig.XFORM_MIN_RANK` from `gameserver.topranking.xform.min_rank`, mapping the Java `AbyssRankEnum` names to C# rank IDs and honoring `mygs.properties`/environment overrides through the existing config loader.
+- Wired AP rank-change transform skill updates to use the loaded threshold instead of the hardcoded `STAR5_OFFICER` default, while keeping `STAR5_OFFICER` as the fallback for invalid or absent values.
+- Added option coverage for the default Java `STAR5_OFFICER` value, `mygs.properties` override to `COMMANDER`, and service coverage for configured minimum-rank suppression.
+- Current gaps in this cluster: legion contribution fanout, siege callback handling, and passive SkillEngine effect apply/remove fanout remain future slices.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "AbyssSkillServiceTests|GameServerOptionsTests"` passes with 9 tests.
 
 ---
 
 ## Next Steps
 
-1. Continue AP rank-change side effects beyond the current owner/visible-player packets, rank-limited equipment pass, and abyss transform skill updates: load Java `RankingConfig.XFORM_MIN_RANK`, then add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
+1. Continue AP rank-change side effects beyond the current owner/visible-player packets, rank-limited equipment pass, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
