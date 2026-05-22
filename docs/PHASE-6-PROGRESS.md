@@ -2349,6 +2349,13 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter WorldNpcSpawnServiceTests` passes with 9 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 521 tests.
 
+### Session 283 (May 22, 2026)
+- Aligned `NpcDialogTargetingService.ValidateTargetingNpcWithFunction` with Java `Player.isTargetingNpcWithFunction`: the helper now checks the current target object and `NpcTemplate.supportsAction`, without adding an extra distance/visibility gate that Java does not have in this method.
+- Updated coverage so a targeted broker-capable NPC remains valid even outside first-pass visibility range; richer range/known-list gates remain with the separate dialog/request paths that own them.
+- Current gaps in this cluster: full dialog service parity still needs broader NPC request/range behavior, persistent Java known-list membership, and the remaining function-specific NPC services.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter NpcDialogTargetingServiceTests` passes with 4 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 521 tests.
+
 ---
 
 ## Next Steps
