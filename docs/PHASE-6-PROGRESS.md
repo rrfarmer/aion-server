@@ -51,8 +51,9 @@ Last updated: May 22, 2026
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
 - `CM_EMOTION` now covers Java abnormal movement guards, stance-denial messages, ride sprint start/end, fly-teleport landing, first-pass fly/land FP task side effects, and stop-glide movement side effects. Full fly-zone/cooldown/stat-speed/observer behavior is still pending.
 - `CM_USE_ITEM` now routes Java ride item actions, including static ride data, delayed mount animation, mount/dismount state, ride emotion broadcasts, ride-on-emotion cancellation exception, and sit-triggered dismount parity. It also routes Java craft-learn recipe items with recipe validation, `SM_LEARN_RECIPE`, DB `player_recipes` insertion, and source item consumption; emotion cards with `player_emotions` persistence and `SM_EMOTION_LIST(action=1)`; title cards with `player_titles` persistence, cash-title messages, and full `SM_TITLE_INFO` refresh; skill books with Java skill-tree/message selection and `player_skills` persistence; cube/warehouse expansion tickets with `players.item_expands` / `players.wh_bonus_expands` persistence plus cube/warehouse update packets; item-target dyes with `inventory.item_color/color_expires` persistence, dye system messages, target item update, and equipped appearance refresh; and motion cards with delayed item-use animation, `player_motions` persistence, `SM_MOTION(action=2)` owner updates, and visible active-motion refresh.
-- Next implementation slice should start from the remaining equipment/gameplay queue: temporary emotion/title expiration lifecycle, remodel/cosmetic/decomposition item actions, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 428 tests.
+- Temporary emotion/title/motion lifecycle now has a C# `ExpireTimerTask` bridge: enter-world registers loaded temporary rows, new emotion/title/motion item actions register fresh expirable entries, logout unregisters the player, the periodic tick honors Java's `remainingSeconds < 0` expiry threshold, and timeout removal deletes the DB row while sending Java-shaped `SM_EMOTION_LIST`, `SM_TITLE_INFO`, `SM_MOTION(action=6)`, and cash-timeout system messages.
+- Next implementation slice should start from the remaining equipment/gameplay queue: broaden expirable lifecycle coverage to item/pet/house-object rows, remodel/cosmetic/decomposition item actions, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 430 tests.
 
 ---
 
@@ -1679,12 +1680,20 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: Java `ExpireTimerTask` timeout removal for temporary motions is still pending with the shared expirable-task bridge.
 - Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 428 tests.
 
+### Session 199 (May 22, 2026)
+- Added a C# `ExpirableTaskService` bridge for Java `ExpireTimerTask`: it starts a 1s periodic scan through `ThreadPoolManager`, registers loaded player emotions/titles/motions on enter-world, registers newly learned temporary emotion/title/motion entries from `CM_USE_ITEM`, unregisters the player on leave-world, and preserves Java's `remainingSeconds < 0` expiry threshold.
+- Ported timeout removal side effects for temporary emotions, titles, and motions: expired emotions remove `player_emotions`, send full `SM_EMOTION_LIST(action=0)`, and send `STR_MSG_DELETE_CASH_SOCIALACTION_BY_TIMEOUT`; expired titles remove `player_titles`, clear active display/bonus title state with Java-shaped `SM_TITLE_INFO` packets, refresh the title list, and send `STR_MSG_DELETE_CASH_TITLE_BY_TIMEOUT`; expired motions remove `player_motions`, send Java `SM_MOTION(action=6)`, and send `STR_MSG_DELETE_CASH_CUSTOMANIMATION_BY_TIMEOUT`.
+- Added repository delete methods and packet coverage for the three timeout system messages plus motion removal, with focused lifecycle tests covering expiry, exact-threshold retention, and logout unregistration.
+- Current gaps in this cluster: the bridge currently covers the Phase 6 temporary social unlocks only; Java also registers expirable inventory/equipment items, pets, and house objects on login, which should be widened in a later lifecycle slice.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "ExpirableTaskServiceTests|GamePackets_AreSerializedWithExpectedOpcodesAndPayloads|PlayerEnterWorldServiceTests"` passes with 9 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 430 tests.
+
 ---
 
 ## Next Steps
 
-1. Add a C# expirable-task bridge for temporary emotions/motions/titles, including timeout removal packets/messages, when taking on lifecycle timers.
-2. Continue `CM_USE_ITEM` action routing with another bounded Java action such as remodel/cosmetic or decomposition, after checking each action's persistence and packet fanout.
+1. Continue `CM_USE_ITEM` action routing with another bounded Java action such as cosmetic or decomposition, after checking each action's persistence and packet fanout; keep remodel behind NPC/dialog validation unless that support is expanded first.
+2. Broaden the expirable lifecycle bridge to Java's other registered expirable types: inventory/equipment item expiration, pets, and house objects.
 3. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 4. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
