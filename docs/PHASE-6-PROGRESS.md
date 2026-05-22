@@ -2373,6 +2373,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter WorldNpcSpawnServiceTests` passes with 12 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 524 tests.
 
+### Session 286 (May 22, 2026)
+- Added a first ordinary-NPC death lifecycle entry point to `WorldNpcSpawnService`, mirroring Java `NpcController.onDie`: schedule respawn while the corpse remains spawned, clear static-placeable state immediately, then schedule delayed decay deletion.
+- Added Java `RespawnService.scheduleDecayTask` timing constants for no-drop immediate decay (`2s`) and with-drop decay (`5m`), with a test-only override path for deterministic coverage.
+- Split scheduled respawns between delete-and-respawn tasks that hold/release the old object ID and death-scheduled respawns that can run while the corpse still owns its object ID.
+- Added coverage proving death scheduling keeps the corpse until decay, preserves a pending respawn, clears static-placeable state at death time, deletes on decay, and respawns from the original spawn metadata.
+- Current gaps in this cluster: combat/life-stat callers still do not invoke this death lifecycle, registered drop discovery is not wired, and Java event-end deferral, instance-existence checks, pooled respawn replacement, rift callbacks, loot reward, and AI/quest death events remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter WorldNpcSpawnServiceTests` passes with 13 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 525 tests.
+
 ---
 
 ## Next Steps
