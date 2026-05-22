@@ -2406,6 +2406,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter WorldNpcWalkerRouteServiceTests` passes with 3 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 529 tests.
 
+### Session 290 (May 22, 2026)
+- Added `WorldNpcWalkerFormationService` as the first C# port of Java `WalkerGroup.form` math for spawned NPC walker clusters.
+- Ported Java square/line formation behavior: descending walker-index ordering, line row sagittal shifts, multi-row square shifts, row-distance parity math, and `WalkerGroup.getLinePoint` projection including the Java horizontal/vertical fast-path quirks.
+- Added coverage for line formation, multi-row square formation, point-form unchanged behavior, insufficient-route fallback, and diagonal `getLinePoint` projection.
+- Current gaps in this cluster: formation results are still pure data and are not yet registered into an `InstanceWalkerFormations` cache, spawned into world positions, advanced through route steps, broadcast through `SM_MOVE`, or driven by AI `WalkManager`.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcWalkerFormationServiceTests|WorldNpcWalkerRouteServiceTests"` passes with 8 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 534 tests.
+
 ---
 
 ## Next Steps
