@@ -2157,6 +2157,13 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage still wait for C# homes for those systems.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 485 tests.
 
+### Session 259 (May 22, 2026)
+- Loaded Java NPC `TalkInfo` dialog metadata into C# static data: `NpcTemplateSummary` now carries `talk_info.distance` with Java's default distance of `2`, preserves whitespace-parsed `func_dialogs`, and exposes `SupportsDialogAction` as the C# equivalent of `NpcTemplate.supportsAction`.
+- Added real Java static-data coverage for broker NPC `799211`, confirming `func_dialogs="33"` and talk distance `5` are parsed and that unsupported dialog actions remain rejected.
+- Current gaps in this cluster: runtime broker/dialog guards still cannot fully replace the object-id-only audit until C# has spawned NPC visible-object templates and known-list/range membership for ordinary NPCs.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~StaticDataLoadingTests.DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 1 test.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 485 tests.
+
 ---
 
 ## Next Steps
@@ -2166,5 +2173,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: fill the remaining house-object/NPC edges, especially studio spawning, visitor kick side effects, or full NPC/dialog known-list/function validation.
+6. Continue housing/NPC work from the new world-house baseline: fill studio spawning, visitor kick side effects, and runtime NPC/dialog known-list validation now that NPC template function ids and talk distances are loaded.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
