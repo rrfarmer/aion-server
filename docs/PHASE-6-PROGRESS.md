@@ -2141,6 +2141,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter HousingWorldServiceTests` passes with 4 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 485 tests.
 
+### Session 257 (May 22, 2026)
+- Added a C# `IHouseDoorStateService` bridge for Java `GeoService.setHouseDoorState`, storing active house door state by world/address until full collision geometry exists.
+- Wired world-house startup loading and live `AddOrUpdateWorldHouse` updates to push each house's door state into the bridge whenever the visible `WorldHouse` snapshot is inserted or updated.
+- Registered the door-state bridge in game-server DI and threaded it through `GameClientSocketServer` into `GameServerConnection`, so future `CM_HOUSE_SETTINGS` updates keep the runtime door-state view current.
+- Added housing world-service coverage that verifies a loaded house records its Java door state in the bridge.
+- Current gaps in this cluster: studio spawning, visitor kick side effects, and fuller NPC/dialog known-list/function validation remain separate housing/NPC slices.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter HousingWorldServiceTests` passes with 4 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 485 tests.
+
 ---
 
 ## Next Steps
@@ -2150,5 +2159,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: fill the remaining house-object/NPC edges, especially studio spawning, GeoService door state updates, visitor kick side effects, or full NPC/dialog known-list/function validation.
+6. Continue housing from the new world-house baseline: fill the remaining house-object/NPC edges, especially studio spawning, visitor kick side effects, or full NPC/dialog known-list/function validation.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
