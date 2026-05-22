@@ -65,9 +65,9 @@ Last updated: May 22, 2026
 - AP extraction metadata now includes Java `<acquisition ap="...">` required AP values and Java `ItemMask.CAN_AP_EXTRACT`, enabling AP extraction targets to compute returned AP from real item metadata.
 - `CM_USE_ITEM` now routes Java `<apextract/>` runtime with source/target validation, tool level/quality/target-type checks, target deletion, tool consume/decrement, AP-rank persistence, AP gain system message, `SM_ABYSS_RANK`, and visible-player `SM_ABYSS_RANK_UPDATE` fanout on rank changes.
 - Java remodel now covers item-template `<remodel type/minutes>` metadata, opcode `90` `CM_ITEM_REMODEL` parsing, first-pass `ItemRemodelService.remodelItem` runtime validation, Kinah payment, extract item consumption, target `item_skin`/color mutation, inventory update/delete packets, and remodel system messages. NPC range/function validation remains pending with the broader NPC/dialog known-list work.
-- Direct Java NPC spawn data now loads group-level and spot-level `temporary_spawn` markers; the always-on C# `SpawnEngine.spawnAll` bridge skips those scheduled spawns until a `TemporarySpawnEngine` equivalent can own hourly spawn/despawn timing.
+- Direct Java NPC spawn data now loads group-level and spot-level `temporary_spawn` schedule windows; the C# `SpawnEngine.spawnAll` bridge evaluates Java `TemporarySpawn.isInSpawnTime` against persisted game time at startup, while hourly `TemporarySpawnEngine.onHourChange` spawn/despawn timing remains pending.
 - Next implementation slice should start from the remaining equipment/gameplay queue: finish AP rank-change side effects beyond current packets (`Equipment.checkRankLimitItems`, `AbyssSkillService.updateSkills`, legion contribution/siege callbacks), broaden expirable lifecycle coverage to pets and house-object rows once their models exist, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 512 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 516 tests.
 
 ---
 
@@ -2267,6 +2267,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticData_LoadsRegularNpcSpawnSpotSummaries|WorldNpcSpawnServiceTests"` passes with 5 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 512 tests.
 
+### Session 273 (May 22, 2026)
+- Replaced the temporary-spawn marker boolean with a typed `TemporarySpawnSchedule` that preserves Java `spawn_time`, `despawn_time`, weekday masks, wildcard fields, and `/n` expressions for direct NPC spawn data.
+- Updated startup NPC materialization to evaluate Java `TemporarySpawn.isInSpawnTime`: group schedules gate the whole spawn group, spot schedules gate non-pooled spots, and pooled groups keep Java's group-level pool behavior.
+- Initialized `GameTimeService` before `GameEngine` startup so `WorldNpcSpawnService` can use persisted Java `server_variables.time` before `SpawnEngine.spawnAll` runs.
+- Added schedule tests for overnight hour windows, month/day ranges, `/n` expressions, weekday masks, and runtime startup filtering for scheduled group/spot spawns.
+- Current gaps in this cluster: the hourly `TemporarySpawnEngine.onHourChange` loop still needs to register temporary spawn groups, delete live temporary NPCs on despawn windows, spawn newly eligible groups/spots, and refresh NPC known-list deltas.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticData_LoadsRegularNpcSpawnSpotSummaries|WorldNpcSpawnServiceTests|TemporarySpawnScheduleTests|GameServerBootstrap_LoadsDataInitializesWorldAndStartsGameTime"` passes with 10 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 516 tests.
+
 ---
 
 ## Next Steps
@@ -2276,5 +2285,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, add a `TemporarySpawnEngine` equivalent for `temporary_spawn` schedules, and continue special spawn parity for static objects, gatherables, rifts, town spawns, respawns, and per-instance pool state.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, add the hourly `TemporarySpawnEngine.onHourChange` spawn/despawn loop for registered temporary spawn groups, and continue special spawn parity for static objects, gatherables, rifts, town spawns, respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
