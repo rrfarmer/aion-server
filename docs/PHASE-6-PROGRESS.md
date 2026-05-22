@@ -2164,6 +2164,13 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~StaticDataLoadingTests.DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 1 test.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 485 tests.
 
+### Session 260 (May 22, 2026)
+- Loaded Java item-template `weapon_boost` metadata into `ItemTemplateSummary`, preserving the `ItemTemplate.getWeaponBoost` value needed by the future C# `PlayerGameStats.getPowerShardDamage` parity path.
+- Added real Java static-data coverage for power shard template `169000005`, confirming its parsed `WeaponBoost` value is `20`.
+- Current gaps in this cluster: the damage calculation and Java `Equipment.usePowerShard` burn/replacement trigger are still pending until the combat/stat observer path has a C# entry point.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~StaticDataLoadingTests.DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 1 test.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 485 tests.
+
 ---
 
 ## Next Steps
@@ -2172,6 +2179,6 @@ From `csharp-port.md`, dependency order:
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
-5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
+5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, weapon-boost damage consumption, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house baseline: fill studio spawning, visitor kick side effects, and runtime NPC/dialog known-list validation now that NPC template function ids and talk distances are loaded.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
