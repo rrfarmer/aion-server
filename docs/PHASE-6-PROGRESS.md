@@ -50,9 +50,9 @@ Last updated: May 22, 2026
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
 - `CM_EMOTION` now covers Java abnormal movement guards, stance-denial messages, ride sprint start/end, fly-teleport landing, first-pass fly/land FP task side effects, and stop-glide movement side effects. Full fly-zone/cooldown/stat-speed/observer behavior is still pending.
-- `CM_USE_ITEM` now routes Java ride item actions, including static ride data, delayed mount animation, mount/dismount state, ride emotion broadcasts, ride-on-emotion cancellation exception, and sit-triggered dismount parity. It also routes Java craft-learn recipe items with recipe validation, `SM_LEARN_RECIPE`, DB `player_recipes` insertion, and source item consumption; emotion cards with `player_emotions` persistence and `SM_EMOTION_LIST(action=1)`; title cards with `player_titles` persistence, cash-title messages, and full `SM_TITLE_INFO` refresh; skill books with Java skill-tree/message selection and `player_skills` persistence; and cube/warehouse expansion tickets with `players.item_expands` / `players.wh_bonus_expands` persistence plus cube/warehouse update packets.
-- Next implementation slice should start from the remaining equipment/gameplay queue: temporary emotion/title expiration lifecycle, dye/remodel/cosmetic/decomposition item actions, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 426 tests.
+- `CM_USE_ITEM` now routes Java ride item actions, including static ride data, delayed mount animation, mount/dismount state, ride emotion broadcasts, ride-on-emotion cancellation exception, and sit-triggered dismount parity. It also routes Java craft-learn recipe items with recipe validation, `SM_LEARN_RECIPE`, DB `player_recipes` insertion, and source item consumption; emotion cards with `player_emotions` persistence and `SM_EMOTION_LIST(action=1)`; title cards with `player_titles` persistence, cash-title messages, and full `SM_TITLE_INFO` refresh; skill books with Java skill-tree/message selection and `player_skills` persistence; cube/warehouse expansion tickets with `players.item_expands` / `players.wh_bonus_expands` persistence plus cube/warehouse update packets; and item-target dyes with `inventory.item_color/color_expires` persistence, dye system messages, target item update, and equipped appearance refresh.
+- Next implementation slice should start from the remaining equipment/gameplay queue: temporary emotion/title expiration lifecycle, remodel/cosmetic/decomposition item actions, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 427 tests.
 
 ---
 
@@ -1667,12 +1667,18 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: NPC-paid cube/warehouse expansion dialog flows still depend on fuller NPC/dialog function validation and are not part of item-ticket parity.
 - Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 426 tests.
 
+### Session 197 (May 22, 2026)
+- Ported the item-target branch of Java `DyeAction` for `CM_USE_ITEM`: item templates now parse `<dye color="...">` plus optional minutes, target skin templates honor Java's `ItemMask.DYEABLE` bit, and successful dye/removal consumes or decrements the source dye item.
+- Added DB-backed `inventory.item_color` / `color_expires` persistence, Java dye success/error system-message IDs, full target `SM_INVENTORY_UPDATE_ITEM`, and equipped-item `SM_UPDATE_PLAYER_APPEARANCE` refresh through the visible-player broadcaster when available.
+- Current gaps in this cluster: house-object painting remains pending until house object edit/spawn state is broad enough to mirror `DyeAction.dyeHouseObject`.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 427 tests.
+
 ---
 
 ## Next Steps
 
 1. Add a C# expirable-task bridge for temporary emotions/motions/titles, including timeout removal packets/messages, when taking on lifecycle timers.
-2. Continue `CM_USE_ITEM` action routing with another bounded Java action such as dye/remodel/cosmetic or decomposition, after checking each action's persistence and packet fanout.
+2. Continue `CM_USE_ITEM` action routing with another bounded Java action such as remodel/cosmetic or decomposition, after checking each action's persistence and packet fanout.
 3. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 4. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
