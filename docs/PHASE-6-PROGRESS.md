@@ -58,8 +58,9 @@ Last updated: May 22, 2026
 - Assembly item static data now loads Java `assembly_items.xml` into a typed C# holder, and `CM_USE_ITEM` routes item-template `<actions><assemble item="..."/>` metadata through Java `AssemblyItemAction`: all required parts are validated, a 1s item-use animation is scheduled with Java item-cancel behavior, parts are consumed by item ID, the assembly success message is sent, and the reward is added through the reusable Java `ItemService.addItem`-style planner. Java's full-inventory behavior is preserved: consumed parts stay consumed and the dice inventory error is sent if the reward cannot fit.
 - XP extraction item-template metadata now parses Java `<actions><expextract item_id percent cost/>` into `ItemTemplateSummary`, and `CM_USE_ITEM` routes Java `ExpExtractAction` runtime: 5s item-use animation/cancel, inventory-full and not-enough-exp guards, fixed/percent EXP cost calculation, source consumption by item ID, EXP persistence, `SM_STATUPDATE_EXP`, reward add, dice-inventory failure, and success messaging.
 - Enchantment-stone composition now parses Java `<composition/>` metadata and opcode `208` `CM_COMPOSITE_STONES`, validating the combination tool plus two enchantment stones, scheduling Java's 5s self-only item-use animation/cancel, consuming tool/stone item IDs, calculating the Java reward enchantment-stone ID, and adding the reward through the reusable item-add planner.
+- Extraction tool metadata now parses Java `<extract/>` markers and `<apextract rate target/>` metadata into item templates, setting up the future `ExtractAction`/`ApExtractAction` runtime slices without guessing at their heavier `EnchantService.breakItem` and AP-return dependencies.
 - Java remodel now covers item-template `<remodel type/minutes>` metadata, opcode `90` `CM_ITEM_REMODEL` parsing, first-pass `ItemRemodelService.remodelItem` runtime validation, Kinah payment, extract item consumption, target `item_skin`/color mutation, inventory update/delete packets, and remodel system messages. NPC range/function validation remains pending with the broader NPC/dialog known-list work.
-- Next implementation slice should start from the remaining equipment/gameplay queue: parse/route another small Java item action such as `extract`/`apextract` if its service dependencies are tractable, broaden expirable lifecycle coverage to pets and house-object rows once their models exist, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
+- Next implementation slice should start from the remaining equipment/gameplay queue: runtime for `ExtractAction`/`ApExtractAction` only after the missing `EnchantService.breakItem` and AP/common-data mutation pieces are scoped, broaden expirable lifecycle coverage to pets and house-object rows once their models exist, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
 - Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 461 tests.
 
 ---
@@ -1821,11 +1822,18 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "CompositionServiceTests|ClientPacketFactory_ParsesCompositeStonesPacket|StaticDataLoadingTests"` passes with 7 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 461 tests.
 
+### Session 216 (May 22, 2026)
+- Parsed the remaining small extraction action metadata: Java `<actions><extract/>` now sets `ItemTemplateSummary.HasExtractAction`, and Java `<actions><apextract rate="..." target="..."/>` now maps to `ItemTemplateSummary.ApExtractAction`.
+- Added real static-data coverage for the lone extraction tool `165000001` plus representative AP extraction tools `165005000` and `165005001`, and asserted that every loaded `<extract>`/`<apextract>` element is represented on an item template.
+- Current gaps in this cluster: runtime remains intentionally deferred until `EnchantService.breakItem` reward/breakdown behavior, target equipment deletion, AP rank/common-data persistence, and AP stat packets are ported.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter StaticDataLoadingTests` passes with 3 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 461 tests.
+
 ---
 
 ## Next Steps
 
-1. Parse or route another bounded Java item action if dependencies are tractable, especially `extract`/`apextract` metadata before the heavier `EnchantService.breakItem` and AP-return runtime work.
+1. Scope `ExtractAction`/`ApExtractAction` runtime only after the missing support pieces are explicit: `EnchantService.breakItem`, target equipment deletion side effects, AP rank/common-data persistence, AP stat packets, and exact failure messaging.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 4. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
