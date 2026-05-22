@@ -2179,6 +2179,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~EquipmentServiceTests|FullyQualifiedName~GamePacketTests"` passes with 100 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 488 tests.
 
+### Session 262 (May 22, 2026)
+- Added `IdianPolishService.BurnEquippedWeaponPolishCharge` as the C# planner for Java `PolishChargeCondition.validate`: it scans equipped cube items, burns only weapon idian stones, skips `MAIN_OFF_HAND`/`SUB_OFF_HAND` equipment-set slots, and returns the updated inventory plus per-item burn results.
+- Reused the existing Java `IdianStone.decreasePolishCharge` parity logic so the multi-item condition path reports low-charge threshold updates and idian exhaustion/removal exactly like the single-item burn helper.
+- Added idian service coverage for main-hand/sub-hand burns, off-hand-set skips, non-weapon skips, cube-item skips, and exhausted-idian removal.
+- Current gaps in this cluster: the planner is still waiting for a real C# `SkillEngine` condition/effect invocation point and runtime packet/persistence caller.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter IdianPolishServiceTests` passes with 7 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 490 tests.
+
 ---
 
 ## Next Steps
@@ -2187,6 +2195,6 @@ From `csharp-port.md`, dependency order:
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
-5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard` invocation/persistence/packets, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, weapon-boost damage consumption, and stat refresh fanout.
+5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation/persistence/packets, `Equipment.usePowerShard` invocation/persistence/packets, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, weapon-boost damage consumption, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house baseline: fill studio spawning, visitor kick side effects, and runtime NPC/dialog known-list validation now that NPC template function ids and talk distances are loaded.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
