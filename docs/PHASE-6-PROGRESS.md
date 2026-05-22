@@ -2124,6 +2124,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 276 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 483 tests.
 
+### Session 255 (May 22, 2026)
+- Added a runtime `canExpireNow` callback to the loaded house-object `ExpireTimerTask` bridge so C# can preserve Java's live object guards without baking connection state into `ExpirableTaskService`.
+- Wired the game runtime callback to Java `UseableHouseObject.canExpireNow` semantics for use-item, storage, and postbox objects by deferring expiration while `CM_USE_HOUSE_OBJECT` occupant state is still held.
+- Added the Java `NpcObject.canExpireNow` target guard against the currently available housing-NPC object ID representation, deferring expiration while any online player has that NPC selected.
+- Added coverage that expired use-item, storage, postbox, and NPC house objects remain registered while runtime state reports them busy, then expire on the next tick once that callback allows it.
+- Current gaps in this cluster: studio spawning, GeoService door state updates, live-DB orphan-house validation, visitor kick side effects, and fuller NPC/dialog known-list/function validation remain separate housing/NPC slices.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter ExpirableTaskServiceTests` passes with 7 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 484 tests.
+
 ---
 
 ## Next Steps
@@ -2133,5 +2142,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: fill the remaining house-object/NPC edges, especially `NpcObject.canExpireNow` target checks, useable-object occupant-aware expiration, studio spawning, GeoService door state updates, live-DB orphan-house validation, visitor kick side effects, or full NPC/dialog known-list/function validation.
+6. Continue housing from the new world-house baseline: fill the remaining house-object/NPC edges, especially studio spawning, GeoService door state updates, live-DB orphan-house validation, visitor kick side effects, or full NPC/dialog known-list/function validation.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
