@@ -1951,6 +1951,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "HousingWorldServiceTests|HousingVisibilityServiceTests|GameServerBootstrap_LoadsDataInitializesWorldAndStartsGameTime"` passes with 5 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 477 tests.
 
+### Session 234 (May 22, 2026)
+- Parsed Java housing-land default building references into `HousingAddressSummary`, preserving `HousingLand.getDefaultBuilding` fallback semantics and global `Building.type` values from `housing/house_buildings.xml`.
+- Extended `HousingWorldService` to synthesize ownerless custom-house world snapshots for static `HouseAddress` rows missing from the `houses` table, matching Java `HousingService.spawnHouses` creation of `new House(address, instanceId)` with default building, owner id `0`, visible map coordinates, `showOwnerName=true`, and closed ownerless doors.
+- Skipped `PERSONAL_INS` studio addresses during global synthesis, preserving Java's per-personal-instance studio spawning split.
+- Current gaps in this cluster: synthesized ownerless custom houses are world-visible but still are not persisted until the future acquisition/auction path, studios are not spawned per personal instance, deleted-owner revocation is not ported, and house-object/registry/decor persistence remains pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "HousingWorldServiceTests|StaticDataLoadingTests|HousingVisibilityServiceTests"` passes with 8 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 478 tests.
+
 ---
 
 ## Next Steps
@@ -1960,5 +1968,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: synthesize missing unowned custom houses from static housing addresses, spawn studio houses per personal instance, add populated decor/object registry packets, GeoService door state updates, deleted-owner revocation, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
+6. Continue housing from the new world-house baseline: spawn studio houses per personal instance, add populated decor/object registry packets, GeoService door state updates, deleted-owner revocation, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
