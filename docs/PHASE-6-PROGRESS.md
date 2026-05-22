@@ -50,9 +50,9 @@ Last updated: May 22, 2026
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
 - `CM_EMOTION` now covers Java abnormal movement guards, stance-denial messages, ride sprint start/end, fly-teleport landing, first-pass fly/land FP task side effects, and stop-glide movement side effects. Full fly-zone/cooldown/stat-speed/observer behavior is still pending.
-- `CM_USE_ITEM` now routes Java ride item actions, including static ride data, delayed mount animation, mount/dismount state, ride emotion broadcasts, ride-on-emotion cancellation exception, and sit-triggered dismount parity. It also routes Java craft-learn recipe items with recipe validation, `SM_LEARN_RECIPE`, DB `player_recipes` insertion, and source item consumption; emotion cards with `player_emotions` persistence and `SM_EMOTION_LIST(action=1)`; title cards with `player_titles` persistence, cash-title messages, and full `SM_TITLE_INFO` refresh; skill books with Java skill-tree/message selection and `player_skills` persistence; cube/warehouse expansion tickets with `players.item_expands` / `players.wh_bonus_expands` persistence plus cube/warehouse update packets; and item-target dyes with `inventory.item_color/color_expires` persistence, dye system messages, target item update, and equipped appearance refresh.
+- `CM_USE_ITEM` now routes Java ride item actions, including static ride data, delayed mount animation, mount/dismount state, ride emotion broadcasts, ride-on-emotion cancellation exception, and sit-triggered dismount parity. It also routes Java craft-learn recipe items with recipe validation, `SM_LEARN_RECIPE`, DB `player_recipes` insertion, and source item consumption; emotion cards with `player_emotions` persistence and `SM_EMOTION_LIST(action=1)`; title cards with `player_titles` persistence, cash-title messages, and full `SM_TITLE_INFO` refresh; skill books with Java skill-tree/message selection and `player_skills` persistence; cube/warehouse expansion tickets with `players.item_expands` / `players.wh_bonus_expands` persistence plus cube/warehouse update packets; item-target dyes with `inventory.item_color/color_expires` persistence, dye system messages, target item update, and equipped appearance refresh; and motion cards with delayed item-use animation, `player_motions` persistence, `SM_MOTION(action=2)` owner updates, and visible active-motion refresh.
 - Next implementation slice should start from the remaining equipment/gameplay queue: temporary emotion/title expiration lifecycle, remodel/cosmetic/decomposition item actions, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 427 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 428 tests.
 
 ---
 
@@ -1672,6 +1672,12 @@ From `csharp-port.md`, dependency order:
 - Added DB-backed `inventory.item_color` / `color_expires` persistence, Java dye success/error system-message IDs, full target `SM_INVENTORY_UPDATE_ITEM`, and equipped-item `SM_UPDATE_PLAYER_APPEARANCE` refresh through the visible-player broadcaster when available.
 - Current gaps in this cluster: house-object painting remains pending until house object edit/spawn state is broad enough to mirror `DyeAction.dyeHouseObject`.
 - Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 427 tests.
+
+### Session 198 (May 22, 2026)
+- Ported Java `AnimationAddAction` for `CM_USE_ITEM`: item templates now parse `<animation idle/run/jump/rest/shop minutes>`, motion cards start the Java 1s item-use animation, consume/delete or decrement the source card on completion, persist learned `player_motions`, and replace active motions by Java motion type.
+- Added Java-shaped `SM_MOTION(action=2)` add-motion packet coverage, owner add-motion sends for each learned motion, and visible-player active-motion refresh after the completion animation.
+- Current gaps in this cluster: Java `ExpireTimerTask` timeout removal for temporary motions is still pending with the shared expirable-task bridge.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 428 tests.
 
 ---
 
