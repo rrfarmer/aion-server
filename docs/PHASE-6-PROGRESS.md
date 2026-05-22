@@ -2364,6 +2364,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter WorldNpcSpawnServiceTests` passes with 10 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 522 tests.
 
+### Session 285 (May 22, 2026)
+- Added a first ordinary-NPC respawn bridge to `WorldNpcSpawnService`, matching Java `VisibleObjectController.deleteAndScheduleRespawn` plus `RespawnService.scheduleRespawn` for spawned NPCs with positive `respawn_time`.
+- Tracked the original `NpcSpawnSummary`/template for materialized world NPCs so scheduled respawns can re-materialize from the same Java spawn metadata instead of rebuilding from packet/runtime fields.
+- Pending respawns now hold the old object ID until the scheduled task unregisters, then respawn through the same `SpawnNpc` path that restores static-placeable state and runtime metadata.
+- Added coverage for delayed respawn restoration, pending-task bookkeeping, static-placeable despawn/respawn, and no-respawn (`respawn_time=0`) deletion behavior.
+- Current gaps in this cluster: full NPC death/decay callers, drop-aware decay timing, instance existence checks, event-end respawn deferral, pooled respawn replacement, rift update callbacks, and temporary-special object respawns remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter WorldNpcSpawnServiceTests` passes with 12 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 524 tests.
+
 ---
 
 ## Next Steps
@@ -2373,5 +2382,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add random-walk/walker/AI runtime consumers for the now-preserved spawn metadata, and continue special spawn parity for static objects, gatherables, rifts, town spawns, respawns, and per-instance pool state.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add random-walk/walker/AI runtime consumers for the now-preserved spawn metadata, and continue special spawn parity for static objects, gatherables, rifts, town spawns, drop-aware death/decay, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
