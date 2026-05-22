@@ -2398,6 +2398,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticData_LoadsWalkerTemplates|DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 2 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 526 tests.
 
+### Session 289 (May 22, 2026)
+- Added `WorldNpcWalkerRouteService` as the first runtime consumer for loaded walker route data, resolving a spawned `WorldNpc.WalkerId` into a Java-style route plan.
+- The resolver now distinguishes no-walker NPCs, missing route IDs, and ready route plans, carrying route ID, version parent ID, formation, square rows, and route steps for future movement/AI consumers.
+- Added coverage for no-walker, missing-route, and ready-route cases with Java breadcrumbs for `Npc.isWalker`, `WalkerTemplate.getVersionId`, and future `WalkManager` route setup.
+- Current gaps in this cluster: the resolver does not yet organize walker groups, assign group shifts, advance route steps, broadcast movement, or drive AI `WalkManager`; it only establishes the runtime lookup boundary.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter WorldNpcWalkerRouteServiceTests` passes with 3 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 529 tests.
+
 ---
 
 ## Next Steps
