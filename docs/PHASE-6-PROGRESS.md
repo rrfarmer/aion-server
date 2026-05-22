@@ -1897,6 +1897,13 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: full house known-list membership, GeoService door updates, visitor kick side effects, and populated decor/house-object registry data remain future housing slices.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter CharacterSelectionServerPackets_WriteJavaShapedPayloads` passes with 1 test.
 
+### Session 226 (May 22, 2026)
+- Added C# `SM_HOUSE_RENDER` opcode `271` and `SM_DELETE_HOUSE` opcode `272` parity for Java `PlayerController.see/notSee` house known-list packets.
+- Factored the Java `AbstractHouseInfoPacket.writeCommonInfo` layout into a shared C# writer so `SM_HOUSE_UPDATE` and `SM_HOUSE_RENDER` stay byte-aligned when populated decor/registry support is added later.
+- Added packet coverage proving `SM_HOUSE_RENDER` writes the same common house payload as `SM_HOUSE_UPDATE` after the update header, and that `SM_DELETE_HOUSE` writes the Java address ID body.
+- Current gaps in this cluster: the packets are ready, but full known-list membership still needs a real C# house world object/store before enter/leave visibility can send render/delete automatically.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter CharacterSelectionServerPackets_WriteJavaShapedPayloads` passes with 1 test.
+
 ---
 
 ## Next Steps
@@ -1906,5 +1913,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing auction settlement/maintenance/sign/appearance flows, persistent house/known-list membership, populated decor/object registry packets, GeoService door updates, visitor kick side effects, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
+6. Continue housing auction settlement/maintenance/sign/appearance flows, persistent house/known-list membership using the new render/delete packet surfaces, populated decor/object registry packets, GeoService door updates, visitor kick side effects, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
