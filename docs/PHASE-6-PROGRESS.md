@@ -55,8 +55,9 @@ Last updated: May 22, 2026
 - `CM_APPEARANCE` opcode `197` now covers Java type `2` cosmetic item actions: static `cosmetic_items.xml` templates and item `<actions><cosmetic name="..."/>` metadata load into C# holders, race/gender/ride guards send Java system messages, supported appearance mutations and presets update `player_appearance`, the cosmetic item is deleted from inventory, and visible players receive a Java `onChangedPlayerAttributes`-style `SM_PLAYER_INFO` refresh. Character/legion rename coupon branches remain deferred until rename/world-cache services are ported.
 - Decomposable item static data now loads Java `decomposable_items.xml` into a typed C# holder, including normal reward groups, selectable first-group rewards, chance/level gates, fixed rewards, random rewards, race/class restrictions, Java default counts, and item-template `<actions><decompose/>` markers.
 - `CM_USE_ITEM` now routes Java `<decompose/>` item actions and opcode `236` `CM_SELECT_DECOMPOSABLE`: selectable decomposables send Java `SM_FIRST_SHOW_DECOMPOSABLE` and selection consumes the source, sends success/secondary packets, persists rewards through a reusable Java `ItemService.addItem`-style stack/new-row planner, sends `SM_INVENTORY_UPDATE_ITEM(INC_ITEM_COLLECT)` for merged stacks, and uses Java `DECOMPOSABLE` inventory-add type for new reward rows; normal decomposables run the Java 3s item-use animation, movement cancel message/cooldown removal, level/chance reward group selection, fixed/random reward resolution, source consumption, success/failure messages, and DB-backed reward stack/new-row persistence. Decompose canAct now separates normal cube fullness from Java special-cube fullness using item-template `<inventory id="...">` metadata, and the reusable item-add planner can use that metadata for non-overflow normal vs special slot checks. Remaining tightening is broader Java partial-add failure behavior.
-- Next implementation slice should start from the remaining equipment/gameplay queue: tighten item-add partial failure behavior, broaden expirable lifecycle coverage to item/pet/house-object rows, remodel item actions, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 441 tests.
+- Java remodel foundations now cover item-template `<remodel type/minutes>` metadata and opcode `90` `CM_ITEM_REMODEL` parser registration, with runtime `ItemRemodelService` parity still pending.
+- Next implementation slice should start from the remaining equipment/gameplay queue: port `ItemRemodelService` runtime for `CM_ITEM_REMODEL`, tighten item-add partial failure behavior, broaden expirable lifecycle coverage to item/pet/house-object rows, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 442 tests.
 
 ---
 
@@ -1740,11 +1741,18 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "InventoryAddServiceTests|DecomposeServiceTests|StaticDataLoadingTests"` passes with 11 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 441 tests.
 
+### Session 206 (May 22, 2026)
+- Parsed Java item-template `<remodel type="..." minutes="..."/>` metadata into `ItemTemplateSummary.RemodelAction`, with real static-data coverage for the Expert Essencetapping Ring remodel action.
+- Added Java opcode `90` `CM_ITEM_REMODEL` parser coverage (`npcId`, keep item object id, extract item object id, trailing unknown) and registered it for in-game clients.
+- Left the packet handler as an explicit documented no-op until the next runtime slice ports Java `services/item/ItemRemodelService.remodelItem`.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticDataLoadingTests|ClientPacketFactory_ParsesItemRemodelPacket|GamePackets_AreSerializedWithExpectedOpcodesAndPayloads"` passes with 4 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 442 tests.
+
 ---
 
 ## Next Steps
 
-1. Tighten the reusable item-add planner with richer Java partial-add failure behavior, then reuse it for future reward/remodel flows.
+1. Port Java `ItemRemodelService.remodelItem` runtime for `CM_ITEM_REMODEL`: level/Kinah/gender/type/remodelable guards, pattern-reshaper removal, target `item_skin`/color updates, extract item consumption, Kinah mutation, inventory update packets, and system messages.
 2. Broaden the expirable lifecycle bridge to Java's other registered expirable types: inventory/equipment item expiration, pets, and house objects.
 3. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 4. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
