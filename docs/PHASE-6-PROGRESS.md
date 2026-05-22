@@ -2082,6 +2082,12 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: the parsers/packets/action metadata are ready, but `CM_USE_HOUSE_OBJECT` runtime still needs visibility/talk-range guards, occupant tracking, owner-only/storage/postbox behavior, required-item checks, delayed reward/remove-count mutation, use-count persistence, cooldown mutation, cancel/release handling, and object deletion on final use.
 - Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 482 tests.
 
+### Session 250 (May 22, 2026)
+- Implemented Java `CM_HOUSE_EDIT` action `16` renovation runtime: C# now validates the target building, consumes the Java race/type-specific renovation coupon from cube inventory, persists the `houses.building_id` update and coupon mutation in one housing transaction, reloads the registry against the new building defaults, refreshes the cached player/world-house snapshot, and broadcasts `SM_HOUSE_UPDATE`.
+- Added `IHousingRepository.SaveHouseRenovationAsync` as the C# equivalent of the `removeRenovationCoupon` plus `HousesDAO.storeHouse` mutation boundary.
+- Current gaps in this cluster: `CM_USE_HOUSE_OBJECT`/`CM_RELEASE_OBJECT` runtime, quest callbacks, object/decor ID release after delete, studio house spawning, GeoService door state updates, live-DB orphan-house validation, and richer sighted-player house-object update side effects remain pending.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 482 tests.
+
 ---
 
 ## Next Steps
@@ -2091,5 +2097,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: implement `CM_USE_HOUSE_OBJECT`/`CM_RELEASE_OBJECT` runtime mutation paths now that the packet/action metadata is present, add renovation action `16`, then spawn studio houses per personal instance, add GeoService door state updates, live-DB orphan-house validation, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
+6. Continue housing from the new world-house baseline: implement `CM_USE_HOUSE_OBJECT`/`CM_RELEASE_OBJECT` runtime mutation paths now that the packet/action metadata is present, then spawn studio houses per personal instance, add GeoService door state updates, live-DB orphan-house validation, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
