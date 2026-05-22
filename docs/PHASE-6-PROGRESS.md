@@ -1917,6 +1917,13 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter EquipmentServiceTests` passes with 30 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 473 tests.
 
+### Session 229 (May 22, 2026)
+- Loaded Java `model/templates/housing/HouseAddress` map position and optional exit coordinates into `HousingAddressSummary`, preserving `map`, `x`, `y`, `z`, `exit_map`, `exit_x`, `exit_y`, and `exit_z` from `housing/houses.xml`.
+- Added real static-data assertions for an open-world house address and an instanced studio address with exit coordinates, preparing the C# housing known-list and visitor teleport-out slices to use Java address data instead of hardcoded placeholders.
+- Current gaps in this cluster: no behavior consumes these coordinates yet; house known-list membership, door GeoService updates, and visitor teleport-out remain future slices.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter StaticDataLoadingTests` passes with 3 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 473 tests.
+
 ---
 
 ## Next Steps
@@ -1926,5 +1933,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing auction settlement/maintenance/sign/appearance flows, persistent house/known-list membership using the new render/delete packet surfaces, populated decor/object registry packets, GeoService door updates, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
+6. Continue housing auction settlement/maintenance/sign/appearance flows, persistent house/known-list membership using the new render/delete packet surfaces and loaded address coordinates, populated decor/object registry packets, GeoService door updates, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
