@@ -2133,6 +2133,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter ExpirableTaskServiceTests` passes with 7 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 484 tests.
 
+### Session 256 (May 22, 2026)
+- Added Java `HousesDAO.loadHouses` validation at the C# world-house load boundary: persistent DB snapshots with unknown house addresses, unknown building templates, or duplicate custom-house addresses are now skipped before entering `World`.
+- Kept the Java startup behavior where skipped/invalid persistent rows do not block synthesis of missing ownerless custom-field houses for valid template addresses.
+- Added housing world-service coverage for duplicate DB rows, missing building templates, missing addresses, and the resulting ownerless fallback for the skipped valid address.
+- Current gaps in this cluster: studio spawning, GeoService door state updates, visitor kick side effects, and fuller NPC/dialog known-list/function validation remain separate housing/NPC slices.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter HousingWorldServiceTests` passes with 4 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 485 tests.
+
 ---
 
 ## Next Steps
@@ -2142,5 +2150,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: fill the remaining house-object/NPC edges, especially studio spawning, GeoService door state updates, live-DB orphan-house validation, visitor kick side effects, or full NPC/dialog known-list/function validation.
+6. Continue housing from the new world-house baseline: fill the remaining house-object/NPC edges, especially studio spawning, GeoService door state updates, visitor kick side effects, or full NPC/dialog known-list/function validation.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
