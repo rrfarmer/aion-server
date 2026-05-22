@@ -2150,6 +2150,13 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter HousingWorldServiceTests` passes with 4 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 485 tests.
 
+### Session 258 (May 22, 2026)
+- Extracted a shared C# `AbyssPointsService.onRankChanged` side-effect helper in `GameServerConnection`, preserving the Java breadcrumbs for visible rank broadcasts, rank-limited equipment checks, and configured abyss transform skill refreshes.
+- Reused that helper for AP extraction, keeping the existing behavior but removing the duplicated inline rank-change fanout.
+- Wired AP-paid item charge and charge-all completion through the same rank-change side effects after `UseAbyssPoint` / `SM_ABYSS_RANK`, so AP spend that drops rank now triggers Java's equipment and temporary-skill cleanup.
+- Current gaps in this cluster: legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage still wait for C# homes for those systems.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 485 tests.
+
 ---
 
 ## Next Steps
