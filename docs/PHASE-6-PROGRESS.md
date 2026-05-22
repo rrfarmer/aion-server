@@ -1583,11 +1583,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GamePackets_AreSerializedWithExpectedOpcodesAndPayloads|ClientPacketFactory_ParsesEmotionPacket|Player_CreatureStateMatchesJavaBitAndExactMultibitSemantics"` passes with 2 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 415 tests.
 
+### Session 179 (May 21, 2026)
+- Created `docs/Phase-6N-Completion.md` as the next handoff after the 6M/6N emotion continuation, summarizing Sessions 170-178, the current 415-test validation baseline, important limits, and the next focused unit queue.
+- Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx --no-restore` passing with 415 tests from Session 178.
+
 ---
 
 ## Next Steps
 
-1. Continue broader `CM_EMOTION` parity: abnormal-state/stance guards, full fly/land eligibility/cooldown/FP/stat-controller behavior, fly-teleport/sprint controller behavior, sit observers, quest/summon observers, and exact movement/attack speed fanout.
+1. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: abnormal effect flags, stance state/messages, fly-zone/cooldown/FP timers, ride/sprint data, observers, or reusable stat-speed calculation.
 2. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 3. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
 4. Continue housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
