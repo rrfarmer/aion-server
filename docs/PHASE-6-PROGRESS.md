@@ -66,6 +66,7 @@ Last updated: May 22, 2026
 - `CM_USE_ITEM` now routes Java `<apextract/>` runtime with source/target validation, tool level/quality/target-type checks, target deletion, tool consume/decrement, AP-rank persistence, AP gain system message, `SM_ABYSS_RANK`, and visible-player `SM_ABYSS_RANK_UPDATE` fanout on rank changes.
 - Java remodel now covers item-template `<remodel type/minutes>` metadata, opcode `90` `CM_ITEM_REMODEL` parsing, first-pass `ItemRemodelService.remodelItem` runtime validation, Kinah payment, extract item consumption, target `item_skin`/color mutation, inventory update/delete packets, and remodel system messages. NPC range/function validation remains pending with the broader NPC/dialog known-list work.
 - Direct Java NPC spawn data now loads group-level and spot-level `temporary_spawn` schedule windows; the C# `SpawnEngine.spawnAll` bridge evaluates Java `TemporarySpawn.isInSpawnTime` against persisted game time at startup, and game-time hour changes now run a first ordinary-NPC `TemporarySpawnEngine.onHourChange` bridge for group-temporary spawn/despawn with NPC known-list refreshes.
+- Housing kick opcode coverage now includes Java `CM_HOUSE_KICK` parsing/routing for owner-triggered kick-friends/all requests and the Java owner notification messages, while actual visitor selection/teleport side effects remain queued with house known-list/zone parity.
 - Next implementation slice should start from the remaining equipment/gameplay queue: finish AP rank-change side effects beyond current packets (`Equipment.checkRankLimitItems`, `AbyssSkillService.updateSkills`, legion contribution/siege callbacks), broaden expirable lifecycle coverage to pets and house-object rows once their models exist, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
 - Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 517 tests.
 
@@ -2283,6 +2284,13 @@ From `csharp-port.md`, dependency order:
 - Added coverage for group-temporary startup tracking, hour-three despawn, hour-four spot-window respawn, and always-on spawn non-duplication during the temporary-spawn hour pass.
 - Current gaps in this cluster: temporary spawn tracking is still limited to ordinary non-instance NPCs; exact Java instance-id registration, static/gatherable/rift/siege/vortex/town temporary groups, respawn cancellation, and richer pool state remain pending.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcSpawnServiceTests|GameTimeService_LoadsAndPeriodicallyStoresServerVariable"` passes with 6 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 517 tests.
+
+### Session 275 (May 22, 2026)
+- Registered Java opcode `72` as `CM_HOUSE_KICK`, parsing the option byte plus trailing short from `CM_HOUSE_KICK.readImpl`.
+- Routed house-kick requests through `GameServerConnection`: active-house owners now receive Java-shaped `STR_MSG_HOUSING_ORDER_OUT_WITHOUT_FRIENDS` for option `1` and `STR_MSG_HOUSING_ORDER_OUT_ALL` for option `2`, matching the owner notification part of `HouseController.kickVisitors`.
+- Current gaps in this cluster: actual visitor discovery, friend filtering, house-zone membership checks, and teleport-out side effects still need house known-list/zone and teleport support.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter ClientPacketFactory_ParsesHousingPackets` passes with 1 test.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 517 tests.
 
 ---
