@@ -2227,6 +2227,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter HousingWorldServiceTests` passes with 7 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 506 tests.
 
+### Session 268 (May 22, 2026)
+- Added a typed C# `NpcSpawnTable` over Java `static_data/spawns`: direct `spawn_map/spawn/spot` groups now preserve map, NPC id, coordinates, heading, respawn, pool, handler, static id, walker id/index, and custom flags while intentionally leaving town and nested special spawn groups for later passes.
+- Added `WorldNpcSpawnService` as the first C# `SpawnEngine.spawnAll` bridge, materializing safe regular non-instance NPC spawns into `WorldNpc` objects with Java `IDFactory` object IDs and static NPC templates, while skipping gatherables, handler-backed groups, pools, missing templates, and instance maps until those object models exist.
+- Registered the spawn service in game-server startup so ordinary non-instance NPC templates are available to runtime world lookups; the real Java data test now verifies broker NPC `799211` has a parsed Gelkmaros spawn at the source coordinates.
+- Current gaps in this cluster: `STATIC` handler objects, gatherables, pooled/random spots, rift/siege/vortex/base spawns, town spawns, instance-map spawning, walker movement, and known-list enter/leave packet fanout are still pending; the broker object-id fallback can be removed after the runtime path is validated against spawned broker NPC objects.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticData_LoadsRegularNpcSpawnSpotSummaries|WorldNpcSpawnServiceTests"` passes with 3 tests; `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter DataManager_LoadsRealJavaStaticDataManifestCounts` passes with 1 test.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 509 tests.
+
 ---
 
 ## Next Steps
@@ -2236,5 +2244,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house visibility, add visitor kick side effects, populate ordinary `WorldNpc` spawns, and remove the broker object-id fallback once runtime NPC/dialog known-list validation has real spawned template objects.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: remove the broker object-id fallback after runtime validation against spawned broker NPC objects, add known-list enter/leave packet fanout for spawned NPCs, wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house visibility, add visitor kick side effects, and continue special spawn parity for static objects/gatherables/pools/rifts/town spawns.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
