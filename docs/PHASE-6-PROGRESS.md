@@ -2115,6 +2115,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 275 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 482 tests.
 
+### Session 254 (May 22, 2026)
+- Extended the C# `ExpireTimerTask` bridge to loaded active-house registry objects, matching Java `PlayerEnterWorldService` registration once `HouseRegistry` data is available.
+- Added house-object `canExpireNow` parity for the important loaded cases: emblems never expire automatically, and expired final-reward `UseableItemObject` rows remain registered so the owner can recover the final reward instead of losing the object.
+- Wired expired registered house objects through `HouseObject.onExpire`-style deletion: the C# path deletes the `player_registered_items` row, sends Java `SM_HOUSE_EDIT(7)` / `SM_DELETE_HOUSE_OBJECT` / `SM_HOUSE_EDIT(4)` plus `STR_MSG_HOUSING_OBJECT_DELETE_EXPIRE_TIME`, refreshes the cached player/world house registry, clears the discarded object cooldown from online players, and releases the object ID.
+- Broadened registered-object discard cleanup so final-use deletion and `CM_HOUSE_EDIT` object deletion also remove online-player house-object cooldowns and release IDs.
+- Current gaps in this cluster: the C# house-object expiration bridge does not yet model `NpcObject.canExpireNow` target checks or useable-object occupant checks beyond final-reward deferral; studio spawning and richer NPC/dialog known-list validation remain separate housing/NPC slices.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 276 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 483 tests.
+
 ---
 
 ## Next Steps
@@ -2124,5 +2133,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: add registered house-object expiration handling to the C# `ExpireTimerTask` bridge, including automatic `HouseObject.onExpire` deletion with `STR_MSG_HOUSING_OBJECT_DELETE_EXPIRE_TIME`, cooldown cleanup for all players, and object-ID release after registry deletion; after that, continue studio spawning, GeoService door state updates, live-DB orphan-house validation, visitor kick side effects, or full NPC/dialog known-list/function validation.
+6. Continue housing from the new world-house baseline: fill the remaining house-object/NPC edges, especially `NpcObject.canExpireNow` target checks, useable-object occupant-aware expiration, studio spawning, GeoService door state updates, live-DB orphan-house validation, visitor kick side effects, or full NPC/dialog known-list/function validation.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
