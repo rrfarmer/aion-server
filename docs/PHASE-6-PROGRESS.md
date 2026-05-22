@@ -1991,6 +1991,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "CharacterSelectionServerPackets_WriteJavaShapedPayloads|ClientPacketFactory_ParsesHousingPackets"` passes with 2 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 478 tests.
 
+### Session 239 (May 22, 2026)
+- Loaded Java `housing/housing_objects.xml` into a C# `HousingObjectTemplateTable`, keyed like `dataholders/HousingObjectData` so future `HouseObjectFactory` and registry load work can resolve template metadata by housing-object template ID.
+- Preserved the Java concrete `PlaceableHouseObject.getTypeId` mappings for passive/picture/move/movie objects (`0`), use item (`1`), storage (`2`), postbox (`3`), chair (`5`), jukebox (`6`), NPC (`7`), and emblem (`11`).
+- Captured the fields needed by the next registry/object slices: placement area/location/limit/category, `use_days`, dyeability, NPC ID, storage warehouse ID, use-item owner/cooldown/delay/count/required-item data, and emblem level.
+- Added real static-data coverage for the 1,511 Java housing-object templates plus representative chair, storage, NPC, and use-item records.
+- Current gaps in this cluster: loaded template metadata is not yet consumed by DB registry loading, `CM_HOUSE_EDIT` add/register flows, spawned object visibility packets, or useable-object usage data serialization.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter StaticDataLoadingTests` passes with 3 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 478 tests.
+
 ---
 
 ## Next Steps
@@ -2000,5 +2009,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: spawn studio houses per personal instance, load player-registered decor/object registry rows and implement `CM_HOUSE_EDIT` mutation actions on top of the default-part packet shell, add GeoService door state updates, live-DB orphan-house validation, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
+6. Continue housing from the new world-house baseline: spawn studio houses per personal instance, load player-registered decor/object registry rows using the housing-object template table and implement `CM_HOUSE_EDIT` mutation actions on top of the default-part packet shell, add GeoService door state updates, live-DB orphan-house validation, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
