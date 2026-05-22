@@ -1959,6 +1959,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "HousingWorldServiceTests|StaticDataLoadingTests|HousingVisibilityServiceTests"` passes with 8 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 478 tests.
 
+### Session 235 (May 22, 2026)
+- Ported Java `HousingService.revokeOwnershipOfDeletedPlayers` startup behavior into the C# world-house load: persistent custom-house rows with a nonzero `player_id` but no matching `players` row are treated as ownerless before visibility snapshots are built.
+- Persisted the Java `changeOwner(house, 0)` reset for those deleted-owner rows: default building, `player_id=0`, null acquire/next-pay/sign fields, `showOwnerName=true`, and closed door settings.
+- Cleared owner, legion, inactive, and sign fields from the world snapshot after revocation so `SM_HOUSE_RENDER`/`SM_HOUSE_UPDATE` no longer advertise deleted players.
+- Current gaps in this cluster: the revocation path has compile/full-suite coverage but still needs opt-in live-DB validation with an orphaned `houses.player_id`; studios are still excluded from global world-house load and remain pending for personal-instance flow.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "HousingWorldServiceTests|StaticDataLoadingTests"` passes with 5 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 478 tests.
+
 ---
 
 ## Next Steps
@@ -1968,5 +1976,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: spawn studio houses per personal instance, add populated decor/object registry packets, GeoService door state updates, deleted-owner revocation, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
+6. Continue housing from the new world-house baseline: spawn studio houses per personal instance, add populated decor/object registry packets, GeoService door state updates, live-DB orphan-house validation, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
