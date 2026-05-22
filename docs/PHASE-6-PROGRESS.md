@@ -1868,11 +1868,17 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GamePackets_AreSerializedWithExpectedOpcodesAndPayloads|ApExtractServiceTests"` passes with 2 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 466 tests.
 
+### Session 222 (May 22, 2026)
+- Ported the first AP rank-change equipment side effect from Java `Equipment.checkRankLimitItems`: C# now scans equipped items after an AP extraction rank change, checks main and fusioned item rank limits, unequips failing items, persists the equipment slot state, refreshes inventory/stat/appearance packets through the existing equipment path, and sends Java `STR_MSG_UNEQUIP_RANKITEM`.
+- Added packet coverage for system message `1401329` plus equipment service coverage for regular rank-limited items and fusioned item rank limits.
+- Current gaps in this cluster: Java `AbyssSkillService.updateSkills`, legion contribution fanout, siege callback handling, and full retail behavior around full-inventory rank unequip edge cases remain future slices.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "EquipmentServiceTests|GamePackets_AreSerializedWithExpectedOpcodesAndPayloads"` passes with 30 tests.
+
 ---
 
 ## Next Steps
 
-1. Finish AP rank-change side effects beyond the current owner/visible-player packets: Java `Equipment.checkRankLimitItems`, `AbyssSkillService.updateSkills`, legion contribution fanout, and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
+1. Continue AP rank-change side effects beyond the current owner/visible-player packets and rank-limited equipment pass: Java `AbyssSkillService.updateSkills`, legion contribution fanout, and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
