@@ -66,10 +66,10 @@ Last updated: May 22, 2026
 - `CM_USE_ITEM` now routes Java `<apextract/>` runtime with source/target validation, tool level/quality/target-type checks, target deletion, tool consume/decrement, AP-rank persistence, AP gain system message, `SM_ABYSS_RANK`, and visible-player `SM_ABYSS_RANK_UPDATE` fanout on rank changes.
 - Java remodel now covers item-template `<remodel type/minutes>` metadata, opcode `90` `CM_ITEM_REMODEL` parsing, first-pass `ItemRemodelService.remodelItem` runtime validation, Kinah payment, extract item consumption, target `item_skin`/color mutation, inventory update/delete packets, and remodel system messages. NPC range/function validation remains pending with the broader NPC/dialog known-list work.
 - Direct Java NPC spawn data now loads group-level and spot-level `temporary_spawn` schedule windows; the C# `SpawnEngine.spawnAll` bridge evaluates Java `TemporarySpawn.isInSpawnTime` against persisted game time at startup, and game-time hour changes now run a first ordinary-NPC `TemporarySpawnEngine.onHourChange` bridge for group-temporary spawn/despawn with NPC known-list refreshes.
-- Direct Java NPC spawn data now also preserves `SpawnSpotTemplate` random-walk range, anchor, state, and AI-name metadata so later walker/AI/static-state work has typed source data instead of reopening raw XML. Spawn group `difficult_id` is preserved and the world NPC spawn bridge honors Java `SpawnEngine.spawnInstance` difficulty filtering.
+- Direct Java NPC spawn data now also preserves `SpawnSpotTemplate` random-walk range, anchor, state, and AI-name metadata so later walker/AI work has typed source data instead of reopening raw XML. Spawn group `difficult_id` is preserved and the world NPC spawn bridge honors Java `SpawnEngine.spawnInstance` difficulty filtering. `SM_NPC_INFO` now writes Java-style NPC state from spawn spot state, template state, or the default active/walk-mode value.
 - Housing kick opcode coverage now includes Java `CM_HOUSE_KICK` parsing/routing for owner-triggered kick-friends/all requests and the Java owner notification messages, while actual visitor selection/teleport side effects remain queued with house known-list/zone parity.
 - Next implementation slice should start from the remaining equipment/gameplay queue: finish AP rank-change side effects beyond current packets (`Equipment.checkRankLimitItems`, `AbyssSkillService.updateSkills`, legion contribution/siege callbacks), broaden expirable lifecycle coverage to pets and house-object rows once their models exist, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 518 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 519 tests.
 
 ---
 
@@ -2297,7 +2297,7 @@ From `csharp-port.md`, dependency order:
 ### Session 276 (May 22, 2026)
 - Extended `NpcSpawnSummary` and the static-data loader to preserve the remaining direct Java `SpawnSpotTemplate` metadata used by future spawn/AI systems: `random_walk`, `anchor`, `state`, and `ai`.
 - Added loader coverage for the new metadata alongside the existing coordinate, heading, walker, static id, and temporary schedule assertions.
-- Current gaps in this cluster: the typed metadata is now available, but random walking, walker formation, custom AI selection, anchor handling, and initial static state application still need runtime consumers.
+- Current gaps in this cluster: the typed metadata is now available, but random walking, walker formation, custom AI selection, and anchor handling still need runtime consumers.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticData_LoadsRegularNpcSpawnSpotSummaries|WorldNpcSpawnServiceTests"` passes with 6 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 517 tests.
 
@@ -2308,6 +2308,15 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: instance spawning still has no C# world-map-instance model, so callers currently use difficulty `0` except focused tests; future instance entry should pass the selected difficulty into this bridge.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticData_LoadsRegularNpcSpawnSpotSummaries|WorldNpcSpawnServiceTests"` passes with 7 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 518 tests.
+
+### Session 278 (May 22, 2026)
+- Added Java NPC template `state` parsing to `NpcTemplateSummary`, complementing the already-preserved spawn-spot state metadata.
+- Added `IWorldNpcObject.State` / `WorldNpcState` so ordinary world NPCs and express postmen compute their initial state like Java `NpcController.onBeforeSpawn`: spawn state wins, otherwise template state, otherwise `ACTIVE | WALK_MODE` (`65`).
+- Updated `SM_NPC_INFO` to write the modeled NPC state instead of a hard-coded active state, matching Java `SM_NPC_INFO.writeImpl -> npc.getState()`.
+- Added coverage for template-state loading, default/template/spawn state precedence, and packet serialization of both default and explicit NPC states.
+- Current gaps in this cluster: random walking, walker formation, custom AI selection, and anchor handling still need runtime consumers; NPC state changes after spawn remain part of future AI/combat state work.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcSpawnServiceTests|StaticData_LoadsRegularNpcSpawnSpotSummaries|FullyQualifiedName~GamePacketTests"` passes with 75 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 519 tests.
 
 ---
 
