@@ -1649,11 +1649,17 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: temporary emotion expiration timers and timeout removal messages are not yet wired into a C# `ExpireTimerTask` equivalent.
 - Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 423 tests.
 
+### Session 194 (May 22, 2026)
+- Ported Java `TitleAddAction` for `CM_USE_ITEM`: title-card items now parse `titleid` plus optional `minutes`, validate missing/duplicate titles, preserve Java's post-animation race denial branch, persist `player_titles`, consume/delete or decrement the source card, send `STR_MSG_GET_CASH_TITLE`, and refresh the owner with Java-shaped full-list `SM_TITLE_INFO`.
+- Added Java expiration math for temporary title cards, `STR_TOOLTIP_LEARNED_TITLE` packet coverage, and static-data coverage against the real Effervescent title-card templates.
+- Current gaps in this cluster: temporary title expiration timers and `STR_MSG_DELETE_CASH_TITLE_BY_TIMEOUT` removal messages remain pending with the broader expirable-task bridge.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 424 tests.
+
 ---
 
 ## Next Steps
 
-1. Continue `CM_USE_ITEM` action routing with another self-contained Java action that has small persistence and packet surface, such as skill books or title cards.
+1. Continue `CM_USE_ITEM` action routing with another self-contained Java action, preferably skill books if the next slice can stay within `SkillLearnService.learnSkillBook` persistence and packet fanout.
 2. Add a C# expirable-task bridge for temporary emotions/motions/titles, including timeout removal packets/messages, when taking on lifecycle timers.
 3. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 4. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
