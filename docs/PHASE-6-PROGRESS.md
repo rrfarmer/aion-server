@@ -2459,6 +2459,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcWalkerPlacementPlanServiceTests|WorldNpcWalkerSpawnPlanCacheServiceTests|WorldNpcSpawnServiceTests|WorldNpcWalkerVariantSelectionServiceTests"` passes with 19 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 549 tests.
 
+### Session 296 (May 22, 2026)
+- Added `WorldNpc.SpawnPosition` / `SpawnLocation` so C# keeps Java `SpawnTemplate` coordinates available after runtime NPC positions begin changing.
+- Updated world NPC materialization to preserve the original spawn `WorldPosition`, matching Java's split between `Npc` current coordinates and `npc.getSpawn()` metadata.
+- Updated walker formation organization, formation math, spawn candidates, and placement plans to use `SpawnLocation` for Java `ClusteredNpc` position hashes, initial formation origins, selected walker coordinates, and spawn Z/heading.
+- Added coverage proving walker organization still groups by original spawn coordinates after runtime placement has moved the NPCs apart, plus spawn-service coverage for preserved spawn location metadata.
+- Current gaps in this cluster: C# can now safely mutate runtime NPC positions later without losing walker grouping input, but the actual world-position mutation, inactive variant hiding, movement scheduling, and NPC movement broadcasts remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcWalkerFormationOrganizerServiceTests|WorldNpcWalkerFormationServiceTests|WorldNpcWalkerPlacementPlanServiceTests|WorldNpcWalkerSpawnPlanCacheServiceTests|WorldNpcSpawnServiceTests"` passes with 28 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 550 tests.
+
 ---
 
 ## Next Steps
