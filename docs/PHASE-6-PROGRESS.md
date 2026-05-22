@@ -1910,11 +1910,18 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: C# still lacks real house-zone membership, friend/legion visitor filtering, and teleport-out side effects, so visitor recipient messages and movement remain future housing-known-list work.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter CharacterSelectionServerPackets_WriteJavaShapedPayloads` passes with 1 test.
 
+### Session 228 (May 22, 2026)
+- Wired Java `services/player/PlayerEnterWorldService` login equipment cleanup: after login house-owner info and before expirable registration, C# now runs `EquipmentService.CheckRankLimitItems` to remove rank-limited gear when the player's stored AP rank changed while offline.
+- Reused the existing equipment mutation fanout so login cleanup persists unequipped slots, sends inventory updates, rank-limit system messages, stats refresh, appearance broadcast, and power-shard deactivation when applicable.
+- Current gaps in this cluster: Java's full login service fanout still has unported legion/siege/pet/house-object services, but rank-limited equipment cleanup now runs on both AP rank changes and login.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter EquipmentServiceTests` passes with 30 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 473 tests.
+
 ---
 
 ## Next Steps
 
-1. Continue AP rank-change side effects beyond the current owner/visible-player packets, rank-limited equipment pass, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
+1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
