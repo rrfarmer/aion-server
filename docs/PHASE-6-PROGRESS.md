@@ -66,10 +66,10 @@ Last updated: May 22, 2026
 - `CM_USE_ITEM` now routes Java `<apextract/>` runtime with source/target validation, tool level/quality/target-type checks, target deletion, tool consume/decrement, AP-rank persistence, AP gain system message, `SM_ABYSS_RANK`, and visible-player `SM_ABYSS_RANK_UPDATE` fanout on rank changes.
 - Java remodel now covers item-template `<remodel type/minutes>` metadata, opcode `90` `CM_ITEM_REMODEL` parsing, first-pass `ItemRemodelService.remodelItem` runtime validation, Kinah payment, extract item consumption, target `item_skin`/color mutation, inventory update/delete packets, and remodel system messages. NPC range/function validation remains pending with the broader NPC/dialog known-list work.
 - Direct Java NPC spawn data now loads group-level and spot-level `temporary_spawn` schedule windows; the C# `SpawnEngine.spawnAll` bridge evaluates Java `TemporarySpawn.isInSpawnTime` against persisted game time at startup, and game-time hour changes now run a first ordinary-NPC `TemporarySpawnEngine.onHourChange` bridge for group-temporary spawn/despawn with NPC known-list refreshes.
-- Direct Java NPC spawn data now also preserves `SpawnSpotTemplate` random-walk range, anchor, state, and AI-name metadata so later walker/AI work has typed source data instead of reopening raw XML. Spawn group `difficult_id` is preserved and the world NPC spawn bridge honors Java `SpawnEngine.spawnInstance` difficulty filtering. `SM_NPC_INFO` now writes Java-style NPC state from spawn spot state, template state, or the default active/walk-mode value.
+- Direct Java NPC spawn data now also preserves `SpawnSpotTemplate` random-walk range, anchor, state, and AI-name metadata so later walker/AI work has typed source data instead of reopening raw XML. Spawn group `difficult_id` is preserved and the world NPC spawn bridge honors Java `SpawnEngine.spawnInstance` difficulty filtering. `SM_NPC_INFO` now writes Java-style NPC state from spawn spot state, template state, or the default active/walk-mode value, and runtime `WorldNpc` objects carry the Java template/spawn AI-name selection.
 - Housing kick opcode coverage now includes Java `CM_HOUSE_KICK` parsing/routing for owner-triggered kick-friends/all requests and the Java owner notification messages, while actual visitor selection/teleport side effects remain queued with house known-list/zone parity.
 - Next implementation slice should start from the remaining equipment/gameplay queue: finish AP rank-change side effects beyond current packets (`Equipment.checkRankLimitItems`, `AbyssSkillService.updateSkills`, legion contribution/siege callbacks), broaden expirable lifecycle coverage to pets and house-object rows once their models exist, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 519 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 520 tests.
 
 ---
 
@@ -2317,6 +2317,14 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: random walking, walker formation, custom AI selection, and anchor handling still need runtime consumers; NPC state changes after spawn remain part of future AI/combat state work.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcSpawnServiceTests|StaticData_LoadsRegularNpcSpawnSpotSummaries|FullyQualifiedName~GamePacketTests"` passes with 75 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 519 tests.
+
+### Session 279 (May 22, 2026)
+- Added Java NPC template `ai` parsing to `NpcTemplateSummary`, matching `NpcTemplate.getAiName()`.
+- Added `IWorldNpcObject.AiName` / `WorldNpcAiName` so spawned world NPCs and express postmen resolve AI names like Java `Creature`: template AI by default, spawn-spot AI override when present, and `SpawnTemplate.NO_AI` (`__NO_AI__`) mapped to an empty runtime AI name.
+- Added coverage for template AI loading from synthetic and real Java static data, plus runtime template/spawn/no-AI precedence in `WorldNpcSpawnService`.
+- Current gaps in this cluster: C# now carries the AI selection metadata, but the actual AI engine, walker movement, random-walk behavior, and anchor handling still need runtime implementations.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcSpawnServiceTests|StaticData_LoadsRegularNpcSpawnSpotSummaries|DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 10 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 520 tests.
 
 ---
 
