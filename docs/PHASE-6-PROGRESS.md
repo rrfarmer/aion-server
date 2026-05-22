@@ -49,8 +49,10 @@ Last updated: May 21, 2026
 - Player close/logout now has Java `CM_QUIT`/`CM_MAY_QUIT` packet surfaces and a `PlayerLeaveWorldService` baseline: active players are removed from the world container, marked offline in memory, current position/world/heading and key common-data fields are persisted, current HP/MP/FP are saved to `player_life_stats`, active skill/item cooldown rows are refreshed, `last_online` is refreshed, and `online=false` is written after the save step. `CM_QUIT` sends Java-shaped `SM_QUIT_RESPONSE` and either returns to authed character-selection state or closes the socket after the response.
 - Character creation is DB-backed and writes `players`, `player_appearance`, `player_skills`, and starter `inventory` rows. It uses Java-style starter items, equipment-slot selection, level-1 autolearn skills, old-name reservation checks, and membership character limits.
 - Startup now preloads `IDFactory` from Java-equivalent used-ID tables before gameplay allocation.
-- Next implementation slice should start from the remaining equipment/gameplay queue: wiring the new one-shot scheduler into Java `TaskId.ITEM_USE` delayed item-use/cancel paths, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 404 tests.
+- `CM_EMOTION` now covers Java abnormal movement guards, stance-denial messages, ride sprint start/end, fly-teleport landing, first-pass fly/land FP task side effects, and stop-glide movement side effects. Full fly-zone/cooldown/stat-speed/observer behavior is still pending.
+- `CM_USE_ITEM` now routes Java ride item actions, including static ride data, delayed mount animation, mount/dismount state, ride emotion broadcasts, ride-on-emotion cancellation exception, and sit-triggered dismount parity. It also routes Java craft-learn recipe items with recipe validation, `SM_LEARN_RECIPE`, DB `player_recipes` insertion, and source item consumption. Emotion-card item metadata now preserves both `emotionid` and optional `minutes`, but `EmotionLearnAction.act` is not wired yet.
+- Next implementation slice should start from the remaining equipment/gameplay queue: full `EmotionLearnAction` use flow, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 422 tests.
 
 ---
 
@@ -1587,12 +1589,66 @@ From `csharp-port.md`, dependency order:
 - Created `docs/Phase-6N-Completion.md` as the next handoff after the 6M/6N emotion continuation, summarizing Sessions 170-178, the current 415-test validation baseline, important limits, and the next focused unit queue.
 - Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx --no-restore` passing with 415 tests from Session 178.
 
+### Session 180 (May 21, 2026)
+- Added Java `AbnormalState` bit/mask parity for player abnormal flags and wired the `CM_EMOTION` abnormal movement guard before item-use cancellation, matching Java's bypass list for target select and weapon-mode toggles.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 416 tests.
+
+### Session 181 (May 21, 2026)
+- Added first-pass Java stance state to `Player` plus `STR_SKILL_CAN_NOT_CHANGE_MODE__WHILE_IN_CURRENT_STANCE` / `STR_SKILL_CAN_NOT_TAKE_OFF__WHILE_IN_CURRENT_STANCE` packets, and wired the `CM_EMOTION` stance guard after item-use cancellation.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 417 tests.
+
+### Session 182 (May 21, 2026)
+- Added Java ride sprint runtime state (`PlayerRideInfo`, sprint FP task intent, parser coverage for `START_SPRINT`/`END_SPRINT`) and wired `CM_EMOTION` ride sprint start/end guards and side effects.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 418 tests.
+
+### Session 183 (May 21, 2026)
+- Added Java fly-teleport landing state for transporter vs windstream paths, including windstream gliding/FP-reduce side effects and parser/state coverage.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 419 tests.
+
+### Session 184 (May 21, 2026)
+- Moved first-pass Java fly/land state mutation into `Player.StartFlying` / `Player.EndFlying`, keeping FP reduce/restore task intent and ride-mode `FLOATING_CORPSE` behavior in one documented state helper.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 420 tests.
+
+### Session 185 (May 21, 2026)
+- Added Java `FlyController.onStopGliding` parity to `CM_MOVE`: stopping glide now clears `GLIDING`, chooses FP reduce/restore intent by flying state, and broadcasts `SM_EMOTION(STOP_GLIDE)` only for the walking-glider branch.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 421 tests.
+
+### Session 186 (May 21, 2026)
+- Loaded Java `ride/ride.xml` into a new `RideTable`, keyed by ride NPC id, and validated real ride speed/FP/sprint metadata from the Java static data.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 421 tests.
+
+### Session 187 (May 21, 2026)
+- Parsed Java item `<actions><ride npc_id="...">` metadata into `ItemTemplateSummary.RideNpcId`, with static-data coverage for real ride-card item templates.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 421 tests.
+
+### Session 188 (May 21, 2026)
+- Ported Java `RideAction` for `CM_USE_ITEM`: mount uses the Java 3s item-use animation and delayed task, dismount is immediate, ride state normalizes resting/floating/sprint state, and `CHANGE_SPEED` / `RIDE` / `RIDE_END` emotions broadcast through the existing visible-player fanout.
+- Added ride canAct messages for resting and abnormal-state denial plus state coverage for mount/dismount behavior.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 422 tests.
+
+### Session 189 (May 21, 2026)
+- Preserved Java's `CM_EMOTION` exception for active ride item use: emotions no longer cancel the pending mount timer, while movement still cancels through the shared pending item-use path.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 422 tests.
+
+### Session 190 (May 21, 2026)
+- Corrected `CM_EMOTION.SIT` to call the Java-shaped ride dismount helper before applying resting state, so sit-triggered dismount now emits the same speed/ride-end side effects as `PlayerActions.unsetPlayerMode(PlayerMode.RIDE)`.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 422 tests.
+
+### Session 191 (May 21, 2026)
+- Ported Java `CraftLearnAction` for `CM_USE_ITEM`: recipe-card items now validate recipe count, recipe existence, race, already-known recipes, required craft skill, and skillpoint before consuming the source item.
+- Added `SM_LEARN_RECIPE`, Java craft-recipe system messages, DB-backed `player_recipes` insertion plus source item consume/delete mutation, and static-data validation against a real ELYOS morph recipe.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 422 tests.
+
+### Session 192 (May 21, 2026)
+- Extended Java `<learnemotion>` item-action parsing so `ItemTemplateSummary` preserves both the card's `emotionid` and optional `minutes`, while retaining the global Java `EmotionLearnAction.isLearnable` set used by custom-emote validation.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 422 tests.
+
 ---
 
 ## Next Steps
 
-1. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: abnormal effect flags, stance state/messages, fly-zone/cooldown/FP timers, ride/sprint data, observers, or reusable stat-speed calculation.
-2. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
-3. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-4. Continue housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
-5. Broaden Java `CM_USE_ITEM` action routing and cooldown application as additional item actions are ported beyond the current polish/charge subset.
+1. Wire Java `EmotionLearnAction.act` now that item templates preserve `EmotionLearnId` and `EmotionLearnMinutes`: validate duplicate/default cases, persist `player_emotions`, consume the card, send `SM_EMOTION_LIST(action=1)`, and preserve Java expiration semantics.
+2. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
+3. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
+4. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
+5. Continue housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
