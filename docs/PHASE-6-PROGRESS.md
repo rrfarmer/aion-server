@@ -2088,6 +2088,15 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: `CM_USE_HOUSE_OBJECT`/`CM_RELEASE_OBJECT` runtime, quest callbacks, object/decor ID release after delete, studio house spawning, GeoService door state updates, live-DB orphan-house validation, and richer sighted-player house-object update side effects remain pending.
 - Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 482 tests.
 
+### Session 251 (May 22, 2026)
+- Implemented the first Java `CM_USE_HOUSE_OBJECT`/`CM_RELEASE_OBJECT` runtime branch for useable storage/postbox house objects: C# now resolves spawned registry objects from visible world-house snapshots or the owner's active registry, enforces Java `talking_distance + 1` range checks, owner-only storage access, atomic useable-object occupants, and release cleanup on object release/logout.
+- Parsed Java house-object `name_id` and `talking_distance` metadata into `HousingObjectTemplateSummary`, allowing object-use system messages to send `ChatUtil.L10n(name_id)` and the runtime to match `PositionUtil.isInTalkRange(player, HouseObject)`.
+- Added Java `SM_DIALOG_WINDOW` opcode `60` for the postbox `DialogPage.MAIL` branch, plus housing object occupied/use/cancel/too-far/owner-only `SM_SYSTEM_MESSAGE` helpers.
+- Storage now sends Java-shaped `SM_OBJECT_USE_UPDATE` after successful owner use, and postboxes set `Player.MailboxState` to regular, send the mail dialog window, then send the same use update; release clears the transient occupant and sends the Java postbox cancel message.
+- Current gaps in this cluster: the larger `UseableItemObject` branch is still pending, including owner/visitor use-count checks, required-item/remove-count consumption, delayed `SM_USE_OBJECT` gauge completion, reward/final-reward grants, use-count persistence, cooldown mutation, and final-use deletion/cooldown cleanup.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 275 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 482 tests.
+
 ---
 
 ## Next Steps
@@ -2097,5 +2106,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: implement `CM_USE_HOUSE_OBJECT`/`CM_RELEASE_OBJECT` runtime mutation paths now that the packet/action metadata is present, then spawn studio houses per personal instance, add GeoService door state updates, live-DB orphan-house validation, and remaining visitor kick side effects (zone membership, friend/legion filtering, teleport-out using address exit coordinates, recipient messages), or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
+6. Continue housing from the new world-house baseline: implement the remaining `UseableItemObject` branch for `CM_USE_HOUSE_OBJECT`/`CM_RELEASE_OBJECT`, including owner/visitor use-count checks, required-item/remove-count consumption, delayed `SM_USE_OBJECT` completion, reward/final-reward grants, use-count persistence, cooldown mutation, and final-use deletion/cooldown cleanup; after that, continue studio spawning, GeoService door state updates, live-DB orphan-house validation, visitor kick side effects, or full NPC/dialog known-list/function validation.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
