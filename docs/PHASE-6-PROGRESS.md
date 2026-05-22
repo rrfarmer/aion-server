@@ -2991,6 +2991,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcLootServiceTests|GameServerBootstrapTests|GamePacketTests"` passes with 94 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 682 tests.
 
+### Session 354 (May 22, 2026)
+- Added `WorldNpcLootService.StartFreeForAll` for the delayed body of Java `DropService.scheduleFreeForAll`: it flips the registration into free-for-all state, clears explicit looters through `DropNpc.startFreeForAll` parity, and returns the Java-shaped `SM_LOOT_STATUS.LOOT_ENABLE` packet for future broadcast callers.
+- Added `WorldNpcLootService.ScheduleFreeForAll` using `ThreadPoolManager.schedule` with Java's default 240000 ms delay, while allowing focused tests to use a short delay and callback.
+- Added coverage that free-for-all clears the allowed-looter set, opens loot rights to other players, preserves loot-effect status payloads, and runs through the scheduler.
+- Current gaps in this cluster: scheduled free-for-all is not yet invoked from the real future drop-registration/death caller and does not yet apply the Java friendly Elyos/Asmodian NPC broadcast filter; real Java drop calculators/global/quest drops, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcLootServiceTests|GameServerBootstrapTests"` passes with 23 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 684 tests.
+
 ---
 
 ## Next Steps
