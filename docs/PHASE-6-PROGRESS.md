@@ -58,10 +58,14 @@ Last updated: May 22, 2026
 - Assembly item static data now loads Java `assembly_items.xml` into a typed C# holder, and `CM_USE_ITEM` routes item-template `<actions><assemble item="..."/>` metadata through Java `AssemblyItemAction`: all required parts are validated, a 1s item-use animation is scheduled with Java item-cancel behavior, parts are consumed by item ID, the assembly success message is sent, and the reward is added through the reusable Java `ItemService.addItem`-style planner. Java's full-inventory behavior is preserved: consumed parts stay consumed and the dice inventory error is sent if the reward cannot fit.
 - XP extraction item-template metadata now parses Java `<actions><expextract item_id percent cost/>` into `ItemTemplateSummary`, and `CM_USE_ITEM` routes Java `ExpExtractAction` runtime: 5s item-use animation/cancel, inventory-full and not-enough-exp guards, fixed/percent EXP cost calculation, source consumption by item ID, EXP persistence, `SM_STATUPDATE_EXP`, reward add, dice-inventory failure, and success messaging.
 - Enchantment-stone composition now parses Java `<composition/>` metadata and opcode `208` `CM_COMPOSITE_STONES`, validating the combination tool plus two enchantment stones, scheduling Java's 5s self-only item-use animation/cancel, consuming tool/stone item IDs, calculating the Java reward enchantment-stone ID, and adding the reward through the reusable item-add planner.
-- Extraction tool metadata now parses Java `<extract/>` markers and `<apextract rate target/>` metadata into item templates, setting up the future `ExtractAction`/`ApExtractAction` runtime slices without guessing at their heavier `EnchantService.breakItem` and AP-return dependencies.
+- Extraction tool metadata now parses Java `<extract/>` markers and `<apextract rate target/>` metadata into item templates.
+- Java `EnchantService.breakItem` now has a C# planner for `ExtractAction`: weapon/armor validation, effective-level stone selection, random count ranges, target deletion, source consume/decrement, and reward planning through the reusable Java `ItemService.addItem` bridge.
+- `CM_USE_ITEM` now routes Java `<extract/>` runtime with 5s self item-use animation/cancel, canAct failure messages, target/source/reward persistence, target/source inventory packets, reward add/update packets, dice-inventory failure behavior, and newly-created expirable reward registration.
+- AP extraction metadata now includes Java `<acquisition ap="...">` required AP values and Java `ItemMask.CAN_AP_EXTRACT`, enabling AP extraction targets to compute returned AP from real item metadata.
+- `CM_USE_ITEM` now routes Java `<apextract/>` runtime with source/target validation, tool level/quality/target-type checks, target deletion, tool consume/decrement, AP-rank persistence, AP gain system message, `SM_ABYSS_RANK`, and visible-player `SM_ABYSS_RANK_UPDATE` fanout on rank changes.
 - Java remodel now covers item-template `<remodel type/minutes>` metadata, opcode `90` `CM_ITEM_REMODEL` parsing, first-pass `ItemRemodelService.remodelItem` runtime validation, Kinah payment, extract item consumption, target `item_skin`/color mutation, inventory update/delete packets, and remodel system messages. NPC range/function validation remains pending with the broader NPC/dialog known-list work.
-- Next implementation slice should start from the remaining equipment/gameplay queue: runtime for `ExtractAction`/`ApExtractAction` only after the missing `EnchantService.breakItem` and AP/common-data mutation pieces are scoped, broaden expirable lifecycle coverage to pets and house-object rows once their models exist, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 461 tests.
+- Next implementation slice should start from the remaining equipment/gameplay queue: finish AP rank-change side effects beyond current packets (`Equipment.checkRankLimitItems`, `AbyssSkillService.updateSkills`, legion contribution/siege callbacks), broaden expirable lifecycle coverage to pets and house-object rows once their models exist, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 466 tests.
 
 ---
 
@@ -1829,13 +1833,49 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter StaticDataLoadingTests` passes with 3 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 461 tests.
 
+### Session 217 (May 22, 2026)
+- Added a C# `EnchantService.CreateBreakItemPlan` bridge for Java `services/EnchantService.breakItem`, including weapon/armor target validation, Java effective-level calculation, stone-tier selection, weapon +5 level bump, Java random reward-count ranges, target deletion, source consume/decrement, and reward insertion through the reusable item-add planner.
+- Added planner coverage for weapon extraction, armor extraction, and canAct-style guard failures.
+- Current gaps in this cluster: this was planner-only; runtime scheduling/cancel, persistence, inventory packet ordering, and real-client validation remained for the next slice.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter EnchantServiceTests` passes with 3 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 464 tests.
+
+### Session 218 (May 22, 2026)
+- Ported Java `<extract/>` item-use runtime through `CM_USE_ITEM`: canAct now validates source/target cube rows, self-only 5s item-use animation, Java cancel messaging, target/source mutation persistence, reward stack/new-row persistence, and Java success/failure animation end states.
+- Added Java-shaped decomposition failure messages for missing target, non-decomposable targets, and equipped target attempts, plus inventory delete/update/add packets and dice-inventory failure behavior when the reward cannot fit after source/target consumption.
+- Registered newly-created non-stackable extraction rewards with the expirable item bridge, matching the Java `ItemService.addNonStackableItem` side effect already used by decomposition and XP extraction.
+- Current gaps in this cluster: quest item-removed observer callbacks and exact real-client ordering validation remain deferred with the broader scheduled item-use queue.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 464 tests.
+
+### Session 219 (May 22, 2026)
+- Parsed Java `<acquisition ap="...">` metadata into `ItemTemplateSummary.RequiredAbyssPoints`, preserving the value consumed by `ApExtractAction.act`.
+- Added Java `ItemMask.CAN_AP_EXTRACT` support as `ItemTemplateSummary.CanApExtract`, enabling AP extraction target validation against real item masks instead of guessing from item type alone.
+- Added real static-data coverage for AP-extractable item `100000363` and its required AP value.
+- Current gaps in this cluster: AP extraction runtime still needed source/target guard order, AP rank mutation persistence, AP gain packets, and side-effect fanout.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 464 tests.
+
+### Session 220 (May 22, 2026)
+- Ported Java `ApExtractAction.canAct + act` into a C# `ApExtractService` and `CM_USE_ITEM` runtime: source/target lookup, source action validation, target `CAN_AP_EXTRACT`, tool level/quality/target-type checks, required AP lookup, AP calculation from Java rate, target deletion, source consume/decrement, and AP rank update.
+- Added DB-backed persistence for AP extraction in one transaction: target delete, source save/delete, and `abyss_rank` save through the Java-shaped `AbyssRankDAO.storeAbyssRank` bridge.
+- Added Java `STR_MSG_COMBAT_MY_ABYSS_POINT_GAIN` system message, AP extraction service tests, packet coverage, and runtime packets for consumed items plus owner `SM_ABYSS_RANK`.
+- Current gaps in this cluster: Java rank-change side effects beyond the owner rank packet remained pending: `SM_ABYSS_RANK_UPDATE`, rank-limited equipment checks, `AbyssSkillService.updateSkills`, legion contribution, and siege callbacks.
+- Validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 466 tests.
+
+### Session 221 (May 22, 2026)
+- Added C# `SM_ABYSS_RANK_UPDATE` opcode `136` parity for Java `network/aion/serverpackets/SM_ABYSS_RANK_UPDATE`, covering rank-change, team-object, and mentor-status payload shapes.
+- Wired AP extraction rank changes to broadcast `SM_ABYSS_RANK_UPDATE(action=0)` to visible players after the owner receives `SM_ABYSS_RANK`, matching Java `AbyssPointsService.onRankChanged` packet fanout within the current known-list approximation.
+- Current gaps in this cluster: Java `Equipment.checkRankLimitItems`, `AbyssSkillService.updateSkills`, legion contribution fanout, and siege callback handling remain future slices because their supporting systems are not fully ported.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GamePackets_AreSerializedWithExpectedOpcodesAndPayloads|ApExtractServiceTests"` passes with 2 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 466 tests.
+
 ---
 
 ## Next Steps
 
-1. Scope `ExtractAction`/`ApExtractAction` runtime only after the missing support pieces are explicit: `EnchantService.breakItem`, target equipment deletion side effects, AP rank/common-data persistence, AP stat packets, and exact failure messaging.
+1. Finish AP rank-change side effects beyond the current owner/visible-player packets: Java `Equipment.checkRankLimitItems`, `AbyssSkillService.updateSkills`, legion contribution fanout, and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
-3. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
-4. Finish the remaining stigma/effect slice: full SkillEngine effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
+3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
+4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
 6. Continue housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation when the next slice should stay out of the stat engine.
+7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
