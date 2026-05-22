@@ -2983,6 +2983,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcLootServiceTests|GamePacketTests"` passes with 85 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 680 tests.
 
+### Session 353 (May 22, 2026)
+- Added `WorldNpcLootService.CreateLootEnableStatusForSeenNpc` for Java `DropService.see` parity, sending `SM_LOOT_STATUS.LOOT_ENABLE` only when the player sees an NPC with a registered drop and is allowed to loot it.
+- Wired NPC known-list appearance refresh so C# sends loot-enable status alongside `SM_NPC_INFO` for newly visible registered-drop NPCs, preserving existing `SM_DELETE` handling for disappearances.
+- Added coverage for allowed and disallowed players at the seen-NPC loot-enable boundary, including loot-effect selection from the current drop list.
+- Current gaps in this cluster: the C# corpse signal still comes from the registered-drop map until the real NPC death/state model is wired; real Java drop calculators/global/quest drops, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, free-for-all broadcast scheduling, friendly-NPC loot filters, and broader non-solo/drop-aware corpse cleanup remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcLootServiceTests|GameServerBootstrapTests|GamePacketTests"` passes with 94 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 682 tests.
+
 ---
 
 ## Next Steps
