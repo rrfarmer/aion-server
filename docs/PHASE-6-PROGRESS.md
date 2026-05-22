@@ -2999,6 +2999,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcLootServiceTests|GameServerBootstrapTests"` passes with 23 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 684 tests.
 
+### Session 355 (May 22, 2026)
+- Added the Java friendly-NPC broadcast filter to the free-for-all result: when the lootable NPC race is Elyos or Asmodian, same-race players are filtered out just like `DropService.scheduleFreeForAll` broadcasting `SM_LOOT_STATUS.LOOT_ENABLE`.
+- Threaded the optional NPC context through `StartFreeForAll` / `ScheduleFreeForAll` so future world-broadcast callers can apply the filter without recomputing Java race rules.
+- Added coverage for an Asmodian NPC confirming same-race players are skipped and opposite-race players remain eligible for the free-for-all loot-enable status.
+- Current gaps in this cluster: scheduled free-for-all is not yet invoked from the real future drop-registration/death caller; real Java drop calculators/global/quest drops, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcLootServiceTests"` passes with 17 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 685 tests.
+
 ---
 
 ## Next Steps
