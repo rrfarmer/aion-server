@@ -2106,6 +2106,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 275 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 482 tests.
 
+### Session 253 (May 22, 2026)
+- Finished the Java `UseableItemObject` final-reward handoff for house use items: C# now allows final-reward templates through, restores `mustGiveLastReward` from expired `player_registered_items.expire_time`, blocks visitors with `STR_MSG_HOUSING_OBJECT_DELETE_EXPIRE_TIME`, and lets the owner claim the final reward on the follow-up use.
+- Preserved absolute registered-object `expire_time` alongside packet-facing remaining `ExpirationSeconds`, and updated `SaveHouseObjectUseAsync` so reaching `use_count` on a final-reward object persists the Java `setExpireTime(now)` handoff instead of deleting the row immediately.
+- Reworked reward selection to match Java's scheduled task: normal rewards are granted at each use, final-reward objects send the flowerpot goal and mark final pending at `use_count`, no-final-reward objects delete at `use_count`, and final rewards delete at `use_count + 1`.
+- Added Java cooking-placement duplicate-reward denial through `STR_MSG_CANNOT_USE_ALREADY_HAVE_REWARD_ITEM`.
+- Current gaps in this cluster: full `ExpireTimerTask` handling for registered house objects is still pending, including automatic `HouseObject.onExpire` deletion with `STR_MSG_HOUSING_OBJECT_DELETE_EXPIRE_TIME`, cooldown cleanup for all players, and object-ID release after registry deletion.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 275 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 482 tests.
+
 ---
 
 ## Next Steps
@@ -2115,5 +2124,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition`, `Equipment.usePowerShard`, `IdianStone.onEquip` attack/defend observers, low-charge update packets, zero-charge deletion, and stat refresh fanout.
-6. Continue housing from the new world-house baseline: finish Java `UseableItemObject` final-reward / `mustGiveLastReward` parity, cooking duplicate-reward denial, delete-expire-time messaging, owner-only expired final-reward recovery, and house-object expiration scheduling; after that, continue studio spawning, GeoService door state updates, live-DB orphan-house validation, visitor kick side effects, or full NPC/dialog known-list/function validation.
+6. Continue housing from the new world-house baseline: add registered house-object expiration handling to the C# `ExpireTimerTask` bridge, including automatic `HouseObject.onExpire` deletion with `STR_MSG_HOUSING_OBJECT_DELETE_EXPIRE_TIME`, cooldown cleanup for all players, and object-ID release after registry deletion; after that, continue studio spawning, GeoService door state updates, live-DB orphan-house validation, visitor kick side effects, or full NPC/dialog known-list/function validation.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
