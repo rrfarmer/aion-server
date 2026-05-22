@@ -2468,6 +2468,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcWalkerFormationOrganizerServiceTests|WorldNpcWalkerFormationServiceTests|WorldNpcWalkerPlacementPlanServiceTests|WorldNpcWalkerSpawnPlanCacheServiceTests|WorldNpcSpawnServiceTests"` passes with 28 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 550 tests.
 
+### Session 297 (May 22, 2026)
+- Added `WorldNpcWalkerPlacementApplicationService` as the first runtime consumer of cached walker placement plans.
+- Added a world-container update primitive and wired `WorldNpcSpawnService` to apply active walker placements after refreshing selected walker spawn plans, so selected formations now update live `WorldNpc.Position` to their Java `WalkerGroup.spawn` X/Y/Z/heading targets.
+- Placement application keeps `WorldNpc.SpawnLocation` unchanged, preserving Java `SpawnTemplate` metadata for later organizer refreshes, respawns, and walker grouping.
+- Added coverage for applying active placement positions, reporting missing placement targets, and spawn-service integration that forms live walker NPC positions while original spawn positions remain intact.
+- Current gaps in this cluster: unselected version variants are still visible instead of hidden, movement state/rest-time scheduling is not started, NPC `SM_MOVE` broadcasts are not emitted, and true instance-scoped walker caches remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcWalkerPlacementApplicationServiceTests|WorldNpcSpawnServiceTests|WorldNpcWalkerFormationOrganizerServiceTests"` passes with 22 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 552 tests.
+
 ---
 
 ## Next Steps
@@ -2477,5 +2486,5 @@ From `csharp-port.md`, dependency order:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, connect future combat/life-stat NPC death callers to the new respawn/decay bridge, add registered-drop decay selection, consume the new walker placement plans to mutate selected formation coordinates and hide inactive variants, implement movement state/rest-time scheduling, movement broadcasts, target-reached callbacks, random-walk/anchor runtime movement, and continue special spawn parity for static objects, gatherables, rifts, town spawns, pooled respawns, and per-instance pool state.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, connect future combat/life-stat NPC death callers to the new respawn/decay bridge, add registered-drop decay selection, hide inactive walker version variants from the world, implement movement state/rest-time scheduling, movement broadcasts, target-reached callbacks, random-walk/anchor runtime movement, and continue special spawn parity for static objects, gatherables, rifts, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
