@@ -2382,6 +2382,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter WorldNpcSpawnServiceTests` passes with 13 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 525 tests.
 
+### Session 287 (May 22, 2026)
+- Added `WalkerTemplateTable` static-data support for Java `npc_walker` route templates so preserved NPC `walker_id` values can resolve to real route metadata in future movement work.
+- Parsed Java walker `route_id`, `pool`, `formation`, `rows`, `loop_type`, and `routestep` coordinates/rest times, including Java `WalkerTemplate.afterUnmarshal` behavior for `WALK_BACK` route expansion, pool-2 square formation, square row parsing, and missing-row fallback to point formation.
+- Added synthetic walker-template coverage plus real Java static-data manifest coverage asserting C# walker-template count matches the merged XML `walker_template` count and a known Java route is available by ID.
+- Current gaps in this cluster: walker formation organization, route-step movement, random-walk target selection, group shifts, walker versions, and AI `WalkManager` runtime behavior remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "StaticData_LoadsWalkerTemplates|DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 2 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 526 tests.
+
 ---
 
 ## Next Steps
