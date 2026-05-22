@@ -69,7 +69,7 @@ Last updated: May 22, 2026
 - Direct Java NPC spawn data now also preserves `SpawnSpotTemplate` random-walk range, anchor, state, and AI-name metadata so later walker/AI work has typed source data instead of reopening raw XML. Spawn group `difficult_id` is preserved and the world NPC spawn bridge honors Java `SpawnEngine.spawnInstance` difficulty filtering. `SM_NPC_INFO` now writes Java-style NPC state and static ID from spawn metadata, runtime `WorldNpc` objects carry the Java template/spawn AI-name selection plus spawn-template random-walk, walker, anchor, static-id, and respawn fields, and static-id NPC spawn/despawn paths now update a first C# GeoService-style placeable-state bridge.
 - Housing kick opcode coverage now includes Java `CM_HOUSE_KICK` parsing/routing for owner-triggered kick-friends/all requests and the Java owner notification messages, while actual visitor selection/teleport side effects remain queued with house known-list/zone parity.
 - Next implementation slice should start from the remaining equipment/gameplay queue: finish AP rank-change side effects beyond current packets (`Equipment.checkRankLimitItems`, `AbyssSkillService.updateSkills`, legion contribution/siege callbacks), broaden expirable lifecycle coverage to pets and house-object rows once their models exist, full SkillEngine effect application after temporary skill mutations, stance observers, power-shard emotion side effects, quest/summon observers, exact speed/emotion fanout, charge/idian burn trigger integration, broader skill/effect stat strategy beyond mastery/title modifiers, housing auction settlement/maintenance/sign/appearance flows, persistent known-list membership, or full NPC/dialog known-list/function validation.
-- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 521 tests.
+- Latest validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed with 522 tests.
 
 ---
 
@@ -2355,6 +2355,14 @@ From `csharp-port.md`, dependency order:
 - Current gaps in this cluster: full dialog service parity still needs broader NPC request/range behavior, persistent Java known-list membership, and the remaining function-specific NPC services.
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter NpcDialogTargetingServiceTests` passes with 4 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 521 tests.
+
+### Session 284 (May 22, 2026)
+- Added `WorldNpcSpawnService.TryDespawnWorldNpc` as the first service-owned ordinary NPC removal boundary, mirroring Java `VisibleObjectController.delete` cleanup shape for spawned world NPCs.
+- Routed temporary NPC despawns through that boundary so object removal, static-placeable cleanup, and object-ID release are handled in one place for future death/respawn callers.
+- Added coverage proving despawn removes the `WorldNpc`, clears static placeable state, and releases the object ID for reuse.
+- Current gaps in this cluster: callers for NPC death/decay and Java `RespawnService.scheduleRespawn` are still pending, so this boundary is only used by temporary spawn despawns today.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter WorldNpcSpawnServiceTests` passes with 10 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 522 tests.
 
 ---
 
