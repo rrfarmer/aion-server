@@ -10159,6 +10159,56 @@ Summary metrics:
 Next recommended unit of work:
 - Continue source-order portal validation by porting `checkRace` with explicit portal-race parameters until `PortalPath` static loading exists, including the `SM_DIALOG_WINDOW(..., DialogPage.NO_RIGHT.id())` failure branch; alternatively prioritize `PortalPath` static-data loading to remove explicit validation parameters from the level/race/title/quest guards.
 
+### Session 529 (May 23, 2026)
+- Added `PortalEntryValidationService.ValidateRace`, a narrow source-shaped equivalent of Java `PortalService.checkRace`.
+- The helper supports Java's membership/admin bypass boundary through an explicit `bypassRaceRequirement` parameter, allows `PC_ALL`, rejects portal-race mismatches, and accepts a caller-supplied siege ownership result until `SiegeService.getFortress` parity exists.
+- Added `SmDialogWindow.NoRightPageId` (`DialogPage.NO_RIGHT.id() == 27`) and `SmSystemMessage.MovePortalErrorInvalidRace()` for Java `SM_SYSTEM_MESSAGE.STR_MOVE_PORTAL_ERROR_INVALID_RACE` (`901354`).
+- Added tests for `PC_ALL`, matching race, dialog-NPC mismatch with `SM_DIALOG_WINDOW`, non-dialog mismatch with system message, supplied siege-ownership failure, and bypass behavior.
+- Kept this intentionally parameterized: C# still does not load `PortalPath.race/siege_id` or query live siege ownership.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~StaticDataLoadingTests"` passes with 123 tests.
+
+#### Migration Parity Table - Session 529
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.checkRace` | `Aion.GameServer.Services.PortalEntryValidationService.ValidateRace` | Service / Validation | Partial | Unit Tested | Partial Parity | C# models portal-race mismatch and siege-check failure outcomes, returning source-shaped failure packets. It remains parameterized and unwired to production portal flow. |
+| `com.aionemu.gameserver.model.templates.portal.PortalPath.getRace` / `getSiegeId` | Explicit `portalRace` and `siegeOwnerMatchesPlayerRace` parameters to `ValidateRace` | Template / Siege Boundary | Partial | Unit Tested | Needs Verification | Portal race and siege result are supplied by callers because C# lacks `PortalPath` static loading and live `SiegeService` fortress ownership lookup. |
+| `com.aionemu.gameserver.model.Race.PC_ALL` / `Race.ELYOS` / `Race.ASMODIANS` | String race values on `Player.Race` and validation parameters | Enum Boundary | Partial | Unit Tested | Needs Verification | C# uses strings rather than a Java-equivalent `Race` enum in this guard. Case-insensitive comparison is used; enum identity and invalid value handling are not Java-runtime verified. |
+| `com.aionemu.gameserver.model.DialogPage.NO_RIGHT` | `Aion.GameServer.Network.Aion.ServerPackets.SmDialogWindow.NoRightPageId` | Enum / Packet Constant | Complete | Unit Tested | Partial Parity | Constant `27` is source-derived and used for the dialog-NPC failure branch. No full DialogPage enum is ported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DIALOG_WINDOW` | `Aion.GameServer.Network.Aion.ServerPackets.SmDialogWindow` returned by `ValidateRace` | Server Packet / Dialog | Partial | Unit Tested / Regression Tested | Partial Parity | Tests cover ordinary zero-context `NO_RIGHT` payload for the race guard. Mail/town context branches are existing behavior and not part of this guard. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MOVE_PORTAL_ERROR_INVALID_RACE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.MovePortalErrorInvalidRace` | Server Packet / System Message | Complete | Regression Tested | Partial Parity | Message id `901354` is source-derived and serialized by packet tests. No live-client packet capture was run. |
+| `com.aionemu.gameserver.services.SiegeService.getFortress` / `FortressLocation.getRace` | Caller-supplied `siegeOwnerMatchesPlayerRace` | Service / World Ownership | Not Started | No Tests | Unknown | Newly surfaced blocker. C# cannot yet query fortress race ownership for portal guards. |
+
+Tests added or extended:
+- `PortalEntryValidationServiceTests.ValidateRace_AllowsPcAllRaceLikeJavaPortalPathDefault`: validates `PC_ALL` default allows entry.
+- `PortalEntryValidationServiceTests.ValidateRace_AllowsMatchingPortalRace`: validates same-race portals pass.
+- `PortalEntryValidationServiceTests.ValidateRace_ReturnsNoRightDialogForDialogNpcMismatch`: validates `SM_DIALOG_WINDOW` `NO_RIGHT` payload for dialog NPCs.
+- `PortalEntryValidationServiceTests.ValidateRace_ReturnsInvalidRaceSystemMessageForNonDialogNpcMismatch`: validates message id `901354` for non-dialog portals.
+- `PortalEntryValidationServiceTests.ValidateRace_RejectsWhenSuppliedSiegeOwnershipCheckFails`: validates the Java `checkSiegeId` failure path through an explicit supplied result.
+- `PortalEntryValidationServiceTests.ValidateRace_AllowsMembershipBypassLikeJavaPermission`: validates explicit bypass behavior.
+- `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages`: extended to serialize `SmSystemMessage.MovePortalErrorInvalidRace`.
+- Java comparison status: expectations are source-derived from `PortalService.checkRace`, `PortalPath.java`, `DialogPage.NO_RIGHT`, `SM_DIALOG_WINDOW`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, portal-template load, SiegeService lookup, live portal handler, or encrypted client validation was run.
+
+Remaining risks:
+- The race guard is not wired into production portal flow.
+- `PortalPath` static-data loading is still absent, so race and siege ids are caller-supplied.
+- `SiegeService.getFortress` and fortress race ownership are not ported for this portal check.
+- C# uses string races rather than Java `Race` enum identity, which needs broader model cleanup or verification.
+- Other portal checks remain missing: rank, title, quests, player size, required item removal, kinah, and production transfer wiring.
+- Admin/membership bypass is explicit rather than connected to live config/permission checks.
+- Packet dispatch timing, threading, reflection identity, date/time behavior, precision/rounding, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 narrow portal race-validation guard plus 1 dialog constant and 1 system-message factory
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 5 production portal handler wiring, portal-path static-data model, SiegeService fortress ownership, membership/admin permission integration, and live-client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 56% complete; another source-order portal guard is represented, but end-to-end portal entry remains incomplete.
+
+Next recommended unit of work:
+- Either continue source-order validation with `checkRank` using `Player.AbyssRank` and explicit portal min-rank parameters, or prioritize `PortalPath` static-data loading so race/level/rank/title/quest guard parameters can come from Java XML instead of test-supplied values.
+
 ---
 
 ## Next Steps
