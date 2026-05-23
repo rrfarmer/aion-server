@@ -8231,6 +8231,46 @@ Summary metrics:
 Next recommended unit of work:
 - Add packet-level coverage proving viewer-specific kisk `SmNpcInfo` changes after movement-fed PVP/FORT zone revalidation, or wire the same revalidation boundary into teleport/map-change paths so counters do not lag after non-walk movement.
 
+### Session 483 (May 23, 2026)
+- Added packet-level regression coverage proving movement-fed PVP zone revalidation can drive viewer-specific kisk `SmNpcInfo` creature-type output.
+- The new test builds two overlapping Java-shaped PVP zone summaries, revalidates a registered kisk NPC first inside one zone and then inside both, and confirms the enemy viewer sees `SUPPORT(54)` before Java `isInsidePvPZone()` becomes true and `ATTACKABLE(0)` once nested PVP counters exceed one.
+- Reused `CreaturePvpZoneRevalidationService`, `CreaturePvpZoneCounterService`, `PlayerKiskNpcInfoPacketService`, and serialized `SmNpcInfo` payload inspection to cover the current C# path from zone membership through packet selection without adding production code.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameClientSocketServerNpcVisibilityTests|FullyQualifiedName~CreaturePvpZoneRevalidationServiceTests|FullyQualifiedName~PlayerKiskNpcInfoPacketServiceTests"` passes with 12 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1030 tests.
+
+#### Migration Parity Table - Session 483
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NPC_INFO(Npc, Player)` | `Aion.GameServer.Network.Aion.GameClientSocketServer.CreateNpcInfoPacketForViewer` + `Aion.GameServer.Network.Aion.ServerPackets.SmNpcInfo` | Server Packet Selection | Partial | Packet Tested | Partial Parity | Packet payload selection is now regression-tested after movement-fed PVP counters. Full encrypted socket-order validation with appeared-NPC and loot-status fanout remains pending. |
+| `com.aionemu.gameserver.model.gameobjects.Kisk.getType(Player)` | `Aion.GameServer.Services.PlayerKiskNpcInfoPacketService` + `Aion.GameServer.Services.PlayerKiskAttackabilityService` | Kisk Attackability Dispatch | Partial | Unit + Packet Tested | Partial Parity | Source-derived behavior for enemy viewers is covered through one-zone support and nested-PVP attackable cases. Combat attackability enforcement, kisk AI/dialog hooks, and full controller behavior remain unported. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.isInsidePvPZone()` | `Aion.GameServer.Services.CreaturePvpZoneCounterService.IsInsidePvpZone` | Counter Runtime | Partial | Unit + Packet Regression Tested | Partial Parity | Test confirms packet behavior changes only after nested PVP counters make `isInsidePvPZone()` true. C# counter lifetime still depends on currently wired revalidation callers. |
+| `com.aionemu.gameserver.world.zone.PvPZoneInstance` | `Aion.GameServer.Services.CreaturePvpZoneRevalidationService` + `CreaturePvpZoneCounterService` | Zone Callback Boundary | Partial | Unit + Packet Regression Tested | Partial Parity | Synthetic PVP zone summaries feed the same revalidation and counter path used by loaded Java PVP/FORT data. Java handler ordering, priorities, and queued update timing remain unverified. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.onEnter(Creature)` / `onLeave(Creature)` | `CreaturePvpZoneCounterService.ApplyZoneEnter` / `ApplyZoneLeave` via `CreaturePvpZoneRevalidationService` | Zone Membership Boundary | Partial | Unit + Packet Regression Tested | Partial Parity | Packet regression covers membership transitions across two zone ids. Controller callbacks, zone handlers, and concurrent scheduler timing are not covered. |
+| `com.aionemu.gameserver.controllers.PlayerController.see` | `GameClientSocketServer.CreateNpcInfoPacketForViewer` test harness | Visibility Fanout | Partial | Packet Tested | Needs Verification | The viewer-aware packet helper is covered, but this unit does not run the full `RefreshNpcVisibilityAsync` socket fanout or verify packet order against a real client. |
+
+Tests added:
+- `GameClientSocketServerNpcVisibilityTests.CreateNpcInfoPacketForViewerUsesMovementFedPvpZoneCounters`: validates that movement-style zone revalidation changes serialized kisk `SmNpcInfo` creature type from support to attackable for an enemy viewer after entering overlapping PVP zones.
+- Java comparison status: test expectations are source-derived from Java `SM_NPC_INFO(Npc, Player)`, `Kisk.getType(Player)`, `Creature.isInsidePvPZone()`, `PvPZoneInstance`, and `ZoneInstance.onEnter/onLeave`; no live Java runtime side-by-side validation was run.
+
+Remaining risks:
+- This unit validates packet payload selection, not live encrypted socket ordering or running-client visibility sequences.
+- The synthetic PVP zones are simple rectangles; Java geometry precision/rounding and full static-data geometry were already covered only indirectly in prior static-data tests, not by live Java comparison.
+- Teleport/map-change, kisk revive teleport, NPC movement, spawn/despawn, subzone-change, admin zone revalidation, and generic world-object cleanup still need equivalent zone-counter wiring.
+- Java queued `ZoneUpdateService` timing, `ZoneLevelService`, zone priorities, controller callbacks, and zone handlers remain unported or unverified.
+- No production serialization format changed. No reflection, date/time, database, or persistence behavior changed. Threading remains limited to the existing concurrent counter store; no scheduler/concurrency stress test was added.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 packet-level regression bridge from movement-fed PVP revalidation to viewer-specific kisk NPC-info selection
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 5 live socket-order validation, teleport/map-change revalidation, NPC/spawn/despawn revalidation, Java zone scheduler/handlers/levels, and dedicated kisk controller/combat attackability enforcement
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because remaining kisk revive cleanup, live team membership wiring, production socket-order validation, teleport/map-change and NPC zone revalidation wiring, full dedicated kisk controller/AI, full NPC/dialog AI, resurrection skill/effect callers, per-zone bind membership, live option mutation callers, admin option consumers, world-map instance ownership, object iteration, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Wire `CreaturePvpZoneRevalidationService` into teleport/map-change paths, especially the kisk revive teleport path after `PlayerTeleportService.TeleportToKiskPosition`, so PVP/FORT counters do not lag after non-walk movement before broader socket-order validation.
+
 ---
 
 ## Next Steps
