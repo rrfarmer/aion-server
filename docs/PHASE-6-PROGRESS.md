@@ -10917,6 +10917,56 @@ Summary metrics:
 Next recommended unit of work:
 - Add the solo/open-world non-same-map portal transfer slice: consume `PortalEntryPreparationResult.EntryPlan.Action == Continue` for `maxPlayers` 0/1, allocate or reuse the target instance through `WorldMapRuntimeStateTable`, queue the existing delayed teleport request with `TeleportAnimation.FadeOutBeam`, and apply entrance cooldown after the teleport request, while still excluding group/alliance/league fanout.
 
+### Session 546 (May 23, 2026)
+- Added `GameServerConnection.QueuePortalContinueTransferAsync`, a narrow continuation bridge for Java `PortalService.port` `maxPlayers` 0/1 after validation and required item/kinah consumption have succeeded.
+- The bridge handles `PortalEntryPlanAction.Continue` for open-world maps by queuing the existing delayed teleport request with `TeleportAnimation.FadeOutBeam` and no instance cooldown.
+- The bridge handles solo/fresh instance maps by allocating/registering a runtime instance through `WorldMapRuntimeStateTable`, queuing the delayed teleport request, and applying entrance cooldown after the teleport request, matching Java `PortalService.transfer` ordering.
+- The bridge handles registered reentry by reusing the registered instance, preserving/setting the instance start position, queueing the delayed transfer, and skipping cooldown addition when `EntryPlan.Reenter` is true.
+- Extended `PortalEntryInteractionService.HandleDialogSelectAsync` with an optional continuation-transfer delegate and wired `GameServerConnection.HandleDialogSelectAsync` to pass `QueuePortalContinueTransferAsync`.
+- Added `PortalContinueTransferResult` and `PortalContinueTransferKind` to expose whether continuation used open-world, registered-instance, or allocated-instance transfer.
+- Kept group/alliance/league fanout, full Java `InstanceService` reuse policy for non-solo teams, actual `CM_TELEPORT_ANIMATION_DONE` completion validation, live socket capture, and broader action-abort/pet/known-list side effects out of scope.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~PortalEntryValidationServiceTests"` passes with 73 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1159 tests.
+
+#### Migration Parity Table - Session 546
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` `maxPlayers` 0/1 continuation | `Aion.GameServer.Network.Aion.GameServerConnection.QueuePortalContinueTransferAsync` | Service / Transfer Orchestration | Partial | Unit Tested | Partial Parity | C# now handles open-world, fresh solo-instance allocation, and registered reentry continuation for the supported dialog portal slice. Group/alliance/league cases remain unsupported. |
+| `com.aionemu.gameserver.services.teleport.PortalService.port(Player, PortalLoc, boolean, int)` | `QueuePortalContinueTransferAsync` open-world and allocated-instance branches | Service / Instance Allocation | Partial | Unit Tested | Partial Parity | Open-world targets queue delayed teleport without cooldown; instance targets allocate/register via `WorldMapRuntimeStateTable`. Java personal-world owner handling is approximated with existing personal-world ids; full `InstanceService.getNextAvailableInstance` parity is not runtime-compared. |
+| `com.aionemu.gameserver.services.teleport.PortalService.transfer` | `QueueInstancePortalTransferAsync` and `QueueAllocatedInstancePortalTransferAsync` invoked by `QueuePortalContinueTransferAsync` | Service / Transfer | Partial | Unit Tested | Partial Parity | C# preserves Java ordering: send/queue teleport before applying entrance cooldown. Full SpawnTask completion, destroyed-instance fallback, and map-change level-ready behavior are separate existing surfaces and not live-verified here. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getRegisteredInstance` | `WorldMapRuntimeStateTable.GetRegisteredInstance` carried by `PortalEntryPlanResult.RegisteredInstance` | Service / Runtime Registry | Partial | Unit Tested | Needs Verification | Registered solo reentry can now reuse an existing runtime instance. Java team id, league id, and full registration map semantics remain incomplete. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getNextAvailableInstance` | `InstanceRuntimeService.CreatePortalTransferInstance` through `QueueAllocatedInstancePortalTransferAsync` | Service / Runtime Allocation | Partial | Unit Tested | Needs Verification | Allocates the next runtime instance id, registers the player, and sets start position. Java difficulty, instance reuse capacity search, world template factory internals, and threading are not runtime-compared. |
+| `com.aionemu.gameserver.world.WorldMapInstance.register` / `setStartPos` | `WorldMapInstanceRuntimeState.Register` / `SetStartPositionIfMissing` | Runtime State | Partial | Unit Tested | Needs Verification | Fresh and registered transfers set or preserve start position and registration. Java player-inside counts and full instance lifecycle are not represented. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.sendLoc` | `GameServerConnection.QueueDelayedTeleportAsync` reused by continuation transfer | Packet / Delayed Teleport Boundary | Partial | Unit Tested / Regression Tested | Partial Parity | Queues pending teleport and sends `SM_TELEPORT_LOC` before cooldown packet. Java action aborts, despawn/spawn internals, pet movement, and live socket framing remain incomplete. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.addPortalCooldown` | `GameServerConnection.ApplyInstanceEntranceCooldownAsync` invoked after queued transfer | Cooldown / Persistence Boundary | Partial | Unit Tested | Partial Parity | Fresh instance transfer adds cooldown after teleport request; registered reentry skips add. Date/time reset calculation uses existing C# table logic and is not Java-runtime compared for every cooldown type. |
+
+Tests added or extended:
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_OpenWorldQueuesTeleportWithoutCooldown`: validates open-world continuation queues only `SM_TELEPORT_LOC`, creates pending teleport, and does not save cooldowns.
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_SoloInstanceAllocatesRegistersAndAppliesCooldownAfterTeleport`: validates fresh solo instance allocation/register/start-position handoff, pending teleport destination, cooldown add, and packet order `SM_TELEPORT_LOC` before `SM_INSTANCE_INFO`.
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_RegisteredReentryTransfersWithoutCooldown`: validates registered reentry reuses the registered instance id, queues teleport, and skips cooldown persistence/packet.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `PortalService.port(Player, PortalLoc, boolean, int)`, `PortalService.transfer`, `InstanceService.getRegisteredInstance`, `InstanceService.getNextAvailableInstance`, `WorldMapInstance.register`, `TeleportService.sendLoc`, and `PortalCooldownList.addPortalCooldown`. No Java runtime execution, live client capture, encrypted socket integration test, full map-change completion, group/alliance runtime comparison, or DB integration test was run.
+
+Remaining risks:
+- Group/alliance/league portal fanout and team registration remain unsupported by this bridge.
+- Java `InstanceService.getNextAvailableInstance` difficulty and capacity reuse semantics are simplified by existing C# runtime allocation helpers.
+- Full teleport completion still depends on later `CM_TELEPORT_ANIMATION_DONE`; this unit only proves pending teleport request/cooldown ordering.
+- Java action-abort side effects, pet movement/spawn, known-list despawn/spawn parity, protection task restart, effect icon refresh, and full zone update callbacks remain partial or missing.
+- Cooldown persistence is unit tested through an existing repository stub but lacks portal-specific SQL integration coverage.
+- Live packet ordering, encryption framing, and client-observed behavior remain unverified.
+- Threading/locking, reflection/JAXB behavior, date/time behavior across all cooldown modes, precision/rounding, and live Java comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 narrow solo/open-world continuation transfer bridge over existing instance, teleport, and cooldown surfaces
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 8 group/alliance/league fanout, full InstanceService reuse semantics, delayed teleport completion, action-abort side effects, pet teleport/spawn, known-list parity, live socket validation, and Java runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; supported dialog portal entry now reaches validation, requirement consumption, packet sending, same-instance teleport, and solo/open-world non-same-map transfer request/cooldown ordering.
+
+Next recommended unit of work:
+- Add a focused `CM_TELEPORT_ANIMATION_DONE` portal-transfer completion regression for the newly queued portal continuation path: verify pending transfer completion mutates position, sends same/map-change packets in Java order, and preserves cooldown state. Then begin the next production gap: group/alliance/league portal planning and explicit unsupported-result reporting from the caller boundary.
+
 ---
 
 ## Next Steps
