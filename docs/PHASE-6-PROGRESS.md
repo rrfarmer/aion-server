@@ -8968,6 +8968,45 @@ Summary metrics:
 Next recommended unit of work:
 - Continue teleport/map-change parity by adding SIEGE/FORT delayed teleport coverage using real `ABYSS_CASTLE_AREA_2011_210050000`, or add the missing `SM_TELEPORT_LOC`/pending-teleport queue caller path for one modeled teleport request so the pending state can be created by a packet/service workflow instead of direct test setup.
 
+### Session 501 (May 23, 2026)
+- Added real Java FORT/SIEGE geometry coverage for the delayed pending-teleport completion boundary introduced in Session 500.
+- The new regression starts a player inside `ABYSS_CASTLE_AREA_2011_210050000`, verifies that the Java static `FORT` zone is loaded as modeled SIEGE counter geometry, completes a pending teleport outside the fortress area, then completes a second pending teleport back inside the fortress area.
+- The test verifies SIEGE counters clear when delayed teleport completion leaves the FORT zone and re-enter when delayed teleport completion returns, without creating PVP counters.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests|FullyQualifiedName~CreaturePvpZoneRevalidationServiceTests|FullyQualifiedName~CreaturePvpZoneCounterServiceTests"` passes with 22 tests.
+
+#### Migration Parity Table - Session 501
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.TeleportService.SpawnTask.run` | `Aion.GameServer.Services.PlayerTeleportService.CompletePendingTeleport` + `GameServerConnection.HandleTeleportAnimationDoneAsync` | Teleport Completion Boundary | Partial | Regression Tested | Partial Parity | Delayed teleport completion now has real FORT/SIEGE counter coverage in addition to PVP coverage. Full Java dead-player fallback, instance-exists guard, conqueror/instance leave callbacks, legion update, pet position, arrival animation, and world spawn remain incomplete. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TELEPORT_ANIMATION_DONE` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleTeleportAnimationDoneAsync` | Client Packet Handler | Partial | Regression Tested | Partial Parity | Regression verifies the handler clears/re-enters SIEGE counters while consuming pending teleport state. Java `FutureTask.get()` exception handling and fallback `SM_PLAYER_INFO` + `World.spawn` remain unmodeled. |
+| `com.aionemu.gameserver.model.siege.FortressLocation` / FORT zone static data | `Aion.GameServer.StaticData.CreaturePvpZones` + `CreaturePvpZoneType.Siege` | Static Data / Zone Boundary | Partial | Regression Tested | Partial Parity | Real `ABYSS_CASTLE_AREA_2011_210050000` FORT geometry is exercised for delayed teleport completion. Fortress observers, ownership, shield, balance, vulnerability behavior, and live siege handlers remain unported. |
+| `com.aionemu.gameserver.world.World.setPosition` | `Player.Position` mutation + movement reset in `PlayerTeleportService.CompletePendingTeleport` | World Position Boundary | Partial | Regression Tested | Partial Parity | C# mutates authoritative player position before revalidation for real FORT geometry. Java also moves pets and interacts with world-map instances/regions; those pieces remain missing. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.revalidateZones()` / `com.aionemu.gameserver.world.MapRegion.revalidateZones(Creature)` | `CreaturePvpZoneRevalidationService.Revalidate` from delayed teleport completion | Zone Revalidation Boundary | Partial | Unit + Regression Tested | Partial Parity | Real Java FORT geometry verifies delayed teleport leave/re-enter SIEGE counter transitions. Zone priorities, handler callbacks, neighboring regions, full-map zones, and live fortress state remain incomplete. |
+| `com.aionemu.gameserver.world.zone.PvPZoneInstance.onEnter/onLeave` with `ZoneType.SIEGE` counters | `CreaturePvpZoneCounterService` through delayed teleport completion | Zone Callback Boundary | Partial | Unit + Regression Tested | Partial Parity | Test proves delayed teleport completion clears and re-enters modeled SIEGE counters. Java handler ordering, controller callbacks, and live siege side effects remain unverified. |
+
+Tests added:
+- `GameServerConnectionFlightZoneFanoutTests.HandleTeleportAnimationDoneAsync_CompletesPendingTeleportAndRevalidatesCreatureSiegeZoneCounters`: loads real Java static data, starts a player inside `ABYSS_CASTLE_AREA_2011_210050000`, completes a pending delayed teleport outside the FORT zone and verifies empty counters, then completes another pending teleport back inside and verifies SIEGE counters re-enter without PVP counters.
+- Java comparison status: expectations are source-derived from Java `TeleportService.SpawnTask.run`, `CM_TELEPORT_ANIMATION_DONE`, FORT zone static-data semantics, `World.setPosition`, `Creature.revalidateZones`, `MapRegion.revalidateZones`, and `PvPZoneInstance`/SIEGE counter behavior; no live Java runtime side-by-side validation or live siege-state validation was run.
+
+Remaining risks:
+- This unit strengthens SIEGE/FORT verification only. Full Java fortress/siege behavior, observers, ownership, shield and vulnerability logic, balance buffs, and controller callbacks remain unported.
+- The delayed teleport pending state is still created directly in tests. A real `SM_TELEPORT_LOC`/teleport request caller path is still needed.
+- Packet fanout is not golden-byte or live-socket validated; same-map/full-map ordering beyond currently modeled packets remains needs-verification.
+- C# still revalidates modeled counters directly instead of executing Java zone `onEnter`/`onLeave` handlers, controller callbacks, quest/material handlers, fortress observers, or instance callbacks.
+- No code, packet serialization, database schema, date/time, reflection, or persistence behavior changed in this unit. Threading remains immediate over the concurrent counter store rather than Java's future/task scheduler.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 delayed pending-teleport SIEGE/FORT counter regression
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 7 Java controller task scheduler, real `SM_TELEPORT_LOC`/pending-teleport queue caller, full fortress/siege side effects, full same-map/full-map world spawn side effects, pet/legion/instance/conqueror callbacks, Java zone handlers/controller callbacks, and live packet ordering
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because remaining kisk revive cleanup, live team membership wiring, production socket-order validation, broader teleport/map-change zone revalidation, remaining direct-removal cleanup, generic visible-object cleanup, full dedicated kisk controller/AI, full NPC/dialog AI, resurrection skill/effect callers, per-zone bind membership, live option mutation callers, admin option consumers, world-map instance ownership, object iteration, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Add the missing `SM_TELEPORT_LOC`/pending-teleport queue caller path for one modeled teleport request so pending state is created through a service/connection workflow instead of direct test setup, or continue teleport map-change packet-order coverage for the delayed completion same-map and full-map branches.
+
 ---
 
 ## Next Steps
