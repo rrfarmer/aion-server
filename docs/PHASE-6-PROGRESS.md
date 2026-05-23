@@ -11425,6 +11425,54 @@ Summary metrics:
 Next recommended unit of work:
 - Begin turning the non-executing group plan into an allocation preview: add a blocked `GroupPortalAllocationPlan` that records target world id, difficulty id placeholder, max players, intended team id registration, and why allocation is still not performed. Keep all `WorldMapRuntimeStateTable.AddWorldMapInstance`, `RegisterTeamId`, teleport, and cooldown side effects disabled until the live group aggregate and caller semantics exist.
 
+### Session 557 (May 23, 2026)
+- Added a non-executing `GroupPortalAllocationPlan` under `GroupPortalTransferPlan`.
+- `PortalContinueTransferResult.UnsupportedTeamPortal` now receives the portal location so group planning can record the target world id without executing allocation.
+- Allocation-needed group plans now record target world id, max players, intended registered team id, unknown difficulty id, and the explicit `InstanceAllocationNotPorted` blocked reason.
+- Registered group-instance plans now record that allocation is not needed because the registered team instance was already resolved.
+- Invalid/missing-team-id group plans now block allocation before intended team registration is exposed.
+- Kept `WorldMapRuntimeStateTable.CreateNextWorldMapInstance`, `AddWorldMapInstance`, `WorldMapInstanceRuntimeState.RegisterTeamId`, instance handler creation, spawn execution, transfer fanout, teleport packets, and cooldown writes disabled.
+- Extended focused transfer-boundary tests to assert allocation preview metadata and prove no next instance is created for allocation-needed or invalid-team blocked group plans.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passes with 119 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1172 tests.
+
+#### Migration Parity Table - Session 557
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` group allocation branches | `Aion.GameServer.Services.GroupPortalAllocationPlan` | DTO / Planning | Partial | Unit Tested | Needs Verification | C# now records the allocation Java would attempt for fresh group plans, including target world id, max players, and intended team id registration. It does not allocate or transfer. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getNextAvailableInstance(int, byte, int)` | `GroupPortalAllocationState.WouldAllocateAndRegisterTeam` | Service Dependency | Not Started | Unit Tested | Needs Verification | C# marks that allocation would be needed but does not call `WorldMapRuntimeStateTable.CreateNextWorldMapInstance`, spawn handlers, or event spawns. Difficulty id is explicitly unknown/null because the current C# blocked path does not carry Java's `difficult` argument. |
+| `com.aionemu.gameserver.world.WorldMapInstance.registerTeam` | `GroupPortalAllocationPlan.IntendedRegisteredTeamId` / future `WorldMapInstanceRuntimeState.RegisterTeamId` caller | Runtime State / Dependency | Partial | Unit Tested | Needs Verification | The intended team id is recorded for future registration, but `RegisterTeamId` is not invoked and no Java `GeneralTeam` object is stored. |
+| `com.aionemu.gameserver.world.WorldMap.addInstance` / `WorldMapInstanceFactory.createWorldMapInstance` | `WorldMapRuntimeStateTable.CreateNextWorldMapInstance` intentionally not called | Runtime State / Dependency | Not Started | Unit Tested | Needs Verification | Tests assert no next modeled instance is created for blocked group allocation previews. Real factory creation, instance handler setup, and spawn behavior remain missing. |
+| `com.aionemu.gameserver.instance.InstanceEngine.getNewInstanceHandler` | `GroupPortalAllocationBlockedReason.InstanceAllocationNotPorted` | Handler Dependency | Not Started | No Tests | Unknown | Handler creation is newly documented as a dependency of allocation. C# dynamic instance handlers are not involved in this blocked preview. |
+| `com.aionemu.gameserver.spawnengine.SpawnEngine.spawnInstance` | `GroupPortalAllocationBlockedReason.InstanceAllocationNotPorted` | Spawn Dependency | Not Started | No Tests | Unknown | Java spawns the instance after allocation; C# performs no spawn or static object population in this unit. |
+| `com.aionemu.gameserver.services.teleport.PortalService.transfer` | `QueuePortalContinueTransferAsync` unsupported group result with allocation plan and null teleport/cooldown | Service / Packet Boundary | Partial | Unit Tested | Needs Verification | Tests prove blocked allocation previews still send no packet, create no pending teleport, save no cooldown, and allocate no world instance. Java's positive transfer remains missing. |
+
+Tests added or extended:
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_UnsupportedTeamPlanReturnsBlockedResultWithoutPackets`: extended to assert registered group plans mark allocation as not needed and carry no intended team registration.
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_GroupPlanWithoutRegisteredInstanceRecordsAllocationNeededWithoutPackets`: extended to assert target world id, null difficulty id, max players, intended team id registration, allocation blocked reason, and no created next instance.
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_GroupPlanWithoutTeamIdRecordsMissingTeamIdWithoutPackets`: extended to assert invalid team id blocks allocation and no created next instance.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `InstanceService.getNextAvailableInstance`, `WorldMapInstance.registerTeam`, `WorldMap.addInstance`, `WorldMapInstanceFactory.createWorldMapInstance`, `SpawnEngine.spawnInstance`, and `PortalService.transfer`. No Java runtime execution, actual allocation, handler creation, spawning, team registration, transfer fanout, cooldown timing comparison, encrypted socket validation, or concurrency comparison was run.
+
+Remaining risks:
+- Allocation preview is advisory metadata only and does not create a C# instance.
+- Java's `difficult` argument is not carried through the current blocked C# group path, so `DifficultyId` remains null.
+- The C# live group aggregate still does not exist, so team object storage, membership mutation, and owner/lifecycle behavior are missing.
+- Instance handler creation, spawn execution, auto-destroy scheduling, full team registration, capacity gate enforcement, cooldown timing, and transfer fanout remain unimplemented.
+- Alliance and league allocation planning remain outside this group-specific DTO.
+- Date/time cooldown behavior, serialization/live packet behavior, Java threading semantics, reflection/JAXB behavior, precision/rounding, and runtime/client comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 blocked group allocation preview DTO under the existing group transfer plan
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 12 Java difficulty propagation, actual group instance allocation, instance handler creation, spawn execution, auto-destroy scheduling, full `registerTeam`, live group aggregate, capacity gate enforcement, member transfer fanout, alliance/league allocation, team lifecycle/concurrency, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group portal planning now documents allocation intent, but successful group portal entry is still missing.
+
+Next recommended unit of work:
+- Add a blocked group transfer execution preview that records Java's future `PortalService.transfer(player, loc, instance, reenter)` inputs: target instance id when registered, start-position intent, reenter flag, teleport animation, and cooldown-add eligibility. Keep `SetStartPositionIfMissing`, `Register(player.ObjectId)`, teleport queueing, and cooldown persistence disabled until the actual group execution path is safe to port.
+
 ---
 
 ## Next Steps
