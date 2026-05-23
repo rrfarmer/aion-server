@@ -11061,6 +11061,50 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the group/alliance/league portal planning slice by adding a minimal C# team-instance planning abstraction that can carry Java team ids and member lists without executing fanout yet. Start with group portals only: inspect Java `PlayerGroup`, `PlayerGroupService`, `InstanceService.getRegisteredInstance(mapId, teamId)`, and `PortalService.port` group branches, then add tests that a grouped player reaches an explicit blocked group-fanout plan with the Java team id preserved instead of a generic unsupported result.
 
+### Session 549 (May 23, 2026)
+- Added minimal portal team-plan metadata so a grouped/allied player who passes the no-team requirement guard no longer loses the Java team context when C# stops before unsupported team fanout.
+- Added `Player.CurrentTeamId` as the C# breadcrumb for Java `PlayerGroup.getTeamId` / `PlayerAlliance.getObjectId` consumed by `PortalService.port`.
+- Added `Player.CurrentTeamMemberObjectIds` as a narrow metadata carrier for Java `PlayerGroup.getMembers`; no member iteration or transfer fanout is implemented yet.
+- Added `PortalTeamEntryPlan` and `PortalTeamEntryKind` to `PortalEntryPlanResult`, with `FanoutSupported = false` for current group/alliance team plans.
+- Updated the grouped-player portal validation regression so a group-sized portal preserves team id `88001`, member ids `[1001, 1002]`, max players `6`, and explicit blocked fanout state while still returning `UnsupportedTeamPortal`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests"` passes with 79 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1165 tests.
+
+#### Migration Parity Table - Session 549
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` group branch | `Aion.GameServer.Services.PortalEntryValidationService.CreateUnsupportedTeamPlan` / `PortalEntryPlanResult.TeamPlan` | Service / Planning | Partial | Unit Tested | Needs Verification | C# now preserves group team id/member metadata when stopping before fanout. It does not query registered team instances, allocate group instances, register teams, or transfer members. |
+| `com.aionemu.gameserver.model.team2.group.PlayerGroup.getTeamId` | `Aion.GameServer.Model.GameObjects.Player.CurrentTeamId` | Model Dependency | Partial | Unit Tested | Needs Verification | Added as a primitive team id carrier for portal planning. No C# `PlayerGroup` aggregate exists yet, and id ownership/lifecycle is not runtime-validated. |
+| `com.aionemu.gameserver.model.team2.group.PlayerGroup.getMembers` | `Aion.GameServer.Model.GameObjects.Player.CurrentTeamMemberObjectIds` | Model Dependency | Partial | Unit Tested | Needs Verification | Added as metadata only. Java returns live `Player` objects; C# currently carries object ids only and does not check online state, map eligibility, distance, capacity, or concurrent membership changes. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance.getObjectId` | `Aion.GameServer.Model.GameObjects.Player.CurrentTeamId` for alliance membership | Model Dependency | Partial | No Tests | Needs Verification | The same carrier can represent alliance id, but this unit only added group-focused regression coverage. League id and alliance-group structure remain missing. |
+| `com.aionemu.gameserver.world.WorldMapInstance.registerTeam` | Future C# team registration/fanout path, represented by `PortalTeamEntryPlan.FanoutSupported` | Service Dependency | Not Started | No Tests | Unknown | `FanoutSupported` is explicitly false; no team registration or instance player registration is performed. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getRegisteredInstance(mapId, group.getTeamId())` | Future `WorldMapRuntimeStateTable.GetRegisteredInstance(worldId, teamId)` call for team plans | Service Dependency | Not Started | No Tests | Unknown | Existing C# registry can look up by object id, but team-id lookup is not wired into portal planning for team portals yet. |
+| `com.aionemu.gameserver.services.teleport.PortalService.port` alliance/league branches | `PortalTeamEntryPlan` alliance enum support and future league support | Service / Planning | Partial | No Tests | Needs Verification | Alliance metadata path exists when `TeamMembership == Alliance`; no alliance-specific regression, league model, league id, or fanout exists. |
+
+Tests added or extended:
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_GroupMemberStopsWithBlockedTeamPlanBeforeFanout`: validates a grouped player with Java-style team id/member metadata reaches `UnsupportedTeamPortal` with a populated blocked `PortalTeamEntryPlan`.
+- Java comparison status: expectations are source-derived from `PortalService.port` group branch, `PlayerGroup.getTeamId`, `PlayerGroup.getMembers`, `InstanceService.getRegisteredInstance`, and `WorldMapInstance.registerTeam`. No Java runtime execution, registered group-instance lookup, team allocation, member fanout, live client capture, encrypted socket test, threading/concurrency comparison, or alliance/league runtime comparison was run.
+
+Remaining risks:
+- Successful group portal entry is still not implemented; this unit only preserves the data needed for the next planning slice.
+- `CurrentTeamId` and `CurrentTeamMemberObjectIds` are lightweight placeholders, not full Java `PlayerGroup` / `PlayerAlliance` aggregates.
+- Team id lifecycle, membership mutation, online/offline member filtering, capacity checks, group reuse policy, and member transfer iteration remain unported.
+- Alliance support is structurally possible through the same metadata, but was not regression-tested in this unit; league support is still absent.
+- `PortalTeamEntryPlan` is not consumed by `GameServerConnection.QueuePortalContinueTransferAsync`; production transfer continues to refuse team portals.
+- Java threading/locking, reflection/JAXB behavior, serialization, date/time behavior, precision/rounding, and live runtime comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 blocked team-plan metadata slice plus 2 player team metadata carriers
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 8 registered group-instance lookup, group instance allocation, `registerTeam`, group member transfer fanout, alliance fanout, league model, team concurrency/lifecycle, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; C# now preserves group team context for the next portal planning step but still cannot execute team portal entry.
+
+Next recommended unit of work:
+- Wire the blocked group plan to a non-executing registered-instance lookup: for `TeamPlan.Kind == Group`, probe `WorldMapRuntimeStateTable.GetRegisteredInstance(worldId, TeamId)` and record whether Java would attempt reentry versus fresh group allocation, but continue to return a blocked result before any member fanout or cooldown mutation. Add tests for registered group team id lookup and for the no-registered-instance allocation-needed branch.
+
 ---
 
 ## Next Steps
