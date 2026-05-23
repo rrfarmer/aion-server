@@ -10507,6 +10507,47 @@ Summary metrics:
 Next recommended unit of work:
 - Port the cheap structural side of Java `ItemReq` parsing into `PortalPathSummary` or a child requirement list before expanding portal plan actions further. Java checks required items before same-instance teleport, so item requirement visibility is the next blocker for improving plan fidelity without executing inventory mutation.
 
+### Session 537 (May 23, 2026)
+- Added structural portal requirement DTOs: `PortalQuestRequirementSummary` and `PortalItemRequirementSummary`.
+- Refactored portal-path static-data parsing to keep a temporary builder open until `</portal_path>` so nested Java `quest_req` and `item_req` child elements attach to the correct `PortalPathSummary`.
+- `PortalPathSummary` now carries `QuestRequirements` and `ItemRequirements` lists while preserving the existing scalar constructor used by validation tests.
+- Added real Java XML regression assertions for item requirements on `portal_use` `730199` and quest requirements on `portal_use` `730033`.
+- Kept this as data visibility only: quest validation, item-count checks, item removal, and inventory/kinah mutation are not implemented in this unit.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaticDataLoadingTests"` passes with 13 tests.
+
+#### Migration Parity Table - Session 537
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.portal.PortalPath.getQuestReq` | `Aion.GameServer.Dataholders.PortalPathSummary.QuestRequirements` | DTO / Template Child List | Partial | Unit Tested / Regression Tested | Partial Parity | C# now carries nested quest requirements with `quest_id` and `quest_step`. Java mutable list identity and actual `PortalService.checkQuests` behavior are not ported. |
+| `com.aionemu.gameserver.model.templates.portal.PortalPath.getItemReq` | `Aion.GameServer.Dataholders.PortalPathSummary.ItemRequirements` | DTO / Template Child List | Partial | Unit Tested / Regression Tested | Partial Parity | C# now carries nested item requirements with `item_id` and `item_count`. Java required-item availability checks and item removal remain missing. |
+| `com.aionemu.gameserver.model.templates.portal.QuestReq` | `Aion.GameServer.Dataholders.PortalQuestRequirementSummary` | DTO | Partial | Unit Tested / Regression Tested | Partial Parity | Scalar fields are parsed from synthetic and real XML. Setter methods and JAXB mutability are intentionally not represented. |
+| `com.aionemu.gameserver.model.templates.portal.ItemReq` | `Aion.GameServer.Dataholders.PortalItemRequirementSummary` | DTO | Partial | Unit Tested / Regression Tested | Partial Parity | Scalar fields are parsed from synthetic and real XML. Setter methods and JAXB mutability are intentionally not represented. |
+| `game-server/data/static_data/portals/portal_template2.xml` nested `quest_req` / `item_req` | `Aion.GameServer.Dataholders.StaticData` portal-path builder | Static Data Loader | Partial | Regression Tested | Partial Parity | Real Java data is spot-checked for `730199` item requirement and `730033` quest requirement. Full XML parity and Java JAXB runtime comparison were not run. |
+
+Tests added or extended:
+- `StaticDataLoadingTests.StaticData_LoadsPortalPathSummariesWithJavaRaceFallbacks`: extended to assert synthetic nested `quest_req` and `item_req` are attached to the ASMODIANS dialog path.
+- `StaticDataLoadingTests.LoadsStaticDataFromJavaProject`: extended to assert real `portal_template2.xml` item requirement `185000077 x1` for `730199` and quest requirement `1636 step 3` for `730033`.
+- Java comparison status: expectations are source-derived from `PortalPath`, `QuestReq`, `ItemReq`, `portal_template2.xsd`, and real Java XML. No Java runtime/JAXB execution, quest-state validation, inventory checks, item removal, kinah mutation, or live-client validation was run.
+
+Remaining risks:
+- `PortalService.checkQuests` is still unported; quest status/step semantics, null quest state handling, and membership bypass are not modeled.
+- `PortalService.checkAndRemoveRequiredItems` is still unported; inventory counting, item deletion, kinah consumption, error packets/dialogs, and transaction/persistence behavior remain missing.
+- Requirement lists are immutable C# snapshots, not Java mutable JAXB lists; no code depends on mutation currently.
+- Production portal handlers still do not consume requirement lists.
+- Threading, reflection/JAXB differences, serialization, date/time, precision/rounding, packet dispatch ordering, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 4 partial structural requirement surfaces plus loader attachment
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 5 quest validation, required-item validation/removal, kinah consumption, production handler wiring, and live runtime/client comparison
+- Estimated overall migration completion: Phase 6 remains about 58% complete; portal requirement data is visible, but requirement enforcement is still missing.
+
+Next recommended unit of work:
+- Add a narrow `ValidateQuestRequirements` helper for `PortalPathSummary.QuestRequirements` that mirrors Java `PortalService.checkQuests` return behavior as far as current C# quest state supports it, including explicit bypass and a documented gap for incomplete quest-engine semantics.
+
 ---
 
 ## Next Steps
