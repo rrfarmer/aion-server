@@ -12050,6 +12050,50 @@ Summary metrics:
 Next recommended unit of work:
 - Add a minimal `LootGroupRules`/group packet metadata bridge for Java `SM_GROUP_INFO`: source-read `LootGroupRules`, `LootRuleType`, and Java defaults, then add descriptor fields or a small DTO with tested default ids/thresholds. Keep actual `SM_GROUP_INFO` serialization disabled until the metadata is complete enough for byte tests.
 
+### Session 570 (May 23, 2026)
+- Added the first loot-rule metadata bridge required by Java `SM_GROUP_INFO`.
+- Added `PlayerGroupLootRuleType` with Java `LootRuleType` ids: `FREEFORALL=0`, `ROUNDROBIN=1`, `LEADER=2`.
+- Added `PlayerGroupLootRules` with Java default `LootGroupRules` values: round-robin, misc `0`, common threshold `0`, and superior/heroic/fabled/eternal/mythic thresholds `2`.
+- Added `PlayerGroupLootRules.AutoDistributionId` matching Java `LootGroupRules.getAutodistributionId` for mythic threshold `3 -> 3`, `2 -> 2`, otherwise `0`.
+- `PlayerGroupDescriptor` now carries `LootRules`, defaulting to Java default group loot rules.
+- Kept actual `SM_GROUP_INFO` serialization disabled until all required group/team packet fields are modeled and byte-testable.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests"` passes with 92 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1191 tests.
+
+#### Migration Parity Table - Session 570
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.common.legacy.LootRuleType` | `Aion.GameServer.Model.GameObjects.PlayerGroupLootRuleType` | Enum | Partial | Unit Tested | Needs Verification | C# models Java ids for free-for-all, round-robin, and leader loot. Runtime loot distribution behavior is not wired. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootGroupRules` | `Aion.GameServer.Model.GameObjects.PlayerGroupLootRules` | DTO / Metadata | Partial | Unit Tested | Needs Verification | C# carries Java defaults and packet-facing threshold fields. Distribution queues, roll/bid scheduling, quality checks, and mutable counters are not ported. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootGroupRules.getAutodistributionId` | `PlayerGroupLootRules.AutoDistributionId` | Utility | Partial | Unit Tested | Needs Verification | C# mirrors the mythic-threshold branch. Broader roll/bid/autodistribution behavior remains missing. |
+| `com.aionemu.gameserver.model.team.TemporaryPlayerTeam.getLootGroupRules` | `PlayerGroupDescriptor.LootRules` | Team Metadata | Partial | Unit Tested | Needs Verification | Descriptor now carries default loot rules for group-info planning. Java mutable team loot-rule changes and packet fanout remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_INFO` | `PlayerGroupDescriptor.LootRules` dependency only | Packet Dependency | Not Started | Unit Tested Around Dependency | Unknown | Loot metadata required by Java packet is now represented, but the packet itself is still not serialized. Active-player map id, raw team type/subtype, message id, and name fields are still pending. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_DISTRIBUTION_SETTINGS` | No C# equivalent | Client Packet / Dependency | Not Started | No Tests | Unknown | Newly re-touched because Java mutates loot rules through this packet. C# cannot change group loot rules from the client yet. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.CreateOrUpdateGroup_AttachesSharedSnapshotMetadataToMembers`: extended to validate descriptor default loot rule id and all Java default threshold values.
+- `PlayerGroupRuntimeTests.PlayerGroupLootRules_DefaultsMatchJavaLootGroupRules`: validates Java loot rule ids, default thresholds, and autodistribution id logic.
+- Java comparison status: expectations are source-derived from Java `LootRuleType`, `LootGroupRules`, `TemporaryPlayerTeam.getLootGroupRules`, and `SM_GROUP_INFO` field dependencies. No Java runtime execution, loot distribution behavior, packet serialization, distribution-settings packet handling, or live client validation was run.
+
+Remaining risks:
+- `PlayerGroupLootRules` is metadata only; it does not implement Java roll/bid queues, round-robin counters, misc counters, quality checks, scheduled roll handling, or `DropDistributionService` integration.
+- No C# `CM_DISTRIBUTION_SETTINGS` path mutates group loot rules.
+- `SM_GROUP_INFO` serialization remains blocked on active-player map id and exact group/team packet metadata.
+- Threading is not involved in this immutable metadata slice; Java loot rules include concurrent distribution queues that are not modeled.
+- Serialization is still deferred. Reflection/JAXB behavior, date/time, and precision/rounding are not involved in this slice.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 loot-rule metadata bridge
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 12 `SM_GROUP_INFO` serialization, active-player map-id context, raw team type/subtype completeness, mutable group loot-rule changes, `CM_DISTRIBUTION_SETTINGS`, roll/bid distribution queues, round-robin counters, misc counters, quality checks, scheduled roll handling, `DropDistributionService` integration, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group-info packet metadata is more complete, but serialization and live loot-rule behavior remain missing.
+
+Next recommended unit of work:
+- Add a non-sending `GroupInfoPacketPlan` DTO sourced from Java `SM_GROUP_INFO`, using `PlayerGroupDescriptor` plus an explicit active-player map id. Include group id, leader id, map id, loot-rule fields, raw team type/subtype, message id `0`, and empty name intent. Keep packet bytes disabled until a following unit can add a focused serializer test.
+
 ---
 
 ## Next Steps
