@@ -6256,6 +6256,62 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the live zone bridge by loading a narrow subset of Java `zones_*.xml` `zone_type="FLY"` / `zone_type="NO_FLY"` templates and evaluating the player's current `WorldPosition` against those shapes during enter-world and `CM_SUBZONE_CHANGE`. If that proves too wide, add a socket/log harness for `CM_EMOTION` / `CM_SUBZONE_CHANGE` to verify the current map-default flight transition path before expanding geometry.
 
+### Session 436 (May 23, 2026)
+- Added the first geometric Java zone bridge for `zone_type="FLY"` / `zone_type="NO_FLY"` polygon templates.
+- Introduced `FlightZoneTable`, `FlightZoneSummary`, `FlightZoneType`, and `ZonePoint2D` to hold the narrow subset of Java `ZoneTemplate` / `Points` data needed by flight guards.
+- Extended `StaticData` to parse Java `zones_*.xml` polygon flight zones from the merged static-data cache; the current Java data set loads 56 `FLY` / `NO_FLY` polygon zones.
+- Added `FlightZoneSummary.Contains` with Java-breadcrumbed `AbstractArea.isInside3D` / `PolyArea.isInside2D` semantics: z-range check plus polygon containment.
+- Upgraded `PlayerZoneStateService.RevalidateFlightZones` so map-default `FLY` flags can be augmented by local polygon `FLY` zones and blocked by local polygon `NO_FLY` zones.
+- Wired enter-world and `CM_SUBZONE_CHANGE` revalidation to pass the loaded `FlightZoneTable`.
+- Current gaps in this cluster: Java synchronized `ZoneInstance` enter/leave lists, nested zone counters, zone handlers, region indexing, `CylinderArea`/`SphereArea`/`SemisphereArea`, `WorldMap.hasOverridenOption`, admin zone-info messages, and FP reduce/restore callbacks from fly-zone enter/leave remain unported.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~PlayerZoneStateServiceTests|FullyQualifiedName~PlayerStateTests.PlayerFlightActionService"` passes with 12 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~RiftManager|FullyQualifiedName~PlayerZoneStateServiceTests"` passes with 93 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 950 tests.
+
+#### Migration Parity Table - Session 436
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.zone.ZoneTemplate` | `Aion.GameServer.Dataholders.FlightZoneSummary` / `StaticData.FlightZoneBuilder` | Static Data DTO / Parser | Partial | Integration Tested | Partial Parity | Loads only `ZoneClassName.FLY` and `NO_FLY` polygon templates with map id, name, flags, vertical bounds, and points. Siege/town/priority/handlers and other zone types remain unported. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneClassName.FLY` | `Aion.GameServer.Dataholders.FlightZoneType.Fly` | Enum / Zone Type | Partial | Unit + Integration Tested | Partial Parity | Local polygon fly zones can now set `Player.IsInsideFlyZone` even when the world map lacks a default `FLY` flag. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneClassName.NO_FLY` | `Aion.GameServer.Dataholders.FlightZoneType.NoFly` | Enum / Zone Type | Partial | Unit + Integration Tested | Partial Parity | Local polygon no-fly zones can now set `Player.IsInsideNoFlyZone` and therefore block `FlyController.canFly` through the existing guard. |
+| `com.aionemu.gameserver.model.templates.zone.Points` | `Aion.GameServer.Dataholders.FlightZoneSummary.Bottom` / `Top` / `Points` | Geometry DTO | Partial | Integration Tested | Partial Parity | Polygon point lists and z bounds are loaded for flight zones. Optional non-polygon shapes are still ignored. |
+| `com.aionemu.gameserver.model.templates.zone.Point2D` | `Aion.GameServer.Dataholders.ZonePoint2D` | Geometry DTO | Partial | Integration Tested | Partial Parity | Stores Java x/y point coordinates as `float`. Precision is source-derived; no Java runtime golden comparison was run. |
+| `com.aionemu.gameserver.model.geometry.AbstractArea.isInside3D` | `Aion.GameServer.Dataholders.FlightZoneSummary.Contains` | Geometry Utility | Partial | Unit + Integration Tested | Partial Parity | Applies the Java z-bound check before 2D containment. Boundary behavior has not been compared against Java `Shape.contains`. |
+| `com.aionemu.gameserver.model.geometry.PolyArea.isInside2D` / `Polygon2D.contains` | `Aion.GameServer.Dataholders.FlightZoneSummary.Contains` | Geometry Utility | Partial | Unit + Integration Tested | Needs Verification | Uses C# ray-casting for polygon containment. This should match ordinary non-self-intersecting zones, but Java uses `GeneralPath`, so boundary and winding precision require verification. |
+| `com.aionemu.gameserver.world.zone.ZoneService.getZoneInstancesByWorldId` | `Aion.GameServer.Dataholders.FlightZoneTable` | Zone Registry Slice | Partial | Integration Tested | Partial Parity | Provides a map-id lookup for flight-relevant zones only. Java full-map dummy zones, all other zone classes, handlers, and region indexing remain absent. |
+| `com.aionemu.gameserver.world.zone.FlyZoneInstance` | `Aion.GameServer.Services.PlayerZoneStateService.RevalidateFlightZones` | Runtime Zone State Service | Partial | Unit Tested | Partial Parity | Current-position polygon membership can now set `IsInsideFlyZone`. Java enter/leave counters and `onEnterFlyArea`/`onLeaveFlyArea` callbacks are not ported. |
+| `com.aionemu.gameserver.world.zone.NoFlyZoneInstance` | `Aion.GameServer.Services.PlayerZoneStateService.RevalidateFlightZones` | Runtime Zone State Service | Partial | Unit Tested | Partial Parity | Current-position polygon membership can now set `IsInsideNoFlyZone`. Java nested no-fly counters and leave callbacks are not ported. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.setInsideZoneType` / `unsetInsideZoneType` | `Aion.GameServer.Model.GameObjects.Player.IsInsideFlyZone` / `IsInsideNoFlyZone` | Runtime State | Partial | Unit Tested | Needs Verification | C# stores booleans from current-position evaluation, not Java zone-type counters that survive nested enter/leave events. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUBZONE_CHANGE` | `Aion.GameServer.Network.Aion.GameServerConnection` `CmSubzoneChange` case | Client Packet Handler | Partial | Source-Derived Integration Path | Needs Verification | Revalidation now includes map-default and polygon flight zones. Admin zone-info packet text and socket-level ordering remain unverified. |
+| `com.aionemu.gameserver.controllers.CreatureController.onAfterSpawn` | `Aion.GameServer.Network.Aion.GameServerConnection` enter-world flow | Lifecycle Hook | Partial | Source-Derived Integration Path | Needs Verification | Enter-world revalidation now includes polygon flight zones. It is still not Java's full spawn/region/zone lifecycle. |
+| `com.aionemu.gameserver.model.geometry.CylinderArea` / `SphereArea` / `SemisphereArea` | No C# equivalent in this flight-zone slice | Geometry Dependency | Not Started | No Tests | Needs Verification | Not needed by current Java `FLY` / `NO_FLY` polygon rows, but still part of the general zone system. |
+
+Tests added or extended:
+- `StaticDataLoadingTests.DataManager_LoadsRealJavaStaticDataManifestCounts`: now asserts 56 real Java flight zones are loaded, verifies a sample Eltnen `FLY` zone, verifies a Belus `NO_FLY` zone, and checks z-bound rejection.
+- `PlayerZoneStateServiceTests.RevalidateFlightZonesMatchesJavaWorldMapFlightSlice`: renamed for the broader revalidation method while preserving world-map default coverage.
+- `PlayerZoneStateServiceTests.RevalidateFlightZonesMatchesJavaPolygonFlyAndNoFlySlice`: validates local polygon fly-zone enablement, no-fly-zone blocking on a fly map, and z-bound exclusion.
+- Java comparison status: tests are source-derived from Java `ZoneTemplate`, `Points`, `ZoneClassName`, `AbstractArea`, `PolyArea`, `FlyZoneInstance`, `NoFlyZoneInstance`, and `CM_SUBZONE_CHANGE`; no live Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Polygon containment uses a local ray-casting implementation; Java uses `GeneralPath.contains`, so boundary, winding, and self-intersection behavior are marked needs-verification.
+- The bridge evaluates current position only; it does not maintain Java synchronized zone membership collections or nested-zone counters.
+- No zone enter/leave handler fanout exists yet, including FP reduce/restore task callbacks from `FlyZoneInstance` / `NoFlyZoneInstance`.
+- Non-flight zone types and non-polygon geometry remain absent.
+- Revalidation is wired only to enter-world and `CM_SUBZONE_CHANGE`; movement-time region/zone updates are still incomplete.
+- Reflection is not used. Serialization is unchanged. Date/time is not introduced. Threading differs from Java synchronized zone membership because C# currently recomputes booleans on demand.
+
+Summary metrics:
+- Total Java artifacts discovered: 14
+- Total artifacts ported: 1 polygon `FLY` / `NO_FLY` zone-membership slice
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 14
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full zone lifecycle handlers, movement-time zone revalidation, full audit subsystem, full movement-controller parity, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue the zone bridge by adding movement-time revalidation and minimal zone-transition results so entering/leaving `FLY` / `NO_FLY` areas can trigger Java-shaped `onEnterFlyArea` / `onLeaveFlyArea` FP task intent, or build a socket harness around `CM_SUBZONE_CHANGE` + `CM_EMOTION(FLY)` to verify the newly live path before adding more zone lifecycle behavior.
+
 ---
 
 ## Next Steps
@@ -6263,7 +6319,7 @@ Next recommended unit of work:
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
-4. Continue `CM_EMOTION` / `CM_MOVE` flight work by adding one missing support model at a time: geometric fly/no-fly zone membership from Java `zones_*.xml`, full audit-system staff/punishment fanout, FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
+4. Continue `CM_EMOTION` / `CM_MOVE` flight work by adding one missing support model at a time: movement-time fly/no-fly zone transition callbacks, full audit-system staff/punishment fanout, FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
