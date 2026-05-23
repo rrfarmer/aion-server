@@ -11151,6 +11151,50 @@ Summary metrics:
 Next recommended unit of work:
 - Add the next non-executing group allocation plan: introduce a blocked `GroupAllocationNeeded`/`GroupRegisteredTransfer` result surface that can be consumed by the dialog caller or future transfer service without changing live behavior. Then add a narrow C# `WorldMapInstanceRuntimeState.RegisterTeamId` helper mirroring Java `WorldMapInstance.registerTeam` storage semantics, still avoiding member fanout.
 
+### Session 551 (May 23, 2026)
+- Added `WorldMapInstanceRuntimeState.RegisterTeamId`, a Java-shaped helper for the stored-team-id half of `WorldMapInstance.registerTeam`.
+- `RegisterTeamId` stores a single `RegisteredTeamId`, adds the team id to the existing registered object id set for `InstanceService.getRegisteredInstance`-style lookup, and rejects a second team registration.
+- Updated blocked group portal tests to use `RegisterTeamId(88001)` instead of directly calling generic `Register(88001)`, so the test setup now mirrors the Java team-registration boundary more clearly.
+- Added focused runtime coverage for the helper's storage, registered-object lookup, registered count, duplicate-team rejection, and preservation of the original team id.
+- Kept full `GeneralTeam` object storage, member fanout, group allocation, instance handler/lifecycle, and transfer execution out of scope.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~WorldMapRuntimeStateTests"` passes with 96 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1168 tests.
+
+#### Migration Parity Table - Session 551
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMapInstance.registerTeam` | `Aion.GameServer.World.WorldMapInstanceRuntimeState.RegisterTeamId` | Runtime State | Partial | Unit Tested | Partial Parity | C# now models the stored team id and registered-object-id side effect. It does not store a `GeneralTeam` object, expose registered team members, or run empty-instance/lifecycle behavior. |
+| `com.aionemu.gameserver.model.team.common.GeneralTeam.getTeamId` | `RegisterTeamId(int teamId)` parameter and `RegisteredTeamId` property | Model Dependency | Partial | Unit Tested | Needs Verification | C# carries the numeric team id only. No `GeneralTeam`, `PlayerGroup`, alliance group, leader, or member mutation semantics exist. |
+| `com.aionemu.gameserver.world.WorldMapInstance.register(int)` | `WorldMapInstanceRuntimeState.Register` / `RegisterTeamId` registering into `_registeredObjectIds` | Runtime State | Partial | Unit Tested | Partial Parity | Team ids and player ids share the registered id set as in Java. Threading uses a C# lock; Java's concurrent collection behavior was not runtime-compared. |
+| `com.aionemu.gameserver.world.WorldMapInstance.isRegistered` | `WorldMapInstanceRuntimeState.IsRegistered` after `RegisterTeamId` | Runtime State | Partial | Unit Tested | Partial Parity | Tests prove registered team id lookup succeeds and duplicate team id does not get registered. Live `InstanceService` scans and lifecycle cleanup remain unverified. |
+| `com.aionemu.gameserver.services.teleport.PortalService.port` group branch test setup | `PortalEntryValidationServiceTests` using `RegisterTeamId` | Test Boundary | Partial | Unit Tested | Needs Verification | Portal group planning tests now use the Java-shaped team registration helper. Actual group portal transfer remains blocked. |
+
+Tests added or extended:
+- `WorldMapRuntimeStateTests.WorldMapInstanceRuntimeState_RegisterTeamIdMirrorsJavaRegisterTeamStorage`: validates team id storage, registered lookup, registered count, duplicate-team rejection, and preservation of the original team id.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_GroupMemberFindsRegisteredTeamInstanceBeforeBlockedFanout`: updated to set up the registered group instance through `RegisterTeamId`.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_GroupMemberMarksReenterOnlyWhenPlayerObjectIsRegisteredLikeJava`: updated to combine `RegisterTeamId` with player-object registration for the Java reentry nuance.
+- Java comparison status: expectations are source-derived from `WorldMapInstance.registerTeam`, `WorldMapInstance.register`, `WorldMapInstance.isRegistered`, and `PortalService.port`. No Java runtime execution, full `GeneralTeam` storage, team lifecycle cleanup, member fanout, instance allocation, live socket capture, or concurrency comparison was run.
+
+Remaining risks:
+- `RegisterTeamId` is only the storage half of `registerTeam`; it does not hold or validate a `GeneralTeam` object.
+- There is no C# group/alliance/league aggregate yet, so team id ownership, member mutation, leader changes, league object id handling, and online/offline behavior remain unported.
+- Group portal allocation and transfer fanout are still blocked.
+- Empty-instance lifecycle, instance handler callbacks, team cleanup on logout/disband, and capacity checks are not represented.
+- Threading/locking behavior uses C# `lock` over hash sets; Java collection semantics were not runtime-compared.
+- Serialization/live packet behavior, reflection/JAXB behavior, date/time behavior, precision/rounding, and live client/runtime comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 partial runtime helper for Java team-id registration storage
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 8 full `GeneralTeam` storage, group model, alliance model, league model, team lifecycle cleanup, group allocation, member transfer fanout, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; team-id registration storage is now represented, but team portal entry still cannot execute.
+
+Next recommended unit of work:
+- Add a non-executing group allocation decision surface on `PortalTeamEntryPlan`: distinguish registered team transfer, fresh group allocation, and missing/invalid team id with explicit enum values, then wire the future transfer caller to refuse team plans with a clear blocked result rather than ignoring `TeamPlan`.
+
 ---
 
 ## Next Steps
