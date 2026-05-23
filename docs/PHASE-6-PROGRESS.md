@@ -10647,6 +10647,51 @@ Summary metrics:
 Next recommended unit of work:
 - Add a non-mutating consumption plan for required portal items and kinah that records which inventory rows would be decreased, then later wire a repository/persistence mutation. This keeps Java's removal order visible without yet changing live inventory state.
 
+### Session 540 (May 23, 2026)
+- Added `PortalEntryValidationService.CreateRequiredItemsAndKinahConsumptionPlan`, a non-mutating inventory consumption planner for Java `PortalService.checkAndRemoveRequiredItems`.
+- The planner prevalidates kinah first and all item requirements before recording any decrements, matching Java's failure behavior where no item/kinah is removed when a prerequisite check fails.
+- The planner records stack-level required-item consumption first and kinah consumption last, matching Java's successful mutation order: `decreaseByItemId` loop for each `ItemReq`, then `decreaseKinah`.
+- Added `PortalRequirementConsumptionPlan` and `PortalRequirementConsumptionStep` records so later production wiring can persist exact item row updates/deletes and send inventory update packets without recomputing the Java order.
+- Kinah planning keeps the kinah inventory row with count `0` instead of deleting it, mirroring Java `Storage.decreaseItemCount` behavior for kinah.
+- This remains detached from live portal handlers; it does not mutate `Player.InventoryItems`, persist rows, send inventory packets, trigger quest item removed hooks, or invoke teleport.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests"` passes with 59 tests.
+
+#### Migration Parity Table - Session 540
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.checkAndRemoveRequiredItems` | `Aion.GameServer.Services.PortalEntryValidationService.CreateRequiredItemsAndKinahConsumptionPlan` | Service / Mutation Planner | Partial | Unit Tested | Partial Parity | C# now represents Java's successful removal order in a non-mutating plan: item requirements first, kinah last. It still does not call the planner from production portal entry, mutate inventory, persist updates/deletes, send packets, or trigger teleport. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseByItemId` | `PortalEntryValidationService.PlanDecreaseByItemId` | Inventory Mutation Planner | Partial | Unit Tested | Partial Parity | C# records stack-level decrements/deletes across matching item rows. Java `ItemStorage.getItemsById` ordering, locks, storage-location filtering, quest-status delete types, logging, `QuestEngine.onItemRemoved`, and packet emission remain unverified or unsupported. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseKinah` | `PortalEntryValidationService.PlanDecreaseByItemId(..., KinahItemId, deleteWhenZero: false, ...)` | Kinah Mutation Planner | Partial | Unit Tested | Partial Parity | C# records a kinah row count update and keeps the row at zero. Java `ItemUpdateType.DEC_KINAH_BUY`, persistent state marking, and packet dispatch are not implemented in this planner. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseItemCount` | `PortalRequirementConsumptionStep` plus planned `InventoryItem` updates/deletes | Inventory Boundary | Partial | Unit Tested | Needs Verification | C# plans the count math but does not execute Java side effects: `ItemPacketService.sendItemPacket`, delete queue handling, `PersistentState.UPDATE_REQUIRED`, logging, or quest item removal callbacks. |
+| `com.aionemu.gameserver.model.templates.portal.ItemReq` | `Aion.GameServer.Dataholders.PortalItemRequirementSummary` consumed by planner | DTO / Requirement | Partial | Unit Tested / Regression Tested | Partial Parity | Required item ids/counts are consumed by both validation and planning. Duplicate same-item requirements may expose Java's odd precheck-then-unchecked-decrease behavior and need static data review. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` / Java item packet dispatch through `ItemPacketService` | Not yet wired for portal requirement consumption | Packet / Inventory Update | Not Started | No Tests | Unknown | Newly discovered dependency for production mutation. Planner provides updated rows/deleted object ids, but no packet sequencing has been ported for portal entry consumption. |
+
+Tests added or extended:
+- `PortalEntryValidationServiceTests.CreateRequiredItemsAndKinahConsumptionPlan_PlansJavaItemThenKinahConsumptionAcrossStacks`: validates multi-stack item consumption, item delete/update records, kinah update, Java order, and non-mutation of the original inventory objects.
+- `PortalEntryValidationServiceTests.CreateRequiredItemsAndKinahConsumptionPlan_KeepsKinahRowAtZeroLikeJavaStorage`: validates kinah reaches count zero without producing a delete.
+- `PortalEntryValidationServiceTests.CreateRequiredItemsAndKinahConsumptionPlan_FailsBeforePlanningWhenJavaKinahCheckFails`: validates Java's first failure gate produces no planned item consumption.
+- `PortalEntryValidationServiceTests.CreateRequiredItemsAndKinahConsumptionPlan_FailsBeforePlanningWhenAnyJavaItemCheckFails`: validates missing required items produce no planned updates/deletes.
+- Java comparison status: expectations are source-derived from `PortalService.checkAndRemoveRequiredItems`, `Storage.decreaseByItemId`, `Storage.decreaseKinah`, and `Storage.decreaseItemCount`. No Java runtime execution, database persistence, inventory packet capture, quest callback comparison, or live-client validation was run.
+
+Remaining risks:
+- The planner is not invoked by production portal entry paths, so live behavior still does not consume portal-required items or kinah.
+- Java `ItemStorage.getItemsById` ordering and C# `Player.InventoryItems` ordering have not been runtime-compared.
+- C# still lacks Java side effects for item deletion queues, persistent state, update types, packet dispatch, logging, and `QuestEngine.onItemRemoved`.
+- Duplicate item requirements for the same item id need static data review because Java validates all requirements before any removal but ignores the boolean result of each later `decreaseByItemId` call.
+- Group-size checks, actual same-instance teleport, instance transfer/allocation, quest engine depth, siege ownership, threading, reflection/JAXB behavior, date/time, precision/rounding, and live-client behavior remain incomplete or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 non-mutating portal requirement consumption planner plus 2 planner record types
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 5 production portal handler wiring, inventory persistence, inventory packet dispatch, quest item removal side effects, and live runtime/client comparison
+- Estimated overall migration completion: Phase 6 remains about 60% complete; portal required-item/kinah validation and planning are now represented, but live mutation and teleport integration are still missing.
+
+Next recommended unit of work:
+- Wire the portal requirement consumption plan into a repository/packet boundary for production portal entry, or first add a narrow persistence-facing service that applies the planned inventory updates/deletes and returns the Java-like `SM_INVENTORY_UPDATE_ITEM` packet sequence without yet performing the final teleport.
+
 ---
 
 ## Next Steps
