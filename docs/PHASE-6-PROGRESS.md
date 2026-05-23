@@ -3154,6 +3154,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcGlobalDropServiceTests|StaticDataLoadingTests|GamePacketTests|GameServerBootstrapTests"` passes with 96 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 736 tests.
 
+### Session 372 (May 23, 2026)
+- Added a staged zone-membership surface to `WorldNpcDropModifiers` with `InsideZones`, preserving existing drop modifier construction while giving the future zone engine a direct way to feed Java `npc.isInsideZone(...)` state into global-drop filtering.
+- Wired `WorldNpcGlobalDropService` to apply `gd_zone` restrictions against `InsideZones`, matching Java `DropRegistrationService.checkGlobalRuleZones` once current zone names are available.
+- Left `WorldNpcDropModifierService` intentionally empty for zone names and documented the dependency on the future `CM_SUBZONE_CHANGE` / `MapRegion` revalidation model, so this does not pretend the live zone system is already ported.
+- Added coverage for matching and mismatched zone restrictions alongside the existing map/world/NPC-group filters.
+- Current gaps in this cluster: live zone membership/revalidation, siege/base spawn restrictions, runtime event lifecycle side effects, optional sockets, and instance/AI `onDropRegistered` callbacks remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcGlobalDropServiceTests|WorldNpcDropModifierServiceTests|WorldNpcCustomDropServiceTests|GameServerBootstrapTests"` passes with 35 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 736 tests.
+
 ---
 
 ## Next Steps
