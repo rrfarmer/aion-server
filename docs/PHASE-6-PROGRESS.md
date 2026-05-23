@@ -12273,6 +12273,54 @@ Summary metrics:
 Next recommended unit of work:
 - Add a focused non-sending `ChangeGroupLootRulesEvent` planning slice: model a method that applies/replaces `PlayerGroupLootRules` on the descriptor and records future `SmGroupInfo` broadcast intent for current group members. Source-read `CM_DISTRIBUTION_SETTINGS` first if mutation inputs are touched; otherwise keep it as a direct service/internal event slice with live sends disabled.
 
+### Session 575 (May 23, 2026)
+- Source-read Java `CM_DISTRIBUTION_SETTINGS` before touching loot-rule mutation inputs.
+- Added `PlayerGroupLootRulesChangedPacketPlan` and `PlayerGroupInfoBroadcastIntent` for the Java `ChangeGroupLootRulesEvent` broadcast shape.
+- Added `PlayerGroupRuntime.ChangeLootRules(int teamId, PlayerGroupLootRules lootRules)`, which replaces the runtime group descriptor's loot rules and records one non-sending `SmGroupInfo` broadcast intent per current group member.
+- Each planned broadcast uses the recipient member's current `Player.Position.WorldId` as the source-shaped map id for `SM_GROUP_INFO`.
+- Added tests for descriptor mutation, per-member group-info broadcast planning, serialized unencrypted payload values, and unknown-group no-op behavior.
+- Kept `CM_DISTRIBUTION_SETTINGS` parsing/dispatch, alliance/league rule changes, live packet sends, and drop-distribution behavior disabled.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 99 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1197 tests.
+
+#### Migration Parity Table - Session 575
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.group.events.ChangeGroupLootRulesEvent` | `Aion.GameServer.Services.PlayerGroupRuntime.ChangeLootRules` / `PlayerGroupLootRulesChangedPacketPlan` | Event / Service Planning Bridge | Partial | Unit Tested | Needs Verification | C# replaces descriptor loot rules and records non-sending `SM_GROUP_INFO` broadcast intents for current members. Java runs through team events and live packet sends. Event ordering and concurrency are unverified. |
+| `com.aionemu.gameserver.model.team.TemporaryPlayerTeam.setLootGroupRules` | `PlayerGroupDescriptor with { LootRules = ... }` | Team Metadata Mutation | Partial | Unit Tested | Needs Verification | C# descriptor is immutable and replaced in the runtime dictionary. Java mutates team state directly. Runtime identity, threading, and downstream drop references are unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupInfo` via `PlayerGroupInfoBroadcastIntent.CreateGroupInfoPacket` | Server Packet / Broadcast Intent | Partial | Regression Tested | Needs Verification | Broadcast intents can instantiate `SmGroupInfo` and payload values are tested. No Java golden vector, live frame, socket send, or client capture validates end-to-end parity. |
+| `com.aionemu.gameserver.network.aion.AionConnection.getActivePlayer` map id dependency | `Player.Position.WorldId` feeding per-recipient `PlayerGroupInfoPacketPlan.ActivePlayerMapId` | Packet Context | Refactored | Unit Tested | Intentional Difference | Java writes map id from each recipient's active connection during serialization. C# planning uses each member player's current position until live connection serialization exists. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_DISTRIBUTION_SETTINGS` | No C# client packet equivalent in this unit | Client Packet Dependency | Not Started | No Tests | Unknown | Java parses client loot-rule settings and dispatches group/alliance/league changes. C# only adds an internal direct service slice; packet parsing, leader permissions, and alliance/league branches remain missing. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootGroupRules` | `Aion.GameServer.Model.GameObjects.PlayerGroupLootRules` | DTO / Packet Dependency | Partial | Regression Tested | Needs Verification | C# carries packet-facing fields and applies replacement metadata. Roll/bid queues, counters, quality checks, distribution scheduling, and drop-service integration remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.events.ChangeAllianceLootRulesEvent` / `com.aionemu.gameserver.model.team.league.events.LeagueLootRulesChangeEvent` | No C# equivalent in this unit | Event Dependency | Not Started | No Tests | Unknown | Newly touched through `CM_DISTRIBUTION_SETTINGS`. Alliance and league loot-rule mutations are not ported. |
+| `com.aionemu.gameserver.services.drop.DropDistributionService` / `DropService` loot-rule consumers | No C# equivalent in this unit | Service Dependency | Not Started | No Tests | Unknown | Newly re-touched by mutable loot rules. C# packet metadata updates do not yet affect drop distribution behavior. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.ChangeLootRules_UpdatesDescriptorAndPlansGroupInfoBroadcastLikeJavaEvent`: validates descriptor loot-rule replacement, one group-info broadcast intent per member, per-recipient map ids, and serialized unencrypted `SmGroupInfo` payload values after the change.
+- `PlayerGroupRuntimeTests.ChangeLootRules_ReturnsNullForUnknownGroupWithoutChangingKnownGroups`: validates unknown-group no-op behavior and unchanged existing descriptor defaults.
+- Java comparison status: expectations are source-derived from `ChangeGroupLootRulesEvent.handleEvent`, `CM_DISTRIBUTION_SETTINGS.readImpl/runImpl`, `SM_GROUP_INFO.writeImpl`, and `LootGroupRules`. No Java runtime execution, Java-generated golden vector, live client packet parsing, leader-permission comparison, socket send/broadcast comparison, encoded opcode/frame comparison, alliance/league comparison, drop-distribution comparison, or client validation was run.
+
+Remaining risks:
+- `CM_DISTRIBUTION_SETTINGS` is not ported, so real client loot-rule changes cannot reach this C# service slice.
+- Alliance and league loot-rule changes are absent.
+- C# descriptor replacement may differ from Java mutable team state for references held by future drop services.
+- Live `SM_GROUP_INFO` broadcast sends are not wired, and per-recipient active connection map-id lookup remains approximated by player position.
+- Drop distribution behavior, roll/bid queues, counters, quality thresholds, and scheduled roll handling remain missing.
+- Threading/event ordering are unverified; Java uses team event semantics, while C# uses a runtime lock and non-sending DTOs.
+- Serialization is source-derived for payload only. Full frame/opcode/header parity, reflection/JAXB behavior, date/time behavior, and precision/rounding were not newly validated.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 non-sending `ChangeGroupLootRulesEvent` metadata mutation and `SmGroupInfo` broadcast-planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 15 `CM_DISTRIBUTION_SETTINGS` parsing/dispatch, leader permission checks, alliance loot-rule changes, league loot-rule changes, live `SM_GROUP_INFO` broadcast sends, active connection map-id lookup, encoded opcode/frame golden validation, mutable Java object identity comparison, drop distribution integration, roll/bid queues, counters, quality threshold behavior, scheduled roll handling, full team event ordering/threading, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group loot-rule metadata can now be changed and planned for group-info broadcast, but live client-driven loot behavior remains unported.
+
+Next recommended unit of work:
+- Continue group-enter parity by adding non-sending intent rows for the remaining Java `PlayerGroupEnteredEvent` caller outputs in dependency order: first party-enter system-message intent (`STR_PARTY_ENTERED_PARTY` / `STR_PARTY_HE_ENTERED_PARTY`) if existing `SmSystemMessage` helpers cover those ids, otherwise add source-derived message constants with tests. Keep `SM_GROUP_MEMBER_INFO`, brands, and abyss-rank fanout deferred until their dependencies are ready.
+
 ---
 
 ## Next Steps
