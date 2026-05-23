@@ -12934,6 +12934,61 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the group member-info event bridge by source-reading Java `PlayerStartMentoringEvent` and `PlayerGroupStopMentoringEvent`, then add a non-sending movement/update plan that models their `PlayerGroupUpdateEvent(..., GroupEvent.MOVEMENT)` behavior and validates the `SM_GROUP_MEMBER_INFO` movement branch through `PlayerGroupMemberInfoIntent.CreatePacket()`. Keep mentor state mutation, live sends, and socket fanout deferred unless the supporting runtime surface is already present.
 
+### Session 589 (May 23, 2026)
+- Source-read Java `PlayerStartMentoringEvent`, `PlayerGroupStopMentoringEvent`, shared `PlayerStopMentoringEvent`, and `Predicates.Players.canBeMentoredBy`.
+- Added C# mentor system-message factories for Java message ids `STR_MSG_MENTOR_START`, `STR_MSG_MENTOR_START_PARTYMSG`, `STR_MSG_MENTOR_END`, and `STR_MSG_MENTOR_END_PARTYMSG`.
+- Added `PlayerGroupMentorStatusChangePlan` and `PlayerGroupMentorAbyssRankUpdateIntent` to model non-sending mentoring side effects.
+- Added `PlayerGroupRuntime.CreateMentorStatusChangePlan`:
+  - validates the group and subject member;
+  - applies the Java `canBeMentoredBy` level rule before start;
+  - mutates `Player.IsMentor` like Java `player.setMentor(...)`;
+  - plans Java self/party mentor system messages;
+  - plans `SM_GROUP_MEMBER_INFO(..., GroupEvent.MOVEMENT)` to every group member including the mentor;
+  - plans Java action-2 `SM_ABYSS_RANK_UPDATE` mentor status packet.
+- Added tests for mentor start, mentor stop, fake-start rejection, all-member movement packet bodies, mentor flag prefix changes, and action-2 abyss rank update payloads.
+- Kept `AuditLogger`, live `PacketSendUtility` sends, actual broadcast-and-receive target resolution, alliance mentoring events, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 115 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1213 tests.
+
+#### Migration Parity Table - Session 589
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.group.events.PlayerStartMentoringEvent` | `Aion.GameServer.Services.PlayerGroupRuntime.CreateMentorStatusChangePlan` / `PlayerGroupMentorStatusChangePlan` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# models the level predicate, `IsMentor=true` mutation, self/party messages, all-member `MOVEMENT` packet intents, and mentor abyss update intent. Java `AuditLogger`, live sends, broadcast target resolution, and runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerGroupStopMentoringEvent` | `PlayerGroupRuntime.CreateMentorStatusChangePlan(..., isMentor: false)` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# models `IsMentor=false`, end messages, all-member movement packets, and mentor abyss update intent. Live `PacketSendUtility` fanout and superclass dispatch remain deferred. |
+| `com.aionemu.gameserver.model.team.common.events.PlayerStopMentoringEvent` | `PlayerGroupRuntime.CreateMentorStatusChangePlan` | Abstract Event / Shared Behavior | Partial | Regression Tested | Needs Verification | Shared Java stop behavior is represented for player groups only. Alliance/generic team variants are not ported in this slice. |
+| `com.aionemu.gameserver.utils.collections.Predicates.Players.canBeMentoredBy` | `PlayerGroupRuntime.CreateMentorStatusChangePlan` level predicate | Utility / Predicate | Partial | Unit Tested | Needs Verification | C# uses `member.Level + 10 <= mentor.Level` for non-self group members before start. Java filter behavior and edge cases need runtime comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` mentor factories | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.MentorStart*` / `MentorEnd*` | Server Packet Factory | Partial | Unit Tested | Needs Verification | Message ids and parameters are source-derived and packet-body tested through existing system-message helper. No encoded frame or client validation. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK_UPDATE` | `PlayerGroupMentorAbyssRankUpdateIntent` / `SmAbyssRankUpdate.MentorStatusChange` | Server Packet / Intent Factory | Partial | Unit Tested | Needs Verification | Action 2 payload is packet-body tested for start/end. Live broadcast-and-receive recipient selection remains deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `SmGroupMemberInfo` through mentoring movement intents | Server Packet / Intent Factory | Partial | Unit Tested | Needs Verification | Movement branch is packet-body tested with mentor flag prefix changes. Java golden bytes, encoded frame, and client validation are still missing. |
+
+Tests added:
+- `PlayerGroupRuntimeTests.CreateMentorStatusChangePlan_StartsMentoringLikeJavaPlayerStartMentoringEvent`: validates start eligibility, mentor flag mutation, system messages, all-member `MOVEMENT` member-info intents, mentor flag prefix, and action-2 abyss packet.
+- `PlayerGroupRuntimeTests.CreateMentorStatusChangePlan_StopsMentoringLikeJavaPlayerGroupStopMentoringEvent`: validates stop mutation, end messages, all-member movement member-info intents, mentor flag prefix, and action-2 abyss packet.
+- `PlayerGroupRuntimeTests.CreateMentorStatusChangePlan_RejectsFakeStartWhenNoMenteeQualifiesLikeJavaPredicate`: validates the source-derived `canBeMentoredBy` fake-start guard and no mentor mutation.
+- Java comparison status: expectations are source-derived from Java event classes, predicate source, `SM_SYSTEM_MESSAGE`, `SM_ABYSS_RANK_UPDATE`, and `SM_GROUP_MEMBER_INFO.writeImpl`. No Java runtime execution, Java-generated golden vector, live send/fanout comparison, encoded frame comparison, reflection behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Live mentor start/stop sends are not wired to sockets.
+- `AuditLogger.log(player, "sent fake start mentoring packet")` is not modeled.
+- Broadcast-and-receive audience selection for `SM_ABYSS_RANK_UPDATE(2, player)` remains an intent only.
+- Alliance mentoring parity is not included.
+- Java predicate identity/filter behavior is source-modeled but not runtime-compared.
+- Threading behavior is C# lock-based and not Java event-loop validated.
+- Serialization is packet-body tested, but Java golden bytes and encoded frame validation are still unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 player-group mentor status non-sending planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 8 live mentor packet sends, audit logging, broadcast-and-receive target resolution, alliance mentoring, Java predicate/runtime comparison, encoded opcode/frame golden validation, active connection/runtime comparison, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; player-group mentoring now has a non-sending plan boundary, but live dispatch and runtime comparisons are still incomplete.
+
+Next recommended unit of work:
+- Continue the group update caller bridge by source-reading Java `TeamMoveUpdater`, `TeamStatUpdater`, `PlayerEffectController`, and `PlayerReviveService` usages of `PlayerGroupService.updateGroup(player, GroupEvent.MOVEMENT)`, then add a small C# caller-facing plan/result surface that reuses `CreateMemberInfoUpdatePlan(..., PlayerGroupEvent.Movement)` for scheduled movement/stat/revive/effect update triggers. Keep scheduler integration and live socket fanout deferred unless the existing services already expose a safe hook.
+
 ---
 
 ## Next Steps
