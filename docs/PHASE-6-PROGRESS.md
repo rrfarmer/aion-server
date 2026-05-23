@@ -6625,6 +6625,46 @@ Summary metrics:
 Next recommended unit of work:
 - Add a small runtime world-map option owner around `WorldMapSummary` current flags, or wire the first live consumer of these option helpers such as ride restriction, kisk/pet spawn restriction, or admin zone-info output. If continuing flight verification instead, drive the existing connection fanout through an actual `CM_MOVE`, `CM_MOVE_IN_AIR`, or `CM_SUBZONE_CHANGE` packet path.
 
+### Session 445 (May 23, 2026)
+- Added `WorldMapRuntimeState` as the first C# runtime owner for Java `WorldMap.worldOptions`.
+- The new state initializes current options from `WorldMapSummary.Flags`, exposes Java-shaped option readers, applies `setWorldOption` / `removeWorldOption`, and delegates override detection back to the static template baseline.
+- This is still a standalone runtime model; `World` / `GameServerRuntimeContext` do not yet own a map-id registry of `WorldMapRuntimeState` instances.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~StaticDataLoadingTests.WorldMapSummary_OptionReadersMatchJavaWorldMap|FullyQualifiedName~StaticDataLoadingTests.FlightZoneSummary_CanFlyCanGlideMatchesJavaZoneInstanceOptions"` passes with 3 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~PlayerZoneStateServiceTests"` passes with 15 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 957 tests.
+
+#### Migration Parity Table - Session 445
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMap.worldOptions` | `Aion.GameServer.World.WorldMapRuntimeState.CurrentFlags` | Runtime State | Partial | Unit Tested | Partial Parity | Initializes from `WorldMapSummary.Flags` like Java `WorldMapTemplate.flags`. No map registry or instance collection is wired yet. |
+| `com.aionemu.gameserver.world.WorldMap.setWorldOption` | `Aion.GameServer.World.WorldMapRuntimeState.SetWorldOption` | Runtime Mutation | Partial | Unit Tested | Partial Parity | Applies the Java bitwise OR mutation through the immutable helper. Threading remains simpler than a full world-map service. |
+| `com.aionemu.gameserver.world.WorldMap.removeWorldOption` | `Aion.GameServer.World.WorldMapRuntimeState.RemoveWorldOption` | Runtime Mutation | Partial | Unit Tested | Partial Parity | Applies the Java bit clear mutation through the immutable helper. No live caller uses it yet. |
+| `com.aionemu.gameserver.world.WorldMap.hasOverridenOption` | `Aion.GameServer.World.WorldMapRuntimeState.HasOverriddenOption` | Runtime Option Utility | Partial | Unit Tested | Partial Parity | Compares mutable current flags against static template flags through `WorldMapSummary`. Java method typo remains documented on the C# helper. |
+| `com.aionemu.gameserver.world.WorldMap.isFlightAllowed` / `canGlide` / `canRide` / `canFlyRide` / `canPutKisk` / `canRecall` / `isPvpAllowed` / duel readers / `canReturnToBattle` | `Aion.GameServer.World.WorldMapRuntimeState` option properties | Runtime Option Utility | Partial | Unit Tested | Partial Parity | Runtime state exposes the full option-reader surface currently modeled by `WorldMapSummary`; live ride/kisk/duel/PvP callers are still not wired. |
+| `com.aionemu.gameserver.world.WorldMap` instance/iterator APIs | No C# equivalent in this slice | World Map Runtime Dependency | Not Started | No Tests | Needs Verification | Java also owns instances, next instance id, accessible instance lookup, removal, and object iteration. This slice covers only mutable world options. |
+
+Tests added or extended:
+- `WorldMapRuntimeStateTests.WorldMapRuntimeState_MatchesJavaWorldOptionsMutationSlice`: validates initialization from template flags, option removal, option addition, override detection, and inverted return-to-battle behavior.
+- Java comparison status: tests are source-derived from Java `WorldMap` and `ZoneAttributes`; no live Java runtime side-by-side validation was run.
+
+Remaining risks:
+- `WorldMapRuntimeState` is not yet owned by `World`, `GameServerRuntimeContext`, or a map-id lookup service, so runtime behavior is unchanged.
+- Live Java callers for ride restriction, kisk/pet spawn restriction, PvP/duel checks, recall checks, and admin zone info remain unwired.
+- Java `WorldMap` instance collection behavior is still absent.
+- Reflection is not used. Serialization is unchanged. Date/time is not involved. Threading uses simple mutable in-memory state; full concurrency semantics need review when a shared runtime registry is introduced.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 runtime world-options state slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because shared mutable world-map registries, world-map instance ownership, live option consumers, full socket-order harnesses, full zone lifecycle handlers, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Wire `WorldMapRuntimeState` into a map-id registry owned by the game runtime, then switch future zone option consumers to read current flags from that registry. A smaller alternative is to wire the first live option consumer directly: ride restriction, kisk/pet spawn restriction, or admin zone-info output.
+
 ---
 
 ## Next Steps
