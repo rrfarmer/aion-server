@@ -13974,6 +13974,63 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance event parity by source-reading `CheckAllianceReadyEvent` and porting a narrow ready-check planner/runtime status update around `PlayerAllianceRuntime`, including Java `allianceReadyStatus` handling and any system/member packet outputs. Keep client command decoding and live socket sends deferred.
 
+### Session 608 (May 23, 2026)
+- Source-read Java `CheckAllianceReadyEvent`, `SM_ALLIANCE_READY_CHECK`, `TeamCommand`, `PlayerTeamCommandService`, and `CM_PLAYER_STATUS_INFO`.
+- Added `SmAllianceReadyCheck` with opcode `250` and Java payload shape:
+  - `D playerObjectId`;
+  - `C statusCode`.
+- Added `PlayerAllianceReadyCheckCommand`, `PlayerAllianceReadyCheckPlan`, and `PlayerAllianceReadyCheckPacketIntent`.
+- Extended `PlayerAllianceRuntime` with Java `allianceReadyStatus` state and `CheckReady` handling:
+  - `CANCEL` resets status to `0` and broadcasts status `0`;
+  - `START` sets status to online member count minus one and broadcasts statuses `5` then `1`;
+  - `AUTOCANCEL` resets status to `0` and broadcasts status `2`;
+  - `READY` decrements status, broadcasts status `5`, and when status reaches `0` also broadcasts completion status `3`;
+  - `NOTREADY` decrements status, broadcasts status `4`, and when status reaches `0` also broadcasts completion status `3`.
+- Kept live `PacketSendUtility`, command packet decoding, `PlayerTeamCommandService` wiring, Java runtime ordering comparison, socket sends, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerAllianceRuntimeTests|PlayerAllianceMemberInfoTests"` passes with 50 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1060 tests.
+
+#### Migration Parity Table - Session 608
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.events.CheckAllianceReadyEvent` | `Aion.GameServer.Services.PlayerAllianceRuntime.CheckReady` / `PlayerAllianceReadyCheckPlan` | Event Runtime/Planning Bridge | Partial | Regression Tested | Needs Verification | C# models ready-status mutation and packet-intent output for cancel/start/autocancel/ready/not-ready. Java live `alliance.onEvent` locking, live `PacketSendUtility`, and command-service wiring remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Services.PlayerAllianceRuntime` ready-status state | Team Runtime Bridge | Partial | Regression Tested | Needs Verification | C# now tracks `allianceReadyStatus` by alliance id. Java field ownership is modeled narrowly; ready state is not included in snapshots and is not runtime-compared under concurrency. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_READY_CHECK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceReadyCheck` | Server Packet | Partial | Unit Tested | Needs Verification | C# serializes Java `D playerObjectId` + `C statusCode` payload and opcode `250`. Java golden bytes, encrypted frame validation, and client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.ServerPacketsOpcodes` | `SmAllianceReadyCheck.PacketOpCode` | Opcode Mapping | Partial | Unit Tested | Needs Verification | Opcode `250` is source-modeled from Java registration. Encoded opcode/frame validation remains missing. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand` | `Aion.GameServer.Services.PlayerAllianceReadyCheckCommand` | Enum | Partial | Unit Tested | Needs Verification | C# includes ready-check command ids `20..24` only. Other team command ids are not modeled in this enum. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService` | Deferred caller around `PlayerAllianceRuntime.CheckReady` | Service Dependency | Not Started | No Tests | Unknown | Java dispatches ready-check commands through generic team command service. C# runtime method is not wired to command packet handling yet. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | Deferred client packet/caller | Client Packet Dependency | Not Started | No Tests | Unknown | Java reads command code, selected object id, alliance group id, and second object id. C# does not parse or dispatch this packet in this unit. Serialization differences remain unverified for the client packet path. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `PlayerAllianceReadyCheckPacketIntent` metadata | Runtime Dependency | Not Started | No Tests | Unknown | Java sends packets immediately to each member in `alliance.forEach`. C# records send intents only. |
+
+Tests added:
+- `PlayerAllianceRuntimeTests.AllianceReadyCheckCommand_JavaCodesMatchTeamCommand`: validates Java ready-check command ids `20..24`.
+- `PlayerAllianceRuntimeTests.SmAllianceReadyCheck_WritesJavaPayload`: validates opcode `250` and serialized `D/C` payload.
+- `PlayerAllianceRuntimeTests.CheckReady_StartSetsOnlineMemberCountMinusOneAndBroadcastsStartPacketsLikeJava`: validates `START` ready-status mutation using online member count and status `5`/`1` broadcasts to every member.
+- `PlayerAllianceRuntimeTests.CheckReady_ReadyAndNotReadyDecrementAndSendCompletionWhenStatusReachesZero`: validates `READY`/`NOTREADY` decrement behavior and completion status `3` broadcast.
+- `PlayerAllianceRuntimeTests.CheckReady_CancelAndAutoCancelResetStatusLikeJava`: validates `CANCEL` status `0` and `AUTOCANCEL` status `2`.
+- `PlayerAllianceRuntimeTests.CheckReady_ReturnsNullForMissingAllianceOrPlayer`: validates missing runtime/member boundaries.
+- Java comparison status: expectations are source-derived from `CheckAllianceReadyEvent.handleEvent`, `SM_ALLIANCE_READY_CHECK.writeImpl`, `ServerPacketsOpcodes`, `TeamCommand`, `PlayerTeamCommandService`, and `CM_PLAYER_STATUS_INFO`. No Java runtime execution, Java-generated golden vector, live static service registry comparison, command packet decoding comparison, socket send comparison, threading/lock comparison, reflection behavior, encrypted frame comparison, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Ready-check command decoding and caller wiring are not implemented.
+- Live `PacketSendUtility` sends are represented as metadata only.
+- Java `alliance.forEach` locking/threading behavior is source-derived but not runtime-compared.
+- C# ready-status state is runtime-owned but not part of alliance snapshots.
+- Java golden byte vectors, encrypted opcode/frame validation, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 alliance ready-check runtime/packet planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 7 command packet caller, live static service registry, live socket send, Java `onEvent` locking comparison, Java runtime ordering comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; alliance ready-check state and packet planning are now modeled, but command/socket integration and broader alliance lifecycle behavior remain incomplete.
+
+Next recommended unit of work:
+- Continue alliance runtime parity by source-reading Java alliance brand handling (`TemporaryPlayerTeam.updateBrand/sendBrands`, alliance callers, and `SM_SHOW_BRAND`) and port a narrow runtime brand update/send-brands bridge around `PlayerAllianceRuntime`, or wire `CM_PLAYER_STATUS_INFO` command parsing if the packet caller can stay small and non-invasive.
+
 ---
 
 ## Next Steps
