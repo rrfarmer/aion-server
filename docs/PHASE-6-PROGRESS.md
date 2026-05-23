@@ -3655,6 +3655,57 @@ Summary metrics:
 Next recommended unit of work:
 - Extend the staged skill/effect caller to periodic spell damage and drain branches (`SpellAttackEffect`, `SpellAtkDrainEffect`) with DOT-attacked observer and drain-result DTOs, while keeping full `AttackUtil` and heal/MP side effects marked partial until their systems exist.
 
+### Session 383 (May 23, 2026)
+- Extended `WorldNpcSkillDamageService` with staged periodic spell damage and spell-drain caller mappings.
+- Added `WorldNpcSkillDamageKind.PeriodicSpellAttack` for Java `SpellAttackEffect.onPeriodicAction`, mapping to `TYPE.DAMAGE`, `LOG.SPELLATK`, `notifyAttack = false`, and a staged DOT-attacked observer notification.
+- Added `WorldNpcSkillDamageKind.SpellAttackDrain` for Java `SpellAtkDrainEffect.onPeriodicAction`, mapping to `TYPE.DAMAGE`, `LOG.SPELLATKDRAIN`, `notifyAttack = true`, staged effector attack-observer notification, and staged HP/MP drain-result amounts.
+- Added `WorldNpcSkillDotAttackedObserverNotification` and `WorldNpcSkillDrainResult` DTOs.
+- Drain HP/MP values currently calculate from final damage and configured percentages only; they do not mutate effector HP/MP yet.
+- Added focused coverage for periodic spell packet/log/notify mapping, DOT-attacked observer DTOs, spell-drain packet/log/notify mapping, and HP/MP drain amount calculation.
+- Current gaps in this cluster: full `AbstractOverTimeEffect` scheduling, `AttackUtil.calculateMagicalOverTimeSkillResult`, `EffectReserved`, live HP/MP restoration, DOT observer callback execution, poison/bleed/delayed logs, and real `SkillEngine` callers remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcDamageServiceTests"` passes with 11 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcDamageServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GamePacketTests|GameServerBootstrapTests"` passes with 143 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 772 tests.
+
+#### Migration Parity Table - Session 383
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.SpellAttackEffect` | `Aion.GameServer.Services.WorldNpcSkillDamageKind.PeriodicSpellAttack`; `Aion.GameServer.Services.WorldNpcSkillDotAttackedObserverNotification` | Skill Effect/Caller Kind | Partial | Unit Tested | Partial Parity | C# maps periodic spell damage to `TYPE.DAMAGE`, `LOG.SPELLATK`, `notifyAttack = false`, and a staged DOT-attacked observer DTO. Over-time scheduling and magical damage calculation are not ported. |
+| `com.aionemu.gameserver.skillengine.effect.SpellAtkDrainEffect` | `Aion.GameServer.Services.WorldNpcSkillDamageKind.SpellAttackDrain`; `Aion.GameServer.Services.WorldNpcSkillDrainResult` | Skill Effect/Caller Kind | Partial | Unit Tested | Partial Parity | C# maps spell drain to `TYPE.DAMAGE`, `LOG.SPELLATKDRAIN`, attack-observer DTO, and calculated HP/MP drain amounts. It does not yet call effector `increaseHp`/`increaseMp`. |
+| `com.aionemu.gameserver.skillengine.effect.AbstractOverTimeEffect` | Not started; future over-time scheduler/effect lifecycle | Skill Effect Base | Not Started | No Tests | Unknown | Java periodic effects run through over-time scheduling. C# invokes the staged caller directly with final damage. |
+| `com.aionemu.gameserver.controllers.ObserveController.notifyDotAttackedObservers` | `Aion.GameServer.Services.WorldNpcSkillDotAttackedObserverNotification` | Observer Surface/DTO | Partial | Unit Tested | Partial Parity | C# returns a staged DOT-attacked observer notification. Dynamic observer registration and callback execution are not ported. |
+| `com.aionemu.gameserver.model.stats.container.CreatureLifeStats.increaseHp` | `Aion.GameServer.Services.WorldNpcSkillDrainResult.HpAmount` | Stats Side Effect/DTO | Partial | Unit Tested | Needs Verification | C# computes the staged HP drain amount but does not mutate effector HP or broadcast heal packets. |
+| `com.aionemu.gameserver.model.stats.container.CreatureLifeStats.increaseMp` | `Aion.GameServer.Services.WorldNpcSkillDrainResult.MpAmount` | Stats Side Effect/DTO | Partial | Unit Tested | Needs Verification | C# computes the staged MP drain amount but does not mutate effector MP or broadcast MP packets. |
+| `com.aionemu.gameserver.controllers.attack.AttackUtil` | Not started; future C# skill result calculation service | Utility | Not Started | No Tests | Unknown | Java calculates magical over-time damage before the attack call. C# request still supplies final damage directly. |
+| `com.aionemu.gameserver.skillengine.model.EffectReserved` | `Aion.GameServer.Services.WorldNpcSkillDamageRequest.Damage` | Runtime Value | Partial | Unit Tested | Needs Verification | C# does not model reserved positions or resource types for periodic effects. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ATTACK_STATUS.LOG` | `Aion.GameServer.Network.Aion.ServerPackets.SmAttackStatusLog` | Packet Enum | Partial | Unit Tested | Partial Parity | C# now selects `SpellAttack` and `SpellAttackDrain` in addition to regular/proc logs. Other effect logs remain pending. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ATTACK_STATUS.TYPE` | `Aion.GameServer.Network.Aion.ServerPackets.SmAttackStatusType` | Packet Enum | Partial | Unit Tested | Partial Parity | C# maps both periodic branches to `Damage`. Runtime packet comparison remains pending. |
+
+Tests added or extended:
+- `ApplyDamageEffectAsync_MapsPeriodicSpellAttackToDotObserver`: validates periodic spell damage maps to `TYPE.DAMAGE`, `LOG.SPELLATK`, `notifyAttack = false`, skill id propagation, no attack-observer DTO, and DOT-attacked observer DTO.
+- `ApplyDamageEffectAsync_MapsSpellAttackDrainToAttackObserverAndDrainAmounts`: validates spell drain maps to `TYPE.DAMAGE`, `LOG.SPELLATKDRAIN`, attack-observer DTO, no DOT DTO, and HP/MP drain amount calculation.
+- Java comparison status: tests are source-derived from Java `SpellAttackEffect.onPeriodicAction`, `SpellAtkDrainEffect.onPeriodicAction`, `ObserveController.notifyDotAttackedObservers`, and `CreatureLifeStats.increaseHp/increaseMp`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Periodic effect timing and repeated action scheduling are not ported.
+- DOT and attack observer DTOs are not dispatched to dynamic observer callbacks.
+- Drain amounts do not mutate live HP/MP, send heal/MP packets, or apply caps/boosts.
+- Final damage is still supplied by tests/callers; Java `AttackUtil` and magical boost behavior remain missing.
+- Threading is inherited from the staged damage workflow; Java effect scheduler timing is unverified.
+- Reflection, serialization, precision/rounding, and date/time behavior are not exercised beyond integer drain amount calculation.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 6 partial/staged C# artifacts
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 55% because over-time scheduling, full skill runtime, `AttackUtil`, live drain/heal side effects, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Add the next staged skill/effect mappings for delayed/proc/bleed-style damage (`DelayedSpellAttackInstantEffect`, `ProcAtkInstantEffect`, `BleedEffect`) and their log/observer differences before attempting full `AttackUtil` damage calculation.
+
 ---
 
 ## Next Steps
@@ -3664,5 +3715,5 @@ Next recommended unit of work:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, extend the staged skill/effect caller to periodic spell damage and drain branches (`SpellAttackEffect`, `SpellAtkDrainEffect`) with DOT-attacked observer and drain-result DTOs before full packet/AI combat is attempted, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add the next staged skill/effect mappings for delayed/proc/bleed-style damage (`DelayedSpellAttackInstantEffect`, `ProcAtkInstantEffect`, `BleedEffect`) and their log/observer differences before attempting full `AttackUtil` damage calculation, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
