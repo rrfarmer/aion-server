@@ -8314,6 +8314,45 @@ Summary metrics:
 Next recommended unit of work:
 - Continue non-walk zone parity by wiring PVP/FORT counter revalidation into remaining teleport/map-change completion paths, or start generic NPC/spawn/despawn zone revalidation and cleanup so non-player creatures and kisk NPCs cannot retain stale zone counters.
 
+### Session 485 (May 23, 2026)
+- Added player leave-world cleanup for `CreaturePvpZoneCounterService` so counters and zone-membership keys created by movement or teleport revalidation are cleared when the connection removes the player from the world.
+- Refactored the active-player leave path through `GameServerConnection.LeavePlayerWorldAsync`, preserving existing logout/kisk/postman/visibility behavior while adding a Java `World.despawn` breadcrumb for zone leave cleanup.
+- Added regression coverage that seeds both PVP and SIEGE memberships for a player, leaves the world through the connection boundary, verifies counters are removed, and proves a stale Java-zone leave callback no longer sees the player as inside that zone.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests|FullyQualifiedName~CreaturePvpZoneCounterServiceTests|FullyQualifiedName~CreaturePvpZoneRevalidationServiceTests|FullyQualifiedName~PlayerKiskRemovalRuntimeCleanupServiceTests"` passes with 14 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1032 tests.
+
+#### Migration Parity Table - Session 485
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.World.despawn(VisibleObject, ObjectDeleteAnimation)` | `Aion.GameServer.Network.Aion.GameServerConnection.LeavePlayerWorldAsync` | World Despawn Boundary | Partial | Integration Tested | Partial Parity | C# player leave now clears PVP/FORT zone counters during connection world removal. Full Java despawn known-list cleanup, controller `onDespawn`, object delete animation, and generic visible-object coverage remain broader world work. |
+| `com.aionemu.gameserver.world.MapRegion.revalidateZones(Creature)` | `CreaturePvpZoneCounterService.ClearCounters` called from `LeavePlayerWorldAsync` | Zone Cleanup Boundary | Partial | Integration Tested | Intentional Difference | Java despawn marks the creature unspawned and asks the old region to call zone `onLeave`; C# clears the modeled aggregate PVP/SIEGE counters directly because full zone instances/regions are not ported. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.onLeave(Creature)` | `CreaturePvpZoneCounterService.ClearCounters` membership-key removal | Zone Membership Boundary | Partial | Unit + Integration Tested | Partial Parity | Regression proves stale leave callbacks become `NotInside` after player leave cleanup. Controller zone handlers and per-zone leave side effects remain unported. |
+| `com.aionemu.gameserver.world.zone.PvPZoneInstance.onLeave(Creature)` | `CreaturePvpZoneCounterService.ClearCounters` for PVP counters | Zone Callback Boundary | Partial | Unit + Integration Tested | Partial Parity | PVP counters no longer survive player logout/disconnect. Real zone handler ordering and map-region callback timing remain unverified. |
+| `com.aionemu.gameserver.model.siege.FortressLocation.onLeaveZone` | `CreaturePvpZoneCounterService.ClearCounters` for SIEGE counters | Siege Zone Cleanup Boundary | Partial | Integration Tested | Partial Parity | SIEGE counters are cleared at player leave even though fortress shield observers, race/vulnerability logic, and balance buffs remain unported. |
+| `com.aionemu.gameserver.services.player.PlayerLeaveWorldService.leaveWorld` | `GameServerConnection.LeavePlayerWorldAsync` + `PlayerEnterWorldService.LeaveWorldAsync` | Player Logout Boundary | Partial | Integration Tested | Partial Parity | Connection-level leave now performs zone-counter cleanup around the existing persistence/world-removal path. Java multi-client, conqueror/protector, instance, and full social/team leave side effects remain incomplete. |
+
+Tests added:
+- `GameServerConnectionFlightZoneFanoutTests.LeavePlayerWorldAsync_ClearsCreaturePvpZoneCounters`: validates PVP and SIEGE counters plus zone membership keys are cleared when a player leaves through the connection boundary, and confirms stale `ApplyZoneLeave` returns `NotInside`.
+- Java comparison status: test expectations are source-derived from Java `World.despawn`, `MapRegion.revalidateZones`, `ZoneInstance.onLeave`, `PvPZoneInstance.onLeave`, `FortressLocation.onLeaveZone`, and `PlayerLeaveWorldService.leaveWorld`; no live Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Cleanup is currently wired for player connection leave and kisk NPC removal. Generic NPC despawn, spawn placement, NPC movement, ordinary visible-object removal, pet removal, and world-instance deletion still need broader zone cleanup.
+- C# clears the modeled PVP/SIEGE counters directly instead of replaying every zone `onLeave` callback. This avoids stale counters but does not execute Java controller handlers, quest/material handlers, fortress observers, or instance/conqueror callbacks.
+- Exact ordering against logout persistence, known-list delete fanout, and real client packet delivery remains unverified.
+- No packet format, database schema, persistence contract, date/time, reflection, or geometry behavior changed. Threading remains immediate over the concurrent counter store.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 player leave-world PVP/FORT counter cleanup boundary
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 5 generic visible-object despawn cleanup, NPC/spawn/movement revalidation, Java zone handlers/controller callbacks, full logout side effects, and live packet-order validation
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because remaining kisk revive cleanup, live team membership wiring, production socket-order validation, broader teleport/map-change and NPC zone revalidation wiring, generic visible-object cleanup, full dedicated kisk controller/AI, full NPC/dialog AI, resurrection skill/effect callers, per-zone bind membership, live option mutation callers, admin option consumers, world-map instance ownership, object iteration, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue zone lifecycle parity by adding generic NPC/spawn/despawn PVP/FORT revalidation or cleanup hooks, then use those hooks to keep kisk NPC attackability counters current outside the player movement path.
+
 ---
 
 ## Next Steps
