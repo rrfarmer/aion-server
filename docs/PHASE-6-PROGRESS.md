@@ -9376,6 +9376,49 @@ Summary metrics:
 Next recommended unit of work:
 - Either deepen instance lifecycle parity by introducing a small `WorldMapInstance` runtime object with owner/registration state and handler placeholders, or switch to Java-generated golden-vector coverage for the delayed teleport packet set (`SM_TELEPORT_LOC`, `SM_DELETE`, `SM_PLAYER_INFO`, and `SM_SYSTEM_MESSAGE` id `1400640`) before expanding more side effects.
 
+### Session 511 (May 23, 2026)
+- Introduced `WorldMapInstanceRuntimeState` as a narrow C# runtime stand-in for Java `WorldMapInstance` identity, owner, registration, tracked players, and max-player/full checks.
+- Extended `WorldMapRuntimeState` and `WorldMapRuntimeStateTable` so explicitly added instances can be retrieved, registered object ids can be scanned like `InstanceService.getRegisteredInstance`, and explicit removal still drives the delayed teleport fallback.
+- Kept the new runtime object deliberately small: no handlers, zones/regions, object iteration, temporary spawn cleanup, registered team object, empty-instance task, quest-id tracking, door state, or nearby quest scheduling were added in this unit.
+- Added unit coverage for owner/personal state, registered objects, player count/full checks, retrieval by instance id, and registered-instance lookup.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~PlayerKiskSpawnRestrictionServiceTests|FullyQualifiedName~PlayerRideRestrictionServiceTests|FullyQualifiedName~PlayerZoneStateServiceTests"` passes with 31 tests.
+
+#### Migration Parity Table - Session 511
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMapInstance` | `Aion.GameServer.World.WorldMapInstanceRuntimeState` | Runtime State | Partial | Unit Tested | Partial Parity | C# now models instance id, owner id, `isPersonal`, max-player/full checks, registered object ids, and player count. Missing Java behavior is extensive: region/zones, object/NPC/player dictionaries with object instances, handler callbacks, start position, registered team, empty-instance task, quest ids, doors, iteration, nearby quest scheduling, last-player-leave timestamps, and object lifecycle side effects. |
+| `com.aionemu.gameserver.world.WorldMap2DInstance` | `Aion.GameServer.World.WorldMapInstanceRuntimeState` | Runtime State | Partial | Unit Tested | Needs Verification | Owner id and personal-instance semantics are modeled. 2D region creation, zone filtering, coordinate-to-region lookup, and map-neighbor wiring are not ported. |
+| `com.aionemu.gameserver.world.WorldMap3DInstance` | No dedicated C# equivalent yet | Runtime State | Not Started | No Tests | Unknown | Reshanta-specific 3D region behavior remains unported. C# runtime instance state does not distinguish 2D from 3D instances. |
+| `com.aionemu.gameserver.world.WorldMapInstanceFactory` | `Aion.GameServer.World.WorldMapRuntimeState.AddWorldMapInstance` / `WorldMapRuntimeStateTable.AddWorldMapInstance` | Factory / Runtime State | Partial | Unit Tested | Partial Parity | C# can create a minimal runtime instance entry with normalized id, owner, and max players. It does not call `InstanceEngine`, create handlers, select 2D vs 3D maps, spawn instance contents, or allocate ids through Java `WorldMap.getNextInstanceId`. |
+| `com.aionemu.gameserver.world.WorldMap.addInstance(int, WorldMapInstance)` | `Aion.GameServer.World.WorldMapRuntimeState.AddWorldMapInstance` | Runtime State | Partial | Unit Tested | Partial Parity | Explicitly added runtime instances are stored and retrievable; adding removes any prior explicit removal. Java stores full `WorldMapInstance` objects in a concurrent map and supports object iteration; C# stores the narrow runtime state only. |
+| `com.aionemu.gameserver.world.WorldMap.getWorldMapInstance(int)` | `Aion.GameServer.World.WorldMapRuntimeState.TryGetWorldMapInstance` / `WorldMapRuntimeStateTable.TryGetWorldMapInstance` | Runtime State | Partial | Unit Tested | Partial Parity | C# lookup normalizes instance id `0` through the runtime object path and returns explicitly stored instance entries. Existing permissive `InstanceExists` remains intentionally broader until full lifecycle exists. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getRegisteredInstance(int, int)` | `Aion.GameServer.World.WorldMapRuntimeStateTable.GetRegisteredInstance` | Service Lookup / Runtime State | Partial | Unit Tested | Partial Parity | C# scans explicitly stored runtime instances for registered object ids. Java scans all real `WorldMapInstance` objects and registrations may represent players or teams; C# does not yet model registered teams or team disband state. |
+| `com.aionemu.gameserver.world.WorldMapInstance.register(int)` / `isRegistered(int)` / `getRegisteredCount()` | `Aion.GameServer.World.WorldMapInstanceRuntimeState.Register` / `IsRegistered` / `RegisteredCount` | Runtime State | Partial | Unit Tested | Partial Parity | Registered id storage is covered. Threading uses a C# lock and copied hash sets rather than Java `ConcurrentHashMap.newKeySet`; reflection behavior differs because C# exposes a bespoke class, not Java collections. |
+| `com.aionemu.gameserver.world.WorldMapInstance.getPlayerCount()` / `isFull()` | `Aion.GameServer.World.WorldMapInstanceRuntimeState.PlayerCount` / `IsFull` | Runtime State | Partial | Unit Tested | Partial Parity | C# models player ids only and uses `maxPlayers > 0 && PlayerCount >= MaxPlayers`, matching Java's formula. It does not store `Player` objects, update fly-zone membership, or maintain last-player-leave time. |
+
+Tests added:
+- `WorldMapRuntimeStateTests.WorldMapRuntimeStateTable_TracksInstanceRegistrationAndCapacitySlice`: validates added instance id, owner/personal semantics, registration count and lookup, registered-instance scan, player count/full formula, player removal, stored-instance lookup, and unknown-map lookup failure. Expectations are source-derived from Java `WorldMapInstance`, `WorldMap2DInstance`, `WorldMap.addInstance`, and `InstanceService.getRegisteredInstance`; no Java runtime comparison was run.
+- Java comparison status: this unit uses source-derived deterministic behavior from Java classes and does not execute Java, produce Java-generated vectors, or validate live client behavior.
+
+Remaining risks:
+- This is still not a full `WorldMapInstance` port. The runtime object intentionally omits handlers, regions, zones, object iteration, NPC/player object dictionaries, registered teams, empty-instance destroy tasks, temporary spawn cleanup, quest-id tracking, doors, and nearby quest updates.
+- Instance id allocation via Java `WorldMap.getNextInstanceId` is not modeled; callers must still provide ids.
+- Threading differs: C# uses a private lock and snapshots, while Java uses concurrent maps/sets. This is adequate for the modeled tests but not verified for production concurrency.
+- Serialization, database persistence, date/time handling, precision/rounding, reflection behavior, and packet wire format are unchanged in this unit.
+- `QueueDelayedTeleportAsync` remains an internal modeled helper and is still not wired from real teleporter/portal/item/event callers.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 narrow `WorldMapInstance` runtime-state slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 8 full Java `WorldMapInstance`, `WorldMap2DInstance` regions/zones, `WorldMap3DInstance`, `WorldMapInstanceFactory` handler/engine integration, full `InstanceService`, empty-instance destroy scheduling, temporary spawn/object lifecycle callbacks, and production teleport/instance caller wiring
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this adds useful instance runtime scaffolding but broad game-core systems remain open.
+
+Next recommended unit of work:
+- Continue instance lifecycle parity by adding instance id allocation and a `GetNextAvailableInstance`/registration slice modeled after `InstanceService.getNextAvailableInstance` and `getOrRegisterInstance`, or switch to Java-generated packet golden-vector coverage for delayed teleport packet fields before expanding more side effects.
+
 ---
 
 ## Next Steps
