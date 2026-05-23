@@ -5929,6 +5929,45 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the `CM_LEVEL_READY` cluster by adding the missing stat/speed visual refresh after fly restart, or move to the first narrow status-packet scaffold (`SM_GM_SHOW_PLAYER_STATUS`, `SM_GROUP_MEMBER_INFO`, or `SM_ALLIANCE_MEMBER_INFO`) to keep fly-state and movement-mask fanout converging.
 
+### Session 429 (May 23, 2026)
+- Extended `PlayerLevelReadyFlightNotifier` so the Java `FlyController.startFly(true, true)` restart path can invoke `PlayerGameStats.updateStatsAndSpeedVisually` parity through `PlayerVisualStatsUpdateService` before broadcasting `SM_EMOTION(FLY)`.
+- Updated `GameServerConnection.HandleLevelReadyAsync` to pass a level-ready visual-stats bridge when a connection registry is available.
+- Extended the level-ready flight regression to verify Java packet order: owner `SM_STATS_INFO`, visible-player `SM_EMOTION(CHANGE_SPEED)`, then visible-player `SM_EMOTION(FLY)`.
+- Kept the non-flying skip branch side-effect free.
+- Current gaps in this cluster: the visual-stats bridge is still based on the partial C# stats pipeline, Java fly-start validation remains incomplete, and the connection-level `CM_LEVEL_READY` dispatch path is still covered through the notifier rather than a socket harness.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerVisualStatsUpdateServiceTests.LevelReadyFlightNotifier"` passes with 1 test.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerVisualStatsUpdateServiceTests|FullyQualifiedName~PlayerStateTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~WorldNpcSoloDpRewardServiceTests"` passes with 146 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 945 tests.
+
+#### Migration Parity Table - Session 429
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.FlyController.startFly(true, true)` | `Aion.GameServer.Services.PlayerLevelReadyFlightNotifier` | Controller / State + Packet Fanout | Partial | Unit Tested | Partial Parity | Restart path now applies fly state, FP-reduce intent, visual stats/speed refresh, then `SM_EMOTION(FLY)` broadcast in Java order. Guards and cooldown/audit behavior remain pending. |
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats.updateStatsAndSpeedVisually` | `Aion.GameServer.Services.PlayerVisualStatsUpdateService` | Service / Packet Fanout | Partial | Unit Tested | Partial Parity | Level-ready flight restart now reuses the existing stats-then-speed fanout. The underlying stat resolver is still partial. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_LEVEL_READY` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLevelReadyAsync` | Client Packet Handler | Partial | Service Regression Tested | Partial Parity | Handler now supplies the visual-stats bridge when restarting persisted flight. Full Java level-ready side effects and socket-level dispatch coverage remain pending. |
+
+Tests added or extended:
+- `PlayerVisualStatsUpdateServiceTests.LevelReadyFlightNotifier_RestartsFlyingAndBroadcastsFlyEmotion`: now also verifies `SM_STATS_INFO`, `SM_EMOTION(CHANGE_SPEED)`, and `SM_EMOTION(FLY)` ordering.
+- Java comparison status: the test is source-derived from Java `FlyController.startFly`, `PlayerGameStats.updateStatsAndSpeedVisually`, and `CM_LEVEL_READY.runImpl`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Java `canFly` checks, fly cooldown audit, zone/access/no-fly/polymorph/private-store restrictions, and system messages are still deferred.
+- `PlayerVisualStatsUpdateService` still depends on partial stats and speed resolvers, so the fanout order is closer to Java but the values are not full Java runtime parity.
+- The connection creates a local visual-stats bridge for level-ready restart rather than sharing the singleton cache; this is acceptable for the one-shot restart slice but should converge when connection services are fully modeled.
+- Reflection and date/time are not involved. Serialization order is covered by a source-derived unit test. Threading remains approximate because Java level-ready still schedules broader world/team work that is not modeled here.
+
+Summary metrics:
+- Total Java artifacts discovered: 3
+- Total artifacts ported: 1 visual stat/speed fanout bridge for level-ready fly restart
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full level-ready world/spawn side effects, full stat-function/effect resolution, full fly validation, full movement-controller parity, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue the flight cluster with Java `FlyController.canFly/canGlide` guard parity, or move to a first narrow status packet scaffold (`SM_GM_SHOW_PLAYER_STATUS`, `SM_GROUP_MEMBER_INFO`, or `SM_ALLIANCE_MEMBER_INFO`) now that fly-state, movement-mask, and visual speed fanout have stronger shared coverage.
+
 ---
 
 ## Next Steps
