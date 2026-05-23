@@ -9851,6 +9851,48 @@ Summary metrics:
 Next recommended unit of work:
 - Add a minimal source-shaped portal transfer service around instance allocation/registration and start-position state if the current `InstanceRuntimeService` can supply the destination instance id, or add MySQL integration coverage for `SavePlayerPortalCooldownsAsync` before more caller wiring.
 
+### Session 522 (May 23, 2026)
+- Added `WorldMapInstanceRuntimeState.StartPosition` plus set-once `SetStartPositionIfMissing`, mirroring Java `WorldMapInstance.setStartPos` usage in `PortalService.transfer`.
+- Added `InstanceRuntimeService.CreatePortalTransferInstance` to allocate a runtime instance, register the requester object id, initialize start position, and return a destination whose `InstanceId` matches the allocated instance.
+- Added runtime tests for set-once start-position behavior, portal transfer allocation/registration, personal owner id, max-player propagation, and non-instance rejection.
+- Kept this as runtime-state preparation only: it is not yet wired into `GameServerConnection.QueueInstancePortalTransferAsync` or a full portal packet path.
+- Focused validation: `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests"` passes with 34 tests.
+
+#### Migration Parity Table - Session 522
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMapInstance.setStartPos` / `getStartPos` | `Aion.GameServer.World.WorldMapInstanceRuntimeState.StartPosition` / `SetStartPositionIfMissing` | Runtime State | Partial | Unit Tested | Partial Parity | C# models the portal-transfer set-once usage where start position is initialized only if missing. Java setter itself overwrites when called directly; this C# helper intentionally mirrors the `PortalService.transfer` guard, not arbitrary setter semantics. |
+| `com.aionemu.gameserver.world.WorldMapInstance.register` | `Aion.GameServer.World.WorldMapInstanceRuntimeState.Register` via `InstanceRuntimeService.CreatePortalTransferInstance` | Runtime State | Partial | Unit Tested | Partial Parity | Requester object id is registered during portal transfer planning. Team registration, registered-team object state, and duplicate error behavior are not modeled. |
+| `com.aionemu.gameserver.services.teleport.PortalService.port` | `Aion.GameServer.Services.InstanceRuntimeService.CreatePortalTransferInstance` | Service / Runtime Planning | Partial | Unit Tested | Partial Parity | C# allocates a runtime instance, applies owner/max-player values, registers requester, and returns a destination with allocated instance id. WorldMapType personal-map detection, difficulty id, handler selection, event spawns, and full portal validation are missing. |
+| `com.aionemu.gameserver.services.teleport.PortalService.transfer` | `Aion.GameServer.Services.InstanceRuntimeService.CreatePortalTransferInstance` plus future connection transfer caller | Service / Runtime Planning | Partial | Unit Tested | Needs Verification | Start-position and registration preparation are modeled, but not yet composed with `QueueInstancePortalTransferAsync` in a production caller. Packet ordering was covered in Session 521, not this runtime helper. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getNextAvailableInstance` | `Aion.GameServer.Services.InstanceRuntimeService.GetNextAvailableInstance` via `CreatePortalTransferInstance` | Service / Instance Allocation | Partial | Unit Tested | Partial Parity | Existing allocation guard is reused. Missing Java behavior remains difficulty id, instance handler supplier, `SpawnEngine.spawnInstance`, `InstanceHandler.onInstanceCreate`, auto-destroy scheduling, and Panesterra restrictions. |
+| `com.aionemu.gameserver.world.WorldPosition` | `Aion.GameServer.World.WorldPosition` | DTO | Partial | Unit Tested | Partial Parity | C# preserves world id, coordinates, heading, and allocated instance id for transfer destination. Java object identity, mutable position references, and world-map-instance backreferences are not modeled. |
+| `com.aionemu.gameserver.model.WorldMapType.isPersonal` | Caller-supplied `ownerId` to `CreatePortalTransferInstance` | Enum / Map Type Boundary | Not Started | No Tests | Unknown | Discovered dependency remains outside C#. The helper accepts an owner id but does not infer personal maps from Java `WorldMapType`. |
+
+Tests added or extended:
+- `WorldMapRuntimeStateTests.WorldMapRuntimeStateTable_TracksInstanceRegistrationAndCapacitySlice`: extended to validate start-position set-once behavior and stored `StartPosition`.
+- `WorldMapRuntimeStateTests.InstanceRuntimeService_CreatesPortalTransferInstanceWithStartPosition`: validates allocated instance id, owner/max-player storage, requester registration, destination instance id rewrite, stored start position, registered-instance lookup, and non-instance rejection.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `PortalService.transfer`, `InstanceService.getNextAvailableInstance`, and `WorldMapInstance.setStartPos/register`. No Java runtime execution, handler/engine integration, live portal flow, or real-client validation was run.
+
+Remaining risks:
+- `CreatePortalTransferInstance` is not yet wired together with `QueueInstancePortalTransferAsync`, so the instance allocation/start-position work and packet/cooldown work are still separate building blocks.
+- C# does not infer personal maps through Java `WorldMapType`; callers must pass `ownerId`.
+- Difficulty ids, handler suppliers, spawn engine, instance handler callbacks, auto-destroy scheduling, and event spawn behavior remain missing.
+- Threading differs: C# uses a lock around runtime sets/start position, while Java uses concurrent collections plus mutable object state.
+- Serialization, database persistence, date/time handling, precision/rounding, and reflection identity are unchanged in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 narrow portal-transfer runtime planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 production portal caller wiring, Java `WorldMapType` personal-map metadata, difficulty/handler/spawn integration, team registration, live teleport/client validation, and Java runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this adds instance runtime preparation for portal transfer but does not complete the end-to-end flow.
+
+Next recommended unit of work:
+- Compose `InstanceRuntimeService.CreatePortalTransferInstance` with `GameServerConnection.QueueInstancePortalTransferAsync` in a small service/helper that returns the allocated destination and preserves Java `PortalService.port -> transfer` ordering, while still leaving full validation and item/kinah consumption explicit.
+
 ---
 
 ## Next Steps
