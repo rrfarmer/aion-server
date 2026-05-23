@@ -12094,6 +12094,49 @@ Summary metrics:
 Next recommended unit of work:
 - Add a non-sending `GroupInfoPacketPlan` DTO sourced from Java `SM_GROUP_INFO`, using `PlayerGroupDescriptor` plus an explicit active-player map id. Include group id, leader id, map id, loot-rule fields, raw team type/subtype, message id `0`, and empty name intent. Keep packet bytes disabled until a following unit can add a focused serializer test.
 
+### Session 571 (May 23, 2026)
+- Added a non-sending `PlayerGroupInfoPacketPlan` DTO sourced from Java `SM_GROUP_INFO.writeImpl`.
+- `PlayerGroupInfoPacketPlan.FromDescriptor` records group id, leader id, active-player map id, loot-rule metadata, constant marker `0x02`, unknown byte `0`, raw team type/subtype, message id `0`, and empty name intent.
+- Added `PlayerGroupType.ToJavaPacketFields` for Java `TeamType.GROUP` (`0x3F`, `0`) and `TeamType.AUTO_GROUP` (`0x02`, `1`).
+- Extended tests to validate `SM_GROUP_INFO` planning metadata from the runtime descriptor and raw Java team type/subtype values.
+- Kept `SM_GROUP_INFO` packet serialization and live sends disabled.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests"` passes with 93 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1192 tests.
+
+#### Migration Parity Table - Session 571
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_INFO` | `Aion.GameServer.Services.PlayerGroupInfoPacketPlan` | Packet Planning DTO | Partial | Unit Tested | Needs Verification | C# now records the Java field intent but does not serialize bytes or send packets. Exact packet opcode/frame behavior remains unverified. |
+| `com.aionemu.gameserver.model.team.TeamType.getType` / `getSubType` | `Aion.GameServer.Model.GameObjects.PlayerGroupTypeExtensions.ToJavaPacketFields` | Enum Utility | Partial | Unit Tested | Needs Verification | C# models raw packet fields for `GROUP` and `AUTO_GROUP` only. Alliance/offence/defence variants remain missing. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootGroupRules` | `PlayerGroupInfoPacketPlan.LootRules` | Packet Dependency | Partial | Regression Tested | Needs Verification | Plan carries default loot metadata through descriptor. Mutable loot-rule changes and distribution behavior remain missing. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.getLeader` / `getObjectId` | `PlayerGroupDescriptor` feeding `PlayerGroupInfoPacketPlan` | Packet Dependency | Partial | Regression Tested | Needs Verification | Plan uses descriptor team id and leader object id. Java wrapper leader identity and leader-change lifecycle remain missing. |
+| `com.aionemu.gameserver.network.aion.AionConnection.getActivePlayer` map id dependency | `PlayerGroupInfoPacketPlan.ActivePlayerMapId` | Packet Context | Refactored | Unit Tested | Intentional Difference | Java reads map id from active connection player at serialization time. C# plan takes explicit map id so intent can be tested before live connection serialization exists. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.CreateOrUpdateGroup_AttachesSharedSnapshotMetadataToMembers`: extended to validate `PlayerGroupInfoPacketPlan` fields from an auto-group descriptor.
+- `PlayerGroupRuntimeTests.PlayerGroupType_JavaPacketFieldsMatchTeamType`: validates raw Java packet fields for `GROUP` and `AUTO_GROUP`.
+- Java comparison status: expectations are source-derived from `SM_GROUP_INFO.writeImpl` and Java `TeamType`. No Java runtime execution, packet byte comparison, opcode validation, live connection active-player lookup, or client validation was run.
+
+Remaining risks:
+- This is still packet intent, not packet serialization.
+- `SM_GROUP_INFO` byte parity cannot be claimed until a C# packet class writes the exact field order and packet opcode.
+- Active-player map id is explicit in C# planning; Java reads it from `AionConnection.getActivePlayer`.
+- Only group/auto-group raw team type fields are modeled.
+- Mutable loot-rule changes, leader changes, and live group lifecycle are not modeled.
+- Serialization remains deferred. Reflection/JAXB behavior, date/time, precision/rounding, and threading are not involved in this planning DTO beyond existing runtime descriptor state.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 non-sending `SM_GROUP_INFO` planning DTO
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 10 `SM_GROUP_INFO` packet serialization, opcode/frame validation, live send path, active connection map-id lookup, alliance/offence/defence team type fields, mutable loot-rule changes, leader-change lifecycle, group packet fanout, live client/runtime comparison, and packet golden vectors
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group-info packet intent is modeled, but byte serialization and live fanout remain missing.
+
+Next recommended unit of work:
+- Add the first focused `SmGroupInfo` packet serializer only for the currently modeled group-info plan fields, with an unencrypted payload test for the exact Java field order. Keep live sends disabled and mark parity as source-derived until a Java golden vector or client capture verifies bytes/opcode.
+
 ---
 
 ## Next Steps
