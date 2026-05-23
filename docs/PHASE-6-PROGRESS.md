@@ -12799,6 +12799,48 @@ Summary metrics:
 Next recommended unit of work:
 - Add a small packet-facing group member effect DTO and use it for non-empty `SM_GROUP_MEMBER_INFO` effect list serialization. Keep the DTO source fields exactly aligned with Java `Effect`: effector id, skill id, skill level, target slot ordinal, and remaining display time. Add byte tests for one `ENTER`/`UPDATE` effect and one `UPDATE_EFFECTS` targeted effect, but keep live effect-controller extraction deferred if needed.
 
+### Session 586 (May 23, 2026)
+- Source-read Java `Effect` accessors used by `SM_GROUP_MEMBER_INFO.writeImpl`: `getEffectorId`, `getSkillId`, `getSkillLevel`, `getTargetSlot().ordinal()`, and `getRemainingTimeToDisplay`.
+- Added `PlayerGroupMemberEffectInfo`, a packet-facing DTO with the exact source fields needed for group member effect serialization.
+- Extended `PlayerGroupMemberInfoPacketPlan` with optional `AbnormalEffects`.
+- Updated `SmGroupMemberInfo` to serialize non-empty abnormal-effect lists for both full-slot `ENTER`/`UPDATE` branches and targeted `UPDATE_EFFECTS` branches.
+- The live Java effect-controller extraction path remains deferred; tests construct packet DTOs directly.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 110 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1208 tests.
+
+#### Migration Parity Table - Session 586
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` | Server Packet | Partial | Unit Tested | Needs Verification | C# can now serialize prefix, all zero-effect branches, and caller-supplied non-empty effect entries. Live effect extraction and socket fanout remain missing. |
+| `com.aionemu.gameserver.skillengine.model.Effect` | `Aion.GameServer.Services.PlayerGroupMemberEffectInfo` | Packet DTO / Effect Dependency | Partial | Unit Tested | Needs Verification | DTO mirrors Java packet-facing fields: effector id, skill id, skill level, target slot ordinal, and remaining display time. It does not model effect runtime behavior, reflection, save rules, or controller filtering. |
+| `com.aionemu.gameserver.skillengine.model.SkillTargetSlot` | `PlayerGroupMemberEffectInfo.TargetSlotOrdinal` plus private `SmGroupMemberInfo` timer constants | Enum / Packet Dependency | Partial | Unit Tested | Needs Verification | C# writes the Java target slot ordinal supplied by the DTO and still uses private constants for the timer loop. Reusable enum parity is still missing. |
+| `com.aionemu.gameserver.controllers.effect.EffectController.getAbnormalEffectsToShow` / `getAbnormalEffectsToTargetSlot` | Not implemented for group member info | Controller Dependency | Not Started | No Tests | Unknown | Newly emphasized dependency. C# callers must eventually populate `PlayerGroupMemberInfoPacketPlan.AbnormalEffects` from live player effects. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.SmGroupMemberInfo_WritesNonEmptyEffectEntriesLikeJava`: validates one effect entry for a full-slot `ENTER` branch and one effect entry for a targeted `UPDATE_EFFECTS` branch, covering effector id, skill id, skill level, target slot ordinal, remaining display time, and trailing timer placeholders.
+- Java comparison status: expectations are source-derived from `SM_GROUP_MEMBER_INFO.writeImpl` and Java `Effect` accessors. No Java runtime execution, Java-generated golden vector, live effect-controller extraction comparison, socket send/fanout comparison, encoded frame comparison, or client validation was run.
+
+Remaining risks:
+- Live effect extraction from C# player/effect controllers is not implemented.
+- C# does not yet model Java `EffectController.getAbnormalEffectsToShow` or `getAbnormalEffectsToTargetSlot` filtering.
+- Reflection-sensitive effect runtime behavior remains outside this DTO.
+- `SkillTargetSlot` still lacks a reusable C# enum/model.
+- Live group member fanout and Java packet ordering remain unwired/unverified.
+- Byte tests cover unencrypted payload only; encoded opcode/frame and live-client behavior remain unverified.
+- Date/time handling is represented only as caller-supplied remaining milliseconds; no live clock comparison was performed.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 packet-facing group member effect DTO and serializer slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 6 live effect-controller extraction, reusable `SkillTargetSlot` model, reflection-sensitive effect runtime behavior, live group member fanout, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; `SM_GROUP_MEMBER_INFO` packet serialization can now represent effect entries when supplied, but runtime population and live sends are still incomplete.
+
+Next recommended unit of work:
+- Add non-sending `SM_GROUP_MEMBER_INFO` packet creation helpers to group-enter/reconnect plans now that the packet can serialize the source-shaped branches used by those plans. Keep live socket sends deferred, but expose `CreatePacket()` from `PlayerGroupMemberInfoIntent` when `PacketPlan` is present and add tests for join/enter/reconnect packet construction.
+
 ---
 
 ## Next Steps
