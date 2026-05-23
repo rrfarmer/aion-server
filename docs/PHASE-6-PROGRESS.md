@@ -14289,6 +14289,51 @@ Summary metrics:
 Next recommended unit of work:
 - Continue `CM_PLAYER_STATUS_INFO` parity by porting one more command branch with narrow blast radius: either `GROUP_SET_LFG` (`Player.setLookingForGroup(selectedObjectId == 2)`) or `ALLIANCE_CHANGE_GROUP` by wiring the existing `PlayerAllianceGroupChangeServicePlanner` through the packet handler with system-message sends. Keep league commands and full generic team-command dispatch deferred.
 
+### Session 614 (May 23, 2026)
+- Source-read Java `Player.lookingForGroup`, `Player.isLookingForGroup`, `Player.setLookingForGroup`, `CM_PLAYER_STATUS_INFO.runImpl`, `SM_PLAYER_SEARCH`, and `CM_PLAYER_SEARCH`.
+- Added `Player.IsLookingForGroup` as the C# state bridge for Java `Player.lookingForGroup`.
+- Extended `GameServerConnection.HandlePlayerStatusInfoAsync` with the Java `GROUP_SET_LFG` branch:
+  - command code `9`;
+  - sets `player.IsLookingForGroup = packet.SelectedObjectId == 2`;
+  - sends no packets and returns no ready-check plan.
+- Kept player search filtering/status serialization, persistence, broader team-command dispatch, live client validation, and Java runtime comparison deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|ClientPacketFactory_ParsesPlayerStatusInfoPacket"` passes with 4 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1076 tests.
+
+#### Migration Parity Table - Session 614
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | C# now handles Java `GROUP_SET_LFG` command code `9` plus ready-check ids `20..24`. Alliance group change, league, ban/leader/leave/vice-captain, mentoring, and other branches remain missing. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.GROUP_SET_LFG` | Command code `9` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | C# source-models the Java command id and behavior. Full `TeamCommand` enum mapping remains partial; invalid command exception behavior remains deferred. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Aion.GameServer.Model.GameObjects.Player.IsLookingForGroup` | Model State | Partial | Regression Tested | Needs Verification | C# stores the LFG flag and toggles it from the packet. Java accessors `isLookingForGroup/setLookingForGroup` are represented as a property; persistence and broader consumers are not complete. Threading/visibility semantics are not runtime-compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_SEARCH` | Deferred C# player-search/status serialization consumer | Server Packet Dependency | Not Started | No Tests | Unknown | Java serializes status `2` when `player.isLookingForGroup()`. C# does not yet expose this flag through player search packets. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_SEARCH` | Deferred C# player-search filter consumer | Client Packet Dependency | Not Started | No Tests | Unknown | Java filters out non-LFG players when `lfgOnly == 1`. C# search filtering is not part of this unit. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService` | Narrow branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Service Dependency | Partial | Regression Tested | Needs Verification | C# continues bypassing the full generic team-command service and ports one more simple branch directly. Broader dispatch remains missing. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_GroupSetLfgTogglesPlayerFlagLikeJava`: validates command code `9` sets LFG true only when `selectedObjectId == 2`, clears it otherwise, and emits no packets.
+- Java comparison status: expectations are source-derived from `CM_PLAYER_STATUS_INFO.runImpl`, `TeamCommand.GROUP_SET_LFG`, and `Player.setLookingForGroup`. No Java runtime execution, Java-generated golden vector, live client packet capture, player-search serialization comparison, player-search filter comparison, persistence comparison, threading/visibility comparison, reflection behavior, encrypted frame comparison, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Player search serialization/filtering does not yet consume `IsLookingForGroup`.
+- The C# property is not persisted; Java appears to keep `lookingForGroup` as runtime state only, but lifecycle reset/client behavior has not been runtime-compared.
+- Most `CM_PLAYER_STATUS_INFO` commands remain unimplemented.
+- Java exception behavior for invalid/deferred team commands remains unmodeled.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 `CM_PLAYER_STATUS_INFO` group-LFG branch
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 8 player-search serialization, player-search filtering, remaining team command branches, Java exception behavior for deferred commands, Java runtime/threading comparison, encoded opcode/frame golden validation, packet capture comparison, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; the LFG command branch is now modeled, but player search consumers and most team commands remain incomplete.
+
+Next recommended unit of work:
+- Continue `CM_PLAYER_STATUS_INFO` parity with `ALLIANCE_CHANGE_GROUP` by wiring the existing `PlayerAllianceGroupChangeServicePlanner` through the packet handler and sending no-alliance/no-rights system-message intents through the registry/direct-send path. Keep league commands and full generic `PlayerTeamCommandService` dispatch deferred.
+
 ---
 
 ## Next Steps
