@@ -10209,6 +10209,47 @@ Summary metrics:
 Next recommended unit of work:
 - Either continue source-order validation with `checkRank` using `Player.AbyssRank` and explicit portal min-rank parameters, or prioritize `PortalPath` static-data loading so race/level/rank/title/quest guard parameters can come from Java XML instead of test-supplied values.
 
+### Session 530 (May 23, 2026)
+- Added `PortalEntryValidationService.ValidateRank`, a narrow source-shaped equivalent of Java `PortalService.checkRank`.
+- The helper compares `Player.AbyssRank.Rank` to an explicit `portalPathMinRank` and returns `SM_DIALOG_WINDOW(npcObjectId, DialogPage.NO_RIGHT.id())` when the player rank is too low.
+- Added tests for rank meeting the minimum, portal minimum rank zero, and below-minimum failure dialog payload.
+- Kept this parameterized until `PortalPath` static-data loading exists; no production portal handler calls the helper yet.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~GamePacketTests"` passes with 101 tests.
+
+#### Migration Parity Table - Session 530
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.checkRank` | `Aion.GameServer.Services.PortalEntryValidationService.ValidateRank` | Service / Validation | Partial | Unit Tested | Partial Parity | C# models the rank-id comparison and `NO_RIGHT` dialog failure branch. It returns the packet rather than dispatching it and remains unwired to live portal flow. |
+| `com.aionemu.gameserver.model.templates.portal.PortalPath.getMinRank` | Explicit `portalPathMinRank` parameter to `ValidateRank` | Template Boundary | Partial | Unit Tested | Needs Verification | The Java portal-path min-rank value is represented by a primitive parameter. C# still lacks `PortalPath` XML/static-data loading, so data fidelity is not verified. |
+| `com.aionemu.gameserver.model.gameobjects.player.AbyssRank.getRank().getId` | `Aion.GameServer.Model.GameObjects.PlayerAbyssRank.Rank` | Player State / Rank | Partial | Unit Tested | Partial Parity | Existing C# rank id is consumed directly by the guard. Rank load/update behavior is tested elsewhere but not runtime-compared to Java in this unit. |
+| `com.aionemu.gameserver.model.DialogPage.NO_RIGHT` | `Aion.GameServer.Network.Aion.ServerPackets.SmDialogWindow.NoRightPageId` | Enum / Packet Constant | Complete | Unit Tested | Partial Parity | Constant `27` is reused from Session 529. Full Java `DialogPage` enum remains unported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DIALOG_WINDOW` | `Aion.GameServer.Network.Aion.ServerPackets.SmDialogWindow` returned by `ValidateRank` | Server Packet / Dialog | Partial | Unit Tested / Regression Tested | Partial Parity | Tests cover ordinary zero-context `NO_RIGHT` payload for the rank guard. Live-client dispatch and special context branches are not verified. |
+
+Tests added:
+- `PortalEntryValidationServiceTests.ValidateRank_AllowsWhenJavaAbyssRankMeetsPortalMinimum`: validates rank equal to min rank is allowed.
+- `PortalEntryValidationServiceTests.ValidateRank_AllowsWhenJavaPortalMinimumIsZero`: validates min-rank default `0` allows default soldier rank.
+- `PortalEntryValidationServiceTests.ValidateRank_ReturnsNoRightDialogWhenRankIsBelowPortalMinimum`: validates below-min-rank rejection and dialog payload.
+- Java comparison status: expectations are source-derived from `PortalService.checkRank`, `PortalPath.getMinRank`, `AbyssRank.getRank().getId`, `DialogPage.NO_RIGHT`, and `SM_DIALOG_WINDOW`. No Java runtime execution, portal-template loading, production portal handler, or encrypted client validation was run.
+
+Remaining risks:
+- The rank guard is not wired into production portal flow.
+- `PortalPath` static-data loading remains absent, so min-rank values are caller-supplied.
+- C# rank ids are assumed to match Java `AbyssRankEnum` ids based on existing model work, but no Java runtime comparison was performed in this unit.
+- Remaining portal checks include title, quests, player size, required item removal, kinah, and production transfer wiring.
+- Packet dispatch timing, threading, reflection identity, date/time behavior, precision/rounding, serialization beyond the tested dialog payload, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 narrow portal rank-validation guard
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 4 production portal handler wiring, portal-path static-data model, remaining portal guards, and live-client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 56% complete; another source-order portal guard is represented, but end-to-end portal entry remains incomplete.
+
+Next recommended unit of work:
+- Continue source-order portal validation with `checkTitle` using explicit `portalPathTitleId` and `Player.Titles` membership until `PortalPath` loading exists, or pivot to a minimal `PortalPath` static-data model before adding more guards.
+
 ---
 
 ## Next Steps
