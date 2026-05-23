@@ -4961,6 +4961,53 @@ Summary metrics:
 Next recommended unit of work:
 - Continue resource side-effect concretization by choosing the smallest remaining runtime side effect: either wire Java `PlayerGameStats.updateStatsAndSpeedVisually()` into a concrete C# visual stat/speed packet path after DP changes, or start group stat update fanout for HP/MP changes if the team/connection surfaces are ready. Keep full effect runtime and broad DP caller integration as follow-up slices unless their supporting systems are already available.
 
+### Session 409 (May 23, 2026)
+- Added a focused Java `DpUseAction.act` spend boundary as `WorldNpcResourceStatsService.SpendPlayerDpForSkillAsync`.
+- Successful DP skill spends now reuse the packeted `AddPlayerDpAsync` boundary, which broadcasts `SmDpInfo`, records visual stat/speed update intent, then sends owner `SmStatUpdateDp`.
+- Failed DP skill spends now send Java `SM_SYSTEM_MESSAGE.STR_SKILL_NOT_ENOUGH_DP` as `SmSystemMessage.SkillNotEnoughDp` and leave player DP unchanged.
+- Added `WorldNpcDpUseActionResult` / `WorldNpcDpUseActionStatus` to keep skill-action success/failure separate from raw resource mutation results.
+- Current gaps in this cluster: XML action loading, live `Skill` execution, effector type guards, and full skill-engine action sequencing remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~GamePacketTests"` passes with 100 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcResourceStatsServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 270 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 899 tests.
+
+#### Migration Parity Table - Session 409
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.action.DpUseAction` | `Aion.GameServer.Services.WorldNpcResourceStatsService.SpendPlayerDpForSkillAsync`; `WorldNpcDpUseActionResult`; `WorldNpcDpUseActionStatus` | Action/Service | Partial | Unit Tested | Partial Parity | C# mirrors the current-DP guard, not-enough-DP message, and successful `setDp(currentDp - value)` behavior through the packeted DP boundary. Full XML action loading and live `Skill` invocation are not ported here. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.SkillNotEnoughDp` | Packet Factory | Partial | Unit Tested | Partial Parity | C# adds message ID `1300016` for Java `STR_SKILL_NOT_ENOUGH_DP`. The generic system-message writer is pre-existing; no live-client capture was run for this message. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `WorldNpcResourceStatsService.AddPlayerDpAsync` reused by `SpendPlayerDpForSkillAsync` | Runtime/Service | Partial | Unit Tested | Partial Parity | Successful skill DP spend routes through the existing DP mutation and packet ordering path. Live `PlayerGameStats.getMaxDp()` and `updateStatsAndSpeedVisually()` remain explicit gaps. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmDpInfo` | Packet | Partial | Unit Tested | Partial Parity | Reused by successful DP skill spend. Serialization parity is covered by Session 408 payload tests; this session verifies action-level broadcast ordering. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_DP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateDp` | Packet | Partial | Unit Tested | Partial Parity | Reused by successful DP skill spend. Serialization parity is covered by Session 408 payload tests; this session verifies action-level owner-send ordering. |
+| `com.aionemu.gameserver.skillengine.model.Skill` | No dedicated C# live `Skill` action host for `DpUseAction` yet | Runtime/Model | Not Started | No Tests | Needs Verification | Discovered dependency. Java action obtains the effector from `Skill`; C# currently accepts a `Player` directly until the full skill action execution pipeline is ported. |
+| `com.aionemu.gameserver.skillengine.action.Action` | No dedicated C# XML-backed action base for `DpUseAction` yet | Abstract Action | Not Started | No Tests | Needs Verification | Discovered dependency. C# does not yet load or execute action templates as Java JAXB `Action` subclasses. |
+
+Tests added or extended:
+- `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages`: now validates `SmSystemMessage.SkillNotEnoughDp()` writes Java message ID `1300016`.
+- `WorldNpcResourceStatsServiceTests.SpendPlayerDpForSkillAsync_SpendsDpThroughPacketedBoundary`: validates successful DP spend, DP mutation, concrete DP info broadcast, concrete DP stat owner send, and packet order.
+- `WorldNpcResourceStatsServiceTests.SpendPlayerDpForSkillAsync_SendsNotEnoughDpMessageWithoutMutation`: validates insufficient-DP guard, Java system-message output, and no DP mutation or DP packet broadcast/send.
+- Java comparison status: tests are source-derived from Java `DpUseAction.act`, `SM_SYSTEM_MESSAGE.STR_SKILL_NOT_ENOUGH_DP`, `PlayerCommonData.setDp`, `SM_DP_INFO.writeImpl`, and `SM_STATUPDATE_DP.writeImpl`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Full skill-engine action execution is not ported. This is a focused service boundary, not live XML/JAXB action dispatch from a Java-shaped `Skill`.
+- Java casts `skill.getEffector()` to `Player`; C# accepts `Player?` directly and records missing-target failure instead of exercising Java's cast failure path.
+- The not-enough-DP message is sent only when the C# player is online through the current connection registry. Java action execution normally runs for a live player connection.
+- `PlayerGameStats.updateStatsAndSpeedVisually()` remains a result intent only after successful spend.
+- DP spend still depends on explicit max-DP input for online mutation because live `PlayerGameStats.getMaxDp()` is not available at this boundary.
+- Reflection and date/time are not involved. Threading parity remains approximate through async service methods and connection-registry calls outside Java synchronized semantics.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 2 partial C# action/service/message artifacts plus reuse of the packeted DP boundary
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full skill action loading/execution, DP transfer/craft/reward/revive callers, group stat fanout, restore/flight timers, DP visual stat updates, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue DP caller concretization with Java `DPTransferEffect`: add a focused C# staged transfer boundary that moves reserved DP from effector to effected player through `AddPlayerDpAsync` for both players, preserving Java's effected-first then effector-second mutation order and leaving full `Effect` / `EffectReserved` runtime storage as an explicit gap.
+
 ---
 
 ## Next Steps
