@@ -10111,6 +10111,54 @@ Summary metrics:
 Next recommended unit of work:
 - Add the next Java portal guard in source order where support is narrowest: either `checkMentor` after adding `InstanceCooltime.can_enter_mentor`, or start `PortalPath` static-data loading so `ValidateEnterLevel` can consume real `portalPath.getMinLevel()` and `getErrLevel()` values instead of explicit parameters.
 
+### Session 528 (May 23, 2026)
+- Added `Player.IsMentor`, mirroring the Java `Player.isMentor()` state needed by portal and quest/drop guards.
+- Added `InstanceCooltimeSummary.CanEnterMentor`, `InstanceCooltimeTable.CanEnterMentor`, and XML parsing for Java `can_enter_mentor`.
+- Added `SmSystemMessage.MentorCantEnter(worldId)` for Java `SM_SYSTEM_MESSAGE.STR_MSG_MENTOR_CANT_ENTER(worldId)` (`1400766`).
+- Added `PortalEntryValidationService.ValidateMentor`, a narrow source-shaped equivalent of Java `PortalService.checkMentor`.
+- Added tests for non-mentor allow, mentor reject when template disallows mentors, mentor allow when template allows mentors, system-message serialization, mentor static-data lookup, and real static-data load for world `300030000`.
+- Kept this as a validation helper only: it is not wired into the live portal guard chain or group mentor-state fanout.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~StaticDataLoadingTests"` passes with 117 tests.
+
+#### Migration Parity Table - Session 528
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.checkMentor` | `Aion.GameServer.Services.PortalEntryValidationService.ValidateMentor` | Service / Validation | Partial | Unit Tested | Partial Parity | C# models the source branch where mentors are rejected when instance cooltime data exists and `can_enter_mentor` is false. It returns the failure packet instead of dispatching it, and production portal guard ordering remains unwired. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.isMentor` | `Aion.GameServer.Model.GameObjects.Player.IsMentor` | Player State | Partial | Unit Tested | Needs Verification | The state bit exists and is consumed by portal validation tests. C# does not yet model Java mentor lifecycle transitions, group mentor conversion, mentor stop side effects, or visible-player fanout. |
+| `com.aionemu.gameserver.model.templates.InstanceCooltime.getCanEnterMentor` | `Aion.GameServer.Dataholders.InstanceCooltimeSummary.CanEnterMentor` / `InstanceCooltimeTable.CanEnterMentor` | Static Data / DTO | Partial | Unit Tested / Regression Tested | Partial Parity | C# parses and exposes Java `can_enter_mentor`. Static-data load checks one real world id; broader XML parity and Java JAXB runtime comparison were not run. |
+| `game-server/data/static_data/instance_cooltimes/instance_cooltimes.xml` `can_enter_mentor` element | `Aion.GameServer.Dataholders.StaticData` XML reader | Static Data Loader | Partial | Regression Tested | Partial Parity | Loader now handles the element as a boolean with missing/invalid values defaulting false like Java boolean field defaults. Not all worlds are individually asserted. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_MENTOR_CANT_ENTER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.MentorCantEnter` | Server Packet / System Message | Complete | Regression Tested | Partial Parity | Message id `1400766` and world-id parameter are source-derived and serialized by packet tests. No live-client packet capture was run. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | Future caller consuming `PortalEntryValidationResult.FailurePacket` | Socket Dispatch | Not Started | No Tests | Unknown | Discovered dependency remains: validation returns the packet but does not send it through connection/registry/portal handler. |
+
+Tests added or extended:
+- `PortalEntryValidationServiceTests.ValidateMentor_AllowsNonMentorWhenInstanceDisallowsMentors`: validates non-mentor players pass the guard even when the template disallows mentors.
+- `PortalEntryValidationServiceTests.ValidateMentor_RejectsMentorWhenJavaTemplateDisallowsMentors`: validates mentor players are rejected with message id `1400766`.
+- `PortalEntryValidationServiceTests.ValidateMentor_AllowsMentorWhenJavaTemplateAllowsMentors`: validates mentor players pass when `can_enter_mentor` is true.
+- `WorldMapRuntimeStateTests.InstanceCooltimeTable_MatchesJavaCanEnterMentorLookup`: validates helper lookup including unknown-map default.
+- `StaticDataLoadingTests.LoadsStaticDataFromJavaProject`: extended to assert `can_enter_mentor` for world `300030000`.
+- `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages`: extended to serialize `SmSystemMessage.MentorCantEnter`.
+- Java comparison status: expectations are source-derived from `PortalService.checkMentor`, `InstanceCooltime.java`, `SM_SYSTEM_MESSAGE`, and Java boolean field defaults. No Java runtime execution, live portal handler, mentor lifecycle, or encrypted client validation was run.
+
+Remaining risks:
+- The mentor guard is not wired into production portal flow, so live instance entry still bypasses it.
+- Java mentor state lifecycle, group/alliance mentor interactions, mentor stop/force-leave side effects, and visible-player mentor status packets are not modeled here.
+- Admin bypass ordering remains caller-owned; Java skips `checkMentor` when `AdminConfig.INSTANCE_ENTER_ALL` is active.
+- Other portal checks remain missing: race, rank, title, quests, player size, required item removal, kinah, and production transfer wiring.
+- Packet dispatch timing and live-client behavior are unverified; helper returns packets only.
+- Threading, reflection identity, mutable Java state references, date/time, precision/rounding, and serialization beyond the tested system message are not verified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 narrow portal mentor guard plus 1 static-data field and 1 system-message factory
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 5 production portal handler wiring, admin bypass integration, mentor lifecycle/team side effects, remaining portal guards, and live-client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 56% complete; another portal guard is represented, but the live guard chain is still incomplete.
+
+Next recommended unit of work:
+- Continue source-order portal validation by porting `checkRace` with explicit portal-race parameters until `PortalPath` static loading exists, including the `SM_DIALOG_WINDOW(..., DialogPage.NO_RIGHT.id())` failure branch; alternatively prioritize `PortalPath` static-data loading to remove explicit validation parameters from the level/race/title/quest guards.
+
 ---
 
 ## Next Steps
