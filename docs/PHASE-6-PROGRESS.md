@@ -13252,6 +13252,57 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance event parity by source-reading Java alliance group-change/captain assignment events that call `SM_ALLIANCE_MEMBER_INFO`, then add a non-sending plan for member group changes using `PlayerAllianceMemberInfoEvent.MemberGroupChange`. Keep live alliance slot mutation and socket fanout deferred, but make the packet caller surface explicit.
 
+### Session 595 (May 23, 2026)
+- Source-read Java `ChangeMemberGroupEvent`, `AssignViceCaptainEvent`, and the `PlayerAllianceService.changeMemberGroup/changeViceCaptain` callers.
+- Confirmed `ChangeMemberGroupEvent` is the Java event that sends `SM_ALLIANCE_MEMBER_INFO(..., MEMBER_GROUP_CHANGE)`:
+  - one packet when moving a member to another alliance group;
+  - two packets when swapping two members between alliance groups.
+- Added `PlayerAllianceMemberGroupChangePlan` and `PlayerAllianceMemberGroupChangePlanner`.
+- The planner returns non-sending `PlayerAllianceMemberInfoIntent` entries using `PlayerAllianceMemberInfoEvent.MemberGroupChange`.
+- Modeled Java's missing-member early exits for first/second affected members.
+- Added regression coverage for single-member move packets, two-member swap packets, missing-member null exits, name-only `MEMBER_GROUP_CHANGE` packet bodies, and the descriptor identity added in Session 594.
+- Kept live `PlayerAllianceGroup` mutation, captain/permission checks, socket fanout, `AssignViceCaptainEvent` system/alliance-info packets, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests|FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 130 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1228 tests.
+
+#### Migration Parity Table - Session 595
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.events.ChangeMemberGroupEvent` | `Aion.GameServer.Services.PlayerAllianceMemberGroupChangePlanner` / `PlayerAllianceMemberGroupChangePlan` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# models affected packet outputs for move/swap and missing-member early exits. It does not mutate `PlayerAllianceGroup` membership or run through Java event dispatch. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.changeMemberGroup` | `PlayerAllianceMemberGroupChangePlanner.CreateMemberGroupChangePlan` | Service / Caller Bridge | Partial | Regression Tested | Needs Verification | C# exposes the packet caller surface only. Java captain checks, not-in-force/right-missing system messages, alliance lookup, and live event invocation remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceGroup` | Not implemented; modeled as `TargetAllianceGroupId` metadata only | Team Runtime Dependency | Not Started | No Tests | Unknown | Newly emphasized dependency. Real group slot removal/addition and group id validation are deferred. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceMember` | `PlayerAllianceMemberInfoPacketPlan.FromPlayer` direct player input | Team Member Dependency | Partial | Regression Tested | Needs Verification | C# still bypasses full alliance-member wrappers. Packet object id/name data is modeled; member group references and role metadata are not. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `SmAllianceMemberInfo` with `PlayerAllianceMemberInfoEvent.MemberGroupChange` | Server Packet / Intent Factory | Partial | Unit Tested | Needs Verification | Name-only member-group-change packet bodies are tested through move/swap intents. Java golden bytes, encoded frames, live sends, and client validation remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.events.AssignViceCaptainEvent` | Not implemented; documented dependency | Event / Role Service | Not Started | No Tests | Unknown | Source-read for scope. Java sends `SM_ALLIANCE_INFO`, not `SM_ALLIANCE_MEMBER_INFO`, and mutates vice-captain ids; deferred for a separate role-info unit. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.MemberGroupChangePlanner_PlansSingleMovePacketLikeJavaChangeMemberGroupEvent`: validates one affected packet intent for move-to-group.
+- `PlayerAllianceMemberInfoTests.MemberGroupChangePlanner_PlansSwapPacketsLikeJavaChangeMemberGroupEvent`: validates two affected packet intents for member swaps.
+- `PlayerAllianceMemberInfoTests.MemberGroupChangePlanner_ReturnsNullWhenAffectedMemberIsMissing`: validates Java-style early exits when affected members are gone.
+- Java comparison status: expectations are source-derived from `ChangeMemberGroupEvent.handleEvent`, `SM_ALLIANCE_MEMBER_INFO.writeImpl`, and `PlayerAllianceService.changeMemberGroup`. No Java runtime execution, Java-generated golden vector, live group-slot mutation comparison, socket fanout comparison, encoded frame comparison, reflection behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Live alliance registry/runtime membership is not implemented.
+- Live `PlayerAllianceGroup` slot mutation and validation are missing.
+- Captain/right checks and failure system messages from `PlayerAllianceService.changeMemberGroup` are not modeled.
+- Live alliance member-info sends are not wired to sockets.
+- `AssignViceCaptainEvent` role mutation and `SM_ALLIANCE_INFO` fanout remain unported.
+- Java runtime ordering/event-loop behavior is not compared.
+- Java golden byte vectors and encoded frame validation are still unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 alliance member-group-change packet planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 live alliance registry/runtime, live group-slot mutation, captain/right checks, live alliance socket fanout, `SM_ALLIANCE_INFO` role fanout, Java runtime ordering comparison, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; alliance member-group-change packet planning is modeled, but live alliance group/role runtime remains incomplete.
+
+Next recommended unit of work:
+- Continue alliance role/event parity by source-reading `SM_ALLIANCE_INFO`, `ChangeAllianceLeaderEvent`, and `AssignViceCaptainEvent`, then add the first non-sending alliance role-info plan for vice-captain promote/demote system/alliance-info packet outputs. Keep live vice-captain id mutation, league broadcast, permissions, and socket fanout deferred unless a safe runtime surface exists.
+
 ---
 
 ## Next Steps
