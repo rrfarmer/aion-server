@@ -12460,6 +12460,52 @@ Summary metrics:
 Next recommended unit of work:
 - Begin `SM_GROUP_MEMBER_INFO` prerequisites rather than attempting the full packet at once. Source-read `SM_GROUP_MEMBER_INFO.writeImpl` again and add a small DTO for the first stable header/event fields (group id, member object id, `GroupEvent` id, and event-specific branch marker) only if those fields can be tested without life stats/common-data dependencies. If not, add the smallest missing dependency model explicitly required by the packet writer.
 
+### Session 579 (May 23, 2026)
+- Re-read Java `SM_GROUP_MEMBER_INFO.writeImpl` and `GroupEvent` before attempting any member-info packet work.
+- Added `PlayerGroupMemberInfoPacketPlan`, a non-serializing DTO for the stable Java member-info header and event-branch decisions.
+- The plan records group id, member object id, requested event, effective event, slot, online state, and which unresolved packet blocks would be written: life stats, position, common data, name, abnormal effects, and slot timers.
+- Java's `ENTER` to `ENTER_OFFLINE` rewrite for offline members is now modeled in the plan.
+- Reconnect member-info intents now carry a `PlayerGroupMemberInfoPacketPlan` for their subject member.
+- Added tests for reconnect JOIN/ENTER member-info plans, offline `ENTER` rewrite, `UPDATE_EFFECTS` slot/effects branch flags, and movement no-name/no-effect branch flags.
+- Kept `SM_GROUP_MEMBER_INFO` byte serialization disabled because life stats, common-data, effect serialization, slot timers, flight/mentor state, and live packet ordering are still not fully modeled.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 103 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1201 tests.
+
+#### Migration Parity Table - Session 579
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `Aion.GameServer.Services.PlayerGroupMemberInfoPacketPlan` | Packet Planning DTO | Partial | Unit Tested | Needs Verification | C# models stable header/event branch decisions only. It does not serialize bytes, life stats, position, class/gender/level, fly/mentor state, names, effects, or slot timers. |
+| `com.aionemu.gameserver.model.team.common.legacy.GroupEvent` | `Aion.GameServer.Model.GameObjects.PlayerGroupEvent` consumed by `PlayerGroupMemberInfoPacketPlan` | Enum / Packet Dependency | Partial | Regression Tested | Needs Verification | C# uses existing Java ids and now models the `ENTER` to `ENTER_OFFLINE` effective-event rewrite when the subject member is offline. Broader event behavior remains incomplete. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerConnectedEvent` | `PlayerGroupReconnectPacketPlan.MemberInfoIntents` with packet plans | Event Planning Bridge | Partial | Regression Tested | Needs Verification | Reconnect intents now include source-shaped member-info packet planning metadata. Java still sends live `SM_GROUP_MEMBER_INFO` packets with full payloads. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats` | No C# group-member packet equivalent in this unit | Packet Dependency | Not Started | No Tests | Unknown | Java writes max/current HP, MP, and FP. C# only flags this block as required. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | No C# group-member packet equivalent in this unit | Packet Dependency | Not Started | No Tests | Unknown | Java writes class id, gender id, level, and name. C# only flags this block as required. |
+| `com.aionemu.gameserver.world.WorldPosition` | No C# group-member packet serialization in this unit | Packet Dependency | Not Started | No Tests | Unknown | Java writes map id, instance-derived map instance id, and XYZ coordinates. C# only flags this block as required. |
+| `com.aionemu.gameserver.skillengine.model.Effect` / `SkillTargetSlot` | No C# group-member packet equivalent in this unit | Packet Dependency | Not Started | No Tests | Unknown | Java writes abnormal effects and slot timer placeholders for ENTER/UPDATE/UPDATE_EFFECTS. C# only flags these blocks as required. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.ReconnectMember_ReturnsNonSendingPacketIntentPlanLikeJavaPlayerConnectedEvent`: extended to validate per-intent `PlayerGroupMemberInfoPacketPlan` metadata, including subject ids, event ids, online state, and offline `ENTER` to `ENTER_OFFLINE` rewrite.
+- `PlayerGroupRuntimeTests.PlayerGroupMemberInfoPacketPlan_ModelsStableJavaHeaderAndEventBranches`: validates offline ENTER rewrite, UPDATE_EFFECTS slot/effects flags, and MOVEMENT no-name/no-effect branch flags.
+- Java comparison status: expectations are source-derived from `SM_GROUP_MEMBER_INFO.writeImpl`, `GroupEvent`, and `PlayerConnectedEvent.handleEvent`. No Java runtime execution, Java-generated golden vector, packet byte serialization, life-stat comparison, common-data comparison, world-position serialization comparison, effect serialization comparison, slot timer comparison, socket send/fanout comparison, or client validation was run.
+
+Remaining risks:
+- No `SM_GROUP_MEMBER_INFO` C# packet serializer exists yet.
+- Required data blocks are only flagged, not serialized: life stats, position/map instance id, class/gender/level/name, fly/mentor state, abnormal effects, and slot timers.
+- C# online/offline state comes from current `Player.IsOnline`; Java uses the wrapped player state at packet serialization time.
+- Reconnect/group-enter packet ordering and live sends remain unverified.
+- Threading behavior, reflection/JAXB behavior, date/time behavior, precision/rounding, and full frame/opcode/header serialization were not newly validated.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 `SM_GROUP_MEMBER_INFO` header/event planning prerequisite
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 11 `SM_GROUP_MEMBER_INFO` byte serialization, life-stat packet block, common-data packet block, world-position/map-instance packet block, fly/mentor state serialization, abnormal effect serialization, `SkillTargetSlot` timers, live group member fanout, Java packet ordering comparison, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group member-info planning has begun, but the actual Java packet payload remains mostly unported.
+
+Next recommended unit of work:
+- Add the next smallest `SM_GROUP_MEMBER_INFO` dependency model: a packet-facing member snapshot DTO for life stats and common/position data needed by the fixed prefix after group id/member id. Keep effect serialization and live sends deferred, and do not serialize the packet until the prefix can be byte-tested without placeholders.
+
 ---
 
 ## Next Steps
