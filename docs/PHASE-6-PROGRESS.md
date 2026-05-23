@@ -10419,6 +10419,57 @@ Summary metrics:
 Next recommended unit of work:
 - Add a narrow portal-entry orchestration helper that resolves `PortalPathSummary.LocId` through `PortalLocTable`, returns an explicit missing-location result when absent, and applies the already-ported mentor/race/rank/title/cooldown/level checks in Java `PortalService.port` order for solo/no-registration cases. Keep quests, group-size, item removal, kinah, and actual teleport transfer as documented gaps.
 
+### Session 535 (May 23, 2026)
+- Added `PortalEntryValidationService.ValidatePortalEntryPlan`, a narrow source-shaped planning helper for Java `PortalService.port`'s early solo/open-world entry path.
+- The helper resolves `PortalPathSummary.LocId` through `PortalLocTable`, returns `MissingPortalLocation` when no loc exists, derives `mapId` from `PortalLocSummary.WorldId`, and uses `InstanceCooltimeTable.GetMaxMemberCount` for the Java max-player branch.
+- The helper applies existing guard helpers in Java order for the supported slice: mentor, race, rank, title, registered-instance/cooldown, then level only when not reentering.
+- Added `PortalEntryPlanResult` to carry the resolved portal location, optional registered instance, reenter flag, failure status, and failure packet without performing teleport or transfer side effects.
+- Team-sized portals are explicitly returned as `UnsupportedTeamPortal` so group/alliance/league behavior is not silently treated as solo parity.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests"` passes with 41 tests.
+
+#### Migration Parity Table - Session 535
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` | `Aion.GameServer.Services.PortalEntryValidationService.ValidatePortalEntryPlan` | Service / Orchestration | Partial | Unit Tested | Partial Parity | C# models the early location lookup, admin guard boundary, mentor/race/rank/title ordering, solo registered-instance/cooldown check, reenter flag, and level check skip on reenter. It does not remove items, consume kinah, perform same-instance teleport, allocate/transfer instances, dispatch packets, or handle group/alliance/league paths. |
+| `com.aionemu.gameserver.dataholders.PortalLocData.getPortalLoc` | `Aion.GameServer.Dataholders.PortalLocTable.GetPortalLoc` consumed by `ValidatePortalEntryPlan` | Static Data Lookup | Partial | Unit Tested | Partial Parity | The orchestration helper now uses loaded portal locations to derive the target world id. Java's log warning for missing locations is represented only as a result status; no logger side effect is emitted. |
+| `com.aionemu.gameserver.model.templates.portal.PortalPath.getLocId` | `Aion.GameServer.Dataholders.PortalPathSummary.LocId` consumed by `ValidatePortalEntryPlan` | Template Boundary | Partial | Unit Tested | Partial Parity | `LocId` now drives portal location resolution. Quest/item child requirements, kinah, and `siege_id` live lookup are still not orchestrated. |
+| `com.aionemu.gameserver.model.templates.InstanceCooltime.getMaxMemberLight/getMaxMemberDark` | `Aion.GameServer.Dataholders.InstanceCooltimeTable.GetMaxMemberCount` consumed by `ValidatePortalEntryPlan` | Static Data / Restriction | Partial | Unit Tested | Partial Parity | Used to distinguish open-world/no-registration, solo, and unsupported team-sized portals. Group/alliance registered-instance lookup is intentionally blocked in this unit. |
+| `com.aionemu.gameserver.world.WorldMapInstance.isRegistered` / `InstanceService.getRegisteredInstance` | `WorldMapRuntimeStateTable.GetRegisteredInstance` via `ValidateCooldownForRegisteredInstance` | Runtime State / Instance | Partial | Unit Tested | Partial Parity | Solo registered-instance reentry behavior is represented. Java group/alliance/league registered lookups and instance service allocation remain missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `PortalEntryPlanResult.FailurePacket` | Packet Dispatch Boundary | Not Started | Unit Tested as payload objects | Unknown | C# returns the packet to a future caller instead of dispatching it. Socket ordering and live-client behavior are not verified. |
+
+Tests added:
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_ReturnsMissingLocationBeforeAnyGuardLikeJava`: validates missing `PortalLoc` stops before mentor/cooldown checks and returns no packet.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_MentorFailureHappensBeforeCooldown`: validates mentor restriction precedes cooldown lockout.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_RaceFailureHappensBeforeCooldown`: validates race restriction precedes cooldown lockout.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_RankFailureHappensBeforeCooldown`: validates rank restriction precedes cooldown lockout.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_TitleFailureHappensBeforeCooldown`: validates title restriction precedes cooldown lockout.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_CooldownFailureHappensBeforeLevelCheck`: validates cooldown lockout precedes level failure when not reentering.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_ReenterSkipsCooldownAndLevelLikeJava`: validates registered solo reentry bypasses cooldown and level checks and returns the registered instance/reenter flag.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_AllowsOpenWorldPlanWithResolvedLocation`: validates open-world/no-registration plan success with resolved location.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_LeavesTeamPortalsExplicitlyUnsupported`: validates group/alliance-sized portals are not silently handled by the solo/open-world slice.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `PortalLocData`, existing C# validation helper tests, and runtime state tests. No Java runtime execution, live packet dispatch, quest/item checks, kinah consumption, group/alliance/league instance lookup, same-instance teleport, or actual transfer validation was run.
+
+Remaining risks:
+- This is still not a production portal handler; no packet handler calls `ValidatePortalEntryPlan`.
+- Java `checkQuests`, `checkPlayerSize`, `checkAndRemoveRequiredItems`, kinah consumption, same-instance teleport, instance allocation, transfer animation, `InstanceHandler.onInstanceCreate`, and team fanout remain incomplete.
+- Admin/membership permissions are still explicit parameters, not resolved from live config/player permission services.
+- Siege ownership remains caller-supplied and not resolved from `PortalPathSummary.SiegeId`.
+- Java missing-loc logging is not emitted; C# exposes a result status only.
+- Group/alliance/league paths are explicitly unsupported in this helper, not partially emulated.
+- Threading, reflection/JAXB differences, packet dispatch ordering, date/time behavior beyond cooldown timestamps, precision/rounding, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 partial orchestration helper over existing static-data/runtime-state/validation surfaces
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 7 production portal handler wiring, quests, player-size/team checks, item removal, kinah consumption, actual teleport/transfer, and live runtime/client comparison
+- Estimated overall migration completion: Phase 6 remains about 58% complete; the early solo/open-world portal entry plan is now represented, but end-to-end portal use remains incomplete.
+
+Next recommended unit of work:
+- Continue the `PortalService.port` slice by adding a same-instance teleport plan result for `mapId == player.WorldId` after successful non-reenter level validation, still without executing teleport. This should carry target coordinates/heading from `PortalLocSummary` and document that actual `TeleportService.teleportTo` invocation is a later production-wiring step.
+
 ---
 
 ## Next Steps
