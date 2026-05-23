@@ -10967,6 +10967,47 @@ Summary metrics:
 Next recommended unit of work:
 - Add a focused `CM_TELEPORT_ANIMATION_DONE` portal-transfer completion regression for the newly queued portal continuation path: verify pending transfer completion mutates position, sends same/map-change packets in Java order, and preserves cooldown state. Then begin the next production gap: group/alliance/league portal planning and explicit unsupported-result reporting from the caller boundary.
 
+### Session 547 (May 23, 2026)
+- Added a focused regression for completing a queued portal continuation transfer when the client sends `CM_TELEPORT_ANIMATION_DONE`.
+- The new test queues an open-world portal continuation transfer, completes the pending teleport via `GameServerConnection.HandleTeleportAnimationDoneAsync`, verifies the player's position mutates to the portal destination, verifies `PendingTeleport` is consumed, and verifies the map-change packet sequence `SM_TELEPORT_LOC`, `SM_CHANNEL_INFO`, `SM_PLAYER_SPAWN`.
+- This is a test-only parity unit over existing C# teleport completion code; no production behavior was changed in this session.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionInstanceCooldownTests"` passes with 8 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1160 tests.
+
+#### Migration Parity Table - Session 547
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TELEPORT_ANIMATION_DONE.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleTeleportAnimationDoneAsync` | Client Packet Handler / Teleport Completion | Partial | Unit Tested | Partial Parity | Regression now covers completion of a portal continuation pending teleport. Java controller task storage, spawned-state guard, dead-player fallback, and destroyed-instance fallback are only partially represented by existing C# helpers. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.SpawnTask.run` map-change branch | `PlayerTeleportService.CompletePendingTeleport` plus `GameServerConnection.SendDelayedTeleportCompletionPacketsAsync` | Service / State Mutation | Partial | Unit Tested | Partial Parity | Test validates pending teleport is consumed, position mutates, and map-change packets follow `SM_CHANNEL_INFO` then `SM_PLAYER_SPAWN`. Java action aborts, world despawn/spawn internals, pet movement, legion updates, and live known-list effects remain unverified. |
+| `com.aionemu.gameserver.services.teleport.PortalService.transfer` queued teleport path | `QueuePortalContinueTransferAsync` followed by `HandleTeleportAnimationDoneAsync` | Service / Integration Boundary | Partial | Unit Tested | Partial Parity | The queued portal continuation path now has a completion regression from request through animation-done handling. Instance cooldown preservation is covered by previous transfer tests; live DB/socket comparison is not done. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_TELEPORT_LOC` | `SmTeleportLoc` emitted by `QueuePortalContinueTransferAsync` | Packet | Partial | Regression Tested | Partial Parity | Packet object order is verified before completion packets. Binary packet surface has existing packet tests, but this scenario lacks live-client capture. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CHANNEL_INFO` | `SmChannelInfo` emitted by delayed completion | Packet | Partial | Regression Tested | Partial Parity | Packet object order after completion is verified. Full payload is not newly inspected in this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_SPAWN` | `SmPlayerSpawn` emitted by delayed completion | Packet | Partial | Regression Tested | Partial Parity | Packet object order after completion is verified. Full live-client spawn behavior remains unverified. |
+
+Tests added or extended:
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_CompletesPendingTeleportOnAnimationDone`: validates queued portal continuation completion mutates position, consumes pending teleport, reports map-change completion, and emits `SM_TELEPORT_LOC`, `SM_CHANNEL_INFO`, `SM_PLAYER_SPAWN` in order.
+- Java comparison status: expectations are source-derived from `CM_TELEPORT_ANIMATION_DONE.runImpl`, `TeleportService.SpawnTask.run`, and `PortalService.transfer`. No Java runtime execution, live client capture, encrypted socket integration test, dead/destroyed-instance fallback comparison, or full packet payload comparison was run for this scenario.
+
+Remaining risks:
+- This unit is regression coverage only; it does not broaden production portal behavior.
+- Same-world completion and instance-map opened-for-self behavior are covered elsewhere but not newly tied to portal continuation here.
+- Dead-player and destroyed-instance fallback behavior remains partial and is not specifically validated for portal continuation.
+- Java action-abort side effects, pet movement/spawn, known-list despawn/spawn parity, protection task restart, effect icon refresh, and full zone update callbacks remain partial or missing.
+- Live packet ordering, encryption framing, and client-observed behavior remain unverified.
+- Threading/locking, reflection/JAXB behavior, date/time behavior across all cooldown modes, precision/rounding, and live Java comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 0 new production artifacts; 1 focused regression over existing portal continuation and delayed teleport completion surfaces
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 7 group/alliance/league fanout, dead/destroyed-instance portal fallback coverage, action-abort side effects, pet teleport/spawn, known-list parity, live socket validation, and Java runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; supported portal continuation now has request, cooldown-order, and animation-done completion regression coverage, but broader portal team paths and live validation remain incomplete.
+
+Next recommended unit of work:
+- Start the group/alliance/league portal planning slice conservatively: extend the portal entry plan result to surface explicit unsupported team-portal reasons from the dialog caller with Java-shaped failure packets where known, while avoiding partial team transfer fanout until group/alliance runtime models are ready.
+
 ---
 
 ## Next Steps
