@@ -10061,6 +10061,56 @@ Summary metrics:
 Next recommended unit of work:
 - Port a narrow `PortalService.checkEnterLevel` equivalent using the new entrance-level helpers, initially with explicit method parameters for portal-path min-level and err-level until full portal template loading exists; add `STR_MSG_CANT_INSTANCE_ENTER_LEVEL` and `SM_DIALOG_WINDOW` coverage if not already present.
 
+### Session 527 (May 23, 2026)
+- Added `PortalEntryValidationService.ValidateEnterLevel`, a narrow source-shaped equivalent of Java `PortalService.checkEnterLevel`.
+- The helper supports Java's membership/admin bypass boundary through an explicit `bypassLevelRequirement` parameter, uses `portalPath.getMinLevel()` when provided, falls back to race-specific `InstanceCooltime` min levels when portal-path min level is zero, and enforces race-specific max levels when greater than zero.
+- The helper returns Java's `SM_SYSTEM_MESSAGE.STR_MSG_CANT_INSTANCE_ENTER_LEVEL` (`1400179`) by default and returns `SM_DIALOG_WINDOW(npcObjectId, portalPathErrLevel)` when the portal path provides an err-level dialog id.
+- Widened portal validation failure packet result types from `SmSystemMessage` to `GameServerPacket` so later guards can return dialog or system-message failures without sending directly.
+- Extended tests for min-level allow, below-min rejection, above-max rejection, portal-path min-level override, err-level dialog payload, membership bypass, and system-message serialization.
+- Kept this intentionally short of full portal-template integration: portal-path min/err-level values are explicit parameters until `PortalPath` static loading exists.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~StaticDataLoadingTests"` passes with 113 tests.
+
+#### Migration Parity Table - Session 527
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.checkEnterLevel` | `Aion.GameServer.Services.PortalEntryValidationService.ValidateEnterLevel` | Service / Validation | Partial | Unit Tested | Partial Parity | C# models the source min/max level decision and returns failure packets instead of sending them. Missing production wiring, portal-path static loading, and real membership permission resolution keep parity partial. |
+| `com.aionemu.gameserver.model.templates.portal.PortalPath.getMinLevel` / `getErrLevel` | Explicit `portalPathMinLevel` / `portalPathErrLevel` parameters to `ValidateEnterLevel` | Template Boundary | Partial | Unit Tested | Needs Verification | The Java behavior is represented by parameters, not by loaded `PortalPath` objects. Full portal-template XML parsing remains not started, so static-data fidelity for these values is not verified. |
+| `com.aionemu.gameserver.model.templates.InstanceCooltime.getEnterMinLevelLight/Dark` / `getEnterMaxLevelLight/Dark` | `Aion.GameServer.Dataholders.InstanceCooltimeTable.GetEnterMinLevel` / `GetEnterMaxLevel` consumed by `ValidateEnterLevel` | Static Data Lookup | Partial | Unit Tested / Regression Tested | Partial Parity | The level guard now consumes the Session 526 entrance-level data. Race fallback mirrors Java's ELYOS-vs-dark branch. No Java runtime comparison was run. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getLevel` / `getRace` | `Aion.GameServer.Model.GameObjects.Player.Level` / `Race` | Player State | Partial | Unit Tested | Partial Parity | Tests cover level and race inputs in the validation helper. Live player state mutation, threading, and movement/portal concurrency are not verified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_CANT_INSTANCE_ENTER_LEVEL` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.CantInstanceEnterLevel` | Server Packet / System Message | Complete | Regression Tested | Partial Parity | Message id `1400179` is source-derived and serialized through existing packet tests. No live-client packet capture was run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DIALOG_WINDOW` | `Aion.GameServer.Network.Aion.ServerPackets.SmDialogWindow` returned by `ValidateEnterLevel` | Server Packet / Dialog | Partial | Unit Tested / Regression Tested | Partial Parity | Err-level dialog payload is tested for target object id, page id, quest id, and context zeros. Existing dialog packet behavior has special mail/town context branches; this unit uses the ordinary zero-context branch only. |
+| `com.aionemu.gameserver.configs.main.MembershipConfig.INSTANCES_LEVEL_REQ` | `ValidateEnterLevel(..., bypassLevelRequirement: true)` caller-owned bypass | Config / Permission Boundary | Partial | Unit Tested | Needs Verification | C# models the bypass as an explicit input. It is not wired to actual membership/admin permission config at a live portal caller. |
+
+Tests added or extended:
+- `PortalEntryValidationServiceTests.ValidateEnterLevel_UsesJavaInstanceCooltimeLevelsWhenPortalPathMinIsMissing`: validates Java fallback from portal-path min `0` to race-specific instance-cooltime min level.
+- `PortalEntryValidationServiceTests.ValidateEnterLevel_RejectsBelowJavaMinimumWithSystemMessage`: validates below-min failure with message id `1400179`.
+- `PortalEntryValidationServiceTests.ValidateEnterLevel_RejectsAboveJavaMaximum`: validates max-level failure when max level is greater than zero.
+- `PortalEntryValidationServiceTests.ValidateEnterLevel_UsesPortalPathMinimumBeforeInstanceCooltimeMinimum`: validates portal-path min-level override precedence.
+- `PortalEntryValidationServiceTests.ValidateEnterLevel_ReturnsJavaErrLevelDialogWhenPortalPathProvidesOne`: validates err-level dialog packet payload.
+- `PortalEntryValidationServiceTests.ValidateEnterLevel_AllowsMembershipBypassLikeJavaPermission`: validates the explicit bypass branch.
+- `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages`: extended to serialize `SmSystemMessage.CantInstanceEnterLevel`.
+- Java comparison status: expectations are source-derived from `PortalService.checkEnterLevel`, `InstanceCooltime.java`, `SM_SYSTEM_MESSAGE`, and `SM_DIALOG_WINDOW`. No Java runtime execution, live portal handler, portal-template XML load, or encrypted client validation was run.
+
+Remaining risks:
+- The level guard is not wired into a production portal dialog/selection handler.
+- C# still lacks `PortalPath` static-data loading, so portal min-level and err-level values are not automatically sourced from XML.
+- The membership/admin bypass is represented as an explicit parameter, not integrated with live `MembershipConfig.INSTANCES_LEVEL_REQ` or `AdminConfig.INSTANCE_ENTER_ALL`.
+- Earlier Java checks (`checkMentor`, `checkRace`, `checkRank`, `checkTitle`, `checkQuests`, `checkPlayerSize`) and later item/kinah consumption remain missing.
+- Packet dispatch timing is not validated; the helper returns packets only.
+- Date/time is unchanged in this unit; threading, reflection identity, mutable Java object references, precision/rounding, and serialization beyond the tested packets are not verified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 narrow portal level-validation guard plus 1 system-message factory
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 5 production portal handler wiring, portal-path static-data model, membership/admin permission integration, remaining portal guards, and live-client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 56% complete; the level guard is represented, but end-to-end portal entry is still incomplete.
+
+Next recommended unit of work:
+- Add the next Java portal guard in source order where support is narrowest: either `checkMentor` after adding `InstanceCooltime.can_enter_mentor`, or start `PortalPath` static-data loading so `ValidateEnterLevel` can consume real `portalPath.getMinLevel()` and `getErrLevel()` values instead of explicit parameters.
+
 ---
 
 ## Next Steps
