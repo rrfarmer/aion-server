@@ -11775,6 +11775,56 @@ Summary metrics:
 Next recommended unit of work:
 - Add the first minimal `PlayerGroupMember` wrapper model and runtime storage path so `GetMember` can return wrapper metadata instead of only object ids. Keep it narrow: object id, player reference, and last-online timestamp only if directly source-derived from Java `PlayerGroupMember`; do not wire packet fanout, online filtering, loot rules, brand updates, event dispatch, or offline checker yet.
 
+### Session 564 (May 23, 2026)
+- Added a minimal `PlayerGroupMember` wrapper model for the Java `PlayerGroupMember` / `PlayerTeamMember` surface.
+- `PlayerGroupMember` wraps a `Player` and exposes object id, name, player reference, online state, and last-online epoch-millisecond storage.
+- `PlayerGroupMember.UpdateLastOnlineTime(DateTimeOffset now)` mirrors Java `PlayerTeamMember.updateLastOnlineTime` while taking deterministic time for tests.
+- `PlayerGroupRuntime` now stores `PlayerGroupMember` wrappers internally instead of raw players.
+- `PlayerGroupRuntime.GetMember` now returns the stored wrapper metadata for Java `GeneralTeam.getMember`-style callers.
+- Snapshot attachment, member object-id queries, duplicate-add guard, missing-remove guard, leader checks, and portal planning behavior continue to work through the wrapper storage.
+- Kept Java position/heading/level wrapper helpers, online filtering, offline checker, event dispatch, packet fanout, loot rules, brand updates, stats, and disband behavior out of scope.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests"` passes with 84 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1183 tests.
+
+#### Migration Parity Table - Session 564
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.TeamMember` | `Aion.GameServer.Model.GameObjects.PlayerGroupMember` | Interface / Wrapper | Partial | Unit Tested | Needs Verification | C# implements the currently needed object id/name/player-reference surface directly on a concrete wrapper. No generic interface or non-player team member abstraction exists yet. |
+| `com.aionemu.gameserver.model.team.PlayerTeamMember` | `Aion.GameServer.Model.GameObjects.PlayerGroupMember` | Class / Wrapper | Partial | Unit Tested | Needs Verification | C# wraps a `Player`, exposes `ObjectId`, `Name`, `Player`, `IsOnline`, and deterministic last-online update. Java position helpers, heading, level, and direct `System.currentTimeMillis` timing remain unported. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupMember` | `Aion.GameServer.Model.GameObjects.PlayerGroupMember` | Class / Wrapper | Partial | Unit Tested | Needs Verification | Java class is a thin subclass of `PlayerTeamMember`; C# keeps a single concrete group wrapper. Inheritance shape intentionally differs until more team types require it. |
+| `com.aionemu.gameserver.model.team.PlayerTeamMember.updateLastOnlineTime` | `PlayerGroupMember.UpdateLastOnlineTime` | Date/Time Helper | Partial | Unit Tested | Needs Verification | C# takes `DateTimeOffset now` for deterministic tests instead of reading the system clock directly. Java runtime clock behavior and offline checker timing remain unverified. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.getMember` | `PlayerGroupRuntime.GetMember` | Service Query | Partial | Unit Tested | Needs Verification | C# now returns a stored wrapper instead of only object-id membership. Java's generic `TeamMember` identity, concurrent map visibility, and event lifecycle remain unverified. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.getMembers` | `PlayerGroupRuntime.GetMemberObjectIds` and wrapper-backed snapshots | Service Query | Partial | Regression Tested | Needs Verification | Runtime storage now uses wrappers, but the public snapshot bridge still exposes object ids. Java returns live `Player` objects from wrappers. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.onPlayerLogout` | `PlayerGroupMember.UpdateLastOnlineTime` dependency only | Service Dependency | Not Started | Unit Tested Around Dependency | Unknown | Java updates last-online during logout events. C# has the wrapper timestamp helper but no login/logout group service integration or offline removal scheduler. |
+| `com.aionemu.gameserver.model.team.group.OfflinePlayerChecker` | No C# equivalent | Scheduler Dependency | Not Started | No Tests | Unknown | Newly re-touched dependency from Java. C# does not remove offline group members based on `GroupConfig.GROUP_REMOVE_TIME`. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.CreateOrUpdateGroup_AttachesSharedSnapshotMetadataToMembers`: extended to assert `GetMember` returns wrapper object id, name, player reference, and online state.
+- `PlayerGroupRuntimeTests.GetMember_ReturnsWrapperWithDeterministicLastOnlineUpdate`: validates wrapper lookup, deterministic last-online epoch-millisecond update, and null for unknown members.
+- Existing runtime tests continue to validate snapshot refresh, duplicate-add rejection, over-capacity rejection, remove-missing rejection, and blocked portal planning through wrapper-backed storage.
+- Java comparison status: expectations are source-derived from `TeamMember`, `PlayerTeamMember`, `PlayerGroupMember`, `GeneralTeam.getMember`, `GeneralTeam.getMembers`, and `PlayerGroupService.onPlayerLogout`'s `updateLastOnlineTime` dependency. No Java runtime execution, offline checker comparison, system-clock comparison, concurrent mutation comparison, packet fanout comparison, or live client validation was run.
+
+Remaining risks:
+- C# has no generic `TeamMember<T>` or base `PlayerTeamMember`; the inheritance shape differs intentionally until alliance/league and non-group team models need it.
+- Java wrapper position helpers (`getX`, `getY`, `getZ`, `getHeading`, `getLevel`) are not ported.
+- Last-online uses injected `DateTimeOffset` for determinism; Java uses `System.currentTimeMillis`. Runtime clock and timezone behavior remain unverified.
+- Login/logout group service integration and offline group removal scheduling are not implemented.
+- Threading remains a simple C# `Lock`; Java wrapper storage is in a `ConcurrentHashMap` protected by team event locks for many operations.
+- Serialization is unchanged. Reflection/JAXB behavior is not involved. Precision/rounding is not involved.
+- Group portal execution remains blocked; this unit only improves member-wrapper metadata.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 minimal `PlayerGroupMember` wrapper/storage slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 12 generic `TeamMember` abstraction, `PlayerTeamMember` inheritance shape, position/heading/level wrapper helpers, login/logout group service integration, offline checker, `GroupConfig.GROUP_REMOVE_TIME`, team event dispatch, packet fanout, loot rules, brand updates, full team concurrency semantics, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; C# now has first wrapper-backed group membership, but full Java team lifecycle and group portal execution remain missing.
+
+Next recommended unit of work:
+- Add source-derived `PlayerGroupMember` helper coverage for Java `PlayerTeamMember` position/heading/level accessors, backed by `Player.Position` and `Player.Level`, then decide whether those helpers are needed by the next group lifecycle caller. Keep login/logout integration, offline checker scheduling, event dispatch, and packet fanout deferred.
+
 ---
 
 ## Next Steps
