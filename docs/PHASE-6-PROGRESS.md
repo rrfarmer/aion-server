@@ -10692,6 +10692,53 @@ Summary metrics:
 Next recommended unit of work:
 - Wire the portal requirement consumption plan into a repository/packet boundary for production portal entry, or first add a narrow persistence-facing service that applies the planned inventory updates/deletes and returns the Java-like `SM_INVENTORY_UPDATE_ITEM` packet sequence without yet performing the final teleport.
 
+### Session 541 (May 23, 2026)
+- Added `PortalEntryValidationService.CreateRequiredItemsAndKinahApplication`, a narrow production-facing application boundary for successful portal item/kinah consumption plans.
+- The boundary accepts a `PortalRequirementConsumptionPlan`, applies planned item updates/deletes to a working inventory snapshot, and returns Java-like packet objects without mutating the live `Player.InventoryItems`.
+- Packet planning follows Java `ItemPacketService.sendItemPacket` for cube inventory: deleted required item stacks produce `SmDeleteItem(..., SmDeleteItem.UseDeleteType)` followed by `SmCubeUpdate.CubeSize(...)`; reduced required item stacks produce `SmInventoryUpdateItem(..., SmInventoryUpdateItem.DecreaseItemUse)`; kinah reduction produces `SmInventoryUpdateItem(..., SmInventoryUpdateItem.DecreaseKinahBuy)`.
+- Failed consumption plans return no packets and leave the original inventory list unchanged.
+- Missing item templates for required update packets return `MissingTemplateIds` and no packets, because `SM_INVENTORY_UPDATE_ITEM` needs the item template/client name. Delete-only packet paths do not require templates.
+- This remains a detached application boundary: it does not persist inventory changes, send packets through a live connection, trigger Java quest item removal callbacks, or execute the final portal teleport.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~GamePacketTests"` passes with 139 tests.
+
+#### Migration Parity Table - Session 541
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemPacketService.sendItemPacket` | `Aion.GameServer.Services.PortalEntryValidationService.CreateRequiredItemsAndKinahApplication` | Service / Packet Boundary | Partial | Unit Tested | Partial Parity | C# now turns planned portal item/kinah consumption into an applied inventory snapshot and packet objects. It does not send packets, persist rows, update Java persistent state, or run through a live connection. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.sendItemDeletePacket` | `SmDeleteItem(..., SmDeleteItem.UseDeleteType)` plus `SmCubeUpdate.CubeSize(...)` from `CreateRequiredItemsAndKinahApplication` | Packet Boundary | Partial | Unit Tested | Partial Parity | Required item stack deletion emits the Java USE delete mask and cube-size update. Warehouse/legion storage delete paths are intentionally out of scope because portal requirements consume cube inventory. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.sendItemUpdatePacket` | `SmInventoryUpdateItem` packets from `CreateRequiredItemsAndKinahApplication` | Packet Boundary | Partial | Unit Tested | Partial Parity | Required item stack reductions use `DecreaseItemUse`; kinah uses `DecreaseKinahBuy`. Full live packet ordering and client capture remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DELETE_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmDeleteItem` | Packet | Complete | Unit Tested / Regression Tested | Partial Parity | Existing packet is reused with Java USE delete mask `0x17`. Live-client capture not run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CUBE_UPDATE` | `Aion.GameServer.Network.Aion.ServerPackets.SmCubeUpdate.CubeSize` | Packet | Partial | Unit Tested | Partial Parity | C# creates cube-size packets after delete operations using the working inventory snapshot. Full cube expansion/storage-type parity remains outside this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryUpdateItem` | Packet | Partial | Unit Tested / Regression Tested | Partial Parity | Existing packet is reused for item and kinah update masks. Full item-info blob parity and live-client capture remain unverified. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseItemCount` | `PortalRequirementConsumptionApplication.InventoryItems` working snapshot | Inventory Boundary | Partial | Unit Tested | Needs Verification | C# applies planned count updates/deletes to a snapshot only. Java `PersistentState.UPDATE_REQUIRED`, DB flushing, delete queue, logging, `QuestEngine.onItemRemoved`, and concurrency/locking remain missing. |
+| `com.aionemu.gameserver.dataholders.DataManager.ITEM_DATA` / `ItemTemplate` lookup for update packets | `Aion.GameServer.Dataholders.ItemTemplateTable` lookup in `CreateRequiredItemsAndKinahApplication` | Static Data Dependency | Partial | Unit Tested | Needs Verification | Missing update templates are surfaced as `MissingTemplateIds` with no packets. Java startup guarantees templates for valid item ids; C# does not yet enforce that at this boundary. |
+
+Tests added or extended:
+- `PortalEntryValidationServiceTests.CreateRequiredItemsAndKinahApplication_AppliesJavaDeleteUpdateAndKinahPackets`: validates required item delete packet, cube-size packet, item update mask `0x16`, kinah update mask `0x1D`, applied inventory snapshot, and no mutation of original inventory objects.
+- `PortalEntryValidationServiceTests.CreateRequiredItemsAndKinahApplication_ReturnsNoPacketsForFailedConsumptionPlan`: validates failed consumption plans are not applied and produce no packets.
+- `PortalEntryValidationServiceTests.CreateRequiredItemsAndKinahApplication_ReturnsNoPacketsWhenUpdateTemplateIsMissing`: validates missing update templates are reported without partial packet emission.
+- Java comparison status: expectations are source-derived from `ItemPacketService.sendItemPacket`, `sendItemDeletePacket`, `sendItemUpdatePacket`, `ItemUpdateType.DEC_ITEM_USE`, `ItemUpdateType.DEC_KINAH_BUY`, `ItemDeleteType.USE`, `SM_DELETE_ITEM`, `SM_CUBE_UPDATE`, and `SM_INVENTORY_UPDATE_ITEM`. No Java runtime execution, database persistence, live connection send, quest callback comparison, or live-client validation was run.
+
+Remaining risks:
+- The application boundary is not invoked by production portal entry paths, so live behavior still does not consume portal-required items or kinah.
+- Inventory changes are returned as a snapshot only; no repository applies updates/deletes to the database yet.
+- Packet objects are returned but not sent, so socket ordering, encryption framing, and client behavior are unverified.
+- Java side effects remain missing: persistent state marking, delete queue handling, logging, `QuestEngine.onItemRemoved`, and concurrency/lock semantics.
+- Template lookup failures are now explicit, but valid static data coverage is not proven for every portal requirement.
+- Group-size checks, actual same-instance teleport, instance transfer/allocation, quest engine depth, siege ownership, threading, reflection/JAXB behavior, date/time, precision/rounding, and live-client behavior remain incomplete or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 partial portal requirement application boundary using 3 existing packet surfaces
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 6 production portal handler wiring, inventory repository persistence, live packet dispatch, quest item removal side effects, actual teleport/transfer, and live runtime/client comparison
+- Estimated overall migration completion: Phase 6 remains about 60% complete; portal requirement validation, planning, and packet-boundary shaping now exist, but live portal execution is still incomplete.
+
+Next recommended unit of work:
+- Add the persistence-facing inventory application step for `PortalRequirementConsumptionApplication.InventoryItems`: update/delete the affected item rows through the existing item repository patterns, then wire that repository result and packet list into a still-teleport-free portal entry caller. Keep actual `TeleportService.teleportTo`/instance transfer as the following unit.
+
 ---
 
 ## Next Steps
