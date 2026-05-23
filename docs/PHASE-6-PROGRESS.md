@@ -5549,6 +5549,63 @@ Summary metrics:
 Next recommended unit of work:
 - The DP reward caller surface now has focused quest, solo-NPC, and PVP member boundaries. Continue with live speed snapshot support for `CHANGE_SPEED` after DP mutations, or take `PlayerTeamDistributionService.doReward` only after enough team-member/final-damage scaffolding exists to avoid inventing broad runtime state.
 
+### Session 421 (May 23, 2026)
+- Added the first live C# speed snapshot source for Java `PlayerGameStats.updateStatsAndSpeedVisually()` / `checkSpeedStats()` by resolving mounted player movement speed from current `Player.RideInfo` state.
+- `PlayerVisualStatsUpdateService.UpdateStatsAndSpeedVisuallyAsync` now creates a `PlayerVisualSpeedSnapshot` when a player is in ride mode, choosing ride fly speed while flying, sprint speed while sprinting, and move speed otherwise.
+- Added a small per-player speed cache in `PlayerVisualStatsUpdateService` so repeated unchanged ride snapshots send owner `SmStatsInfo` but skip duplicate `CHANGE_SPEED`, mirroring Java's cached `CreatureGameStats.cachedSpeed` / `PlayerGameStats.cachedAttackSpeed` check.
+- Kept unresolved ordinary player movement explicit: non-ride player speed still reports `SpeedSnapshotMissing` because C# does not yet have Java `StatsTemplate` player speed values, full `StatEnum.SPEED`/`FLY_SPEED` calculation, or effect/equipment speed modifiers.
+- The DP mutation path now broadcasts `SmEmotion(ChangeSpeed)` between owner `SmStatsInfo` and owner `SmStatUpdateDp` when the shared DP boundary can resolve the ride speed snapshot.
+- Added byte-level coverage for C# `SmEmotion(ChangeSpeed)` serialization including speed, base attack speed, current attack speed, and the trailing 4.0 marker byte.
+- Current gaps in this cluster: non-ride run/walk/fly speed, class `CreatureSpeeds`, effect/equipment speed stat functions, stat caps, live attack-speed modifiers, cache cleanup on logout/object-id lifecycle, and real-client visibility behavior remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerVisualStatsUpdateServiceTests|FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~GamePacketTests"` passes with 112 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PvpDpRewardServiceTests|WorldNpcSoloDpRewardServiceTests|QuestRewardServiceTests|PlayerEnterWorldServiceTests|PlayerVisualStatsUpdateServiceTests|WorldNpcResourceStatsServiceTests|CraftServiceTests|SkillDpConditionServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 321 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 940 tests.
+
+#### Migration Parity Table - Session 421
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats` | `Aion.GameServer.Services.PlayerVisualStatsUpdateService.UpdateStatsAndSpeedVisuallyAsync`; `PlayerVisualSpeedSnapshot` | Stats Container / Service Boundary | Partial | Unit Tested | Partial Parity | C# now resolves ride-mode speed snapshots and emits `CHANGE_SPEED` after stats. Full `getMovementSpeed`, `getAttackSpeed`, stat functions, and effect recalculation remain missing. |
+| `com.aionemu.gameserver.model.stats.container.CreatureGameStats` | `PlayerVisualStatsUpdateService` per-object speed cache | Stats Container / Cache | Partial | Unit Tested | Partial Parity | C# mirrors cached speed/current-attack comparison with a service `ConcurrentDictionary`. Java stores cache fields on each `GameStats` instance; C# lacks lifecycle cleanup and full stat locking semantics. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_EMOTION` | `Aion.GameServer.Network.Aion.ServerPackets.SmEmotion` | Packet | Partial | Regression Tested | Partial Parity | Added `CHANGE_SPEED` payload byte coverage. Tests are source-derived, not Java runtime generated golden vectors. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `Aion.GameServer.Network.Aion.IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync` | Network Utility / Bridge | Partial | Unit Tested | Partial Parity | `CHANGE_SPEED` uses visible-player broadcast with source inclusion through the registry. Exact Java known-list filtering remains runtime-dependent. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `WorldNpcResourceStatsService.AddPlayerDpAsync` invoking `PlayerVisualStatsUpdateService` | Runtime / Service Boundary | Partial | Regression Tested | Partial Parity | Ride-mode DP mutations now include `CHANGE_SPEED` in Java order: DP info, stats, speed, DP stat update. Non-ride DP mutations still report missing speed snapshot. |
+| `com.aionemu.gameserver.model.templates.ride.RideInfo` | `Aion.GameServer.Model.GameObjects.PlayerRideInfo` | DTO / Template Summary | Partial | Unit Tested | Partial Parity | C# uses move, fly, and sprint speeds from the already-loaded ride info. Ride stat/effect interactions remain pending. |
+| `com.aionemu.gameserver.model.actions.PlayerMode` | `Player.IsInRideMode` plus `Player.RideInfo` | Runtime State | Partial | Unit Tested | Partial Parity | Snapshot resolution currently depends on ride mode. Other player modes and mode-derived speed effects are not modeled here. |
+| `com.aionemu.gameserver.model.gameobjects.state.CreatureState` | `Aion.GameServer.Model.GameObjects.PlayerCreatureState` | Enum / Runtime State | Partial | Regression Tested | Partial Parity | C# uses flying/gliding state to choose ride fly speed. Java's exact multibit state semantics are broader than this slice. |
+| `com.aionemu.gameserver.model.PlayerClass` | No C# player speed template values yet | Enum / Template Factory | Partial | No Tests In This Unit | Needs Verification | Java class stats feed `StatsTemplate`; C# class stat port lacks player run/walk/fly speed values, so ordinary player speed remains unsupported. |
+| `com.aionemu.gameserver.model.templates.stats.StatsTemplate` | `SmStatsInfo` private calculated stats; no exported movement-speed source | Stats Template | Partial | No Tests In This Unit | Needs Verification | C# has combat/stat packet calculations, but no shared movement-speed stat source for non-ride players. |
+| `com.aionemu.gameserver.model.templates.stats.CreatureSpeeds` | No C# player class `CreatureSpeeds` equivalent yet | DTO / Static Data | Not Started | No Tests | Needs Verification | Needed for non-ride run, walk, and fly speed parity. |
+| `com.aionemu.gameserver.model.stats.container.StatEnum.SPEED`, `FLY_SPEED`, `ATTACK_SPEED` | Ride movement snapshot plus default/weapon attack-speed helper in `PlayerVisualStatsUpdateService` | Stat Enum / Formula | Partial | Unit Tested | Partial Parity | Movement supports ride values only. Attack speed currently uses base/weapon template values without full modifiers. |
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment` and item `WeaponStats` | `PlayerVisualStatsUpdateService.ResolveAttackSpeed` over `InventoryItem` + `ItemTemplateTable` | Equipment / Static Data | Partial | Unit Tested Indirectly | Needs Verification | Helper can use equipped weapon template attack speed when runtime item templates are present, but mastery/effect/bonus speed modifiers are not applied. |
+
+Tests added or extended:
+- `PlayerVisualStatsUpdateServiceTests.UpdateStatsAndSpeedVisuallyAsync_ResolvesRideSpeedSnapshotWhenMissing`: validates automatic ride move-speed snapshot creation and stats-before-speed packet order.
+- `PlayerVisualStatsUpdateServiceTests.UpdateStatsAndSpeedVisuallyAsync_UsesRideSprintAndFlightSpeeds`: validates sprint and flying ride speed selection.
+- `PlayerVisualStatsUpdateServiceTests.UpdateStatsAndSpeedVisuallyAsync_SkipsUnchangedResolvedSpeedAfterCacheWarm`: validates the Java-style no duplicate `CHANGE_SPEED` behavior for unchanged cached speed.
+- `WorldNpcResourceStatsServiceTests.AddPlayerDpAsync_BroadcastsChangeSpeedForResolvedRideSnapshotInJavaOrder`: validates DP mutation packet order with ride `CHANGE_SPEED`: `SmDpInfo`, `SmStatsInfo`, `SmEmotion(ChangeSpeed)`, `SmStatUpdateDp`.
+- `GamePacketTests` `SmEmotion` coverage: validates `CHANGE_SPEED` payload fields and trailing marker byte.
+- Java comparison status: tests are source-derived from Java `PlayerGameStats.updateStatsAndSpeedVisually`, `CreatureGameStats.checkSpeedStats`, `PlayerGameStats.checkSpeedStats`, `PlayerGameStats.getMovementSpeed`, `SM_EMOTION`, and `PlayerCommonData.setDp`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Ordinary player run/walk/fly movement speed is still unsupported because C# does not yet expose Java `StatsTemplate.getRunSpeed/getWalkSpeed/getFlySpeed` for player classes.
+- Effect, equipment, mastery, ride, abnormal, and stat-cap modifiers for `SPEED`, `FLY_SPEED`, and `ATTACK_SPEED` are not fully ported.
+- C# caches visual speed state inside the singleton service keyed by player object id; Java stores cache fields in the player's `GameStats`. Logout/object-id cleanup and exact Java synchronization remain pending.
+- `SmEmotion(ChangeSpeed)` serialization is source-derived and unit-tested, but not validated against live Java-generated golden bytes or a real client capture.
+- Reflection and date/time are not involved. Precision differs slightly at the cache boundary: C# compares `MathF.Round(speed * 1000)` units to mirror Java integer stat units, while the packet still writes the float speed.
+- Threading parity remains approximate because C# uses async registry broadcasts and a `ConcurrentDictionary` cache rather than Java instance fields updated inside synchronous stat callbacks.
+
+Summary metrics:
+- Total Java artifacts discovered: 13
+- Total artifacts ported: 1 partial ride-mode speed snapshot/cache bridge plus `CHANGE_SPEED` packet regression coverage
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 13
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full player speed stats, live max-DP lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, group stat fanout, restore/flight timers, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue the visual stat/speed cluster by adding a shared non-ride player movement-speed source from Java `StatsTemplate` / `CreatureSpeeds` if the C# class/static-data model can support it cleanly. If that would require too much class stat/template scaffolding, switch to live max-DP lookup for online DP mutations so reward callers no longer need explicit `maxDp`.
+
 ---
 
 ## Next Steps
