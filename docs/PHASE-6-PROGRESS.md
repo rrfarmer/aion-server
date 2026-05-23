@@ -4861,6 +4861,51 @@ Summary metrics:
 Next recommended unit of work:
 - Continue resource side-effect concretization with `SM_FLY_TIME` for player FP mutations. Re-read Java `PlayerLifeStats.sendFpPacketUpdate`, `SM_FLY_TIME`, and the existing `SendFlyTimeUpdate` intent, then wire concrete fly-time packet output while keeping FP restore/reduce timers as explicit follow-up gaps.
 
+### Session 407 (May 23, 2026)
+- Ported Java `SM_FLY_TIME` as `SmFlyTime`.
+- Wired player FP mutations into concrete owner fly-time sends through `WorldNpcResourceStatsService.SendFlyTimeUpdateAsync`.
+- Player FP reduce/increase paths now retain the existing `SendFlyTimeUpdate` intent and additionally carry the generated fly-time packet/send result for online player targets.
+- Staged FP heal adapter coverage now observes concrete fly-time packet output through the same resource boundary.
+- Current gaps in this cluster: FP restore/reduce timers, flight-zone/sprint cost scheduling, and broader `FlyController` integration remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~GamePacketTests"` passes with 98 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcResourceStatsServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 268 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 897 tests.
+
+#### Migration Parity Table - Session 407
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_FLY_TIME` | `Aion.GameServer.Network.Aion.ServerPackets.SmFlyTime` | Packet | Partial | Unit Tested | Partial Parity | C# writes Java payload shape `currentFp` then `maxFp` as 32-bit integers with opcode 244. Full live-client validation remains pending. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats.sendFpPacketUpdate` | `WorldNpcResourceStatsService.SendFlyTimeUpdateAsync`; `WorldNpcResourceChangeResult.FlyTimePacket`; `FlyTimeSent` | Packet Caller/Service | Partial | Unit Tested | Partial Parity | C# sends owner fly-time packet for online player FP changes through the connection registry. Java calls `PacketSendUtility.sendPacket`; C# uses `Player.IsOnline` as the concrete send gate while preserving the broader intent flag. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats.reduceFp` | `WorldNpcResourceStatsService.ReducePlayerFpAsync`; `ApplyPlayerFpChangeAsync` | Runtime/Service | Partial | Unit Tested | Partial Parity | C# clamps FP damage to zero, preserves HP percentage attack-status behavior, records/sends fly-time packet output for online players, and leaves FP reduce task scheduling pending. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats.increaseFp` | `WorldNpcResourceStatsService.IncreasePlayerFpAsync`; `ApplyPlayerFpChangeAsync` | Runtime/Service | Partial | Unit Tested | Partial Parity | C# caps FP heal to max FP, sends fly-time output only for positive effective FP changes, and skips output when already full. FP restore task behavior remains pending. |
+| `com.aionemu.gameserver.skillengine.effect.FPHealEffect` / `FpAttackEffect` staged callers | `WorldNpcResourceStatsService.ApplyResourceOverTimePeriodicResultAsync`; `ApplyInstantResourceResultAsync` with `SmFlyTime` output | Effect-to-Stats Adapter | Partial | Unit Tested | Partial Parity | Staged FP heal output reaches concrete fly-time packet send for online player targets. Instant/delayed FP attack adapter still needs representative concrete fly-time send coverage. |
+
+Tests added or extended:
+- `GamePacketTests` resource packet coverage: validates `SmFlyTime` serializes Java `SM_FLY_TIME` payload order and integer widths.
+- `WorldNpcResourceStatsServiceTests.ReducePlayerFpAsync_ClampsToZeroAndUsesHpPercentageWithFlyTimeIntent`: now validates concrete fly-time packet/send for FP reduction.
+- `WorldNpcResourceStatsServiceTests.IncreasePlayerFpAsync_CapsToMaxAndSkipsPacketWhenFull`: now validates concrete fly-time packet/send for effective FP healing and no packet when already full.
+- `WorldNpcResourceStatsServiceTests.ApplyResourceOverTimePeriodicResultAsync_IncreasesPlayerFpFromStagedFpHeal`: now validates staged FP heal output carries concrete fly-time packet data.
+- Java comparison status: tests are source-derived from Java `SM_FLY_TIME.writeImpl`, `PlayerLifeStats.sendFpPacketUpdate`, `PlayerLifeStats.reduceFp`, and `PlayerLifeStats.increaseFp`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- C# uses `Player.IsOnline` as the current concrete send gate; Java's owner connection behavior is broader than the current C# model.
+- FP restore/reduce task scheduling, flight-zone checks, sprint/ride FP costs, and `FlyController` integration remain pending.
+- Instant/delayed FP attack adapter branches now have a concrete send path through the shared service, but representative direct tests for those concrete sends are still useful.
+- Serialization parity is covered by payload-level tests, not live encrypted client captures.
+- Reflection and date/time are not involved. Threading parity remains approximate through staged service methods and connection-registry calls outside Java monitor semantics.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 2 partial C# packet/service artifacts plus result DTO fields
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because DP packet classes, group stat fanout, restore/flight timers, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue resource side-effect concretization with DP packet output: port and wire `SM_STATUPDATE_DP` and/or `SM_DP_INFO` from the existing `SendDpStatUpdate` / `BroadcastDpInfo` intents, preserving Java `PlayerCommonData.addDp/setDp` ordering and leaving stat/speed recalculation as an explicit gap if needed.
+
 ---
 
 ## Next Steps
