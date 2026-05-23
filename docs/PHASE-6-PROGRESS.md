@@ -5098,6 +5098,54 @@ Summary metrics:
 Next recommended unit of work:
 - Continue DP caller concretization with Java `CraftService.startCrafting`: add a focused C# crafting DP-cost boundary that checks recipe DP cost against current player DP and spends the cost through `AddPlayerDpAsync` only after the start-craft validation succeeds. Leave full `CM_CRAFT`, material consumption, `CraftingTask`, cooldown, static-object range, and quest/event crafting callbacks as explicit follow-up slices.
 
+### Session 412 (May 23, 2026)
+- Added a focused Java `CraftService.startCrafting` recipe-DP-cost boundary as C# `CraftService.SpendRecipeDpForCraftStartAsync`.
+- The C# boundary checks current player DP against `RecipeTemplateSummary.Dp` before mutation, matching Java `checkCraft`'s DP guard and no-packet failure path.
+- Successful craft-start DP handling now spends recipe DP through `WorldNpcResourceStatsService.AddPlayerDpAsync`, preserving the established `SmDpInfo` broadcast, visual stat/speed intent, and owner `SmStatUpdateDp` ordering.
+- Zero-DP recipes intentionally still route through `AddPlayerDpAsync`, preserving Java's `recipeTemplate.getDp() != null` / `addDp(0)` behavior from the current int-backed `RecipeTemplate.dp` field.
+- Added `CraftStartDpCostResult` / `CraftStartDpCostStatus` to keep craft-start DP failure and boundary-skipped states separate from raw resource changes.
+- Current gaps in this cluster: full `CM_CRAFT`, static-object/range validation, material selection and consumption, bonus-craft item consumption, `CraftingTask`, craft animation/update packets, cooldown writes, XP/reward handling, and quest/event craft callbacks remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~CraftServiceTests|FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~GamePacketTests"` passes with 108 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "CraftServiceTests|WorldNpcResourceStatsServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 278 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 907 tests.
+
+#### Migration Parity Table - Session 412
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService` | `Aion.GameServer.Services.CraftService.SpendRecipeDpForCraftStartAsync`; `CraftStartDpCostResult`; `CraftStartDpCostStatus` | Service Boundary | Partial | Unit Tested | Partial Parity | C# covers the DP guard and recipe-DP spend side effect of Java `checkCraft`/`startCrafting`. Full crafting validation, material/cooldown/task flow, animations, rewards, and quest callbacks are not ported here. |
+| `com.aionemu.gameserver.model.templates.recipe.RecipeTemplate` | `Aion.GameServer.Dataholders.RecipeTemplateSummary.Dp` | Static Data DTO | Partial | Unit Tested elsewhere | Partial Parity | C# already loads recipe `dp` from static data. This session consumes it for start-craft DP cost, including zero-cost calls through the DP boundary. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CRAFT` | No dedicated C# `CmCraft` packet/handler yet | Client Packet | Not Started | No Tests | Needs Verification | Java parses craft request, target template/object, craft type, and material counts before `CraftService.startCrafting`. C# currently exposes only the focused service boundary. |
+| `com.aionemu.gameserver.skillengine.task.CraftingTask` | No dedicated C# crafting task runtime yet | Runtime Task | Not Started | No Tests | Needs Verification | Java creates and starts a timed crafting task after the DP spend. C# does not yet schedule craft progress or finish callbacks. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `WorldNpcResourceStatsService.AddPlayerDpAsync` reused by `CraftService.SpendRecipeDpForCraftStartAsync` | Runtime/Service | Partial | Unit Tested | Partial Parity | Recipe DP spend routes through the concrete packeted DP boundary. Online max-DP lookup and visual stat/speed packet output remain gaps. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmDpInfo` | Packet | Partial | Unit Tested | Partial Parity | Reused for successful and zero-cost craft-start DP handling. Live-client capture remains pending. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_DP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateDp` | Packet | Partial | Unit Tested | Partial Parity | Reused for successful and zero-cost craft-start DP handling. Live-client capture remains pending. |
+
+Tests added or extended:
+- `CraftServiceTests.SpendRecipeDpForCraftStartAsync_SpendsRecipeDpAfterCraftValidation`: validates craft DP spend, DP mutation, concrete DP info broadcast, concrete DP stat owner send, and packet order.
+- `CraftServiceTests.SpendRecipeDpForCraftStartAsync_RejectsInsufficientDpBeforeMutation`: validates Java DP guard behavior with no DP mutation and no packet output.
+- `CraftServiceTests.SpendRecipeDpForCraftStartAsync_RoutesZeroCostThroughDpBoundary`: validates Java's zero-cost `addDp(0)` shape by emitting the no-change DP packet sequence.
+- `CraftServiceTests.SpendRecipeDpForCraftStartAsync_RequiresPlayerRecipeAndOnlineMaxDp`: validates missing player, missing recipe, and online missing max-DP boundary skip states.
+- Java comparison status: tests are source-derived from Java `CraftService.checkCraft`, `CraftService.startCrafting`, `RecipeTemplate.getDp`, `PlayerCommonData.addDp/setDp`, `SM_DP_INFO.writeImpl`, and `SM_STATUPDATE_DP.writeImpl`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- This is a focused DP-cost boundary, not a live `CM_CRAFT` or full C# crafting pipeline. Target validation, range checks, material consumption, bonus items, progress task scheduling, cooldowns, rewards, and quest callbacks remain pending.
+- Java audit-logs insufficient DP and the caller sends craft-cancel packets outside this branch; C# returns `NotEnoughDp` without audit/cancel side effects until the craft handler exists.
+- Online DP spend still requires explicit max-DP input because live `PlayerGameStats.getMaxDp()` is not available at this boundary.
+- `PlayerGameStats.updateStatsAndSpeedVisually()` remains a result intent only after recipe DP spend.
+- Reflection and date/time are not involved. Threading parity remains approximate through async service methods and connection-registry calls outside Java synchronized semantics.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 partial C# craft DP-cost service boundary plus result DTO/status and packeted DP-boundary reuse
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full crafting request/task flow, NPC/quest/PVP/team DP rewards, group stat fanout, restore/flight timers, DP visual stat updates, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue remaining DP caller concretization with reward/distribution surfaces such as Java `NpcController` DP rewards, `QuestService` DP rewards, `PvpService` DP distribution, or `PlayerTeamDistributionService` team DP distribution; choose the smallest caller whose surrounding C# model already exists. If reward scaffolding is not ready, return to resource side-effect concretization with group stat fanout or the `PlayerGameStats.updateStatsAndSpeedVisually()` packet path.
+
 ---
 
 ## Next Steps
