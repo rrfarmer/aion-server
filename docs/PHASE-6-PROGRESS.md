@@ -6312,6 +6312,53 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the zone bridge by adding movement-time revalidation and minimal zone-transition results so entering/leaving `FLY` / `NO_FLY` areas can trigger Java-shaped `onEnterFlyArea` / `onLeaveFlyArea` FP task intent, or build a socket harness around `CM_SUBZONE_CHANGE` + `CM_EMOTION(FLY)` to verify the newly live path before adding more zone lifecycle behavior.
 
+### Session 437 (May 23, 2026)
+- Added movement-time flight-zone revalidation for the newly loaded polygon zone bridge.
+- Introduced `PlayerZoneRevalidationResult`, capturing previous/current `FLY` and `NO_FLY` membership plus enter/leave deltas.
+- Reused a connection helper for enter-world, `CM_SUBZONE_CHANGE`, `CM_MOVE`, and `CM_MOVE_IN_AIR` so all four paths refresh player flight-zone state from the same Java-breadcrumbed service.
+- `CM_MOVE` now revalidates after updating `Player.Position`, matching the Java path where `CM_MOVE.notifyControllers` reaches `CreatureController.onMove` / `onStopMove` and then `ZoneUpdateService`.
+- `CM_MOVE_IN_AIR` now also revalidates after the air-position update, matching Java `CM_MOVE_IN_AIR.runImpl -> player.getController().onMove()`.
+- Current gaps in this cluster: Java's 500ms FIFO `ZoneUpdateService`, synchronized zone membership collections, nested counters, zone handlers, FP reduce/restore callbacks, anti-hack/spawn/dead movement gates, and socket-level ordering remain incomplete.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerZoneStateServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesMovementPackets|FullyQualifiedName~PlayerStateTests.PlayerFlightActionService"` passes with 13 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests|FullyQualifiedName~PlayerZoneStateServiceTests|FullyQualifiedName~PlayerStateTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests"` passes with 108 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 950 tests.
+
+#### Migration Parity Table - Session 437
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_MOVE` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleMoveAsync` | Client Packet Handler | Partial | Existing Packet + Service Coverage | Partial Parity | After updating `Player.Position`, movement now refreshes flight-zone booleans from world-map and polygon data. Java anti-hack/spawn gates, controller notification ordering, and FIFO zone scheduling remain partial. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_MOVE_IN_AIR` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleMoveInAir` caller path | Client Packet Handler | Partial | Source-Derived Integration Path | Needs Verification | Air movement now refreshes flight-zone booleans after position update. C# still lacks Java's spawned/flying guards and full `onMoveFromClient` side effects. |
+| `com.aionemu.gameserver.controllers.CreatureController.onMove` | `Aion.GameServer.Network.Aion.GameServerConnection.RevalidatePlayerFlightZones` | Movement Controller Hook | Partial | Source-Derived Integration Path | Needs Verification | C# invokes revalidation directly from movement handling instead of Java's observer/AI/zone-update fanout chain. |
+| `com.aionemu.gameserver.controllers.PlayerController.onStopMove` | `Aion.GameServer.Network.Aion.GameServerConnection.RevalidatePlayerFlightZones` | Movement Controller Hook | Partial | Source-Derived Integration Path | Needs Verification | Immediate/stop movement reuses the same direct revalidation after position update. Java skill cancellation, player move task manager, and observer fanout remain partial. |
+| `com.aionemu.gameserver.world.zone.ZoneUpdateService.callTask` | `Aion.GameServer.Services.PlayerZoneStateService.RevalidateFlightZones` | Zone Revalidation Service | Partial | Unit Tested | Partial Parity | C# recomputes current-position flight-zone membership synchronously. Java's 500ms FIFO batching, zone-level checks, and full creature support are not ported. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.setInsideZoneType` / `unsetInsideZoneType` | `Aion.GameServer.Services.PlayerZoneRevalidationResult` | Runtime State Delta | Partial | Unit Tested | Needs Verification | Result exposes enter/leave deltas for `FLY` and `NO_FLY` booleans, preparing future Java-shaped callbacks. It is not a nested counter or synchronized zone membership list. |
+| `com.aionemu.gameserver.world.zone.FlyZoneInstance.onEnter` / `onLeave` | `Aion.GameServer.Services.PlayerZoneRevalidationResult.EnteredFlyZone` / `LeftFlyZone` | Zone Transition Dependency | Partial | Unit Tested | Needs Verification | Deltas are detected, but Java `PlayerController.onEnterFlyArea` / `onLeaveFlyArea` FP task callbacks are not invoked yet. |
+| `com.aionemu.gameserver.world.zone.NoFlyZoneInstance.onEnter` / `onLeave` | `Aion.GameServer.Services.PlayerZoneRevalidationResult.EnteredNoFlyZone` / `LeftNoFlyZone` | Zone Transition Dependency | Partial | Unit Tested | Needs Verification | Deltas are detected, but Java's no-fly/fly-area callback interactions are not ported yet. |
+
+Tests added or extended:
+- `PlayerZoneStateServiceTests.RevalidateFlightZonesMatchesJavaWorldMapFlightSlice`: now asserts enter/leave deltas for map-default `FLY` and stale state clearing.
+- `PlayerZoneStateServiceTests.RevalidateFlightZonesMatchesJavaPolygonFlyAndNoFlySlice`: now asserts `EnteredFlyZone`, `EnteredNoFlyZone`, and non-entry behavior for z-bound exclusion.
+- Java comparison status: tests are source-derived from Java `CM_MOVE`, `CM_MOVE_IN_AIR`, `CreatureController.onMove`, `PlayerController.onStopMove`, `ZoneUpdateService`, `FlyZoneInstance`, and `NoFlyZoneInstance`; no live Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Movement revalidation is direct and synchronous, unlike Java's queued `ZoneUpdateService`.
+- No direct socket or connection-level test asserts that `CM_MOVE` and `CM_MOVE_IN_AIR` actually invoke the helper; coverage is source-derived plus service-level unit tests.
+- Detected enter/leave deltas are not yet consumed by FP reduce/restore task intent or zone handler fanout.
+- Nested zone counters are still represented as booleans, so overlapping zones can differ from Java enter/leave collection behavior.
+- Reflection is not used. Serialization is unchanged. Date/time is not introduced. Threading differs from Java's FIFO periodic task manager and synchronized zone instances.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 movement-time flight-zone revalidation bridge plus transition-delta DTO
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full zone lifecycle handlers, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Consume `PlayerZoneRevalidationResult` for the narrow Java `FlyZoneInstance` / `NoFlyZoneInstance` callback slice: entering a fly area should set FP reduce task intent, leaving the last fly area or entering no-fly should set FP restore/stop-reduce intent. Keep it bool/task-intent scoped until full `PlayerLifeStats` scheduling exists, or add connection-level tests first if you want to lock down movement/subzone invocation before adding side effects.
+
 ---
 
 ## Next Steps
@@ -6319,7 +6366,7 @@ Next recommended unit of work:
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
-4. Continue `CM_EMOTION` / `CM_MOVE` flight work by adding one missing support model at a time: movement-time fly/no-fly zone transition callbacks, full audit-system staff/punishment fanout, FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
+4. Continue `CM_EMOTION` / `CM_MOVE` flight work by adding one missing support model at a time: FP task intent from fly/no-fly zone transition callbacks, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
