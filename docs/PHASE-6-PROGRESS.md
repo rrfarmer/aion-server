@@ -9053,6 +9053,50 @@ Summary metrics:
 Next recommended unit of work:
 - Continue teleport/map-change parity by adding one real caller into `QueueDelayedTeleportAsync`, preferably a narrow portal or teleport-select path with static destination data and minimal guard scope, or add Java-generated golden-vector coverage for `SM_TELEPORT_LOC` before expanding caller usage.
 
+### Session 503 (May 23, 2026)
+- Reworked `TeleportAnimation` from a C# enum into a small Java-enum-like value type so Java's distinct `NONE(0)` and `BATTLEGROUND(0)` identities are preserved while still writing the same packet id byte.
+- Added source-derived `ArrivalAnimation` and `ObjectDeleteAnimation` IDs plus default animation mappings from Java `TeleportAnimation.getDefaultArrivalAnimation()` and `getDefaultObjectDeleteAnimation()`.
+- Updated `SmTeleportLoc` to write `TeleportAnimation.Id` explicitly, keeping `BATTLEGROUND` and `NONE` distinguishable in managed code while preserving the Java wire byte.
+- Updated `SmDelete` to accept `ObjectDeleteAnimation` instead of a raw byte, with Java's `FADE_OUT` default still preserved for existing callers.
+- Added deterministic packet hex coverage for `SM_TELEPORT_LOC` instance and non-instance map branches and for `SM_DELETE` jump-in animation serialization.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests|FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests"` passes with 91 tests.
+
+#### Migration Parity Table - Session 503
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.animations.TeleportAnimation` | `Aion.GameServer.Model.TeleportAnimation` | Java-enum-like Value Type | Complete | Unit Tested | Partial Parity | IDs and Java default arrival/delete mappings are source-derived and tested, including distinct `NONE(0)` vs `BATTLEGROUND(0)` identity. Reflection parity is intentionally different because C# uses a readonly value type, not an enum; no Java reflection callers are modeled. |
+| `com.aionemu.gameserver.model.animations.ArrivalAnimation` | `Aion.GameServer.Model.ArrivalAnimation` | Enum | Complete | Unit Tested | Needs Verification | IDs used by Java `SM_PLAYER_INFO` are ported and validated through `TeleportAnimation` default mapping tests. C# `SmPlayerInfo` does not yet consume player port/arrival animation state, so packet-level arrival behavior remains unverified. |
+| `com.aionemu.gameserver.model.animations.ObjectDeleteAnimation` | `Aion.GameServer.Model.ObjectDeleteAnimation` | Enum | Complete | Unit Tested | Partial Parity | IDs used by Java `SM_DELETE`/`SM_PET` are ported; `SmDelete` now serializes typed delete animations. `SM_PET` and world despawn delete-animation broadcasts remain unported or unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DELETE` | `Aion.GameServer.Network.Aion.ServerPackets.SmDelete` | Server Packet | Partial | Unit Tested | Partial Parity | Default `FADE_OUT` remains byte-compatible and `JUMP_IN` has deterministic hex coverage. Other Java delete-animation consumers, visibility broadcasts, and object despawn ordering remain incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_TELEPORT_LOC` | `Aion.GameServer.Network.Aion.ServerPackets.SmTeleportLoc` | Server Packet | Partial | Unit Tested | Partial Parity | Packet now writes `TeleportAnimation.Id` explicitly and has deterministic hex coverage for instance-map and non-instance branches. No Java-generated golden vector or live encrypted socket capture was run. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.sendLoc` / `SpawnTask.run` | `GameServerConnection.QueueDelayedTeleportAsync` + `PlayerTeleportService.CompletePendingTeleport` | Teleport Animation Boundary | Partial | Unit + Regression Tested | Partial Parity | The C# model now has the Java default animation metadata needed by `sendLoc`, `World.despawn`, and `SpawnTask.run`, but queued teleport still does not broadcast `SM_DELETE` with the selected default object-delete animation or set arrival animation for `SM_PLAYER_INFO`. Threading still uses a typed pending record rather than Java `TaskId.TELEPORT` futures. |
+
+Tests added:
+- `GamePacketTests.TeleportAnimation_PreservesJavaIdsAndDefaultMappings`: validates Java ids, default arrival/delete mappings, and the important `NONE(0)` vs `BATTLEGROUND(0)` identity distinction. This is source-derived from Java `TeleportAnimation`, `ArrivalAnimation`, and `ObjectDeleteAnimation`; it does not execute Java.
+- Additional `GamePacketTests` assertions for `SmTeleportLoc`: verify exact deterministic little-endian payload bytes for instance and non-instance destinations, including float precision and map-id/instance-id branch behavior.
+- Additional `GamePacketTests` assertion for `SmDelete`: verifies `ObjectDeleteAnimation.JumpIn` serializes as Java id 11.
+- Java comparison status: expectations are source-derived from Java enum source and packet write order. No Java runtime reflection test, generated packet vector, or live socket comparison was run.
+
+Remaining risks:
+- `ArrivalAnimation` is modeled but not yet wired into player state or `SmPlayerInfo`, so Java arrival visual behavior after delayed teleport completion remains incomplete.
+- Queued delayed teleport still does not call a world despawn pipeline that broadcasts `SmDelete` using `TeleportAnimation.DefaultObjectDeleteAnimation`.
+- `ObjectDeleteAnimation` is now typed for `SmDelete`, but `SM_PET`, generic despawn visibility ordering, and object lifecycle side effects remain unported or unverified.
+- Reflection behavior intentionally differs: Java exposes real enums, while C# uses a value type for `TeleportAnimation` to preserve duplicate-id identity. This should be kept documented if future reflection/config binding code expects enum semantics.
+- Serialization is deterministic-tested from source but still lacks Java-generated golden vectors and live client/socket validation.
+- No database schema, date/time, persistence, precision beyond float packet bits, or scheduler/threading behavior changed in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 3 animation model artifacts plus typed packet usage for 2 packets
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 5 `SmPlayerInfo` arrival animation state, world despawn/delete-animation broadcast pipeline, `SM_PET` delete animation consumers, Java-generated packet vectors/live socket capture, and Java `TaskId.TELEPORT` future scheduling
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because this unit tightens animation metadata only, while real teleporter callers, full map-change spawn/despawn ordering, pets/legion/instance callbacks, generic object lifecycle, zone handlers, AI, rewards, team distribution, effects, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue teleport/map-change parity by wiring the typed default animations into the delayed teleport side effects: broadcast `SmDelete` with `TeleportAnimation.DefaultObjectDeleteAnimation` during the queued request/despawn phase and add a minimal arrival-animation field path into `SmPlayerInfo`, or first add Java-generated golden-vector coverage for `SM_TELEPORT_LOC`/`SM_DELETE` if packet certainty is preferred.
+
 ---
 
 ## Next Steps
