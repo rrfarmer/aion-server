@@ -11671,6 +11671,56 @@ Summary metrics:
 Next recommended unit of work:
 - Extend the runtime group bridge one step toward Java `TemporaryPlayerTeam`: add a minimal group descriptor carrying leader object id, team type, and max-member validation, then test that group add/remove preserves leader metadata and rejects over-capacity groups without changing portal execution. Keep event fanout, packet sends, loot rules, find-group integration, disband, and Java `IDFactory` allocation deferred unless the source behavior is explicitly ported.
 
+### Session 562 (May 23, 2026)
+- Added `PlayerGroupDescriptor` to carry the runtime group's team id, leader object id, team type, and max member count.
+- Added `PlayerGroupType` for the currently relevant Java `TeamType.GROUP` and `TeamType.AUTO_GROUP` values.
+- `PlayerGroupRuntime.CreateOrUpdateGroup` now records descriptor metadata from the first member as leader, accepts an explicit group type, and rejects groups larger than Java `PlayerGroup.getMaxMemberCount()`.
+- `PlayerGroupRuntime.AddMember` now rejects over-capacity adds before attaching the rejected player.
+- `PlayerGroupRuntime.GetDescriptor` exposes descriptor metadata for future group/team call sites.
+- `PlayerGroupRuntime.RemoveMember` preserves descriptor metadata when a non-leader leaves and removes descriptor state when the group empties; full Java leader-change/disband event behavior remains deferred.
+- Extended runtime tests for descriptor metadata, Java six-member capacity rejection, and non-leader removal preserving leader metadata.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests"` passes with 81 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1180 tests.
+
+#### Migration Parity Table - Session 562
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.TeamType` | `Aion.GameServer.Model.GameObjects.PlayerGroupType` | Enum | Partial | Unit Tested | Needs Verification | C# models only `GROUP` and `AUTO_GROUP`, the group values currently needed by the runtime bridge. Java alliance/offence/defence variants and raw type/subType integer serialization are not ported. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.getTeamType` | `PlayerGroupDescriptor.TeamType` | Model Descriptor | Partial | Unit Tested | Needs Verification | Runtime descriptor preserves group type metadata. Java type-specific invite/ban/auto-team behavior remains missing. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.setLeader` / `getLeader` | `PlayerGroupDescriptor.LeaderObjectId` | Model Descriptor | Partial | Unit Tested | Needs Verification | C# stores leader object id from the first supplied member and preserves it when non-leaders leave. Java leader object wrappers, `changeLeader`, leader removal events, and packet fanout are not implemented. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.getMaxMemberCount` | `PlayerGroupDescriptor.JavaMaxMemberCount` / `MaxMemberCount` | Model Descriptor | Partial | Unit Tested | Needs Verification | C# records Java's six-member max and rejects over-capacity runtime adds. Java event-condition ordering, message packets, auto-group behavior, and full restriction checks remain missing. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.isFull` | `PlayerGroupDescriptor.IsFull` and `PlayerGroupRuntime.AddMember` | Utility / Lifecycle Guard | Partial | Unit Tested | Needs Verification | C# applies the full check before attaching a new member. Java uses team/event/restriction paths; exact failure reason and packet behavior are not ported. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.createGroup` | `PlayerGroupRuntime.CreateOrUpdateGroup` with descriptor metadata | Service / Registry | Partial | Regression Tested | Needs Verification | Runtime group creation now preserves leader/type/max metadata alongside snapshot attachment. Java static registry, ID allocation, offline checker startup, and entry events remain absent. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.addPlayer` | `PlayerGroupRuntime.AddMember` capacity rejection | Service / Lifecycle | Partial | Unit Tested | Needs Verification | C# rejects player 7 without mutating that player. Java invite restrictions, event checks, system messages, and packet fanout are not modeled. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.onRemoveMember` | `PlayerGroupRuntime.RemoveMember` descriptor preservation/removal | Service / Lifecycle | Partial | Unit Tested | Needs Verification | C# preserves leader metadata for non-leader removal and removes descriptor when empty. Java disband/leader reassignment/event ordering remains unverified. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.CreateOrUpdateGroup_AttachesSharedSnapshotMetadataToMembers`: extended to validate descriptor team id, leader object id, `AutoGroup` type, and max member count.
+- `PlayerGroupRuntimeTests.AddMember_RejectsPlayersBeyondJavaGroupCapacityWithoutAttachingRejectedPlayer`: validates Java six-member cap behavior at the runtime guard and proves the rejected player's group fields remain unchanged.
+- `PlayerGroupRuntimeTests.RemoveMember_PreservesLeaderDescriptorWhenNonLeaderLeaves`: validates non-leader removal keeps leader/type/max descriptor metadata.
+- Java comparison status: expectations are source-derived from `TeamType`, `PlayerGroup.getTeamType`, `GeneralTeam.setLeader/getLeader/isFull`, `PlayerGroup.getMaxMemberCount`, `PlayerGroupService.createGroup/addPlayer`, and `PlayerGroup.onRemoveMember`. No Java runtime execution, invite failure packet comparison, event ordering comparison, concurrent mutation comparison, or live client validation was run.
+
+Remaining risks:
+- C# `PlayerGroupType` intentionally omits alliance/offence/defence values and Java raw `type` / `subType` fields until a caller requires them.
+- C# descriptor stores only object ids, not Java `TeamMember` wrappers or live leader object identity.
+- Leader removal behavior is only first-pass and not validated against Java's actual leave/disband/change-leader event flow.
+- Capacity rejection is applied directly in the runtime; Java normally reaches add-member decisions through restrictions and team events, so packet/message parity is missing.
+- Threading remains a simple C# `Lock`, not Java `ConcurrentHashMap` plus `ReentrantLock` event dispatch.
+- Serialization is unchanged. Reflection/JAXB behavior is not involved. Date/time and precision/rounding are not involved.
+- Group portal execution remains blocked; these metadata improvements do not add allocation, transfer fanout, cooldown mutation, or persistence.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 2 minimal descriptor artifacts (`PlayerGroupDescriptor`, `PlayerGroupType`) plus runtime descriptor wiring
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 12 Java raw `TeamType` fields, alliance/offence/defence team values, invite/restriction packet behavior, event-condition ordering, leader-change/removal behavior, disband/min-member flow, Java ID allocation, offline checks, find-group integration, packet fanout, full team concurrency semantics, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; the C# group bridge now tracks leader/type/capacity metadata, but full team lifecycle and group portal execution remain missing.
+
+Next recommended unit of work:
+- Continue toward Java `GeneralTeam` behavior by adding a small query surface on `PlayerGroupRuntime`: `HasMember`, `GetMemberObjectIds`, `IsLeader`, `IsFull`, and duplicate-add/remove-missing error behavior aligned with `GeneralTeam`. Unit-test the guard semantics but keep packet fanout, event dispatch, loot rules, brand updates, find-group integration, offline checks, and disband behavior deferred.
+
 ---
 
 ## Next Steps
