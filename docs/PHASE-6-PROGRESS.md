@@ -9143,6 +9143,39 @@ Summary metrics:
 Next recommended unit of work:
 - Continue teleport/map-change parity by adding direct regression coverage for the `CM_LEVEL_READY` arrival-animation reset and the map/instance-change delayed teleport branch, or add Java-generated golden-vector coverage for `SM_TELEPORT_LOC`, `SM_DELETE`, and the `SM_PLAYER_INFO` port-animation byte before wiring a real teleporter/portal caller.
 
+### Session 505 (May 23, 2026)
+- Added direct regression coverage for the `CM_LEVEL_READY` arrival-animation reset that Session 504 implemented from Java source.
+- The existing level-ready PVP revalidation test now seeds `Player.PortAnimation = ArrivalAnimation.FadeInBeam`, runs `HandleLevelReadyAsync`, and verifies the handler resets the value to `ArrivalAnimation.None` after sending the modeled player-info path.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests"` passes with 14 tests.
+
+#### Migration Parity Table - Session 505
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_LEVEL_READY` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLevelReadyAsync` | Client Packet Handler | Partial | Regression Tested | Partial Parity | Regression now covers the source-derived reset of `Player.PortAnimation` to `ArrivalAnimation.NONE` after level-ready player-info fanout. Full Java level-ready side effects remain incomplete: siege/conqueror/rift/event services, nearby/repeatable quests, weather, quest engine callbacks, pet spawn, town/event services, delayed team brands, and full world spawn callbacks. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getPortAnimationId/setPortAnimation` | `Aion.GameServer.Model.GameObjects.Player.PortAnimation` | Player State | Partial | Unit + Regression Tested | Partial Parity | The same-map delayed teleport and level-ready reset paths are now regression-covered. The test verifies state reset after the handler; it does not capture the encrypted outbound `SM_PLAYER_INFO` frame from `HandleLevelReadyAsync`, so packet-level delivery order remains needs-verification. |
+| `com.aionemu.gameserver.model.animations.ArrivalAnimation` | `Aion.GameServer.Model.ArrivalAnimation` | Enum | Complete | Unit + Regression Tested | Partial Parity | `FADE_IN_BEAM` can now be seeded through level-ready reset coverage, and `NONE` reset behavior is regression-tested. Other arrival-animation producers/consumers remain unverified. |
+
+Tests added:
+- `GameServerConnectionFlightZoneFanoutTests.HandleLevelReadyAsync_RevalidatesCreaturePvpZoneCountersAfterMapLoadTeleport`: expanded to seed `Player.PortAnimation = ArrivalAnimation.FadeInBeam` and verify `HandleLevelReadyAsync` resets it to `ArrivalAnimation.None`.
+- Java comparison status: expectations are source-derived from Java `CM_LEVEL_READY.runImpl` resetting `activePlayer.setPortAnimation(ArrivalAnimation.NONE)` after player-info/world-entry fanout. No live Java runtime, Java-generated packet vector, or direct outbound frame capture was run.
+
+Remaining risks:
+- This unit covers only the level-ready state reset. It does not prove the outbound `SM_PLAYER_INFO` frame sent by `HandleLevelReadyAsync` contained the prior animation byte, because the current connection test harness does not capture direct encrypted sends.
+- Full Java `CM_LEVEL_READY` behavior remains broad and partial: siege/conqueror/rift/event services, nearby/repeatable quests, weather, quest callbacks, pet spawn, town/event services, team brands, and complete world spawn/instance callbacks are not ported here.
+- No database schema, persistence, date/time, reflection, precision/rounding, serialization format, or threading behavior changed in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 3
+- Total artifacts ported: 1 level-ready port-animation reset regression
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 5 direct outbound frame capture for `HandleLevelReadyAsync`, full Java `CM_LEVEL_READY` service fanout, pet/world spawn callbacks, quest/weather/town/event callbacks, and Java-generated packet/live socket validation
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this coverage closes one small teleport/map-change verification gap but broad game-core areas remain open.
+
+Next recommended unit of work:
+- Continue teleport/map-change parity by covering the map/instance-change delayed teleport branch's arrival-animation retention through `CM_LEVEL_READY`, or add Java-generated golden-vector coverage for `SM_TELEPORT_LOC`, `SM_DELETE`, and `SM_PLAYER_INFO` before wiring a real teleporter/portal caller.
+
 ---
 
 ## Next Steps
