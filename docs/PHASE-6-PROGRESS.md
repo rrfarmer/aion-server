@@ -4017,6 +4017,53 @@ Summary metrics:
 Next recommended unit of work:
 - Add a staged `AttackUtil.calculateAdditionalHitCount` / `amplifyDamageByAdditionalHitCount` result surface that records additional-hit triggers, skipped counter statuses, main/off-hand hit counts, and damage amplification metadata before wiring real passive/stat observers.
 
+### Session 390 (May 23, 2026)
+- Added a staged Java `AttackUtil.calculateAdditionalHitCount` / `amplifyDamageByAdditionalHitCount` surface to `WorldNpcSkillResultCalculationService`.
+- Added `WorldNpcSkillAdditionalHitOptions`, `WorldNpcSkillAdditionalHitResult`, and `WorldNpcSkillAdditionalHitAttackResult` to record player/weapon eligibility, deterministic weapon hit-count rolls, main/off-hand additional-hit counts, generated hit metadata, and missing roll/damage inputs.
+- The staged additional-hit surface mirrors Java's exact `DODGE`/`RESIST` skip, main-hand `roll - 1` count, off-hand non-shield gating, amplification loop ordering, 10 percent generated-hit damage, normal/off-hand-normal attack statuses, hit-type propagation, and low-damage no-add behavior.
+- Additional hits are exposed as metadata only; they do not mutate a shared Java-style `List<AttackResult>` yet.
+- Current gaps in this cluster: real player equipment lookup, weapon hit-count template reads, `Rnd.get` integration, true main/off-hand attack-list generation, passive/stat observer interaction, and downstream packet/effect consumers remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcSkillResultCalculationServiceTests"` passes with 55 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcDamageServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GamePacketTests|GameServerBootstrapTests"` passes with 202 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 831 tests.
+
+#### Migration Parity Table - Session 390
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.attack.AttackUtil.calculateAdditionalHitCount` | `Aion.GameServer.Services.WorldNpcSkillAdditionalHitOptions`; `WorldNpcSkillAdditionalHitResult` | Utility/DTO | Partial | Unit Tested | Partial Parity | C# records player/weapon eligibility and deterministic main/off-hand hit-count rolls. Real equipment lookup and Java RNG are pending. |
+| `com.aionemu.gameserver.controllers.attack.AttackUtil.amplifyDamageByAdditionalHitCount` | `Aion.GameServer.Services.WorldNpcSkillAdditionalHitAttackResult` | Utility/DTO | Partial | Unit Tested | Partial Parity | C# generates staged extra-hit metadata using Java 10 percent damage and normal/off-hand-normal statuses. It does not mutate a Java-style attack-result list. |
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment.getMainHandWeapon` | `WorldNpcSkillAdditionalHitOptions.HasMainHandWeapon`; `MainHandWeaponHitCount`; `MainHandRoll` | Equipment/Staged Input | Partial | Unit Tested | Needs Verification | C# accepts main-hand weapon hit-count data as explicit inputs. Item template lookup is not ported here. |
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment.getOffHandWeapon` | `WorldNpcSkillAdditionalHitOptions.HasOffHandWeapon`; `OffHandWeaponHitCount`; `OffHandRoll`; `OffHandIsShield` | Equipment/Staged Input | Partial | Unit Tested | Needs Verification | C# accepts off-hand weapon and shield gating as explicit inputs. Equipment lookup and item subtype checks remain pending. |
+| `com.aionemu.commons.utils.Rnd.get` | `WorldNpcSkillAdditionalHitOptions.MainHandRoll`; `OffHandRoll` | RNG/Staged Input | Refactored | Unit Tested | Intentional Difference | C# uses deterministic rolls so tests can cover Java count formulas without global RNG. Live RNG parity remains pending. |
+| `com.aionemu.gameserver.controllers.attack.AttackResult` | `WorldNpcSkillAttackResult`; `WorldNpcSkillAdditionalHitAttackResult` | DTO | Partial | Unit Tested | Needs Verification | C# keeps one primary staged attack result and exposes extra hits separately. Java appends extra `AttackResult` entries to the same list. |
+
+Tests added or extended:
+- `WorldNpcSkillResultCalculationServiceTests.Calculate_AdditionalHitsSkipExactDodgeAndResistLikeJava`: validates exact Java `DODGE`/`RESIST` skip behavior.
+- `WorldNpcSkillResultCalculationServiceTests.Calculate_AdditionalHitsGenerateMainHandAmplification`: validates main-hand `roll - 1` count, loop count, generated 10 percent damage, normal-hit status, and hit metadata.
+- `WorldNpcSkillResultCalculationServiceTests.Calculate_AdditionalHitsGenerateOffHandAmplification`: validates off-hand non-shield path, off-hand count, generated 10 percent damage, `OFFHAND_NORMALHIT`, and hit-type propagation.
+- `WorldNpcSkillResultCalculationServiceTests.Calculate_AdditionalHitsRecordLowDamageWithoutGeneratedHit`: validates Java's `damage >= 10` gate records counts without generated hits.
+- `WorldNpcSkillResultCalculationServiceTests.Calculate_AdditionalHitsRecordMissingRollInputs`: validates unresolved deterministic roll metadata.
+- Java comparison status: tests are source-derived from Java `AttackUtil.calculateAdditionalHitCount` and `AttackUtil.amplifyDamageByAdditionalHitCount`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Additional-hit counts come from explicit rolls; C# does not yet read item templates or call Java-style RNG.
+- C# exposes generated extra hits as metadata rather than mutating the same attack list used by later damage modifiers, NPC AI hooks, shield checks, packets, and effects.
+- Passive/stat observers and weapon/item subtype models are not wired into this surface.
+- Java's unusual negative main-hand count behavior is represented through the loop formula, but real equipment/RNG validation is still needed.
+- Threading, serialization, reflection, precision/rounding, and date/time behavior are not exercised by this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 3 partial/staged C# artifacts
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 55% because full `AttackUtil`, live equipment/RNG integration, real attack-result lists, NPC AI damage hooks, shield observer execution, stat modifier integration with real creatures, full effect runtime, real skill runtime, live drain/heal side effects, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Add a staged `AttackUtil.modifyDamageByNpcAi` result surface that records attacker-NPC owner-damage and attacked-NPC damage modifier hooks for each staged attack result before wiring real AI owners.
+
 ---
 
 ## Next Steps
@@ -4026,5 +4073,5 @@ Next recommended unit of work:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add a staged `AttackUtil.calculateAdditionalHitCount` / `amplifyDamageByAdditionalHitCount` result surface that records additional-hit triggers, skipped counter statuses, main/off-hand hit counts, and damage amplification metadata before wiring real passive/stat observers, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add a staged `AttackUtil.modifyDamageByNpcAi` result surface that records attacker-NPC owner-damage and attacked-NPC damage modifier hooks for each staged attack result before wiring real AI owners, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
