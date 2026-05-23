@@ -13103,6 +13103,64 @@ Summary metrics:
 Next recommended unit of work:
 - Continue `SM_ALLIANCE_MEMBER_INFO` parity by adding the Java name branches for `JOIN`, `ENTER`, `ENTER_OFFLINE`, `UPDATE`, and `RECONNECT` with zero-effect online handling and offline `ENTER -> ENTER_OFFLINE` behavior, mirroring the already-ported group member-info packet strategy. Keep live alliance membership/runtime sends and non-empty effect extraction deferred.
 
+### Session 592 (May 23, 2026)
+- Continued Java `SM_ALLIANCE_MEMBER_INFO.writeImpl` parity from the movement prefix into name/effect-list branches.
+- Extended `PlayerAllianceMemberInfoPacketPlan` with packet-shape flags:
+  - `WritesName`;
+  - `WritesAbnormalEffects`;
+  - `WritesSlotTimers`;
+  - optional `AbnormalEffects` DTO entries.
+- Added `SmAllianceMemberInfo` serialization for online zero-effect name branches:
+  - name;
+  - two zero dwords;
+  - full-slot byte `127`;
+  - zero abnormal-effect count;
+  - eight zero slot-timer dwords.
+- Added offline `ENTER -> ENTER_OFFLINE` packet planning and serialization:
+  - name;
+  - two zero dwords;
+  - zero `H` value without the online full-slot/timer block.
+- Kept non-empty alliance effect extraction, `UPDATE_EFFECTS`, member group change, captain/vice-captain semantics, live alliance runtime sends, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Documented a C# enum-alias risk: Java distinguishes same-id `PlayerAllianceEvent` constants such as `JOIN` and `MEMBER_GROUP_CHANGE`, but C# enum aliases collapse them at runtime. This slice tests/source-models the shared name/effect id branches, but not `MEMBER_GROUP_CHANGE`'s Java name-only behavior.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests|FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 124 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1222 tests.
+
+#### Migration Parity Table - Session 592
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` / `PlayerAllianceMemberInfoPacketPlan` | Server Packet / Planning DTO | Partial | Unit Tested | Needs Verification | C# now serializes fixed prefix, branchless movement-style events, online zero-effect name branches, and offline `ENTER_OFFLINE`. Non-empty effects, `UPDATE_EFFECTS`, member group change name-only behavior, Java golden bytes, encoded frames, and client validation remain missing. |
+| `com.aionemu.gameserver.model.team.common.legacy.PlayerAllianceEvent` | `Aion.GameServer.Model.GameObjects.PlayerAllianceEvent` | Enum | Partial | Unit Tested | Needs Verification | C# aliases same-id Java events. This is acceptable for shared packet branches but not enough for Java constants with different behavior under the same id, especially `MEMBER_GROUP_CHANGE`. A richer discriminator may be needed. |
+| `com.aionemu.gameserver.skillengine.model.SkillTargetSlot` | `SmAllianceMemberInfo` private `FullSlots = 127` constant | Enum / Packet Dependency | Partial | Unit Tested | Needs Verification | Full-slot byte and eight timer placeholders are source-modeled for zero-effect online branches. Reusable C# target-slot enum parity remains missing. |
+| `com.aionemu.gameserver.skillengine.model.Effect` | `PlayerGroupMemberEffectInfo` reused as alliance packet effect DTO | Packet DTO / Effect Dependency | Partial | No Tests for Alliance Effects | Needs Verification | DTO storage is available but this unit only tested zero-effect branches. Live alliance effect extraction and non-empty alliance serialization are not verified. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_WritesOnlineNameZeroEffectBranchesLikeJava`: validates online `JOIN` name/effect skeleton bytes with full-slot `127`, zero effect count, and eight timer placeholders.
+- `PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_RewritesOfflineEnterToEnterOfflineLikeJava`: validates offline `ENTER` planning rewrite and Java offline payload shape.
+- Existing movement tests were retained and the prefix helper was generalized for event-specific class/gender/level/event bytes.
+- Java comparison status: expectations are source-derived from `SM_ALLIANCE_MEMBER_INFO.writeImpl` and `PlayerAllianceEvent`. No Java runtime execution, Java-generated golden vector, live send/fanout comparison, encoded frame comparison, reflection behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- C# enum aliases cannot distinguish all Java same-id alliance event constants; `MEMBER_GROUP_CHANGE` remains unported despite sharing id `5`.
+- Live alliance registry/runtime membership is not implemented.
+- Live alliance member-info sends are not wired to sockets.
+- Non-empty alliance effect serialization and live effect extraction are not tested.
+- `UPDATE_EFFECTS`, captain/vice-captain events, and member group-change behavior remain missing.
+- Java runtime ordering/event-loop behavior is not compared.
+- Serialization is packet-body tested only; Java golden bytes and encoded frames are still unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 alliance member-info name/zero-effect packet slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 enum discriminator for same-id event constants, live alliance registry/runtime, live alliance socket fanout, non-empty alliance effects, alliance `UPDATE_EFFECTS`, member group-change/captain branches, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; alliance packet serialization is broader, but full alliance runtime/event parity is still incomplete.
+
+Next recommended unit of work:
+- Continue `SM_ALLIANCE_MEMBER_INFO` by adding targeted `UPDATE_EFFECTS` zero-effect serialization and one DTO-backed non-empty effect serialization test for alliance packets. Keep live `EffectController.getAbnormalEffectsToShow/getAbnormalEffectsToTargetSlot` extraction deferred, and explicitly track the unresolved same-id enum discriminator issue before attempting `MEMBER_GROUP_CHANGE`.
+
 ---
 
 ## Next Steps
