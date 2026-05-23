@@ -11914,6 +11914,52 @@ Summary metrics:
 Next recommended unit of work:
 - Add the matching narrow login bridge for runtime group membership: source-derive `TryReconnectMember` / `OnPlayerLogin` to scan runtime groups for a member object id and refresh the wrapper/player reference only if needed, while documenting that Java `PlayerConnectedEvent`, leader recovery, packet fanout, and offline-expiry behavior remain deferred.
 
+### Session 567 (May 23, 2026)
+- Added the matching narrow login bridge for runtime group member wrapper refresh.
+- `PlayerGroupRuntime.TryReconnectMember(Player player)` now scans runtime groups by player object id, replaces the stored wrapper with the logging-in `Player`, clears the previous wrapper player's group fields, and reapplies the shared group snapshot.
+- Reconnected wrappers start with `LastOnlineTimeMillis == 0`, matching Java's new `PlayerGroupMember(player)` replacement behavior.
+- Unknown players return `false` without mutating runtime membership or player group state.
+- Kept Java `PlayerConnectedEvent` packet fanout, leader recovery, change-leader event, offline-expiry behavior, and full login pipeline integration out of scope.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests"` passes with 89 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1188 tests.
+
+#### Migration Parity Table - Session 567
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.onPlayerLogin` | `Aion.GameServer.Services.PlayerGroupRuntime.TryReconnectMember` | Service Lifecycle Slice | Partial | Unit Tested | Needs Verification | C# scans runtime groups and reconnects by object id. Java scans static `groups.values()` and dispatches `PlayerConnectedEvent`; event dispatch and real login pipeline integration remain missing. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerConnectedEvent` | `PlayerGroupRuntime.TryReconnectMember` | Event Dependency / Lifecycle | Partial | Unit Tested | Needs Verification | C# ports only the wrapper replacement and snapshot reattach effect. Java sends `SM_GROUP_INFO`, multiple `SM_GROUP_MEMBER_INFO` packets, handles leader warnings/recovery, and can trigger `ChangeGroupLeaderEvent`; all remain unported. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupMember` | `Aion.GameServer.Model.GameObjects.PlayerGroupMember` | Wrapper | Partial | Regression Tested | Needs Verification | Reconnect replaces the wrapper with a new wrapper around the logging-in `Player`, resetting last-online timestamp. Java wrapper replacement is source-derived but runtime object identity and event ordering are unverified. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.removeMember` / `addMember` during reconnect | `PlayerGroupRuntime.TryReconnectMember` wrapper replacement | Lifecycle Dependency | Partial | Unit Tested | Needs Verification | C# clears previous player group fields, replaces the wrapper, and reapplies snapshots. Java invokes `onRemoveMember`/`addMember`, stats updates, and packet/event side effects; those are missing. |
+| `com.aionemu.gameserver.model.team.group.events.ChangeGroupLeaderEvent` | No C# equivalent in this unit | Event Dependency | Not Started | No Tests | Unknown | Java can recover leadership during reconnect if the leader member is absent. C# descriptor leader id is unchanged and no leader event is dispatched. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_INFO` | No C# equivalent in this unit | Packet Dependency | Not Started | No Tests | Unknown | Java sends group info to the reconnecting player. C# does not serialize or send group packets. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | No C# equivalent in this unit | Packet Dependency | Not Started | No Tests | Unknown | Java sends join/enter member updates to the reconnecting player and other members. C# packet fanout is not modeled. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.TryReconnectMember_ReplacesStoredWrapperWithLoggingInPlayerAndRefreshesSnapshot`: validates wrapper replacement, timestamp reset, old player group clearing, new player snapshot attachment, member ids, and online/level metadata.
+- `PlayerGroupRuntimeTests.TryReconnectMember_ReturnsFalseForUnknownPlayerWithoutMutatingRuntime`: validates unknown player no-op behavior and unchanged stored wrapper.
+- Java comparison status: expectations are source-derived from `PlayerGroupService.onPlayerLogin` and `PlayerConnectedEvent.handleEvent`. No Java runtime execution, packet serialization/fanout comparison, leader-recovery comparison, login pipeline integration, concurrent mutation comparison, or live client validation was run.
+
+Remaining risks:
+- C# does not call this bridge from the real player login/enter-world pipeline.
+- Java `PlayerConnectedEvent` packet fanout is entirely unported.
+- Java reconnect leader recovery is not implemented.
+- C# wrapper replacement preserves list order; Java stores members in a concurrent map where iteration order is not guaranteed.
+- Threading remains a C# `Lock`; Java uses team event locks and concurrent maps.
+- Serialization is unchanged. Reflection/JAXB behavior is not involved. Date/time behavior is relevant only through last-online reset and is not runtime-clock verified. Precision/rounding is not involved.
+- Group portal execution remains blocked.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 narrow login reconnect wrapper bridge
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 10 real login/enter-world pipeline integration, `PlayerConnectedEvent` full event ordering, leader recovery, `ChangeGroupLeaderEvent`, `SM_GROUP_INFO`, `SM_GROUP_MEMBER_INFO`, packet fanout, offline-expiry interaction, full team concurrency semantics, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; runtime group wrappers now have narrow logout/login metadata bridges, but full Java group lifecycle and group packets remain missing.
+
+Next recommended unit of work:
+- Add a first non-sending group packet planning DTO for reconnect fanout: model the `PlayerConnectedEvent` packet intent (`SM_GROUP_INFO` to reconnecting player, `SM_GROUP_MEMBER_INFO` join/enter directions) without serialization or sends, and prove `TryReconnectMember` can return that plan while keeping live packet fanout disabled.
+
 ---
 
 ## Next Steps
