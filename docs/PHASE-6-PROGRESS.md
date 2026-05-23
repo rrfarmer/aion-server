@@ -10338,6 +10338,47 @@ Summary metrics:
 Next recommended unit of work:
 - Refactor the existing portal guard helpers to accept `PortalPathSummary` or add a small orchestration method that applies level, mentor, race, rank, and title checks from loaded portal data, then add tests using real `portal_template2.xml` paths. Keep quest/item/kinah as explicit gaps until `QuestReq`, `ItemReq`, inventory, and kinah-consumption parity are in place.
 
+### Session 533 (May 23, 2026)
+- Added `PortalPathSummary` overloads for `PortalEntryValidationService.ValidateEnterLevel`, `ValidateRace`, `ValidateRank`, and `ValidateTitle`.
+- The overloads preserve the existing Java-shaped guard behavior while sourcing `min_level`, `err_level`, `race`, `min_rank`, and `title_id` from the newly loaded portal path DTO.
+- Kept this as a bridge only: the production portal handler, `PortalLoc` resolution, cooldown/reenter ordering, quest/item/kinah checks, and group-size checks remain outside this unit.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests"` passes with 32 tests.
+
+#### Migration Parity Table - Session 533
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.checkEnterLevel` | `Aion.GameServer.Services.PortalEntryValidationService.ValidateEnterLevel(Player, int, InstanceCooltimeTable, PortalPathSummary, ...)` | Service / Validation | Partial | Unit Tested | Partial Parity | C# now consumes loaded portal path `MinLevel` and `ErrLevel` values. It still returns packets rather than dispatching them, and the Java reenter/cooldown ordering is not orchestrated here. |
+| `com.aionemu.gameserver.services.teleport.PortalService.checkRace` | `PortalEntryValidationService.ValidateRace(Player, PortalPathSummary, ...)` | Service / Validation | Partial | Unit Tested | Partial Parity | C# now consumes loaded portal path `Race`. `SiegeService.getFortress` remains caller-supplied through `siegeOwnerMatchesPlayerRace`; `SiegeId` is loaded but not used by a live siege lookup. |
+| `com.aionemu.gameserver.services.teleport.PortalService.checkRank` | `PortalEntryValidationService.ValidateRank(Player, PortalPathSummary, int)` | Service / Validation | Partial | Unit Tested | Partial Parity | C# now consumes loaded portal path `MinRank` and preserves the `NO_RIGHT` dialog failure branch. Production portal flow remains unwired. |
+| `com.aionemu.gameserver.services.teleport.PortalService.checkTitle` | `PortalEntryValidationService.ValidateTitle(Player, PortalPathSummary, int, ...)` | Service / Validation | Partial | Unit Tested | Partial Parity | C# now consumes loaded portal path `TitleId` and still compares against active `Player.TitleId`, matching Java `PlayerCommonData.titleId`. Live title activation/persistence is not covered here. |
+| `com.aionemu.gameserver.model.templates.portal.PortalPath` | `Aion.GameServer.Dataholders.PortalPathSummary` consumed by validation helpers | DTO / Template Boundary | Partial | Unit Tested | Needs Verification | Scalar portal fields are now used by validation overloads, but `quest_req`, `item_req`, kinah consumption, `loc_id` to `PortalLoc`, and `siege_id` to fortress race remain gaps. |
+
+Tests added:
+- `PortalEntryValidationServiceTests.ValidateEnterLevel_UsesLoadedPortalPathSummaryFields`: validates `PortalPathSummary.MinLevel` and `ErrLevel` drive the level failure dialog payload.
+- `PortalEntryValidationServiceTests.ValidateRace_UsesLoadedPortalPathSummaryRace`: validates `PortalPathSummary.Race` drives the invalid-race system-message branch.
+- `PortalEntryValidationServiceTests.ValidateRank_UsesLoadedPortalPathSummaryMinimumRank`: validates `PortalPathSummary.MinRank` drives the rank failure dialog payload.
+- `PortalEntryValidationServiceTests.ValidateTitle_UsesLoadedPortalPathSummaryTitleId`: validates `PortalPathSummary.TitleId` drives the active-title failure dialog payload.
+- Java comparison status: expectations are source-derived from the existing Java guard methods and C# DTO loader. No Java runtime execution, production portal orchestration, live `PortalLocData`, `SiegeService`, quest/item checks, or encrypted client validation was run.
+
+Remaining risks:
+- No production portal dialog/use/scroll handler calls these overloads yet.
+- Guard ordering is still split across individual helpers; Java's full `PortalService.port` sequence, reenter exception, cooldown branch, required item removal, and same-instance teleport branch are not represented as a single C# workflow.
+- `PortalLocData` is still missing, so a portal path's `loc_id` cannot resolve a target map id/coordinates without caller-supplied data.
+- Quest, group/alliance/league size, item removal, kinah consumption, and siege-ownership checks remain incomplete.
+- Threading, reflection/JAXB differences, mutable Java holder semantics, date/time, precision/rounding, and live-client packet dispatch remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 4 bridge overloads over existing partial guard ports
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 5 production portal handler wiring, `PortalLocData`, quest/item requirements, group-size checks, and siege ownership lookup
+- Estimated overall migration completion: Phase 6 remains about 57% complete; loaded portal path scalars now feed validation helpers, but end-to-end portal entry is still incomplete.
+
+Next recommended unit of work:
+- Add a minimal `PortalLoc` / `PortalLocData` static-data table so `PortalPathSummary.LocId` can resolve target world id and coordinates. That unlocks a source-shaped portal-entry orchestration test around Java's early guard/cooldown/reenter ordering without yet implementing quest/item/kinah consumption.
+
 ---
 
 ## Next Steps
