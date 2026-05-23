@@ -3119,6 +3119,14 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcEventDropRuleServiceTests|WorldNpcGlobalDropServiceTests|WorldNpcDropRegistrationWorkflowServiceTests|StaticDataLoadingTests|GameServerBootstrapTests"` passes with 29 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 735 tests.
 
+### Session 368 (May 23, 2026)
+- Bound Java `gameserver.event.service.disabled_events` into `GameServerOptions.Custom.DisabledEventNames`, preserving comma-separated event names and wildcard `*` for the event service surface.
+- Added the DI constructor path for `WorldNpcEventDropRuleService` so runtime active-event drop filtering consumes the loaded disabled-event config instead of always assuming no disabled events.
+- Added coverage that Java config defaults keep the disabled-event set empty, `mygs.properties` overrides parse named disabled events case-insensitively, and the event drop rule service still honors named/wildcard disable behavior.
+- Current gaps in this cluster: runtime event scheduler/start/stop side effects, event config-property application, event quests/buffs/spawns/themes/surveys/inventory drops, live config reload, and broader event lifecycle integration remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GameServerOptionsTests|WorldNpcEventDropRuleServiceTests|GameServerBootstrapTests"` passes with 13 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 735 tests.
+
 ---
 
 ## Next Steps
