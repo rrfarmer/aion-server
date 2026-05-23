@@ -11105,6 +11105,52 @@ Summary metrics:
 Next recommended unit of work:
 - Wire the blocked group plan to a non-executing registered-instance lookup: for `TeamPlan.Kind == Group`, probe `WorldMapRuntimeStateTable.GetRegisteredInstance(worldId, TeamId)` and record whether Java would attempt reentry versus fresh group allocation, but continue to return a blocked result before any member fanout or cooldown mutation. Add tests for registered group team id lookup and for the no-registered-instance allocation-needed branch.
 
+### Session 550 (May 23, 2026)
+- Extended blocked team portal planning so group/alliance team plans can probe the existing C# runtime registry by Java team id before the port stops at unsupported fanout.
+- `PortalEntryValidationService.CreateUnsupportedTeamPlan` now receives the target world id and `WorldMapRuntimeStateTable`, then calls `GetRegisteredInstance(worldId, CurrentTeamId)` for group/alliance team plans.
+- Added `PortalTeamEntryDisposition` to distinguish `FreshInstanceAllocationNeeded` from `RegisteredInstanceTransfer` while keeping `FanoutSupported = false`.
+- Added `PortalTeamEntryPlan.RegisteredInstance` and `PortalTeamEntryPlan.Reenter` metadata. The `Reenter` flag intentionally follows Java's early `instance.isRegistered(player.getObjectId())` check, so a team-id-only registration is recorded as a registered transfer but not as a player-object reentry.
+- Kept cooldown checks, group instance allocation, `registerTeam`, member iteration, and actual transfer fanout out of scope.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests"` passes with 81 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1167 tests.
+
+#### Migration Parity Table - Session 550
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` group registered-instance probe | `Aion.GameServer.Services.PortalEntryValidationService.CreateUnsupportedTeamPlan` | Service / Planning | Partial | Unit Tested | Needs Verification | C# now probes the runtime registry by team id and records whether Java would reuse a registered group instance or need fresh allocation. It still returns `UnsupportedTeamPortal` before cooldown, allocation, registration, or transfer fanout. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getRegisteredInstance(int, int)` | `Aion.GameServer.World.WorldMapRuntimeStateTable.GetRegisteredInstance` used by team plans | Service / Runtime Registry | Partial | Unit Tested | Needs Verification | Existing registry lookup is reused for team ids. Java scans live `WorldMapInstance` objects with registered player/team ids; C# registry is in-memory and not runtime-compared. |
+| `com.aionemu.gameserver.world.WorldMapInstance.registerTeam` | `WorldMapInstanceRuntimeState.Register(teamId)` as test setup; future team registration path | Runtime State / Dependency | Partial | Unit Tested | Needs Verification | Tests model Java `registerTeam`'s stored team id by registering the team id directly. No C# `registerTeam` method, registered-team object, or lifecycle exists yet. |
+| `com.aionemu.gameserver.world.WorldMapInstance.isRegistered` | `WorldMapInstanceRuntimeState.IsRegistered` used by `PortalTeamEntryPlan.Reenter` | Runtime State | Partial | Unit Tested | Partial Parity | C# mirrors the Java check for whether the player object id is registered before marking reentry. Team-id-only registrations correctly do not set `Reenter`. Live lifecycle and concurrency behavior remain unverified. |
+| `com.aionemu.gameserver.model.team2.group.PlayerGroup.getTeamId` | `Aion.GameServer.Model.GameObjects.Player.CurrentTeamId` | Model Dependency | Partial | Unit Tested | Needs Verification | Current team id feeds registered-instance lookup. No full group aggregate, ownership, or mutation semantics exist. |
+| `com.aionemu.gameserver.model.team2.group.PlayerGroup.getMembers` | `Aion.GameServer.Model.GameObjects.Player.CurrentTeamMemberObjectIds` carried in `PortalTeamEntryPlan` | Model Dependency | Partial | Unit Tested | Needs Verification | Member ids remain metadata only; Java returns live `Player` members for later reuse/fanout. Online filtering, distance, eligibility, and transfer iteration are missing. |
+| `com.aionemu.gameserver.services.teleport.PortalService.port` alliance registered-instance probe | `PortalTeamEntryPlan` alliance path | Service / Planning | Partial | No Tests | Needs Verification | Alliance plans use the same registry probe when `TeamMembership == Alliance`, but this unit only regression-tested group paths. League remains absent. |
+
+Tests added or extended:
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_GroupMemberStopsWithBlockedTeamPlanBeforeFanout`: extended to assert no registered team instance records `FreshInstanceAllocationNeeded`, no registered instance, no reentry, and blocked fanout.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_GroupMemberFindsRegisteredTeamInstanceBeforeBlockedFanout`: validates a team-id registration is found through `WorldMapRuntimeStateTable.GetRegisteredInstance`, records `RegisteredInstanceTransfer`, preserves the instance, and still blocks fanout.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_GroupMemberMarksReenterOnlyWhenPlayerObjectIsRegisteredLikeJava`: validates the Java nuance that `Reenter` is only true when the player object id is registered, not merely the group team id.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `InstanceService.getRegisteredInstance`, `WorldMapInstance.registerTeam`, and `WorldMapInstance.isRegistered`. No Java runtime execution, actual C# team object, cooldown mutation, group allocation, `registerTeam` lifecycle, member fanout, live socket capture, encrypted client validation, or concurrency comparison was run.
+
+Remaining risks:
+- Successful group portal entry is still blocked; this unit only records the registered-instance decision that Java would use later.
+- The C# registry can store team ids as registered object ids, but it lacks Java `registeredTeam`, `GeneralTeam`, and team lifecycle cleanup.
+- Group allocation and `registerTeam` are not implemented, so fresh allocation metadata is not consumed.
+- Team member iteration, capacity checks against live `getPlayersInside`, online/offline behavior, race/eligibility filtering, and transfer fanout remain unported.
+- Alliance uses the same metadata path but lacks focused tests; league has no model.
+- Date/time behavior around cooldowns, serialization/live packet behavior, threading/locking, reflection/JAXB behavior, precision/rounding, and runtime comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 non-executing registered-team-instance planning probe over existing runtime registry metadata
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 8 group instance allocation, `registerTeam`, member transfer fanout, alliance registered-instance tests/fanout, league model/fanout, cooldown handling for team portals, team lifecycle/concurrency, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; blocked group plans now know whether a registered team instance exists, but team portal entry still cannot execute.
+
+Next recommended unit of work:
+- Add the next non-executing group allocation plan: introduce a blocked `GroupAllocationNeeded`/`GroupRegisteredTransfer` result surface that can be consumed by the dialog caller or future transfer service without changing live behavior. Then add a narrow C# `WorldMapInstanceRuntimeState.RegisterTeamId` helper mirroring Java `WorldMapInstance.registerTeam` storage semantics, still avoiding member fanout.
+
 ---
 
 ## Next Steps
