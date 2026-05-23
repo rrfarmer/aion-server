@@ -9007,6 +9007,52 @@ Summary metrics:
 Next recommended unit of work:
 - Add the missing `SM_TELEPORT_LOC`/pending-teleport queue caller path for one modeled teleport request so pending state is created through a service/connection workflow instead of direct test setup, or continue teleport map-change packet-order coverage for the delayed completion same-map and full-map branches.
 
+### Session 502 (May 23, 2026)
+- Added a C# `TeleportAnimation` enum for the Java IDs consumed by `SM_TELEPORT_LOC`.
+- Added `SmTeleportLoc` with Java opcode 20 and Java write order: animation id, map id, map id-or-instance id, x/y/z, heading.
+- Added `GameServerConnection.QueueDelayedTeleportAsync`, a narrow modeled caller path that queues `Player.PendingTeleport`, sends `SmTeleportLoc`, and leaves the authoritative player position unchanged until `HandleTeleportAnimationDoneAsync` consumes the pending teleport.
+- Added deterministic serialization coverage for `SmTeleportLoc`, including instance-map handling where Java writes `instanceId` in the third field.
+- Added workflow coverage proving the queue helper creates pending teleport state, serializes the teleport request, keeps the player at the pre-teleport position before animation completion, then `HandleTeleportAnimationDoneAsync` mutates the player to the destination and revalidates modeled PVP counters.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests|FullyQualifiedName~PlayerTeleportServiceTests|FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests|FullyQualifiedName~CreaturePvpZoneRevalidationServiceTests|FullyQualifiedName~CreaturePvpZoneCounterServiceTests"` passes with 102 tests.
+
+#### Migration Parity Table - Session 502
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.animations.TeleportAnimation` | `Aion.GameServer.Model.TeleportAnimation` | Enum | Partial | Unit Tested | Partial Parity | C# now includes Java animation IDs used by `SM_TELEPORT_LOC`. Java default arrival/delete animation helpers are not ported; only request packet IDs are modeled. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_TELEPORT_LOC` | `Aion.GameServer.Network.Aion.ServerPackets.SmTeleportLoc` | Server Packet | Partial | Unit Tested | Partial Parity | Packet writes Java opcode 20 payload order and instance-map id selection. Golden byte comparison against a live Java-generated vector was not run; deterministic reader assertions cover field order, precision, and instance id behavior. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.sendLoc` | `Aion.GameServer.Network.Aion.GameServerConnection.QueueDelayedTeleportAsync` | Teleport Request Boundary | Partial | Regression Tested | Partial Parity | C# now has a modeled caller path that queues pending teleport state and sends `SmTeleportLoc` while leaving player position unchanged until animation completion. Java action abort, world despawn/delete animation broadcast, full teleporter/portal/kinah guards, task cancellation, and production caller wiring remain incomplete. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.SpawnTask.run` | `PlayerTeleportService.CompletePendingTeleport` + `GameServerConnection.HandleTeleportAnimationDoneAsync` | Teleport Completion Boundary | Partial | Regression Tested | Partial Parity | Workflow test proves queued request state is consumed by animation-done completion and revalidates PVP counters after position mutation. Java dead-player fallback, instance-exists guard, conqueror/instance leave callbacks, legion update, pet position, arrival animation, and full world spawn remain unported. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TELEPORT_ANIMATION_DONE` | `GameServerConnection.HandleTeleportAnimationDoneAsync` | Client Packet Handler | Partial | Regression Tested | Partial Parity | Existing completion handler now has a production-like queue source to consume. Java `FutureTask.get()` exception handling and fallback `SM_PLAYER_INFO` + `World.spawn` remain unmodeled. |
+| `com.aionemu.gameserver.model.TaskId.TELEPORT` / `CreatureController.addTask/getAndRemoveTask` | `Player.PendingTeleport` + `PlayerTeleportService.QueuePendingTeleport` | Task State | Partial | Unit + Regression Tested | Intentional Difference | C# still uses a typed nullable pending teleport record rather than Java's generic controller task map. This is an interim difference until controller task scheduling is ported; threading remains immediate. |
+| `com.aionemu.gameserver.world.World.setPosition` | `Player.Position` mutation in `CompletePendingTeleport` after queued `SmTeleportLoc` | World Position Boundary | Partial | Regression Tested | Partial Parity | Queue workflow proves position remains pre-teleport while `SmTeleportLoc` is sent, then mutates after animation completion. Java also moves pets and interacts with world-map instances/regions; those pieces remain missing. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.revalidateZones()` / `com.aionemu.gameserver.world.MapRegion.revalidateZones(Creature)` | `CreaturePvpZoneRevalidationService.Revalidate` from queued delayed teleport completion | Zone Revalidation Boundary | Partial | Unit + Regression Tested | Partial Parity | Real Java PVP geometry `PVP_87_210040000` verifies queue-to-completion counter entry. Zone priorities, handler callbacks, neighboring regions, full-map zones, and SIEGE/FORT queue-path coverage remain incomplete. |
+| `com.aionemu.gameserver.world.zone.PvPZoneInstance.onEnter/onLeave` | `CreaturePvpZoneCounterService` through queued delayed teleport workflow | Zone Callback Boundary | Partial | Unit + Regression Tested | Partial Parity | Test proves queued delayed teleport completion can enter modeled PVP counters. Java handler ordering, controller callbacks, and live side effects remain unverified. |
+
+Tests added:
+- `GamePacketTests` deterministic `SmTeleportLoc` serialization assertion: verifies animation id, map id, instance id for an instance map, float coordinates, heading, and no trailing payload. This is source-derived from Java `SM_TELEPORT_LOC.writeImpl`; no Java-generated golden vector was used.
+- `GameServerConnectionFlightZoneFanoutTests.QueueDelayedTeleportAsync_SendsTeleportLocAndPendingStateCompletesOnAnimationDone`: queues a delayed teleport through the new connection helper, verifies the player position remains unchanged while pending, inspects the generated `SmTeleportLoc`, completes animation, and verifies destination position plus modeled PVP counter entry.
+- Java comparison status: expectations are source-derived from Java `TeleportService.sendLoc`, `SM_TELEPORT_LOC`, `TeleportAnimation`, `CM_TELEPORT_ANIMATION_DONE`, `World.setPosition`, `Creature.revalidateZones`, `MapRegion.revalidateZones`, and `PvPZoneInstance`; no live Java runtime side-by-side validation, live socket validation, or Java packet vector generation was run.
+
+Remaining risks:
+- This unit adds the first modeled queue caller but not real teleporter/NPC/portal/item caller wiring. Production gameplay paths still need to call it after their Java-equivalent guards pass.
+- Java action abort, world despawn, object delete animation broadcast, teleport fade/animation metadata beyond the ID byte, dead-player fallback, instance existence checks, conqueror/instance leave callbacks, legion update, pet position/spawn, protection tasks, effect icon refresh, arrival/port animation, and full world-region spawn remain partial or absent.
+- Packet serialization is deterministic-tested but not compared against a Java-generated golden vector or live encrypted client capture.
+- SIEGE/FORT queue-path coverage was not added in this unit; earlier direct delayed completion SIEGE coverage remains separate.
+- C# still revalidates modeled counters directly rather than executing Java zone `onEnter`/`onLeave` handlers, controller callbacks, quest/material handlers, fortress observers, or instance callbacks.
+- No database schema, date/time, reflection, or persistence behavior changed. Threading remains immediate over a typed pending record rather than Java's future/task scheduler.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 modeled `SM_TELEPORT_LOC` pending-teleport queue workflow
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 8 Java controller task scheduler, real teleporter/portal caller wiring, action abort/world despawn/object-delete animation broadcast, Java-generated packet golden vector, dead-player/instance-exists fallback, full same-map/full-map world spawn side effects, pet/legion/instance/conqueror callbacks, and Java zone handlers/controller callbacks
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because remaining kisk revive cleanup, live team membership wiring, production socket-order validation, broader teleport/map-change zone revalidation, remaining direct-removal cleanup, generic visible-object cleanup, full dedicated kisk controller/AI, full NPC/dialog AI, resurrection skill/effect callers, per-zone bind membership, live option mutation callers, admin option consumers, world-map instance ownership, object iteration, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue teleport/map-change parity by adding one real caller into `QueueDelayedTeleportAsync`, preferably a narrow portal or teleport-select path with static destination data and minimal guard scope, or add Java-generated golden-vector coverage for `SM_TELEPORT_LOC` before expanding caller usage.
+
 ---
 
 ## Next Steps
