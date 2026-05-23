@@ -6714,6 +6714,49 @@ Summary metrics:
 Next recommended unit of work:
 - Wire the first live option consumer to `WorldMapRuntimeStateTable`. Good narrow candidates are ride restriction (`RideAction` / `PlayerController.onEnterZone`), kisk/pet spawn restrictions (`ToyPetSpawnAction`), or admin zone-info output. If staying in flight, pass runtime world flags into `PlayerZoneStateService` for map-default `FLY` checks while preserving polygon `ZoneType.FLY` membership behavior.
 
+### Session 448 (May 23, 2026)
+- Wired the first live runtime-world-option consumer: map-default flight-zone revalidation now reads `WorldMapRuntimeStateTable` current flags when available.
+- `GameServerConnection.RevalidatePlayerFlightZonesAsync` now passes `_runtimeContext.WorldMapStates` into `PlayerZoneStateService`.
+- `PlayerZoneStateService.RevalidateFlightZones` still accepts static `WorldMapSummary` rows as a fallback, but map-default `FLY` now uses Java-shaped `WorldMap.isFlightAllowed` over mutable runtime flags when runtime state exists.
+- Preserved the important separation from the prior handoff: local polygon `zone_type="FLY"` and `zone_type="NO_FLY"` membership still follows zone type and containment, not `ZoneInstance.canFly/canGlide` option helpers.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerZoneStateServiceTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests"` passes with 8 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerZoneStateServiceTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests"` passes with 29 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 959 tests.
+
+#### Migration Parity Table - Session 448
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.World.getWorldMap(int)` | `Aion.GameServer.Services.GameServerRuntimeContext.WorldMapStates` / `WorldMapRuntimeStateTable.GetMap` | Runtime Lookup | Partial | Unit Tested | Partial Parity | Flight-zone revalidation now uses the runtime map lookup when available. Broader Java `World` APIs remain absent. |
+| `com.aionemu.gameserver.world.WorldMap.worldOptions` | `Aion.GameServer.World.WorldMapRuntimeState.CurrentFlags` | Runtime State | Partial | Unit Tested | Partial Parity | Current world flags now affect map-default flight-zone membership. No live set/remove caller exists yet beyond tests. |
+| `com.aionemu.gameserver.world.WorldMap.isFlightAllowed` | `Aion.GameServer.World.WorldMapRuntimeState.IsFlightAllowed` / `WorldMapSummary.IsFlightAllowed` | Runtime Option Utility | Partial | Unit Tested | Partial Parity | `PlayerZoneStateService` uses runtime `worldOptions` for map-default `FLY`, matching Java's `WorldMap.isFlightAllowed` read path. |
+| `com.aionemu.gameserver.world.zone.FlyZoneInstance` | `Aion.GameServer.Services.PlayerZoneStateService.RevalidateFlightZones` | Zone Membership Service | Partial | Unit Tested | Partial Parity | Map-default `FLY` now follows runtime world flags; polygon `FLY` still follows zone type and containment, matching Java membership behavior. Synchronized zone membership collections remain absent. |
+| `com.aionemu.gameserver.world.zone.NoFlyZoneInstance` | `Aion.GameServer.Services.PlayerZoneStateService.RevalidateFlightZones` | Zone Membership Service | Partial | Existing Unit Coverage | Partial Parity | No-fly polygon handling is unchanged and still blocks valid fly-area status after map-default/runtime fly is resolved. Nested counters remain absent. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.canFly` / `canGlide` | `Aion.GameServer.Dataholders.FlightZoneSummary.CanFly` / `CanGlide` | Zone Option Dependency | Partial | Existing Unit Coverage | Needs Verification | Explicitly not used for `ZoneType.FLY` membership in this unit. Future live option consumers still need wiring. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_MOVE` / `CM_MOVE_IN_AIR` / `CM_SUBZONE_CHANGE` | `Aion.GameServer.Network.Aion.GameServerConnection.RevalidatePlayerFlightZonesAsync` | Client Packet Handler Hook | Partial | Regression + Source-Derived Coverage | Needs Verification | These paths now pass runtime world-map state into revalidation, but full encrypted packet-loop invocation is still not directly tested. |
+
+Tests added or extended:
+- `PlayerZoneStateServiceTests.RevalidateFlightZonesReadsJavaWorldMapRuntimeOptionsForMapDefaultFly`: validates that removing runtime `FLY` from a static fly map clears map-default flight membership and adding runtime `FLY` to a static glide-only map grants map-default flight membership.
+- Java comparison status: tests are source-derived from Java `World.getWorldMap`, `WorldMap.worldOptions`, `WorldMap.isFlightAllowed`, `FlyZoneInstance`, and `NoFlyZoneInstance`; no live Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Runtime world-option changes still have no live setter/remover outside tests.
+- Full Java zone lifecycle remains absent: synchronized `ZoneInstance` membership maps, nested counters, handlers, and FIFO `ZoneUpdateService` scheduling are not ported.
+- The C# connection helper is regression-tested, but actual encrypted `CM_MOVE`, `CM_MOVE_IN_AIR`, and `CM_SUBZONE_CHANGE` packet-loop invocation remains needs-verification.
+- `ZoneInstance.canFly/canGlide` live option consumers remain unwired.
+- Reflection is not used. Serialization is unchanged. Date/time is not involved. Threading remains simpler than Java synchronized zone/world-map paths.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 runtime map-default flight option consumer slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because live option mutation callers, ride/kisk/admin option consumers, world-map instance ownership, object iteration, full socket-order harnesses, full zone lifecycle handlers, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Wire a live Java option consumer beyond map-default flight. Good narrow candidates remain ride restriction (`RideAction` / `PlayerController.onEnterZone`), kisk/pet spawn restriction (`ToyPetSpawnAction`), or admin zone-info output. Alternatively, deepen verification by driving runtime-world-option flight changes through an actual `CM_MOVE`, `CM_MOVE_IN_AIR`, or `CM_SUBZONE_CHANGE` packet-loop test.
+
 ---
 
 ## Next Steps
