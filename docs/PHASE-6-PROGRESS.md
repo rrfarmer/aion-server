@@ -10548,6 +10548,56 @@ Summary metrics:
 Next recommended unit of work:
 - Add a narrow `ValidateQuestRequirements` helper for `PortalPathSummary.QuestRequirements` that mirrors Java `PortalService.checkQuests` return behavior as far as current C# quest state supports it, including explicit bypass and a documented gap for incomplete quest-engine semantics.
 
+### Session 538 (May 23, 2026)
+- Added `PortalEntryValidationService.ValidateQuestRequirements`, a narrow source-shaped equivalent of Java `PortalService.checkQuests`.
+- The helper allows empty requirement lists, supports an explicit membership/config bypass, and uses Java's any-requirement semantics: a requirement passes if the player's quest state is `COMPLETE` or if `quest_step > 0` and quest var 0 is at least that step.
+- Added `PortalEntryValidationStatus.QuestRestricted` and Java's non-dialog failure system message `SmSystemMessage.SkillCanNotUseGroupgateNoRight()` (`1300150`).
+- Integrated quest validation into `ValidatePortalEntryPlan` after title and before registered-instance/cooldown checks, matching the Java guard order for the supported solo/open-world slice.
+- Kept this as validation only: quest progression, quest-engine callbacks, production packet dispatch, and portal handler wiring remain outside this unit.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~GamePacketTests"` passes with 126 tests.
+
+#### Migration Parity Table - Session 538
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.checkQuests` | `Aion.GameServer.Services.PortalEntryValidationService.ValidateQuestRequirements` | Service / Validation | Partial | Unit Tested | Partial Parity | C# models empty-list allow, explicit bypass, any-requirement pass, complete quest pass, var0 >= quest_step pass, dialog failure packet, and non-dialog groupgate system message. It returns packets rather than dispatching and is not wired to production portal handlers. |
+| `com.aionemu.gameserver.questEngine.model.QuestState.getStatus` / `getQuestVarById(0)` | `Aion.GameServer.Model.GameObjects.PlayerQuestState.Status` / `GetQuestVarById(0)` | Player Quest State | Partial | Unit Tested | Partial Parity | Existing C# quest state has enough data for this guard. Full Java quest engine lifecycle, repeat handling, persistence timestamps, rewards, flags mutation, and handler callbacks remain incomplete. |
+| `com.aionemu.gameserver.questEngine.model.QuestStatus.COMPLETE` | `PlayerQuestState.IsComplete` | Enum / Status Boundary | Partial | Unit Tested | Partial Parity | C# uses string status values rather than a Java-equivalent enum. Tests cover `COMPLETE` and `START`; invalid/case variants are not Java-runtime compared. |
+| `com.aionemu.gameserver.model.templates.portal.QuestReq` | `Aion.GameServer.Dataholders.PortalQuestRequirementSummary` | DTO / Requirement | Partial | Unit Tested / Regression Tested | Partial Parity | Requirement data loaded in Session 537 is now consumed by validation. Java mutable JAXB DTO behavior is not represented. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DIALOG_WINDOW` | `SmDialogWindow` returned by `ValidateQuestRequirements` | Packet / Dialog | Partial | Unit Tested | Partial Parity | Dialog-NPC quest failure returns `DialogPage.NO_RIGHT` payload. Live-client dispatch and full dialog enum parity remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_CAN_NOT_USE_GROUPGATE_NO_RIGHT` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.SkillCanNotUseGroupgateNoRight` | Packet / System Message | Complete | Regression Tested | Partial Parity | Message id `1300150` is source-derived and serialized by packet tests. No live-client capture was run. |
+| `com.aionemu.gameserver.configs.main.MembershipConfig.INSTANCES_QUEST_REQ` | Explicit `bypassQuestRequirement` parameter | Config / Permission Boundary | Partial | Unit Tested | Needs Verification | C# exposes the bypass boundary but does not resolve live player membership/config permission values in this helper. |
+
+Tests added or extended:
+- `PortalEntryValidationServiceTests.ValidateQuestRequirements_AllowsWhenJavaPortalHasNoQuestRequirements`: validates Java null/empty list allow behavior.
+- `PortalEntryValidationServiceTests.ValidateQuestRequirements_AllowsMembershipBypassLikeJavaPermission`: validates explicit quest-requirement bypass.
+- `PortalEntryValidationServiceTests.ValidateQuestRequirements_AllowsWhenAnyJavaQuestIsComplete`: validates a completed quest satisfies the gate.
+- `PortalEntryValidationServiceTests.ValidateQuestRequirements_AllowsWhenAnyJavaQuestVarMeetsStep`: validates any one requirement can satisfy the gate via quest var 0 threshold.
+- `PortalEntryValidationServiceTests.ValidateQuestRequirements_ReturnsNoRightDialogForDialogNpcWhenNoQuestMatches`: validates dialog NPC failure payload.
+- `PortalEntryValidationServiceTests.ValidateQuestRequirements_ReturnsGroupgateSystemMessageForNonDialogNpcWhenNoQuestMatches`: validates non-dialog failure message id `1300150`.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_QuestFailureHappensBeforeCooldown`: validates quest failure is ordered before cooldown lockout in the portal plan helper.
+- `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages`: extended to serialize `SmSystemMessage.SkillCanNotUseGroupgateNoRight`.
+- Java comparison status: expectations are source-derived from `PortalService.checkQuests`, `QuestState`, `QuestStatus`, `SM_DIALOG_WINDOW`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, live quest engine progression, production portal handler, packet dispatch, or client validation was run.
+
+Remaining risks:
+- Production portal handlers still do not call `ValidateQuestRequirements` or `ValidatePortalEntryPlan`.
+- C# quest state is string-based and loaded data only; Java quest runtime behavior, repeatability, timestamps, reward group, flags mutation, and quest handler callbacks remain incomplete.
+- Membership/config bypass is explicit and not wired to live permission checks.
+- Non-dialog packet dispatch timing and socket ordering are not verified.
+- Required item validation/removal, kinah consumption, group-size checks, same-instance actual teleport, instance transfer/allocation, and live-client behavior remain incomplete.
+- Threading, reflection/JAXB differences, serialization beyond tested packets, date/time behavior, and precision/rounding remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 narrow quest-requirement validation helper plus 1 system-message factory
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 production handler wiring, live permission lookup, full quest engine semantics, required item/kinah enforcement, actual teleport/transfer, and live runtime/client comparison
+- Estimated overall migration completion: Phase 6 remains about 59% complete; portal quest gating is represented in the plan layer, but end-to-end portal use is still incomplete.
+
+Next recommended unit of work:
+- Add a narrow required-item and kinah validation helper for `PortalPathSummary.ItemRequirements` and `Kinah` that mirrors Java `PortalService.checkAndRemoveRequiredItems` failure behavior without mutating inventory yet. Document mutation/removal as a later step, because Java deletes items and kinah after all requirements pass.
+
 ---
 
 ## Next Steps
