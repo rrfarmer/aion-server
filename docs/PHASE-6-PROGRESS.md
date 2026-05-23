@@ -5328,6 +5328,51 @@ Summary metrics:
 Next recommended unit of work:
 - Use the packeted DP boundary from `PlayerEnterWorldService` for the offline DP reset so Java enter-world `setDp(0)` gains immediate `SmDpInfo`, `SmStatsInfo`, and `SmStatUpdateDp` output when the C# connection context is available. If that constructor wiring is too invasive, re-check the smallest reward/distribution DP caller or continue resource-side group stat fanout only after team packet scaffolding exists.
 
+### Session 417 (May 23, 2026)
+- Routed Java `PlayerEnterWorldService.enterWorld` offline DP reset through the packeted C# DP boundary when `WorldNpcResourceStatsService` is available.
+- After the player is world-added and marked online, advanced-class offline resets now call `AddPlayerDpAsync(player, -player.Dp, maxDp: player.Dp)` instead of directly assigning `player.Dp = 0`.
+- The enter-world reset now emits the same concrete Java packet order as `PlayerCommonData.setDp(0)`: visible `SmDpInfo`, owner `SmStatsInfo`, then owner `SmStatUpdateDp`.
+- Kept the old direct assignment fallback if `PlayerEnterWorldService` is manually constructed without resource stats, preserving narrow-test/manual construction compatibility.
+- Extended the existing enter-world offline reset test to verify DP state, source-included DP info broadcast, owner visual stats packet, owner DP stat update, and packet order.
+- Current gaps in this cluster: live speed snapshot / `CHANGE_SPEED` output, exact max-DP lookup from `PlayerGameStats`, explicit DP persistence at enter time, and broader login-side effect sequencing remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests"` passes with 45 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerEnterWorldServiceTests|PlayerVisualStatsUpdateServiceTests|WorldNpcResourceStatsServiceTests|CraftServiceTests|SkillDpConditionServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 297 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 916 tests.
+
+#### Migration Parity Table - Session 417
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerEnterWorldService` | `Aion.GameServer.Services.PlayerEnterWorldService.ApplyOfflineDpResetAsync` via `EnterWorldAsync` | Service | Partial | Unit Tested | Partial Parity | Offline DP reset now routes through the packeted DP boundary after online marking. The broader Java login sequence, on-login side effects, and exact persistence timing remain partial. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `Aion.GameServer.Services.WorldNpcResourceStatsService.AddPlayerDpAsync` invoked from enter-world reset | Runtime / Service Boundary | Partial | Regression Tested | Partial Parity | C# now uses the shared `setDp`-shaped DP packet boundary for enter-world reset. The reset passes previous DP as the cap because no upward clamp is needed for `setDp(0)`; live `getMaxDp()` remains absent. |
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats` | `Aion.GameServer.Services.PlayerVisualStatsUpdateService` reused through DP boundary | Stats Container / Service Boundary | Partial | Regression Tested | Partial Parity | Enter-world reset now emits owner `SmStatsInfo`. Live speed/stat cache comparison and `CHANGE_SPEED` output remain pending. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmDpInfo` | Packet | Partial | Unit Tested | Partial Parity | Enter-world offline reset now broadcasts DP info with the source player included, matching Java `PacketSendUtility.broadcastPacket(..., true)` intent. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATS_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatsInfo` | Packet | Partial | Unit Tested | Partial Parity | Enter-world offline reset now sends owner visual stats between DP info and DP stat update. Static-data/game-time content remains whatever runtime context provides. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_DP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateDp` | Packet | Partial | Unit Tested | Partial Parity | Enter-world offline reset now sends owner DP stat update after visual stats, matching Java `PlayerCommonData.setDp`. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `Aion.GameServer.Network.Aion.IGameClientConnectionRegistry` via resource/visual services | Network Utility / Bridge | Partial | Unit Tested | Partial Parity | Tests verify call order through the registry. Exact Java sight-filter behavior still depends on C# world visibility implementation and is not side-by-side validated. |
+
+Tests added or extended:
+- `PlayerEnterWorldServiceTests.EnterWorld_ResetsDpAfterFiveMinutesOfflineForAdvancedClass`: now validates DP reset state plus `SmDpInfo`, `SmStatsInfo`, and `SmStatUpdateDp` output order.
+- Java comparison status: tests are source-derived from Java `PlayerEnterWorldService.enterWorld`, `PlayerCommonData.setDp`, `SM_DP_INFO`, `SM_STATS_INFO`, and `SM_STATUPDATE_DP`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- The reset uses the previous DP value as the explicit max-DP cap for a reset-only mutation because live `PlayerGameStats.getMaxDp()` is still unavailable at this boundary.
+- C# sends owner visual stats but still does not emit `CHANGE_SPEED` without a live `PlayerVisualSpeedSnapshot`.
+- If `PlayerEnterWorldService` is manually constructed without `WorldNpcResourceStatsService`, it falls back to direct DP assignment and emits no packets.
+- DP persistence remains tied to the existing player persistence/logout path; this unit covers live enter-world state and packet output.
+- Reflection is not involved. Date/time comparison still uses C# `DateTime.Now` versus Java `System.currentTimeMillis()`. Threading parity remains approximate because C# uses async repository and packet calls.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 partial enter-world DP packet fanout bridge plus DP/visual packet reuse
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because speed snapshot/cached-stat parity, reward/distribution DP callers, group stat fanout, restore/flight timers, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Re-check reward/distribution DP callers now that the shared DP boundary emits the full concrete packet trio. Good targets remain Java `QuestService.giveReward`, `NpcController.doReward`, `PvpService.doReward`, or `PlayerTeamDistributionService.doReward`; choose only a caller with enough C# scaffolding to avoid inventing broad quest/team/reward systems. If still blocked, move to a bounded resource-side task such as team stat packet scaffolding or live speed snapshot support for `CHANGE_SPEED`.
+
 ---
 
 ## Next Steps
