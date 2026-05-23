@@ -11960,6 +11960,51 @@ Summary metrics:
 Next recommended unit of work:
 - Add a first non-sending group packet planning DTO for reconnect fanout: model the `PlayerConnectedEvent` packet intent (`SM_GROUP_INFO` to reconnecting player, `SM_GROUP_MEMBER_INFO` join/enter directions) without serialization or sends, and prove `TryReconnectMember` can return that plan while keeping live packet fanout disabled.
 
+### Session 568 (May 23, 2026)
+- Added a non-sending reconnect packet-intent plan for the Java `PlayerConnectedEvent` group fanout shape.
+- Added `PlayerGroupReconnectResult`, `PlayerGroupReconnectPacketPlan`, `PlayerGroupMemberInfoIntent`, and `PlayerGroupMemberInfoEvent`.
+- `PlayerGroupRuntime.ReconnectMember(Player player)` now returns a result with packet intent metadata when reconnect succeeds.
+- Existing `TryReconnectMember` remains as a bool convenience wrapper.
+- Reconnect plans now record Java's intended `SM_GROUP_INFO` send to the reconnecting player and `SM_GROUP_MEMBER_INFO` join/enter directions for the reconnecting player and other group members.
+- No packet serialization or live sends were added.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests"` passes with 90 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1189 tests.
+
+#### Migration Parity Table - Session 568
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.group.events.PlayerConnectedEvent` | `Aion.GameServer.Services.PlayerGroupReconnectResult` / `PlayerGroupReconnectPacketPlan` | Event Planning DTO | Partial | Unit Tested | Needs Verification | C# records the non-sending packet intent for reconnect. Java performs actual event handling, packet sends, leader checks, and group member fanout. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_INFO` | `PlayerGroupReconnectPacketPlan.SendGroupInfoToReconnectingPlayer` | Packet Intent | Not Started | Unit Tested Around Intent | Unknown | C# records that group info should be sent to the reconnecting player. No packet class, serialization, or send path exists in this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `PlayerGroupMemberInfoIntent` / `PlayerGroupMemberInfoEvent` | Packet Intent | Not Started | Unit Tested Around Intent | Unknown | C# records JOIN to reconnecting player and ENTER directions between reconnecting player and existing members. No packet bytes or fanout are implemented. |
+| `com.aionemu.gameserver.model.team.common.legacy.GroupEvent` | `PlayerGroupMemberInfoEvent` | Enum / Packet Intent | Partial | Unit Tested | Needs Verification | C# models only the `JOIN` and `ENTER` event values needed for reconnect intent. Other Java group events remain missing. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.onPlayerLogin` | `PlayerGroupRuntime.ReconnectMember` | Service Lifecycle Slice | Partial | Regression Tested | Needs Verification | Reconnect now returns packet intent metadata after wrapper refresh. Real login pipeline invocation and Java event dispatch remain missing. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.ReconnectMember_ReturnsNonSendingPacketIntentPlanLikeJavaPlayerConnectedEvent`: validates group-info intent, reconnecting-player JOIN intent, and bidirectional ENTER intents for each other member.
+- `PlayerGroupRuntimeTests.TryReconnectMember_ReturnsFalseForUnknownPlayerWithoutMutatingRuntime`: extended to validate `ReconnectMember` returns `NotFound` with no packet plan for unknown players.
+- Java comparison status: expectations are source-derived from `PlayerConnectedEvent.handleEvent`, `SM_GROUP_INFO`, `SM_GROUP_MEMBER_INFO`, and `GroupEvent.JOIN/ENTER`. No Java runtime execution, packet serialization comparison, live send/fanout comparison, leader-recovery comparison, or client validation was run.
+
+Remaining risks:
+- This unit adds packet intent only; no `SM_GROUP_INFO` / `SM_GROUP_MEMBER_INFO` C# packet serialization exists here.
+- Group event ordering beyond reconnect JOIN/ENTER is not modeled.
+- The intent list uses C# runtime member list order; Java `ConcurrentHashMap` iteration order is not guaranteed.
+- Real login/enter-world pipeline integration is still missing.
+- Leader recovery and `ChangeGroupLeaderEvent` remain unported.
+- Threading remains a C# `Lock`; Java event dispatch and packet fanout concurrency are unverified.
+- Serialization is explicitly not implemented. Reflection/JAXB behavior is not involved. Date/time and precision/rounding are not involved.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 non-sending reconnect packet-intent planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 10 `SM_GROUP_INFO` serialization, `SM_GROUP_MEMBER_INFO` serialization, live packet sends, real login/enter-world pipeline integration, full `GroupEvent` enum surface, leader recovery, `ChangeGroupLeaderEvent`, Java map iteration/order comparison, full team concurrency semantics, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; reconnect packet intent is now source-shaped, but group packet serialization/fanout and full lifecycle remain missing.
+
+Next recommended unit of work:
+- Port the first packet serialization boundary for reconnect group fanout: add a minimal `SmGroupMemberInfo` or `SmGroupInfo` packet model only if enough Java packet layout can be source-read and unit-tested. If packet layout is too broad, add `GroupEvent` enum coverage and keep packet serialization deferred with explicit gaps.
+
 ---
 
 ## Next Steps
