@@ -11825,6 +11825,49 @@ Summary metrics:
 Next recommended unit of work:
 - Add source-derived `PlayerGroupMember` helper coverage for Java `PlayerTeamMember` position/heading/level accessors, backed by `Player.Position` and `Player.Level`, then decide whether those helpers are needed by the next group lifecycle caller. Keep login/logout integration, offline checker scheduling, event dispatch, and packet fanout deferred.
 
+### Session 565 (May 23, 2026)
+- Added the remaining narrow Java `PlayerTeamMember` pass-through helpers to `PlayerGroupMember`.
+- `PlayerGroupMember.X`, `Y`, `Z`, `Heading`, and `Level` now read from the wrapped C# `Player.Position` / `Player.Level`.
+- Extended wrapper tests to validate position, heading, and level metadata alongside object id, name, player reference, and online state.
+- No runtime group lifecycle, packet fanout, login/logout integration, offline checker, stats, loot rules, brand updates, or portal execution behavior changed in this unit.
+- Focused validation initially failed because `PlayerGroupRuntimeTests` needed the `Aion.GameServer.World` import for `WorldPosition`; after adding the import, the focused suite passed.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests"` passes with 84 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1183 tests.
+
+#### Migration Parity Table - Session 565
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.PlayerTeamMember.getX` | `Aion.GameServer.Model.GameObjects.PlayerGroupMember.X` | Wrapper Helper | Partial | Unit Tested | Needs Verification | C# reads `Player.Position.X`. Java reads `player.getX()`. Runtime movement synchronization and concurrent position visibility remain unverified. |
+| `com.aionemu.gameserver.model.team.PlayerTeamMember.getY` | `PlayerGroupMember.Y` | Wrapper Helper | Partial | Unit Tested | Needs Verification | C# reads `Player.Position.Y`; Java reads `player.getY()`. Runtime movement/known-list side effects are outside this unit. |
+| `com.aionemu.gameserver.model.team.PlayerTeamMember.getZ` | `PlayerGroupMember.Z` | Wrapper Helper | Partial | Unit Tested | Needs Verification | C# reads `Player.Position.Z`; Java reads `player.getZ()`. Precision is float in both surfaces, but no live movement comparison was run. |
+| `com.aionemu.gameserver.model.team.PlayerTeamMember.getHeading` | `PlayerGroupMember.Heading` | Wrapper Helper | Partial | Unit Tested | Needs Verification | C# reads `WorldPosition.Heading` as a byte. Java returns `player.getHeading()`. Packet serialization and movement update ordering are not revalidated here. |
+| `com.aionemu.gameserver.model.team.PlayerTeamMember.getLevel` | `PlayerGroupMember.Level` | Wrapper Helper | Partial | Unit Tested | Needs Verification | C# reads `Player.Level` as `int`; Java returns a byte. Values used in tests are within byte range, but exact type/overflow behavior remains a C# difference to watch. |
+| `com.aionemu.gameserver.model.team.PlayerTeamMember` | `PlayerGroupMember` | Class / Wrapper | Partial | Regression Tested | Needs Verification | Wrapper now covers object id, name, player reference, online state, last-online timestamp, position, heading, and level. Java inheritance, generic `TeamMember`, logout/offline integration, and event lifecycle are still missing. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.CreateOrUpdateGroup_AttachesSharedSnapshotMetadataToMembers`: extended to validate wrapper `X`, `Y`, `Z`, `Heading`, and `Level` pass-through values.
+- Java comparison status: expectations are source-derived from `PlayerTeamMember.getX/getY/getZ/getHeading/getLevel`. No Java runtime execution, movement synchronization comparison, packet serialization comparison, precision/overflow comparison, or live client validation was run.
+
+Remaining risks:
+- `PlayerGroupMember.Level` is an `int` from C# `Player.Level`; Java returns a byte. This is acceptable for current in-range player levels but not verified for overflow/serialization callers.
+- Position helpers read the current immutable `Player.Position` snapshot; Java's movement/controller state may have different update timing under concurrent movement.
+- No login/logout/offline checker integration uses the wrapper yet.
+- Threading remains a C# `Lock` around runtime membership and direct reads for wrapper properties; Java uses team locks and player state internals.
+- Serialization is unchanged. Reflection/JAXB behavior is not involved. Date/time is unchanged from Session 564. Precision/rounding is only source-derived for float position values and not live-compared.
+- Group portal execution remains blocked.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 wrapper helper slice on `PlayerGroupMember`
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 10 live movement synchronization, heading update ordering, level byte/int edge behavior, generic `TeamMember` inheritance, login/logout group service integration, offline checker, event dispatch, packet fanout, full team concurrency semantics, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; member-wrapper data parity is broader, but full Java team lifecycle and group portal execution remain missing.
+
+Next recommended unit of work:
+- Add the first login/logout bridge for the runtime group wrapper: source-derive a small `UpdateMemberLastOnlineTime` or `OnPlayerLogout` method that looks up the wrapper by player object id and updates last-online time without scheduling removal. Unit-test deterministic timestamp mutation and no-op behavior for players without runtime group membership. Keep offline checker scheduling, group events, packet fanout, and disband behavior deferred.
+
 ---
 
 ## Next Steps
