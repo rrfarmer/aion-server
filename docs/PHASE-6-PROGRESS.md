@@ -6670,6 +6670,50 @@ Next recommended unit of work:
 - Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx` passing with 957 tests from Session 445.
 - Next recommended unit is to wire `WorldMapRuntimeState` into a small map-id runtime registry, or to wire the first live option consumer such as ride restriction, kisk/pet spawn restriction, or admin zone-info output.
 
+### Session 447 (May 23, 2026)
+- Added `WorldMapRuntimeStateTable`, a map-id runtime registry for `WorldMapRuntimeState`.
+- Wired `GameServerRuntimeContext.SetDataManager` to build the runtime world-map registry from loaded `StaticData.WorldMaps`.
+- Matched Java `WorldMapsData.afterUnmarshal` duplicate map-id behavior for this runtime registry: duplicate map rows collapse by map id and the last loaded template value wins.
+- Added lookup and mutation helpers matching Java `World.getWorldMap(id)` plus `WorldMap.setWorldOption` / `removeWorldOption` forwarding.
+- Current gaps: the registry is available from runtime context, but no live ride/kisk/admin/zone option consumer reads it yet.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~StaticDataLoadingTests.DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 3 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~PlayerZoneStateServiceTests"` passes with 16 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 958 tests.
+
+#### Migration Parity Table - Session 447
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.World` | `Aion.GameServer.Services.GameServerRuntimeContext.WorldMapStates` | Runtime Context / Registry Owner | Partial | Integration Tested | Partial Parity | Runtime context now exposes a map-id world-map state registry after static data is loaded. Java `World` itself still owns broader object, player, instance, spawn, and map APIs that are not covered here. |
+| `com.aionemu.gameserver.world.World.getWorldMap(int)` | `Aion.GameServer.World.WorldMapRuntimeStateTable.GetMap` / `TryGetMap` | Runtime Lookup | Partial | Unit + Integration Tested | Partial Parity | C# lookup returns nullable state for unknown map ids, matching Java's null-return shape. No full `WorldMap` instance object is modeled. |
+| `com.aionemu.gameserver.dataholders.WorldMapsData.afterUnmarshal` | `Aion.GameServer.World.WorldMapRuntimeStateTable` constructor | Static Data Runtime Projection | Partial | Unit + Integration Tested | Partial Parity | Duplicate map ids are collapsed for runtime lookup with last loaded value winning, matching Java `LinkedHashMap.put` value replacement. Raw `StaticData.WorldMaps` still keeps parsed rows for existing C# consumers. |
+| `com.aionemu.gameserver.dataholders.WorldMapsData.forEachParalllel` | `Aion.GameServer.Services.GameServerRuntimeContext.SetDataManager` | Startup Projection | Partial | Integration Tested | Partial Parity | C# builds registry synchronously during `SetDataManager`. Java builds `WorldMap` objects in parallel during `World` singleton construction. |
+| `com.aionemu.gameserver.world.WorldMap.worldOptions` | `Aion.GameServer.World.WorldMapRuntimeStateTable` / `WorldMapRuntimeState.CurrentFlags` | Runtime State | Partial | Unit + Integration Tested | Partial Parity | Runtime state is now reachable by map id. It still covers only current option flags, not Java world-map instances or object iteration. |
+| `com.aionemu.gameserver.world.WorldMap.setWorldOption` / `removeWorldOption` | `Aion.GameServer.World.WorldMapRuntimeStateTable.SetWorldOption` / `RemoveWorldOption` | Runtime Mutation Forwarder | Partial | Unit Tested | Partial Parity | Table-level mutation helpers forward to the per-map state and return false for unknown map ids. No live caller uses them yet. |
+| `com.aionemu.gameserver.world.WorldMap` instance/iterator APIs | No C# equivalent in this unit | World Map Runtime Dependency | Not Started | No Tests | Needs Verification | Java `WorldMap` still owns instance ids, instance creation/removal, and object iteration; the C# registry is only the current world-options slice. |
+
+Tests added or extended:
+- `WorldMapRuntimeStateTests.WorldMapRuntimeStateTable_MatchesJavaWorldMapLookupSlice`: validates duplicate map-id collapse with last value winning, map-id lookup, mutation forwarding, unknown-map behavior, and shared state identity.
+- `StaticDataLoadingTests.DataManager_LoadsRealJavaStaticDataManifestCounts`: now verifies `GameServerRuntimeContext.SetDataManager` builds a runtime registry from real Java static data and that real fly-map options are available.
+- Java comparison status: tests are source-derived from Java `World`, `WorldMap`, and `WorldMapsData`; no live Java runtime side-by-side validation was run.
+
+Remaining risks:
+- The registry is not yet consumed by live gameplay checks, so runtime behavior is mostly unchanged.
+- Raw `StaticData.WorldMaps` still preserves duplicate parsed rows for existing packet/static-data consumers; only the runtime registry collapses duplicates like Java `WorldMapsData`.
+- Java `WorldMap` instance ownership and object iteration remain absent.
+- Reflection is not used. Serialization is unchanged. Date/time is not involved. Threading differs: C# builds the registry synchronously during context setup, while Java uses `parallelStream` during `World` construction. Per-map option state remains simple mutable state pending broader concurrency review.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 runtime world-map registry slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because live option consumers, world-map instance ownership, object iteration, full socket-order harnesses, full zone lifecycle handlers, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Wire the first live option consumer to `WorldMapRuntimeStateTable`. Good narrow candidates are ride restriction (`RideAction` / `PlayerController.onEnterZone`), kisk/pet spawn restrictions (`ToyPetSpawnAction`), or admin zone-info output. If staying in flight, pass runtime world flags into `PlayerZoneStateService` for map-default `FLY` checks while preserving polygon `ZoneType.FLY` membership behavior.
+
 ---
 
 ## Next Steps
