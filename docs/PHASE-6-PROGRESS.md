@@ -5053,6 +5053,51 @@ Summary metrics:
 Next recommended unit of work:
 - Continue DP caller concretization with a small Java caller that spends or resets DP through the packeted boundary, such as `CraftService.startCrafting` recipe DP cost or `PlayerReviveService` DP reset, or take the visual-stat side effect next by wiring `PlayerGameStats.updateStatsAndSpeedVisually()` to concrete C# packet output if the required static-data context can be provided cleanly.
 
+### Session 411 (May 23, 2026)
+- Added a focused Java `PlayerReviveService.revive` DP-reset boundary as `WorldNpcResourceStatsService.ResetPlayerDpForReviveAsync`.
+- Revive DP reset now preserves Java's guard: reset only when the player has DP and the revive is not covered by the no-resurrect-penalty effect.
+- Successful reset reuses `AddPlayerDpAsync`, so online players receive `SmDpInfo` broadcast, visual stat/speed intent, then owner `SmStatUpdateDp` in the existing Java order.
+- Added `WorldNpcReviveDpResetResult` / `WorldNpcReviveDpResetStatus` to keep revive-specific skip states separate from raw DP mutation results.
+- Current gaps in this cluster: full revive dispatch, HP/MP percentage restoration, soul-sickness update, resurrection emotion broadcast, team movement updates, aggro clearing, spawn/teleport handling, and no-resurrect-penalty effect lookup remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~GamePacketTests"` passes with 104 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcResourceStatsServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 274 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 903 tests.
+
+#### Migration Parity Table - Session 411
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerReviveService` | `Aion.GameServer.Services.WorldNpcResourceStatsService.ResetPlayerDpForReviveAsync`; `WorldNpcReviveDpResetResult`; `WorldNpcReviveDpResetStatus` | Service Boundary | Partial | Unit Tested | Partial Parity | C# mirrors the DP-specific revive branch: if current DP is positive and no-resurrect-penalty is absent, reset DP through the packeted DP path. Full revive flow remains pending. |
+| `com.aionemu.gameserver.skillengine.model.Effect` | No dedicated C# no-resurrect-penalty effect lookup for revive yet | Runtime/Model | Not Started | No Tests | Needs Verification | Java asks `EffectController.hasAbnormalEffect(Effect::isNoResurrectPenalty)` before HP/MP and DP reset. C# accepts the boolean explicitly until effect-controller runtime exists. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `WorldNpcResourceStatsService.AddPlayerDpAsync` reused by `ResetPlayerDpForReviveAsync` | Runtime/Service | Partial | Unit Tested | Partial Parity | Revive reset calls the existing DP boundary with `-currentDp`, preserving starting-class guard, max-DP prerequisite for online players, and packet order. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmDpInfo` | Packet | Partial | Unit Tested | Partial Parity | Reused by revive DP reset. This session verifies owner-visible broadcast ordering for the reset; live-client capture remains pending. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_DP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateDp` | Packet | Partial | Unit Tested | Partial Parity | Reused by revive DP reset. This session verifies owner stat-update ordering after DP info broadcast; live-client capture remains pending. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats` | Existing C# HP/MP resource helpers only; no revive percent host yet | Runtime/Stats | Partial | Unit Tested elsewhere | Needs Verification | Java revive also sets current HP/MP percentages. This unit intentionally covers only the DP reset branch. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_EMOTION` | Existing `Aion.GameServer.Network.Aion.ServerPackets.SmEmotion` packet | Packet | Partial | Unit Tested elsewhere | Needs Verification | Java revive broadcasts `EmotionType.RESURRECT`; this unit does not yet wire the revive caller to concrete emotion broadcast. |
+
+Tests added or extended:
+- `WorldNpcResourceStatsServiceTests.ResetPlayerDpForReviveAsync_ClearsDpThroughPacketedBoundary`: validates revive DP reset, DP mutation, concrete DP info broadcast, concrete DP stat owner send, and packet order.
+- `WorldNpcResourceStatsServiceTests.ResetPlayerDpForReviveAsync_SkipsPenaltyNoDpAndMissingTarget`: validates no-resurrect-penalty, zero-DP, and missing-player branches do not mutate or emit packets.
+- Java comparison status: tests are source-derived from Java `PlayerReviveService.revive`, `PlayerCommonData.setDp`, `SM_DP_INFO.writeImpl`, and `SM_STATUPDATE_DP.writeImpl`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- This is a focused DP reset boundary, not a live C# `PlayerReviveService` port. HP/MP percentage restoration, soul sickness, aggro clearing, spawn hooks, team movement updates, teleport routing, and resurrect emotion broadcast remain pending.
+- Java derives the no-resurrect-penalty flag from active effects; C# accepts it explicitly until the effect-controller runtime is available.
+- Online DP reset still requires explicit max-DP input because live `PlayerGameStats.getMaxDp()` is not available at this boundary.
+- `PlayerGameStats.updateStatsAndSpeedVisually()` remains a result intent only after the reset.
+- Reflection and date/time are not involved. Threading parity remains approximate through async service methods and connection-registry calls outside Java synchronized semantics.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 partial C# revive DP-reset service boundary plus result DTO/status and packeted DP-boundary reuse
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full revive flow, no-resurrect-penalty effect lookup, craft DP spend, NPC/quest/PVP/team DP rewards, group stat fanout, restore/flight timers, DP visual stat updates, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue DP caller concretization with Java `CraftService.startCrafting`: add a focused C# crafting DP-cost boundary that checks recipe DP cost against current player DP and spends the cost through `AddPlayerDpAsync` only after the start-craft validation succeeds. Leave full `CM_CRAFT`, material consumption, `CraftingTask`, cooldown, static-object range, and quest/event crafting callbacks as explicit follow-up slices.
+
 ---
 
 ## Next Steps
