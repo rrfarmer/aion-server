@@ -7747,6 +7747,45 @@ Summary metrics:
 Next recommended unit of work:
 - Continue kisk parity with live team membership wiring for group/alliance binding, a dedicated kisk controller/death-state bridge that removes runtime kisks when the spawned kisk NPC dies, or the next small revive cleanup only after a faithful aggro/team model exists.
 
+### Session 471 (May 23, 2026)
+- Added `PlayerKiskDeathCleanupService` to detect registered runtime kisks during NPC death handling and remove their registry/world/id state through the existing lifetime despawn boundary.
+- Added `PlayerKiskRemovalRuntimeCleanupService` and moved the connection-local removal side effects into a reusable runtime cleanup path: creator `SM_KISK_UPDATE`, online member bind-point reset, pending bind request clear, dead-member `SM_DIE`, and NPC visibility refresh now share one service.
+- Wired `WorldNpcDeathDropWorkflowService` through server DI callbacks so a dead registered kisk short-circuits ordinary NPC loot/respawn/decay and reports `KiskRemoved` status before cleanup packets are sent.
+- Added focused regression coverage for the death workflow removing a live kisk runtime, clearing bound/pending online players, sending the Java-shaped cleanup packets, refreshing NPC visibility, and releasing the object id.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "WorldNpcDeathDropWorkflowServiceTests|PlayerKiskLifetimeServiceTests|PlayerKiskRemovalCleanupServiceTests"` passes with 12 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1004 tests.
+
+#### Migration Parity Table - Session 471
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.Kisk.isActive()` / `KiskController.delete()` | `PlayerKiskDeathCleanupService.TryRemoveDiedKisk` | Kisk Death Bridge | Partial | Unit Tested | Partial Parity | A registered kisk NPC death now removes runtime registry/world/id state before normal NPC death loot/decay. A dedicated C# `KiskController` class and attackability/AI hooks remain pending. |
+| `com.aionemu.gameserver.services.KiskService.removeKisk(Kisk)` | `PlayerKiskRemovalRuntimeCleanupService.ApplyAsync` | Runtime Cleanup Service | Partial | Regression Tested | Partial Parity | Shared cleanup now covers creator update, online member kisk clear, bind-point reset, dead-member revive-option refresh, pending request clear, and NPC visibility refresh. Real-client socket ordering still needs verification. |
+| `com.aionemu.gameserver.controllers.NpcController.onDie` kisk-specialized path | `WorldNpcDeathDropWorkflowService` kisk callbacks + `WorldNpcDeathDropWorkflowStatus.KiskRemoved` | Death Workflow Hook | Partial | Regression Tested | Partial Parity | Registered kisks bypass generic reward/respawn/decay scheduling after removal. Ordinary NPC death behavior remains unchanged by the callback when the NPC is not a registered kisk. |
+| `com.aionemu.gameserver.controllers.VisibleObjectController.delete` object removal | `PlayerKiskLifetimeService.DespawnExpiredKisk` reused by death cleanup | Object Lifecycle Boundary | Partial | Regression Tested | Partial Parity | The current player-spawned kisk path removes directly from world/registry/id state. Full world-map instance ownership and known-list callback parity are still broader Phase 6 work. |
+
+Tests added or extended:
+- `WorldNpcDeathDropWorkflowServiceTests.HandleDeathAsync_RemovesRuntimeKiskAndRunsMemberCleanup`: validates the new kisk death bridge, shared cleanup packets, online member state mutation, NPC visibility refresh, and object-id release.
+- Existing `PlayerKiskLifetimeServiceTests` and `PlayerKiskRemovalCleanupServiceTests` remain the focused guardrails for registry/world removal and cleanup-plan selection.
+- Java comparison status: tests are source-derived from Java `Kisk.isActive`, `KiskController.delete`, `KiskService.removeKisk`, and `NpcController.onDie`; no live Java runtime side-by-side validation was run.
+
+Remaining risks:
+- C# still lacks a dedicated `KiskController`, enemy attackability, full NPC/Kisk AI dialog handling, and exact Java `onDie/onDelete/onDespawn` callback layering.
+- Player-spawned kisk NPCs still need broader combat/life-stat wiring before every possible attack/death source can reach this workflow.
+- Real encrypted client socket ordering and concurrent known-list mutation remain unverified.
+- No reflection, serialization, date/time, or database behavior changed. Threading risk is limited to the existing connection-registry cleanup and visibility refresh paths.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 kisk death-removal bridge plus 1 shared cleanup refactor
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 2 dedicated kisk controller/AI/attackability and live combat/life-stat ingress
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because remaining kisk revive cleanup, live team membership wiring, production socket-order validation, full dedicated kisk controller/AI attackability, full NPC/dialog AI, per-zone bind membership, live option mutation callers, admin option consumers, world-map instance ownership, object iteration, full socket-order harnesses, full zone lifecycle handlers, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue kisk parity with live team membership wiring for group/alliance binding, dedicated `KiskController`/attackability/AI dialog hooks beyond the generic death bridge, or socket-order validation for the shared kisk removal cleanup path.
+
 ---
 
 ## Next Steps
@@ -7754,7 +7793,7 @@ Next recommended unit of work:
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
-4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout, dedicated controller/death state, and live group/alliance resolver wiring, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
+4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, dedicated `KiskController` attackability and AI dialog/death hooks beyond the generic death bridge, and live group/alliance resolver wiring, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
