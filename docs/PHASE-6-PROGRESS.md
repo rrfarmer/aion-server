@@ -12409,6 +12409,57 @@ Summary metrics:
 Next recommended unit of work:
 - Source-read `PlayerGroup.sendBrands` and related brand packet classes. If dependencies are small, add a non-sending brand-send intent to `PlayerGroupEnteredPacketPlan`; if broad, mark brand send blocked and pivot to the next prerequisite for `SM_GROUP_MEMBER_INFO` serialization, starting with the smallest player common-data/life-stat fields needed by Java's group member packet.
 
+### Session 578 (May 23, 2026)
+- Source-read Java `TemporaryPlayerTeam.updateBrand`, `TemporaryPlayerTeam.sendBrands`, `SM_SHOW_BRAND`, and `CM_SHOW_BRAND`.
+- Added C# `SmShowBrand` for Java opcode `249`, including single-brand payloads and Java's empty-map reset behavior for brand ids `0..15`.
+- Added runtime group brand storage in `PlayerGroupRuntime`, keyed by team id and brand id.
+- Added `PlayerGroupRuntime.UpdateBrand(int teamId, int brandId, int targetObjectId)` to store a brand target and record non-sending `SmShowBrand` broadcast intents for current group members.
+- Added `PlayerGroupBrandIntent` and `PlayerGroupBrandUpdatePlan`.
+- `PlayerGroupRuntime.CreateEnteredPacketPlan` now includes a non-sending brand replay intent for the entering player, matching Java `team.sendBrands(player)`.
+- Added tests for `SmShowBrand` payload serialization, empty reset behavior, brand update broadcast planning, group-enter brand replay, and unknown-group no-op behavior.
+- Kept `CM_SHOW_BRAND` parsing/permission checks, live socket sends, alliance captain behavior, and full group-enter packet dispatch disabled.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 102 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1200 tests.
+
+#### Migration Parity Table - Session 578
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SHOW_BRAND` | `Aion.GameServer.Network.Aion.ServerPackets.SmShowBrand` | Server Packet | Partial | Unit Tested | Needs Verification | C# writes count plus Java `(1, brandId, targetObjectId)` triples and empty-map reset `0..15`. No Java golden vector, live frame, or client capture validates end-to-end parity. |
+| `com.aionemu.gameserver.model.team.TemporaryPlayerTeam.updateBrand` | `Aion.GameServer.Services.PlayerGroupRuntime.UpdateBrand` / `PlayerGroupBrandUpdatePlan` | Service / Event Planning Bridge | Partial | Unit Tested | Needs Verification | C# stores brand target metadata and records non-sending broadcast intents. Java stores in a `ConcurrentHashMap` and sends packets live to the team. |
+| `com.aionemu.gameserver.model.team.TemporaryPlayerTeam.sendBrands` | `PlayerGroupEnteredPacketPlan.BrandIntent` / `PlayerGroupBrandIntent` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# replays stored brand map to the entering player as non-sending intent. Java sends `SM_SHOW_BRAND(targetIdsByBrandId)` immediately. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SHOW_BRAND` | No C# client packet equivalent in this unit | Client Packet Dependency | Not Started | No Tests | Unknown | Source-read only. C# does not parse client brand updates, enforce leader/alliance-captain permissions, or support solo fallback sends. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance.isSomeCaptain` | No C# equivalent in this unit | Permission Dependency | Not Started | No Tests | Unknown | Newly touched through `CM_SHOW_BRAND`; alliance captain brand permission is not ported. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerGroupEnteredEvent` | `PlayerGroupRuntime.CreateEnteredPacketPlan` with brand intent | Event Planning Bridge | Partial | Regression Tested | Needs Verification | Group-enter now plans group-info, system messages, brands, and abyss-rank update, but member-info packets, superclass handling, and live ordering are still missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | No C# packet equivalent in this unit | Server Packet Dependency | Not Started | No Tests | Unknown | Still the main missing group-enter packet. |
+
+Tests added or extended:
+- `GamePacketTests.SmShowBrand_WritesSingleBrandAndEmptyMapResetLikeJava`: validates single-brand payload and Java empty-map reset behavior for 16 brand ids.
+- `PlayerGroupRuntimeTests.UpdateBrand_StoresBrandAndPlansBroadcastLikeJavaTemporaryPlayerTeam`: validates runtime brand storage, non-sending team broadcast intents, payload serialization, and later group-enter brand replay.
+- `PlayerGroupRuntimeTests.UpdateBrand_ReturnsNullForUnknownGroup`: validates unknown group no-op behavior.
+- `PlayerGroupRuntimeTests.CreateEnteredPacketPlan_ReturnsNonSendingGroupInfoPlanLikeJavaPlayerGroupEnteredEvent`: extended to validate entering-player brand replay intent and payload.
+- Java comparison status: expectations are source-derived from `TemporaryPlayerTeam.updateBrand`, `TemporaryPlayerTeam.sendBrands`, `SM_SHOW_BRAND.writeImpl`, and `CM_SHOW_BRAND.runImpl`. No Java runtime execution, Java-generated golden vector, live client packet parsing, leader/alliance-captain permission comparison, socket send/fanout comparison, encoded opcode/frame comparison, Java `ConcurrentHashMap` iteration comparison, or client validation was run.
+
+Remaining risks:
+- `CM_SHOW_BRAND` is not ported, so real clients cannot update group brands through C#.
+- Live brand packet sends are not wired to `GameServerConnection`.
+- Java stores brands in `ConcurrentHashMap`; C# uses a locked dictionary snapshot. Iteration ordering is not Java-runtime compared.
+- Alliance captain permissions and solo fallback brand sends remain missing.
+- Brand ids and target ids are not validated against client limits beyond Java's packet shape.
+- Group-enter packet ordering remains incomplete because `SM_GROUP_MEMBER_INFO` and superclass handling are missing.
+- Serialization is source-derived for payload only. Full frame/opcode/header parity, threading behavior, reflection/JAXB behavior, date/time behavior, and precision/rounding were not newly validated.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 focused group brand metadata and `SM_SHOW_BRAND` intent/packet slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 12 `CM_SHOW_BRAND` parsing/dispatch, leader permission checks, alliance captain permissions, solo fallback brand send, live group brand broadcasts, Java `ConcurrentHashMap` ordering comparison, encoded opcode/frame golden validation, `SM_GROUP_MEMBER_INFO` serialization, group-enter member-info fanout, superclass player-entered handling, full team event ordering/threading, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group-enter now plans group-info, party-message, brand replay, and abyss-rank packets, but client-driven brand updates and member-info bytes remain missing.
+
+Next recommended unit of work:
+- Begin `SM_GROUP_MEMBER_INFO` prerequisites rather than attempting the full packet at once. Source-read `SM_GROUP_MEMBER_INFO.writeImpl` again and add a small DTO for the first stable header/event fields (group id, member object id, `GroupEvent` id, and event-specific branch marker) only if those fields can be tested without life stats/common-data dependencies. If not, add the smallest missing dependency model explicitly required by the packet writer.
+
 ---
 
 ## Next Steps
