@@ -3347,6 +3347,57 @@ Summary metrics:
 Next recommended unit of work:
 - Add the first actual NPC damage/combat caller into `WorldNpcLifeStatsService.ReduceHpAsync`, carrying enough attacker and damage context to preserve Java `CreatureController.onAttack` / `CreatureLifeStats.reduceHp` order while documenting missing `SM_ATTACK_STATUS` fanout and observers.
 
+### Session 377 (May 23, 2026)
+- Added `WorldNpcDamageService` as the first actual NPC damage caller into the staged life-stat path, preserving the Java `CreatureController.onAttack` spawned-target guard before `CreatureLifeStats.reduceHp`.
+- The damage caller now resolves the spawned world NPC, requires a player attacker, derives max HP/MP from existing staged life stats or loaded `NpcTemplateSummary.MaxHp`, and delegates to `WorldNpcLifeStatsService.ReduceHpAsync`.
+- Added `WorldNpcDamageOptions` / `WorldNpcDamageResult` / `WorldNpcDamageStatus` so future packet/skill callers can pass death options while the result exposes Java-shaped outcomes: not spawned, missing attacker, missing life stats, no damage, damaged, died, and already dead.
+- Registered `WorldNpcDamageService` in game-server DI for future packet/skill/AI attack callers.
+- Added focused coverage for nonlethal spawned damage, lethal damage invoking the staged death workflow, duplicate lethal damage not invoking a second death workflow, unspawned target guard, missing-attacker guard, and missing max-HP/life-stats guard.
+- Current gaps in this cluster: the caller still does not serialize `SM_ATTACK_STATUS`, notify attacked observers, add aggro/hate, notify nearby NPC support AI, increment attacked counts, activate critical/godstone effects, broadcast delayed hate, or connect to a real client/skill/AI attack packet.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcDamageServiceTests"` passes with 5 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcDamageServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 52 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 754 tests.
+
+#### Migration Parity Table - Session 377
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.CreatureController` | `Aion.GameServer.Services.WorldNpcDamageService` | Controller/Service | Partial | Unit Tested | Partial Parity | C# now has a real spawned-NPC damage entry point that feeds life stats and death workflow. Missing methods/behavior: casting cancel checks, observer notification, aggro/hate mutation, support AI events, attacked-count increments, critical effects, godstone activation, delayed hate broadcast, packet fanout, and real packet/skill/AI callers. |
+| `com.aionemu.gameserver.model.stats.container.CreatureLifeStats` | `Aion.GameServer.Services.WorldNpcLifeStatsService` | Stats Container/Service | Partial | Unit Tested | Partial Parity | Damage caller delegates to the staged HP reducer and one-shot death workflow. Missing methods/behavior remain attack-status packet emission, HP observers, invulnerability, `killingBlow`, heal/MP paths, restore tasks, effect metadata, and exact Java monitor/thread semantics. |
+| `com.aionemu.gameserver.model.stats.container.NpcLifeStats` | `Aion.GameServer.Services.WorldNpcLifeStats`; `Aion.GameServer.Services.WorldNpcLifeStatsService` | Stats Container/DTO | Partial | Unit Tested | Needs Verification | Existing staged NPC life stats are now consumed by a damage caller. Max MP, restore scheduling, and game-stat-derived max values remain missing. |
+| `com.aionemu.gameserver.controllers.attack.AttackStatus` | Not started; future C# attack-status model | Enum | Not Started | No Tests | Unknown | Newly re-confirmed dependency: Java branches post-reduce godstone/critical behavior around `DODGE` / `RESIST`. C# damage caller does not model attack-result status yet. |
+| `com.aionemu.gameserver.skillengine.model.HopType` | Not started; future C# hate/attack context model | Enum | Not Started | No Tests | Unknown | Newly re-confirmed dependency: Java passes `HopType` into `AggroList.addDamage`. C# does not model hate type or aggro mutation yet. |
+| `com.aionemu.gameserver.controllers.ObserveController` | Not started; future C# observer surface | Controller | Not Started | No Tests | Unknown | Java notifies attacked observers before HP reduction. C# has no attacked-observer fanout yet. |
+| `com.aionemu.gameserver.controllers.attack.AggroList` | Not started; future C# aggro/hate service | Service/State | Not Started | No Tests | Unknown | Java adds damage hate before reducing HP. C# damage currently only changes HP/death state. |
+| `com.aionemu.gameserver.world.knownlist.KnownList` | Existing known-list visibility surfaces only; no support-AI attack fanout | Service/State | Partial | No Tests | Unknown | Java notifies nearby NPCs with `AIEventType.CREATURE_NEEDS_SUPPORT`. C# known-list work exists for visibility, but not this combat-support event. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ATTACK_STATUS` | Not started for NPC damage | Packet | Not Started | No Tests | Unknown | Java `CreatureLifeStats.reduceHp` can broadcast attack status. C# does not serialize or broadcast damage status yet; packet binary parity is unverified. |
+
+Tests added:
+- `ApplyDamageAsync_ReducesSpawnedNpcHpViaLifeStats`: validates spawned NPC damage resolves life stats and reduces HP without death side effects.
+- `ApplyDamageAsync_TriggersDeathWorkflowForLethalDamage`: validates lethal damage reaches death workflow, schedules respawn/decay, marks AI died, and maps duplicate lethal damage to `AlreadyDead`.
+- `ApplyDamageAsync_ReturnsNotSpawnedBeforeCreatingStats`: validates the Java spawned-target guard prevents life-stat creation.
+- `ApplyDamageAsync_ReturnsMissingAttackerWithoutReducingHp`: validates missing attacker is rejected before HP changes.
+- `ApplyDamageAsync_ReturnsMissingLifeStatsWhenMaxHpUnavailable`: validates missing max HP/life stats is explicit instead of inventing fake stats.
+- Java comparison status: tests are source-derived from Java `CreatureController.onAttack` and `CreatureLifeStats.reduceHp`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- No real client opcode, skill effect, or NPC AI attack path invokes `WorldNpcDamageService` yet.
+- Observer, aggro, known-list support, attacked-count, critical/godstone, delayed-hate, and packet side effects remain unported.
+- Max HP fallback uses staged template max HP; full Java game-stat max values and max MP are incomplete.
+- Threading is covered only by the staged life-stat lock and scheduler tests; exact Java monitor/order behavior remains unverified.
+- Reflection and date/time behavior are not involved; serialization and precision/rounding are not exercised by this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 4 partial/staged C# artifacts
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 55% because live attack packets/skills/AI, combat side effects, packet fanout, full creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Add the first `SM_ATTACK_STATUS` damage-status packet surface for NPC HP reduction, then thread a staged packet/fanout result through `WorldNpcDamageService` without pretending observer, aggro, or skill/godstone side effects are complete.
+
 ---
 
 ## Next Steps
@@ -3356,5 +3407,5 @@ Next recommended unit of work:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add the first actual NPC damage/combat caller into `WorldNpcLifeStatsService.ReduceHpAsync`, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add `SM_ATTACK_STATUS` damage-status packet/fanout support for the staged NPC damage caller before wiring real attack packets/skills/AI, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
