@@ -11195,6 +11195,51 @@ Summary metrics:
 Next recommended unit of work:
 - Add a non-executing group allocation decision surface on `PortalTeamEntryPlan`: distinguish registered team transfer, fresh group allocation, and missing/invalid team id with explicit enum values, then wire the future transfer caller to refuse team plans with a clear blocked result rather than ignoring `TeamPlan`.
 
+### Session 552 (May 23, 2026)
+- Added an explicit unsupported-team result surface to the portal continuation transfer boundary.
+- `PortalContinueTransferKind` now includes `UnsupportedTeamPortal`.
+- `PortalContinueTransferResult` now carries nullable teleport data plus the blocked `PortalTeamEntryPlan`, allowing callers/tests to distinguish a refused team plan from an ordinary null/no-op result.
+- `GameServerConnection.QueuePortalContinueTransferAsync` now checks `EntryPlan.TeamPlan` before normal `Continue` processing and returns `UnsupportedTeamPortal` without queuing teleport, applying cooldown, allocating instances, or sending packets.
+- Added regression coverage proving a blocked registered group team plan returns the unsupported-team result with no teleport/cooldown side effects.
+- Kept production dialog behavior unchanged: team portals still currently stop earlier as validation rejection until the future caller wiring deliberately passes blocked team plans forward.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~WorldMapRuntimeStateTests"` passes with 97 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1169 tests.
+
+#### Migration Parity Table - Session 552
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` unsupported group/alliance continuation gap | `Aion.GameServer.Network.Aion.GameServerConnection.QueuePortalContinueTransferAsync` | Service / Transfer Boundary | Partial | Unit Tested | Needs Verification | C# now returns an explicit unsupported-team result when handed a blocked team plan. Java would continue into group/alliance allocation and transfer; C# deliberately refuses because fanout is not ported. |
+| `com.aionemu.gameserver.services.teleport.PortalService.transfer` | `Aion.GameServer.Services.PortalContinueTransferResult` / `PortalContinueTransferKind.UnsupportedTeamPortal` | DTO / Result | Partial | Unit Tested | Needs Verification | Result can now represent a non-executed team portal plan without teleport/cooldown packets. Actual Java transfer behavior remains missing for teams. |
+| `com.aionemu.gameserver.world.WorldMapInstance.registerTeam` | `Aion.GameServer.Services.PortalTeamEntryPlan` carried through unsupported transfer result | Runtime State / Dependency | Partial | Unit Tested | Needs Verification | Registered team instance metadata is preserved in the blocked result. Full `GeneralTeam` object storage and lifecycle are still missing. |
+| `com.aionemu.gameserver.model.team2.group.PlayerGroup.getTeamId` | `Aion.GameServer.Model.GameObjects.Player.CurrentTeamId` / `PortalTeamEntryPlan.TeamId` | Model Dependency | Partial | Unit Tested | Needs Verification | Team id is carried through the refusal result. No full C# `PlayerGroup`, leader/member mutation, or lifecycle exists. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_TELEPORT_LOC` absence for blocked teams | `QueuePortalContinueTransferAsync_UnsupportedTeamPlanReturnsBlockedResultWithoutPackets` | Packet Boundary | Partial | Unit Tested | Needs Verification | Test proves no C# teleport packet is emitted for unsupported team plans. Java would eventually send teleport only after supported group allocation/transfer; that positive path is not ported. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.addPortalCooldown` absence for blocked teams | `PortalContinueTransferResult.UnsupportedTeamPortal` with null cooldown | Cooldown Boundary | Partial | Unit Tested | Needs Verification | Test proves blocked team plans do not mutate cooldowns. Java cooldown behavior for successful group entry remains unimplemented and unverified. |
+
+Tests added or extended:
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_UnsupportedTeamPlanReturnsBlockedResultWithoutPackets`: validates a blocked registered group team plan returns `UnsupportedTeamPortal`, preserves the registered instance and team plan, emits no packets, creates no pending teleport, and saves no cooldowns.
+- Existing supported transfer tests were updated to use null-forgiving access after `PortalContinueTransferResult.Teleport` became nullable for unsupported-team results.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `PortalService.transfer`, `WorldMapInstance.registerTeam`, `SM_TELEPORT_LOC`, and `PortalCooldownList.addPortalCooldown`. No Java runtime execution, supported group transfer, actual member fanout, encrypted socket capture, live client validation, cooldown DB integration, or threading/concurrency comparison was run.
+
+Remaining risks:
+- This unit adds a safe refusal result; it does not implement successful group/alliance/league portal entry.
+- Production dialog handling still treats team portal plans as validation rejection before transfer continuation.
+- `PortalContinueTransferResult.Teleport` is now nullable for blocked outcomes; callers must branch on `Kind` before dereferencing.
+- Group allocation, `registerTeam` full object storage, member iteration, capacity checks, cooldown behavior for successful teams, and team lifecycle cleanup remain missing.
+- Alliance/league paths are structurally represented only through metadata and remain untested/unimplemented for transfer behavior.
+- Serialization/live packet behavior, reflection/JAXB behavior, date/time handling for team cooldowns, precision/rounding, Java threading semantics, and live runtime comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 explicit non-executing unsupported-team transfer result surface
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 9 supported group transfer, group allocation, `registerTeam` full object storage, group member fanout, alliance transfer, league model/transfer, team cooldown add, team lifecycle/concurrency, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; team portal plans can now be refused explicitly at the future transfer boundary, but successful team portal entry is still not implemented.
+
+Next recommended unit of work:
+- Wire the dialog/preparation layer to surface blocked team plans as a distinct handled status instead of generic validation rejection. Keep packet behavior unchanged for no-team failures, but when a grouped/allied player has a populated `TeamPlan`, return a status such as `UnsupportedTeamPortal` that future callers can route to the explicit transfer refusal surface.
+
 ---
 
 ## Next Steps
