@@ -11240,6 +11240,49 @@ Summary metrics:
 Next recommended unit of work:
 - Wire the dialog/preparation layer to surface blocked team plans as a distinct handled status instead of generic validation rejection. Keep packet behavior unchanged for no-team failures, but when a grouped/allied player has a populated `TeamPlan`, return a status such as `UnsupportedTeamPortal` that future callers can route to the explicit transfer refusal surface.
 
+### Session 553 (May 23, 2026)
+- Added a distinct `UnsupportedTeamPortal` status to the portal preparation and dialog interaction layers.
+- `PlayerEnterWorldService.PreparePortalEntryAsync` now returns `PortalEntryPreparationStatus.UnsupportedTeamPortal` when validation returns a blocked team plan with `EntryPlan.TeamPlan` populated.
+- Ordinary requirement failures, such as a solo player trying to enter a group-only portal without a group, still return `ValidationRejected` and preserve existing Java-shaped failure packet behavior.
+- `PortalEntryInteractionService.HandleDialogSelectAsync` now maps blocked team plans to `PortalDialogEntryStatus.UnsupportedTeamPortal` without sending packets or invoking same-instance/continuation transfer delegates.
+- Added regression coverage for a grouped player with a registered group team instance reaching the distinct unsupported-team dialog status while preserving the registered team plan metadata.
+- Kept successful group/alliance/league entry, actual transfer fanout, cooldown mutation, and production caller transfer wiring for blocked team plans out of scope.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passes with 117 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1170 tests.
+
+#### Migration Parity Table - Session 553
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` unsupported group/alliance planning gap | `Aion.GameServer.Services.PlayerEnterWorldService.PreparePortalEntryAsync` | Service / Preparation | Partial | Unit Tested | Needs Verification | C# now distinguishes populated blocked team plans from normal validation failures. Java would continue into group/alliance transfer; C# still blocks because fanout is not ported. |
+| `ai.portals.PortalDialogAI.onDialogSelect` -> `PortalService.port` caller behavior | `Aion.GameServer.Services.PortalEntryInteractionService.HandleDialogSelectAsync` | Caller Boundary | Partial | Unit Tested | Needs Verification | Dialog interaction now reports `UnsupportedTeamPortal` for grouped players with a populated team plan and sends no packets. Full Java AI/dialog event machine remains incomplete. |
+| `com.aionemu.gameserver.services.teleport.PortalService.checkPlayerSize` | `PortalEntryValidationService.ValidatePlayerSize` feeding `UnsupportedTeamPortal` prep status | Service / Validation Dependency | Partial | Unit Tested | Partial Parity | No-team failures still send Java-shaped requirement packets and remain `ValidationRejected`. Grouped players pass this guard and surface the unsupported plan status. |
+| `com.aionemu.gameserver.world.WorldMapInstance.registerTeam` | `PortalTeamEntryPlan.RegisteredInstance` carried through preparation/dialog result | Runtime State / Dependency | Partial | Unit Tested | Needs Verification | Registered team metadata is preserved through the dialog result. Full `GeneralTeam` object storage, member lifecycle, and transfer execution remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ENTER_ONLY_PARTY_DON` | `PortalEntryInteractionService` no-team group failure branch | Packet Boundary | Partial | Unit Tested | Partial Parity | Existing no-team packet behavior remains covered. Exact binary/live-client behavior is not newly verified. |
+
+Tests added or extended:
+- `PortalEntryInteractionServiceTests.HandleDialogSelect_ReturnsUnsupportedTeamPortalForGroupedPlayerWithoutPackets`: validates a grouped player with registered team metadata reaches `UnsupportedTeamPortal`, preserves `RegisteredInstanceTransfer` metadata, and sends no packets.
+- Existing `PortalEntryInteractionServiceTests.HandleDialogSelect_SendsTeamRequirementFailurePacketBeforeUnsupportedFanout` continues to validate the no-group Java party-only failure packet path remains `ValidationRejected`.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `checkPlayerSize`, `PortalDialogAI.onDialogSelect`, and `WorldMapInstance.registerTeam`. No Java runtime execution, live client capture, encrypted socket validation, full AI dispatch, successful group transfer, cooldown mutation, or concurrency comparison was run.
+
+Remaining risks:
+- Team portals are still unsupported for successful entry; this unit only improves status/routing clarity.
+- Production dialog flow still stops before continuation transfer for blocked team plans, by design.
+- Group/alliance/league transfer fanout, full team aggregates, member iteration, capacity checks, cooldown add, and team lifecycle cleanup remain unimplemented.
+- `UnsupportedTeamPortal` is C#-specific status plumbing around a missing Java-positive path; it must be removed or changed once real team portal transfer is implemented.
+- Serialization/live packet behavior, reflection/JAXB behavior, date/time handling, precision/rounding, Java threading semantics, and live runtime comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 distinct unsupported-team preparation/dialog status surface over existing blocked team-plan metadata
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 9 successful group transfer, group allocation, full `registerTeam`, group member fanout, alliance transfer, league model/transfer, team cooldown handling, team lifecycle/concurrency, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; blocked team portal plans now have distinct preparation/dialog status, but successful team portal entry remains missing.
+
+Next recommended unit of work:
+- Start the smallest real group transfer building block: add a non-executing `GroupPortalTransferPlan` DTO that captures Java's `group != null`, registered instance reuse, fresh allocation need, max player capacity, and member object ids. Keep the dialog/transfer path blocked, but make the next transition from metadata to executable planning explicit and testable.
+
 ---
 
 ## Next Steps
