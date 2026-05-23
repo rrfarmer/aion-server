@@ -8844,6 +8844,45 @@ Summary metrics:
 Next recommended unit of work:
 - Continue remaining teleport/map-change completion paths outside kisk revive, or add SIEGE/FORT formation variant coverage if a compact fixture can be made without pulling in broader siege behavior.
 
+### Session 498 (May 23, 2026)
+- Added compact SIEGE/FORT formation walker variant coverage for the shared `TrySwapInactiveWalkerFormationVariant` hooks.
+- Extended the synthetic versioned formation fixture with an optional Java-style `zone_type="FORT"` polygon. The loader maps this to modeled `CreaturePvpZoneType.Siege`, matching the existing C# static-data bridge for Java FORT zones.
+- The new regression verifies active formation members enter modeled SIEGE counters after initial spawn/placement, inactive parked members have no counters, then a formation variant swap clears counters for parked active members and revalidates SIEGE counters for activated inactive members.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcSpawnServiceTests|FullyQualifiedName~CreaturePvpZoneRevalidationServiceTests|FullyQualifiedName~CreaturePvpZoneCounterServiceTests"` passes with 41 tests.
+
+#### Migration Parity Table - Session 498
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.spawnengine.InstanceWalkerFormations.changeCluster` | `Aion.GameServer.Services.WorldNpcSpawnService.TrySwapInactiveWalkerFormationVariant` | Formation Variant Swap | Partial | Regression Tested | Partial Parity | Formation variant swaps now have direct SIEGE/FORT counter coverage for parked and activated members. Java trigger callers from death/AI/instance callbacks remain future work. |
+| `com.aionemu.gameserver.spawnengine.WalkerGroup.spawn/despawn` | `WorldNpcSpawnService` formation add/remove hooks | Walker Formation Lifecycle | Partial | Regression Tested | Partial Parity | Regression proves active formation members enter SIEGE counters and parked members clear counters. Java full group movement state, instance callbacks, and controller side effects remain incomplete. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneClassName.FORT` / `com.aionemu.gameserver.model.siege.FortressLocation` | `Aion.GameServer.StaticData.CreaturePvpZones` + `CreaturePvpZoneType.Siege` | Static Data / Zone Boundary | Partial | Regression Tested | Partial Parity | Synthetic `zone_type="FORT"` fixture verifies the static-data mapping used by formation revalidation. Full Java fortress observers, ownership, shield, vulnerability, balance buffs, and siege handlers remain unported. |
+| `com.aionemu.gameserver.world.World.spawn` / `World.despawn` | Direct `_world.TryAddObject` / `_world.TryRemoveObject` inside formation swap | World Lifecycle Boundary | Partial | Regression Tested | Intentional Difference | C# revalidates and clears modeled counters immediately around direct world mutations because Java map regions/zone instances are not ported. Java zone handlers/controller callbacks are not executed. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.revalidateZones()` / `com.aionemu.gameserver.world.MapRegion.revalidateZones(Creature)` | `CreaturePvpZoneRevalidationService.Revalidate` from formation swap hooks | Zone Revalidation Boundary | Partial | Unit + Regression Tested | Partial Parity | Synthetic FORT geometry is exercised for formation variant swaps. Zone priorities, handler callbacks, neighboring regions, full-map zones, and live fortress state remain incomplete. |
+| `com.aionemu.gameserver.world.zone.PvPZoneInstance.onEnter/onLeave` with `ZoneType.SIEGE` counters | `CreaturePvpZoneCounterService` through formation swap hooks | Zone Callback Boundary | Partial | Unit + Regression Tested | Partial Parity | Test proves parked active formation SIEGE counters clear and activated inactive formation SIEGE counters enter. Java handler ordering, controller callbacks, and live siege side effects remain unverified. |
+
+Tests added:
+- `WorldNpcSpawnServiceTests.TrySwapInactiveWalkerFormationVariant_RevalidatesCreatureSiegeZoneCountersForActivatedAndParkedFormations`: loads synthetic versioned formation and FORT/SIEGE zone static data, verifies initial active formation SIEGE counters and inactive parked empty counters, swaps variants, then verifies parked active counters clear and activated inactive counters enter SIEGE without PVP counters.
+- Java comparison status: expectations are source-derived from Java `InstanceWalkerFormations.changeCluster`, `WalkerGroup.spawn/despawn`, FORT zone static-data semantics, `World.spawn/despawn`, `Creature.revalidateZones`, `MapRegion.revalidateZones`, and `PvPZoneInstance`/SIEGE counter behavior; no live Java runtime side-by-side validation or live siege-state validation was run.
+
+Remaining risks:
+- This unit covers synthetic FORT geometry only. Full Java fortress/siege behavior, observers, ownership, shields, vulnerability windows, balance buffs, and controller callbacks remain unported.
+- Formation swap trigger callers from Java death/AI/instance callbacks remain absent; this unit validates the service boundary once called.
+- C# clears modeled counters directly instead of executing Java zone `onLeave` handlers, controller callbacks, quest/material handlers, or fortress observers.
+- Java queued zone scheduling, full group AI movement, route event state, and live socket ordering remain unverified.
+- No packet serialization, database schema, date/time, reflection, or public protocol behavior changed. Threading remains immediate over the concurrent counter store rather than Java's zone scheduler.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 formation walker variant SIEGE/FORT counter lifecycle regression
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 6 live fortress/siege side effects, Java zone handlers/controller callbacks, formation trigger callers, Java queued scheduler/levels, full formation AI/movement parity, and live runtime ordering
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because remaining kisk revive cleanup, live team membership wiring, production socket-order validation, broader teleport/map-change zone revalidation, remaining direct-removal cleanup, generic visible-object cleanup, full dedicated kisk controller/AI, full NPC/dialog AI, resurrection skill/effect callers, per-zone bind membership, live option mutation callers, admin option consumers, world-map instance ownership, object iteration, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue remaining teleport/map-change completion paths outside kisk revive. Re-read Java `TeleportService`, `CM_TELEPORT_ANIMATION_DONE`, `CM_LEVEL_READY`, `World`, and `MapRegion`; then choose one non-kisk C# teleport/map-change completion path, mutate player position first, revalidate modeled PVP/FORT counters after the move, preserve packet ordering, and add a focused regression.
+
 ---
 
 ## Next Steps
