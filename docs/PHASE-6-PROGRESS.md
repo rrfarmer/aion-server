@@ -11008,6 +11008,59 @@ Summary metrics:
 Next recommended unit of work:
 - Start the group/alliance/league portal planning slice conservatively: extend the portal entry plan result to surface explicit unsupported team-portal reasons from the dialog caller with Java-shaped failure packets where known, while avoiding partial team transfer fanout until group/alliance runtime models are ready.
 
+### Session 548 (May 23, 2026)
+- Added `PortalEntryValidationService.ValidatePlayerSize`, mirroring Java `PortalService.checkPlayerSize` for the current pre-fanout team portal gate.
+- Moved team-sized portal rejection out of the old early unsupported exit and into the Java guard order after mentor/race/rank/title/quest validation, so known Java failure packets can be surfaced before the C# port reaches still-missing group/alliance/league transfer fanout.
+- Added Java-shaped system message factories for party-only, alliance-only, and league-only portal failures.
+- Group-sized portals now return the portal path `err_group` dialog page when present, otherwise `STR_MSG_ENTER_ONLY_PARTY_DON`.
+- Alliance-sized portals now return `STR_MSG_ENTER_ONLY_FORCE_DON`; league-sized portals return `STR_MSG_ENTER_ONLY_UNION_DON` because no C# league membership model exists yet.
+- Kept actual group/alliance/league portal registration, member fanout, instance reuse, and transfer execution blocked behind `UnsupportedTeamPortal` when the current C# marker says the player is already in the required team type.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests"` passes with 79 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1165 tests.
+
+#### Migration Parity Table - Session 548
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.checkPlayerSize` | `Aion.GameServer.Services.PortalEntryValidationService.ValidatePlayerSize` | Service / Validation | Partial | Unit Tested | Partial Parity | C# now emits Java-shaped rejection packets for players without the required group/alliance/league membership. Full team models, team id lookup, registration, and fanout remain missing. |
+| `com.aionemu.gameserver.services.teleport.PortalService.port` guard order | `Aion.GameServer.Services.PortalEntryValidationService.ValidatePortalEntryPlan` | Service / Planning | Partial | Unit Tested | Partial Parity | Team-size validation now runs after mentor/race/rank/title/quest guards, matching Java source order for non-admin callers. Admin/membership bypass behavior and supported team transfer continuation remain incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ENTER_ONLY_PARTY_DON` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.EnterOnlyPartyDon` | Packet Factory | Complete | Unit Tested | Needs Verification | Uses Java message id `1390256`; packet object id is asserted, but binary serialization and live-client display were not newly captured for this scenario. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ENTER_ONLY_FORCE_DON` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.EnterOnlyForceDon` | Packet Factory | Complete | Unit Tested | Needs Verification | Uses Java message id `1400544`; packet object id is asserted. Live socket/client comparison remains unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ENTER_ONLY_UNION_DON` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.EnterOnlyUnionDon` | Packet Factory | Complete | Unit Tested | Needs Verification | Uses Java message id `1401251`; C# has no league membership model yet, so league portals always reject at this guard. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DIALOG_WINDOW` for `PortalPath.getErrGroup` | `Aion.GameServer.Network.Aion.ServerPackets.SmDialogWindow` from `ValidatePlayerSize` | Packet | Partial | Unit Tested | Partial Parity | Group portals with `err_group` now return an `SM_DIALOG_WINDOW` failure packet. The test asserts packet type only because the C# packet does not expose dialog page fields; binary payload comparison is not newly added. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.isInGroup` | `Aion.GameServer.Model.GameObjects.Player.TeamMembership == Group` | Model Dependency | Partial | Unit Tested | Needs Verification | Current C# marker is a lightweight team-membership enum, not a Java `PlayerGroup` with team id/member collection. It is used only to avoid sending the no-group failure packet. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.isInAlliance` | `Aion.GameServer.Model.GameObjects.Player.TeamMembership == Alliance` | Model Dependency | Partial | Unit Tested | Needs Verification | Current C# marker can identify alliance presence, but lacks alliance/team id, online member fanout, registration, and distribution semantics. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.isInLeague` | Future C# league membership model | Model Dependency | Not Started | No Tests | Unknown | No C# league model exists, so league portal entry is rejected with the Java union-only message and remains blocked for actual entry. |
+| `com.aionemu.gameserver.dataholders.Portal2Data.getPortalDialogPath` plus dialog caller failure dispatch | `Aion.GameServer.Services.PortalEntryInteractionService.HandleDialogSelectAsync` | Caller Boundary | Partial | Unit Tested | Partial Parity | Dialog caller now sends the Java-shaped team requirement failure packet returned by planning and stops before unsupported team fanout. Full AI/dialog engine and live socket order remain unverified. |
+
+Tests added or extended:
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_GroupPortalWithoutGroupReturnsErrGroupDialogLikeJava`: validates a group-sized portal with `err_group` rejects with `SM_DIALOG_WINDOW`.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_GroupPortalWithoutErrGroupReturnsPartySystemMessageLikeJava`: validates group-sized portal without `err_group` rejects with message id `1390256`.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_AlliancePortalWithoutAllianceReturnsForceSystemMessageLikeJava`: validates alliance-sized portal rejects with message id `1400544`.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_LeaguePortalReturnsUnionSystemMessageUntilLeagueModelExists`: validates league-sized portal rejects with message id `1401251`.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_TeamMemberStillStopsBeforeUnsupportedFanout`: validates the C# port still blocks actual team portal entry once the no-team guard is satisfied.
+- `PortalEntryInteractionServiceTests.HandleDialogSelect_SendsTeamRequirementFailurePacketBeforeUnsupportedFanout`: validates the dialog caller sends the returned team requirement packet and stops at validation rejection.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `PortalService.checkPlayerSize`, `SM_SYSTEM_MESSAGE`, and `SM_DIALOG_WINDOW`. No Java runtime execution, live client capture, encrypted socket integration test, binary payload comparison for the new dialog packet, actual group/alliance/league team registration, or transfer fanout comparison was run.
+
+Remaining risks:
+- Group/alliance/league portals remain blocked after the requirement packet layer; this unit intentionally does not implement team transfer fanout.
+- The C# `PlayerTeamMembership` enum is not equivalent to Java `PlayerGroup`, `PlayerAlliance`, or league models and carries no team id, member list, online-state fanout, or concurrency behavior.
+- League membership is not modeled at all, so league portal behavior cannot be distinguished beyond the known Java failure packet.
+- Admin and membership bypass paths for team requirements remain conservative: the C# port still blocks actual team-sized entry because the downstream transfer path is missing.
+- `SM_DIALOG_WINDOW` err-group behavior is source-derived and type-tested, but the exact page id payload was not newly binary-compared.
+- Live packet ordering, encryption framing, client-observed text, reflection/JAXB data loading, threading/locking, date/time behavior, precision/rounding, and Java runtime comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 focused team-size validation guard plus 3 packet factory helpers over the existing portal planning/caller boundary
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 7 group portal fanout, alliance portal fanout, league portal fanout, Java team id registration, member transfer iteration, admin/membership team bypass entry, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; team portal failure packets are now represented, but successful team portal entry is still not implemented.
+
+Next recommended unit of work:
+- Continue the group/alliance/league portal planning slice by adding a minimal C# team-instance planning abstraction that can carry Java team ids and member lists without executing fanout yet. Start with group portals only: inspect Java `PlayerGroup`, `PlayerGroupService`, `InstanceService.getRegisteredInstance(mapId, teamId)`, and `PortalService.port` group branches, then add tests that a grouped player reaches an explicit blocked group-fanout plan with the Java team id preserved instead of a generic unsupported result.
+
 ---
 
 ## Next Steps
