@@ -14031,6 +14031,55 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance runtime parity by source-reading Java alliance brand handling (`TemporaryPlayerTeam.updateBrand/sendBrands`, alliance callers, and `SM_SHOW_BRAND`) and port a narrow runtime brand update/send-brands bridge around `PlayerAllianceRuntime`, or wire `CM_PLAYER_STATUS_INFO` command parsing if the packet caller can stay small and non-invasive.
 
+### Session 609 (May 23, 2026)
+- Source-read Java `TemporaryPlayerTeam.updateBrand`, `TemporaryPlayerTeam.sendBrands`, `SM_SHOW_BRAND`, `CM_SHOW_BRAND`, `PlayerAllianceEnteredEvent`, and the level-ready delayed `sendBrands` caller.
+- Added `PlayerAllianceBrandUpdatePlan` and `PlayerAllianceBrandIntent`.
+- Extended `PlayerAllianceRuntime` with alliance brand storage:
+  - `UpdateBrand` stores `brandId -> targetObjectId` and creates one `SM_SHOW_BRAND(brandId, targetObjectId)` intent per alliance member;
+  - `CreateSendBrandsIntent` creates a single-member `SM_SHOW_BRAND(currentBrandMap)` intent, including Java's empty-map reset behavior through the existing `SmShowBrand` packet.
+- Reused existing `SmShowBrand` serialization and packet tests for Java payload shape.
+- Kept `CM_SHOW_BRAND` parsing, leader/vice-captain authorization, no-team solo echo behavior, delayed level-ready send-brands scheduling, live socket sends, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerAllianceRuntimeTests|PlayerAllianceMemberInfoTests"` passes with 53 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1063 tests.
+
+#### Migration Parity Table - Session 609
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.TemporaryPlayerTeam` | `Aion.GameServer.Services.PlayerAllianceRuntime.UpdateBrand` / `CreateSendBrandsIntent` | Base Team Runtime Bridge | Partial | Regression Tested | Needs Verification | C# models brand storage, update broadcast intents, and send-current-brands intent for alliances. Java live `ConcurrentHashMap`, generic team base class reuse, socket sends, and delayed send-brands callers remain missing. Threading differs because C# uses the runtime `Lock`. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `PlayerAllianceRuntime` brand state | Team Runtime Bridge | Partial | Regression Tested | Needs Verification | Alliance runtime now owns brand map alongside members/ready status. Java service registry, live event integration, league behavior, and disband cleanup remain incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SHOW_BRAND` | `Aion.GameServer.Network.Aion.ServerPackets.SmShowBrand` through `PlayerAllianceBrandIntent` | Server Packet | Partial | Regression Tested | Needs Verification | Existing C# packet serializes Java single-brand and empty-map reset payloads; this unit validates alliance runtime callers. Java golden frames, encrypted opcode validation, and client validation remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceEnteredEvent` | `PlayerAllianceRuntime.CreateSendBrandsIntent` future caller | Event Dependency | Partial | Regression Tested as Runtime Helper | Needs Verification | Java sends current brand map to entering alliance member. C# has the intent helper but `PlayerAllianceEnteredPlanner` still only records `WouldSendBrands`; no composition is wired. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SHOW_BRAND` | Deferred caller around `PlayerAllianceRuntime.UpdateBrand` | Client Packet Dependency | Not Started | No Tests | Unknown | Java reads action, brand id, and target object id; no-team callers receive a solo echo, leaders/alliance captains update team brands. C# does not parse or dispatch this packet in this unit. Serialization differences for the client packet path remain unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_LEVEL_READY` delayed team brand resend | Deferred scheduler/caller around `CreateSendBrandsIntent` | Client Packet / Scheduler Dependency | Not Started | No Tests | Unknown | Java schedules delayed `team.sendBrands(activePlayer)` after level-ready. C# records no delayed send-brands behavior here; date/time scheduling remains deferred. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `PlayerAllianceBrandIntent` metadata | Runtime Dependency | Not Started | No Tests | Unknown | Java sends packets immediately. C# records send intents only. |
+
+Tests added:
+- `PlayerAllianceRuntimeTests.UpdateBrand_StoresBrandAndPlansAllianceBroadcastLikeJavaTemporaryPlayerTeam`: validates stored brand update, broadcast recipients, single-brand payload, and send-current-brands helper.
+- `PlayerAllianceRuntimeTests.CreateSendBrandsIntent_EmptyAllianceBrandMapResetsAllJavaBrands`: validates Java empty-map reset behavior emits 16 brand reset rows.
+- `PlayerAllianceRuntimeTests.AllianceBrandRuntime_ReturnsNullForUnknownAllianceOrRecipient`: validates missing alliance/member boundaries.
+- Java comparison status: expectations are source-derived from `TemporaryPlayerTeam.updateBrand`, `TemporaryPlayerTeam.sendBrands`, `SM_SHOW_BRAND.writeImpl`, `CM_SHOW_BRAND.runImpl`, `PlayerAllianceEnteredEvent.handleEvent`, and `CM_LEVEL_READY`. No Java runtime execution, Java-generated golden vector, live `ConcurrentHashMap` comparison, command packet decoding comparison, socket send comparison, delayed scheduler comparison, threading/lock comparison, reflection behavior, encrypted frame comparison, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- `CM_SHOW_BRAND` command decoding, authorization, and solo echo are not implemented.
+- Delayed level-ready `sendBrands` scheduling is not implemented.
+- `PlayerAllianceEnteredPlanner` still records `WouldSendBrands` instead of composing the runtime brand intent.
+- Live `PacketSendUtility` sends are represented as metadata only.
+- Java thread/concurrent-map behavior is source-derived but not runtime-compared.
+- Java golden byte vectors, encrypted opcode/frame validation, and real-client validation remain unavailable.
+- Reflection and precision/rounding are not involved; date/time handling remains deferred for delayed level-ready brand resend.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 alliance brand runtime/send-brands planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 `CM_SHOW_BRAND` caller, command authorization, no-team solo echo, delayed level-ready send-brands scheduler, entered-event composition, live socket send, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; alliance brand runtime state and packet intents are modeled, but command wiring and delayed resend behavior remain incomplete.
+
+Next recommended unit of work:
+- Continue alliance command wiring by adding a narrow `CM_SHOW_BRAND` service planner around current team state: no-team solo echo, group leader update via existing `PlayerGroupRuntime.UpdateBrand`, alliance leader/vice-captain update via `PlayerAllianceRuntime.UpdateBrand`, and unauthorized no-op. Keep actual client packet parser/socket sends deferred if needed.
+
 ---
 
 ## Next Steps
