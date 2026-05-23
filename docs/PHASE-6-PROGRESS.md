@@ -11868,6 +11868,52 @@ Summary metrics:
 Next recommended unit of work:
 - Add the first login/logout bridge for the runtime group wrapper: source-derive a small `UpdateMemberLastOnlineTime` or `OnPlayerLogout` method that looks up the wrapper by player object id and updates last-online time without scheduling removal. Unit-test deterministic timestamp mutation and no-op behavior for players without runtime group membership. Keep offline checker scheduling, group events, packet fanout, and disband behavior deferred.
 
+### Session 566 (May 23, 2026)
+- Added the first narrow logout bridge for runtime group member last-online state.
+- `PlayerGroupRuntime.UpdateMemberLastOnlineTime(Player player, DateTimeOffset now)` now looks up the player's current runtime group wrapper and updates `PlayerGroupMember.LastOnlineTimeMillis`.
+- The method returns `true` only when a wrapper was found and updated; no-group and stale-group metadata return `false` without mutating membership.
+- Kept Java `PlayerDisconnectedEvent`, login reconnect event handling, offline checker scheduling/removal, packet fanout, disband behavior, and `GroupConfig.GROUP_REMOVE_TIME` out of scope.
+- Added deterministic tests for grouped-player timestamp mutation, no-group no-op behavior, and stale group metadata no-op behavior.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests"` passes with 87 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1186 tests.
+
+#### Migration Parity Table - Session 566
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.onPlayerLogout` | `Aion.GameServer.Services.PlayerGroupRuntime.UpdateMemberLastOnlineTime` | Service Lifecycle Slice | Partial | Unit Tested | Needs Verification | C# updates the wrapper last-online timestamp when the player has runtime group membership. It does not dispatch `PlayerDisconnectedEvent`, send packets, or integrate with the real logout pipeline. |
+| `com.aionemu.gameserver.model.team.PlayerTeamMember.updateLastOnlineTime` | `Aion.GameServer.Model.GameObjects.PlayerGroupMember.UpdateLastOnlineTime` | Date/Time Helper | Partial | Unit Tested | Needs Verification | C# accepts deterministic `DateTimeOffset now`; Java reads `System.currentTimeMillis`. Runtime clock behavior and scheduler timing remain unverified. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupMember` | `Aion.GameServer.Model.GameObjects.PlayerGroupMember` | Wrapper | Partial | Regression Tested | Needs Verification | Wrapper timestamp can now be updated through the runtime logout bridge. Java wrapper identity and event lifecycle are still broader than the C# bridge. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.getMember` | `PlayerGroupRuntime.GetMember` / `UpdateMemberLastOnlineTime` | Service Query Dependency | Partial | Regression Tested | Needs Verification | C# lookup is by current team id and object id. Stale/no-group cases return false; Java normally assumes `player.getPlayerGroup()` and `group.getMember()` stay coherent. |
+| `com.aionemu.gameserver.model.team.group.PlayerDisconnectedEvent` | No C# equivalent in this unit | Event Dependency | Not Started | No Tests | Unknown | Java fires this event after updating last-online time. C# does not yet model disconnected event ordering, packet fanout, or member online-state notifications. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.OfflinePlayerChecker` | No C# equivalent | Scheduler Dependency | Not Started | No Tests | Unknown | Deferred. C# does not remove offline members based on `lastOnlineTime + GroupConfig.GROUP_REMOVE_TIME`. |
+| `com.aionemu.gameserver.configs.main.GroupConfig.GROUP_REMOVE_TIME` | No C# equivalent | Config Dependency | Not Started | No Tests | Unknown | Newly relevant through the offline checker. No config binding or scheduler behavior exists for group removal timeout. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.UpdateMemberLastOnlineTime_UpdatesGroupedMemberLikeJavaLogout`: validates deterministic timestamp update for the matching grouped member only and no membership mutation.
+- `PlayerGroupRuntimeTests.UpdateMemberLastOnlineTime_ReturnsFalseForPlayerWithoutRuntimeGroup`: validates no-group players are explicit no-ops.
+- `PlayerGroupRuntimeTests.UpdateMemberLastOnlineTime_ReturnsFalseForStaleGroupMetadataWithoutMutatingRuntime`: validates stale player group metadata returns false, preserves the stale player fields, and leaves runtime membership/timestamps unchanged.
+- Java comparison status: expectations are source-derived from `PlayerGroupService.onPlayerLogout`, `PlayerTeamMember.updateLastOnlineTime`, and `GeneralTeam.getMember`. No Java runtime execution, real logout pipeline validation, event ordering comparison, offline checker comparison, system-clock comparison, packet fanout comparison, or live client validation was run.
+
+Remaining risks:
+- C# does not call this bridge from the real player logout pipeline yet.
+- Java `PlayerDisconnectedEvent` behavior is entirely unported.
+- Offline removal scheduling, timeout config, and disband/leave-timeout events remain missing.
+- C# returns `false` for stale/no-group cases; Java's normal object graph should keep those coherent and may throw if it does not. This is an intentional defensive bridge until full lifecycle parity exists.
+- Threading remains a C# `Lock`; Java uses team locks/event dispatch plus concurrent maps.
+- Serialization is unchanged. Reflection/JAXB behavior is not involved. Precision/rounding is not involved. Date/time is deterministic in tests but not runtime-clock verified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 narrow logout last-online bridge
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 9 real logout pipeline integration, `PlayerDisconnectedEvent`, login reconnect event, offline checker scheduler, `GroupConfig.GROUP_REMOVE_TIME`, leave-timeout/disband events, packet fanout, full team concurrency semantics, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; runtime group wrapper logout metadata can now update deterministically, but full Java group lifecycle remains missing.
+
+Next recommended unit of work:
+- Add the matching narrow login bridge for runtime group membership: source-derive `TryReconnectMember` / `OnPlayerLogin` to scan runtime groups for a member object id and refresh the wrapper/player reference only if needed, while documenting that Java `PlayerConnectedEvent`, leader recovery, packet fanout, and offline-expiry behavior remain deferred.
+
 ---
 
 ## Next Steps
