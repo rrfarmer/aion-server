@@ -6490,6 +6490,11 @@ Summary metrics:
 Next recommended unit of work:
 - Either apply Java `ZoneInstance.canFly/canGlide` precedence to the current polygon zone bridge using zone template `flags`, or build the focused connection/socket-level tests for the fly-zone transition fanout path before changing more runtime behavior.
 
+### Session 441 (May 23, 2026)
+- Created `docs/Phase-6BP-Completion.md` as the next handoff after the 6BO continuation, summarizing Sessions 438-440, the three committed fly-zone transition/map-option units, the current 952-test validation baseline, important limits, and the next focused unit queue.
+- Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx` passing with 952 tests from Session 440.
+- Next recommended unit remains either focused connection/socket-level tests for the fly-zone transition fanout path, or carefully applying Java `ZoneInstance.canFly/canGlide` precedence only to zone option checks that actually consume those helpers. Do not apply that precedence blindly to `ZoneType.FLY` polygon membership.
+
 ---
 
 ## Next Steps
