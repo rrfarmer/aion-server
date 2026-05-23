@@ -5431,6 +5431,66 @@ Summary metrics:
 Next recommended unit of work:
 - Continue reward/distribution DP callers now that quest DP reward has a packeted boundary. Good bounded candidates are Java `NpcController.doReward` solo DP rewards or `PlayerTeamDistributionService.doReward` team DP distribution if enough C# combat/team scaffolding exists. If both require inventing broad systems, fall back to the next contained resource-side task: live speed snapshot support for `CHANGE_SPEED` after DP mutations.
 
+### Session 419 (May 23, 2026)
+- Added a focused C# `WorldNpcSoloDpRewardService.ApplySoloDpRewardAsync` boundary for the Java `NpcController.doReward` solo-player DP reward branch.
+- Ported the source-local DP reward math used by that branch: `StatFunctions.calculateDPReward`, `XPRewardEnum.xpRewardFrom`, `StatFunctions.calculateRatingMultiplier`, Java float-to-int narrowing, and damage-percent truncation.
+- Kept the important Java behavioral difference from quest rewards: NPC solo reward calls `player.getCommonData().addDp(rewardDp)` even when the scaled reward becomes zero, so C# still routes a zero reward through the packeted DP boundary and emits the Java DP packet trio for online players.
+- Routed the final reward through `WorldNpcResourceStatsService.AddPlayerDpAsync`, preserving visible `SmDpInfo`, owner `SmStatsInfo`, then owner `SmStatUpdateDp` ordering for online advanced-class players.
+- Added explicit missing-player, missing-NPC, dead-player, missing-max-DP, and starting-class states so later death/reward orchestration can distinguish Java branch skips from DP-boundary skips.
+- Registered `WorldNpcSoloDpRewardService` in game-server DI for future NPC-death reward wiring.
+- Current gaps in this cluster: the service is not yet invoked from the live NPC death/reward loop, and Java `TeamDamageList`, temporary-team reward distribution, instance handlers, quest kill notification, PVE kill events, hunting EXP, PVE AP, loot-reward AI checks, and real `Rates.DP_PVE` membership/config lookup remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcSoloDpRewardServiceTests|FullyQualifiedName~QuestRewardServiceTests|FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests|FullyQualifiedName~GamePacketTests"` passes with 120 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "WorldNpcSoloDpRewardServiceTests|QuestRewardServiceTests|PlayerEnterWorldServiceTests|PlayerVisualStatsUpdateServiceTests|WorldNpcResourceStatsServiceTests|CraftServiceTests|SkillDpConditionServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 309 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 928 tests.
+
+#### Migration Parity Table - Session 419
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.NpcController.doReward` solo-player DP branch | `Aion.GameServer.Services.WorldNpcSoloDpRewardService.ApplySoloDpRewardAsync` | Service Boundary | Partial | Unit Tested | Partial Parity | Covers solo-player DP calculation and mutation only. Full death/reward loop orchestration remains pending. |
+| `com.aionemu.gameserver.utils.stats.StatFunctions.calculateDPReward` | `WorldNpcSoloDpRewardService.CalculateDpReward` | Formula / Service Helper | Partial | Unit Tested | Partial Parity | C# ports level, rating, XP-percentage, and rate multiplication math. Live `Rates.DP_PVE` lookup is passed as an explicit rate until rate config is modeled. |
+| `com.aionemu.gameserver.utils.stats.XPRewardEnum` | `WorldNpcSoloDpRewardService.GetXpRewardPercent` | Formula Table | Ported | Unit Tested | Needs Runtime Verification | Static table is source-derived, including lower and upper clamping. No Java runtime side-by-side validation was run. |
+| `com.aionemu.gameserver.model.templates.npc.NpcRating` | `WorldNpcSoloDpRewardService.GetRatingMultiplier` over `NpcTemplateSummary.Rating` | Template Enum / Formula Table | Partial | Unit Tested | Partial Parity | Uses string ratings from existing C# NPC templates. Unknown ratings follow Java default multiplier `1`. |
+| `com.aionemu.gameserver.model.gameobjects.player.Rates.DP_PVE` | Explicit `dpPveRate` parameter to `CalculateDpReward` / `ApplySoloDpRewardAsync` | Rate Config | Partial | Unit Tested | Needs Verification | Java selects membership/config rates from `RatesConfig.DP_PVE_RATES`; C# caller supplies the effective multiplier for now. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `WorldNpcResourceStatsService.AddPlayerDpAsync` reused by solo reward service | Runtime / Service Boundary | Partial | Regression Tested | Partial Parity | Solo NPC DP reward now uses shared packeted DP mutation. Live `PlayerGameStats.getMaxDp()` lookup remains absent. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmDpInfo` | Packet | Partial | Regression Tested | Partial Parity | Reused for visible solo NPC DP reward broadcast, including zero-delta rewards. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATS_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatsInfo` | Packet | Partial | Regression Tested | Partial Parity | Reused for owner visual stats after solo NPC DP reward mutation. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_DP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateDp` | Packet | Partial | Regression Tested | Partial Parity | Reused for owner DP stat update after visual stats. |
+| `com.aionemu.gameserver.model.team.common.legacy.TeamDamageList` and `DamageInfo` | Explicit `damagePercent` input to `ApplySoloDpRewardAsync` | Combat Reward Input | Not Started | No Tests | Needs Verification | C# does not yet build Java final damage lists or most-damage winner data for rewards. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamDistributionService` | No C# team DP distribution reward service yet | Service Boundary | Not Started | No Tests | Needs Verification | Temporary team reward branch remains pending. |
+| `com.aionemu.gameserver.questEngine.QuestEngine.onKill` | No C# kill quest notification from NPC reward yet | Quest Event | Not Started | No Tests | Needs Verification | Java skips this only for `PvpMapHandler`; C# reward loop is not wired. |
+| `com.aionemu.gameserver.services.EventService.onPveKill` | No C# PVE kill event reward hook yet | Event Service | Not Started | No Tests | Needs Verification | PVE kill event side effects remain pending. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData.addExp` and `Rates.XP_HUNTING` | No C# NPC hunting EXP reward branch yet | Progression / Reward | Not Started | No Tests | Needs Verification | EXP calculation, NPC l10n, rate caps, and packets remain outside this DP slice. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService.addAp`; `StatFunctions.calculatePvEApGained`; `AIQuestion.REWARD_AP` | No C# NPC PVE AP reward branch yet | Abyss Reward | Not Started | No Tests | Needs Verification | AP reward AI question, instance AP multiplier, and AP side effects remain pending. |
+| `AIQuestion.REWARD_LOOT` and NPC reward loot branch | Existing drop/death workflow slices only; no direct `NpcController.doReward` caller yet | Loot Reward | Partial | No Reward Caller Tests | Needs Verification | C# has drop workflow work, but Java reward-loop AI gating and winner routing are not wired here. |
+| `InstanceHandler`, `PvpMapHandler`, and reward multipliers | No C# reward-loop instance-handler bridge yet | Instance / Reward Context | Not Started | No Tests | Needs Verification | Java uses instance EXP/AP multipliers and PVP-map quest-notification suppression around this branch. |
+
+Tests added or extended:
+- `WorldNpcSoloDpRewardServiceTests.ApplySoloDpRewardAsync_CalculatesScalesAndAddsDpThroughPacketedBoundary`: validates Java DP formula, damage-percent truncation, DP mutation, and packet order.
+- `WorldNpcSoloDpRewardServiceTests.ApplySoloDpRewardAsync_AddsZeroScaledDpAndStillSendsJavaDpPackets`: validates the NPC reward branch has no zero-DP guard after scaling.
+- `WorldNpcSoloDpRewardServiceTests.CalculateDpReward_MatchesJavaRatingAndLevelTables`: validates rating multipliers and XP reward percentages.
+- `WorldNpcSoloDpRewardServiceTests.CalculateDpReward_AppliesJavaRateAndDamageTruncation`: validates explicit DP-PVE rate multiplication, damage scaling, and NaN-to-zero Java cast behavior.
+- `WorldNpcSoloDpRewardServiceTests.ApplySoloDpRewardAsync_SkipsMissingDeadAndBoundaryCases`: validates missing/dead inputs and shared DP-boundary skip states.
+- Java comparison status: tests are source-derived from Java `NpcController.doReward`, `StatFunctions.calculateDPReward`, `XPRewardEnum`, `Rates.DP_PVE`, `PlayerCommonData.addDp/setDp`, `SM_DP_INFO`, `SM_STATS_INFO`, and `SM_STATUPDATE_DP`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- The service is still an isolated boundary and is not invoked from the live NPC death flow.
+- The caller must supply `damagePercent`, `maxDp`, and the effective `dpPveRate` until C# has Java final damage lists, live max-DP lookup, and rate/membership config at this boundary.
+- Team DP rewards, quest kill notification, event callbacks, EXP rewards, AP rewards, and loot winner routing remain unported from the surrounding Java branch.
+- C# still sends owner visual stats but does not emit `CHANGE_SPEED` without a live speed snapshot.
+- Reflection and date/time are not involved. Threading parity remains approximate because Java reward mutation is synchronous while C# packet delivery is async through the registry.
+
+Summary metrics:
+- Total Java artifacts discovered: 17
+- Total artifacts ported: 1 partial solo NPC DP reward service boundary plus source-derived XP/rating helper tables
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 17
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because the live NPC death/reward loop, team distribution, PVP reward DP callers, full quest reward pipeline, speed snapshot/cached-stat parity, group stat fanout, restore/flight timers, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue reward/distribution DP callers with the next bounded branch. Good candidates are Java `PvpService.doReward` DP gain if existing C# abyss/player-rank context is sufficient, or `PlayerTeamDistributionService.doReward` only if enough team-member/damage scaffolding exists. If both would require broad new runtime systems, switch to live speed snapshot support so DP mutations can emit `CHANGE_SPEED` like Java `PlayerGameStats.checkSpeedStats`.
+
 ---
 
 ## Next Steps
