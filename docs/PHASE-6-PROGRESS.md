@@ -13482,6 +13482,63 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance event parity by source-reading `PlayerAllianceEnteredEvent`, `PlayerAllianceLeavedEvent`, `PlayerConnectedEvent`, and `PlayerDisconnectedEvent`, then add a focused non-sending plan for alliance enter/connect/disconnect info fanout using the existing `SmAllianceInfo` and `SmAllianceMemberInfo` packet surfaces. Keep live membership mutation, disband logic, timeout scheduling, and socket fanout deferred.
 
+### Session 599 (May 23, 2026)
+- Source-read Java `PlayerAllianceEnteredEvent`, `PlayerConnectedEvent`, `PlayerDisconnectedEvent`, and `PlayerAllianceLeavedEvent`.
+- Added a first alliance connect/reconnect fanout slice for Java `PlayerConnectedEvent`.
+- Added ordered mixed packet-intent DTOs:
+  - `PlayerAllianceConnectedPlan`;
+  - `PlayerAlliancePacketIntent`;
+  - `PlayerAlliancePacketIntentKind`.
+- Added `PlayerAllianceConnectedPlanner.CreateConnectedPlan`.
+- Modeled Java `PlayerConnectedEvent.handleEvent` packet order after the remove/add member refresh boundary:
+  - send `SM_ALLIANCE_INFO(alliance)` to the reconnecting player;
+  - send `SM_ALLIANCE_MEMBER_INFO(connectedMember, RECONNECT)` to the reconnecting player;
+  - for each other alliance member, send `SM_ALLIANCE_MEMBER_INFO(connectedMember, RECONNECT)` to that member;
+  - then send `SM_ALLIANCE_MEMBER_INFO(member, RECONNECT)` back to the reconnecting player.
+- Reused `SmAllianceInfo` and `SmAllianceMemberInfo` so the reconnect plan can create serializable non-league packet bodies.
+- Kept live alliance member wrapper replacement, actual `alliance.removeMember/addMember`, socket sends, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests|FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 143 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1241 tests.
+
+#### Migration Parity Table - Session 599
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerConnectedEvent` | `Aion.GameServer.Services.PlayerAllianceConnectedPlanner` / `PlayerAllianceConnectedPlan` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# models the source-derived reconnect packet order and missing connected-member boundary. It does not replace the live alliance member wrapper, mutate `PlayerAlliance`, or execute socket sends. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` via `PlayerAlliancePacketIntent` | Server Packet | Partial | Regression Tested | Needs Verification | Reconnect sends a serialized non-league alliance-info packet to the reconnecting player. League rows, golden bytes, encoded frames, and live sends remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` via `PlayerAlliancePacketIntent` | Server Packet | Partial | Regression Tested | Needs Verification | Reconnect `SM_ALLIANCE_MEMBER_INFO` packets are serialized through the existing id-13 `Reconnect` descriptor. Live member wrapper metadata, Java golden bytes, and encoded frames remain missing. |
+| `com.aionemu.gameserver.model.team.common.legacy.PlayerAllianceEvent.RECONNECT` | `Aion.GameServer.Services.PlayerAllianceMemberInfoEvent.Reconnect` / `PlayerAllianceEvent.Reconnect` | Enum / Packet Descriptor | Partial | Unit Tested | Needs Verification | C# preserves Java event identity and wire id `13` for reconnect packet planning. Java enum runtime comparison is still missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceMember` | `PlayerAllianceMemberInfoPacketPlan.FromPlayer` direct player input | Team Member Dependency | Partial | Regression Tested | Needs Verification | Java creates a new `PlayerAllianceMember(connected)` and iterates member wrappers. C# still bypasses full alliance-member wrappers and live group/role metadata. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | Snapshot member inputs in `PlayerAllianceConnectedPlanner` | Team Runtime Dependency | Not Started | No Tests | Unknown | Full live alliance runtime remains missing: remove/add member refresh, member wrapper collection, online/offline semantics, and iteration order from Java runtime. |
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceEnteredEvent` | Source-read dependency; not implemented in this unit | Event Dependency | Not Started | No Tests | Unknown | Newly read. Java enter has mixed `SM_ALLIANCE_INFO`, system messages, brands, member-info backfill, abyss-rank broadcast, league broadcast, and `super.handleEvent`; deferred. |
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerDisconnectedEvent` | Source-read dependency; not implemented in this unit | Event Dependency | Not Started | No Tests | Unknown | Newly read. Java disconnect sends offline system/member-info/alliance-info packets, may trigger leader change, disband, or league broadcast; deferred. |
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceLeavedEvent` | Source-read dependency; not implemented in this unit | Event Dependency | Not Started | No Tests | Unknown | Newly read. Java leave removes vice-captain id/member, sends reason-specific system messages, member leave packets, alliance info, disband/league side effects; deferred. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.ConnectedPlanner_PlansReconnectPacketOrderLikeJavaPlayerConnectedEvent`: validates the source-derived reconnect packet sequence, recipients, subjects, `SM_ALLIANCE_INFO` payload, and serialized `RECONNECT` member-info payloads.
+- `PlayerAllianceMemberInfoTests.ConnectedPlanner_ReturnsNullForMissingConnectedMemberLikeJavaConditionBoundary`: validates the planner does not emit reconnect packets when the connected member snapshot is absent.
+- Java comparison status: expectations are source-derived from `PlayerConnectedEvent.handleEvent`, `SM_ALLIANCE_INFO.writeImpl`, and `SM_ALLIANCE_MEMBER_INFO.writeImpl`. No Java runtime execution, Java-generated golden vector, live alliance mutation comparison, socket fanout comparison, encoded frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Live `PlayerAlliance.removeMember/addMember` reconnect wrapper replacement is not implemented.
+- Java alliance member wrapper metadata and live iteration order are not runtime-compared.
+- `PlayerAllianceEnteredEvent`, `PlayerDisconnectedEvent`, and `PlayerAllianceLeavedEvent` remain source-read only.
+- System-message factories for enter/leave/disconnect side effects are still incomplete.
+- Live socket fanout and Java threading/event-dispatch behavior are not runtime-compared.
+- Java golden byte vectors and encoded-frame validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 alliance reconnect fanout planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 9 live alliance runtime, live member wrapper replacement, enter fanout, disconnect fanout, leave fanout, system-message side effects, Java runtime ordering comparison, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; alliance reconnect packet order is now modeled, but enter/leave/disconnect and live alliance runtime behavior remain incomplete.
+
+Next recommended unit of work:
+- Continue alliance event fanout parity with `PlayerAllianceEnteredEvent`: add a non-sending ordered packet/system-message plan for the invited player and existing members, including `SM_ALLIANCE_INFO`, `SM_ALLIANCE_MEMBER_INFO(JOIN/ENTER)`, `STR_FORCE_ENTERED_FORCE`, and `STR_FORCE_HE_ENTERED_FORCE`. Keep brands, abyss-rank broadcast, live add-player mutation, league broadcast, and socket sends deferred unless safe packet surfaces already exist.
+
 ---
 
 ## Next Steps
