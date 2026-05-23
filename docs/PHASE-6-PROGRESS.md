@@ -13924,6 +13924,56 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance service parity by adding a narrow authorization/failure-message planner for `PlayerAllianceService.changeMemberGroup`: model no-alliance `STR_FORCE_YOU_ARE_NOT_FORCE_MEMBER`, no-rights `STR_FORCE_RIGHT_NOT_HAVE`, and authorized dispatch to `PlayerAllianceRuntime.ChangeMemberGroup`. Keep command packet decoding and live socket sends deferred.
 
+### Session 607 (May 23, 2026)
+- Source-read Java `SM_SYSTEM_MESSAGE.STR_FORCE_RIGHT_NOT_HAVE` and `STR_FORCE_YOU_ARE_NOT_FORCE_MEMBER` ids used by `PlayerAllianceService.changeMemberGroup`.
+- Added `SmSystemMessage.ForceRightNotHave()` for Java id `1300976`.
+- Added `SmSystemMessage.ForceYouAreNotForceMember()` for Java id `1301015`.
+- Added `PlayerAllianceGroupChangeServicePlanner` and `PlayerAllianceGroupChangeServicePlan`:
+  - no current alliance returns a system-message intent to the caller;
+  - caller without leader/vice-captain rights returns a no-rights system-message intent;
+  - leader or vice-captain dispatches to `PlayerAllianceRuntime.ChangeMemberGroup`;
+  - missing event targets surface as `EventSkipped`, preserving Java `ChangeMemberGroupEvent` early-return behavior.
+- Kept client command packet decoding, live `PacketSendUtility`, socket sends, Java `PlayerAllianceService` static registry lookup, and runtime comparison deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerAllianceRuntimeTests|PlayerAllianceMemberInfoTests"` passes with 44 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1054 tests.
+
+#### Migration Parity Table - Session 607
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.changeMemberGroup` | `Aion.GameServer.Services.PlayerAllianceGroupChangeServicePlanner` / `PlayerAllianceGroupChangeServicePlan` | Service Planning Bridge | Partial | Regression Tested | Needs Verification | C# models no-alliance/no-rights failures and authorized dispatch into the runtime mutation. Java static service registry, `PacketSendUtility`, live sockets, command packet caller, and full event queue/lock comparison remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance.isSomeCaptain` | `PlayerAllianceRuntime.IsLeader` + `IsViceCaptain` checks in `PlayerAllianceGroupChangeServicePlanner` | Authorization Boundary | Partial | Regression Tested | Needs Verification | C# treats leader or tracked vice-captain id as authorized. Java collection ownership and concurrent vice-captain mutation remain not runtime-compared. |
+| `com.aionemu.gameserver.model.team.alliance.events.ChangeMemberGroupEvent` | `PlayerAllianceRuntime.ChangeMemberGroup` through service planner | Event Runtime/Planning Bridge | Partial | Regression Tested | Needs Verification | Authorized service dispatch invokes the runtime move/swap bridge. Java live `alliance.onEvent` lock/check wrapper and live `sendPackets` remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_RIGHT_NOT_HAVE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceRightNotHave` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Factory returns Java id `1300976`; no Java frame comparison or live socket validation was run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_YOU_ARE_NOT_FORCE_MEMBER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceYouAreNotForceMember` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Factory returns Java id `1301015`; no Java frame comparison or live socket validation was run. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `PlayerAllianceGroupChangeServicePlan.SystemMessageIntent` metadata | Runtime Dependency | Not Started | No Tests | Unknown | Java sends packets immediately. C# records send intents only. |
+
+Tests added:
+- `PlayerAllianceRuntimeTests.GroupChangeServicePlanner_ReturnsNotAllianceMemberMessageLikeJavaService`: validates no-alliance status and message id `1301015`.
+- `PlayerAllianceRuntimeTests.GroupChangeServicePlanner_ReturnsNoRightsMessageForNonCaptainLikeJavaService`: validates no-rights status, message id `1300976`, and no runtime mutation.
+- `PlayerAllianceRuntimeTests.GroupChangeServicePlanner_DispatchesForLeaderAndViceCaptainLikeJavaService`: validates leader and vice-captain authorization dispatch to the runtime mutation.
+- `PlayerAllianceRuntimeTests.GroupChangeServicePlanner_ReportsSkippedWhenJavaEventTargetAlreadyLeft`: validates authorized dispatch reports Java-style skipped event when the target member is missing.
+- Java comparison status: expectations are source-derived from `PlayerAllianceService.changeMemberGroup`, `PlayerAlliance.isSomeCaptain`, `ChangeMemberGroupEvent.handleEvent`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live static service registry comparison, command packet decoding comparison, socket send comparison, threading/lock comparison, reflection behavior, serialization frame comparison, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Command packet decoding and caller wiring are not implemented.
+- Live `PacketSendUtility` sends are represented as metadata only.
+- Java static alliance registry lookup is not ported; the planner uses the runtime snapshot attached to the caller.
+- Java `onEvent` locking/threading behavior remains unverified.
+- Java golden byte vectors and encoded-frame validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 alliance group-change service authorization/failure-message planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 7 command packet caller, live static service registry, live socket send, Java `onEvent` locking comparison, Java runtime ordering comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; alliance group-change service behavior is now planned through authorization and runtime dispatch, but live command/socket integration remains incomplete.
+
+Next recommended unit of work:
+- Continue alliance event parity by source-reading `CheckAllianceReadyEvent` and porting a narrow ready-check planner/runtime status update around `PlayerAllianceRuntime`, including Java `allianceReadyStatus` handling and any system/member packet outputs. Keep client command decoding and live socket sends deferred.
+
 ---
 
 ## Next Steps
