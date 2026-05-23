@@ -8689,6 +8689,47 @@ Summary metrics:
 Next recommended unit of work:
 - Add a dedicated kisk save-failure rollback regression now that direct creature-zone cleanup hooks exist, then continue a broader audit of generic `World.TryRemoveObject` callers that remove `WorldNpc`, `PostmanNpc`, or future creature-like objects outside `WorldNpcSpawnService`.
 
+### Session 494 (May 23, 2026)
+- Added a dedicated regression for the kisk item-use save-failure rollback branch that was wired in Session 491 but previously lacked an isolated persistence failure fixture.
+- Made `EmptyPlayerEnterWorldRepository` configurable for `SaveItemUseSourceMutationAsync` success/failure while preserving the existing default success behavior.
+- Extended the connection test harness so `GameServerConnection.CompleteToyPetSpawnUseItemAsync` can be exercised with a real `PlayerEnterWorldService` and a failing source-item mutation repository.
+- The new regression lets the kisk spawn into the C# world and enter real Java static PVP geometry first, then forces the source-item persistence mutation to fail and verifies rollback world removal, empty PVP/FORT counters, unchanged player inventory, no runtime kisk registration, no NPC visibility refresh, and released object ID reuse.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests|FullyQualifiedName~CreaturePvpZoneRevalidationServiceTests|FullyQualifiedName~CreaturePvpZoneCounterServiceTests"` passes with 17 tests.
+
+#### Migration Parity Table - Session 494
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.ToyPetSpawnAction.act` | `Aion.GameServer.Network.Aion.GameServerConnection.CompleteToyPetSpawnUseItemAsync` | Item-Use Spawn Boundary | Partial | Regression Tested | Partial Parity | Save-failure rollback after kisk world insertion is now covered. Java decreases inventory before spawn and only spawns after successful inventory mutation; C# persists source mutation after world add and rolls back on failure, an intentional ordering difference in the current persistence model. |
+| `com.aionemu.gameserver.spawnengine.VisibleObjectSpawner.spawnKisk` | `PlayerKiskSpawnService.CreatePlan` + `GameServerConnection.RevalidateKiskCreaturePvpZones` | Kisk Spawn Boundary | Partial | Integration + Regression Tested | Partial Parity | Regression confirms spawned kisk position enters real Java PVP geometry before rollback. Full `KiskController`, known-list, AI, dialog, team/legion ownership, and controller callbacks remain incomplete. |
+| `com.aionemu.gameserver.services.KiskService.regKisk` | `PlayerKiskRegistry.RegisterKisk` from `CompleteToyPetSpawnUseItemAsync` | Kisk Registry Boundary | Partial | Regression Tested | Partial Parity | Rollback test verifies failed source persistence does not register the kisk runtime state. Java registration ordering after successful `decreaseByObjectId` remains broader live-flow work. |
+| `com.aionemu.gameserver.world.World.spawn` / `World.despawn` | Direct `_world.TryAddObject` and rollback `_world.TryRemoveObject` in `CompleteToyPetSpawnUseItemAsync` | World Lifecycle Boundary | Partial | Regression Tested | Intentional Difference | C# directly revalidates after add and clears modeled counters after rollback removal because full Java map regions/zone instances are not ported. Java zone handlers/controller callbacks are not executed. |
+| `com.aionemu.gameserver.utils.idfactory.IDFactory.releaseId` | `Aion.GameServer.Utils.IdFactory.IDFactory.ReleaseId` rollback path | Utility | Partial | Regression Tested | Partial Parity | Regression confirms the kisk object ID is reusable after rollback release. Java startup preload/invalid-id edge cases are covered elsewhere and not revalidated in this slice. |
+| `com.aionemu.gameserver.world.zone.PvPZoneInstance.onEnter/onLeave` | `CreaturePvpZoneCounterService` through kisk spawn rollback hooks | Zone Callback Boundary | Partial | Unit + Regression Tested | Partial Parity | Test proves rollback clears modeled counters after the kisk entered a real PVP zone. Java handler ordering, controller callbacks, and SIEGE/FORT kisk rollback coverage remain unverified. |
+| `com.aionemu.gameserver.dao.InventoryDAO` / `Storage.decreaseByObjectId` persistence boundary | `EmptyPlayerEnterWorldRepository.SaveItemUseSourceMutationResult` test fixture + `PlayerEnterWorldService.SaveItemUseSourceMutationAsync` | Repository Boundary | Partial | Regression Tested | Needs Verification | Test fixture isolates failed source-item persistence without a live database. Actual MySQL transaction/autocommit behavior and Java inventory mutation ordering were not side-by-side validated. |
+
+Tests added:
+- `GameServerConnectionFlightZoneFanoutTests.CompleteToyPetSpawnUseItemAsync_ClearsCreaturePvpZoneCountersWhenSourceMutationFailsAfterKiskSpawn`: loads real Java static data, spawns a kisk through the connection helper inside `PVP_87_210040000`, forces source-item mutation failure, and verifies rollback world removal, empty counters, unchanged inventory, absent runtime kisk registration, no NPC visibility refresh, and object ID reuse.
+- Java comparison status: expectations are source-derived from Java `ToyPetSpawnAction.act`, `VisibleObjectSpawner.spawnKisk`, `KiskService.regKisk`, `World.spawn/despawn`, `IDFactory.releaseId`, and `PvPZoneInstance`; no live Java runtime side-by-side validation or live MySQL failure simulation was run.
+
+Remaining risks:
+- This unit validates the C# rollback behavior around the current C# ordering. Java decreases inventory before spawning the kisk; C# creates the runtime/world object before source persistence and compensates on failure. This is an intentional difference until item-use persistence is moved closer to Java's in-memory storage semantics.
+- Rollback counter cleanup is covered for real PVP geometry only. SIEGE/FORT kisk rollback coverage remains open.
+- C# clears modeled counters directly on rollback instead of executing Java zone `onLeave` handlers, controller callbacks, quest/material handlers, or fortress observers.
+- Live database transaction/autocommit behavior, encrypted packet ordering, item-use observer cancellation ordering, and full kisk controller/dialog/death behavior remain unverified.
+- No packet serialization, database schema, date/time, reflection, or public protocol behavior changed. The empty repository gained a configurable failure result for this isolated regression; threading remains immediate over the concurrent counter store rather than Java's zone scheduler.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 kisk item-use save-failure rollback PVP/FORT counter cleanup regression
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 Java/C# item-use persistence ordering difference, SIEGE/FORT kisk rollback coverage, Java zone handlers/controller callbacks, dedicated KiskController behavior, live DB failure simulation, and Java queued scheduler/levels
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because remaining kisk revive cleanup, live team membership wiring, production socket-order validation, broader teleport/map-change zone revalidation, remaining direct-removal cleanup, generic visible-object cleanup, full dedicated kisk controller/AI, full NPC/dialog AI, resurrection skill/effect callers, per-zone bind membership, live option mutation callers, admin option consumers, world-map instance ownership, object iteration, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue the generic direct world-removal audit with `rg "TryRemoveObject" dotnetConversion/src/Aion.GameServer`, focusing on remaining paths that remove `WorldNpc`, `PostmanNpc`, or future creature-like objects outside `WorldNpcSpawnService`, `RiftService`, `RiftManagerService`, kisk runtime cleanup, and postman/player rollback paths.
+
 ---
 
 ## Next Steps
