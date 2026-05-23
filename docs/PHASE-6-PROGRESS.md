@@ -6111,6 +6111,53 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the flight guard cluster by introducing a narrow fly-zone/free-flight access model for Java `FlyController.canFly`, or add a focused `CM_MOVE` / `CM_EMOTION` socket harness to verify the transition packet ordering now wired through `GameServerConnection`.
 
+### Session 433 (May 23, 2026)
+- Added the missing Java `FlyController.canFly` zone/free-flight guard slice.
+- Loaded `gameserver.administration.flight.free_fly` into `GameServerOptions.Administration.FreeFlightAccessLevel`, matching Java `AdminConfig.FREE_FLIGHT`.
+- Added narrow `Player.IsInsideFlyZone` and `Player.IsInsideNoFlyZone` flags as breadcrumbs for Java `ZoneType.FLY` / `ZoneType.NO_FLY` until full region zone revalidation exists.
+- Updated `PlayerFlightActionService.StartFlying` to reject non-staff flight when the player is in a no-fly zone or not in a fly zone, preserving Java guard order before no-fly abnormal, transform, private-store, and cooldown checks.
+- Wired `GameServerConnection.HandleEmotionAsync` to pass the loaded free-flight access threshold into the fly guard.
+- Extended the fly-start regression so non-zone branches explicitly run inside a fly zone, and added outside-fly-zone, no-fly-zone, and free-flight-admin success coverage.
+- Current gaps in this cluster: live zone membership is still a pair of explicit player flags, not Java `MapRegion` / `ZoneInstance` revalidation, and cooldown audit logging is still missing.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerStateTests.PlayerFlightActionService_StartFlying|FullyQualifiedName~GameServerOptionsTests.LoadFromJavaConfig_ReadsCoreAndNetworkDefaults|FullyQualifiedName~GamePacketTests.SmSystemMessages"` passes with 2 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerStateTests|FullyQualifiedName~GameServerOptionsTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests"` passes with 110 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 947 tests.
+
+#### Migration Parity Table - Session 433
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.FlyController.canFly` | `Aion.GameServer.Services.PlayerFlightActionService` | Guard / Service | Partial | Unit Tested | Partial Parity | Zone/free-flight guard now runs after Daeva and before no-fly abnormal, matching Java order. Cooldown audit logging and live zone membership remain future work. |
+| `com.aionemu.gameserver.configs.administration.AdminConfig.FREE_FLIGHT` | `Aion.GameServer.Configuration.GameServerAdministrationOptions.FreeFlightAccessLevel` | Config / Access Threshold | Partial | Config Regression Tested | Partial Parity | Java property `gameserver.administration.flight.free_fly` is loaded with default `1` and passed into `CM_EMOTION(FLY)`. Broader admin config parity remains incomplete. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.hasAccess` | `Aion.GameServer.Services.PlayerFlightActionService.HasAccess` | Access Guard | Partial | Unit Tested | Partial Parity | Uses `Player.AccessLevel >= threshold`, matching the Java helper used by `canFly`. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneType.FLY` | `Aion.GameServer.Model.GameObjects.Player.IsInsideFlyZone` | Runtime Zone State | Partial | Unit Tested | Needs Verification | Explicit flag preserves the guard boundary. Java `ZoneInstance`, nested-zone counters, world-map overrides, and revalidation are not ported. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneType.NO_FLY` | `Aion.GameServer.Model.GameObjects.Player.IsInsideNoFlyZone` | Runtime Zone State | Partial | Unit Tested | Needs Verification | Explicit flag preserves no-fly-zone rejection. Live zone data and transitions are still absent. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_EMOTION` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleEmotionAsync` | Client Packet Handler | Partial | Source-Derived Integration Path | Needs Verification | Fly action passes the configured free-flight threshold into the guard. Socket-level dispatch and live zone flag population remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FLYING_FORBIDDEN_HERE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.FlyingForbiddenHere` | Packet / System Message | Partial | Existing Regression Coverage | Partial Parity | The previously added message factory is now reachable from the fly guard. Live Java-golden packet captures were not run. |
+
+Tests added or extended:
+- `PlayerStateTests.PlayerFlightActionService_StartFlyingMatchesJavaGuardAndCooldownSlice`: now covers outside fly-zone, no-fly-zone, and free-flight-admin branches, and explicitly sets fly-zone membership for later guard-order branches.
+- `GameServerOptionsTests.LoadFromJavaConfig_ReadsCoreAndNetworkDefaults`: now asserts `gameserver.administration.flight.free_fly` loads as access level `1`.
+- Java comparison status: tests are source-derived from Java `FlyController.canFly`, `Player.hasAccess`, `AdminConfig.FREE_FLIGHT`, `ZoneType.FLY`, `ZoneType.NO_FLY`, and `SM_SYSTEM_MESSAGE.STR_FLYING_FORBIDDEN_HERE`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Zone membership is not populated by world/region code yet; `IsInsideFlyZone` and `IsInsideNoFlyZone` are explicit placeholders until `MapRegion` / `ZoneInstance` parity lands.
+- World-map overridden glide/fly flags and nested zone counters are not modeled.
+- The regular-player default is conservative: without a populated fly-zone flag, `StartFlying` now rejects ordinary flight like Java would outside `ZoneType.FLY`.
+- Cooldown audit logging remains absent.
+- Reflection is not used. Date/time behavior is unchanged except existing cooldown comparisons. Serialization uses an existing source-derived system-message factory. Threading remains unchanged.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 fly-zone/free-flight guard slice plus config and player zone-state placeholders
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because live zone revalidation, full movement-controller parity, cooldown audit logging, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue the flight cluster with cooldown audit logging for Java `AuditLogger.log` on suspicious fly cooldown attempts, or start the live zone-membership bridge that can eventually populate `IsInsideFlyZone` / `IsInsideNoFlyZone` from Java-shaped world regions.
+
 ---
 
 ## Next Steps
@@ -6118,7 +6165,7 @@ Next recommended unit of work:
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
-4. Continue `CM_EMOTION` / `CM_MOVE` flight work by adding one missing support model at a time: full fly-zone/free-flight access, cooldown audit logging, FP timers, stop-glide/end-fly visual stat refresh, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
+4. Continue `CM_EMOTION` / `CM_MOVE` flight work by adding one missing support model at a time: live fly/no-fly zone membership, cooldown audit logging, FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
