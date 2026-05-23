@@ -14334,6 +14334,56 @@ Summary metrics:
 Next recommended unit of work:
 - Continue `CM_PLAYER_STATUS_INFO` parity with `ALLIANCE_CHANGE_GROUP` by wiring the existing `PlayerAllianceGroupChangeServicePlanner` through the packet handler and sending no-alliance/no-rights system-message intents through the registry/direct-send path. Keep league commands and full generic `PlayerTeamCommandService` dispatch deferred.
 
+### Session 615 (May 23, 2026)
+- Source-read Java `CM_PLAYER_STATUS_INFO.runImpl`, `PlayerAllianceService.changeMemberGroup`, `ChangeMemberGroupEvent`, and the existing C# alliance group-change planner/runtime bridge.
+- Extended `GameServerConnection.HandlePlayerStatusInfoAsync` with the Java `ALLIANCE_CHANGE_GROUP` branch:
+  - command code `27`;
+  - delegates to `PlayerAllianceGroupChangeServicePlanner`;
+  - sends `STR_FORCE_YOU_ARE_NOT_FORCE_MEMBER` for no-alliance callers;
+  - sends `STR_FORCE_RIGHT_NOT_HAVE` for non-captain alliance members;
+  - dispatches authorized moves/swaps through `PlayerAllianceRuntime.ChangeMemberGroup`;
+  - broadcasts resulting `SM_ALLIANCE_MEMBER_INFO(MEMBER_GROUP_CHANGE)` packets to current alliance members through the registry/direct-send path.
+- Kept league commands, full generic `PlayerTeamCommandService` dispatch, Java exception behavior for invalid target alliance group ids beyond existing runtime throw behavior, Java event queue/lock comparison, socket ordering comparison, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|GroupChangeServicePlanner|ChangeMemberGroup|MemberGroupChange"` passes with 17 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1078 tests.
+
+#### Migration Parity Table - Session 615
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | C# now handles `GROUP_SET_LFG`, `ALLIANCE_CHANGE_GROUP`, and ready-check ids `20..24`. League, ban/leader/leave/vice-captain, mentoring, and other team commands remain missing. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.ALLIANCE_CHANGE_GROUP` | Command code `27` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | C# source-models command id `27` and dispatches selected/second/group ids from the packet. Full `TeamCommand` enum dispatch remains partial. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.changeMemberGroup` | `Aion.GameServer.Services.PlayerAllianceGroupChangeServicePlanner` through connection handler | Service / Handler Bridge | Partial | Regression Tested | Needs Verification | C# now sends Java-shaped no-alliance/no-rights system messages and dispatches authorized changes. Java static alliance registry lookup and live `alliance.onEvent` lock/event wrapper are not runtime-compared. |
+| `com.aionemu.gameserver.model.team.alliance.events.ChangeMemberGroupEvent` | `Aion.GameServer.Services.PlayerAllianceRuntime.ChangeMemberGroup` / `PlayerAllianceMemberGroupChangePlan` | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | C# moves/swaps members and broadcasts member-info packets to current runtime members. Java event queue ordering, locking, invalid target-group exception surface, and live socket ordering remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` through connection group-change sends | Server Packet | Partial | Regression Tested | Needs Verification | Existing member-info packet is sent for moved/swapped members. Java golden bytes, encrypted frames, and real-client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_RIGHT_NOT_HAVE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceRightNotHave` through connection sends | Server Packet Factory | Partial | Regression Tested | Needs Verification | No-rights failure message id `1300976` is sent through the packet handler. Java golden frame and client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_YOU_ARE_NOT_FORCE_MEMBER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceYouAreNotForceMember` through connection sends | Server Packet Factory | Partial | Regression Tested | Needs Verification | No-alliance failure message id `1301015` is sent through the packet handler. Java golden frame and client validation remain missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / direct fallback | Runtime Dependency | Partial | Regression Tested | Needs Verification | C# sends system messages and member-info packets through registry/direct fallback. Java `PacketSendUtility` ordering/offline-recipient behavior remains unverified. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_AllianceChangeGroupSendsJavaServiceFailureMessages`: validates no-alliance and no-rights Java system-message ids are sent from parsed command `27`.
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_AllianceChangeGroupMovesMemberAndBroadcastsMemberInfo`: validates leader-authorized command `27` moves a member to the requested alliance group and broadcasts `SmAllianceMemberInfo` to current alliance recipients.
+- Java comparison status: expectations are source-derived from `CM_PLAYER_STATUS_INFO.runImpl`, `PlayerAllianceService.changeMemberGroup`, `ChangeMemberGroupEvent`, `SM_SYSTEM_MESSAGE`, and `SM_ALLIANCE_MEMBER_INFO` packet planners. No Java runtime execution, Java-generated golden vector, live client packet capture, Java static registry comparison, Java event queue/lock comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- League, ban/leader/leave/vice-captain, mentoring, and other `CM_PLAYER_STATUS_INFO` command branches remain unimplemented.
+- Java static alliance registry lookup is approximated by runtime snapshots attached to the caller.
+- Java event queue/lock/threading behavior remains source-derived only.
+- Socket ordering for multiple `SM_ALLIANCE_MEMBER_INFO` packets is not compared against Java/live client traces.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 `CM_PLAYER_STATUS_INFO` alliance group-change branch
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 8 remaining team command branches, Java static service registry, Java event queue/lock comparison, live socket ordering, Java runtime/threading comparison, encoded opcode/frame golden validation, packet capture comparison, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; the alliance group-change command path is now connected to packet handling, but generic team-command parity is still incomplete.
+
+Next recommended unit of work:
+- Continue `CM_PLAYER_STATUS_INFO` parity by adding one of the remaining narrow generic team-command branches: `GROUP_START_MENTORING`/`GROUP_END_MENTORING` if the existing `PlayerGroupRuntime` mentor planner can be wired safely, or alliance vice-captain promote/demote if the assignment planner can send its system/alliance-info intents through the registry path. Keep league commands deferred.
+
 ---
 
 ## Next Steps
