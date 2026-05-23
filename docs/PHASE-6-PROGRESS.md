@@ -6539,6 +6539,49 @@ Summary metrics:
 Next recommended unit of work:
 - Either extend this harness down one level to an actual `CM_MOVE`, `CM_MOVE_IN_AIR`, or `CM_SUBZONE_CHANGE` packet-loop test, or apply Java `ZoneInstance.canFly/canGlide` precedence only to option checks that actually consume zone option flags. Keep `ZoneType.FLY` polygon membership separate unless a Java call site proves it should use `canFly`.
 
+### Session 443 (May 23, 2026)
+- Added the Java `ZoneInstance.canFly` / `canGlide` option-precedence slice to `FlightZoneSummary` without changing current `ZoneType.FLY` / `NO_FLY` membership behavior.
+- `FlightZoneSummary.CanFly` and `CanGlide` now match the Java branch order: zone flags `-1` or `0` inherit mutable world-map options; otherwise a runtime world-map override still wins; otherwise the zone template flag bit is used.
+- Added tests covering inherit-from-world, explicit zone flag override, runtime world option removal, and runtime world option addition.
+- Kept this helper preparatory because the current C# runtime has no mutable `WorldMap` object and Java `FlyZoneInstance.onEnter` sets `ZoneType.FLY` from zone type rather than from `ZoneInstance.canFly`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaticDataLoadingTests.FlightZoneSummary_CanFlyCanGlideMatchesJavaZoneInstanceOptions|FullyQualifiedName~StaticDataLoadingTests.WorldMapSummary_HasOverriddenOptionMatchesJavaWorldMap|FullyQualifiedName~PlayerZoneStateServiceTests"` passes with 5 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~PlayerZoneStateServiceTests|FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests"` passes with 15 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 955 tests.
+
+#### Migration Parity Table - Session 443
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.zone.ZoneInstance.canFly` | `Aion.GameServer.Dataholders.FlightZoneSummary.CanFly` | Zone Option Utility | Partial | Unit Tested | Partial Parity | Mirrors Java branch precedence for `flags == -1`, `flags == 0`, runtime world-map override, and explicit zone-template `FLY` bit. No active runtime caller consumes it yet. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.canGlide` | `Aion.GameServer.Dataholders.FlightZoneSummary.CanGlide` | Zone Option Utility | Partial | Unit Tested | Partial Parity | Mirrors Java branch precedence for `GLIDE`. This is not used to decide `ZoneType.FLY` membership. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneTemplate.flags` | `Aion.GameServer.Dataholders.FlightZoneSummary.Flags` | Static Data Field | Partial | Unit + Integration Tested | Partial Parity | Existing parser retains Java flag integers; new helpers consume them for fly/glide option checks. Other zone option flags such as bind, recall, ride, fly-ride, PvP, duel, and return-battle remain unmodeled on this DTO. |
+| `com.aionemu.gameserver.world.WorldMap.hasOverridenOption` | `Aion.GameServer.Dataholders.WorldMapSummary.HasOverriddenOption` | World Option Utility | Partial | Unit Tested | Partial Parity | Now consumed by the new zone option helpers. The C# method remains source-derived and still has no mutable runtime `WorldMap` owner. |
+| `com.aionemu.gameserver.world.WorldMap.isFlightAllowed` / `canGlide` | `Aion.GameServer.Dataholders.WorldMapSummary.IsFlightAllowed` / `CanGlide` | World Option Utility | Partial | Unit Tested | Partial Parity | New helpers delegate to these mutable-flag readers when Java would fall back to `WorldMap.worldOptions`. |
+| `com.aionemu.gameserver.world.zone.ZoneAttributes` | `Aion.GameServer.Dataholders.WorldZoneAttributes` | Enum / Bit Flags | Partial | Existing Unit Coverage | Partial Parity | Existing bit values are reused for zone-template option checks. No serialization changes are involved. |
+| `com.aionemu.gameserver.world.zone.FlyZoneInstance` / `NoFlyZoneInstance` | `Aion.GameServer.Services.PlayerZoneStateService.RevalidateFlightZones` | Zone Membership Dependency | Partial | Existing Unit Coverage | Needs Verification | Important separation preserved: Java fly/no-fly membership is driven by zone type and enter/leave membership, not by the `canFly/canGlide` option helpers. |
+
+Tests added or extended:
+- `StaticDataLoadingTests.FlightZoneSummary_CanFlyCanGlideMatchesJavaZoneInstanceOptions`: validates inheritance for `-1`/`0` zone flags, explicit zone-template fly/glide flags, world-option removal overriding a zone `FLY` flag, and world-option addition overriding a zone without `FLY`.
+- Java comparison status: tests are source-derived from Java `ZoneInstance.canFly`, `ZoneInstance.canGlide`, `WorldMap.hasOverridenOption`, `WorldMap.isFlightAllowed`, `WorldMap.canGlide`, and `ZoneAttributes`; no live Java runtime side-by-side validation was run.
+
+Remaining risks:
+- The new helpers are not yet wired to any live zone option check, so runtime behavior is unchanged.
+- C# still has no mutable runtime `WorldMap` with `setWorldOption` / `removeWorldOption`, so callers must pass current flags explicitly.
+- Only `FLY` and `GLIDE` are modeled in this helper slice; Java has parallel option precedence for bind, recall, ride, fly-ride, PvP, duel, and return-battle.
+- Do not use these helpers to filter `zone_type="FLY"` polygon membership unless a Java call site proves that behavior; Java `FlyZoneInstance.onEnter` sets `ZoneType.FLY` directly.
+- Reflection is not used. Serialization is unchanged. Date/time is not involved. Threading is not involved in this immutable helper slice, but future mutable world options will need concurrency review.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 zone-option precedence helper slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because mutable world-map options, live zone option consumers, full socket-order harnesses, full zone lifecycle handlers, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue the zone-option path by identifying the first live Java call site that consumes `ZoneInstance.canFly/canGlide` or add a mutable C# `WorldMap` option holder for `setWorldOption` / `removeWorldOption`. If staying with flight packet verification, extend the connection harness down to an actual `CM_MOVE`, `CM_MOVE_IN_AIR`, or `CM_SUBZONE_CHANGE` packet-loop test.
+
 ---
 
 ## Next Steps
