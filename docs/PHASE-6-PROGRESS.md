@@ -13650,6 +13650,66 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance event fanout parity with `PlayerAllianceLeavedEvent`: add a non-sending plan for non-disband leave/ban/timeout member fanout, including vice-captain id removal metadata, reason-specific system messages, `SM_ALLIANCE_MEMBER_INFO(LEAVE)`, and `SM_ALLIANCE_INFO`; keep actual remove-member mutation, disband checks, league broadcast, ban-to-leaved-player message, and socket sends deferred.
 
+### Session 602 (May 23, 2026)
+- Source-read Java `PlayerLeavedEvent` base behavior and the `SM_SYSTEM_MESSAGE` factories used by `PlayerAllianceLeavedEvent`.
+- Added `PlayerAllianceLeaveReason`, `PlayerAllianceLeavedPlan`, and `PlayerAllianceLeavedPlanner`.
+- Added leave-related system-message factories:
+  - `SmSystemMessage.PartyAllianceDispersed()` for `STR_PARTY_ALLIANCE_DISPERSED` (`1300201`);
+  - `SmSystemMessage.PartyAllianceHeLeavedPartyOfflineTimeout(string)` for `STR_PARTY_ALLIANCE_HE_LEAVED_PARTY_OFFLINE_TIMEOUT` (`1300203`);
+  - `SmSystemMessage.ForceLeaveHim(string)` for `STR_FORCE_LEAVE_HIM` (`1300978`);
+  - `SmSystemMessage.ForceBanMe(string)` for `STR_FORCE_BAN_ME` (`1300979`);
+  - `SmSystemMessage.ForceBanHim(string, string)` for `STR_FORCE_BAN_HIM` (`1300980`).
+- Modeled Java `PlayerAllianceLeavedEvent.handleEvent` output after the remove-member boundary:
+  - removed player id is removed from the vice-captain snapshot;
+  - remaining members receive the reason-specific leave message;
+  - non-disband reasons also send `SM_ALLIANCE_MEMBER_INFO(leavedMember, LEAVE)` and `SM_ALLIANCE_INFO(team)`;
+  - `BAN` also sends `STR_FORCE_BAN_ME(banPersonName)` to the leaved player after remaining-member fanout;
+  - `DISBAND` sends `STR_PARTY_ALLIANCE_DISPERSED` to remaining members and the leaved player without member-info/alliance-info packets.
+- Represented leader-change, disband, league broadcast, and base `PlayerLeavedEvent.handleEvent` as metadata boundaries.
+- Kept live `team.removeMember`, live vice-captain collection mutation, `SM_LEAVE_GROUP_MEMBER`, instance-kick scheduling, `EventService.onLeftTeam`, disband execution, league broadcast execution, socket sends, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests|FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 149 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1247 tests.
+
+#### Migration Parity Table - Session 602
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceLeavedEvent` | `Aion.GameServer.Services.PlayerAllianceLeavedPlanner` / `PlayerAllianceLeavedPlan` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# models leave/ban/timeout/disband output intent ordering after remove-member. Live `team.removeMember`, leader-change composition, disband checks, league broadcast execution, `super.handleEvent`, and socket sends remain missing. |
+| `com.aionemu.gameserver.model.team.common.events.PlayerLeavedEvent` | `PlayerAllianceLeavedPlan.WouldInvokeBaseLeaveEvent` metadata | Base Event Dependency | Not Started | No Tests | Unknown | Java base event sends `SM_LEAVE_GROUP_MEMBER`, may schedule instance kick, and calls `EventService.onLeftTeam`. C# only records that boundary. Date/time handling is deferred because the Java 30-second scheduled kick is not ported here. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` leave methods | `SmSystemMessage.PartyAllianceDispersed`, `PartyAllianceHeLeavedPartyOfflineTimeout`, `ForceLeaveHim`, `ForceBanMe`, `ForceBanHim` | Server Packet Factory | Partial | Unit Tested | Needs Verification | Java ids `1300201`, `1300203`, `1300978`, `1300979`, and `1300980` are modeled and recipient-planned. Java runtime frame/parameter comparison is missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` via leave packet intents | Server Packet | Partial | Regression Tested | Needs Verification | Leave fanout serializes the Java prefix-only event-id-0 branch. Java golden bytes, encoded frames, live member wrapper metadata, and client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` via leave packet intents | Server Packet | Partial | Regression Tested | Needs Verification | Non-disband leave fanout reuses alliance-info serialization. League rows are metadata-only/unsupported for serialization, and Java golden bytes/live sends remain missing. |
+| `com.aionemu.gameserver.model.team.TeamType.AUTO_ALLIANCE` | `Aion.GameServer.Services.PlayerAllianceTeamType.AutoAlliance` disband guard input | Enum / Runtime Dependency | Partial | Unit Tested | Needs Verification | C# uses team type metadata to suppress disband metadata for auto alliances. Live `TeamType` ownership and `team.shouldDisband()` behavior are not ported. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.disband` | `PlayerAllianceLeavedPlan.WouldDisband` metadata | Service Dependency | Not Started | Unit Tested as Metadata | Unknown | Java may disband for non-auto leave/ban/timeout. C# records metadata only. |
+| `com.aionemu.gameserver.model.team.league.League.broadcast` | `PlayerAllianceLeavedPlan.WouldBroadcastLeague` metadata | Runtime Dependency | Not Started | Unit Tested as Metadata | Unknown | Java broadcasts league updates for leave/ban when in league. C# records metadata only; league row serialization remains missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | Snapshot member inputs in `PlayerAllianceLeavedPlanner` | Team Runtime Dependency | Not Started | No Tests | Unknown | Full live alliance runtime remains missing: remove member, vice-captain collection ownership, leader lookup, disband checks, league integration, and live iteration. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.LeavedPlanner_PlansLeaveFanoutLikeJavaPlayerAllianceLeavedEvent`: validates normal leave fanout, vice-captain id removal metadata, reason message id `1300978`, serialized prefix-only `LEAVE` member-info payloads, alliance-info metadata for in-league plans, and disband/league metadata.
+- `PlayerAllianceMemberInfoTests.LeavedPlanner_PlansBanTimeoutAndDisbandReasonMessagesLikeJava`: validates `BAN` message ids `1300980`/`1300979`, `LEAVE_TIMEOUT` message id `1300203`, and `DISBAND` message id `1300201` behavior without member-info/alliance-info packets.
+- Java comparison status: expectations are source-derived from `PlayerAllianceLeavedEvent.handleEvent`, `PlayerLeavedEvent.handleEvent`, `SM_ALLIANCE_INFO.writeImpl`, `SM_ALLIANCE_MEMBER_INFO.writeImpl`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live remove-member comparison, live vice-captain collection comparison, disband comparison, league broadcast comparison, scheduled instance-kick timing comparison, socket fanout comparison, encoded frame comparison, reflection behavior, precision/rounding behavior, or client validation was run.
+
+Remaining risks:
+- Live `team.removeMember` and vice-captain collection mutation are not implemented.
+- Leader-leave composition with `ChangeAllianceLeaderEvent` remains metadata only.
+- Base `PlayerLeavedEvent` behavior is not ported: `SM_LEAVE_GROUP_MEMBER`, registered-instance kick scheduling, and `EventService.onLeftTeam`.
+- Disband and league-broadcast side effects remain deferred.
+- League `SM_ALLIANCE_INFO` row serialization remains blocked.
+- Live socket fanout and Java threading/event-dispatch behavior are not runtime-compared.
+- Java golden byte vectors and encoded-frame validation remain unavailable.
+- Reflection and precision/rounding are not involved; date/time handling is deferred for the Java 30-second instance-kick task.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 alliance leave fanout planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 10 live remove-member mutation, live vice-captain mutation, leader-leave composition, base leave-event packet/scheduler/event-service behavior, live disband, league broadcast, full league `SM_ALLIANCE_INFO`, Java runtime ordering comparison, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; alliance leave output planning is now modeled, but live alliance runtime, base leave side effects, and league/disband behavior remain incomplete.
+
+Next recommended unit of work:
+- Continue alliance lifecycle parity by adding a focused base-leave side-effect plan for `PlayerLeavedEvent.handleEvent`: model `SM_LEAVE_GROUP_MEMBER`, optional `STR_MSG_LEAVE_INSTANCE_NOT_PARTY`, the 30-second instance-kick scheduling boundary, and `EventService.onLeftTeam` metadata. Keep actual instance/team runtime, scheduler execution, and socket sends deferred.
+
 ---
 
 ## Next Steps
