@@ -11521,6 +11521,56 @@ Summary metrics:
 Next recommended unit of work:
 - Add a blocked cooldown-preview refinement for group execution: thread `InstanceCooltimeTable` and `now` into the unsupported group result enough to record whether Java would add cooldown when `!reenter` and a positive reuse delay exists, but still avoid `PortalCooldownList.addPortalCooldown`, persistence, and packet sends. Keep date/time parity conservative and mark runtime comparison as needed.
 
+### Session 559 (May 23, 2026)
+- Added a non-mutating cooldown preview path for blocked group portal execution.
+- `InstanceEntranceCooldownService.PreviewEntranceCooldown` now reuses the same Java-shaped cooldown calculation and membership rate lookup as `ApplyEntranceCooldown`, but does not call `PlayerPortalCooldownService.AddPortalCooldown`.
+- `PortalContinueTransferResult.UnsupportedTeamPortal` now passes the active player, `InstanceCooltimeTable`, options, and effective time into group planning.
+- `GroupPortalExecutionPlan` now records cooldown reuse time, instance cooldown rate, and whether Java would add cooldown for registered group transfers.
+- Registered non-reentry group plans now record a positive cooldown preview when instance cooltime data yields one.
+- Registered reentry group plans now record cooldown skipped for reentry.
+- Allocation-needed and invalid-team group plans keep cooldown state unknown until allocation/transfer.
+- Extended focused tests to assert positive cooldown preview, reentry skip, no cooldown save, no packet send, and no blocked-instance mutation.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passes with 120 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1173 tests.
+
+#### Migration Parity Table - Session 559
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.transfer` cooldown branch | `Aion.GameServer.Services.GroupPortalExecutionPlan` cooldown preview fields | DTO / Planning | Partial | Unit Tested | Needs Verification | C# records whether cooldown would be added for blocked registered group transfers. It does not call `addPortalCooldown`, persist, or send packets. |
+| `com.aionemu.gameserver.dataholders.InstanceCooltimeData.calculateInstanceEntranceCooltime` | `InstanceEntranceCooldownService.PreviewEntranceCooldown` / `InstanceCooltimeTable.CalculateInstanceEntranceCooltime` | Service / Dataholder | Partial | Unit Tested | Needs Verification | Preview reuses existing C# cooldown calculation and membership-rate lookup without mutation. Runtime Java comparison and server-time edge cases remain unverified. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getInstanceRate` | `InstanceCooldownRateService.GetInstanceRate` used by preview | Service Dependency | Partial | Unit Tested | Needs Verification | Preview records the rate used by C# membership options. Java permission/config comparison is source-derived; broader account membership behavior remains unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.addPortalCooldown` | `InstanceEntranceCooldownService.PreviewEntranceCooldown` returning `Added` as would-add only | Service / Persistence Boundary | Not Started | Unit Tested | Needs Verification | C# preview intentionally does not mutate `Player.PortalCooldowns`, does not call repository save, and does not send `SM_INSTANCE_INFO`. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INSTANCE_INFO` send after cooldown add | `QueuePortalContinueTransferAsync` blocked group path | Packet Boundary | Not Started | Unit Tested | Needs Verification | Tests prove no packet is sent for blocked group cooldown preview. Positive packet serialization already exists elsewhere but is not exercised here. |
+| `com.aionemu.gameserver.utils.time.ServerTime.now` / `System.currentTimeMillis` usage | `DateTimeOffset now` passed to blocked group cooldown preview | Date/Time Dependency | Partial | Unit Tested | Needs Verification | Tests use deterministic `now` for relative cooldown. Daily/weekly reset, local time zone, and real server clock parity remain unverified in this group path. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.hasPermission` via membership cooldown rate | `Player.AccountMembership` / `GameServerOptions.Membership.InstancesCooldown` | Model / Config Dependency | Partial | Existing Unit Tested | Needs Verification | Rate behavior is reused from existing service. This unit only checks default rate through blocked group planning. |
+
+Tests added or extended:
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_UnsupportedTeamPlanReturnsBlockedResultWithoutPackets`: extended to assert registered non-reentry group execution records `WouldAddCooldown`, reuse time, instance cooldown rate, and no cooldown persistence or packet sends.
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_RegisteredGroupReentryPreviewSkipsCooldownWithoutSaving`: validates registered reentry group plans mark cooldown skipped, expose no reuse time/rate, send no packets, save no cooldown, and do not mutate start position or player registration.
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_GroupPlanWithoutRegisteredInstanceRecordsAllocationNeededWithoutPackets`: extended to assert allocation-needed group plans keep cooldown preview unknown.
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_GroupPlanWithoutTeamIdRecordsMissingTeamIdWithoutPackets`: extended to assert invalid-team plans keep cooldown preview unknown.
+- Java comparison status: expectations are source-derived from `PortalService.transfer`, `InstanceCooltimeData.calculateInstanceEntranceCooltime`, `InstanceService.getInstanceRate`, `PortalCooldownList.addPortalCooldown`, `SM_INSTANCE_INFO`, and Java server-time usage. No Java runtime execution, live client capture, actual cooldown persistence, owner/team packet fanout, daily/weekly reset comparison, or concurrency comparison was run.
+
+Remaining risks:
+- Cooldown preview is advisory metadata only and does not execute Java's cooldown side effects.
+- Daily/weekly cooldown reset behavior is not newly tested through group planning.
+- Membership cooldown-rate behavior is reused but not deeply revalidated in this unit.
+- Java team packet fanout for `PortalCooldownList.sendEntryInfo` is not ported for group portals.
+- Actual group transfer execution, start-position mutation, player registration, teleport queueing, allocation, `registerTeam`, capacity enforcement, member fanout, alliance/league paths, and lifecycle cleanup remain missing.
+- Serialization/live packet behavior, Java threading semantics, reflection/JAXB behavior, precision/rounding, and runtime/client comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 non-mutating cooldown preview path for blocked group execution
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 12 actual cooldown add/persistence, `SM_INSTANCE_INFO` group/team fanout, daily/weekly runtime comparison, actual group transfer execution, start-position mutation, player registration, teleport packet queueing, allocation, full `registerTeam`, group member fanout, alliance/league execution, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group portal planning now documents cooldown intent, but successful group portal entry remains missing.
+
+Next recommended unit of work:
+- Add the first minimal live group aggregate model needed by the blocked portal plan: introduce a C# `PlayerGroup`/team snapshot or resolver that can hold team id and live member object ids separately from `Player.CurrentTeamMemberObjectIds`, then adapt `PortalTeamEntryPlan` creation to source metadata from that resolver when present. Keep portal execution blocked and document Java `PlayerGroup` lifecycle gaps clearly.
+
 ---
 
 ## Next Steps
