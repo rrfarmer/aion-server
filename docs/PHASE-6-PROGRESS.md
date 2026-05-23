@@ -14384,6 +14384,60 @@ Summary metrics:
 Next recommended unit of work:
 - Continue `CM_PLAYER_STATUS_INFO` parity by adding one of the remaining narrow generic team-command branches: `GROUP_START_MENTORING`/`GROUP_END_MENTORING` if the existing `PlayerGroupRuntime` mentor planner can be wired safely, or alliance vice-captain promote/demote if the assignment planner can send its system/alliance-info intents through the registry path. Keep league commands deferred.
 
+### Session 616 (May 23, 2026)
+- Source-read Java `PlayerTeamCommandService` mentoring branches, `PlayerGroupService.startMentoring/stopMentoring`, `PlayerStartMentoringEvent`, `PlayerGroupStopMentoringEvent`, and `PlayerStopMentoringEvent`.
+- Extended `GameServerConnection` to retain the injected/shared `PlayerGroupRuntime`.
+- Extended `GameServerConnection.HandlePlayerStatusInfoAsync` with Java group mentoring commands:
+  - command code `10` starts mentoring through `PlayerGroupRuntime.CreateMentorStatusChangePlan`;
+  - command code `11` stops mentoring through the same planner;
+  - missing group or Java fake-start predicate failure no-ops;
+  - sends planned `SM_SYSTEM_MESSAGE` mentor start/end messages to group recipients;
+  - sends planned `SM_GROUP_MEMBER_INFO(MOVEMENT)` packets to group recipients.
+- Kept Java `PacketSendUtility.broadcastPacketAndReceive(player, SM_ABYSS_RANK_UPDATE(2, player))`, known-list visible-player fanout, audit logger side effect for fake start packets, full team-command service dispatch, live socket ordering comparison, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|MentorStatusChangePlan|Mentoring"` passes with 10 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1079 tests.
+
+#### Migration Parity Table - Session 616
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | C# now handles group LFG, group mentoring start/end, alliance group change, and ready-check ids. League, ban/leader/leave/vice-captain, group remove/leader/ban, and other branches remain missing. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.GROUP_START_MENTORING` | Command code `10` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | C# source-models command id `10` and dispatches to the group runtime planner. Java audit side effect and visible-player abyss-rank broadcast remain deferred. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.GROUP_END_MENTORING` | Command code `11` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | C# source-models command id `11` and dispatches to the group runtime planner. Java visible-player abyss-rank broadcast remains deferred. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.startMentoring` | `Aion.GameServer.Services.PlayerGroupRuntime.CreateMentorStatusChangePlan` through connection handler | Service / Handler Bridge | Partial | Regression Tested | Needs Verification | C# toggles mentor state and sends group system/member-info packets when a mentee qualifies. Java static group registry, event queue/lock, audit logger, and visible-player broadcast remain unverified. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.stopMentoring` | `Aion.GameServer.Services.PlayerGroupRuntime.CreateMentorStatusChangePlan` through connection handler | Service / Handler Bridge | Partial | Regression Tested | Needs Verification | C# clears mentor state and sends group system/member-info packets. Java static group registry, event queue/lock, and visible-player broadcast remain unverified. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerStartMentoringEvent` | `PlayerGroupRuntime.CreateMentorStatusChangePlan` / connection group mentor sends | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | C# models the qualifying mentee predicate, mentor state mutation, self/party system messages, and group member-info sends. Audit logging and `SM_ABYSS_RANK_UPDATE` visible broadcast are missing. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerGroupStopMentoringEvent` | `PlayerGroupRuntime.CreateMentorStatusChangePlan` / connection group mentor sends | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | C# models mentor state mutation, self/party system messages, and group member-info sends. `SM_ABYSS_RANK_UPDATE` visible broadcast is missing. |
+| `com.aionemu.gameserver.model.team.common.events.PlayerStopMentoringEvent` | `PlayerGroupRuntime.CreateMentorStatusChangePlan` stop path | Base Event Dependency | Partial | Regression Tested | Needs Verification | C# covers the group stop variant but not other future team types or base event dispatch. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` through connection mentor sends | Server Packet | Partial | Regression Tested | Needs Verification | Existing group member-info packet is sent to group recipients. Java golden bytes, encrypted frames, and real-client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK_UPDATE` | `PlayerGroupMentorAbyssRankUpdateIntent` metadata only | Server Packet Dependency | Partial | Regression Tested as Planner | Needs Verification | Runtime planner still creates the abyss-rank intent, but connection handler does not broadcast it because Java visible-player fanout is broader than group recipients. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / direct fallback | Runtime Dependency | Partial | Regression Tested | Needs Verification | C# sends group-directed mentor system/member-info packets through registry/direct fallback. Java broadcast ordering and visible-player recipient selection remain unverified. |
+| `com.aionemu.gameserver.utils.audit.AuditLogger` | Deferred fake mentoring audit side effect | Utility Dependency | Not Started | No Tests | Unknown | Java logs fake start mentoring attempts. C# currently no-ops when the planner rejects a fake start. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_GroupMentoringCommandsToggleMentorAndSendGroupPackets`: validates command ids `10` and `11` toggle mentor state, send Java mentor system-message ids, and send `SmGroupMemberInfo` movement packets to group members.
+- Java comparison status: expectations are source-derived from `PlayerTeamCommandService`, `PlayerGroupService`, `PlayerStartMentoringEvent`, `PlayerGroupStopMentoringEvent`, `PlayerStopMentoringEvent`, `SM_SYSTEM_MESSAGE`, and `SM_GROUP_MEMBER_INFO` packet planners. No Java runtime execution, Java-generated golden vector, live client packet capture, Java static group registry comparison, Java event queue/lock comparison, visible-player broadcast comparison, audit-log comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Mentor abyss-rank visible-player broadcast is not sent by the connection handler.
+- Java fake-start audit logging is not implemented.
+- Java static group registry lookup is approximated by runtime snapshots attached to the caller.
+- Java event queue/lock/threading behavior remains source-derived only.
+- Several `CM_PLAYER_STATUS_INFO` command branches remain unimplemented.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 12
+- Total artifacts ported: 1 `CM_PLAYER_STATUS_INFO` group mentoring start/end branch pair
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 9 remaining team command branches, mentor abyss-rank visible broadcast, fake-start audit logging, Java static group registry, Java event queue/lock comparison, live socket ordering, Java runtime/threading comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; group mentoring packet commands now reach the runtime planner and group-directed packets, but visible fanout/audit side effects remain incomplete.
+
+Next recommended unit of work:
+- Continue `CM_PLAYER_STATUS_INFO` parity with alliance vice-captain promote/demote (`ALLIANCE_SET_VICECAPTAIN`/`ALLIANCE_UNSET_VICECAPTAIN`) if the existing assignment planner can be safely wired through the packet handler, including system-message and alliance-info sends. Otherwise, add the mentor abyss-rank visible broadcast through an existing visible-player registry helper if one can preserve Java recipient semantics.
+
 ---
 
 ## Next Steps
