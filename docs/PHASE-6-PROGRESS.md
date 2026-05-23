@@ -10598,6 +10598,55 @@ Summary metrics:
 Next recommended unit of work:
 - Add a narrow required-item and kinah validation helper for `PortalPathSummary.ItemRequirements` and `Kinah` that mirrors Java `PortalService.checkAndRemoveRequiredItems` failure behavior without mutating inventory yet. Document mutation/removal as a later step, because Java deletes items and kinah after all requirements pass.
 
+### Session 539 (May 23, 2026)
+- Added `PortalEntryValidationService.ValidateRequiredItemsAndKinah`, a validation-only slice of Java `PortalService.checkAndRemoveRequiredItems`.
+- The helper checks kinah first using the Java kinah item id (`182400001`), then checks each loaded `PortalItemRequirementSummary` by item id/count.
+- Added `PortalEntryValidationStatus.KinahRestricted` and `ItemRestricted`.
+- Added `SmSystemMessage.InstanceCantEnterWithoutItem()` for Java `SM_SYSTEM_MESSAGE.STR_MSG_INSTANCE_CANT_ENTER_WITHOUT_ITEM` (`1400219`).
+- Integrated required-item/kinah validation into `ValidatePortalEntryPlan` after level validation and before same-instance teleport planning, matching Java's order.
+- Kept this as validation only: Java removes required items and decreases kinah after all checks pass; C# does not mutate inventory or persist item/kinah updates in this unit.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~GamePacketTests"` passes with 132 tests.
+
+#### Migration Parity Table - Session 539
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.checkAndRemoveRequiredItems` | `Aion.GameServer.Services.PortalEntryValidationService.ValidateRequiredItemsAndKinah` | Service / Validation | Partial | Unit Tested | Partial Parity | C# models kinah failure and required-item failure branches and plan ordering, but intentionally does not remove items or kinah after successful validation. Persistence and inventory mutation remain missing. |
+| `com.aionemu.gameserver.model.items.storage.Storage.getKinah` | `Player.InventoryItems` summed for item id `182400001` | Inventory / Kinah Boundary | Partial | Unit Tested | Needs Verification | C# treats kinah as the existing inventory item row. Java `Storage.getKinah`, `decreaseKinah`, kinah cap behavior, and transactional persistence are not runtime-compared. |
+| `com.aionemu.gameserver.model.items.storage.Storage.getItemCountByItemId` | `Player.InventoryItems` count sum by `ItemId` | Inventory Boundary | Partial | Unit Tested | Partial Parity | C# sums inventory rows by item id for validation. Java storage location filtering, stack behavior, locks, and persistence are not covered. |
+| `com.aionemu.gameserver.model.templates.portal.ItemReq` | `Aion.GameServer.Dataholders.PortalItemRequirementSummary` consumed by validation | DTO / Requirement | Partial | Unit Tested / Regression Tested | Partial Parity | Loaded item requirements now feed validation. Java mutable JAXB DTO behavior remains intentionally absent. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DIALOG_WINDOW` | `SmDialogWindow` returned by `ValidateRequiredItemsAndKinah` | Packet / Dialog | Partial | Unit Tested | Partial Parity | Dialog-NPC kinah/item failures return `DialogPage.NO_RIGHT` payload. Live dispatch and full dialog enum parity remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_NOT_ENOUGH_KINA` | `SmSystemMessage.NotEnoughKinah` | Packet / System Message | Complete | Regression Tested | Partial Parity | Existing message id `901285` is reused for non-dialog kinah failure. Live-client capture not run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_INSTANCE_CANT_ENTER_WITHOUT_ITEM` | `SmSystemMessage.InstanceCantEnterWithoutItem` | Packet / System Message | Complete | Regression Tested | Partial Parity | Message id `1400219` is source-derived and serialized by packet tests. Live-client capture not run. |
+
+Tests added or extended:
+- `PortalEntryValidationServiceTests.ValidateRequiredItemsAndKinah_AllowsWhenJavaRequirementsAreMet`: validates enough kinah and required item count allow entry.
+- `PortalEntryValidationServiceTests.ValidateRequiredItemsAndKinah_ReturnsNoRightDialogWhenDialogNpcKinahIsMissing`: validates dialog-NPC kinah failure payload.
+- `PortalEntryValidationServiceTests.ValidateRequiredItemsAndKinah_ReturnsNotEnoughKinahForNonDialogNpc`: validates non-dialog kinah failure message id `901285`.
+- `PortalEntryValidationServiceTests.ValidateRequiredItemsAndKinah_ReturnsNoRightDialogWhenDialogNpcItemIsMissing`: validates dialog-NPC missing-item failure.
+- `PortalEntryValidationServiceTests.ValidateRequiredItemsAndKinah_ReturnsMissingItemSystemMessageForNonDialogNpc`: validates non-dialog missing-item message id `1400219`.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_ItemFailureHappensAfterLevelBeforeSameInstanceTeleport`: validates item failure is ordered after level and before same-instance action.
+- `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages`: extended to serialize `SmSystemMessage.InstanceCantEnterWithoutItem`.
+- Java comparison status: expectations are source-derived from `PortalService.checkAndRemoveRequiredItems`, `ItemReq`, `Storage.getKinah`, `Storage.getItemCountByItemId`, `SM_DIALOG_WINDOW`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, inventory mutation, item deletion, kinah persistence, production portal handler, or live-client validation was run.
+
+Remaining risks:
+- Successful validation does not remove required items or kinah; Java does both after all requirements pass.
+- C# inventory sum may differ from Java `Storage` semantics around storage location, locks, equipped rows, stack state, and transactional updates.
+- Production portal handlers still do not call this helper.
+- Packet dispatch ordering and socket behavior remain unverified.
+- Group-size checks, actual same-instance teleport, instance transfer/allocation, quest engine depth, siege ownership, threading, reflection/JAXB behavior, date/time, precision/rounding, and live-client behavior remain incomplete or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 validation-only required-item/kinah helper plus 1 system-message factory
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 inventory mutation/persistence, production handler wiring, actual teleport/transfer, group-size checks, storage semantics, and live runtime/client comparison
+- Estimated overall migration completion: Phase 6 remains about 59% complete; portal item/kinah failure behavior is represented, but successful requirement consumption is not.
+
+Next recommended unit of work:
+- Add a non-mutating consumption plan for required portal items and kinah that records which inventory rows would be decreased, then later wire a repository/persistence mutation. This keeps Java's removal order visible without yet changing live inventory state.
+
 ---
 
 ## Next Steps
