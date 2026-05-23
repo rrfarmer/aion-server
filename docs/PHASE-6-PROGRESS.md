@@ -12989,6 +12989,67 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the group update caller bridge by source-reading Java `TeamMoveUpdater`, `TeamStatUpdater`, `PlayerEffectController`, and `PlayerReviveService` usages of `PlayerGroupService.updateGroup(player, GroupEvent.MOVEMENT)`, then add a small C# caller-facing plan/result surface that reuses `CreateMemberInfoUpdatePlan(..., PlayerGroupEvent.Movement)` for scheduled movement/stat/revive/effect update triggers. Keep scheduler integration and live socket fanout deferred unless the existing services already expose a safe hook.
 
+### Session 590 (May 23, 2026)
+- Source-read Java movement-update callers:
+  - `TeamMoveUpdater.callTask`;
+  - `TeamStatUpdater.callTask`;
+  - `PlayerEffectController.updatePlayerIconsAndGroup`;
+  - `PlayerReviveService.revive`.
+- Added `PlayerGroupMovementUpdatePlanner` as a caller-facing non-sending bridge around `PlayerGroupRuntime.CreateMemberInfoUpdatePlan(..., PlayerGroupEvent.Movement)`.
+- Added explicit trigger/status DTOs:
+  - `PlayerGroupMovementUpdateTrigger.TeamMoveUpdater`;
+  - `PlayerGroupMovementUpdateTrigger.TeamStatUpdater`;
+  - `PlayerGroupMovementUpdateTrigger.PlayerEffectController`;
+  - `PlayerGroupMovementUpdateTrigger.PlayerReviveService`;
+  - `PlayerGroupMovementUpdateStatus.Planned`, `Offline`, `NotInGroup`, `AllianceDeferred`, and `MissingGroup`.
+- Modeled Java's scheduled updater online gate for `TeamMoveUpdater` and `TeamStatUpdater`.
+- Modeled effect/revive group movement callers without adding a scheduled-online gate, matching the Java source shape where those calls occur inside live gameplay paths.
+- Kept alliance update calls visible as `AllianceDeferred` instead of pretending group parity covers Java's `PlayerAllianceService.updateAlliance(..., MOVEMENT)` branch.
+- Added regression coverage for scheduled movement/stat group updates, effect/revive movement update callers, offline scheduled skips, alliance-deferred branches, detached missing-group status, and serialized `SM_GROUP_MEMBER_INFO` movement packet bodies through the planned intents.
+- Kept scheduler registration, live socket sends, alliance movement packets, effect-controller extraction, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 119 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1217 tests.
+
+#### Migration Parity Table - Session 590
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.taskmanager.tasks.TeamMoveUpdater` | `Aion.GameServer.Services.PlayerGroupMovementUpdatePlanner.CreateTeamMoveUpdatePlan` | Scheduler / Caller Bridge | Partial | Regression Tested | Needs Verification | C# models the `player.isOnline()` gate and group `PlayerGroupService.updateGroup(player, GroupEvent.MOVEMENT)` call as a non-sending plan. FIFO scheduler registration, task cadence, alliance branch, live sends, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.taskmanager.tasks.TeamStatUpdater` | `PlayerGroupMovementUpdatePlanner.CreateTeamStatUpdatePlan` | Scheduler / Caller Bridge | Partial | Regression Tested | Needs Verification | C# models the `player.isOnline()` gate and group movement update plan. Java's 500ms FIFO manager behavior, alliance branch, live sends, and runtime comparison remain deferred. |
+| `com.aionemu.gameserver.controllers.effect.PlayerEffectController` | `PlayerGroupMovementUpdatePlanner.CreateEffectMovementUpdatePlan` | Controller Caller Bridge | Partial | Regression Tested | Needs Verification | C# models only the group movement update caller boundary. `SM_ABNORMAL_STATE`, passive-effect filtering, slot calculation, `updateGroupEffects`, live effect extraction, and alliance effects remain missing. |
+| `com.aionemu.gameserver.services.player.PlayerReviveService` | `PlayerGroupMovementUpdatePlanner.CreateReviveMovementUpdatePlan` | Service Caller Bridge | Partial | Regression Tested | Needs Verification | C# models only the group movement update caller boundary after revive. HP/MP/DP/soul-sickness/aggro/spawn/emotion side effects are outside this unit. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.updateGroup` | `PlayerGroupRuntime.CreateMemberInfoUpdatePlan(..., PlayerGroupEvent.Movement)` reused by `PlayerGroupMovementUpdatePlanner` | Service / Event Bridge | Partial | Regression Tested | Needs Verification | C# reuses the existing all-except-player movement member-info plan. Live `group.onEvent` dispatch and socket fanout remain deferred. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.updateAlliance` | `PlayerGroupMovementUpdateStatus.AllianceDeferred` | Service Dependency | Not Started | Regression Tested | Unknown | Newly emphasized dependency. Java callers route alliance members to alliance movement packets; C# explicitly reports the branch as deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `SmGroupMemberInfo` through movement update intents | Server Packet / Intent Factory | Partial | Unit Tested | Needs Verification | Planned movement caller tests validate serialized branchless `MOVEMENT` packet bodies. Encoded frames, Java golden bytes, and client validation remain missing. |
+
+Tests added:
+- `PlayerGroupRuntimeTests.MovementUpdatePlanner_ModelsScheduledTeamMoveAndStatGroupUpdatesLikeJava`: validates scheduled online group movement/stat callers, all-except-player recipients, movement event metadata, and serialized movement packet bodies.
+- `PlayerGroupRuntimeTests.MovementUpdatePlanner_ModelsEffectAndReviveGroupMovementCallersLikeJava`: validates effect/revive caller-facing movement plans and movement packet bodies.
+- `PlayerGroupRuntimeTests.MovementUpdatePlanner_SkipsOfflineScheduledUpdatesAndDeferredAllianceBranches`: validates Java's scheduled online gate and explicit alliance deferral.
+- `PlayerGroupRuntimeTests.MovementUpdatePlanner_ReportsMissingRuntimeGroupForDetachedGroupMember`: validates a detached group-membership boundary where C# player metadata exists but runtime group state does not.
+- Java comparison status: expectations are source-derived from the Java caller classes and existing `PlayerGroupUpdateEvent` / `SM_GROUP_MEMBER_INFO` source. No Java runtime execution, Java-generated golden vector, scheduler timing comparison, live send/fanout comparison, encoded frame comparison, reflection behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Live scheduled task registration and FIFO timing are not implemented in this slice.
+- Live group member-info movement sends are still not wired to sockets.
+- Alliance movement update parity is explicitly deferred.
+- `PlayerEffectController` passive-effect filtering, `SM_ABNORMAL_STATE`, slot calculation, and `updateGroupEffects` behavior remain missing.
+- `PlayerReviveService` revive state mutations and emotion fanout remain outside this unit.
+- Java runtime ordering and event-loop/threading behavior are not compared; C# remains plan-oriented.
+- Serialization is packet-body tested only; Java golden bytes and encoded frames are still unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 group movement-update caller planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 9 live scheduler integration, live group socket fanout, alliance movement updates, effect icon/effect-slot/update-effects behavior, revive side effects, Java runtime ordering comparison, encoded opcode/frame golden validation, active connection/runtime comparison, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group movement update callers now have a non-sending planning boundary, but scheduler/live dispatch/alliance/effect/revive parity remains incomplete.
+
+Next recommended unit of work:
+- Continue the team movement-update parity by source-reading Java `PlayerAllianceUpdateEvent`, `SM_ALLIANCE_MEMBER_INFO`, and `PlayerAllianceService.updateAlliance(..., MOVEMENT)`, then add the first non-sending alliance movement member-info packet plan that mirrors the group movement planner's deferred branch. Keep live alliance socket fanout, alliance effect slots, and scheduler integration deferred until packet bodies and recipient shaping are covered.
+
 ---
 
 ## Next Steps
