@@ -14080,6 +14080,55 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance command wiring by adding a narrow `CM_SHOW_BRAND` service planner around current team state: no-team solo echo, group leader update via existing `PlayerGroupRuntime.UpdateBrand`, alliance leader/vice-captain update via `PlayerAllianceRuntime.UpdateBrand`, and unauthorized no-op. Keep actual client packet parser/socket sends deferred if needed.
 
+### Session 610 (May 23, 2026)
+- Added `PlayerShowBrandCommandPlanner`, `PlayerShowBrandCommandPlan`, `PlayerShowBrandCommandPlanStatus`, and `PlayerShowBrandIntent`.
+- Modeled Java `CM_SHOW_BRAND.runImpl` decision behavior without parsing or sending sockets:
+  - no current team produces a solo `SM_SHOW_BRAND(brandId, targetObjectId)` echo intent to the caller;
+  - group leader dispatches to existing `PlayerGroupRuntime.UpdateBrand`;
+  - alliance leader or vice-captain dispatches to `PlayerAllianceRuntime.UpdateBrand`;
+  - unauthorized group/alliance members produce a no-op `NotAuthorized` plan;
+  - stale C# team metadata without runtime ownership produces a `TeamMissing` plan.
+- Kept actual `CM_SHOW_BRAND` packet parsing/registration, `PacketSendUtility`, socket sends, Java static team lookup, and real-client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerAllianceRuntimeTests|PlayerAllianceMemberInfoTests|PlayerGroupRuntimeTests"` passes with 97 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1067 tests.
+
+#### Migration Parity Table - Session 610
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SHOW_BRAND` | `Aion.GameServer.Services.PlayerShowBrandCommandPlanner` / `PlayerShowBrandCommandPlan` | Client Command Planning Bridge | Partial | Regression Tested | Needs Verification | C# models run-implementation decisions for solo echo, group leader update, alliance captain update, and unauthorized no-op. Packet parsing/registration, live connection active-player lookup, and socket sends remain missing. |
+| `com.aionemu.gameserver.model.team.TemporaryPlayerTeam.updateBrand` | `PlayerGroupRuntime.UpdateBrand` / `PlayerAllianceRuntime.UpdateBrand` through command planner | Runtime Dependency | Partial | Regression Tested | Needs Verification | Command planner dispatches to group/alliance brand runtimes. Java generic team base class and `ConcurrentHashMap` behavior remain not runtime-compared. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.isLeader` | `PlayerGroupRuntime.IsLeader` / `PlayerAllianceRuntime.IsLeader` | Authorization Boundary | Partial | Regression Tested | Needs Verification | Group leader and alliance leader authorization are modeled. Java live team object identity and concurrency remain unverified. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance.isSomeCaptain` | `PlayerAllianceRuntime.IsLeader` + `IsViceCaptain` | Authorization Boundary | Partial | Regression Tested | Needs Verification | Alliance leader and vice-captain can update brands. Java mutable vice-captain collection behavior remains source-derived only. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SHOW_BRAND` | `PlayerShowBrandIntent` / runtime brand update intents | Server Packet Planning | Partial | Regression Tested | Needs Verification | Solo echo and team update callers produce existing `SmShowBrand` packets. Java golden frames, encrypted opcode validation, and live socket validation remain missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | Command-plan packet intents | Runtime Dependency | Not Started | No Tests | Unknown | Java sends immediately in `CM_SHOW_BRAND`; C# records metadata only. |
+
+Tests added:
+- `PlayerAllianceRuntimeTests.ShowBrandCommandPlanner_EchoesSoloBrandLikeJavaCmShowBrand`: validates no-team solo echo and `SM_SHOW_BRAND` payload.
+- `PlayerAllianceRuntimeTests.ShowBrandCommandPlanner_GroupLeaderUpdatesGroupAndMemberIsIgnoredLikeJavaCmShowBrand`: validates group leader update dispatch and non-leader no-op.
+- `PlayerAllianceRuntimeTests.ShowBrandCommandPlanner_AllianceLeaderAndViceCaptainUpdateAllianceLikeJavaCmShowBrand`: validates alliance leader/vice-captain dispatch and ordinary member no-op.
+- `PlayerAllianceRuntimeTests.ShowBrandCommandPlanner_ReportsTeamMissingForStaleCurrentTeam`: validates stale C# runtime metadata does not masquerade as authorization failure.
+- Java comparison status: expectations are source-derived from `CM_SHOW_BRAND.runImpl`, `TemporaryPlayerTeam.updateBrand`, `PlayerAlliance.isSomeCaptain`, and `SM_SHOW_BRAND.writeImpl`. No Java runtime execution, Java-generated golden vector, live active-player lookup comparison, packet parser comparison, socket send comparison, threading/lock comparison, reflection behavior, encrypted frame comparison, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- `CM_SHOW_BRAND` packet parsing and connection handler wiring are not implemented.
+- Live `PacketSendUtility` sends are represented as metadata only.
+- Java static/current team object identity is approximated through C# runtime snapshots and descriptors.
+- Java concurrent-map behavior for brand storage is source-derived but not runtime-compared.
+- Java golden byte vectors, encrypted opcode/frame validation, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 show-brand command planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 6 packet parser/handler wiring, live active-player lookup, live socket send, Java runtime/threading comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; show-brand command decisions are now modeled, but live packet handling and socket integration remain incomplete.
+
+Next recommended unit of work:
+- Continue command integration by adding a narrow `CM_SHOW_BRAND` client packet parse/handler boundary if it can reuse `PlayerShowBrandCommandPlanner` without broad connection changes; otherwise continue alliance entered-event composition by feeding `PlayerAllianceRuntime.CreateSendBrandsIntent` into the existing entered workflow metadata.
+
 ---
 
 ## Next Steps
