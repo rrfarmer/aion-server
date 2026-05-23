@@ -12181,6 +12181,50 @@ Summary metrics:
 Next recommended unit of work:
 - Add a non-sending `SmGroupInfo` packet-call planning bridge from the existing reconnect intent to an actual `SmGroupInfo` instance, still without live sends. Keep the bridge source-derived from `PlayerConnectedEvent` and test that reconnect can produce the same `PlayerGroupInfoPacketPlan` and packet payload for the reconnecting player's map id. Do not wire socket fanout until active connection/player context and `SM_GROUP_MEMBER_INFO` dependencies are ready.
 
+### Session 573 (May 23, 2026)
+- Added a non-sending reconnect packet bridge from `PlayerGroupReconnectPacketPlan` to `SmGroupInfo`.
+- `PlayerGroupRuntime.ReconnectMember` now builds a `PlayerGroupInfoPacketPlan` during reconnect intent creation, using the reconnecting player's current `WorldPosition.WorldId` as the source-shaped map id.
+- `PlayerGroupReconnectPacketPlan.CreateGroupInfoPacket()` can create the `SmGroupInfo` packet object for the reconnecting player, but it still does not send or fan out packets.
+- Extended the reconnect runtime test to validate the planned group-info fields and serialized unencrypted `SmGroupInfo` payload for the reconnecting player's map id.
+- Kept live socket sends, event dispatch, leader recovery, and `SM_GROUP_MEMBER_INFO` serialization disabled.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 95 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1193 tests.
+
+#### Migration Parity Table - Session 573
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.group.events.PlayerConnectedEvent` | `Aion.GameServer.Services.PlayerGroupRuntime.ReconnectMember` / `PlayerGroupReconnectPacketPlan` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# reconnect intent now carries a source-shaped `SM_GROUP_INFO` packet plan and can instantiate `SmGroupInfo`. Java still performs actual event handling, packet sends, member fanout, leader checks, and possible leader recovery. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupInfo` via `PlayerGroupReconnectPacketPlan.CreateGroupInfoPacket` | Server Packet / Intent Caller | Partial | Regression Tested | Needs Verification | Packet payload is created from reconnect intent and unit-tested, but remains non-sending. No Java golden vector, live socket frame, or client capture validates complete parity. |
+| `com.aionemu.gameserver.network.aion.AionConnection.getActivePlayer` map id dependency | `Player.Position.WorldId` feeding `PlayerGroupInfoPacketPlan.ActivePlayerMapId` | Packet Context | Refactored | Unit Tested | Intentional Difference | Java reads active-player map id at `SM_GROUP_INFO.writeImpl` time. C# reconnect planning uses the reconnecting player's current `WorldPosition.WorldId` because the real connection send path is still absent. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.getLeader` / `getObjectId` | `PlayerGroupDescriptor` consumed by reconnect group-info plan | Packet Dependency | Partial | Regression Tested | Needs Verification | Reconnect plan uses descriptor team id and leader id. Java leader identity/recovery and `ChangeGroupLeaderEvent` remain missing. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootGroupRules` | `PlayerGroupInfoPacketPlan.LootRules` consumed by reconnect `SmGroupInfo` | Packet Dependency | Partial | Regression Tested | Needs Verification | Default loot metadata flows into reconnect packet payload. Mutable loot-rule changes, distribution behavior, and `CM_DISTRIBUTION_SETTINGS` remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `PlayerGroupMemberInfoIntent` only | Server Packet Dependency | Not Started | Unit Tested Around Intent | Unknown | Reconnect still records member-info intent only. Packet serialization remains blocked on player stats, common data, effects, fly/mentor state, and skill slots. |
+| `com.aionemu.gameserver.model.team.group.events.ChangeGroupLeaderEvent` | No C# equivalent in this unit | Event Dependency | Not Started | No Tests | Unknown | Java can change leader during reconnect if needed and broadcast group info. C# does not implement leader recovery or leader-change packet fanout. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.ReconnectMember_ReturnsNonSendingPacketIntentPlanLikeJavaPlayerConnectedEvent`: extended to validate reconnect group-info planning, `CreateGroupInfoPacket()`, and the serialized unencrypted payload for Java field order and the reconnecting player's map id.
+- Java comparison status: expectations are source-derived from `PlayerConnectedEvent.handleEvent`, `SM_GROUP_INFO.writeImpl`, `LootGroupRules`, and `TeamType`. No Java runtime execution, Java-generated golden vector, live connection active-player lookup, socket send/fanout comparison, encoded opcode/frame comparison, leader-recovery comparison, or client validation was run.
+
+Remaining risks:
+- Reconnect group info is still plan-and-packet-object only; no live send path is wired.
+- `SM_GROUP_MEMBER_INFO` serialization and fanout remain deferred, so Java reconnect behavior is still incomplete.
+- C# uses `Player.Position.WorldId` during planning, while Java reads from `AionConnection.getActivePlayer` during serialization.
+- Leader recovery, `ChangeGroupLeaderEvent`, group-enter sends, loot-rule-change sends, and event ordering are not ported.
+- Threading remains a C# `Lock`; Java team event locking and concurrent member map iteration are not runtime-compared.
+- Serialization is source-derived for payload order only. Full frame/opcode/header parity, reflection/JAXB behavior, date/time behavior, and precision/rounding were not newly validated.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 non-sending reconnect-to-`SmGroupInfo` planning bridge
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 12 live reconnect send path, `SM_GROUP_MEMBER_INFO` serialization, member-info fanout, leader recovery, `ChangeGroupLeaderEvent`, group-enter packet sends, loot-rule-change packet sends, encoded opcode/frame golden validation, active connection map-id lookup, Java member iteration/order comparison, full team event ordering, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; reconnect can now produce a source-shaped group-info packet object, but the Java group reconnect packet sequence is still not live or complete.
+
+Next recommended unit of work:
+- Defer `SM_GROUP_MEMBER_INFO` byte serialization until its player/stat/effect dependencies are modeled. The next safe group unit is to add non-sending packet-call intent for Java `PlayerGroupEnteredEvent` using the existing `PlayerGroupInfoPacketPlan`/`SmGroupInfo` path, or to port the first small `ChangeGroupLootRulesEvent` planning slice that records a future `SM_GROUP_INFO` broadcast without live sends.
+
 ---
 
 ## Next Steps
