@@ -12366,6 +12366,49 @@ Summary metrics:
 Next recommended unit of work:
 - Inspect existing C# `SmAbyssRankUpdate` support and Java `SM_ABYSS_RANK_UPDATE(1, player)` shape, then add a non-sending group-enter abyss-rank broadcast intent if the modeled fields are sufficient. If not, defer abyss-rank and add an explicit blocked dependency note, then consider a tiny brand-intent placeholder only if Java `PlayerGroup.sendBrands` can be source-read without broad dependencies.
 
+### Session 577 (May 23, 2026)
+- Source-read Java `SM_ABYSS_RANK_UPDATE.writeImpl` for the group-enter action `1` branch.
+- Confirmed C# `SmAbyssRankUpdate.TeamObjectId(int playerObjectId, int teamObjectId)` already models Java action `1`.
+- Extended `PlayerGroupEnteredPacketPlan` with a non-sending `PlayerGroupAbyssRankUpdateIntent`.
+- `PlayerGroupRuntime.CreateEnteredPacketPlan` now records Java's `PacketSendUtility.broadcastPacket(player, new SM_ABYSS_RANK_UPDATE(1, player), true)` as an intent with `IncludeSelf = true`.
+- Extended the group-enter runtime test to validate the planned action `1` payload: action byte, entering player object id, and current team id.
+- Kept live visible-object broadcast, known-list filtering, `SM_GROUP_MEMBER_INFO`, group brands, and superclass event handling disabled.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 99 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1197 tests.
+
+#### Migration Parity Table - Session 577
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK_UPDATE` action `1` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRankUpdate.TeamObjectId` | Server Packet Helper | Partial | Regression Tested | Needs Verification | Existing C# helper writes Java action `1`, player object id, and team id. Payload is tested through group-enter intent, but no Java golden vector, live frame, or client capture validates end-to-end parity. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerGroupEnteredEvent` | `Aion.GameServer.Services.PlayerGroupEnteredPacketPlan` / `PlayerGroupAbyssRankUpdateIntent` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# now records group-info, party-message, and abyss-rank-update intents. Java still sends member-info packets, brands, and superclass event handling through live event dispatch. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.broadcastPacket` | `PlayerGroupAbyssRankUpdateIntent.IncludeSelf` | Broadcast Intent Dependency | Refactored | Unit Tested | Intentional Difference | Java broadcasts to visible connections with include-self `true`. C# only records the broadcast intent and flag; no known-list/visibility fanout is wired. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | No C# packet equivalent in this unit | Server Packet Dependency | Not Started | No Tests | Unknown | Java group-enter still sends JOIN/ENTER member-info packets before the abyss-rank broadcast. C# remains blocked on packet dependencies. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.sendBrands` | No C# equivalent in this unit | Event Dependency | Not Started | No Tests | Unknown | Java sends group brands to the entering player before visible abyss-rank broadcast. Brand state and packets are still missing. |
+| `com.aionemu.gameserver.model.team.common.events.PlayerEnteredEvent.handleEvent` | No C# equivalent in this unit | Event Dependency | Not Started | No Tests | Unknown | Java calls superclass handling after the broadcast. C# does not model this event chain. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.CreateEnteredPacketPlan_ReturnsNonSendingGroupInfoPlanLikeJavaPlayerGroupEnteredEvent`: extended to validate `PlayerGroupAbyssRankUpdateIntent`, include-self flag, and serialized `SmAbyssRankUpdate.TeamObjectId` payload for Java action `1`.
+- Java comparison status: expectations are source-derived from `PlayerGroupEnteredEvent.handleEvent` and `SM_ABYSS_RANK_UPDATE.writeImpl`. No Java runtime execution, Java-generated golden vector, known-list visibility broadcast comparison, socket send comparison, encoded opcode/frame comparison, client capture, `SM_GROUP_MEMBER_INFO` comparison, brand comparison, or superclass event comparison was run.
+
+Remaining risks:
+- The abyss-rank update is intent-only; no live visible-object broadcast occurs.
+- Include-self is recorded but not consumed by a connection registry or known-list service.
+- Group-enter packet ordering remains incomplete because `SM_GROUP_MEMBER_INFO`, brands, and superclass behavior are missing.
+- C# payload tests are unencrypted payload checks only; full frame/opcode/header parity is not verified.
+- Threading/event ordering, reflection/JAXB behavior, date/time behavior, and precision/rounding were not newly validated.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 non-sending group-enter abyss-rank broadcast intent slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 11 live known-list broadcast, include-self fanout consumption, `SM_GROUP_MEMBER_INFO` serialization, group-enter member-info fanout, group brand sends, superclass player-entered handling, Java packet ordering comparison, encoded opcode/frame golden validation, full team event ordering/threading, active connection/runtime comparison, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group-enter now plans group-info, party-message, and abyss-rank-update packets, but member-info, brands, superclass behavior, and live sends remain missing.
+
+Next recommended unit of work:
+- Source-read `PlayerGroup.sendBrands` and related brand packet classes. If dependencies are small, add a non-sending brand-send intent to `PlayerGroupEnteredPacketPlan`; if broad, mark brand send blocked and pivot to the next prerequisite for `SM_GROUP_MEMBER_INFO` serialization, starting with the smallest player common-data/life-stat fields needed by Java's group member packet.
+
 ---
 
 ## Next Steps
