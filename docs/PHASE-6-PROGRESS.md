@@ -13207,6 +13207,51 @@ Summary metrics:
 Next recommended unit of work:
 - Address the alliance same-id event discriminator before adding `MEMBER_GROUP_CHANGE`: introduce a packet-planning event descriptor that preserves the Java enum constant identity separately from the wire id, then use it to model the Java name-only `MEMBER_GROUP_CHANGE` branch without regressing `JOIN` id-5 behavior. Keep live alliance runtime/fanout deferred.
 
+### Session 594 (May 23, 2026)
+- Re-read Java `PlayerAllianceEvent` and `SM_ALLIANCE_MEMBER_INFO.writeImpl` to preserve Java enum constant identity for same-wire-id packet branches.
+- Added `PlayerAllianceMemberInfoEvent` and `PlayerAllianceMemberInfoEventKind` as packet-planning descriptors that retain both Java constant identity and wire id.
+- Updated `PlayerAllianceMemberInfoPacketPlan` to carry requested/effective descriptor kinds alongside the legacy wire-id enum values.
+- Kept the existing `PlayerAllianceEvent` enum for numeric id parity while adding `FromPlayer(..., PlayerAllianceMemberInfoEvent, ...)` for branches that need exact Java enum identity.
+- Added `MEMBER_GROUP_CHANGE` serialization as Java's name-only id-5 branch.
+- Preserved `JOIN` id-5 behavior as name plus online effect skeleton/timers.
+- Added regression coverage proving `JOIN` and `MEMBER_GROUP_CHANGE` share wire id `5` but serialize different payloads.
+- Kept live alliance runtime/fanout, Java runtime comparison, encoded frame validation, live client validation, and live effect extraction deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests|FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 127 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1225 tests.
+
+#### Migration Parity Table - Session 594
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.common.legacy.PlayerAllianceEvent` | `Aion.GameServer.Model.GameObjects.PlayerAllianceEvent` plus `Aion.GameServer.Services.PlayerAllianceMemberInfoEvent` / `PlayerAllianceMemberInfoEventKind` | Enum / Packet Descriptor | Partial | Unit Tested | Needs Verification | C# keeps numeric id enum parity and now adds a descriptor to preserve Java constant identity where same-id enum aliases behave differently. Runtime Java enum comparison is still missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` | Server Packet | Partial | Unit Tested | Needs Verification | C# now distinguishes `JOIN` id 5 from `MEMBER_GROUP_CHANGE` id 5 and serializes the Java name-only group-change branch. Java golden bytes, encoded frames, live sends, and client validation remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceMember` | `PlayerAllianceMemberInfoPacketPlan.FromPlayer` direct player input plus event descriptor | Team Member Dependency | Partial | Unit Tested | Needs Verification | Descriptor fixes packet event identity, but C# still bypasses a full alliance-member runtime wrapper with group slot/captain/member metadata. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.PlayerAllianceMemberInfoEvent_PreservesJavaConstantIdentityForSameWireIds`: validates descriptor wire ids and distinct Java constant kinds for `JOIN` and `MEMBER_GROUP_CHANGE`.
+- `PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_WritesMemberGroupChangeNameOnlyDespiteSharedJoinWireId`: validates `MEMBER_GROUP_CHANGE` writes only the name while `JOIN` keeps effect/timer behavior, despite both using wire id `5`.
+- Java comparison status: expectations are source-derived from `PlayerAllianceEvent` and `SM_ALLIANCE_MEMBER_INFO.writeImpl`. No Java runtime execution, Java-generated golden vector, live send/fanout comparison, encoded frame comparison, reflection behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Live alliance registry/runtime membership is not implemented.
+- Live alliance member-info sends are not wired to sockets.
+- Java runtime ordering/event-loop behavior is not compared.
+- Java golden byte vectors and encoded frame validation are still unavailable.
+- Live effect-controller extraction/filtering remains missing.
+- Captain/vice-captain event semantics are still only packet-shape modeled through shared id-13 behavior; live role changes are not implemented.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 3
+- Total artifacts ported: 1 alliance event descriptor and member-group-change packet branch slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 7 live alliance registry/runtime, live alliance socket fanout, live role/group-slot metadata, live effect extraction/filtering, Java runtime ordering comparison, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; alliance packet branch identity is safer, but live alliance runtime parity remains incomplete.
+
+Next recommended unit of work:
+- Continue alliance event parity by source-reading Java alliance group-change/captain assignment events that call `SM_ALLIANCE_MEMBER_INFO`, then add a non-sending plan for member group changes using `PlayerAllianceMemberInfoEvent.MemberGroupChange`. Keep live alliance slot mutation and socket fanout deferred, but make the packet caller surface explicit.
+
 ---
 
 ## Next Steps
