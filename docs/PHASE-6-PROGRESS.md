@@ -10739,6 +10739,48 @@ Summary metrics:
 Next recommended unit of work:
 - Add the persistence-facing inventory application step for `PortalRequirementConsumptionApplication.InventoryItems`: update/delete the affected item rows through the existing item repository patterns, then wire that repository result and packet list into a still-teleport-free portal entry caller. Keep actual `TeleportService.teleportTo`/instance transfer as the following unit.
 
+### Session 542 (May 23, 2026)
+- Extended `PortalRequirementConsumptionApplication` to carry `UpdatedItems` and `DeletedObjectIds`, so callers can persist affected rows without diffing the final inventory snapshot.
+- Added `PlayerEnterWorldService.SavePortalRequirementConsumptionMutationAsync`, a portal-specific persistence-facing wrapper over the existing transactional item update/delete repository path.
+- The wrapper rejects unapplied applications, skips the repository when no rows changed, and persists updated/deleted portal requirement rows through `IPlayerEnterWorldRepository.SaveAssemblyItemActionMutationAsync` with empty reward lists.
+- Kept this as a repository boundary only: no live portal handler invokes it, no packets are sent here, and no actual teleport/instance transfer is executed.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passes with 78 tests.
+
+#### Migration Parity Table - Session 542
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.checkAndRemoveRequiredItems` | `PlayerEnterWorldService.SavePortalRequirementConsumptionMutationAsync` consuming `PortalRequirementConsumptionApplication` | Service / Persistence Boundary | Partial | Unit Tested | Partial Parity | C# now has a portal-specific handoff for persisting planned required item/kinah consumption. It is not wired into production portal entry and does not perform teleport. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseByItemId` | `PortalRequirementConsumptionApplication.UpdatedItems` / `DeletedObjectIds` persisted through repository wrapper | Inventory Boundary | Partial | Unit Tested | Needs Verification | Updated/deleted affected rows are carried explicitly. Java storage ordering, locks, delete queue, logging, and `QuestEngine.onItemRemoved` remain unsupported. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseKinah` | Kinah row in `PortalRequirementConsumptionApplication.UpdatedItems` | Kinah Persistence Boundary | Partial | Unit Tested | Needs Verification | Kinah row updates can now be forwarded to repository persistence. Java update type, packet send, and persistent-state side effects are still split across other C# boundaries and not live-verified. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store` / item deletion persistence | Existing `IPlayerEnterWorldRepository.SaveAssemblyItemActionMutationAsync` path reused by `SavePortalRequirementConsumptionMutationAsync` | Repository | Partial | Unit Tested | Needs Verification | Reuses an existing transactional update/delete path with empty reward lists. This avoids a new SQL path, but it has not been Java-runtime compared for portal consumption specifically. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` / `SM_DELETE_ITEM` dispatch | `PortalRequirementConsumptionApplication.Packets` carried separately from persistence wrapper | Packet / Service Boundary | Partial | Unit Tested | Partial Parity | Persistence wrapper does not send packets; Session 541 packet plan remains the packet handoff. Production socket ordering is still missing. |
+
+Tests added or extended:
+- `PlayerEnterWorldServiceTests.SavePortalRequirementConsumptionMutation_PersistsUpdatedAndDeletedRows`: validates portal application updated/deleted rows are forwarded to the existing repository mutation path with no reward rows.
+- `PlayerEnterWorldServiceTests.SavePortalRequirementConsumptionMutation_SkipsRepositoryWhenNoRowsChanged`: validates no-op successful applications do not start persistence work.
+- `PlayerEnterWorldServiceTests.SavePortalRequirementConsumptionMutation_RejectsUnappliedApplication`: validates failed/unapplied applications are not persisted.
+- Java comparison status: expectations are source-derived from `PortalService.checkAndRemoveRequiredItems`, `Storage.decreaseByItemId`, `Storage.decreaseKinah`, and existing C# repository update/delete patterns. No Java runtime execution, database integration test, live packet send, quest callback comparison, or live-client validation was run.
+
+Remaining risks:
+- The persistence wrapper is not invoked by a production portal entry caller.
+- The repository method name is inherited from an existing assembly/composition item mutation path; behavior is suitable for update/delete rows but not semantically dedicated to portals.
+- No integration test proves the exact SQL row changes for portal consumption yet.
+- Packet emission remains separate from persistence; no atomic production flow sends packets only after a successful DB commit.
+- Java side effects remain missing: persistent state marking, delete queue handling, logging, `QuestEngine.onItemRemoved`, and concurrency/lock semantics.
+- Group-size checks, actual same-instance teleport, instance transfer/allocation, quest engine depth, siege ownership, threading, reflection/JAXB behavior, date/time, precision/rounding, and live-client behavior remain incomplete or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 portal-specific persistence-facing wrapper plus explicit affected-row fields on the application DTO
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 6 production portal handler wiring, portal-specific SQL integration coverage, live packet dispatch, quest item removal side effects, actual teleport/transfer, and live runtime/client comparison
+- Estimated overall migration completion: Phase 6 remains about 60% complete; portal requirement consumption now has validation, planning, packet, and persistence boundaries, but no live portal caller executes them end to end.
+
+Next recommended unit of work:
+- Add a still-teleport-free production portal entry orchestration method that calls `ValidatePortalEntryPlan`, `CreateRequiredItemsAndKinahConsumptionPlan`, `CreateRequiredItemsAndKinahApplication`, and `SavePortalRequirementConsumptionMutationAsync`, then returns the failure/packet/action result. Keep `TeleportService.teleportTo`, transfer allocation, and group/alliance fanout as later units.
+
 ---
 
 ## Next Steps
