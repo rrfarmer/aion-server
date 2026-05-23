@@ -9213,6 +9213,45 @@ Summary metrics:
 Next recommended unit of work:
 - Continue teleport/map-change parity by adding deterministic packet-order or frame-capture coverage for delayed teleport map/instance-change `SM_CHANNEL_INFO`/`SM_PLAYER_SPAWN` and subsequent level-ready `SM_PLAYER_INFO`, or begin Java-generated golden-vector coverage for `SM_TELEPORT_LOC`, `SM_DELETE`, and the `SM_PLAYER_INFO` port-animation byte.
 
+### Session 507 (May 23, 2026)
+- Added an optional `GameServerConnection` sent-packet observer, inert by default, so focused tests can record direct server-packet objects without decrypting socket frames or changing production send behavior.
+- Expanded the map/instance-change delayed teleport regression to verify direct packet ordering: `SmTeleportLoc` during queue, `SmChannelInfo` then `SmPlayerSpawn` during animation completion, and `SmPlayerInfo`/`SmAccountProperties`/`SmMotion`/`SmCubeUpdate` during level-ready continuation.
+- This closes part of Session 506's direct packet-order gap while still leaving byte-level golden vectors and live encrypted frame validation open.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests"` passes with 15 tests.
+
+#### Migration Parity Table - Session 507
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.TeleportService.sendLoc` | `Aion.GameServer.Network.Aion.GameServerConnection.QueueDelayedTeleportAsync` | Teleport Request Boundary | Partial | Regression Tested | Partial Parity | Direct packet observer now verifies the queued delayed request sends `SmTeleportLoc` after the modeled despawn broadcast. Java action abort, full `World.despawn`, task scheduling/cancellation, and production caller wiring remain incomplete. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.SpawnTask.run` | `GameServerConnection.HandleTeleportAnimationDoneAsync` + `SendDelayedTeleportCompletionPacketsAsync` | Teleport Completion Boundary | Partial | Regression Tested | Partial Parity | Direct packet observer verifies the map/instance-change branch sends `SmChannelInfo` followed by `SmPlayerSpawn`, matching Java's full-map-reload branch shape. Java instance-open message, dead-player/instance fallback, pet movement/spawn, conqueror/instance callbacks, legion update, protection task, effect icons, and full `World.spawn` remain incomplete. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_LEVEL_READY` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLevelReadyAsync` | Client Packet Handler | Partial | Regression Tested | Partial Parity | Direct packet observer verifies level-ready continuation sends `SmPlayerInfo`, `SmAccountProperties`, `SmMotion`, and `SmCubeUpdate` after the map/instance-change delayed teleport branch. Full Java level-ready service fanout and callback ordering remain incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CHANNEL_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmChannelInfo` | Server Packet | Partial | Regression Tested | Needs Verification | Packet object order is now verified in delayed teleport map/instance-change flow. Byte-level payload parity for this branch was not newly golden-tested in this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_SPAWN` | `Aion.GameServer.Network.Aion.ServerPackets.SmPlayerSpawn` | Server Packet | Partial | Regression Tested | Needs Verification | Packet object order is now verified in delayed teleport map/instance-change flow. Existing packet model still needs broader Java golden-vector/live socket validation. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmPlayerInfo` | Server Packet | Partial | Unit + Regression Tested | Partial Parity | Level-ready continuation packet object order is verified after retained arrival animation state. The observer records packet objects, not encrypted wire bytes, so Java-generated golden-vector and live-client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.AionConnection.sendPacket` / `AionServerPacket.write` | `Aion.GameServer.Network.Aion.GameServerConnection.SendPacketAsync` | Network Send Boundary | Refactored | Regression Tested | Intentional Difference | Added an optional test observer that records packet objects before serialization. It is null by default and does not alter wire format. This is a C# testability hook, not Java behavior; threading remains guarded by the existing send lock. |
+
+Tests added:
+- `GameServerConnectionFlightZoneFanoutTests.QueueDelayedTeleportAsync_MapInstanceChangeKeepsArrivalAnimationUntilLevelReady`: expanded to assert direct packet order through the optional send observer: queue sends `SmTeleportLoc`, completion sends `SmChannelInfo` then `SmPlayerSpawn`, and level-ready sends `SmPlayerInfo`, `SmAccountProperties`, `SmMotion`, and `SmCubeUpdate`.
+- Java comparison status: expectations are source-derived from Java `TeleportService.sendLoc`, `SpawnTask.run`, and `CM_LEVEL_READY.runImpl` packet order. The observer verifies C# packet object order only; no Java runtime comparison, encrypted frame capture, or Java-generated golden vector was run.
+
+Remaining risks:
+- The send observer proves packet object order, not byte-level payloads or encrypted frame order on the socket.
+- Full Java map/instance-change behavior remains partial: instance-open system message, instance-exists fallback, pet movement/spawn, conqueror/protector and instance callbacks, legion update, protection task, effect icon refresh, and full `World.spawn` side effects remain incomplete.
+- The optional observer is a C# testability hook and should remain null in production paths.
+- No database schema, persistence, date/time, reflection, precision/rounding, or scheduler behavior changed in this unit. Serialization format is unchanged but not newly golden-tested.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 packet-order verification slice for map/instance delayed teleport continuation
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 7 byte-level golden vectors/live encrypted frame validation, full Java map/instance spawn side effects, instance-exists fallback/open message, pet/legion/conqueror/instance callbacks, production teleport caller wiring, Java zone handler callback ordering, and broader `CM_LEVEL_READY` service fanout
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this unit improves evidence around teleport packet ordering but does not change the broad remaining game-core scope.
+
+Next recommended unit of work:
+- Add Java-generated golden-vector coverage for `SM_TELEPORT_LOC`, `SM_DELETE`, and `SM_PLAYER_INFO` port-animation byte, or continue map-change parity by modeling the instance-open system message and missing instance-exists fallback path.
+
 ---
 
 ## Next Steps
