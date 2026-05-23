@@ -3813,6 +3813,57 @@ Summary metrics:
 Next recommended unit of work:
 - Add a staged `AttackResult` / `EffectReserved` result surface for `WorldNpcSkillResultCalculationService`, carrying attack status, hit type, resource type, send flag, shield-checked/skipped metadata, and reflected/protected placeholders before implementing real shield or status calculations.
 
+### Session 386 (May 23, 2026)
+- Extended `WorldNpcSkillResultCalculationService` with staged Java `AttackResult` and `EffectReserved` result surfaces.
+- Added `WorldNpcSkillAttackResult` with damage, attack status, hit type, shield-checked metadata, shield type, reflected damage/skill id, protected damage/skill id, protector id, MP absorb fields, and launch-sub-effect flag.
+- Added `WorldNpcSkillEffectReservedResult` with position, value, resource type, damage/heal polarity, send flag, and Java-style `ValueToSend`.
+- Added staged enums `WorldNpcSkillAttackStatus`, `WorldNpcSkillHitType`, and `WorldNpcEffectResourceType` using Java ids/order for known values.
+- Calculation results now expose both attack-result and effect-reserved DTOs while keeping real shield/status math explicitly unimplemented.
+- Extended delayed spell integration coverage to assert `ignoreShield` maps to shield-skipped metadata and `send=false` reaches the staged effect-reserved result.
+- Added focused coverage for Java-style attack result defaults, shield checked/skipped behavior, effect-reserved HP/MP resource values, and negative send values for non-damage.
+- Current gaps in this cluster: actual shield observer mutation, reflected/protected/MP-absorbed side effects, attack status calculation, hit-type selection from skill element, `Effect.set*` mutation, launch subeffect mutation, and full `EffectReserved` ownership remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcSkillResultCalculationServiceTests|WorldNpcDamageServiceTests"` passes with 24 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcDamageServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GamePacketTests|GameServerBootstrapTests"` passes with 156 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 785 tests.
+
+#### Migration Parity Table - Session 386
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.attack.AttackResult` | `Aion.GameServer.Services.WorldNpcSkillAttackResult` | DTO | Partial | Unit Tested | Partial Parity | C# stages damage, attack status, hit type, shield placeholders, MP absorb placeholders, and launch-sub-effect flag. It does not yet mutate these through shield/protect/reflection observers. |
+| `com.aionemu.gameserver.skillengine.model.EffectReserved` | `Aion.GameServer.Services.WorldNpcSkillEffectReservedResult` | DTO | Partial | Unit Tested | Partial Parity | C# stages position, value, resource type, damage polarity, send flag, and Java-style `ValueToSend`. It is not yet owned by a full `Effect` runtime or sorted by position/hash. |
+| `com.aionemu.gameserver.skillengine.model.EffectReserved.ResourceType` | `Aion.GameServer.Services.WorldNpcEffectResourceType` | Enum | Partial | Unit Tested | Partial Parity | C# mirrors HP/MP/FP/DP ids. HealType conversion and full resource consumers are not ported. |
+| `com.aionemu.gameserver.skillengine.model.HitType` | `Aion.GameServer.Services.WorldNpcSkillHitType` | Enum | Partial | Unit Tested | Needs Verification | C# stages known hit types for calculation metadata. XML binding and Java hit-type selection rules remain pending. |
+| `com.aionemu.gameserver.controllers.attack.AttackStatus` | `Aion.GameServer.Services.WorldNpcSkillAttackStatus` | Enum | Partial | Unit Tested | Needs Verification | C# mirrors status ids for DTO metadata only. Java helper methods (`getBaseStatus`, `getOffHandStats`, `getCriticalStatusFor`) and probability calculation remain pending. |
+| `com.aionemu.gameserver.controllers.attack.AttackUtil.calculateEffectResult` | `Aion.GameServer.Services.WorldNpcSkillResultCalculationService` | Utility/Service | Partial | Unit Tested | Partial Parity | C# now creates staged attack-result and effect-reserved DTOs after final damage calculation. It does not call shield observers or mutate Java-style `Effect` fields. |
+| `com.aionemu.gameserver.controllers.ObserveController.checkShieldStatus` | `Aion.GameServer.Services.WorldNpcSkillAttackResult.ShieldChecked` | Observer/DTO Flag | Not Started | Unit Tested | Unknown | C# only records whether shield logic would be checked or skipped based on `ignoreShield`; no shield observers execute. |
+| `com.aionemu.gameserver.skillengine.model.Effect` | `Aion.GameServer.Services.WorldNpcSkillResultCalculationResult` | Runtime/DTO | Partial | Unit Tested | Needs Verification | C# exposes result DTOs but does not call `Effect.setReserveds`, `setAttackStatus`, `setReflectedDamage`, `setProtectedDamage`, or related Java setters. |
+
+Tests added or extended:
+- `WorldNpcSkillResultCalculationServiceTests.Calculate_CreatesJavaAttackResultAndEffectReservedSurface`: validates staged attack status, hit type, shield checked flag, shield placeholders, launch-sub-effect flag, effect-reserved position/value/type/send, and value-to-send.
+- `WorldNpcSkillResultCalculationServiceTests.Calculate_EffectReservedValueToSendIsNegativeForNonDamage`: validates Java `EffectReserved.getValueToSend` polarity for non-damage MP values.
+- `WorldNpcSkillResultCalculationServiceTests.Calculate_RecordsCannotMissAndAttackUtilFlags`: extended to validate default attack-result/effect-reserved DTOs and shield-skipped behavior.
+- `ApplyDamageEffectAsync_MapsDelayedSpellAttackToDelayDamageAndAttackObserver`: extended to validate delayed spell `ignoreShield` and `send=false` metadata reach the calculation result.
+- Java comparison status: tests are source-derived from Java `AttackResult`, `EffectReserved`, `EffectReserved.ResourceType`, `HitType`, `AttackStatus`, and `AttackUtil.calculateEffectResult`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Attack status and hit type are caller/staged metadata, not calculated from physical/magical status logic.
+- Shield/protect/reflection/MP-absorb fields are placeholders and do not come from observer execution.
+- Effect-reserved DTOs are not stored on a full `Effect` object, sorted, or consumed by a real skill runtime.
+- Java `AttackStatus` helper methods and counter/critical flags are not ported yet.
+- Threading, serialization, reflection, and date/time behavior are not exercised by this unit; precision/rounding is inherited from the prior calculation shell.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 6 partial/staged C# artifacts
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 55% because full `AttackUtil`, status probability, shield observer execution, full effect runtime, real skill runtime, live drain/heal side effects, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Add Java `AttackStatus` helper parity on the C# staged enum (`getBaseStatus`, `getOffHandStats`, `getCriticalStatusFor`, critical/counter flags) so later status calculation can build on tested enum behavior.
+
 ---
 
 ## Next Steps
@@ -3822,5 +3873,5 @@ Next recommended unit of work:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add a staged `AttackResult` / `EffectReserved` result surface for `WorldNpcSkillResultCalculationService`, carrying attack status, hit type, resource type, send flag, shield-checked/skipped metadata, and reflected/protected placeholders before implementing real shield or status calculations, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add Java `AttackStatus` helper parity on the C# staged enum (`getBaseStatus`, `getOffHandStats`, `getCriticalStatusFor`, critical/counter flags) so later status calculation can build on tested enum behavior, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
