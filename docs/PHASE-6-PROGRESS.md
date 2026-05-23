@@ -4631,6 +4631,47 @@ Summary metrics:
 Next recommended unit of work:
 - Add the next smallest resource adapter closure: wire staged `DPHealEffect` output into `WorldNpcResourceStatsService.AddPlayerDp` with explicit DP packet/stat intents, or add the HP heal boundary for Java `CreatureLifeStats.increaseHp` if ready to handle disease, killing-blow, death/observer, and packet side effects.
 
+### Session 402 (May 23, 2026)
+- Wired staged `DPHealEffect` resource output into `WorldNpcResourceStatsService.AddPlayerDp`.
+- Kept DP packet/stat behavior as explicit intents on `WorldNpcResourceChangeResult`: `BroadcastDpInfo`, `SendDpStatUpdate`, and `UpdateStatsAndSpeedVisually`.
+- Added an explicit HP unsupported adapter test so future work does not accidentally route HP heals through the MP/FP/DP resource adapter before Java `CreatureLifeStats.increaseHp` parity exists.
+- Current gaps in this cluster: real `SM_DP_INFO`, `SM_STATUPDATE_DP`, and stats/speed visual recalculation are still not ported; HP heal still needs its own boundary; staged delayed/scheduled callbacks remain metadata only.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcResourceStatsServiceTests"` passes with 12 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcResourceStatsServiceTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GamePacketTests|GameServerBootstrapTests"` passes with 256 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 885 tests.
+
+#### Migration Parity Table - Session 402
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.DPHealEffect.onPeriodicAction` | `WorldNpcSkillResourceOverTimePeriodicActionResult` + `WorldNpcResourceStatsService.ApplyResourceOverTimePeriodicResultAsync` | Effect-to-Stats Adapter | Partial | Unit Tested | Partial Parity | C# applies staged DP heal values through `AddPlayerDp`, including max-DP cap behavior and online side-effect intents. Real DP packet classes are pending. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData.addDp` / `setDp` | `WorldNpcResourceStatsService.AddPlayerDp`; `WorldNpcResourceChangeResult` DP intents | Runtime/Service | Partial | Unit Tested | Partial Parity | C# mutates DP and records Java's online DP info/stat update/stat visual update side effects. It does not yet broadcast or send the concrete packets. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DP_INFO` | `WorldNpcResourceChangeResult.BroadcastDpInfo` | Packet Intent | Not Started | Unit Tested as Intent | Needs Verification | C# records when Java would broadcast visible DP info, but packet serialization and visibility broadcast are pending. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_DP` | `WorldNpcResourceChangeResult.SendDpStatUpdate` | Packet Intent | Not Started | Unit Tested as Intent | Needs Verification | C# records when Java would send the player's DP stat update, but packet serialization and self-send are pending. |
+| `com.aionemu.gameserver.model.stats.container.CreatureLifeStats.increaseHp` | `WorldNpcResourceEffectApplicationStatus.UnsupportedResource` for HP | Gap Marker | Not Started | Unit Tested | Needs Verification | HP heal remains intentionally unsupported in the resource adapter until disease, killing-blow, death/observer, and HP packet behavior have a dedicated boundary. |
+
+Tests added:
+- `WorldNpcResourceStatsServiceTests.ApplyResourceOverTimePeriodicResultAsync_AddsDpFromStagedDpHealWithPacketIntents`: validates staged DP heal output can mutate player DP, cap to max DP, and record DP packet/stat intents.
+- `WorldNpcResourceStatsServiceTests.ApplyResourceOverTimePeriodicResultAsync_KeepsHpHealUnsupportedUntilHpBoundaryExists`: validates HP heal output remains unsupported until the HP boundary is ported.
+- Java comparison status: tests are source-derived from Java `DPHealEffect`, `PlayerCommonData.addDp/setDp`, and the pending HP heal guard from `CreatureLifeStats.increaseHp`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- DP effect application records packet/stat intents only. The concrete DP packets, visible-player fanout, self-send, and visual stat recalculation are still open work.
+- HP heal is now explicitly guarded but still unported.
+- Staged effect runtime is still not live: no `EffectReserved` storage, scheduler execution, template lookup, or actual skill engine invocation.
+- The DP adapter relies on caller-supplied max DP for online players, matching the current staged stat-boundary approach.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 2 partial C# adapter/runtime artifacts plus packet intent markers
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full effect runtime, HP heal mutation, real DP packet classes, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Add a dedicated HP heal boundary for Java `CreatureLifeStats.increaseHp`, including disease guard, negative-heal-to-damage branch, max-HP cap, killing-blow reset, HP percentage packet metadata, and explicit gaps for HP observers, player `SM_STATUPDATE_HP`, team stat update, and restore-task triggers.
+
 ---
 
 ## Next Steps
@@ -4640,5 +4681,5 @@ Next recommended unit of work:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring with DP heal adapter intents and the HP heal boundary after the MP/FP adapter baseline, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring with the HP heal boundary after the MP/FP/DP adapter baseline, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
