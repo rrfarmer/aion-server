@@ -5890,6 +5890,45 @@ Summary metrics:
 Next recommended unit of work:
 - Continue extracting shared stat boundaries by moving attack-speed resolution out of `PlayerVisualStatsUpdateService` and toward the `SmStatsInfo` stat context, or introduce the first narrow `SM_GM_SHOW_PLAYER_STATUS` packet scaffold so the Java fly-state plus movement-mask status bytes can be tested against the newly shared movement state.
 
+### Session 428 (May 23, 2026)
+- Added `PlayerLevelReadyFlightNotifier` for the Java `CM_LEVEL_READY` branch that calls `FlyController.startFly(true, true)` when server-side `FlyState.FLYING` survives teleport or map loading.
+- Wired `GameServerConnection.HandleLevelReadyAsync` to invoke the notifier after the baseline self packets, preserving the existing C# level-ready packet order around `SM_PLAYER_INFO`, account properties, motions, and cube update.
+- The notifier re-applies flying creature state through `Player.StartFlying`, records FP-reduce intent, and broadcasts `SM_EMOTION(FLY)` to visible players including the source player.
+- Added a regression that serializes the emitted `SM_EMOTION(FLY)` payload and verifies the skip branch for non-flying players.
+- Current gaps in this cluster: Java `FlyController.canFly` zone/access/no-fly/polymorph/store guards remain incomplete, Java `updateStatsAndSpeedVisually` is not invoked from this notifier yet, and direct end-to-end socket-level `CM_LEVEL_READY` dispatch is still not covered by a connection harness.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerVisualStatsUpdateServiceTests"` passes with 10 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerVisualStatsUpdateServiceTests|FullyQualifiedName~PlayerStateTests|FullyQualifiedName~GamePacketTests"` passes with 104 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 945 tests.
+
+#### Migration Parity Table - Session 428
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_LEVEL_READY` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLevelReadyAsync` | Client Packet Handler | Partial | Service Regression Tested | Partial Parity | Level-ready now restarts flying presentation when `FlyState.Flying` is already set. Full Java level-ready world/spawn/weather/quest/team side effects remain pending. |
+| `com.aionemu.gameserver.controllers.FlyController.startFly(true, true)` | `Aion.GameServer.Services.PlayerLevelReadyFlightNotifier` | Controller / State + Packet Fanout | Partial | Unit Tested | Partial Parity | Re-applies flying state, FP-reduce intent, and `SM_EMOTION(FLY)` broadcast. Java can-fly guards, stat refresh, cooldown policy, and audit/system-message behavior remain incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_EMOTION` | `Aion.GameServer.Network.Aion.ServerPackets.SmEmotion` | Packet / Serialization | Partial | Regression Tested | Partial Parity | Fly emotion payload is source-derived and validated for the level-ready restart path. Broader emotion branches remain covered elsewhere but not live Java-golden verified. |
+
+Tests added or extended:
+- `PlayerVisualStatsUpdateServiceTests.LevelReadyFlightNotifier_RestartsFlyingAndBroadcastsFlyEmotion`: validates the server-side fly-state branch, FP-reduce intent, visible-player broadcast with source included, serialized `SM_EMOTION(FLY)`, and non-flying skip behavior.
+- Java comparison status: the test is source-derived from Java `CM_LEVEL_READY.runImpl`, `FlyController.startFly(true, true)`, and `SM_EMOTION`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- The notifier does not yet invoke the broader Java stat refresh path (`PlayerGameStats.updateStatsAndSpeedVisually`) after restarting flight.
+- Java fly-start validation, cooldown audit, zone checks, no-fly abnormal checks, polymorph restrictions, private-store checks, and system messages are still deferred.
+- `CM_LEVEL_READY` still lacks many Java side effects beyond the currently ported baseline packets, including world spawn, windstream announce, siege, rift, weather, quest, effects, pet, town/event, and delayed team-brand behavior.
+- Reflection and date/time are not involved. Serialization is covered for one `SM_EMOTION(FLY)` payload. Threading remains approximate because Java schedules broader world/team work that is not yet modeled here.
+
+Summary metrics:
+- Total Java artifacts discovered: 3
+- Total artifacts ported: 1 level-ready fly restart side-effect slice
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full level-ready world/spawn side effects, stat refresh fanout, full fly validation, full movement-controller parity, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue the `CM_LEVEL_READY` cluster by adding the missing stat/speed visual refresh after fly restart, or move to the first narrow status-packet scaffold (`SM_GM_SHOW_PLAYER_STATUS`, `SM_GROUP_MEMBER_INFO`, or `SM_ALLIANCE_MEMBER_INFO`) to keep fly-state and movement-mask fanout converging.
+
 ---
 
 ## Next Steps
