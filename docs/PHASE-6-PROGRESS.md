@@ -9097,6 +9097,52 @@ Summary metrics:
 Next recommended unit of work:
 - Continue teleport/map-change parity by wiring the typed default animations into the delayed teleport side effects: broadcast `SmDelete` with `TeleportAnimation.DefaultObjectDeleteAnimation` during the queued request/despawn phase and add a minimal arrival-animation field path into `SmPlayerInfo`, or first add Java-generated golden-vector coverage for `SM_TELEPORT_LOC`/`SM_DELETE` if packet certainty is preferred.
 
+### Session 504 (May 23, 2026)
+- Carried the selected `TeleportAnimation` through the modeled pending teleport state so `CompletePendingTeleport` can set the Java-equivalent arrival animation before completion packets.
+- Added `Player.PortAnimation` and wired `SmPlayerInfo` to write that byte at the Java `player.getPortAnimationId()` position.
+- Updated `QueueDelayedTeleportAsync` to broadcast `SmDelete` with `TeleportAnimation.DefaultObjectDeleteAnimation` from the player's pre-teleport position before sending `SmTeleportLoc`, matching Java `TeleportService.sendLoc` calling `World.despawn(player, animation.getDefaultObjectDeleteAnimation())`.
+- Reset `Player.PortAnimation` to `ArrivalAnimation.None` after same-map delayed teleport `SmPlayerInfo` and after `CM_LEVEL_READY` sends `SmPlayerInfo`, matching Java `spawnOnSameMap` and `CM_LEVEL_READY` reset behavior.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests|FullyQualifiedName~PlayerTeleportServiceTests|FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests"` passes with 94 tests.
+
+#### Migration Parity Table - Session 504
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.TeleportService.sendLoc` | `Aion.GameServer.Network.Aion.GameServerConnection.QueueDelayedTeleportAsync` | Teleport Request Boundary | Partial | Regression Tested | Partial Parity | C# now broadcasts a typed `SmDelete` using `animation.getDefaultObjectDeleteAnimation()` before sending `SmTeleportLoc` and queueing pending state. Java action abort, full `World.despawn` state removal, flight ending, known-list mutation, in-range/out-of-range delete fallback, task cancellation, and production caller wiring remain incomplete. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.SpawnTask.run` | `Aion.GameServer.Services.PlayerTeleportService.CompletePendingTeleport` + `GameServerConnection.SendDelayedTeleportCompletionPacketsAsync` | Teleport Completion Boundary | Partial | Unit + Regression Tested | Partial Parity | C# now stores the pending teleport animation and sets `Player.PortAnimation` from `animation.getDefaultArrivalAnimation()` before completion packet fanout. Java dead-player fallback, instance-exists guard, action abort on delayed completion, pet position, conqueror/instance leave callbacks, legion update, protection task, effect icon refresh, and full `World.spawn` remain incomplete. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getPortAnimationId/setPortAnimation` | `Aion.GameServer.Model.GameObjects.Player.PortAnimation` | Player State | Partial | Unit Tested | Partial Parity | Port animation is modeled as `ArrivalAnimation` and reset after same-map delayed completion and `CM_LEVEL_READY` player-info send. Persistence, login/enter-world defaults beyond the property initializer, and all non-teleport callers remain unverified. Reflection differences are not relevant; no Java reflection caller is modeled. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmPlayerInfo` | Server Packet | Partial | Unit Tested | Partial Parity | Packet now writes `Player.PortAnimation` at the Java field location. Broader `SM_PLAYER_INFO` parity still has many modeled baseline gaps, and no Java-generated golden vector or live socket capture was run for the new byte. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DELETE` | `Aion.GameServer.Network.Aion.ServerPackets.SmDelete` | Server Packet / Visibility Boundary | Partial | Unit + Regression Tested | Partial Parity | `QueueDelayedTeleportAsync` now uses typed delete animation from the selected teleport animation. Java `SM_DELETE` also supports `inRange=false` fallback to `NONE`, and real `World.despawn` visibility list mutation is not modeled here. |
+| `com.aionemu.gameserver.model.animations.TeleportAnimation` | `Aion.GameServer.Model.TeleportAnimation` | Java-enum-like Value Type | Complete | Unit + Regression Tested | Partial Parity | Default arrival and object-delete mappings are now consumed by teleport request/completion flow. Java enum reflection semantics still intentionally differ because C# uses a readonly value type to preserve duplicate-id identity. |
+| `com.aionemu.gameserver.model.animations.ArrivalAnimation` | `Aion.GameServer.Model.ArrivalAnimation` | Enum | Complete | Unit Tested | Partial Parity | `FADE_IN_BEAM`/`JUMP_OUT_CAMERA_BEHIND` can now flow into `SmPlayerInfo` through pending teleport completion. Other arrival-animation callers and live client visual validation remain unverified. |
+| `com.aionemu.gameserver.model.animations.ObjectDeleteAnimation` | `Aion.GameServer.Model.ObjectDeleteAnimation` | Enum | Complete | Unit + Regression Tested | Partial Parity | `FADE_OUT_BEAM` is now exercised through queued delayed teleport despawn broadcast. `SM_PET`, out-of-range delete fallback, and generic object lifecycle consumers remain unported or unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_LEVEL_READY` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLevelReadyAsync` | Client Packet Handler | Partial | No New Direct Test | Needs Verification | C# now resets `Player.PortAnimation` after sending `SmPlayerInfo`, matching Java's reset near the end of `CM_LEVEL_READY.runImpl`. This reset is source-derived but not directly covered by a new level-ready regression in this unit. |
+
+Tests added:
+- `PlayerTeleportServiceTests.CompletePendingTeleportConsumesTaskOnceAndResetsMovement`: expanded to queue `TeleportAnimation.JumpIn`, verify pending animation state, and verify completion sets `ArrivalAnimation.JumpOutCameraBehind`.
+- `GamePacketTests.SmPlayerInfo_WritesJavaShapedBaseline`: expanded to set `Player.PortAnimation = ArrivalAnimation.FadeInBeam` and verify `SmPlayerInfo` writes that byte at the Java port-animation field.
+- `GameServerConnectionFlightZoneFanoutTests.QueueDelayedTeleportAsync_SendsTeleportLocAndPendingStateCompletesOnAnimationDone`: expanded to verify the queued request stores `TeleportAnimation.FadeOutBeam`, emits a pre-teleport `SmDelete` from the original position with `ObjectDeleteAnimation.FadeOutBeam`, and resets `Player.PortAnimation` to `None` after same-map completion.
+- Java comparison status: expectations are source-derived from Java `TeleportService.sendLoc`, `SpawnTask.run`, `SM_DELETE`, `SM_PLAYER_INFO`, `TeleportAnimation`, `ArrivalAnimation`, `ObjectDeleteAnimation`, and `CM_LEVEL_READY`. No Java runtime side-by-side validation, Java-generated packet vector, or live socket/client visual validation was run.
+
+Remaining risks:
+- This unit models the packet side of Java despawn, but not full `World.despawn`: known-list removal, spawned-state transitions, flight ending, object lifecycle callbacks, and in-range/out-of-range delete selection remain incomplete.
+- `CM_LEVEL_READY` reset is implemented from source but not directly regression-tested in this unit.
+- Delayed teleport completion still omits Java delayed-completion `abortPlayerActions`, dead-player fallback, instance-exists fallback, pet position/spawn, conqueror/instance callbacks, legion update, protection task, effect icon refresh, and full `World.spawn`.
+- Production teleporter/portal/item callers still do not invoke `QueueDelayedTeleportAsync`; the helper remains a modeled internal path.
+- `SM_PLAYER_INFO`, `SM_DELETE`, and `SM_TELEPORT_LOC` have deterministic source-derived assertions but no Java-generated golden vectors or live encrypted client captures.
+- No database schema, persistence, date/time, precision/rounding beyond existing float serialization, or scheduler/threading behavior changed. Threading remains a typed pending record rather than Java `FutureTask` under `TaskId.TELEPORT`.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 narrowed teleport animation side-effect slice across pending teleport request/completion packets
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 8 full `World.despawn`, full `World.spawn`, Java controller task scheduler/futures, production teleporter/portal/item caller wiring, action abort/dead-player/instance fallback, pet/legion/conqueror/instance callbacks, Java-generated packet vectors/live socket capture, and Java zone handlers/controller callbacks
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this unit tightens delayed teleport visuals but broad game-core areas remain open, including real teleport callers, map-change spawn/despawn ordering, pets, legion/instance callbacks, generic object lifecycle, zone handlers, AI, rewards, team distribution, effects, dynamic handlers, instances, and quests.
+
+Next recommended unit of work:
+- Continue teleport/map-change parity by adding direct regression coverage for the `CM_LEVEL_READY` arrival-animation reset and the map/instance-change delayed teleport branch, or add Java-generated golden-vector coverage for `SM_TELEPORT_LOC`, `SM_DELETE`, and the `SM_PLAYER_INFO` port-animation byte before wiring a real teleporter/portal caller.
+
 ---
 
 ## Next Steps
