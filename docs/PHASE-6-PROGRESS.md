@@ -9295,6 +9295,45 @@ Summary metrics:
 Next recommended unit of work:
 - Continue map-change parity by modeling the missing Java instance-exists fallback path in delayed teleport completion, or switch to Java-generated golden-vector coverage for `SM_TELEPORT_LOC`, `SM_DELETE`, `SM_PLAYER_INFO`, and `SM_SYSTEM_MESSAGE` id `1400640`.
 
+### Session 509 (May 23, 2026)
+- Modeled the Java delayed teleport dead-player fallback from `TeleportService.SpawnTask.run`: if the player is dead when `CM_TELEPORT_ANIMATION_DONE` consumes the pending teleport, C# now clears the pending teleport, sends `SmPlayerInfo`, and does not move the player to the delayed destination.
+- Added `PlayerTeleportService.CancelPendingTeleport` so fallback paths can consume Java's `TaskId.TELEPORT` equivalent without applying the destination position or arrival animation.
+- Added a regression that queues a delayed teleport, marks the player dead before animation completion, and verifies the player remains at the original position with only `SmPlayerInfo` sent after `SmTeleportLoc`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerTeleportServiceTests|FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests"` passes with 21 tests.
+
+#### Migration Parity Table - Session 509
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.TeleportService.SpawnTask.run` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleTeleportAnimationDoneAsync` | Teleport Completion Boundary | Partial | Regression Tested | Partial Parity | Dead-player delayed fallback now consumes the pending teleport, sends `SmPlayerInfo`, and keeps the current position. Java's sibling `!InstanceService.instanceExists(worldId, instanceId)` fallback remains unmodeled, and C# still lacks full `World.spawn(player)` side effects. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TELEPORT_ANIMATION_DONE` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleTeleportAnimationDoneAsync` | Client Packet Handler | Partial | Regression Tested | Partial Parity | Handler now covers no-pending, normal completion, and dead-player fallback paths. It still uses direct async handler flow instead of Java controller `FutureTask` scheduling under `TaskId.TELEPORT`; threading semantics remain intentionally different and need broader scheduler parity later. |
+| `com.aionemu.gameserver.controllers.PlayerController.getAndRemoveTask(TaskId.TELEPORT)` | `Aion.GameServer.Services.PlayerTeleportService.CancelPendingTeleport` | Pending Task Model | Partial | Regression Tested | Partial Parity | C# helper clears the typed pending teleport without moving the player. This models consumption of the Java task for fallback, but does not implement a general controller task registry, cancellation, or Java `FutureTask` behavior. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.isDead()` | `Aion.GameServer.Model.GameObjects.Player.IsInState(PlayerCreatureState.Dead)` plus HP check in `ShouldFallbackDelayedTeleportToCurrentSpawn` | Player State Predicate | Partial | Regression Tested | Needs Verification | C# treats either `Dead` creature state or `LifeStats.CurrentHp <= 0` as dead for this branch. Java `isDead()` exact implementation was not separately ported in this unit, so broader dead-state parity remains needs-verification. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmPlayerInfo` | Server Packet | Partial | Regression Tested | Needs Verification | Dead-player fallback packet object is verified after delayed teleport animation completion. No Java-generated golden vector or live encrypted frame validation was run for this fallback packet. |
+| `com.aionemu.gameserver.world.World.spawn(Player)` | No full C# equivalent; represented by `SmPlayerInfo` fallback send only | World Lifecycle | Not Started | No Tests | Unknown | Java respawns the player in the current world after sending `SM_PLAYER_INFO`. C# does not yet model spawned-state transitions, known-list rebuild, visibility fanout, or zone/world callbacks for this fallback. |
+
+Tests added:
+- `GameServerConnectionFlightZoneFanoutTests.QueueDelayedTeleportAsync_DeadPlayerFallbackSendsPlayerInfoWithoutMoving`: verifies a dead player consumes pending delayed teleport, remains at the original position, keeps `ArrivalAnimation.None`, clears `PendingTeleport`, and receives only `SmPlayerInfo` after the queued `SmTeleportLoc`.
+- Java comparison status: expectations are source-derived from Java `TeleportService.SpawnTask.run` delayed fallback branch. No Java runtime comparison, Java-generated packet vector, encrypted frame capture, or live client validation was run.
+
+Remaining risks:
+- The Java `!InstanceService.instanceExists(worldId, instanceId)` fallback is still missing because C# does not yet have a real instance lifecycle/registry for player map instances.
+- The fallback sends `SmPlayerInfo` but does not implement Java `World.spawn(player)` side effects such as spawned-state mutation, known-list rebuilding, nearby visibility fanout, zone callbacks, or object lifecycle notifications.
+- Dead-state parity is source-shaped but not fully verified against Java `Player.isDead()` internals; C# currently checks both `Dead` state and zero HP.
+- The pending teleport model remains a typed field instead of Java controller tasks/futures, so cancellation/threading behavior remains a known intentional difference.
+- No database schema, persistence, date/time handling, reflection behavior, precision/rounding behavior, or serialization format changed in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 dead-player fallback slice for delayed teleport completion
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 6 Java instance lifecycle/`InstanceService.instanceExists`, full `World.spawn` side effects, general controller task scheduler/futures, Java-generated packet/live socket validation, full dead-state predicate parity, and production teleport caller wiring
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this is a narrow delayed-teleport fallback gain while broad game-core systems remain open.
+
+Next recommended unit of work:
+- Continue delayed teleport fallback parity by introducing a minimal instance-existence runtime model for `InstanceService.instanceExists(worldId, instanceId)` and covering the destroyed-instance fallback, or pause teleport work for Java-generated packet golden vectors around the teleport/player-info/system-message packets.
+
 ---
 
 ## Next Steps
