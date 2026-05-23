@@ -12612,6 +12612,58 @@ Summary metrics:
 Next recommended unit of work:
 - Add the first byte-tested `SM_GROUP_MEMBER_INFO` serializer slice for the fixed prefix only. Source-read `SM_GROUP_MEMBER_INFO.writeImpl` again, create `SmGroupMemberInfo` or an explicitly prefix-only writer guarded by the existing plan, and test serialized unencrypted payload through the event/fly/mentor byte. Keep name/effects/slot-timer branch payloads deferred unless the prefix writer needs a minimal event-specific terminator for valid packet framing.
 
+### Session 582 (May 23, 2026)
+- Re-read Java `SM_GROUP_MEMBER_INFO.writeImpl` before adding any serializer surface.
+- Added C# `SmGroupMemberInfo` for Java opcode `91`.
+- The serializer writes the Java fixed prefix from `PlayerGroupMemberInfoPacketPlan`:
+  - group id and member object id;
+  - max/current HP, MP, and FP;
+  - Java unknown `0`;
+  - map id and `mapId + instanceId - 1`;
+  - XYZ floats;
+  - class id, gender id, level, effective event id, constant `1`, fly state, and mentor flag.
+- Completed only the Java branchless events for serialization: `MOVEMENT`, `DISCONNECTED`, and `LEAVE`.
+- Added an explicit `NotSupportedException` for `JOIN`, `ENTER_OFFLINE`, `ENTER`, `UPDATE`, and `UPDATE_EFFECTS` until name/effect/slot-timer branch payloads are ported.
+- Added focused byte tests for branchless prefix serialization and unsupported-branch guarding.
+- Kept live packet sends, group-enter/reconnect packet creation helpers, names, abnormal effects, and slot timers deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 107 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1205 tests.
+
+#### Migration Parity Table - Session 582
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` | Server Packet | Partial | Unit Tested | Needs Verification | C# serializes the fixed prefix and branchless `MOVEMENT`/`DISCONNECTED`/`LEAVE` events. Name/effect/slot-timer branches intentionally throw until ported. No Java golden vector or live client capture exists. |
+| `com.aionemu.gameserver.model.team.common.legacy.GroupEvent` | `Aion.GameServer.Model.GameObjects.PlayerGroupEvent` consumed by `SmGroupMemberInfo` | Enum / Packet Dependency | Partial | Regression Tested | Needs Verification | Effective event ids are written to the packet prefix. Only branchless event output is byte-tested in this unit. |
+| `com.aionemu.gameserver.world.WorldPosition` | `Aion.GameServer.World.WorldPosition` via `PlayerGroupMemberInfoPrefixSnapshot` | Packet Dependency | Partial | Unit Tested | Needs Verification | XYZ floats and Java map-instance id are serialized through the prefix test. Precision is covered by deterministic C# round-trip only, not Java runtime comparison. |
+| `com.aionemu.gameserver.skillengine.model.Effect` / `SkillTargetSlot` | Not implemented in `SmGroupMemberInfo` | Packet Dependency | Not Started | No Tests | Unknown | Newly guarded as unsupported branches. Effect list, slot mask, slot timers, and remaining-time serialization are still missing. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.SmGroupMemberInfo_WritesBranchlessFixedPrefixLikeJava`: validates the serialized unencrypted payload through group id, member id, max/current HP/MP/FP, map/instance/XYZ, class/gender/level, effective event id, constant `1`, fly state, and mentor flag.
+- `PlayerGroupRuntimeTests.SmGroupMemberInfo_ThrowsForUnportedNameAndEffectBranches`: validates that `JOIN` currently fails loudly instead of producing an incomplete Java packet.
+- Java comparison status: expectations are source-derived from `SM_GROUP_MEMBER_INFO.writeImpl`, existing `PlayerGroupMemberInfoPacketPlan`, and the packet buffer writer. No Java runtime execution, Java-generated golden vector, full branch byte serialization, effect serialization comparison, socket send/fanout comparison, encoded frame comparison, or client validation was run.
+
+Remaining risks:
+- `SmGroupMemberInfo` is not complete for Java `JOIN`, `ENTER_OFFLINE`, `ENTER`, `UPDATE`, or `UPDATE_EFFECTS`.
+- Name serialization is still missing for `JOIN`, `ENTER_OFFLINE`, `ENTER`, and `UPDATE`.
+- Abnormal effects, `SkillTargetSlot.FULLSLOTS`, targeted slot masks, and slot timer writes remain missing.
+- Live group member fanout is still not wired to socket connections.
+- Full packet ordering for group-enter/reconnect remains unverified.
+- Byte tests cover unencrypted payload only; encoded opcode/frame and live-client behavior remain unverified.
+- Threading and Java live event timing are still not compared.
+- Date/time handling is not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 fixed-prefix/branchless `SM_GROUP_MEMBER_INFO` serializer slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 8 name branch serialization, abnormal effect serialization, `SkillTargetSlot` timers, live group member fanout, Java packet ordering comparison, encoded opcode/frame golden validation, Java runtime byte comparison, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; `SM_GROUP_MEMBER_INFO` has first byte-tested output, but most branch payloads and live sends are still unported.
+
+Next recommended unit of work:
+- Add the simplest name-writing `SM_GROUP_MEMBER_INFO` branches next: `JOIN` and `ENTER_OFFLINE`. Source-read Java string writes, extend `SmGroupMemberInfo` to write `PrefixSnapshot.Name` for those two events only, and add byte tests for online `JOIN` plus offline `ENTER -> ENTER_OFFLINE`. Keep `ENTER`/`UPDATE` effect payloads and `UPDATE_EFFECTS` slot payload deferred.
+
 ---
 
 ## Next Steps
