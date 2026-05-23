@@ -14183,6 +14183,58 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance entered-event composition by feeding `PlayerAllianceRuntime.CreateSendBrandsIntent` into the existing entered workflow metadata so Java `PlayerAllianceEnteredEvent` brand resend is represented as an explicit packet intent, or start `CM_PLAYER_STATUS_INFO` ready-check command parsing if the packet surface can stay narrow.
 
+### Session 612 (May 23, 2026)
+- Source-read Java `PlayerAllianceEnteredEvent.handleEvent` and confirmed ordering:
+  - send `SM_ALLIANCE_INFO` to the invited player;
+  - send `STR_FORCE_ENTERED_FORCE`;
+  - send invited `SM_ALLIANCE_MEMBER_INFO(JOIN)`;
+  - call `team.sendBrands(player)`;
+  - backfill existing members and invited member `ENTER` rows;
+  - broadcast abyss rank and league state.
+- Extended `PlayerAllianceEnteredPlan` with optional `PlayerAllianceBrandIntent` while preserving the existing `WouldSendBrands` marker for pure planner calls.
+- Extended `PlayerAllianceEnteredPlanner.CreateEnteredPlan` with an optional brand intent parameter.
+- Added `PlayerAllianceRuntime.CreateEnteredPlan` to compose runtime member/descriptor state with the current alliance brand snapshot from `CreateSendBrandsIntent` semantics.
+- Kept live event dispatch, socket send ordering, `SM_ABYSS_RANK_UPDATE` broadcast wiring, league broadcast wiring, Java runtime comparison, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerAllianceRuntimeTests|PlayerAllianceMemberInfoTests"` passes with 58 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1072 tests.
+
+#### Migration Parity Table - Session 612
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceEnteredEvent` | `Aion.GameServer.Services.PlayerAllianceEnteredPlanner` / `PlayerAllianceEnteredPlan` / `PlayerAllianceRuntime.CreateEnteredPlan` | Event Runtime/Planning Bridge | Partial | Regression Tested | Needs Verification | C# now carries an explicit current-brands intent for runtime-created entered plans, matching Java `team.sendBrands(player)` placement after invited join packets. Live event dispatch, socket ordering, abyss-rank broadcast, league broadcast, and `super.handleEvent` remain incomplete. |
+| `com.aionemu.gameserver.model.team.TemporaryPlayerTeam.sendBrands` | `Aion.GameServer.Services.PlayerAllianceBrandIntent` through `PlayerAllianceEnteredPlan.BrandIntent` | Base Team Runtime Bridge | Partial | Regression Tested | Needs Verification | C# snapshots the current alliance brand map into a single invited-recipient `SmShowBrand` intent. Java `ConcurrentHashMap` behavior and live `PacketSendUtility` send remain unverified. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Services.PlayerAllianceRuntime.CreateEnteredPlan` | Alliance Runtime Bridge | Partial | Regression Tested | Needs Verification | Runtime helper uses stored members, descriptor, vice-captains, loot rules, team type, and brand map. League state is still passed as `false`; Java league ownership and broadcast are deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SHOW_BRAND` | `Aion.GameServer.Network.Aion.ServerPackets.SmShowBrand` via entered-plan brand intent | Server Packet | Partial | Regression Tested | Needs Verification | Existing packet is reused for current-brand resend to the invited player. Java golden bytes, encrypted frames, and real-client rendering validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK_UPDATE` | `PlayerAllianceEnteredPlan.WouldBroadcastAbyssRank` | Event Dependency | Not Started | No Tests | Unknown | Java broadcasts abyss rank after entered member backfill. C# still records only the boolean marker. |
+| `com.aionemu.gameserver.model.team.league.PlayerLeague.broadcast` | `PlayerAllianceEnteredPlan.WouldBroadcastLeague` | Event Dependency | Not Started | No Tests | Unknown | Java broadcasts league state when the alliance is in a league. C# runtime helper does not model league ownership. |
+| `com.aionemu.gameserver.model.team.common.events.PlayerEnteredEvent` | Deferred base entered side effect | Base Event Dependency | Not Started | No Tests | Unknown | Java invokes `super.handleEvent()` after alliance-specific sends. C# entered-plan base side effects remain deferred. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | Packet intent metadata | Runtime Dependency | Partial | Regression Tested | Needs Verification | C# records explicit metadata, including the brand intent; live immediate sends and socket ordering remain unverified. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.EnteredPlanner_PlansJoinAndBackfillPacketOrderLikeJavaPlayerAllianceEnteredEvent`: extended to assert pure planner calls still expose no concrete brand intent.
+- `PlayerAllianceRuntimeTests.CreateEnteredPlan_IncludesCurrentBrandsIntentLikeJavaPlayerAllianceEnteredEvent`: validates runtime-created entered plans include a brand intent for the invited member with the current brand map and preserve the Java join-packet ordering metadata before the brand resend.
+- Java comparison status: expectations are source-derived from `PlayerAllianceEnteredEvent.handleEvent`, `TemporaryPlayerTeam.sendBrands`, `SM_SHOW_BRAND.writeImpl`, and existing alliance info/member packet planners. No Java runtime execution, Java-generated golden vector, live socket ordering comparison, Java `ConcurrentHashMap` comparison, league runtime comparison, base entered-event comparison, threading/lock comparison, reflection behavior, encrypted frame comparison, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Entered-event live socket ordering is still metadata-only; no production connection sends this full entered plan yet.
+- Abyss rank broadcast, league broadcast, and base `PlayerEnteredEvent` side effects remain boolean/deferred.
+- League ownership is not represented in `PlayerAllianceRuntime.CreateEnteredPlan`.
+- Java concurrent-map/team lock behavior for brands remains source-derived but not runtime-compared.
+- Java golden byte vectors, encrypted opcode/frame validation, socket capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 alliance entered-event brand-intent composition slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 live entered-event dispatch, live socket ordering, abyss-rank broadcast, league broadcast, base entered-event side effects, Java runtime/threading comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; entered-event brand resend metadata is now explicit, but the full live entered-event fanout is not wired.
+
+Next recommended unit of work:
+- Start a narrow `CM_PLAYER_STATUS_INFO` parser/planner bridge for alliance ready-check commands by source-reading Java `CM_PLAYER_STATUS_INFO.readImpl/runImpl` and `PlayerTeamCommandService`; connect only ready-check command ids `20..24` to `PlayerAllianceRuntime.CheckReady` if the handler can stay small, otherwise add an explicit live-send helper for existing alliance ready-check packet intents.
+
 ---
 
 ## Next Steps
