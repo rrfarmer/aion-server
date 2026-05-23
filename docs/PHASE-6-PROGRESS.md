@@ -12005,6 +12005,51 @@ Summary metrics:
 Next recommended unit of work:
 - Port the first packet serialization boundary for reconnect group fanout: add a minimal `SmGroupMemberInfo` or `SmGroupInfo` packet model only if enough Java packet layout can be source-read and unit-tested. If packet layout is too broad, add `GroupEvent` enum coverage and keep packet serialization deferred with explicit gaps.
 
+### Session 569 (May 23, 2026)
+- Inspected Java `SM_GROUP_INFO`, `SM_GROUP_MEMBER_INFO`, and `GroupEvent` before attempting group packet serialization.
+- Determined that direct packet serialization is too broad for the current runtime bridge: `SM_GROUP_INFO` requires loot-rule/team-type data, and `SM_GROUP_MEMBER_INFO` requires life stats, class/gender, position, fly/mentor state, names, abnormal effects, and slot timers.
+- Added `PlayerGroupEvent` with the full Java `GroupEvent` id surface: `LEAVE=0`, `MOVEMENT=1`, `DISCONNECTED=3`, `JOIN=5`, `ENTER_OFFLINE=7`, `ENTER=13`, `UPDATE=13`, and `UPDATE_EFFECTS=65`.
+- Reconnect packet-intent DTOs now use `PlayerGroupEvent` instead of the earlier reconnect-only local enum.
+- Extended reconnect packet-intent tests to assert Java event ids for JOIN and ENTER, and added full enum id coverage.
+- Kept `SM_GROUP_INFO` / `SM_GROUP_MEMBER_INFO` packet serialization and live sends explicitly deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests"` passes with 91 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1190 tests.
+
+#### Migration Parity Table - Session 569
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.common.legacy.GroupEvent` | `Aion.GameServer.Model.GameObjects.PlayerGroupEvent` | Enum | Partial | Unit Tested | Needs Verification | C# now carries the full Java id surface, including duplicate id `ENTER`/`UPDATE = 13`. Runtime callers use only JOIN/ENTER so far; broader event behavior remains missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_INFO` | No C# packet equivalent | Packet | Not Started | No Tests | Unknown | Source-read this unit. Serialization requires group id, leader id, active player's map id, loot rules, raw team type/subtype, message id, and name. C# lacks loot-rule and full team type packet data. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | No C# packet equivalent | Packet | Not Started | No Tests | Unknown | Source-read this unit. Serialization requires life stats, common data, world position, class/gender/level, fly/mentor state, optional name, abnormal effects, and slot timers. C# packet serialization is blocked until those dependencies are modeled. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerConnectedEvent` | `PlayerGroupReconnectPacketPlan` using `PlayerGroupEvent` | Event Planning DTO | Partial | Regression Tested | Needs Verification | Reconnect packet intent now references Java event ids. Actual packets, sends, leader recovery, and event dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootGroupRules` | No C# equivalent | Dependency | Not Started | No Tests | Unknown | Newly re-touched by `SM_GROUP_INFO`. Loot rule id and item-threshold fields are required before group-info packet serialization can be honest. |
+| `com.aionemu.gameserver.skillengine.model.Effect` / `SkillTargetSlot` | No C# group-packet equivalent | Dependency | Not Started | No Tests | Unknown | Newly re-touched by `SM_GROUP_MEMBER_INFO`. Abnormal effect serialization for group member updates is not modeled here. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.ReconnectMember_ReturnsNonSendingPacketIntentPlanLikeJavaPlayerConnectedEvent`: extended to assert JOIN id `5` and ENTER id `13` through `PlayerGroupEvent`.
+- `PlayerGroupRuntimeTests.PlayerGroupEvent_IdsMatchJavaGroupEvent`: validates every Java `GroupEvent` id, including the duplicate `ENTER`/`UPDATE` id.
+- Java comparison status: expectations are source-derived from Java `GroupEvent`, `SM_GROUP_INFO`, `SM_GROUP_MEMBER_INFO`, and `PlayerConnectedEvent`. No Java runtime execution, packet byte comparison, packet serialization, effect serialization, loot-rule comparison, live fanout, or client validation was run.
+
+Remaining risks:
+- Packet serialization is intentionally not implemented because dependencies are broad and not yet fully ported.
+- `SM_GROUP_INFO` requires loot-rule fields and raw `TeamType` ids/subtypes that the current group descriptor does not fully model.
+- `SM_GROUP_MEMBER_INFO` requires life stats, player common data, effect controller state, `SkillTargetSlot`, fly/mentor state, and event-specific branches.
+- C# enum names differ from Java casing but carry matching ids.
+- Threading is not involved in this enum-only slice; broader packet fanout concurrency remains unverified.
+- Serialization is explicitly deferred. Reflection/JAXB behavior, date/time, and precision/rounding are not involved in the enum slice.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 Java `GroupEvent` id enum surface
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 2
+- Total blocked artifacts: 12 `SM_GROUP_INFO` packet serialization, `SM_GROUP_MEMBER_INFO` packet serialization, loot-rule model, full raw `TeamType` packet ids/subtypes, life-stat group packet bridge, player common-data group packet bridge, abnormal effect serialization, `SkillTargetSlot`, fly/mentor state, live packet sends, full group event behavior, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group event ids are now source-shaped, but group packet serialization/fanout remains missing.
+
+Next recommended unit of work:
+- Add a minimal `LootGroupRules`/group packet metadata bridge for Java `SM_GROUP_INFO`: source-read `LootGroupRules`, `LootRuleType`, and Java defaults, then add descriptor fields or a small DTO with tested default ids/thresholds. Keep actual `SM_GROUP_INFO` serialization disabled until the metadata is complete enough for byte tests.
+
 ---
 
 ## Next Steps
