@@ -12225,6 +12225,54 @@ Summary metrics:
 Next recommended unit of work:
 - Defer `SM_GROUP_MEMBER_INFO` byte serialization until its player/stat/effect dependencies are modeled. The next safe group unit is to add non-sending packet-call intent for Java `PlayerGroupEnteredEvent` using the existing `PlayerGroupInfoPacketPlan`/`SmGroupInfo` path, or to port the first small `ChangeGroupLootRulesEvent` planning slice that records a future `SM_GROUP_INFO` broadcast without live sends.
 
+### Session 574 (May 23, 2026)
+- Source-read Java `PlayerGroupEnteredEvent.handleEvent` and `ChangeGroupLootRulesEvent.handleEvent` before adding the next group packet caller slice.
+- Added `PlayerGroupEnteredPacketPlan`, a non-sending packet-call plan for the entering player's Java `SM_GROUP_INFO` send.
+- Added `PlayerGroupRuntime.CreateEnteredPacketPlan(int teamId, Player enteringPlayer)` for already-added group members. The method records the entering player, builds a `PlayerGroupInfoPacketPlan` from the group descriptor, and sources the map id from `enteringPlayer.Position.WorldId`.
+- `PlayerGroupEnteredPacketPlan.CreateGroupInfoPacket()` can instantiate `SmGroupInfo`, but it does not send packets or model the rest of Java's `PlayerGroupEnteredEvent` fanout.
+- Added tests for the entering-player group-info plan/payload and the non-member no-op branch.
+- Kept live socket sends, `SM_GROUP_MEMBER_INFO`, system messages, brand sends, abyss rank broadcast, superclass event handling, and `ChangeGroupLootRulesEvent` mutation/broadcast behavior disabled.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 97 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1195 tests.
+
+#### Migration Parity Table - Session 574
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.group.events.PlayerGroupEnteredEvent` | `Aion.GameServer.Services.PlayerGroupRuntime.CreateEnteredPacketPlan` / `PlayerGroupEnteredPacketPlan` | Event Planning Bridge | Partial | Unit Tested | Needs Verification | C# models only the non-sending `SM_GROUP_INFO` intent for an already-added entering member. Java also calls `PlayerGroupService.addPlayerToGroup`, sends system messages, member-info packets, brands, abyss rank update, and superclass event handling. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupInfo` via `PlayerGroupEnteredPacketPlan.CreateGroupInfoPacket` | Server Packet / Intent Caller | Partial | Regression Tested | Needs Verification | Entered-event planning can instantiate `SmGroupInfo` and the unencrypted payload is tested. No Java golden vector, live frame, socket send, or client capture validates end-to-end parity. |
+| `com.aionemu.gameserver.network.aion.AionConnection.getActivePlayer` map id dependency | `Player.Position.WorldId` feeding `PlayerGroupInfoPacketPlan.ActivePlayerMapId` | Packet Context | Refactored | Unit Tested | Intentional Difference | Java reads active-player map id during packet serialization. C# planning uses the entering player's current position because the live connection send path is still absent. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.addPlayerToGroup` | `PlayerGroupRuntime.AddMember` plus `CreateEnteredPacketPlan` | Service / Event Dependency | Partial | Regression Tested | Needs Verification | C# keeps add-member mutation separate from packet planning. Java performs add then sends in one event. Real event dispatch and ordering are not ported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | No C# packet equivalent in this unit | Server Packet Dependency | Not Started | No Tests | Unknown | Java sends JOIN to the entering player and ENTER packets between existing members and the entering player. C# still has no byte serializer or live fanout for this packet. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` party-enter messages | No C# group-enter message plan in this unit | Server Packet Dependency | Not Started | No Tests | Unknown | Java sends `STR_PARTY_ENTERED_PARTY` to the entering player and `STR_PARTY_HE_ENTERED_PARTY` to existing members. C# does not plan or send these group-enter messages yet. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.sendBrands` | No C# equivalent in this unit | Event Dependency | Not Started | No Tests | Unknown | Java sends existing group brands to the entering player. Brand state and packet sends are not modeled. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK_UPDATE` | No C# group-enter abyss-rank fanout in this unit | Server Packet Dependency | Not Started | No Tests | Unknown | Java broadcasts an abyss rank update for the entering player. C# does not model this caller here. |
+| `com.aionemu.gameserver.model.team.group.events.ChangeGroupLootRulesEvent` | No C# equivalent in this unit | Event Dependency | Not Started | No Tests | Unknown | Source-read as the alternate next unit. Java mutates loot rules and broadcasts `SM_GROUP_INFO`; C# does not yet support mutable loot-rule changes or broadcast planning. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.CreateEnteredPacketPlan_ReturnsNonSendingGroupInfoPlanLikeJavaPlayerGroupEnteredEvent`: validates the entered-event group-info plan, entering-player map id, `SmGroupInfo` instantiation, and serialized unencrypted payload order.
+- `PlayerGroupRuntimeTests.CreateEnteredPacketPlan_ReturnsNullForPlayerOutsideGroup`: validates that packet planning does not attach or mutate a player who is not in the runtime group.
+- Java comparison status: expectations are source-derived from `PlayerGroupEnteredEvent.handleEvent`, `SM_GROUP_INFO.writeImpl`, `LootGroupRules`, and `TeamType`. No Java runtime execution, Java-generated golden vector, live event dispatch, socket send/fanout comparison, encoded opcode/frame comparison, system-message comparison, brand comparison, abyss-rank broadcast comparison, or client validation was run.
+
+Remaining risks:
+- This unit models only one `SM_GROUP_INFO` intent from Java `PlayerGroupEnteredEvent`; the rest of the event fanout is missing.
+- `CreateEnteredPacketPlan` assumes `AddMember` already ran. Java performs add-member mutation inside `handleEvent`, so ordering remains unverified.
+- `SM_GROUP_MEMBER_INFO`, party system messages, brand send, abyss-rank update broadcast, and superclass event handling remain unported for group entry.
+- C# uses `Player.Position.WorldId` during planning, while Java gets map id from `AionConnection.getActivePlayer` during serialization.
+- Live sends, packet ordering, and threading are unverified. Java event handling uses team event semantics; C# uses a simple lock and non-sending DTOs.
+- Serialization is source-derived for payload only. Full frame/opcode/header parity, reflection/JAXB behavior, date/time behavior, and precision/rounding were not newly validated.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 non-sending `PlayerGroupEnteredEvent` to `SmGroupInfo` planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 14 live group-enter send path, `SM_GROUP_MEMBER_INFO` serialization, group-enter member fanout, group-enter system messages, group brand sends, abyss rank update broadcast, superclass player-entered handling, Java add/send event ordering, active connection map-id lookup, encoded opcode/frame golden validation, `ChangeGroupLootRulesEvent`, mutable loot-rule changes, full team event ordering/threading, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group-enter can now plan the first group-info packet object, but Java's full group-enter event behavior is still mostly missing.
+
+Next recommended unit of work:
+- Add a focused non-sending `ChangeGroupLootRulesEvent` planning slice: model a method that applies/replaces `PlayerGroupLootRules` on the descriptor and records future `SmGroupInfo` broadcast intent for current group members. Source-read `CM_DISTRIBUTION_SETTINGS` first if mutation inputs are touched; otherwise keep it as a direct service/internal event slice with live sends disabled.
+
 ---
 
 ## Next Steps
