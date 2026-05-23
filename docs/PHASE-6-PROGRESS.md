@@ -9252,6 +9252,49 @@ Summary metrics:
 Next recommended unit of work:
 - Add Java-generated golden-vector coverage for `SM_TELEPORT_LOC`, `SM_DELETE`, and `SM_PLAYER_INFO` port-animation byte, or continue map-change parity by modeling the instance-open system message and missing instance-exists fallback path.
 
+### Session 508 (May 23, 2026)
+- Modeled the Java delayed teleport map/instance-change instance-open notification: after `SmChannelInfo` and `SmPlayerSpawn`, C# now sends `SmSystemMessage.InstanceDungeonOpenedForSelf(worldId)` for non-personal instance maps.
+- Added the missing `SmSystemMessage` factory for Java `STR_MSG_INSTANCE_DUNGEON_OPENED_FOR_SELF(worldId)` with message id `1400640` and invariant world-id parameter serialization.
+- Preserved Java `WorldMapType.isPersonal()` behavior for the four personal housing worlds (`700020000`, `710020000`, `720010000`, `730010000`) so personal instance maps do not receive the notification.
+- Added regression coverage for both a normal instance map (`300030000`) receiving the message and a personal instance map (`720010000`) skipping it.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests|FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests"` passes with 94 tests.
+
+#### Migration Parity Table - Session 508
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.TeleportService.SpawnTask.run` | `Aion.GameServer.Network.Aion.GameServerConnection.SendDelayedTeleportCompletionPacketsAsync` | Teleport Completion Boundary | Partial | Regression Tested | Partial Parity | C# now sends the instance-open-for-self system message after `SmChannelInfo` and `SmPlayerSpawn` for non-personal instance map/instance changes. Java dead-player fallback, instance-exists fallback, delayed action abort, pet position/spawn, conqueror/instance callbacks, legion update, protection task, effect icon refresh, and full `World.spawn` remain incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_INSTANCE_DUNGEON_OPENED_FOR_SELF` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.InstanceDungeonOpenedForSelf` | Server Packet Helper | Complete | Unit Tested | Partial Parity | Message id `1400640` and world-id parameter serialization are source-derived and covered by deterministic packet serialization. No Java-generated packet vector or live socket capture was run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Unit Tested | Needs Verification | This unit adds one missing helper only. The broader Java static-message catalog remains partially ported and should not be assumed complete. Serialization path is deterministic-tested for the new helper but not Java-runtime compared. |
+| `com.aionemu.gameserver.world.WorldMapType.getWorld(int)` / `isPersonal()` | `GameServerConnection.IsPersonalWorld` | World Metadata Helper | Partial | Regression Tested | Partial Parity | C# preserves the Java personal-world exclusion for the four source-listed personal housing worlds. This is a narrow local helper, not a full `WorldMapType` port; future callers needing world-type metadata should prefer a shared model. |
+| `com.aionemu.gameserver.dataholders.DataManager.WORLD_MAPS_DATA` / `WorldMapTemplate.isInstance()` | `Aion.GameServer.Dataholders.StaticData.WorldMaps` / `WorldMapSummary.IsInstance` | Static Data | Partial | Regression Tested | Partial Parity | Tests verify static data marks `300030000` and `720010000` as instance maps and the teleport branch uses that flag. Static loader does not model Java `WorldMapType.isPersonal`; the local helper supplies that exclusion for this branch. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CHANNEL_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmChannelInfo` | Server Packet | Partial | Regression Tested | Needs Verification | Packet object order remains covered in delayed map/instance-change flow. Byte-level payload parity for this packet was not newly golden-tested. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_SPAWN` | `Aion.GameServer.Network.Aion.ServerPackets.SmPlayerSpawn` | Server Packet | Partial | Regression Tested | Needs Verification | Packet object order now includes the following system-message position for non-personal instances. `SM_PLAYER_SPAWN` payload parity still needs Java golden-vector/live socket validation. |
+
+Tests added:
+- `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages`: expanded to validate `SmSystemMessage.InstanceDungeonOpenedForSelf(300030000)` serializes message id `1400640` with parameter `"300030000"`.
+- `GameServerConnectionFlightZoneFanoutTests.QueueDelayedTeleportAsync_InstanceMapChangeSendsOpenedForSelfMessage`: verifies delayed teleport into `300030000` emits `SmChannelInfo`, `SmPlayerSpawn`, then `SmSystemMessage` id `1400640`.
+- `GameServerConnectionFlightZoneFanoutTests.QueueDelayedTeleportAsync_PersonalInstanceMapSkipsOpenedForSelfMessage`: verifies delayed teleport into personal instance map `720010000` emits only `SmChannelInfo` and `SmPlayerSpawn`, matching Java's `!WorldMapType.getWorld(worldId).isPersonal()` guard.
+- Java comparison status: expectations are source-derived from Java `TeleportService.SpawnTask.run`, `SM_SYSTEM_MESSAGE.STR_MSG_INSTANCE_DUNGEON_OPENED_FOR_SELF`, `WorldMapType`, and `world_maps.xml`. No Java runtime comparison, Java-generated packet vector, encrypted frame capture, or live client validation was run.
+
+Remaining risks:
+- The personal-world exclusion is local to this teleport branch; C# still lacks a shared full `WorldMapType` port, so future map-type callers may rediscover this metadata.
+- Full Java map/instance-change behavior remains partial: instance-exists fallback, dead-player fallback, pet movement/spawn, conqueror/protector and instance callbacks, legion update, protection task, effect icon refresh, and full `World.spawn` side effects remain incomplete.
+- The system-message helper is byte-tested from C# serialization only; there is no Java-generated golden vector for `SM_SYSTEM_MESSAGE` id `1400640`.
+- `QueueDelayedTeleportAsync` is still not wired from real teleporter/portal/item/event callers.
+- No database schema, persistence, date/time handling, reflection behavior, precision/rounding behavior, or scheduler/threading behavior changed in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 instance-open system-message slice for delayed map/instance-change teleport
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 7 Java-generated packet vectors/live encrypted frame validation, full shared `WorldMapType` metadata, instance-exists fallback, full Java map/instance spawn side effects, pet/legion/conqueror/instance callbacks, production teleport caller wiring, and broader `CM_LEVEL_READY` service fanout
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this unit closes one packet-order side effect but the broad game-core systems remain open.
+
+Next recommended unit of work:
+- Continue map-change parity by modeling the missing Java instance-exists fallback path in delayed teleport completion, or switch to Java-generated golden-vector coverage for `SM_TELEPORT_LOC`, `SM_DELETE`, `SM_PLAYER_INFO`, and `SM_SYSTEM_MESSAGE` id `1400640`.
+
 ---
 
 ## Next Steps
