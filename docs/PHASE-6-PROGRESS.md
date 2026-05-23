@@ -10470,6 +10470,43 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the `PortalService.port` slice by adding a same-instance teleport plan result for `mapId == player.WorldId` after successful non-reenter level validation, still without executing teleport. This should carry target coordinates/heading from `PortalLocSummary` and document that actual `TeleportService.teleportTo` invocation is a later production-wiring step.
 
+### Session 536 (May 23, 2026)
+- Added `PortalEntryPlanAction` and extended `PortalEntryPlanResult` so the partial portal plan can distinguish ordinary continuation from Java's same-instance teleport branch.
+- Updated `ValidatePortalEntryPlan` to return `SameInstanceTeleport` when `PortalLocSummary.WorldId == Player.Position.WorldId` after successful non-reenter level validation, matching the Java `PortalService.port` branch that calls `TeleportService.teleportTo(... player.getInstanceId(), loc.x/y/z/h)` and returns.
+- The C# helper still does not execute the teleport; it only carries the resolved `PortalLocSummary` coordinates/heading and the action marker for future production wiring.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests"` passes with 42 tests.
+
+#### Migration Parity Table - Session 536
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` same-map branch | `Aion.GameServer.Services.PortalEntryValidationService.ValidatePortalEntryPlan` / `PortalEntryPlanAction.SameInstanceTeleport` | Service / Orchestration | Partial | Unit Tested | Partial Parity | C# now identifies the Java `mapId == player.getWorldId()` branch after level validation and before transfer planning. It does not call `TeleportService.teleportTo`, does not check/remove required items before this branch, and does not dispatch movement/teleport packets. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.teleportTo` | Future caller consuming `PortalEntryPlanAction.SameInstanceTeleport` and `PortalLocSummary` | Service Dependency | Not Started | No Tests | Unknown | Newly surfaced next dependency. The action marker carries target world/coordinates/heading, but actual teleport state mutation and packet fanout remain missing. |
+| `com.aionemu.gameserver.model.templates.portal.PortalLoc.getX/getY/getZ/getH` | `Aion.GameServer.Dataholders.PortalLocSummary` carried by `PortalEntryPlanResult.PortalLoc` | Static Data / Coordinates | Partial | Unit Tested | Partial Parity | Coordinates and heading are available to future teleport code. Float precision and live movement packet side effects are not runtime-compared to Java. |
+
+Tests added:
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_PlansSameInstanceTeleportAfterLevelCheck`: validates same-world portal plans return `SameInstanceTeleport` with resolved target coordinates/heading and no failure packet.
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_AllowsOpenWorldPlanWithResolvedLocation`: extended to assert ordinary allowed plans return `PortalEntryPlanAction.Continue`.
+- Java comparison status: expectations are source-derived from `PortalService.port`'s same-map branch and existing `PortalLoc` parsing. No Java runtime execution, required-item check, actual teleport state mutation, packet fanout, or live-client validation was run.
+
+Remaining risks:
+- Java `checkAndRemoveRequiredItems` runs before the same-map teleport branch; C# still lacks this check, so the action is only a partial plan marker.
+- Actual `TeleportService.teleportTo` behavior, world-position mutation, known-list updates, and packet ordering are not implemented here.
+- Production portal handlers still do not consume the plan result.
+- Reenter/transfer/instance allocation branches remain incomplete, as do quests, group-size checks, item removal, kinah, and siege ownership.
+- Threading, reflection/JAXB differences, packet dispatch ordering, date/time behavior, precision/rounding, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3
+- Total artifacts ported: 1 partial same-instance action marker over the existing portal plan helper
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 6 required item removal, production handler wiring, actual teleport execution, packet fanout, instance transfer/allocation, and live runtime/client comparison
+- Estimated overall migration completion: Phase 6 remains about 58% complete; same-instance portal intent is now represented, but actual teleport behavior remains unported.
+
+Next recommended unit of work:
+- Port the cheap structural side of Java `ItemReq` parsing into `PortalPathSummary` or a child requirement list before expanding portal plan actions further. Java checks required items before same-instance teleport, so item requirement visibility is the next blocker for improving plan fidelity without executing inventory mutation.
+
 ---
 
 ## Next Steps
