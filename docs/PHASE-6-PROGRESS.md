@@ -13428,6 +13428,60 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance role parity with a non-sending `ChangeAllianceLeaderEvent` plan for non-league leader changes: model leader id update, removal of the new leader from vice-captain ids, `SM_ALLIANCE_INFO` fanout to members, and `STR_FORCE_HE_IS_NEW_LEADER` / `STR_FORCE_YOU_BECOME_NEW_LEADER` system-message intents. Keep league-specific union messages, live mutation, and socket sends deferred.
 
+### Session 598 (May 23, 2026)
+- Continued Java `ChangeAllianceLeaderEvent.changeLeaderTo` parity for the non-league planning surface.
+- Added `PlayerAllianceLeaderChangePlan` and `PlayerAllianceLeaderChangePlanner`.
+- Modeled source-derived leader-change outputs:
+  - post-event leader id is the new leader;
+  - the new leader is removed from the vice-captain id snapshot;
+  - non-league changes plan `SM_ALLIANCE_INFO(team)` fanout to every alliance member, using the Session 597 serializer with message id `0`;
+  - the new leader receives `STR_FORCE_YOU_BECOME_NEW_LEADER` (`1300999`);
+  - when Java `eventPlayer != null`, all other members receive `STR_FORCE_HE_IS_NEW_LEADER(newLeaderName)` (`1300998`);
+  - when Java `eventPlayer == null`, other members do not receive the "he is new leader" message, matching the leader-leave fallback comment in Java;
+  - when `isInLeague` is true, direct `SM_ALLIANCE_INFO` fanout is skipped and represented by `WouldBroadcastLeague`.
+- Added `SmSystemMessage.ForceHeIsNewLeader(string)` and `SmSystemMessage.ForceYouBecomeNewLeader()`.
+- Reused `SmAllianceInfo` packet-body tests through leader-change fanout intents.
+- Kept live `PlayerAlliance.changeLeader`, league union messages, league broadcast execution, socket sends, automatic next-leader selection, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests|FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 141 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1239 tests.
+
+#### Migration Parity Table - Session 598
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.events.ChangeAllianceLeaderEvent` | `Aion.GameServer.Services.PlayerAllianceLeaderChangePlanner` / `PlayerAllianceLeaderChangePlan` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# models non-league output intents for explicit and fallback leader changes. Live `team.changeLeader`, automatic leader selection, league union messages, and event dispatch are not implemented. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` via leader-change intents | Server Packet | Partial | Regression Tested | Needs Verification | Leader-change fanout now reuses the non-league serializer with updated leader id and message id `0`. League rows, golden bytes, encoded frames, and live sends remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_HE_IS_NEW_LEADER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceHeIsNewLeader` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Factory returns Java message id `1300998`; tests validate planned recipients. Parameter serialization was not separately byte-compared against Java runtime. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_YOU_BECOME_NEW_LEADER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceYouBecomeNewLeader` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Factory returns Java message id `1300999`; tests validate planned recipient. Packet frame comparison remains missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `PlayerAllianceLeaderChangePlan` snapshot inputs | Team Runtime Dependency | Not Started | No Tests | Unknown | Full live runtime remains missing: `changeLeader`, member wrappers, vice-captain collection ownership, league object integration, member iteration, and disband/fallback leader selection. |
+| `com.aionemu.gameserver.model.team.league.League` | `PlayerAllianceLeaderChangePlan.WouldBroadcastLeague` metadata | Runtime Dependency | Not Started | Unit Tested as Metadata | Unknown | C# flags the Java league broadcast boundary and skips direct non-league alliance-info fanout. Union leader-change messages and actual league broadcast are not ported. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.LeaderChangePlanner_PlansNonLeagueAllianceInfoAndSystemMessagesLikeJavaChangeAllianceLeaderEvent`: validates non-league alliance-info fanout with updated leader id, vice-captain removal, `1300998` for other members, and `1300999` for the new leader.
+- `PlayerAllianceMemberInfoTests.LeaderChangePlanner_SkipsHeIsNewLeaderWhenEventPlayerIsMissingLikeJavaLeaveFallback`: validates Java's `eventPlayer == null` fallback skips the "he is new leader" message for other members.
+- `PlayerAllianceMemberInfoTests.LeaderChangePlanner_SkipsAllianceInfoWhenLeagueBroadcastWillHandleItLikeJava`: validates the in-league direct `SM_ALLIANCE_INFO` skip and league-broadcast metadata boundary.
+- Java comparison status: expectations are source-derived from `ChangeAllianceLeaderEvent.changeLeaderTo`, `SM_ALLIANCE_INFO.writeImpl`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live leader mutation comparison, socket fanout comparison, encoded frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Live `PlayerAlliance.changeLeader` and event dispatch are not implemented.
+- Automatic fallback leader selection from online vice-captains/next available member is not ported.
+- League-specific union messages and broadcast execution remain missing.
+- `SmAllianceInfo` league row serialization remains blocked.
+- Live socket fanout and Java iteration/threading behavior are not runtime-compared.
+- Java golden byte vectors and encoded-frame validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 non-league leader-change planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 live alliance leader runtime, automatic fallback leader selection, league union messages/broadcast, full league `SM_ALLIANCE_INFO`, live socket fanout, service event invocation/permissions, Java runtime ordering comparison, and encoded opcode/frame golden validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; alliance role event output planning is broader, but live alliance role/runtime behavior remains incomplete.
+
+Next recommended unit of work:
+- Continue alliance event parity by source-reading `PlayerAllianceEnteredEvent`, `PlayerAllianceLeavedEvent`, `PlayerConnectedEvent`, and `PlayerDisconnectedEvent`, then add a focused non-sending plan for alliance enter/connect/disconnect info fanout using the existing `SmAllianceInfo` and `SmAllianceMemberInfo` packet surfaces. Keep live membership mutation, disband logic, timeout scheduling, and socket fanout deferred.
+
 ---
 
 ## Next Steps
