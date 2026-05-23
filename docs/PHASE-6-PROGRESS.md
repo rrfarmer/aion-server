@@ -3209,6 +3209,53 @@ Summary metrics:
 Next recommended unit of work:
 - Wire the first real combat/life-stat NPC death caller into `WorldNpcDeathDropWorkflowService.HandleDeathAsync`, preserving Java `CreatureLifeStats` -> `NpcController.onDie` order and feeding staged AI decisions without duplicating legacy `TryScheduleWorldNpcDeath` behavior.
 
+### Session 374 (May 23, 2026)
+- Added `WorldNpcAiStateService.MarkDied` for the Java `DiedEventHandler.onDie` state transition into `AIState.DIED`.
+- Threaded `WorldNpcAiStateService` into `WorldNpcDeathDropWorkflowService`, so `HandleDeathAsync` marks the NPC AI state as died after reward/drop registration and before decay or immediate delete cleanup.
+- Added `WorldNpcDeathDropWorkflowResult.AiMarkedDied` so future combat/life-stat callers and tests can observe whether the staged AI death event was emitted.
+- Threaded `WorldNpcAiStateService` into `WorldNpcSpawnService` and clear stale AI runtime state when spawning a fresh world NPC or despawning an existing one, avoiding dead/walking state leakage across object-id reuse.
+- Added focused coverage for death-time AI DIED marking, despawn cleanup, and spawn-time stale-state cleanup.
+- Current gaps in this cluster: this is still a simplified AI runtime-state marker, not Java's full `NpcAI` event pipeline; `CreatureLifeStats.onHpChanged`, `NpcLifeStats`, `CreatureController.onDie`, death animation/effect cleanup, observer callbacks, known-list hate cleanup, instance/zone callbacks, and live combat damage reduction are still pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests"` passes with 33 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|WorldNpcRandomWalkServiceTests|WorldNpcWalkerRouteWalkingServiceTests|GameServerBootstrapTests"` passes with 58 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 742 tests.
+
+#### Migration Parity Table - Session 374
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.handler.DiedEventHandler` | `Aion.GameServer.Services.WorldNpcAiStateService.MarkDied` | AI Handler/Service | Partial | Unit Tested | Partial Parity | C# now records `WorldNpcAiState.Died` with no substate, matching the Java handler's state transition. Missing behavior: full NPC AI event dispatch, custom AI handlers, shout/phase/death-script side effects, and runtime handler callbacks. |
+| `com.aionemu.gameserver.controllers.NpcController` | `Aion.GameServer.Services.WorldNpcDeathDropWorkflowService` | Controller/Service | Partial | Unit Tested | Partial Parity | Death workflow now emits the staged AI DIED state between reward/drop registration and corpse cleanup. Remaining missing methods/behavior include instance `onDie`, `super.onDie`, pool reset, AP/XP/DP rewards, pet loot, and live life-stat invocation. |
+| `com.aionemu.gameserver.spawnengine.VisibleObjectSpawner` | `Aion.GameServer.Services.WorldNpcSpawnService` | Spawn Service | Partial | Unit Tested | Needs Verification | C# clears stale AI runtime state when a fresh world NPC is spawned. This models the Java creation of a fresh `Npc`/`NpcAI` runtime, but does not yet construct full AI, stats, controller, known-list, aggro-list, or handler state. |
+| `com.aionemu.gameserver.controllers.VisibleObjectController` | `Aion.GameServer.Services.WorldNpcSpawnService.TryDespawnWorldNpc` | Controller/Service | Partial | Unit Tested | Needs Verification | C# despawn now clears the lightweight AI state surface. Java `delete`/`onDespawn` cleanup is broader; drop unregistration, known-list removal, AI stop events, and handler hooks remain outside this unit. |
+| `com.aionemu.gameserver.model.stats.container.CreatureLifeStats` | Not started for NPCs; `Aion.GameServer.Model.GameObjects.PlayerLifeStats` only covers player DB restore helpers | Stats Container | Not Started | No Tests | Unknown | Newly re-read dependency: Java calls `getOwner().getController().onDie(effector)` from `onHpChanged` when HP reaches zero. The C# port has no NPC life-stat reducer/death trigger yet. Precision/rounding from HP percentage and max-stat sync remains unverified. |
+| `com.aionemu.gameserver.model.stats.container.NpcLifeStats` | Not started; future `WorldNpcLifeStats` or combat-life-stat service | Stats Container | Not Started | No Tests | Unknown | Java initializes NPC HP/MP from game stats and schedules HP restore. C# world NPCs do not yet carry current HP/MP or HP restore scheduling. |
+| `com.aionemu.gameserver.controllers.CreatureController` | Not started; future creature death lifecycle service | Controller | Not Started | No Tests | Unknown | Newly re-read dependency: Java aborts movement/casting, removes effects, sets dead state, notifies death observers, broadcasts `SM_EMOTION(DIE)`, and clears hate. None of those live creature-death side effects are ported in this unit. |
+
+Tests added:
+- `HandleDeathAsync_MarksAiDiedBeforeDecayCleanup`: validates the staged death workflow records `WorldNpcAiState.Died` before corpse decay cleanup when AI state service is available.
+- `TryDespawnWorldNpc_ClearsAiRuntimeState`: validates despawn removes stale walking/death AI state for the object id.
+- `SpawnWorldNpcs_ClearsStaleAiRuntimeStateForReusedObjectId`: validates fresh world-NPC spawn clears stale state before object-id reuse can leak old AI state.
+- Java comparison status: tests are based on deterministic Java source inspection; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- The C# AI state surface is intentionally lightweight and does not execute Java AI handlers or scripts.
+- The real Java death trigger still starts in `CreatureLifeStats.onHpChanged`; the C# NPC life-stat and damage reducer model does not exist yet.
+- Despawn/spawn cleanup only covers the C# AI state dictionary; Java controller, known-list, effect, aggro, observer, and handler cleanup are still unported.
+- Threading differences are limited to the existing C# `ThreadPoolManager` schedule surface; no executor-level Java/C# timing comparison was performed.
+- Reflection, serialization, date/time handling, and packet binary output are not exercised by this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 4 partial/staged C# artifacts
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 55% because NPC life stats, combat, AI handlers, creature death side effects, team loot, instances, quests, and dynamic handlers are still open.
+
+Next recommended unit of work:
+- Introduce the first C# NPC life-stat/death trigger surface from Java `CreatureLifeStats.onHpChanged`, keeping it narrow enough to call `WorldNpcDeathDropWorkflowService.HandleDeathAsync` once when HP reaches zero while documenting missing attack-status packets, observers, restore tasks, and full combat math.
+
 ---
 
 ## Next Steps
@@ -3218,5 +3265,5 @@ Next recommended unit of work:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, connect future combat/life-stat NPC death callers to `WorldNpcDeathDropWorkflowService.HandleDeathAsync` with live AI decision inputs, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add the first NPC life-stat death trigger that calls `WorldNpcDeathDropWorkflowService.HandleDeathAsync` with live AI decision inputs, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
