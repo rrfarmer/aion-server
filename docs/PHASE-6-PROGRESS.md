@@ -13539,6 +13539,64 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance event fanout parity with `PlayerAllianceEnteredEvent`: add a non-sending ordered packet/system-message plan for the invited player and existing members, including `SM_ALLIANCE_INFO`, `SM_ALLIANCE_MEMBER_INFO(JOIN/ENTER)`, `STR_FORCE_ENTERED_FORCE`, and `STR_FORCE_HE_ENTERED_FORCE`. Keep brands, abyss-rank broadcast, live add-player mutation, league broadcast, and socket sends deferred unless safe packet surfaces already exist.
 
+### Session 600 (May 23, 2026)
+- Continued Java `PlayerAllianceEnteredEvent.handleEvent` parity after the Session 599 source-read.
+- Added `PlayerAllianceEnteredPlan` and `PlayerAllianceEnteredPlanner`.
+- Added `SmSystemMessage.ForceEnteredForce()` for Java `STR_FORCE_ENTERED_FORCE` (`1390263`).
+- Added `SmSystemMessage.ForceHeEnteredForce(string)` for Java `STR_FORCE_HE_ENTERED_FORCE(String)` (`1400013`).
+- Modeled Java enter packet/system-message ordering after the add-player boundary:
+  - send `SM_ALLIANCE_INFO(team)` to the invited player;
+  - send `STR_FORCE_ENTERED_FORCE` to the invited player;
+  - send `SM_ALLIANCE_MEMBER_INFO(invitedMember, JOIN)` to the invited player;
+  - for each existing member, send the invited member-info `JOIN` packet;
+  - send `STR_FORCE_HE_ENTERED_FORCE(invitedName)` to each existing member;
+  - send `SM_ALLIANCE_INFO(team)` to each existing member;
+  - send `SM_ALLIANCE_MEMBER_INFO(existingMember, ENTER)` back to the invited player.
+- Represented `team.sendBrands(player)`, `SM_ABYSS_RANK_UPDATE(1, player)` broadcast, and league broadcast as explicit plan metadata boundaries.
+- Kept live `PlayerAllianceService.addPlayerToAlliance`, brand packet generation, abyss-rank packet fanout, league broadcast execution, socket sends, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests|FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 145 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1243 tests.
+
+#### Migration Parity Table - Session 600
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceEnteredEvent` | `Aion.GameServer.Services.PlayerAllianceEnteredPlanner` / `PlayerAllianceEnteredPlan` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# models the ordered packet/system-message output after add-player mutation. Live add-player mutation, brands, abyss-rank broadcast, league broadcast, socket sends, and `super.handleEvent` are not implemented. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` via enter packet intents | Server Packet | Partial | Regression Tested | Needs Verification | Enter fanout reuses non-league serializer for invited/existing members. League rows, Java golden bytes, encoded frames, and live sends remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` via enter packet intents | Server Packet | Partial | Regression Tested | Needs Verification | Enter fanout serializes invited `JOIN` and existing-member `ENTER` packets. Java golden bytes, encoded frames, live member wrapper metadata, and client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_ENTERED_FORCE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceEnteredForce` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Factory returns Java message id `1390263`; tests validate planned recipient. Java frame comparison remains missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_HE_ENTERED_FORCE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceHeEnteredForce` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Factory returns Java message id `1400013`; tests validate planned recipients. Java parameter/frame comparison remains missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.addPlayerToAlliance` | `PlayerAllianceEnteredPlanner` post-add snapshot input | Service Dependency | Not Started | No Tests | Unknown | C# assumes `membersAfterJoin` already contains the invited player. Live alliance group/member creation and persistence/session effects are deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK_UPDATE` | `PlayerAllianceEnteredPlan.WouldBroadcastAbyssRank` metadata | Server Packet Dependency | Not Started | No Tests | Unknown | Java broadcasts `new SM_ABYSS_RANK_UPDATE(1, player)` after backfill. This unit only records the boundary. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance.sendBrands` | `PlayerAllianceEnteredPlan.WouldSendBrands` metadata | Team Runtime Dependency | Not Started | No Tests | Unknown | Brand packet generation/order is not ported in this unit. |
+| `com.aionemu.gameserver.model.team.league.League` | `PlayerAllianceEnteredPlan.WouldBroadcastLeague` metadata | Runtime Dependency | Not Started | Unit Tested as Metadata | Unknown | C# flags the league broadcast boundary but does not execute it. League `SM_ALLIANCE_INFO` row serialization remains blocked. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.EnteredPlanner_PlansJoinAndBackfillPacketOrderLikeJavaPlayerAllianceEnteredEvent`: validates invited/existing-member packet order, `SM_ALLIANCE_INFO` packet payloads, `JOIN`/`ENTER` member-info serialized payloads, and system-message ids `1390263`/`1400013`.
+- `PlayerAllianceMemberInfoTests.EnteredPlanner_ReturnsNullWhenInvitedMemberSnapshotIsMissing`: validates no enter fanout is emitted when the post-add member snapshot does not contain the invited player.
+- Java comparison status: expectations are source-derived from `PlayerAllianceEnteredEvent.handleEvent`, `SM_ALLIANCE_INFO.writeImpl`, `SM_ALLIANCE_MEMBER_INFO.writeImpl`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live add-player mutation comparison, brand packet comparison, abyss-rank broadcast comparison, socket fanout comparison, encoded frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Live `PlayerAllianceService.addPlayerToAlliance` is not implemented in this planner.
+- `team.sendBrands(player)` remains metadata only.
+- `SM_ABYSS_RANK_UPDATE(1, player)` broadcast remains metadata only.
+- League broadcast execution and league `SM_ALLIANCE_INFO` rows remain missing.
+- `PlayerDisconnectedEvent` and `PlayerAllianceLeavedEvent` remain source-read only.
+- Live socket fanout and Java threading/event-dispatch behavior are not runtime-compared.
+- Java golden byte vectors and encoded-frame validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 alliance enter fanout planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 10 live alliance add-player mutation, brands, abyss-rank broadcast, league broadcast, full league `SM_ALLIANCE_INFO`, disconnect fanout, leave fanout, Java runtime ordering comparison, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; alliance enter packet ordering is modeled, but live membership mutation and several side effects remain incomplete.
+
+Next recommended unit of work:
+- Continue alliance event fanout parity with `PlayerDisconnectedEvent`: add a non-sending plan for non-leader disconnect output to other members, including `STR_FORCE_HE_BECOME_OFFLINE`, `SM_ALLIANCE_MEMBER_INFO(DISCONNECTED)`, and `SM_ALLIANCE_INFO`; document the leader-change, disband, and league-broadcast branches as deferred unless a safe planner surface already exists.
+
 ---
 
 ## Next Steps
