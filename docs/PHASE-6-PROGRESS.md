@@ -10824,6 +10824,53 @@ Summary metrics:
 Next recommended unit of work:
 - Wire `PreparePortalEntryAsync` into the relevant C# portal/dialog packet caller in a teleport-free mode: send returned failure/consumption packets in Java order and surface the `PortalEntryPlanAction`, but still stop before `TeleportService.teleportTo` or transfer allocation. If the production caller surface is not ready, add a narrow caller adapter with tests that proves packet ordering.
 
+### Session 544 (May 23, 2026)
+- Added `PortalEntryInteractionService.HandleDialogSelectAsync`, a narrow C# caller boundary for Java `CM_DIALOG_SELECT -> NpcController.onDialogSelect -> PortalDialogAI.onDialogSelect -> PortalService.port`.
+- The service resolves the targeted world NPC, enforces the Java talk-range gate before portal AI handling, resolves the dialog portal path through `PortalPathTable.GetPortalDialogPath`, calls `PlayerEnterWorldService.PreparePortalEntryAsync`, sends validation failure packets when present, and sends successful required-item/kinah consumption packets in the order returned by the preparation result.
+- Wired `GameServerConnection.HandleDialogSelectAsync` to invoke the portal-dialog interaction service when the runtime context, world, and `PlayerEnterWorldService` are available. Non-portal dialog actions continue to fall through to the existing charge-all branch.
+- Kept actual `TeleportService.teleportTo`, transfer/allocation, group/alliance fanout, AI quest dialog depth, unsupported-action audit logging, and production live-client validation out of scope.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~PortalEntryValidationServiceTests"` passes with 84 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1155 tests.
+
+#### Migration Parity Table - Session 544
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_DIALOG_SELECT.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleDialogSelectAsync` | Client Packet Handler | Partial | Unit Tested | Partial Parity | C# now routes quest-id-zero portal dialog selections into a portal caller boundary before the existing charge-all branch. Java admin dialog-info messages, unknown-dialog logging, full `supportsAction` audit behavior, quest auto-reward, and generic controller dispatch remain incomplete. |
+| `com.aionemu.gameserver.controllers.NpcController.onDialogSelect` | `Aion.GameServer.Services.PortalEntryInteractionService.HandleDialogSelectAsync` | Controller / Adapter | Partial | Unit Tested | Partial Parity | C# enforces target world NPC lookup and talk-range gating before portal handling. It does not run the Java AI event machine, full known-list security, or non-portal dialog services. |
+| `ai.portals.PortalDialogAI.onDialogSelect` | `Aion.GameServer.Services.PortalEntryInteractionService.HandleDialogSelectAsync` | AI Handler / Adapter | Partial | Unit Tested | Partial Parity | C# handles the quest-id-zero portal path lookup and delegates to portal preparation. Auto-group, find-group, quest dialog, reward dialog, and full AI override behavior are still not ported here. |
+| `com.aionemu.gameserver.dataholders.Portal2Data.getPortalDialogPath` | `Aion.GameServer.Dataholders.PortalPathTable.GetPortalDialogPath` used by `PortalEntryInteractionService` | Static Data Lookup | Partial | Unit Tested / Regression Tested | Partial Parity | Existing C# race fallback is now used by a caller boundary. Java JAXB map population and runtime static-data comparison for every portal dialog remain unverified. |
+| `com.aionemu.gameserver.services.teleport.PortalService.port` | `PlayerEnterWorldService.PreparePortalEntryAsync` invoked by `PortalEntryInteractionService` | Service / Orchestration | Partial | Unit Tested | Partial Parity | C# now reaches portal preparation from a dialog-selection caller and sends pre-teleport failure/consumption packets. Actual teleport, transfer allocation, cooldown addition, and group/alliance/league entry remain missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `Func<GameServerPacket, CancellationToken, Task>` in `PortalEntryInteractionService`; `GameServerConnection.SendPacketAsync` in production wiring | Packet Dispatch Boundary | Partial | Unit Tested | Needs Verification | Tests prove packet objects are sent in service order. Live socket framing, encryption ordering, and client-observed behavior are not verified. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.sendItemPacket` | `PortalEntryPreparationResult.Packets` sent by `PortalEntryInteractionService` | Packet Boundary | Partial | Unit Tested | Partial Parity | Required-item delete/cube/update and kinah update packets are sent by the caller boundary after successful persistence. Java persistent-state flags, delete queues, logging, and quest item removed callbacks remain unsupported. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.teleportTo` | Future consumer of `PortalEntryPreparationResult.EntryPlan.Action` | Service Dependency | Not Started | No Tests | Unknown | Still deliberately not invoked; the caller stops after packet sends and action result production. |
+
+Tests added or extended:
+- `PortalEntryInteractionServiceTests.HandleDialogSelect_SendsValidationFailurePacketWithoutConsumptionPackets`: validates missing required item through dialog portal selection sends the Java-shaped failure dialog packet and does not mutate inventory.
+- `PortalEntryInteractionServiceTests.HandleDialogSelect_SendsRequirementConsumptionPacketsInJavaOrder`: validates fresh same-instance dialog portal selection sends delete, cube-size, item update, and kinah update packets in Java-derived order and updates in-memory inventory after persistence.
+- `PortalEntryInteractionServiceTests.HandleDialogSelect_SkipsRequirementConsumptionPacketsForJavaReentry`: validates registered reentry skips required item/kinah consumption and sends no consumption packets.
+- Java comparison status: expectations are source-derived from `CM_DIALOG_SELECT`, `NpcController.onDialogSelect`, `PortalDialogAI.onDialogSelect`, `Portal2Data.getPortalDialogPath`, `PortalService.port`, and prior required-item packet boundary work. No Java runtime execution, live client packet capture, full AI handler execution, database integration test, actual teleport, group/alliance runtime comparison, or client validation was run.
+
+Remaining risks:
+- The C# production handler still only covers the portal dialog slice and existing charge-all branch; generic dialog service behavior, quest auto-reward, class-change, and AI handler coverage remain incomplete.
+- `PortalEntryInteractionService` sends packets through a delegate and is wired to `GameServerConnection`, but the new connection branch is not covered by an encrypted socket integration test.
+- Full Java `supportsAction` audit behavior, known-list security depth, and AI override ordering are not represented for non-portal dialog actions.
+- Actual same-instance teleport, instance transfer/allocation, cooldown addition after transfer, and `TeleportService.teleportTo` side effects remain unimplemented for this path.
+- Group/alliance/league portals remain explicitly unsupported by the underlying plan helper.
+- Java inventory side effects remain missing: persistent state marking, delete queue handling, logging, `QuestEngine.onItemRemoved`, and lock/concurrency semantics.
+- Siege ownership, live permission lookup, quest engine depth, threading, reflection/JAXB behavior, serialization beyond tested packet objects, date/time behavior, precision/rounding, and live-client behavior remain incomplete or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 narrow portal dialog caller boundary plus GameServerConnection wiring over existing preparation/packet boundaries
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 8 actual teleport execution, instance transfer/allocation, cooldown addition after transfer, group/alliance fanout, full AI/dialog engine, live packet dispatch validation, quest item removal side effects, and live runtime/client comparison
+- Estimated overall migration completion: Phase 6 remains about 62% complete; portal dialog entry now reaches the pre-teleport C# preparation path and sends returned packets, but the final teleport/transfer path and broader dialog AI engine are still incomplete.
+
+Next recommended unit of work:
+- Implement the next teleport-free-to-teleport transition slice for same-instance portal actions: consume `PortalEntryPreparationResult.EntryPlan.Action == SameInstanceTeleport` in the dialog caller and invoke a narrow C# same-map teleport service that mutates player position and emits the expected teleport/location packets, while still leaving instance transfer/allocation and group/alliance fanout for later.
+
 ---
 
 ## Next Steps
