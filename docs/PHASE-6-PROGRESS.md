@@ -6452,6 +6452,44 @@ Summary metrics:
 Next recommended unit of work:
 - Add focused connection/socket-level tests for the flight-zone transition fanout path, especially `CM_MOVE` or `CM_SUBZONE_CHANGE` causing `SM_STATS_INFO`, `SM_EMOTION(CHANGE_SPEED)`, `SM_EMOTION(STOP_FLY/LAND)`, and movement packets in Java-shaped order. If harness cost is too high, move to Java `WorldMap.hasOverridenOption(ZoneAttributes.FLY/GLIDE)` and zone-template flag override precedence.
 
+### Session 440 (May 23, 2026)
+- Added the Java `WorldMap.hasOverridenOption` utility shape to `WorldMapSummary` as `HasOverriddenOption`.
+- Added `WorldMapSummary.IsFlightAllowed(currentFlags)` and `CanGlide(currentFlags)` helpers for the Java mutable `worldOptions` read path.
+- Covered both Java override branches: a template flag removed from runtime options and a runtime option added when the template flag was absent.
+- This is a preparatory slice for future zone-template flag precedence; the current C# world map surface still does not maintain mutable `worldOptions` or apply `ZoneInstance.canFly/canGlide` precedence during zone membership.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~PlayerZoneStateServiceTests"` passes with 12 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 952 tests.
+
+#### Migration Parity Table - Session 440
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMap.hasOverridenOption` | `Aion.GameServer.Dataholders.WorldMapSummary.HasOverriddenOption` | Utility / Map Option | Partial | Unit Tested | Partial Parity | Implements the Java branch logic comparing template flags to supplied runtime flags. C# spelling uses `Overridden`; Java method name typo is documented in the breadcrumb. No mutable `WorldMap` runtime object exists yet. |
+| `com.aionemu.gameserver.world.WorldMap.isFlightAllowed` | `Aion.GameServer.Dataholders.WorldMapSummary.IsFlightAllowed(WorldZoneAttributes)` | Utility / Map Option | Partial | Unit Tested | Partial Parity | Reads supplied runtime flags for `FLY`, matching Java `worldOptions`. Existing `AllowsFlight` property still reflects static template flags. |
+| `com.aionemu.gameserver.world.WorldMap.canGlide` | `Aion.GameServer.Dataholders.WorldMapSummary.CanGlide(WorldZoneAttributes)` | Utility / Map Option | Partial | Unit Tested | Partial Parity | Reads supplied runtime flags for `GLIDE`, matching Java `worldOptions`. No active caller uses mutable map options yet. |
+| `com.aionemu.gameserver.model.templates.world.WorldMapTemplate.flags` | `Aion.GameServer.Dataholders.WorldMapSummary.Flags` | Data Holder | Partial | Existing Integration Coverage | Partial Parity | Static template flags are now also the comparison baseline for future runtime override checks. JAXB unmarshalling differences were already parser-mapped in Session 435. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.canFly` / `canGlide` | No active C# equivalent yet | Zone Option Dependency | Not Started | No Tests | Needs Verification | Newly discovered/continued dependency: Java zone option checks consume `WorldMap.hasOverridenOption`, but C# does not yet apply zone-template flag precedence during geometric zone evaluation. |
+
+Tests added or extended:
+- `StaticDataLoadingTests.WorldMapSummary_HasOverriddenOptionMatchesJavaWorldMap`: validates default no-override, removed-template-flag override, added-runtime-flag override, and runtime `FLY` / `GLIDE` reads.
+- Java comparison status: tests are source-derived from Java `WorldMap.hasOverridenOption`, `WorldMap.isFlightAllowed`, and `WorldMap.canGlide`; no live Java runtime side-by-side validation was run.
+
+Remaining risks:
+- C# still has no mutable `WorldMap` runtime model with `setWorldOption` / `removeWorldOption`.
+- `ZoneInstance.canFly` / `canGlide` precedence is not applied to the current fly-zone membership bridge.
+- No serialization is involved. Reflection is not used. Date/time is not involved. Threading is not involved in this utility slice, but future mutable world options will need concurrency review against Java's world-map usage.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 map-option override utility slice
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because mutable world-map options, zone-template precedence, full zone lifecycle handlers, socket-order harnesses, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Either apply Java `ZoneInstance.canFly/canGlide` precedence to the current polygon zone bridge using zone template `flags`, or build the focused connection/socket-level tests for the fly-zone transition fanout path before changing more runtime behavior.
+
 ---
 
 ## Next Steps
@@ -6459,7 +6497,7 @@ Next recommended unit of work:
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
-4. Continue `CM_EMOTION` / `CM_MOVE` flight work by adding one missing support model at a time: socket-order tests for fly/no-fly zone transition fanout, Java `WorldMap.hasOverridenOption` zone flag precedence, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
+4. Continue `CM_EMOTION` / `CM_MOVE` flight work by adding one missing support model at a time: Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
