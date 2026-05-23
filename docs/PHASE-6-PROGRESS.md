@@ -12564,6 +12564,54 @@ Summary metrics:
 Next recommended unit of work:
 - Add the online max-stat provider needed by `PlayerGroupMemberInfoPrefixSnapshot`: source-read Java `PlayerLifeStats.getMaxHp/getMaxMp/getMaxFp` and the C# `SmStatsInfo` stat calculation path, then thread a narrow `PlayerGroupMemberInfoResourceMaximums` input into `FromMember` or the runtime reconnect/entered planners. Keep full packet serialization deferred until max/current life stats can be byte-tested together with the existing prefix snapshot.
 
+### Session 581 (May 23, 2026)
+- Source-read Java `PlayerLifeStats`, `CreatureLifeStats`, and the existing C# `SmStatsInfo.CalculateCurrentResourceMaxStats` path before adding max-stat support to group member-info planning.
+- Updated `SmStatsInfo` stat context creation to use `Player.Level` when no experience table is supplied, instead of defaulting all no-table calculations to level `1`.
+- Added `PlayerGroupMemberInfoResourceMaximums`, a narrow bridge from `SmStatsInfo.CalculateCurrentResourceMaxStats` to `PlayerGroupMemberInfoPrefixSnapshot`.
+- `PlayerGroupMemberInfoPacketPlan.FromMember` now supplies source-shaped max HP/MP/FP values to the prefix snapshot for online members.
+- Offline member-info prefixes now record zero max/current HP/MP/FP values, matching Java's six zero writes when `player.isOnline()` is false.
+- Online current HP/MP values now use the existing C# Java-parity clamping helpers against the supplied max HP/MP values; current FP continues to use Java-style lower-bound-only C# `GetCurrentFp()`.
+- Added focused tests for level-based max-stat calculation, current-stat clamping, and group-member prefix maximums.
+- Kept full `SM_GROUP_MEMBER_INFO` byte serialization disabled because effect serialization, slot timers, and full packet branch output are still incomplete.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 105 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1203 tests.
+
+#### Migration Parity Table - Session 581
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.stats.container.CreatureLifeStats.getMaxHp` / `getMaxMp` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatsInfo.CalculateCurrentResourceMaxStats` via `PlayerGroupMemberInfoResourceMaximums` | Stat Dependency / Bridge | Partial | Unit Tested | Needs Verification | C# now supplies calculated max HP/MP to group member-info prefix planning. The calculator is source-derived and tested for focused values, but item/effect/stat-modifier completeness remains limited to the existing `SmStatsInfo` implementation. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats.getMaxFp` | `PlayerGroupMemberInfoResourceMaximums.MaxFp` | Stat Dependency / Bridge | Partial | Unit Tested | Needs Verification | C# supplies max FP from `SmStatsInfo` fly-time calculation. Java reads current game stats; C# still lacks full modifier/effect parity. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats.getCurrentFp` | `Aion.GameServer.Model.GameObjects.PlayerLifeStats.GetCurrentFp` consumed by `PlayerGroupMemberInfoPrefixSnapshot` | Stat Dependency | Partial | Unit Tested | Needs Verification | C# preserves lower-bound-only FP clamping for current FP. Full Java FP task lifecycle and max synchronization are outside this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `PlayerGroupMemberInfoPacketPlan` / `PlayerGroupMemberInfoPrefixSnapshot` | Packet Planning DTO | Partial | Regression Tested | Needs Verification | Prefix planning now has max/current HP/MP/FP packet values for online members and six zero life-stat values for offline members. Actual byte serialization and later branch payloads remain missing. |
+| `com.aionemu.gameserver.model.PlayerClass.createStatsTemplate` / `PlayerStatCalculator` | `SmStatsInfo.PlayerCalculatedStats` through `CalculateCurrentResourceMaxStats` | Stat Calculator | Partial | Regression Tested | Needs Verification | C# stat calculation now respects `Player.Level` when no experience table is supplied. This is source-aligned for packet planning but broader stat parity is not fully proven. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.PlayerGroupMemberInfoResourceMaximums_UsesStatsInfoLevelBasedMaxStats`: validates Java-derived level-based max HP/MP values for a level 10 gladiator, HP clamping to max, MP clamping to zero, and FP max/current behavior.
+- `PlayerGroupRuntimeTests.PlayerGroupMemberInfoPrefixSnapshot_ModelsJavaLifeCommonAndPositionPrefix`: updated to assert non-null max HP/MP/FP values for online members and zero max/current life-stat values for offline members.
+- Existing `PlayerReviveRestoreServiceTests.CalculateCurrentResourceMaxStatsExposesSmStatsInfoMaxResourceSource` remains a regression test for the default level 1 max-stat source.
+- Java comparison status: expectations are source-derived from `CreatureLifeStats`, `PlayerLifeStats`, `PlayerClass`, `PlayerStatCalculator` formulas already mirrored in `SmStatsInfo`, and `SM_GROUP_MEMBER_INFO.writeImpl`. No Java runtime execution, Java-generated golden vector, live stat-modifier comparison, equipped-item modifier comparison, abnormal-effect comparison, packet byte serialization, socket send/fanout comparison, or client validation was run.
+
+Remaining risks:
+- Max-stat parity is only as complete as the existing `SmStatsInfo` stat calculator; full equipment, title, skill, effect, and dynamic stat modifier parity is not proven here.
+- `PlayerGroupRuntime` has no dataholder injection for item/template-backed max-stat calculation, so current group member-info plans use the no-table stat path.
+- Full `SM_GROUP_MEMBER_INFO` serialization remains absent.
+- Abnormal effects, `SkillTargetSlot` timers, effect remaining-time calculation, and reflection-sensitive effect data remain missing.
+- Byte-level layout, opcode/frame encoding, endian behavior, and float precision remain unverified for this packet.
+- Threading/event-order behavior is still plan-only and not Java live-send compared.
+- Date/time handling is not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 focused max-stat provider bridge for group member-info prefix planning
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 9 full stat-modifier parity, item/template-backed group stat maxes, full `SM_GROUP_MEMBER_INFO` byte serialization, abnormal effect serialization, `SkillTargetSlot` timers, live group member fanout, Java packet ordering comparison, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; `SM_GROUP_MEMBER_INFO` prefix data is now richer, but packet serialization and effect branches are still unported.
+
+Next recommended unit of work:
+- Add the first byte-tested `SM_GROUP_MEMBER_INFO` serializer slice for the fixed prefix only. Source-read `SM_GROUP_MEMBER_INFO.writeImpl` again, create `SmGroupMemberInfo` or an explicitly prefix-only writer guarded by the existing plan, and test serialized unencrypted payload through the event/fly/mentor byte. Keep name/effects/slot-timer branch payloads deferred unless the prefix writer needs a minimal event-specific terminator for valid packet framing.
+
 ---
 
 ## Next Steps
