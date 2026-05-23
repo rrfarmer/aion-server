@@ -12137,6 +12137,50 @@ Summary metrics:
 Next recommended unit of work:
 - Add the first focused `SmGroupInfo` packet serializer only for the currently modeled group-info plan fields, with an unencrypted payload test for the exact Java field order. Keep live sends disabled and mark parity as source-derived until a Java golden vector or client capture verifies bytes/opcode.
 
+### Session 572 (May 23, 2026)
+- Added the first focused C# `SmGroupInfo` server packet serializer for the Java `SM_GROUP_INFO.writeImpl` field order.
+- `SmGroupInfo` uses Java server opcode `90` from `ServerPacketsOpcodes` and writes the currently modeled `PlayerGroupInfoPacketPlan` fields only.
+- The serializer writes group id, leader id, active-player map id, loot-rule id, loot metadata, constant marker `0x02`, unknown byte `0`, raw team type/subtype, message id `0`, and empty name.
+- Added an unencrypted payload test that reads each field back in Java order and confirms the source-derived payload length is 63 bytes for an empty group name.
+- Kept live sends, reconnect fanout, active connection map-id lookup, and `SM_GROUP_MEMBER_INFO` serialization disabled.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 95 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1193 tests.
+
+#### Migration Parity Table - Session 572
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupInfo` | Server Packet | Partial | Unit Tested | Needs Verification | C# now serializes the currently modeled Java field order from `PlayerGroupInfoPacketPlan`. No Java golden vector, client capture, live send path, or runtime `AionConnection.getActivePlayer` comparison has verified bytes/opcode end to end. |
+| `com.aionemu.gameserver.network.aion.ServerPacketsOpcodes` entry for `SM_GROUP_INFO` | `SmGroupInfo.PacketOpCode` | Packet Opcode Metadata | Partial | Unit Tested Around Payload | Needs Verification | C# uses Java opcode `90`. The focused test slices off the frame header and validates payload only, so encoded opcode/frame parity remains unverified. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootGroupRules` | `Aion.GameServer.Model.GameObjects.PlayerGroupLootRules` consumed by `SmGroupInfo` | Packet Dependency / DTO | Partial | Regression Tested | Needs Verification | Serializer writes all modeled loot metadata fields. Mutable loot-rule changes, distribution queues, roll/bid behavior, and `CM_DISTRIBUTION_SETTINGS` remain missing. |
+| `com.aionemu.gameserver.model.team.TeamType.getType` / `getSubType` | `PlayerGroupInfoPacketPlan.TeamType` / `TeamSubType` consumed by `SmGroupInfo` | Packet Dependency | Partial | Regression Tested | Needs Verification | Serializer writes raw group/auto-group values supplied by the plan. Alliance/offence/defence team types are not modeled. |
+| `com.aionemu.gameserver.network.aion.AionConnection.getActivePlayer` map id dependency | `PlayerGroupInfoPacketPlan.ActivePlayerMapId` consumed by `SmGroupInfo` | Packet Context | Refactored | Unit Tested | Intentional Difference | Java reads the active player's map id at packet serialization time. C# continues to take explicit map id in the plan because live connection serialization and reconnect send integration are not present. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerConnectedEvent` / `PlayerGroupEnteredEvent` / `ChangeGroupLootRulesEvent` / `ChangeGroupLeaderEvent` | No live C# send integration in this unit | Event / Packet Caller Dependency | Not Started | No Tests | Unknown | Java callers send `SM_GROUP_INFO` during group enter, reconnect, loot-rule changes, and leader changes. This unit adds packet bytes only; caller wiring and event ordering remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | No C# packet equivalent | Server Packet Dependency | Not Started | No Tests | Unknown | Still deferred because it depends on life stats, class/gender, position, fly/mentor state, names, abnormal effects, and skill slot timers. |
+
+Tests added or extended:
+- `GamePacketTests.SmGroupInfo_WritesSourceDerivedJavaFieldOrder`: validates the unencrypted `SM_GROUP_INFO` payload field order, values, empty UTF-16 string terminator, and 63-byte payload length.
+- Java comparison status: expectations are source-derived from Java `SM_GROUP_INFO.writeImpl`, `ServerPacketsOpcodes`, `LootGroupRules`, and `TeamType`. No Java runtime execution, generated Java golden vector, encoded opcode/frame comparison, live connection map-id comparison, client capture, or live send/fanout validation was run.
+
+Remaining risks:
+- `SmGroupInfo` is not wired into reconnect, group-enter, leader-change, or loot-rule-change event paths.
+- Payload order is unit-tested, but opcode/header encryption and full frame parity are not validated by a Java golden vector.
+- Active-player map id remains an explicit C# planning input instead of Java's runtime `AionConnection.getActivePlayer` lookup.
+- Mutable loot-rule updates, group leader changes, group packet fanout, and `SM_GROUP_MEMBER_INFO` remain missing.
+- Threading and event ordering are not validated; Java group events run through team event locks and packet utility fanout.
+- Serialization differences are still possible around live frames, opcode header encoding, and client-observed behavior. Reflection/JAXB, date/time, and precision/rounding are not involved in this packet slice.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 focused `SM_GROUP_INFO` payload serializer slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 12 live `SM_GROUP_INFO` send wiring, opcode/frame golden validation, active connection map-id lookup, reconnect fanout, group-enter fanout, leader-change fanout, loot-rule-change fanout, `SM_GROUP_MEMBER_INFO` serialization, mutable loot-rule updates, full team event ordering, Java runtime/client capture comparison, and broader group lifecycle integration
+- Estimated overall migration completion: Phase 6 remains about 63% complete; the first group-info packet payload serializer exists, but live group packet behavior and member-info fanout are still substantial gaps.
+
+Next recommended unit of work:
+- Add a non-sending `SmGroupInfo` packet-call planning bridge from the existing reconnect intent to an actual `SmGroupInfo` instance, still without live sends. Keep the bridge source-derived from `PlayerConnectedEvent` and test that reconnect can produce the same `PlayerGroupInfoPacketPlan` and packet payload for the reconnecting player's map id. Do not wire socket fanout until active connection/player context and `SM_GROUP_MEMBER_INFO` dependencies are ready.
+
 ---
 
 ## Next Steps
