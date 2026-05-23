@@ -3494,6 +3494,59 @@ Summary metrics:
 Next recommended unit of work:
 - Add staged attacked-observer and nearby support-AI event surfaces around `WorldNpcDamageService`, preserving Java's pre-aggro/pre-HP-reduction order while documenting that dynamic observer implementations and full AI handlers remain pending.
 
+### Session 380 (May 23, 2026)
+- Added `WorldNpcCombatEventService` as a staged C# surface for Java attacked-observer notifications and nearby NPC `CREATURE_NEEDS_SUPPORT` fanout.
+- `WorldNpcDamageService` now records attacked-observer notifications when `damage != 0 && notifyAttack`, using `SkillId = 0` for ordinary attacks just like Java passes `effect == null ? 0 : effect.getSkillId()`.
+- `WorldNpcDamageService` now records nearby support-AI requests after aggro damage is added and before HP reduction, preserving the inspected Java order from `CreatureController.onAttack`.
+- Support-AI discovery currently uses spawned same-world NPCs with the existing default visible-distance boundary. This is intentionally a staging surface, not full Java `KnownList`, tribe, geo, aggro-range, guard, or delayed `AggroNotifier` behavior.
+- Extended spawn/despawn cleanup registration to clear staged combat event state alongside life stats and combat state.
+- Added focused coverage for attacked-observer state, nearby support-AI filtering, cleanup, and damage-service integration.
+- Current gaps in this cluster: dynamic observer registration/callback execution, `ObserverType` modeling, item/ride/dot observer consequences, Java AI handler dispatch, `GeneralNpcAI.canHandleEvent`, tribe relation checks, guard support, geo visibility, 500ms aggro notifier scheduling, and real attack packet/skill/AI callers remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcCombatEventServiceTests|WorldNpcDamageServiceTests"` passes with 9 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcDamageServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GamePacketTests|GameServerBootstrapTests"` passes with 133 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 762 tests.
+
+#### Migration Parity Table - Session 380
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.CreatureController` | `Aion.GameServer.Services.WorldNpcDamageService` | Controller/Service | Partial | Unit Tested | Partial Parity | C# now stages observer notification before aggro and support-AI fanout before HP reduction. Missing behavior remains casting cancel checks, real skill/effect callers, critical/godstone activation, delayed hate, and real attack packet/AI callers. |
+| `com.aionemu.gameserver.controllers.ObserveController` | `Aion.GameServer.Services.WorldNpcCombatEventService.NotifyAttackedObservers`; `Aion.GameServer.Services.WorldNpcAttackedObserverNotification` | Controller/Event Surface | Partial | Unit Tested | Partial Parity | C# records attacked-observer notifications with attacker object id and skill id, including ordinary skill id `0`. Dynamic observer registration and callback execution are not ported. |
+| `com.aionemu.gameserver.controllers.observer.ObserverType` | Not started; staged C# attacked notification has no full observer enum | Enum | Not Started | No Tests | Unknown | Java dispatches `ObserverType.ATTACKED`. C# only stores the attacked event shape and does not model the complete observer-type enum or observer polymorphism. |
+| `com.aionemu.gameserver.world.knownlist.KnownList` | `Aion.GameServer.Services.WorldNpcCombatEventService.NotifyNearbySupportAi`; `Aion.GameServer.World.World.GetNpcs` | Known-list/Service | Partial | Unit Tested | Needs Verification | C# uses spawned NPC scans plus default visibility as a stand-in for Java owner known-list iteration. Exact per-NPC KnownList membership, instance handler interactions, and visibility lifecycle are not verified. |
+| `com.aionemu.gameserver.ai.event.AIEventType` | `Aion.GameServer.Services.WorldNpcAiEventType` | Enum/AI Event | Partial | Unit Tested | Partial Parity | Only `CREATURE_NEEDS_SUPPORT` is staged. The rest of Java `AIEventType` remains outside this unit. |
+| `com.aionemu.gameserver.ai.AbstractAI` | `Aion.GameServer.Services.WorldNpcSupportAiRequest` | AI/Event DTO | Partial | Unit Tested | Needs Verification | C# records support requests but does not call `onCreatureEvent`, `canHandleEvent`, event logging, or handler dispatch. |
+| `com.aionemu.gameserver.ai.handler.AggroEventHandler` | Not started; future support-AI handler/aggro notifier service | AI Handler | Not Started | No Tests | Unknown | Java applies tribe, guard, support range, geo, existing hate, and delayed aggro notifier behavior. C# does not yet port those rules. |
+| `com.aionemu.gameserver.ai.NpcAI` / `data.handlers.ai.GeneralNpcAI` | Existing `Aion.GameServer.Services.WorldNpcAiStateService` plus staged support request DTO | AI | Partial | No Tests | Unknown | Existing C# AI state service is still a narrow movement/death state surface. This unit does not implement `GeneralNpcAI.canHandleEvent` or support handler callbacks. |
+| `com.aionemu.gameserver.controllers.VisibleObjectController` | `Aion.GameServer.Services.WorldNpcCombatEventService.Clear`; `Aion.GameServer.Services.WorldNpcSpawnService` cleanup delegate | Controller/Service | Partial | Unit Tested | Needs Verification | Staged combat event state clears on despawn via the existing cleanup delegate. Java delete/onDespawn still performs broader known-list, observer, controller, AI, and handler cleanup. |
+
+Tests added or extended:
+- `WorldNpcCombatEventServiceTests.NotifyAttackedObservers_RecordsAttackerAndSkill`: validates staged attacked-observer records include target NPC, attacker, skill id, and sequence.
+- `WorldNpcCombatEventServiceTests.NotifyNearbySupportAi_RecordsVisibleNpcSupportRequests`: validates nearby same-world NPC support requests and filters self, far, and other-world NPCs.
+- `WorldNpcCombatEventServiceTests.Clear_RemovesNpcCombatEventState`: validates cleanup of staged combat event state.
+- `ApplyDamageAsync_ReducesSpawnedNpcHpViaLifeStats`: extended to validate ordinary Java-style attacked observer notification with skill id `0`.
+- `ApplyDamageAsync_RecordsAttackedObserverAndSupportAiEvents`: validates damage-service integration, support request filtering, and observer-before-support sequence.
+- Java comparison status: tests are source-derived from Java `CreatureController.onAttack`, `ObserveController.notifyAttackedObservers`, `KnownList.forEachNpc`, `AIEventType.CREATURE_NEEDS_SUPPORT`, `AbstractAI.handleCreatureEvent`, and `AggroEventHandler`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- The C# observer surface records notifications but does not execute Java observer callbacks, so item use, ride, dot, stance, quest, and summon consequences remain missing.
+- Support-AI fanout is a request log, not real `NpcAI.onCreatureEvent` dispatch or delayed `AggroNotifier` scheduling.
+- The nearby-NPC scan uses default visible distance and spawned world objects, not full per-creature KnownList membership, support range, tribe relation, guard fallback, or GeoService line-of-sight.
+- Combat-event state is service-backed and object-id keyed, not owned by a full C# `Creature`/`Npc` object.
+- Threading is limited to `ConcurrentDictionary`, per-state locks, and a monotonic sequence; exact Java synchronization and executor timing remain unverified.
+- Reflection, serialization, precision/rounding, and date/time behavior are not exercised by this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 6 partial/staged C# artifacts
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 55% because casting cancel, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Add a staged casting-cancel/interruption surface before attacked-observer notification in `WorldNpcDamageService`, preserving Java `CreatureController.onAttack` lines 204-221 while documenting missing casting skill, concentration, boss, cancel-rate, and random-chance behavior.
+
 ---
 
 ## Next Steps
@@ -3503,5 +3556,5 @@ Next recommended unit of work:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add staged attacked-observer and nearby support-AI event surfaces around `WorldNpcDamageService` before wiring real attack packets/skills/AI, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add a staged casting-cancel/interruption surface before attacked-observer notification in `WorldNpcDamageService` before wiring real attack packets/skills/AI, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
