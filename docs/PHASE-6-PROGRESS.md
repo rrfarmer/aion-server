@@ -11617,6 +11617,60 @@ Summary metrics:
 Next recommended unit of work:
 - Add a minimal `PlayerGroupRuntime`/registry service around `PlayerGroupSnapshot` that can create/update/remove snapshots for players by team id and resolve a player's current group snapshot without manually setting `Player.CurrentGroupSnapshot`. Keep it intentionally narrow, unit-test add/remove/resolve semantics, and continue to document that Java invite, leader, stats, packet fanout, locking, and disband behavior are not yet ported.
 
+### Session 561 (May 23, 2026)
+- Added a minimal `PlayerGroupRuntime` service around the existing snapshot bridge.
+- `PlayerGroupRuntime.CreateOrUpdateGroup` now creates registry-owned group membership by team id, builds one shared `PlayerGroupSnapshot`, and attaches that snapshot to every member player.
+- `PlayerGroupRuntime.AddMember` refreshes the shared snapshot for existing and new members.
+- `PlayerGroupRuntime.RemoveMember` clears the removed player's group fields and refreshes remaining member snapshots.
+- Kept Java invite/request flow, leader election, group stats, team type, max-member enforcement, offline checks, packet fanout, find-group integration, disband behavior, alliance/league integration, ID allocation, and full event lifecycle out of scope.
+- Added focused runtime tests for create/update, add, remove, and resolve semantics.
+- Added portal interaction coverage proving runtime-owned group metadata feeds blocked portal planning while preserving no teleport, no item consumption, no cooldown mutation, and no packet side effects.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests"` passes with 79 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1178 tests.
+
+#### Migration Parity Table - Session 561
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.createGroup` | `Aion.GameServer.Services.PlayerGroupRuntime.CreateOrUpdateGroup` | Service / Registry | Partial | Unit Tested | Needs Verification | C# can attach a runtime-owned snapshot to members by supplied team id. Java creates a `PlayerGroup`, stores it in a static `ConcurrentHashMap`, allocates an id via `IDFactory` when needed, starts offline checks, and triggers entry events; those behaviors are missing. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.addPlayer` / `addPlayerToGroup` | `PlayerGroupRuntime.AddMember` | Service / Lifecycle | Partial | Unit Tested | Needs Verification | C# refreshes member snapshots when a player is added. Java goes through event classes, `PlayerGroup.addMember`, `FindGroupService.onJoinedTeam`, packet fanout, restrictions, and team event dispatch; none of that is ported. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.removePlayer` | `PlayerGroupRuntime.RemoveMember` | Service / Lifecycle | Partial | Unit Tested | Needs Verification | C# removes by current snapshot/team id, clears the removed player's group fields, and refreshes remaining snapshots. Java dispatches `PlayerGroupLeavedEvent`; kick/ban/offline/disband/min-member behaviors are unsupported. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.addMember` | `PlayerGroupRuntime.CreateOrUpdateGroup` / `AddMember` | Class Lifecycle | Partial | Unit Tested | Needs Verification | Mirrors only the observable `member.getObject().setPlayerGroup(this)` effect through `Player.CurrentGroupSnapshot`. Java `PlayerGroupStats.onAddPlayer`, leader/type handling, max-member rules, and `TemporaryPlayerTeam` membership storage are not implemented. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.onRemoveMember` | `PlayerGroupRuntime.RemoveMember` | Class Lifecycle | Partial | Unit Tested | Needs Verification | Mirrors only `member.getObject().setPlayerGroup(null)` through C# group field clearing. Java stats removal, event ordering, leader reassignment, and disband behavior remain missing. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getPlayerGroup` / `setPlayerGroup` | `Aion.GameServer.Model.GameObjects.Player.CurrentGroupSnapshot` and `PlayerGroupRuntime.Resolve` | Model / Resolver | Partial | Unit Tested | Needs Verification | Runtime now attaches snapshots automatically rather than requiring manual assignment. This is still a snapshot, not a live `PlayerGroup`; concurrent mutation and Java object identity are unverified. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.getTeamId` | `PlayerGroupSnapshot.TeamId` | Model Dependency | Partial | Unit Tested | Needs Verification | Team id is copied into every member's fallback fields and used by portal planning. Java ID allocation/ownership remains unsupported. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.getMembers` | `PlayerGroupSnapshot.MemberObjectIds` | Model Dependency | Partial | Unit Tested | Needs Verification | C# snapshots store member object ids. Java exposes live member/player objects and online/offline member wrappers; stale snapshot risks remain. |
+| `com.aionemu.gameserver.services.teleport.PortalService.port` group metadata source | `PortalEntryValidationService.CreateUnsupportedTeamPlan` via runtime-attached snapshot | Service / Planning | Partial | Regression Tested | Needs Verification | Portal interaction test proves runtime-owned snapshot metadata feeds the existing blocked group plan and remains side-effect free. Successful allocation, `registerTeam`, transfer fanout, teleport, and cooldown mutation remain disabled. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupStats` | No C# equivalent | Dependency | Not Started | No Tests | Unknown | Newly re-read Java dependency. Min/max exp-level, add/remove stat updates, and any stat packet side effects are absent. |
+| `com.aionemu.gameserver.model.team.TeamType` | No C# group equivalent | Enum / Dependency | Not Started | No Tests | Unknown | Java distinguishes group types such as auto-group. C# runtime does not carry team type or type-specific restrictions. |
+| `com.aionemu.gameserver.model.team.common.events.*` group events | No C# equivalent | Event Dependency | Not Started | No Tests | Unknown | Java lifecycle is event-driven. C# runtime mutates snapshots directly and intentionally lacks event ordering, packet fanout, and reflection/dynamic handler participation. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.CreateOrUpdateGroup_AttachesSharedSnapshotMetadataToMembers`: validates one shared snapshot is attached to all members, fallback team fields are populated, and resolver returns the runtime-owned snapshot.
+- `PlayerGroupRuntimeTests.RemoveMember_ClearsRemovedPlayerAndRefreshesRemainingSnapshot`: validates removed player group fields are cleared and remaining members receive a refreshed snapshot with updated member ids.
+- `PlayerGroupRuntimeTests.AddMember_RefreshesSnapshotForExistingMembersAndNewMember`: validates add-member refresh propagation for existing and newly added members.
+- `PortalEntryInteractionServiceTests.HandleDialogSelect_UsesRuntimeGroupSnapshotAndKeepsUnsupportedTeamPortalSideEffectFree`: validates blocked portal planning uses runtime snapshot team id/member ids, finds the registered group instance, and does not teleport, consume item/Kinah requirements, add portal cooldowns, or send packets.
+- Java comparison status: expectations are source-derived from `PlayerGroupService.createGroup/addPlayer/removePlayer`, `PlayerGroup.addMember/onRemoveMember`, `Player.getPlayerGroup/setPlayerGroup`, `GeneralTeam.getTeamId/getMembers`, and `PortalService.port`. No Java runtime execution, live client validation, packet fanout comparison, concurrent mutation comparison, or group event ordering comparison was run.
+
+Remaining risks:
+- `PlayerGroupRuntime` is not a full Java `PlayerGroupService`; it is only a snapshot owner for nearby porting work.
+- Java invite/request handling, restrictions, leader changes, ban/kick flows, team type, max/min member rules, disband, offline member retention, find-group updates, group stats, loot rules, and packet fanout are missing.
+- C# uses a simple `Lock` around a local dictionary; Java uses static `ConcurrentHashMap`, event dispatch, and team internals. Threading parity is not verified.
+- C# stores immutable snapshot member ids; Java group members are live objects and wrappers. Snapshot staleness remains a risk whenever future callers bypass the runtime.
+- Serialization is unchanged in this unit. Reflection/JAXB behavior is not involved. Date/time is not involved beyond portal assertions that no cooldown is added. Precision/rounding is not involved.
+- Group portal execution remains blocked: no allocation, `registerTeam`, capacity gate enforcement, member transfer fanout, teleport, cooldown mutation, or persistence.
+
+Summary metrics:
+- Total Java artifacts discovered: 12
+- Total artifacts ported: 1 minimal `PlayerGroupRuntime` snapshot registry
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 12 invite/request flow, restrictions, leader/type/stats support, Java ID allocation, add/remove event ordering, packet fanout, offline checks, find-group integration, disband/min-member behavior, alliance/league integration, actual group portal execution, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group portal planning now has a runtime-owned group snapshot source, but successful group portal entry and full team runtime remain missing.
+
+Next recommended unit of work:
+- Extend the runtime group bridge one step toward Java `TemporaryPlayerTeam`: add a minimal group descriptor carrying leader object id, team type, and max-member validation, then test that group add/remove preserves leader metadata and rejects over-capacity groups without changing portal execution. Keep event fanout, packet sends, loot rules, find-group integration, disband, and Java `IDFactory` allocation deferred unless the source behavior is explicitly ported.
+
 ---
 
 ## Next Steps
