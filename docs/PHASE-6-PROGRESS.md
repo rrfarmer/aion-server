@@ -8883,6 +8883,45 @@ Summary metrics:
 Next recommended unit of work:
 - Continue remaining teleport/map-change completion paths outside kisk revive. Re-read Java `TeleportService`, `CM_TELEPORT_ANIMATION_DONE`, `CM_LEVEL_READY`, `World`, and `MapRegion`; then choose one non-kisk C# teleport/map-change completion path, mutate player position first, revalidate modeled PVP/FORT counters after the move, preserve packet ordering, and add a focused regression.
 
+### Session 499 (May 23, 2026)
+- Wired `GameServerConnection.HandleLevelReadyAsync` to revalidate modeled creature PVP/FORT counters for the active player after the client reports that the destination map has loaded.
+- Kept existing outbound level-ready packet ordering intact: the revalidation has no packet side effects and runs after the currently modeled baseline `SM_PLAYER_INFO` / account properties / motion sends.
+- Made `HandleLevelReadyAsync` internal so the real map-load completion boundary can be regression-tested without packet reflection.
+- Added a regression that simulates the Java teleport/map-load sequence by moving the player position into real Java PVP geometry before level-ready, then verifies level-ready enters modeled PVP counters.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests|FullyQualifiedName~CreaturePvpZoneRevalidationServiceTests|FullyQualifiedName~CreaturePvpZoneCounterServiceTests"` passes with 20 tests.
+
+#### Migration Parity Table - Session 499
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_LEVEL_READY` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLevelReadyAsync` | Client Packet Handler | Partial | Regression Tested | Partial Parity | Level-ready now revalidates modeled PVP/FORT counters after the C# player position has already been moved to the destination map/coordinates. Java house objects, instance count, windstream announcements, world spawn, siege/conqueror/rift/quest/weather/town/event callbacks, pet spawn, and team brand scheduling remain partial or unported. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.SpawnTask.run` | Position-before-level-ready model plus `HandleLevelReadyAsync` revalidation | Teleport Completion Boundary | Partial | Regression Tested | Needs Verification | Java mutates position in `SpawnTask.run` and full-map teleports complete player spawn through `CM_LEVEL_READY`. C# does not yet model generic pending teleport tasks or `CM_TELEPORT_ANIMATION_DONE`; this unit covers the existing C# level-ready completion boundary once position is already mutated. |
+| `com.aionemu.gameserver.world.World.spawn` | `GameServerConnection.HandleLevelReadyAsync` modeled map-load completion | World Spawn Boundary | Partial | Regression Tested | Intentional Difference | C# level-ready does not yet spawn the player through full world-region/known-list infrastructure. It now runs immediate modeled counter revalidation because Java map regions and zone instances are not fully ported. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.revalidateZones()` / `com.aionemu.gameserver.world.MapRegion.revalidateZones(Creature)` | `CreaturePvpZoneRevalidationService.Revalidate` from level-ready | Zone Revalidation Boundary | Partial | Unit + Regression Tested | Partial Parity | Real Java PVP geometry `PVP_87_210040000` is exercised for player map-load completion. Zone priorities, handler callbacks, neighboring regions, full-map zones, and SIEGE/FORT level-ready coverage remain incomplete. |
+| `com.aionemu.gameserver.world.zone.PvPZoneInstance.onEnter/onLeave` | `CreaturePvpZoneCounterService` through level-ready revalidation | Zone Callback Boundary | Partial | Unit + Regression Tested | Partial Parity | Test proves level-ready can enter modeled PVP counters after a position mutation. Java handler ordering, controller callbacks, and live side effects remain unverified. |
+
+Tests added:
+- `GameServerConnectionFlightZoneFanoutTests.HandleLevelReadyAsync_RevalidatesCreaturePvpZoneCountersAfterMapLoadTeleport`: loads real Java static data, verifies an outside position is not in `PVP_87_210040000`, mutates the player to an inside position before level-ready, calls `HandleLevelReadyAsync`, and verifies the modeled PVP counter enters without SIEGE counters.
+- Java comparison status: expectations are source-derived from Java `CM_LEVEL_READY`, `TeleportService.SpawnTask.run`, `World.spawn`, `Creature.revalidateZones`, `MapRegion.revalidateZones`, and `PvPZoneInstance`; no live Java runtime side-by-side validation or generic pending-teleport task validation was run.
+
+Remaining risks:
+- Generic Java `TeleportService.sendLoc` pending task state, `CM_TELEPORT_ANIMATION_DONE`, delayed animation failure recovery, and same-map/full-map packet ordering are still not ported.
+- This unit covers PVP level-ready revalidation only. SIEGE/FORT level-ready coverage and live fortress observer behavior remain open.
+- C# level-ready still omits many Java side effects: world-region spawn, house/instance/windstream/siege/conqueror/rift/quest/weather/town/event callbacks, pet spawn, protection tasks, effect icon refresh, and team brand scheduling.
+- C# revalidates modeled counters directly rather than executing Java zone `onEnter` handlers or controller callbacks.
+- No packet serialization, database schema, date/time, reflection, or public protocol behavior changed. One connection helper became internal for regression access; threading remains immediate over the concurrent counter store rather than Java's zone scheduler.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 level-ready map-load PVP counter revalidation hook
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 6 generic pending teleport task state, `CM_TELEPORT_ANIMATION_DONE`, full level-ready Java side effects, SIEGE/FORT level-ready coverage, Java zone handlers/controller callbacks, and Java queued scheduler/levels
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because remaining kisk revive cleanup, live team membership wiring, production socket-order validation, broader teleport/map-change zone revalidation, remaining direct-removal cleanup, generic visible-object cleanup, full dedicated kisk controller/AI, full NPC/dialog AI, resurrection skill/effect callers, per-zone bind membership, live option mutation callers, admin option consumers, world-map instance ownership, object iteration, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue generic teleport/map-change parity by modeling a narrow pending teleport completion slice: introduce a C# pending teleport task/state boundary corresponding to Java `TeleportService.sendLoc` + `CM_TELEPORT_ANIMATION_DONE`, then verify that executing the pending task mutates position before revalidating modeled PVP/FORT counters while preserving the existing packet order.
+
 ---
 
 ## Next Steps
