@@ -14235,6 +14235,60 @@ Summary metrics:
 Next recommended unit of work:
 - Start a narrow `CM_PLAYER_STATUS_INFO` parser/planner bridge for alliance ready-check commands by source-reading Java `CM_PLAYER_STATUS_INFO.readImpl/runImpl` and `PlayerTeamCommandService`; connect only ready-check command ids `20..24` to `PlayerAllianceRuntime.CheckReady` if the handler can stay small, otherwise add an explicit live-send helper for existing alliance ready-check packet intents.
 
+### Session 613 (May 23, 2026)
+- Source-read Java `CM_PLAYER_STATUS_INFO.readImpl/runImpl`, `TeamCommand`, `PlayerTeamCommandService.executeCommand`, and `PlayerAllianceService.checkReady`.
+- Added `CmPlayerStatusInfo` client packet parsing for Java opcode `96` with Java payload shape:
+  - `C commandCode`;
+  - `D selectedObjectId`;
+  - `D allianceGroupId`;
+  - `D secondObjectId`.
+- Registered `CM_PLAYER_STATUS_INFO` for `GameConnectionState.InGame` in `GameClientPacketFactory`.
+- Wired a narrow `GameServerConnection.HandlePlayerStatusInfoAsync` ready-check branch:
+  - command ids `20..24` dispatch to `PlayerAllianceRuntime.CheckReady`;
+  - missing alliance/runtime ownership no-ops like Java `PlayerAllianceService.checkReady`;
+  - planned `SmAllianceReadyCheck` packets are sent through `IGameClientConnectionRegistry.SendPacketToPlayerAsync`, with direct active-player fallback.
+- Kept `GROUP_SET_LFG`, `ALLIANCE_CHANGE_GROUP`, league commands, ban/leader/vice-captain commands, other team commands, Java exception semantics for invalid non-ready commands, broader `PlayerTeamCommandService` dispatch, live socket ordering comparison, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|ReadyCheck|ClientPacketFactory_ParsesPlayerStatusInfoPacket"` passes with 5 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1075 tests.
+
+#### Migration Parity Table - Session 613
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.ClientPackets.CmPlayerStatusInfo` / `GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | C# parses opcode `96` and handles only alliance ready-check command ids `20..24`. Other Java command branches are explicitly deferred. Java invalid-command exception behavior is not reproduced for deferred command ids. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `96` registration | Opcode Mapping | Partial | Unit Tested | Needs Verification | Opcode is source-modeled and valid only in `InGame`. Encrypted opcode/frame validation against Java/client traffic remains missing. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand` | `Aion.GameServer.Services.PlayerAllianceReadyCheckCommand` plus `CmPlayerStatusInfo.CommandCode` | Enum / Command Mapping | Partial | Unit Tested | Needs Verification | Ready-check command ids `20..24` are dispatched. Group, alliance management, and league command ids remain unhandled in this packet boundary. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService` | `GameServerConnection.HandlePlayerStatusInfoAsync` ready-check branch | Service Dependency | Partial | Regression Tested | Needs Verification | C# bypasses the full generic team command service and ports only the ready-check path. Ban, leader, mentoring, vice-captain, league, and group-change service dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.checkReady` | `PlayerAllianceRuntime.CheckReady` through connection handler | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | C# no-ops when the player has no alliance and dispatches ready-checks when runtime ownership exists. Java static service registry and `alliance.onEvent` lock wrapper are not live-compared. |
+| `com.aionemu.gameserver.model.team.alliance.events.CheckAllianceReadyEvent` | `PlayerAllianceRuntime.CheckReady` / connection send path | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | Prior ready-check runtime plan is now reachable from a parsed client packet. Live socket ordering, Java event queue/lock behavior, and client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_READY_CHECK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceReadyCheck` through `PlayerAllianceReadyCheckPacketIntent` | Server Packet | Partial | Regression Tested | Needs Verification | Existing packet is sent through the registry path. Java golden bytes, encrypted frames, and client validation remain missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / `GameServerConnection.SendPacketAsync` fallback | Runtime Dependency | Partial | Regression Tested | Needs Verification | C# can send ready-check packets to planned recipients. Java `PacketSendUtility` ordering/offline-recipient behavior remains unverified. |
+
+Tests added:
+- `GamePacketTests.ClientPacketFactory_ParsesPlayerStatusInfoPacket`: validates opcode `96`, `InGame` state gating, and `C/D/D/D` field parsing.
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_StartReadyCheckBroadcastsJavaStatuses`: validates parsed ready-check `START` dispatch sends Java status sequence packets to all alliance members through the registry.
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_NonReadyCommandAndMissingAllianceNoopLikeJava`: validates deferred non-ready commands and missing-alliance ready-checks do not emit packets.
+- Java comparison status: expectations are source-derived from `CM_PLAYER_STATUS_INFO.readImpl/runImpl`, `TeamCommand`, `PlayerTeamCommandService`, `PlayerAllianceService.checkReady`, `CheckAllianceReadyEvent`, and `SM_ALLIANCE_READY_CHECK.writeImpl`. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, full team-command service comparison, Java exception comparison for unsupported commands, threading/lock comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Most `CM_PLAYER_STATUS_INFO` commands remain unimplemented: group LFG, alliance group change, league move, ban/leader/leave/vice-captain commands, mentoring, and league management.
+- C# no-ops for deferred non-ready commands; Java may mutate state or throw for invalid targets once those branches are ported.
+- Java static alliance service registry and `alliance.onEvent` locking/threading behavior remain source-derived only.
+- Java `PacketSendUtility` socket ordering and offline-recipient behavior have not been runtime-compared.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 `CM_PLAYER_STATUS_INFO` ready-check parser/handler slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 9 remaining team command branches, Java static service registry, Java `alliance.onEvent` locking comparison, Java exception behavior for deferred commands, live socket ordering, Java runtime/threading comparison, encoded opcode/frame golden validation, packet capture comparison, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; ready-check commands now have a parsed client-packet path, but the broader team command packet remains mostly deferred.
+
+Next recommended unit of work:
+- Continue `CM_PLAYER_STATUS_INFO` parity by porting one more command branch with narrow blast radius: either `GROUP_SET_LFG` (`Player.setLookingForGroup(selectedObjectId == 2)`) or `ALLIANCE_CHANGE_GROUP` by wiring the existing `PlayerAllianceGroupChangeServicePlanner` through the packet handler with system-message sends. Keep league commands and full generic team-command dispatch deferred.
+
 ---
 
 ## Next Steps
