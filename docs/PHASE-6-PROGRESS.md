@@ -13810,6 +13810,68 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance lifecycle parity by adding a minimal live `PlayerAlliance` runtime/snapshot bridge for add/remove/member lookup around the existing planners, or, if keeping runtime deferred, source-read alliance ready-check/brand events and port the next isolated packet fanout slice. Prefer the live runtime bridge if it can stay narrow and non-invasive.
 
+### Session 605 (May 23, 2026)
+- Source-read Java `PlayerAlliance`, `PlayerAllianceGroup`, and `PlayerAllianceMember` lifecycle surfaces.
+- Added a narrow live `PlayerAllianceRuntime` bridge with:
+  - `CreateAlliance` leader registration;
+  - `AddMember` first-open-group placement across Java group ids `1000..1003`;
+  - `RemoveMember` cleanup and remaining-member snapshot refresh;
+  - member lookup, group lookup, leader checks, full checks, and vice-captain snapshot support.
+- Added `PlayerAllianceDescriptor`, `PlayerAllianceMember`, and `PlayerAllianceSnapshot`.
+- Added `Player.CurrentAllianceSnapshot` and cleared it from `Player.RemoveCurrentTeam`.
+- Kept the runtime intentionally non-invasive:
+  - no live socket fanout;
+  - no league object/runtime integration;
+  - no ready-check, brand, group-move, leader-change event execution, or disband execution;
+  - no Java `IDFactory` allocation, because callers still provide deterministic ids in this C# bridge.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerAllianceRuntimeTests|PlayerAllianceMemberInfoTests"` passes with 37 tests.
+- Full validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1047 tests.
+  - `dotnet test dotnetConversion\tests\Aion.Commons.Tests\Aion.Commons.Tests.csproj` passes with 57 tests.
+  - `dotnet test dotnetConversion\tests\Aion.LoginServer.Tests\Aion.LoginServer.Tests.csproj` passes with 121 tests.
+  - `dotnet test dotnetConversion\tests\Aion.ChatServer.Tests\Aion.ChatServer.Tests.csproj` passes with 29 tests.
+
+#### Migration Parity Table - Session 605
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Services.PlayerAllianceRuntime` / `Aion.GameServer.Model.GameObjects.PlayerAllianceSnapshot` / `PlayerAllianceDescriptor` | Team Runtime Bridge | Partial | Unit Tested | Needs Verification | C# now creates an alliance, adds/removes members, tracks leader id, exposes member lookup, snapshots members, and tracks vice-captain ids. Java `IDFactory.nextId`, live service registration, league ownership, ready status, brand storage, group move events, disband checks, and event dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceGroup` | `PlayerAllianceRuntime` group-id buckets in `PlayerAllianceSnapshot.MemberObjectIdsByGroupId` | Team Group Runtime Bridge | Partial | Unit Tested | Needs Verification | C# preserves Java group ids `1000..1003`, first-open-group fill order, and six-member group capacity. Java object identity for `PlayerAllianceGroup`, locking behavior, explicit group move/swap, and group-level loot delegation are not fully ported. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceMember` | `Aion.GameServer.Model.GameObjects.PlayerAllianceMember` | Team Member Wrapper | Partial | Unit Tested | Needs Verification | C# wraps `Player`, stores alliance id, group id, online state, and last-online timestamp boundary. Java delegates group membership through `Player.getPlayerAllianceGroup`; C# uses snapshot metadata instead. Last-online updates are present but not exercised by alliance disconnect runtime yet. |
+| `com.aionemu.gameserver.model.team.TemporaryPlayerTeam` | `PlayerAllianceRuntime` dictionaries and snapshots | Base Runtime Dependency | Partial | Unit Tested | Needs Verification | C# models member storage and group membership narrowly. Java brand map, concurrency semantics, and event service integration remain missing. Threading differs: C# uses `System.Threading.Lock`; Java uses synchronized/lock patterns around the open-group search. |
+| `com.aionemu.gameserver.model.team.GeneralTeam` | `PlayerAllianceRuntime.HasMember`, `GetMember`, `GetMemberObjectIds`, `IsLeader`, `IsFull` | Base Team API | Partial | Unit Tested | Needs Verification | C# exposes the lookup operations needed by current planners. Full Java collection view semantics, leader mutation events, and live service ownership are not implemented. |
+| `com.aionemu.gameserver.model.team.TeamType` alliance variants | `Aion.GameServer.Services.PlayerAllianceTeamType` in descriptors/snapshots | Enum | Partial | Unit Tested | Needs Verification | Snapshot-to-`SM_ALLIANCE_INFO` handoff validates alliance packet fields for the default alliance type. Runtime stores team type but does not yet own Java service creation paths for auto/defence/offence alliances. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootGroupRules` | `Aion.GameServer.Model.GameObjects.PlayerGroupLootRules` in alliance descriptor/snapshot | DTO / Rules | Partial | Unit Tested | Needs Verification | Runtime carries default or provided loot rules into snapshots and alliance-info plans. League loot-rule override from Java `PlayerAlliance.getLootGroupRules` remains missing. |
+| `com.aionemu.gameserver.utils.idfactory.IDFactory` | Caller-supplied `allianceId` in `PlayerAllianceRuntime.CreateAlliance` | Dependency | Not Started | No Tests | Unknown | Java constructor allocates the alliance object id with `IDFactory.nextId()`. C# bridge keeps deterministic caller-supplied ids until a shared object-id allocator exists. |
+| `com.aionemu.gameserver.model.team.league.League` | Deferred on `PlayerAllianceRuntime` / `PlayerAllianceSnapshot` | Runtime Dependency | Not Started | No Tests | Unknown | Java alliance may belong to a league and delegate loot rules/broadcasts. C# runtime has no league object, league id, or league fanout execution yet. |
+
+Tests added:
+- `PlayerAllianceRuntimeTests.CreateAlliance_AttachesLeaderToFirstJavaAllianceGroup`: validates leader registration, group id `1000`, descriptor constants, `Player.CurrentAllianceSnapshot`, `CurrentTeamId`, `CurrentTeamMemberObjectIds`, lookup, and leader/full checks.
+- `PlayerAllianceRuntimeTests.AddMember_FillsAllianceGroupsInJavaOrderAndCapsAtSixPerGroup`: validates first-open-group placement across `1000..1003`, six members per group, 24-member alliance cap, snapshot refresh, and rejected 25th member cleanup.
+- `PlayerAllianceRuntimeTests.RemoveMember_ClearsRemovedPlayerAndRefreshesRemainingAllianceSnapshot`: validates removal cleanup, remaining snapshot refresh, group bucket update, and vice-captain id removal.
+- `PlayerAllianceRuntimeTests.Snapshot_CreatesAllianceInfoPlanForExistingPlanners`: validates snapshot handoff into `PlayerAllianceInfoPacketPlan`, including member count, leader id, vice-captain padding, loot rules, team type fields, and group placeholders.
+- Java comparison status: expectations are source-derived from `PlayerAlliance`, `PlayerAllianceGroup`, `PlayerAllianceMember`, `TemporaryPlayerTeam`, and `GeneralTeam`. No Java runtime execution, Java-generated golden vector, live service registration comparison, live `Player.getPlayerAllianceGroup` object identity comparison, league loot-rule comparison, ready-status comparison, brand comparison, threading comparison, socket fanout comparison, reflection behavior, serialization frame comparison, precision/rounding behavior, date/time last-online behavior, or client validation was run.
+
+Remaining risks:
+- The runtime bridge is intentionally partial and does not execute alliance events, socket sends, disband, ready checks, brand updates, group moves, or league broadcasts.
+- `PlayerAlliance.getLootGroupRules` league override is missing.
+- Java `IDFactory.nextId()` object-id allocation is not ported here.
+- Java object identity for `PlayerAllianceGroup` and `Player.getPlayerAllianceGroup` is represented as snapshot group ids, not a live group object on `Player`.
+- Threading behavior is not runtime-compared; C# uses `Lock` around the bridge.
+- Serialization is only tested through snapshot handoff to existing packet-plan metadata, not Java golden frames.
+- Reflection and precision/rounding are not involved; date/time behavior remains unverified for `PlayerAllianceMember.LastOnlineTimeMillis`.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 narrow live alliance runtime/snapshot bridge
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 10 Java object-id allocation, live service registration, league runtime/loot override, ready status, brand storage/fanout, group move/swap events, leader-change execution, disband execution, Java runtime/threading comparison, and encoded/client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; alliance planners now have a minimal live runtime bridge, but broader alliance lifecycle execution and league/disband behavior remain incomplete.
+
+Next recommended unit of work:
+- Continue alliance runtime parity by source-reading Java alliance ready-check and brand/group-move flows, then port the smallest isolated planner/runtime method that uses the new `PlayerAllianceRuntime` snapshot. Prefer `ChangeMemberGroupEvent`/group move runtime support if it stays narrow, because the runtime now has group buckets but no move/swap mutation.
+
 ---
 
 ## Next Steps
