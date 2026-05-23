@@ -13597,6 +13597,59 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance event fanout parity with `PlayerDisconnectedEvent`: add a non-sending plan for non-leader disconnect output to other members, including `STR_FORCE_HE_BECOME_OFFLINE`, `SM_ALLIANCE_MEMBER_INFO(DISCONNECTED)`, and `SM_ALLIANCE_INFO`; document the leader-change, disband, and league-broadcast branches as deferred unless a safe planner surface already exists.
 
+### Session 601 (May 23, 2026)
+- Continued Java `PlayerDisconnectedEvent.handleEvent` parity for the non-leader disconnect fanout path.
+- Added `PlayerAllianceDisconnectedPlan`, `PlayerAllianceDisconnectedPlanStatus`, and `PlayerAllianceDisconnectedPlanner`.
+- Added `SmSystemMessage.ForceHeBecomeOffline(string)` for Java `STR_FORCE_HE_BECOME_OFFLINE(String)` (`1301019`).
+- Modeled Java non-leader disconnect output to every other alliance member:
+  - send `STR_FORCE_HE_BECOME_OFFLINE(disconnectedName)`;
+  - send `SM_ALLIANCE_MEMBER_INFO(disconnectedMember, DISCONNECTED)`;
+  - send `SM_ALLIANCE_INFO(alliance)`.
+- Reused the existing `Disconnected` alliance member-info descriptor, which serializes the Java event-id-3 prefix-only branch.
+- Explicitly represented leader disconnect as `LeaderDisconnectDeferred` because Java invokes `ChangeAllianceLeaderEvent` before sending offline fanout.
+- Represented no-online-members disband and league broadcast as metadata boundaries.
+- Kept live `PlayerAlliance` online-member tracking, leader-change invocation, disband, league broadcast execution, socket sends, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests|FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 147 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1245 tests.
+
+#### Migration Parity Table - Session 601
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerDisconnectedEvent` | `Aion.GameServer.Services.PlayerAllianceDisconnectedPlanner` / `PlayerAllianceDisconnectedPlan` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# models non-leader offline fanout and explicitly defers leader disconnect, disband, and league branches. Live alliance online-member tracking, event dispatch, and socket sends are not implemented. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_HE_BECOME_OFFLINE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceHeBecomeOffline` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Factory returns Java message id `1301019`; tests validate planned recipients. Java parameter/frame comparison remains missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` via disconnect packet intents | Server Packet | Partial | Regression Tested | Needs Verification | Disconnect fanout serializes the Java prefix-only event-id-3 branch. Java golden bytes, encoded frames, live member wrapper metadata, and client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` via disconnect packet intents | Server Packet | Partial | Regression Tested | Needs Verification | Non-leader disconnect fanout reuses non-league alliance-info serialization. League rows, Java golden bytes, encoded frames, and live sends remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.events.ChangeAllianceLeaderEvent` | `PlayerAllianceDisconnectedPlanStatus.LeaderDisconnectDeferred` metadata | Event Dependency | Partial | Regression Tested as Deferred | Needs Verification | Java leader disconnect invokes leader-change before offline fanout. C# detects and defers this branch; no automatic leader-change composition is implemented here. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.disband` | `PlayerAllianceDisconnectedPlan.WouldDisbandIfNoOnlineMembersRemain` metadata | Service Dependency | Not Started | No Tests | Unknown | Java disbands when no online members remain. C# only records the boundary. |
+| `com.aionemu.gameserver.model.team.league.League.broadcast` | `PlayerAllianceDisconnectedPlan.WouldBroadcastLeague` metadata | Runtime Dependency | Not Started | Unit Tested as Metadata | Unknown | Java broadcasts to league when members remain and alliance is in league. C# records metadata only; league packet rows remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | Snapshot member inputs in `PlayerAllianceDisconnectedPlanner` | Team Runtime Dependency | Not Started | No Tests | Unknown | Full live alliance runtime remains missing: online member collection, member wrappers, leader lookup, and Java iteration order. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.DisconnectedPlanner_PlansNonLeaderOfflineFanoutLikeJavaPlayerDisconnectedEvent`: validates non-leader disconnect system/member/alliance-info packet ordering, recipients, message id `1301019`, serialized prefix-only `DISCONNECTED` member-info payload, and alliance-info payloads.
+- `PlayerAllianceMemberInfoTests.DisconnectedPlanner_DefersLeaderDisconnectAndMissingMemberBranches`: validates leader disconnect is explicitly deferred with leader-change metadata and missing disconnected members produce no packet intents.
+- Java comparison status: expectations are source-derived from `PlayerDisconnectedEvent.handleEvent`, `SM_ALLIANCE_INFO.writeImpl`, `SM_ALLIANCE_MEMBER_INFO.writeImpl`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live online-member tracking comparison, leader-change composition comparison, disband comparison, socket fanout comparison, encoded frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Leader disconnect still needs composition with `ChangeAllianceLeaderEvent` output.
+- Live online-member tracking and disband behavior are not implemented.
+- League broadcast execution and league `SM_ALLIANCE_INFO` rows remain missing.
+- `PlayerAllianceLeavedEvent` remains source-read only.
+- Live socket fanout and Java threading/event-dispatch behavior are not runtime-compared.
+- Java golden byte vectors and encoded-frame validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 non-leader alliance disconnect fanout planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 9 leader disconnect composition, live online-member tracking, live disband, league broadcast, full league `SM_ALLIANCE_INFO`, leave fanout, Java runtime ordering comparison, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; reconnect/enter/non-leader disconnect packet ordering is modeled, but leave/disband/league/live runtime behavior remains incomplete.
+
+Next recommended unit of work:
+- Continue alliance event fanout parity with `PlayerAllianceLeavedEvent`: add a non-sending plan for non-disband leave/ban/timeout member fanout, including vice-captain id removal metadata, reason-specific system messages, `SM_ALLIANCE_MEMBER_INFO(LEAVE)`, and `SM_ALLIANCE_INFO`; keep actual remove-member mutation, disband checks, league broadcast, ban-to-leaved-player message, and socket sends deferred.
+
 ---
 
 ## Next Steps
