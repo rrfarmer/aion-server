@@ -11721,6 +11721,60 @@ Summary metrics:
 Next recommended unit of work:
 - Continue toward Java `GeneralTeam` behavior by adding a small query surface on `PlayerGroupRuntime`: `HasMember`, `GetMemberObjectIds`, `IsLeader`, `IsFull`, and duplicate-add/remove-missing error behavior aligned with `GeneralTeam`. Unit-test the guard semantics but keep packet fanout, event dispatch, loot rules, brand updates, find-group integration, offline checks, and disband behavior deferred.
 
+### Session 563 (May 23, 2026)
+- Added a focused Java `GeneralTeam` query/guard surface to `PlayerGroupRuntime`.
+- `PlayerGroupRuntime.HasMember` now mirrors the current C# equivalent of Java `GeneralTeam.hasMember`.
+- `PlayerGroupRuntime.GetMemberObjectIds` exposes the runtime member list as object ids for snapshot-era callers.
+- `PlayerGroupRuntime.IsLeader` exposes descriptor-backed leader checks.
+- `PlayerGroupRuntime.IsFull` exposes descriptor-backed capacity checks.
+- `PlayerGroupRuntime.AddMember` now rejects duplicate members with Java-derived `GeneralTeam.addMember` behavior instead of silently refreshing the snapshot.
+- `PlayerGroupRuntime.RemoveMember` now rejects a player that claims the runtime team but is absent from the runtime member table, matching Java `GeneralTeam.removeMember` error behavior for an already-removed member.
+- Extended tests for membership queries, leader checks, full checks, duplicate-add rejection, remove-missing rejection, and unchanged blocked portal planning.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests"` passes with 83 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1182 tests.
+
+#### Migration Parity Table - Session 563
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.GeneralTeam.hasMember` | `Aion.GameServer.Services.PlayerGroupRuntime.HasMember` | Service Query | Partial | Unit Tested | Needs Verification | C# checks the runtime member list by object id. Java checks a `ConcurrentHashMap<Integer, TM>` of team member wrappers; wrapper behavior and concurrent visibility remain unverified. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.getMember` | No direct C# member-wrapper equivalent; `PlayerGroupRuntime.HasMember` / `GetMemberObjectIds` only | Dependency / Missing Method | Not Started | Unit Tested Around Gap | Unknown | Java returns the `TeamMember` wrapper. C# still has no `PlayerGroupMember` wrapper, so callers can only query object ids. This gap is explicit and blocks wrapper-level parity. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.getMembers` | `PlayerGroupRuntime.GetMemberObjectIds` | Service Query | Partial | Unit Tested | Needs Verification | Java returns live `Player` objects collected from member wrappers. C# returns copied object ids because the current group bridge is snapshot-based. This is an intentional narrow bridge until full member wrappers exist. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.isLeader` | `PlayerGroupRuntime.IsLeader` | Service Query | Partial | Unit Tested | Needs Verification | C# compares player object id against descriptor leader id. Java compares object identity/equality on the leader wrapper's `Player`; leader-change/removal parity remains missing. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.isFull` | `PlayerGroupRuntime.IsFull` | Service Query | Partial | Unit Tested | Needs Verification | C# checks runtime count against descriptor max. Java calls `size() == getMaxMemberCount()` under the team abstraction. Threading and event-condition ordering remain unverified. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.addMember` | `PlayerGroupRuntime.AddMember` duplicate guard | Service / Lifecycle Guard | Partial | Unit Tested | Needs Verification | Duplicate add now throws `InvalidOperationException("Team member is already added.")` before mutation. Java throws `IllegalStateException`; packet/error-surface behavior through higher-level events remains unported. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.removeMember` | `PlayerGroupRuntime.RemoveMember` missing-member guard | Service / Lifecycle Guard | Partial | Unit Tested | Needs Verification | Missing member with a current runtime team now throws `InvalidOperationException("Team member is already removed.")` without clearing the player. Java throws `IllegalStateException`; service-level no-group no-op remains preserved for players without team metadata. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup` | `PlayerGroupRuntime` | Runtime Bridge | Partial | Regression Tested | Needs Verification | Runtime now has snapshot ownership, descriptor metadata, and basic query/guard semantics. Java stats, loot rules, brands, event dispatch, `TeamMember` wrappers, leader change, disband, packet fanout, and find-group integration remain missing. |
+| `com.aionemu.gameserver.services.teleport.PortalService.port` group metadata source | `PortalEntryValidationService` via runtime-attached snapshots | Service / Planning | Partial | Regression Tested | Needs Verification | Existing portal interaction coverage still proves runtime group metadata feeds blocked planning and remains side-effect free. Successful group portal execution is still blocked. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.CreateOrUpdateGroup_AttachesSharedSnapshotMetadataToMembers`: extended to validate `HasMember`, `GetMemberObjectIds`, `IsLeader`, and non-full state after creation.
+- `PlayerGroupRuntimeTests.AddMember_RefreshesSnapshotForExistingMembersAndNewMember`: extended to validate member query refresh after add.
+- `PlayerGroupRuntimeTests.AddMember_RejectsDuplicateMemberLikeJavaGeneralTeam`: validates duplicate add throws the Java-derived error and leaves runtime membership unchanged.
+- `PlayerGroupRuntimeTests.AddMember_RejectsPlayersBeyondJavaGroupCapacityWithoutAttachingRejectedPlayer`: extended to validate `IsFull`.
+- `PlayerGroupRuntimeTests.RemoveMember_PreservesLeaderDescriptorWhenNonLeaderLeaves`: extended to validate membership and leader queries after removal.
+- `PlayerGroupRuntimeTests.RemoveMember_RejectsMissingMemberLikeJavaGeneralTeam`: validates a player pointing at an existing runtime team but absent from its member table throws the Java-derived already-removed error and leaves both the player and runtime membership unchanged.
+- Java comparison status: expectations are source-derived from `GeneralTeam.getMember`, `hasMember`, `getMembers`, `addMember`, `removeMember`, `isLeader`, `isFull`, and `PlayerGroup.getMaxMemberCount`. No Java runtime execution, `TeamMember` wrapper comparison, event ordering comparison, packet fanout comparison, concurrent mutation comparison, or live client validation was run.
+
+Remaining risks:
+- C# still has no `PlayerGroupMember` / `TeamMember<Player>` wrapper, so `GeneralTeam.getMember`, wrapper filtering, online-member filtering, and wrapper state are not ported.
+- Duplicate-add and remove-missing errors use C# `InvalidOperationException`, not Java exception types; this is a runtime-language difference and not client-visible yet.
+- Java higher-level event paths may prevent or transform these errors before they reach callers; C# tests only cover the direct runtime guard.
+- Threading remains a simple C# `Lock`; Java uses `ConcurrentHashMap` plus `ReentrantLock` around many operations. Concurrent visibility and ordering are unverified.
+- Serialization is unchanged. Reflection/JAXB behavior is not involved. Date/time and precision/rounding are not involved.
+- Group portal execution remains blocked; this unit only improves the group metadata/query bridge.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 focused `GeneralTeam` query/guard slice on `PlayerGroupRuntime`
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 12 `TeamMember` wrapper model, `PlayerGroupMember`, `getMember` wrapper parity, online-member filtering, team event dispatch, leader-change/removal flow, loot rules, brand updates, find-group integration, packet fanout, full team concurrency semantics, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group runtime metadata/query parity is deeper, but full Java team lifecycle and successful group portal execution remain missing.
+
+Next recommended unit of work:
+- Add the first minimal `PlayerGroupMember` wrapper model and runtime storage path so `GetMember` can return wrapper metadata instead of only object ids. Keep it narrow: object id, player reference, and last-online timestamp only if directly source-derived from Java `PlayerGroupMember`; do not wire packet fanout, online filtering, loot rules, brand updates, event dispatch, or offline checker yet.
+
 ---
 
 ## Next Steps
