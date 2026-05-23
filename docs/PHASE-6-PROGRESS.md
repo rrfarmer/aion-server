@@ -10781,6 +10781,49 @@ Summary metrics:
 Next recommended unit of work:
 - Add a still-teleport-free production portal entry orchestration method that calls `ValidatePortalEntryPlan`, `CreateRequiredItemsAndKinahConsumptionPlan`, `CreateRequiredItemsAndKinahApplication`, and `SavePortalRequirementConsumptionMutationAsync`, then returns the failure/packet/action result. Keep `TeleportService.teleportTo`, transfer allocation, and group/alliance fanout as later units.
 
+### Session 543 (May 23, 2026)
+- Added `PlayerEnterWorldService.PreparePortalEntryAsync`, a still-teleport-free production-facing orchestration method for the supported solo/open-world portal slice.
+- The method calls `ValidatePortalEntryPlan`, skips requirement consumption on Java reentry, builds the required item/kinah consumption plan and packet application for fresh entries, persists the application through `SavePortalRequirementConsumptionMutationAsync`, updates the in-memory inventory only after persistence succeeds, and returns the planned portal action plus packets for a future caller to send.
+- Added `PortalEntryPreparationResult` and `PortalEntryPreparationStatus` to distinguish validation rejection, requirement application failure, requirement persistence failure, and ready plans.
+- Kept actual `TeleportService.teleportTo`, instance transfer/allocation, packet send calls, group/alliance fanout, and production client-packet routing out of scope.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~PortalEntryValidationServiceTests"` passes with 81 tests.
+
+#### Migration Parity Table - Session 543
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` | `Aion.GameServer.Services.PlayerEnterWorldService.PreparePortalEntryAsync` | Service / Orchestration | Partial | Unit Tested | Partial Parity | C# now composes validation, fresh-entry requirement consumption, persistence, in-memory inventory update, and returned packets/actions for the supported solo/open-world slice. It does not execute teleport, transfer allocation, packet sends, or group fanout. |
+| `com.aionemu.gameserver.services.teleport.PortalService.checkAndRemoveRequiredItems` | `PreparePortalEntryAsync` using `PortalEntryValidationService` consumption/application helpers and `SavePortalRequirementConsumptionMutationAsync` | Service / Inventory Side Effects | Partial | Unit Tested | Partial Parity | Fresh entries now consume required items/kinah through the C# boundaries after validation and before returning same-instance/continue action. Reentry skips consumption like Java. Live concurrent inventory changes are not modeled. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseByItemId` / `decreaseKinah` | `PortalRequirementConsumptionApplication` persisted by `PlayerEnterWorldService` and applied to `Player.InventoryItems` | Inventory Boundary | Partial | Unit Tested | Needs Verification | In-memory inventory updates occur only after persistence succeeds. Java storage locks, persistent state, delete queues, logging, and quest callbacks remain unsupported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DELETE_ITEM`, `SM_CUBE_UPDATE`, `SM_INVENTORY_UPDATE_ITEM` | `PortalEntryPreparationResult.Packets` | Packet Boundary | Partial | Unit Tested | Partial Parity | Packets are returned for a future caller to send after successful persistence. No socket dispatch, encryption ordering, or live-client capture was run. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.teleportTo` | Future consumer of `PortalEntryPreparationResult.EntryPlan.Action` / `PortalEntryPlanAction.SameInstanceTeleport` | Service Dependency | Not Started | No Tests | Unknown | Still not invoked. The preparation result carries the action marker and portal location only. |
+
+Tests added or extended:
+- `PlayerEnterWorldServiceTests.PreparePortalEntry_PersistsRequirementsAndReturnsPacketsWithoutTeleporting`: validates fresh same-instance preparation persists required item/kinah consumption, updates in-memory inventory after persistence, and returns packet objects while only marking the teleport action.
+- `PlayerEnterWorldServiceTests.PreparePortalEntry_ReturnsValidationFailureWithoutRequirementPersistence`: validates validation failure returns before consumption/persistence.
+- `PlayerEnterWorldServiceTests.PreparePortalEntry_SkipsRequirementConsumptionForJavaReentry`: validates registered reentry skips required item/kinah consumption and persistence even when the portal path has requirements.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `checkAndRemoveRequiredItems`, Java reentry ordering, and previous packet/repository boundary slices. No Java runtime execution, database integration test, packet send, actual teleport, group/alliance runtime comparison, or live-client validation was run.
+
+Remaining risks:
+- No client packet handler calls `PreparePortalEntryAsync` yet.
+- Packets are returned but not sent, so live socket ordering and encryption behavior remain unverified.
+- Actual same-instance teleport and instance transfer/allocation remain unimplemented.
+- The method only covers the current solo/open-world slice; group/alliance/league portals remain explicitly unsupported by the underlying plan helper.
+- Persistence uses the existing item update/delete repository path but lacks portal-specific SQL integration coverage.
+- Java side effects remain missing: persistent state marking, delete queue handling, logging, `QuestEngine.onItemRemoved`, and concurrency/lock semantics.
+- Siege ownership, live permission lookup, quest engine depth, threading, reflection/JAXB behavior, date/time, precision/rounding, and live-client behavior remain incomplete or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 partial production-facing portal preparation orchestrator over existing validation/consumption/persistence packet boundaries
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 7 client packet handler wiring, live packet dispatch, actual teleport execution, instance transfer/allocation, group/alliance fanout, quest item removal side effects, and live runtime/client comparison
+- Estimated overall migration completion: Phase 6 remains about 61% complete; solo/open-world portal preparation is now represented up to persisted requirement consumption, but live teleport execution is still incomplete.
+
+Next recommended unit of work:
+- Wire `PreparePortalEntryAsync` into the relevant C# portal/dialog packet caller in a teleport-free mode: send returned failure/consumption packets in Java order and surface the `PortalEntryPlanAction`, but still stop before `TeleportService.teleportTo` or transfer allocation. If the production caller surface is not ready, add a narrow caller adapter with tests that proves packet ordering.
+
 ---
 
 ## Next Steps
