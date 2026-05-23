@@ -4817,6 +4817,50 @@ Summary metrics:
 Next recommended unit of work:
 - Continue resource side-effect concretization with the next smallest packet closure: port and wire `SM_STATUPDATE_MP` for player MP mutations, or port `SM_FLY_TIME` for FP mutations if flight-time side effects are the higher-value next slice. Keep group fanout and restore task execution as explicit follow-up gaps unless their supporting models are ready.
 
+### Session 406 (May 23, 2026)
+- Ported Java `SM_STATUPDATE_MP` as `SmStatUpdateMp`.
+- Wired player MP mutations into concrete owner MP stat-update sends through `WorldNpcResourceStatsService.SendMpStatUpdateAsync`.
+- Player MP reduce/increase paths now generate `SmStatUpdateMp` when online and MP actually changes, while preserving existing Java `SM_ATTACK_STATUS` metadata.
+- MP changes now record group stat update intent when the online player is in a team, and MP reductions record restore-task intent to match Java `PlayerLifeStats.onMpChanged`.
+- Current gaps in this cluster: group stat fanout and restore task execution remain intent-only; `SM_FLY_TIME`, `SM_DP_INFO`, and `SM_STATUPDATE_DP` still need concrete packet/wiring passes.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~GamePacketTests"` passes with 98 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcResourceStatsServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 268 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 897 tests.
+
+#### Migration Parity Table - Session 406
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_MP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateMp` | Packet | Partial | Unit Tested | Partial Parity | C# writes Java payload shape `currentMp` then `maxMp` as 32-bit integers with opcode 4. Full live-client validation remains pending. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats.sendMpPacketUpdate` | `WorldNpcResourceStatsService.SendMpStatUpdateAsync`; `WorldNpcResourceChangeResult.MpStatUpdatePacket`; `MpStatUpdateSent` | Packet Caller/Service | Partial | Unit Tested | Partial Parity | C# sends the owner MP packet for online player MP changes through the connection registry. Java uses `owner.isSpawned()`; C# currently uses `Player.IsOnline` as the available send gate. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats.onMpChanged` | `WorldNpcResourceStatsService.ReducePlayerMpAsync`; `IncreasePlayerMpAsync`; `WorldNpcResourceChangeResult` MP/group/restore intents | Runtime/Service | Partial | Unit Tested | Partial Parity | C# now emits concrete MP stat-update packets and records group update intent for any MP change plus restore-task intent for MP reductions. Actual group fanout and restore scheduling remain pending. |
+| `com.aionemu.gameserver.model.stats.container.CreatureLifeStats.reduceMp` / `increaseMp` player paths | `WorldNpcResourceStatsService.ApplyPlayerMpChangeAsync` | Runtime/Service | Partial | Unit Tested | Partial Parity | C# preserves MP clamp/cap behavior, packet metadata, stat update output, and MP percentage calculation for player paths. Full Java synchronization and live stat calculations remain broader gaps. |
+| `com.aionemu.gameserver.skillengine.effect.MpAttackEffect` / `MPHealEffect` staged callers | `WorldNpcResourceStatsService.ApplyResourceOverTimePeriodicResultAsync`; `ApplyInstantResourceResultAsync` with `SmStatUpdateMp` send | Effect-to-Stats Adapter | Partial | Unit Tested indirectly | Needs Verification | Existing staged MP resource adapters now flow into concrete owner MP stat-update sends for online player targets. Representative staged MP-heal adapter send coverage remains a useful follow-up. |
+
+Tests added or extended:
+- `GamePacketTests` stat-update payload coverage: validates `SmStatUpdateMp` serializes Java `SM_STATUPDATE_MP` payload order and integer widths.
+- `WorldNpcResourceStatsServiceTests.ReducePlayerMpAsync_SendsMpStatUpdateAndRestoreIntent`: validates MP reduction mutation, attack-status metadata, concrete MP stat-update packet/send, group update intent, and restore-task intent.
+- `WorldNpcResourceStatsServiceTests.IncreasePlayerMpAsync_SendsMpStatUpdateWithoutRestoreIntent`: validates MP increase mutation, attack-status metadata, concrete MP stat-update packet/send, group update intent, and no restore-task intent for healing.
+- Java comparison status: tests are source-derived from Java `SM_STATUPDATE_MP.writeImpl`, `PlayerLifeStats.sendMpPacketUpdate`, and `PlayerLifeStats.onMpChanged`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- C# uses `Player.IsOnline` as the current proxy for Java `owner.isSpawned()` in the MP stat-update path.
+- Group stat updates and restore task scheduling remain result intents only.
+- `SM_FLY_TIME`, `SM_DP_INFO`, and `SM_STATUPDATE_DP` are still not fully ported as concrete side-effect packets from the resource service.
+- Serialization parity is covered by payload-level tests, not live encrypted client captures.
+- Reflection and date/time are not involved. Threading parity remains approximate through staged service methods and connection-registry calls outside Java monitor semantics.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 2 partial C# packet/service artifacts plus result DTO fields
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because group stat fanout, restore/flight tasks, FP/DP resource packet classes, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue resource side-effect concretization with `SM_FLY_TIME` for player FP mutations. Re-read Java `PlayerLifeStats.sendFpPacketUpdate`, `SM_FLY_TIME`, and the existing `SendFlyTimeUpdate` intent, then wire concrete fly-time packet output while keeping FP restore/reduce timers as explicit follow-up gaps.
+
 ---
 
 ## Next Steps
