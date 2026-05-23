@@ -14129,6 +14129,60 @@ Summary metrics:
 Next recommended unit of work:
 - Continue command integration by adding a narrow `CM_SHOW_BRAND` client packet parse/handler boundary if it can reuse `PlayerShowBrandCommandPlanner` without broad connection changes; otherwise continue alliance entered-event composition by feeding `PlayerAllianceRuntime.CreateSendBrandsIntent` into the existing entered workflow metadata.
 
+### Session 611 (May 23, 2026)
+- Added `CmShowBrand` client packet parsing for Java opcode `181` (`[C_TACTICS_SIGN]`) with Java payload shape:
+  - `D action`;
+  - `D brandId`;
+  - `D targetObjectId`.
+- Registered `CM_SHOW_BRAND` for `GameConnectionState.InGame` in `GameClientPacketFactory`.
+- Wired `GameServerConnection` to dispatch `CmShowBrand` through `PlayerShowBrandCommandPlanner`:
+  - solo players receive `SM_SHOW_BRAND` echo through the registry/direct-send fallback;
+  - group leader updates are sent to every group brand intent recipient through `IGameClientConnectionRegistry.SendPacketToPlayerAsync`;
+  - alliance leader/vice-captain updates are sent to every alliance brand intent recipient through the same registry path;
+  - Java `action` remains intentionally read and ignored, matching `CM_SHOW_BRAND.runImpl`.
+- Added optional shared `PlayerGroupRuntime` and `PlayerAllianceRuntime` injection through `GameClientSocketServer` into `GameServerConnection` so future live group/alliance services can reuse the same runtime instances.
+- Kept Java static team object lookup, real client validation, encrypted opcode/frame golden validation, and live population of group/alliance runtime state by command services deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "ShowBrand|ClientPacketFactory_ParsesShowBrandPacket"` passes with 9 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1071 tests.
+
+#### Migration Parity Table - Session 611
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SHOW_BRAND` | `Aion.GameServer.Network.Aion.ClientPackets.CmShowBrand` / `GameServerConnection.HandleShowBrandCommandAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | C# now parses opcode `181`, reads `action/brandId/targetObjectId`, ignores `action`, resolves the active player at the connection boundary, and dispatches to the planner. Java static/current team object identity and real client socket validation remain unverified. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `181` registration | Opcode Mapping | Partial | Unit Tested | Needs Verification | Opcode is source-modeled and valid only in `InGame`. Encrypted opcode/frame validation against Java/client traffic remains missing. |
+| `com.aionemu.gameserver.model.team.TemporaryPlayerTeam.updateBrand` | `PlayerShowBrandCommandPlanner` plus `GameServerConnection` registry fanout | Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | C# sends generated brand intents through `IGameClientConnectionRegistry.SendPacketToPlayerAsync`. Live runtime population, Java `PacketSendUtility` ordering, and recipient online/offline behavior need runtime/client comparison. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup` | `Aion.GameServer.Services.PlayerGroupRuntime` injected through socket server/connection | Group Runtime Dependency | Partial | Regression Tested | Needs Verification | Shared runtime injection allows group brand fanout when the runtime is populated. Full Java group service lifecycle and static registry wiring remain incomplete. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Services.PlayerAllianceRuntime` injected through socket server/connection | Alliance Runtime Dependency | Partial | Regression Tested | Needs Verification | Shared runtime injection allows alliance leader/vice-captain brand fanout when populated. Java alliance lifecycle, league behavior, and current-team object identity remain incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SHOW_BRAND` | `Aion.GameServer.Network.Aion.ServerPackets.SmShowBrand` via connection sends | Server Packet | Partial | Regression Tested | Needs Verification | Existing packet is reused by live handler path. Java golden bytes, encrypted frames, and client rendering validation remain missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / `GameServerConnection.SendPacketAsync` fallback | Runtime Dependency | Partial | Regression Tested | Needs Verification | C# has a registry send path for recipients and a direct fallback for the active player. Java's full `PacketSendUtility` behavior, socket ordering, and offline-recipient semantics remain unverified. |
+
+Tests added:
+- `GamePacketTests.ClientPacketFactory_ParsesShowBrandPacket`: validates opcode `181`, `InGame` state gating, and `D/D/D` field parsing.
+- `GameServerConnectionShowBrandTests.HandleShowBrandCommandAsync_SoloEchoSendsShowBrandLikeJavaCmShowBrand`: validates solo command handling sends `SmShowBrand` to the caller and ignores the Java `action` field.
+- `GameServerConnectionShowBrandTests.HandleShowBrandCommandAsync_GroupLeaderBroadcastsUpdateBrandWithRegistry`: validates group leader command handling broadcasts show-brand packets to group runtime recipients through the connection registry.
+- `GameServerConnectionShowBrandTests.HandleShowBrandCommandAsync_AllianceViceCaptainBroadcastsUpdateBrandWithRegistry`: validates alliance vice-captain command handling broadcasts show-brand packets to alliance runtime recipients through the connection registry.
+- Java comparison status: expectations are source-derived from `CM_SHOW_BRAND.readImpl/runImpl`, `AionClientPacketFactory`, `TemporaryPlayerTeam.updateBrand`, `PlayerAlliance.isSomeCaptain`, `PacketSendUtility`, and `SM_SHOW_BRAND.writeImpl`. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, live static team registry comparison, threading/lock comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client rendering validation was run.
+
+Remaining risks:
+- Live group/alliance runtime population is still incomplete; the handler can only fan out to runtimes that have already been populated by future service wiring.
+- Java static/current team object identity is approximated through C# runtime snapshots and descriptors.
+- Java `PacketSendUtility` socket ordering and offline-recipient behavior have not been runtime-compared.
+- Java concurrent-map/team lock behavior for brand state remains source-derived but not runtime-compared.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 `CM_SHOW_BRAND` parser/handler boundary slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 live group/alliance service runtime population, Java static/current team lookup, Java `PacketSendUtility` ordering comparison, Java runtime/threading comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; `CM_SHOW_BRAND` now has parser and connection-handler coverage, but live runtime population and client/socket validation remain incomplete.
+
+Next recommended unit of work:
+- Continue alliance entered-event composition by feeding `PlayerAllianceRuntime.CreateSendBrandsIntent` into the existing entered workflow metadata so Java `PlayerAllianceEnteredEvent` brand resend is represented as an explicit packet intent, or start `CM_PLAYER_STATUS_INFO` ready-check command parsing if the packet surface can stay narrow.
+
 ---
 
 ## Next Steps
