@@ -12664,6 +12664,49 @@ Summary metrics:
 Next recommended unit of work:
 - Add the simplest name-writing `SM_GROUP_MEMBER_INFO` branches next: `JOIN` and `ENTER_OFFLINE`. Source-read Java string writes, extend `SmGroupMemberInfo` to write `PrefixSnapshot.Name` for those two events only, and add byte tests for online `JOIN` plus offline `ENTER -> ENTER_OFFLINE`. Keep `ENTER`/`UPDATE` effect payloads and `UPDATE_EFFECTS` slot payload deferred.
 
+### Session 583 (May 23, 2026)
+- Re-read the Java `SM_GROUP_MEMBER_INFO.writeImpl` name branches for `JOIN` and `ENTER_OFFLINE`.
+- Extended C# `SmGroupMemberInfo` to write `PrefixSnapshot.Name` for `JOIN` and `ENTER_OFFLINE`.
+- Kept `ENTER`, `UPDATE`, and `UPDATE_EFFECTS` guarded because those branches require abnormal-effect lists, `SkillTargetSlot.FULLSLOTS`, targeted slot masks, and slot-timer placeholder writes.
+- Added byte tests for online `JOIN` name serialization and offline `ENTER -> ENTER_OFFLINE` name serialization.
+- Updated the unsupported-branch test to use `UPDATE_EFFECTS` because C# enum string formatting resolves the duplicate Java id `13` value to `Enter` for `UPDATE`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 108 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1206 tests.
+
+#### Migration Parity Table - Session 583
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` | Server Packet | Partial | Unit Tested | Needs Verification | C# now serializes fixed prefix plus branchless events, `JOIN` name, and `ENTER_OFFLINE` name. `ENTER`, `UPDATE`, and `UPDATE_EFFECTS` remain unsupported. No Java golden vector or live client capture exists. |
+| `com.aionemu.gameserver.model.team.common.legacy.GroupEvent.JOIN` | `Aion.GameServer.Model.GameObjects.PlayerGroupEvent.Join` consumed by `SmGroupMemberInfo` | Enum / Packet Branch | Partial | Unit Tested | Needs Verification | C# writes the effective event id `5` and then the member name string. |
+| `com.aionemu.gameserver.model.team.common.legacy.GroupEvent.ENTER_OFFLINE` | `Aion.GameServer.Model.GameObjects.PlayerGroupEvent.EnterOffline` consumed by `SmGroupMemberInfo` | Enum / Packet Branch | Partial | Unit Tested | Needs Verification | C# models Java's offline `ENTER` rewrite, writes zero life stats, event id `7`, and then the offline member name. |
+| `com.aionemu.gameserver.skillengine.model.Effect` / `SkillTargetSlot` | Not implemented in `SmGroupMemberInfo` | Packet Dependency | Not Started | No Tests | Unknown | Still required for `ENTER`, `UPDATE`, and `UPDATE_EFFECTS`. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.SmGroupMemberInfo_WritesJoinAndEnterOfflineNameBranchesLikeJava`: validates serialized name strings after the fixed prefix for online `JOIN` and offline `ENTER -> ENTER_OFFLINE`.
+- `PlayerGroupRuntimeTests.SmGroupMemberInfo_ThrowsForUnportedEffectBranches`: validates `UPDATE_EFFECTS` still throws instead of writing an incomplete effect branch.
+- Java comparison status: expectations are source-derived from `SM_GROUP_MEMBER_INFO.writeImpl` and the existing C# packet buffer string writer. No Java runtime execution, Java-generated golden vector, effect branch serialization, socket send/fanout comparison, encoded frame comparison, or client validation was run.
+
+Remaining risks:
+- `ENTER` and `UPDATE` still cannot serialize because the effect payload and slot timer tail are missing.
+- `UPDATE_EFFECTS` still cannot serialize because targeted abnormal-effect and slot-timer payloads are missing.
+- Full group-enter/reconnect fanout remains intent-only and is not wired to sockets.
+- C# enum aliasing for `ENTER` and `UPDATE` shares Java id `13`; logging/string formatting can show `Enter` for an `Update` value.
+- Byte tests cover unencrypted payload only; encoded opcode/frame and live-client behavior remain unverified.
+- Threading/event-order behavior is still not Java live-send compared.
+- Date/time handling is not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 `SM_GROUP_MEMBER_INFO` name-branch serializer slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 7 `ENTER` effect branch serialization, `UPDATE` effect branch serialization, `UPDATE_EFFECTS` targeted slot serialization, live group member fanout, Java packet ordering comparison, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; `SM_GROUP_MEMBER_INFO` now covers prefix plus the simplest name branches, but effect branches and live sends remain incomplete.
+
+Next recommended unit of work:
+- Add the zero-effect `ENTER`/`UPDATE` branch skeleton for `SM_GROUP_MEMBER_INFO`: write name, two zero dwords, `SkillTargetSlot.FULLSLOTS`, zero abnormal-effect count, and the Java slot-timer zero dword loop. Source-read `SkillTargetSlot` first to verify `FULLSLOTS` and enum count/order. Keep actual effect list serialization deferred until the C# effect model can supply caster id, skill id, skill level, target slot ordinal, and remaining display time.
+
 ---
 
 ## Next Steps
