@@ -5850,6 +5850,46 @@ Summary metrics:
 Next recommended unit of work:
 - Step up to the shared player-stat resolver so `SmStatsInfo`, DP mutation caps, speed snapshots, and `SmPlayerInfo` movement speed stop duplicating Java stat logic. A smaller alternative is to introduce the first narrow team/status packet scaffold for `SM_GROUP_MEMBER_INFO`, `SM_ALLIANCE_MEMBER_INFO`, or `SM_GM_SHOW_PLAYER_STATUS` so fly-state and movement-mask fanout can be tested.
 
+### Session 427 (May 23, 2026)
+- Added `PlayerMovementSpeedResolver` as the shared Java-shaped movement-speed boundary for the currently ported walk/run/fly/creature-flying/ride branches.
+- Updated `PlayerVisualStatsUpdateService` to use the shared resolver when building `SM_EMOTION(CHANGE_SPEED)` speed snapshots.
+- Updated `SmPlayerInfo` to use the same resolver for the serialized movement-speed float and for the absolute-target vector scaling added in Session 426.
+- Extended the `SM_PLAYER_INFO` packet regression so the absolute-target vector now proves fly-state-backed Java speed (`9.0`) is shared with the visual speed path.
+- Current gaps in this cluster: attack speed still lives in `PlayerVisualStatsUpdateService`, `SmStatsInfo` still owns the broader nested stat context, and the resolver is source-derived from known Java branches rather than the full Java stat-function/effect/template pipeline.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.SmPlayerInfo|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests"` passes with 10 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests|FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~WorldNpcSoloDpRewardServiceTests"` passes with 127 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 944 tests.
+
+#### Migration Parity Table - Session 427
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats.getMovementSpeed` | `Aion.GameServer.Services.PlayerMovementSpeedResolver` | Stats Container / Formula Boundary | Partial | Unit + Regression Tested | Partial Parity | Shared resolver now covers known walk/run/fly/creature-flying/ride branches. Full stat functions, effects, equipment modifiers, speed caps, and template-driven data remain deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmPlayerInfo` | Packet / Serialization | Partial | Regression Tested | Partial Parity | Movement-speed float and absolute vector scaling now use the same resolver as visual speed broadcasts. |
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats.updateStatsAndSpeedVisually` | `Aion.GameServer.Services.PlayerVisualStatsUpdateService` | Service / Packet Fanout | Partial | Unit Tested | Partial Parity | Speed snapshots now share movement-speed resolution. Attack speed and broader stat context extraction remain future work. |
+
+Tests added or extended:
+- `GamePacketTests.SmPlayerInfo_WritesJavaShapedBaseline`: now validates the visible-player movement speed and absolute vector scaling use fly-state-backed `PlayerMovementSpeedResolver` output.
+- Existing `PlayerVisualStatsUpdateServiceTests` continue to cover ride, sprint, fly, walk, and creature-state-only flying branches through the shared resolver.
+- Java comparison status: tests are source-derived from Java `PlayerGameStats.getMovementSpeed`, `SM_PLAYER_INFO.writeImpl`, and `PlayerGameStats.updateStatsAndSpeedVisually`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- The resolver is intentionally partial and does not yet evaluate Java `StatFunction` modifiers, effects, buffs, equipment movement-speed bonuses, or caps.
+- `SmStatsInfo.PlayerStatsContext`, DP cap lookup, and attack-speed resolution still need a broader shared stat boundary.
+- Group/alliance/GM member status packets that serialize fly-state or movement-mask remain future work because those C# packet/team surfaces are not yet present.
+- Reflection and date/time are not involved. Precision is limited to float vector scaling and covered by tolerance-based packet assertions. Threading is unchanged.
+
+Summary metrics:
+- Total Java artifacts discovered: 3
+- Total artifacts ported: 1 shared movement-speed resolver boundary plus 2 callers
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full stat-function/effect resolution, full movement-controller parity, attack-speed extraction, DP cap extraction, flight controller validation, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue extracting shared stat boundaries by moving attack-speed resolution out of `PlayerVisualStatsUpdateService` and toward the `SmStatsInfo` stat context, or introduce the first narrow `SM_GM_SHOW_PLAYER_STATUS` packet scaffold so the Java fly-state plus movement-mask status bytes can be tested against the newly shared movement state.
+
 ---
 
 ## Next Steps
