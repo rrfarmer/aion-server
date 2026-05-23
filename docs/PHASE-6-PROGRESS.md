@@ -5373,6 +5373,64 @@ Summary metrics:
 Next recommended unit of work:
 - Re-check reward/distribution DP callers now that the shared DP boundary emits the full concrete packet trio. Good targets remain Java `QuestService.giveReward`, `NpcController.doReward`, `PvpService.doReward`, or `PlayerTeamDistributionService.doReward`; choose only a caller with enough C# scaffolding to avoid inventing broad quest/team/reward systems. If still blocked, move to a bounded resource-side task such as team stat packet scaffolding or live speed snapshot support for `CHANGE_SPEED`.
 
+### Session 418 (May 23, 2026)
+- Added a focused C# `QuestRewardService.ApplyDpRewardAsync` boundary for the Java `QuestService.giveReward` DP reward clause.
+- Preserved the Java guard exactly for this slice: zero DP rewards skip mutation and packets because Java only calls `player.getCommonData().addDp(rewards.getDp())` when `rewards.getDp() != 0`.
+- Routed non-zero quest DP rewards through `WorldNpcResourceStatsService.AddPlayerDpAsync`, so online advanced-class players inherit the packeted Java DP mutation order: visible `SmDpInfo`, owner `SmStatsInfo`, then owner `SmStatUpdateDp`.
+- Surfaced explicit result states for missing player, zero reward, and shared DP-boundary skips such as missing max-DP context or starting-class players.
+- Registered `QuestRewardService` in game-server DI so later quest pipeline work can use the same packeted DP boundary instead of open-coded DP mutation.
+- Current gaps in this cluster: the full Java `QuestService.giveReward` pipeline still lacks kinah, exp, title, AP, GP, inventory expansion, warehouse expansion, quest-template rate handling, `QuestEnv`, `Rewards`, item rewards, quest state progression, handler integration, and persistence integration.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~QuestRewardServiceTests|FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests|FullyQualifiedName~GamePacketTests"` passes with 112 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "QuestRewardServiceTests|PlayerEnterWorldServiceTests|PlayerVisualStatsUpdateServiceTests|WorldNpcResourceStatsServiceTests|CraftServiceTests|SkillDpConditionServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 301 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 920 tests.
+
+#### Migration Parity Table - Session 418
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.QuestService.giveReward` | `Aion.GameServer.Services.QuestRewardService.ApplyDpRewardAsync` | Service Boundary | Partial | Unit Tested | Partial Parity | Covers only the `rewards.getDp() != 0` branch. Full quest reward orchestration remains pending. |
+| `com.aionemu.gameserver.questEngine.model.QuestEnv` | Explicit `Player?` input to `QuestRewardService.ApplyDpRewardAsync` | Runtime / DTO | Not Started | No Tests | Needs Verification | This DP boundary accepts the resolved player directly until a live C# `QuestEnv` host exists. |
+| `com.aionemu.gameserver.model.templates.quest.Rewards` | Explicit `int rewardDp` input to `QuestRewardService.ApplyDpRewardAsync` | Static Data DTO | Not Started | No Tests | Needs Verification | This unit does not port the full quest reward template model; callers must supply the DP reward value. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `WorldNpcResourceStatsService.AddPlayerDpAsync` reused by `QuestRewardService` | Runtime / Service Boundary | Partial | Regression Tested | Partial Parity | Quest DP reward now uses the shared packeted DP mutation boundary. Live `PlayerGameStats.getMaxDp()` lookup remains absent. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmDpInfo` | Packet | Partial | Regression Tested | Partial Parity | Reused for visible quest DP reward broadcast. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATS_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatsInfo` | Packet | Partial | Regression Tested | Partial Parity | Reused for owner visual stats after quest DP reward mutation. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_DP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateDp` | Packet | Partial | Regression Tested | Partial Parity | Reused for owner DP stat update after visual stats. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `Aion.GameServer.Network.Aion.IGameClientConnectionRegistry` through resource/visual services | Network Utility / Bridge | Partial | Regression Tested | Partial Parity | Tests verify registry packet order. Exact Java visibility filtering remains runtime-dependent. |
+| `com.aionemu.gameserver.configs.main.Rates` quest reward calculations | No dedicated C# quest reward rate bridge yet | Config / Rates | Not Started | No Tests | Needs Verification | Java applies quest rates for kinah, exp, AP, and GP branches around the DP clause. |
+| `com.aionemu.gameserver.dataholders.DataManager.NPC_DATA` and `NpcTemplate` | No C# quest reward NPC l10n lookup yet | Static Data / Template | Not Started | No Tests | Needs Verification | Java exp rewards look up the target NPC template for localized reward context. |
+| `com.aionemu.gameserver.dataholders.DataManager.QUEST_DATA` and `QuestCategory.NON_COUNT` | No C# quest reward AP category check yet | Static Data / Template | Not Started | No Tests | Needs Verification | Java skips AP quest-rate multiplication for `NON_COUNT` relic exchanges. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerInventory.increaseKinah` | No C# quest kinah reward branch yet | Inventory / Reward | Not Started | No Tests | Needs Verification | Kinah reward and `ItemUpdateType.INC_KINAH_QUEST` remain outside this DP unit. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData.addExp` | No C# quest exp reward branch yet | Progression / Reward | Not Started | No Tests | Needs Verification | Quest EXP grant, rates, l10n, and packets are not part of this DP slice. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerTitleList.addTitle` | No C# quest title reward branch yet | Title / Reward | Not Started | No Tests | Needs Verification | Title rewards remain pending. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService.addAp` | Existing AP rank/extract slices only; no quest reward AP caller yet | Service Boundary | Partial | No Quest Reward Tests | Needs Verification | C# has AP-related work, but this unit does not wire Java quest AP reward semantics. |
+| `com.aionemu.gameserver.services.abyss.GloryPointsService.addGp` | No C# quest GP reward branch yet | Service Boundary | Not Started | No Tests | Needs Verification | GP reward, rates, persistence, and packets remain pending. |
+| `com.aionemu.gameserver.services.CubeExpandService.questExpand` and `WarehouseService.expand` | `InventoryExpansionService` partial helpers; no quest reward expansion caller yet | Service Boundary | Partial | No Quest Reward Tests | Needs Verification | C# has expansion helpers and packets, but Java quest reward expansion side effects are not wired here. |
+
+Tests added or extended:
+- `QuestRewardServiceTests.ApplyDpRewardAsync_AddsQuestDpThroughPacketedBoundary`: validates capped DP reward mutation and the `SmDpInfo`, `SmStatsInfo`, `SmStatUpdateDp` order.
+- `QuestRewardServiceTests.ApplyDpRewardAsync_SkipsZeroDpRewardWithoutMutationOrPackets`: validates the Java zero-DP guard.
+- `QuestRewardServiceTests.ApplyDpRewardAsync_RequiresPlayerAndOnlineMaxDp`: validates missing-player and missing-max-DP result states.
+- `QuestRewardServiceTests.ApplyDpRewardAsync_PreservesStartingClassGuard`: validates the shared starting-class DP guard.
+- Java comparison status: tests are source-derived from Java `QuestService.giveReward`, `PlayerCommonData.addDp/setDp`, `SM_DP_INFO`, `SM_STATS_INFO`, and `SM_STATUPDATE_DP`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- The DP reward bridge requires an explicit `maxDp` until C# has a live `PlayerGameStats.getMaxDp()` equivalent at quest reward time.
+- This service is intentionally a narrow reward boundary, not the quest engine, quest handler, or reward-template pipeline.
+- Reward branches for kinah, exp, title, AP, GP, cube expansion, and warehouse expansion remain unported at the quest reward call site.
+- C# still sends owner visual stats but does not emit `CHANGE_SPEED` without a live speed snapshot.
+- Reflection, date/time, and scheduled callbacks are not involved in this DP reward branch. Threading parity remains approximate because Java DP mutation is synchronous while C# packet delivery is async through the registry.
+
+Summary metrics:
+- Total Java artifacts discovered: 17
+- Total artifacts ported: 1 partial quest DP reward service boundary plus reuse of the shared DP packet and visual-stat boundary
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 17
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because the full quest reward pipeline, speed snapshot/cached-stat parity, reward/distribution DP callers, group stat fanout, restore/flight timers, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue reward/distribution DP callers now that quest DP reward has a packeted boundary. Good bounded candidates are Java `NpcController.doReward` solo DP rewards or `PlayerTeamDistributionService.doReward` team DP distribution if enough C# combat/team scaffolding exists. If both require inventing broad systems, fall back to the next contained resource-side task: live speed snapshot support for `CHANGE_SPEED` after DP mutations.
+
 ---
 
 ## Next Steps
