@@ -5714,6 +5714,67 @@ Summary metrics:
 Next recommended unit of work:
 - Extract a shared player-stat resolver from the private `SmStatsInfo` calculations so `MAXDP`, attack speed, movement speed, and future HP/MP/FP caps are sourced from one Java-shaped stat boundary. A smaller fallback is to model Java `Player.flyState` separately enough to cover `isInFlyingState`, `isFlying`, and the remaining `PlayerGameStats.getMovementSpeed` fallback branches.
 
+### Session 424 (May 23, 2026)
+- Added a dedicated C# `PlayerFlyState` bitmask to mirror Java `model.gameobjects.state.FlyState`.
+- `Player` now tracks Java-style fly state separately from `PlayerCreatureState`, with `SetFlyState`, `UnsetFlyState`, `IsInFlyState`, `IsFlying`, `IsInFlyingState`, and `IsInGlidingState` helpers.
+- Updated fly/glide state transitions to keep the fly-state bitmask in sync for `StartFlying`, `EndFlying`, `StartGliding`, `StopGliding`, and windstream `CompleteFlyTeleport`.
+- Updated `GameServerConnection` emotion/move handling so walk toggles use Java `player.isFlying()` semantics and `CM_MOVE` gliding updates set/unset fly-state through the new helpers.
+- Updated `PlayerVisualStatsUpdateService.ResolveKnownMovementSpeed` to follow the remaining Java `PlayerGameStats.getMovementSpeed` branch order: fly-state flying uses class fly speed `9.0`, creature-state-only flying fallback uses `12.0`, walk mode uses `1.5`, and default run uses `6.0`.
+- Updated `SmStatsInfo` to serialize `player.FlyState` in the Java `SM_STATS_INFO.writeImpl` fly-state byte instead of always writing zero.
+- Current gaps in this cluster: full fly zone/cooldown validation, flight transporter path validation, CM_LEVEL_READY fly-state notification, live movement-mask serialization, FP reduce/restore scheduler execution, and stat-function speed modifiers remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerStateTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests|FullyQualifiedName~GamePacketTests"` passes with 103 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PvpDpRewardServiceTests|WorldNpcSoloDpRewardServiceTests|QuestRewardServiceTests|CraftServiceTests|PlayerEnterWorldServiceTests|PlayerVisualStatsUpdateServiceTests|WorldNpcResourceStatsServiceTests|SkillDpConditionServiceTests|GamePacketTests|PlayerStateTests|EquipmentServiceTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 375 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 944 tests.
+
+#### Migration Parity Table - Session 424
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.state.FlyState` | `Aion.GameServer.Model.GameObjects.PlayerFlyState` | Enum / Runtime State | Partial | Unit Tested | Partial Parity | Ports Java bit ids `NONE=0`, `FLYING=1`, `GLIDING=2`. Runtime uses are still limited to currently ported flight/glide paths. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` fly-state helpers | `Aion.GameServer.Model.GameObjects.Player` fly-state property and helper methods | Class / Runtime State | Partial | Unit Tested | Partial Parity | Adds Java-shaped `isFlying`, `isInFlyingState`, `isInGlidingState`, set/unset helpers. Other Java player flight fields such as fly reuse time and current fly path remain missing. |
+| `com.aionemu.gameserver.controllers.FlyController.startFly` | `Player.StartFlying` plus `GameServerConnection` emotion handling | Controller / State Transition | Partial | Unit Tested | Partial Parity | Sets fly-state and creature-state, and records FP reduce intent. Zone checks, cooldown checks, audit logs, and broadcast-side controller orchestration remain pending. |
+| `com.aionemu.gameserver.controllers.FlyController.endFly` | `Player.EndFlying` | Controller / State Transition | Partial | Unit Tested | Partial Parity | Clears fly/glide fly-state and creature-state, and records FP restore intent. Broadcast and scheduler execution remain outside this slice. |
+| `com.aionemu.gameserver.controllers.FlyController.switchToGliding` | `Player.StartGliding`; `GameServerConnection.HandleMoveAsync` | Controller / Movement State | Partial | Unit Tested | Partial Parity | Sets `FlyState.Gliding`, creature gliding state, and FP reduce intent. Java glide guards, fly reuse time, system messages, and stat refresh on glide start remain incomplete. |
+| `com.aionemu.gameserver.controllers.FlyController.onStopGliding` | `Player.StopGliding`; `GameServerConnection.HandleMoveAsync` | Controller / Movement State | Partial | Unit Tested | Partial Parity | Clears glide fly-state and creature-state, chooses FP restore/reduce based on remaining flying fly-state, and lets connection broadcast `STOP_GLIDE` when appropriate. Full stat refresh and sighted-player semantics remain pending. |
+| `com.aionemu.gameserver.controllers.PlayerController.onFlyTeleportEnd` | `Player.CompleteFlyTeleport` | Controller / Flight Path State | Partial | Unit Tested | Partial Parity | Windstream path now clears flying fly-state and sets gliding fly-state. Flight transporter validation, current fly-path timing audit, zone update, and full flight-path model remain missing. |
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats.getMovementSpeed` | `PlayerVisualStatsUpdateService.ResolveKnownMovementSpeed` | Stats Container / Formula | Partial | Unit Tested | Partial Parity | Branch order now distinguishes fly-state flying from creature-state-only flying fallback `12.0`. Full stat modifiers and caps still deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATS_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatsInfo` | Packet / Serialization | Partial | Regression Tested | Partial Parity | Fly-state byte now serializes `Player.FlyState`. Movement-mask byte remains hardcoded `0`, and packet tests are source-derived rather than Java runtime golden captures. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_EMOTION` walk/fly/land slices | `Aion.GameServer.Network.Aion.GameServerConnection` emotion handling | Client Packet Handler | Partial | Regression Tested | Partial Parity | Walk guard now uses fly-state-backed `IsFlying`; fly/land paths update fly-state through `Player`. Full Java guards and zone/cooldown/system-message behavior remain pending. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_MOVE` glide slice | `Aion.GameServer.Network.Aion.GameServerConnection.HandleMoveAsync` | Client Packet Handler | Partial | Regression Tested | Partial Parity | Gliding move packets now update fly-state. Java movement validation, geo, glide reuse checks, and stat refresh remain pending. |
+| `com.aionemu.gameserver.model.gameobjects.state.CreatureState` | `Aion.GameServer.Model.GameObjects.PlayerCreatureState` | Enum / Runtime State | Partial | Unit Tested | Partial Parity | Creature-state remains separate from fly-state. The creature-state-only flying fallback is now represented in speed snapshots. |
+
+Tests added or extended:
+- `PlayerStateTests.Player_FlyStateMatchesJavaBitAndCompoundSemantics`: validates Java fly-state bit ids, set/unset behavior, and fly/glide helper semantics.
+- `PlayerStateTests.Player_RideSprintMatchesJavaGuardAndFpTaskIntent`: now validates ride sprint uses fly-state-backed `IsFlying`.
+- `PlayerStateTests.Player_RideMountAndDismountMatchJavaPlayerActions`: now validates mounted flying behavior with fly-state present.
+- `PlayerStateTests.Player_CompleteFlyTeleportMatchesJavaWindstreamAndTransporterState`: now validates windstream converts flying fly-state to gliding fly-state.
+- `PlayerStateTests.Player_StartAndEndFlyingMatchJavaFpTaskIntent`: now validates fly-state set/clear alongside creature-state and FP task intent.
+- `PlayerStateTests.Player_StopGlidingMatchesJavaFpTaskAndBroadcastDecision`: now validates glide fly-state clearing and the reduce/restore branch decision.
+- `PlayerVisualStatsUpdateServiceTests.UpdateStatsAndSpeedVisuallyAsync_UsesClassWalkAndFlySpeeds`: now uses fly-state-backed flying for Java fly-speed branch.
+- `PlayerVisualStatsUpdateServiceTests.UpdateStatsAndSpeedVisuallyAsync_UsesCreatureFlyingFallbackWhenFlyStateMissing`: validates Java's creature-state-only `12.0` fallback branch.
+- `GamePacketTests.SmStatsInfo_WritesPlayerFlyStateByte`: validates `SM_STATS_INFO` serializes the fly-state byte.
+- Java comparison status: tests are source-derived from Java `FlyState`, `Player`, `FlyController`, `PlayerController.onFlyTeleportEnd`, `PlayerGameStats.getMovementSpeed`, `SM_STATS_INFO`, `CM_EMOTION`, and `CM_MOVE`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Full fly-zone/cooldown checks, access checks, audit logging, and system messages from `FlyController.canFly/canGlide` are not ported.
+- Flight transporter and windstream validation is still partial; current fly-path timing, current fly-path persistence, and zone update behavior remain missing.
+- `CM_LEVEL_READY` fly-state notification and group/alliance fly-state packet fanout are not covered in this unit.
+- `SM_STATS_INFO` now writes fly-state but still writes movement-mask as `0`; Java writes `player.getMoveController().getMovementMask()`.
+- Speed snapshots still do not apply Java stat functions, effects, equipment, titles, or caps.
+- Reflection and date/time are not involved. Serialization changed only for the `SM_STATS_INFO` fly-state byte and is covered by a source-derived packet test. Threading remains approximate because C# stores state directly and async connection handlers replace Java controller/task sequencing.
+- Precision and rounding are unchanged in this unit; movement-speed fallback values are exact constants from Java branches.
+
+Summary metrics:
+- Total Java artifacts discovered: 12
+- Total artifacts ported: 1 partial fly-state runtime model plus packet/speed branch updates
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 12
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full player stat modifier resolution, shared stat templates, live HP/MP/FP max-resource lookup, full flight controllers, flight zones/cooldowns, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, group stat fanout, restore/flight timers, full effect runtime, scheduled callbacks, real attack callers, dynamic observers, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue visual stat/resource convergence by extracting a shared player-stat resolver from `SmStatsInfo` calculations so `MAXDP`, attack speed, movement speed, fly time, and future HP/MP/FP caps come from one Java-shaped stat boundary. A smaller alternative is to continue flight parity with `CM_LEVEL_READY` fly-state notification and `SM_STATS_INFO` movement-mask serialization.
+
 ---
 
 ## Next Steps
