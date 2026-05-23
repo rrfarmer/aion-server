@@ -10379,6 +10379,46 @@ Summary metrics:
 Next recommended unit of work:
 - Add a minimal `PortalLoc` / `PortalLocData` static-data table so `PortalPathSummary.LocId` can resolve target world id and coordinates. That unlocks a source-shaped portal-entry orchestration test around Java's early guard/cooldown/reenter ordering without yet implementing quest/item/kinah consumption.
 
+### Session 534 (May 23, 2026)
+- Added `PortalLocTable` and `PortalLocSummary`, a minimal C# static-data surface for Java `PortalLocData` / `PortalLoc`.
+- Threaded `<portal_locs>/<portal_loc>` parsing through `StaticData.LoadFromCacheAsync`, capturing `world_id`, `loc_id`, `x`, `y`, `z`, and optional heading `h` with Java's default zero behavior.
+- Added lookup by `loc_id`, matching Java `PortalLocData.getPortalLoc`.
+- Kept this as static-data parity only: no production teleport caller resolves a portal path's `loc_id` through the new table yet.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaticDataLoadingTests"` passes with 13 tests.
+
+#### Migration Parity Table - Session 534
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dataholders.PortalLocData` | `Aion.GameServer.Dataholders.PortalLocTable` | Static Data Holder | Partial | Unit Tested / Regression Tested | Partial Parity | C# stores portal locations by `loc_id` and exposes `GetPortalLoc`. Java JAXB `afterUnmarshal` lifecycle and `DataManager.PORTAL_LOC_DATA` global access are not modeled. |
+| `com.aionemu.gameserver.model.templates.portal.PortalLoc` | `Aion.GameServer.Dataholders.PortalLocSummary` | DTO / Template | Partial | Unit Tested / Regression Tested | Partial Parity | C# parses `world_id`, `loc_id`, `x`, `y`, `z`, and heading `h`, including default heading `0`. Setter methods and Java mutable DTO behavior are intentionally not ported. |
+| `game-server/data/static_data/portals/portal_loc.xml` | `Aion.GameServer.Dataholders.StaticData` XML reader | Static Data Loader | Partial | Regression Tested | Partial Parity | Real Java data is loaded and spot-checked for `1100100` and `1100101`. Full XML/schema parity and duplicate-key behavior were not runtime-compared. |
+| `com.aionemu.gameserver.services.teleport.PortalService.port` `DataManager.PORTAL_LOC_DATA.getPortalLoc(portalPath.getLocId())` | Future C# portal orchestration using `PortalPathSummary.LocId` and `PortalLocTable.GetPortalLoc` | Service Dependency | Not Started | No Tests | Unknown | Newly unblocked but not implemented in this unit. Missing behavior includes null-loc warning/return, same-instance teleport, instance allocation, and transfer calls. |
+
+Tests added or extended:
+- `StaticDataLoadingTests.StaticData_LoadsPortalLocSummaries`: validates synthetic portal loc parsing, float fields, default heading `0`, explicit heading `53`, and missing lookup behavior.
+- `StaticDataLoadingTests.LoadsStaticDataFromJavaProject`: extended to assert real `portal_loc.xml` count and known Sanctum entries `1100100` / `1100101`.
+- Java comparison status: expectations are source-derived from `PortalLocData`, `PortalLoc`, `portal_loc.xsd`, and real Java XML. No Java runtime/JAXB execution, production teleport flow, or live client validation was run.
+
+Remaining risks:
+- Production portal flow still does not combine `PortalPathSummary` and `PortalLocSummary`.
+- Java `PortalService.port` null-loc warning/return behavior is not represented in a C# orchestration helper yet.
+- Instance registration/allocation, cooldown/reenter ordering, required-item removal, kinah consumption, quest checks, group-size checks, same-instance teleport, and transfer calls remain incomplete.
+- Duplicate `loc_id` behavior is not verified against Java `HashMap.put`; C# table construction would currently throw on duplicates.
+- Float precision is parsed using invariant culture and compared against source literals, but no Java runtime float serialization comparison was run.
+- Threading, reflection/JAXB differences, mutable Java DTO setters, date/time handling, packet timing, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 2 partial static-data holder/template surfaces plus loader wiring
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 3 production portal orchestration, duplicate-key behavior, and live runtime/client comparison
+- Estimated overall migration completion: Phase 6 remains about 58% complete; portal path and destination data are now loaded, but end-to-end portal entry is still not wired.
+
+Next recommended unit of work:
+- Add a narrow portal-entry orchestration helper that resolves `PortalPathSummary.LocId` through `PortalLocTable`, returns an explicit missing-location result when absent, and applies the already-ported mentor/race/rank/title/cooldown/level checks in Java `PortalService.port` order for solo/no-registration cases. Keep quests, group-size, item removal, kinah, and actual teleport transfer as documented gaps.
+
 ---
 
 ## Next Steps
