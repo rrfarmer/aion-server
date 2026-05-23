@@ -9506,6 +9506,50 @@ Summary metrics:
 Next recommended unit of work:
 - Continue instance lifecycle parity by adding a source-shaped instance cooldown/entry-validation service boundary around the new cooltime member data, or pivot to Java-generated golden-vector coverage for the delayed teleport packet set before adding more instance side effects.
 
+### Session 514 (May 23, 2026)
+- Added `PlayerPortalCooldownService` as a narrow C# companion for Java `PortalCooldownList`.
+- Modeled source-shaped portal cooldown expiry cleanup, cooldown-time lookup, disabled-entry checks against instance `maxcount`, cooldown entry-count increment, and explicit removal.
+- Preserved Java's existing-cooldown behavior in `addPortalCooldown`: a repeated add increments `enterCount` but keeps the original reuse time.
+- Kept DAO persistence and `SM_INSTANCE_INFO` fanout out of this slice; those need repository/socket boundaries before parity can be claimed.
+- Focused validation: `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerStateTests|FullyQualifiedName~WorldMapRuntimeStateTests"` passes with 30 tests.
+- Full validation: `dotnet test dotnetConversion/AionServer.slnx` passes with 1065 tests.
+
+#### Migration Parity Table - Session 514
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.isPortalUseDisabled` | `Aion.GameServer.Services.PlayerPortalCooldownService.IsPortalUseDisabled` | Service / Player State | Partial | Unit Tested | Partial Parity | C# returns false for missing cooldowns, removes expired cooldowns, and compares active `EntryCount` against `InstanceCooltimeSummary.MaxCount`. If no C# cooltime template exists, C# returns false instead of Java's likely null dereference through `getInstanceMaxCountByWorldId`; this is an intentional defensive difference until static data is mandatory at this boundary. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.getPortalCooldownTime` | `Aion.GameServer.Services.PlayerPortalCooldownService.GetPortalCooldownTime` | Service / Player State | Complete | Unit Tested | Partial Parity | C# returns `0` for missing/expired cooldowns and removes expired entries, matching Java source behavior. No Java runtime comparison was run. Date/time uses injected `DateTimeOffset` instead of Java `System.currentTimeMillis()` for deterministic tests. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.addPortalCooldown` | `Aion.GameServer.Services.PlayerPortalCooldownService.AddPortalCooldown` | Service / Player State | Partial | Unit Tested | Partial Parity | C# creates a new cooldown with entry count `1` or increments an existing entry count while preserving the old reuse time. Missing behavior: `PortalCooldownsDAO.storePortalCooldowns(owner)` persistence and `sendEntryInfo(worldId)` packet/team fanout. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.removePortalCooldown` | `Aion.GameServer.Services.PlayerPortalCooldownService.RemovePortalCooldown` | Service / Player State | Complete | Unit Tested | Partial Parity | C# removes from the player's dictionary snapshot. Threading differs from Java's mutable `HashMap`; broader online-player concurrency remains unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldown` | `Aion.GameServer.Model.GameObjects.PlayerPortalCooldown` | DTO | Partial | Unit Tested | Partial Parity | Existing C# record already held world id, reuse time, and entry count. Java mutates `enterCount`; C# replaces immutable records in a copied dictionary. Reflection/serialization compatibility is not claimed. |
+| `com.aionemu.gameserver.dataholders.InstanceCooltimeData.getInstanceMaxCountByWorldId` | `Aion.GameServer.Dataholders.InstanceCooltimeTable.GetInstanceCooltimeByWorldId(...).MaxCount` | Dataholder Lookup | Partial | Unit Tested | Partial Parity | This unit consumes the already-loaded `MaxCount` value for disabled-entry checks. A dedicated C# `getInstanceMaxCountByWorldId` API was not added; missing-template behavior intentionally avoids a null dereference. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INSTANCE_INFO` | No new call site; existing `Aion.GameServer.Network.Aion.ServerPackets.SmInstanceInfo` | Server Packet Fanout | Partial | No Tests | Needs Verification | Java `addPortalCooldown` sends updated entry info to the player or current team. C# service deliberately does not send packets yet because production portal entry and team fanout boundaries are not wired in this unit. |
+| `com.aionemu.gameserver.dao.PortalCooldownsDAO.storePortalCooldowns` | No C# call site in this unit | Repository / Persistence | Not Started | No Tests | Unknown | Java persists cooldown changes immediately after add. C# currently mutates in-memory `Player.PortalCooldowns` only; logout save/load coverage exists elsewhere, but immediate DAO parity is not implemented. |
+
+Tests added:
+- `PlayerStateTests.PlayerPortalCooldownService_MatchesJavaDisableAndExpirySlice`: validates active cooldown time, disabled check after reaching max entries, and expired-entry removal.
+- `PlayerStateTests.PlayerPortalCooldownService_AddsAndRemovesCooldownLikeJavaList`: validates new cooldown creation, repeated add entry-count increment while preserving original reuse time, and removal.
+- Java comparison status: expectations are source-derived from `PortalCooldownList` and `PortalCooldown`. No Java runtime execution, database persistence validation, socket/team packet validation, or live client validation was run.
+
+Remaining risks:
+- `PlayerPortalCooldownService.AddPortalCooldown` does not persist via a C# `PortalCooldownsDAO.storePortalCooldowns` equivalent and does not send `SM_INSTANCE_INFO` to the player/team.
+- Production portal/autogroup/teleport callers are not wired to the new service yet, so this is a state helper rather than an end-to-end entry flow.
+- Missing-template behavior differs defensively from Java's direct `InstanceCooltimeData.getInstanceMaxCountByWorldId` lookup; this should be revisited when the caller can guarantee static data availability.
+- Threading differs from Java mutable `HashMap`; C# snapshots dictionaries and replaces `Player.PortalCooldowns`.
+- Serialization, database schema, date/time reset calculations, precision/rounding, reflection behavior, and packet wire format are unchanged in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 narrow portal cooldown state slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 6 immediate portal cooldown DAO persistence, `SM_INSTANCE_INFO` player/team fanout, production portal/autogroup caller wiring, full instance entrance validation, reset-time calculation/rate handling, and Java runtime/live-client validation
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this adds a cooldown state building block but does not yet close end-to-end instance entry parity.
+
+Next recommended unit of work:
+- Wire one production-shaped caller boundary to `PlayerPortalCooldownService` where C# already has enough portal/autogroup context, or add source-shaped `InstanceCooltimeData.calculateInstanceEntranceCooltime` support for relative/daily/weekly reset calculations before caller wiring.
+
 ---
 
 ## Next Steps
