@@ -9722,6 +9722,49 @@ Summary metrics:
 Next recommended unit of work:
 - Wire the composed cooldown result and entry-info packet into the narrowest production-shaped portal/autogroup caller boundary that can safely send a packet to the owner connection, while keeping DAO persistence and team fanout explicit if those support systems are still absent.
 
+### Session 519 (May 23, 2026)
+- Added `GameServerConnection.ApplyInstanceEntranceCooldownAsync` as the current narrow owner-connection send boundary for Java `PortalCooldownList.addPortalCooldown -> sendEntryInfo`.
+- The connection helper composes the existing cooldown rate/calculation/mutation service, creates the single-world `SmInstanceInfo` packet, and sends it to the owner connection only when Java's add guard succeeds.
+- Added connected-socket tests that capture the packet through `sentPacketObserver`, proving the packet is actually sent on a live connection path instead of only created as an object.
+- Kept this intentionally short of full portal/autogroup integration: no portal validation, teleport sequencing, instance registration, item/kinah consumption, immediate DAO persistence, or team fanout was added in this unit.
+- Focused validation: `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~InstanceEntranceCooldownServiceTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~PlayerStateTests"` passes with 106 tests.
+
+#### Migration Parity Table - Session 519
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.addPortalCooldown` | `Aion.GameServer.Network.Aion.GameServerConnection.ApplyInstanceEntranceCooldownAsync` via `InstanceEntranceCooldownService.ApplyEntranceCooldown` | Connection / Player State | Partial | Unit Tested | Partial Parity | C# now mutates the owner cooldown state and sends the owner entry-info packet when a cooldown is added. Java's immediate DAO persistence and team routing are still missing. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.sendEntryInfo` | `Aion.GameServer.Network.Aion.GameServerConnection.ApplyInstanceEntranceCooldownAsync` plus `InstanceEntranceCooldownService.CreateEntryInfoPacket` | Packet Dispatch Boundary | Partial | Unit Tested | Partial Parity | The Java owner-only `PacketSendUtility.sendPacket(owner, new SM_INSTANCE_INFO(...))` branch is represented by `SendPacketAsync` on a connected `GameServerConnection`. The `owner.getCurrentTeam().sendPackets(...)` branch is not represented. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `Aion.GameServer.Network.Aion.GameServerConnection.SendPacketAsync` | Socket Dispatch | Partial | Unit Tested | Partial Parity | This unit validates packet dispatch through a live connected test socket and observer. It does not validate encrypted client consumption, relative ordering with teleport packets, disconnect races, or registry-based sends. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INSTANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmInstanceInfo` | Server Packet | Partial | Unit Tested / Regression Tested | Partial Parity | The sent packet is byte-checked for the single-player single-world update. Multi-player collection constructor and team update type behavior remain unported. |
+| `com.aionemu.gameserver.services.teleport.PortalService.transfer` | Future portal caller; currently `GameServerConnection.ApplyInstanceEntranceCooldownAsync` only | Service / Caller Integration | Partial | Unit Tested | Needs Verification | The cooldown/send side effect is callable from a connection, but the Java transfer flow still is not wired end-to-end: start position, instance registration, teleport, portal guards, and item/kinah removal are absent. |
+| `com.aionemu.gameserver.model.autogroup.AutoInstance.onPressEnter` | Future autogroup caller; currently `GameServerConnection.ApplyInstanceEntranceCooldownAsync` only | Service / Caller Integration | Partial | No Tests | Needs Verification | This unit can serve the owner-send side effect for future autogroup entry but does not wire a C# autogroup runtime or handler callback. |
+| `com.aionemu.gameserver.dao.PortalCooldownsDAO.storePortalCooldowns` | No C# immediate persistence call | Repository / Persistence | Not Started | No Tests | Unknown | Discovered dependency remains blocked. C# cooldown state is still in-memory at this boundary. |
+| `com.aionemu.gameserver.model.team.PlayerTeam.sendPackets` / `owner.getCurrentTeam().sendPackets` | Existing `Player.TeamMembership` flag only; no team packet router | Team Fanout | Not Started | No Tests | Unknown | Discovered dependency remains blocked. C# has no current-team send route for this packet yet. |
+
+Tests added:
+- `GameServerConnectionInstanceCooldownTests.ApplyInstanceEntranceCooldownAsync_SendsJavaEntryInfoPacketToOwner`: validates a connected C# game connection applies the cooldown, sends exactly one `SmInstanceInfo`, and byte-checks the Java single-world mode `2` payload including cooldown id, remaining seconds, max entries, negative entry offset, and player name.
+- `GameServerConnectionInstanceCooldownTests.ApplyInstanceEntranceCooldownAsync_SkipsSendWhenJavaAddGuardIsFalse`: validates reentry no-op returns no added cooldown, sends no packet, and leaves player cooldown state empty.
+- Java comparison status: expectations are source-derived from `PortalCooldownList.addPortalCooldown`, `PortalCooldownList.sendEntryInfo`, `PacketSendUtility.sendPacket`, and `SM_INSTANCE_INFO.writeImpl`. No Java runtime execution, live client socket capture, portal transfer flow, DAO persistence validation, or team fanout validation was run.
+
+Remaining risks:
+- The helper is still not called by real portal, teleport, or autogroup code, so end-to-end instance entry parity remains open.
+- Packet ordering relative to `SM_TELEPORT_LOC`, instance start-position state, world despawn/spawn, and `CM_TELEPORT_ANIMATION_DONE` is not validated.
+- Immediate Java DAO persistence remains missing, leaving crash/restart behavior different until a persistence boundary is added.
+- Team fanout remains missing because C# has only a `Player.TeamMembership` flag and not a Java-equivalent current-team packet sender.
+- Date/time remains injected for deterministic tests. Runtime clock behavior, threading under concurrent entries, serialization beyond this packet, and Java reflection identity are not verified.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 narrow owner-connection cooldown update dispatch boundary
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 6 production portal/autogroup caller wiring, immediate portal cooldown DAO persistence, team packet fanout/current-team model, teleport packet ordering, Java runtime/live-client validation, and Java multi-player `SM_INSTANCE_INFO` constructor
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this adds a live connection send boundary but still does not close full instance-entry parity.
+
+Next recommended unit of work:
+- Add the immediate `PortalCooldownsDAO.storePortalCooldowns(owner)` equivalent as a repository boundary if the current player persistence layer can store portal cooldowns safely; otherwise, continue toward the actual portal transfer caller and document persistence/team fanout as blocked.
+
 ---
 
 ## Next Steps
