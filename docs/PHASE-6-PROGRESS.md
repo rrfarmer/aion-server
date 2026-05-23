@@ -4770,6 +4770,53 @@ Summary metrics:
 Next recommended unit of work:
 - Continue resource side-effect concretization with the smallest packet/intent closure: port or wire player HP stat-update output (`SM_STATUPDATE_HP`) from the existing `SendHpStatUpdate` intent, or deepen HP observer/restore-task intents if packet prerequisites are still missing. Keep full `SkillEngine` runtime and NPC effect-controller state out of scope unless their supporting models are ready.
 
+### Session 405 (May 23, 2026)
+- Ported Java `SM_STATUPDATE_HP` as `SmStatUpdateHp`.
+- Wired the existing player HP stat-update intent into a concrete owner packet send through `WorldNpcResourceStatsService.SendHpStatUpdateAsync`.
+- Positive and negative player HP changes now construct and attempt to send `SmStatUpdateHp` after HP attack-status metadata, matching Java's `CreatureLifeStats` attack-status then `PlayerLifeStats.onHpChanged` packet order.
+- `WorldNpcResourceChangeResult` now carries the generated HP stat-update packet and whether the direct owner send succeeded, while keeping group stat updates, restore tasks, FP restore, observers, and aggro clearing as explicit side-effect intents.
+- Staged HP heal adapter coverage now observes the concrete HP stat-update packet through the same boundary.
+- Current gaps in this cluster: `SM_STATUPDATE_MP`, `SM_FLY_TIME`, group stat fanout, restore tasks, HP observers, FP restore on resurrection-style HP changes, and live aggro-list clearing remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~GamePacketTests"` passes with 96 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcResourceStatsServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 266 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 895 tests.
+
+#### Migration Parity Table - Session 405
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_HP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateHp` | Packet | Partial | Unit Tested | Partial Parity | C# writes Java payload shape `currentHp` then `maxHp` as 32-bit integers with opcode 3. Full live-client validation remains pending. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats.sendHpPacketUpdate` | `WorldNpcResourceStatsService.SendHpStatUpdateAsync`; `WorldNpcResourceChangeResult.HpStatUpdatePacket`; `HpStatUpdateSent` | Packet Caller/Service | Partial | Unit Tested | Partial Parity | C# sends the owner HP packet for online player HP changes through the connection registry. Java uses `owner.isSpawned()` and `PacketSendUtility.sendPacket`; C# currently uses `Player.IsOnline` as the available spawn/send gate. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats.onHpChanged` | `WorldNpcResourceStatsService.IncreasePlayerHpAsync`; negative-heal damage helper | Runtime/Service | Partial | Unit Tested | Partial Parity | HP stat-update output is concrete now, while group stat updates, restore tasks, FP restore, HP observers, and aggro clearing remain intent fields. |
+| `com.aionemu.gameserver.model.stats.container.CreatureLifeStats.increaseHp` / `reduceHp` player paths | `WorldNpcResourceStatsService` HP mutation paths | Runtime/Service | Partial | Unit Tested | Partial Parity | C# preserves attack-status-before-HP-stat-update ordering for player HP mutation paths. Java monitor synchronization and full creature/controller effects remain broader gaps. |
+| `com.aionemu.gameserver.skillengine.effect.HealEffect.onPeriodicAction` / staged HP heal callers | `WorldNpcResourceStatsService.ApplyResourceOverTimePeriodicResultAsync` with `SmStatUpdateHp` send | Effect-to-Stats Adapter | Partial | Unit Tested | Partial Parity | Staged HP heal output reaches the HP boundary and now generates the owner HP stat-update packet for online players. Full Java effect runtime remains pending. |
+
+Tests added or extended:
+- `GamePacketTests` stat-update payload coverage: validates `SmStatUpdateHp` serializes Java `SM_STATUPDATE_HP` payload order and integer widths.
+- `WorldNpcResourceStatsServiceTests.IncreasePlayerHpAsync_CapsHealAndRecordsPlayerSideEffectIntents`: now validates generated `SmStatUpdateHp`, max/current HP values, direct delivery target, and send success for positive HP healing.
+- `WorldNpcResourceStatsServiceTests.IncreasePlayerHpAsync_RoutesNegativeHealToHpDamage`: now validates generated HP stat-update packet on HP damage/death and MP-zeroing path.
+- `WorldNpcResourceStatsServiceTests.IncreasePlayerHpAsync_BlocksDiseaseAndDoesNotMutate`: now validates disease-blocked HP heal sends no HP stat packet.
+- `WorldNpcResourceStatsServiceTests.ApplyResourceOverTimePeriodicResultAsync_IncreasesPlayerHpFromStagedHpHeal`: now validates staged HP heal output carries the generated HP stat-update packet and direct owner delivery.
+- Java comparison status: tests are source-derived from Java `SM_STATUPDATE_HP.writeImpl`, `PlayerLifeStats.sendHpPacketUpdate`, and `PlayerLifeStats.onHpChanged`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- C# uses `Player.IsOnline` as the current proxy for Java `owner.isSpawned()` in the HP stat-update path.
+- Group stat updates, restore tasks, FP restore, live HP observer callbacks, aggro-list clearing, and player persistence side effects remain result intents only.
+- `SM_STATUPDATE_MP`, `SM_FLY_TIME`, `SM_DP_INFO`, and `SM_STATUPDATE_DP` are still not fully ported as concrete side-effect packets from the resource service.
+- Serialization parity is covered by payload-level tests, not live encrypted client captures.
+- Reflection and date/time are not involved. Threading parity remains approximate through staged service methods and connection-registry calls outside Java monitor semantics.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 2 partial C# packet/service artifacts plus result DTO fields
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because group stat fanout, restore/flight tasks, HP observers, remaining resource packet classes, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue resource side-effect concretization with the next smallest packet closure: port and wire `SM_STATUPDATE_MP` for player MP mutations, or port `SM_FLY_TIME` for FP mutations if flight-time side effects are the higher-value next slice. Keep group fanout and restore task execution as explicit follow-up gaps unless their supporting models are ready.
+
 ---
 
 ## Next Steps
