@@ -9334,6 +9334,48 @@ Summary metrics:
 Next recommended unit of work:
 - Continue delayed teleport fallback parity by introducing a minimal instance-existence runtime model for `InstanceService.instanceExists(worldId, instanceId)` and covering the destroyed-instance fallback, or pause teleport work for Java-generated packet golden vectors around the teleport/player-info/system-message packets.
 
+### Session 510 (May 23, 2026)
+- Added a minimal runtime instance-existence hook to `WorldMapRuntimeStateTable`, mirroring the Java lookup surface used by `InstanceService.instanceExists(worldId, instanceId)`.
+- `WorldMapRuntimeState` now tracks explicitly removed instance ids, normalizes instance id `0` to `1` like Java `WorldMap.getWorldMapInstance`, and can restore an instance id through `AddWorldMapInstance`.
+- Extended delayed teleport animation completion so the Java fallback branch now triggers when the pending destination instance has been explicitly removed: C# consumes the pending teleport, sends `SmPlayerInfo`, and keeps the original position.
+- Kept default modeled instance existence permissive unless explicitly removed, because C# still lacks Java's full dynamic `WorldMapInstance` lifecycle and current modeled teleport tests use synthetic instance ids.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests|FullyQualifiedName~PlayerTeleportServiceTests|FullyQualifiedName~WorldMapRuntimeStateTests"` passes with 25 tests.
+
+#### Migration Parity Table - Session 510
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.TeleportService.SpawnTask.run` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleTeleportAnimationDoneAsync` | Teleport Completion Boundary | Partial | Regression Tested | Partial Parity | Destroyed-instance delayed fallback now follows the same packet/state shape as Java's `!InstanceService.instanceExists(worldId, instanceId)` branch: consume pending teleport, send `SmPlayerInfo`, and do not move. Full `World.spawn(player)`, action abort parity, pet movement/spawn, conqueror/instance callbacks, legion update, protection task, and effect icon refresh remain incomplete. |
+| `com.aionemu.gameserver.services.instance.InstanceService.instanceExists(int, int)` | `Aion.GameServer.World.WorldMapRuntimeStateTable.InstanceExists` | Service Lookup / Runtime State | Partial | Unit + Regression Tested | Partial Parity | C# now exposes a minimal lookup that returns false for explicitly removed destination instances and false for unknown maps. It is not a full `InstanceService` port: registration, ownership, difficulty, empty-instance destroy scheduling, handler callbacks, and player/team membership are missing. |
+| `com.aionemu.gameserver.world.WorldMap.getWorldMapInstance(int)` | `Aion.GameServer.World.WorldMapRuntimeState.InstanceExists` | Runtime State | Partial | Unit Tested | Partial Parity | C# normalizes instance id `0` to `1` and tracks removed ids. Unlike Java's real concurrent map of `WorldMapInstance` objects, default modeled maps are considered present unless explicitly removed to preserve existing modeled teleport coverage until a real instance lifecycle exists. |
+| `com.aionemu.gameserver.world.WorldMap.removeWorldMapInstance(int)` | `Aion.GameServer.World.WorldMapRuntimeState.RemoveWorldMapInstance` / `WorldMapRuntimeStateTable.RemoveWorldMapInstance` | Runtime State | Partial | Unit + Regression Tested | Partial Parity | Explicit removal is covered and drives the teleport fallback. Java also destroys temporary spawns, moves players, deletes objects, invokes handlers, and tears down walker formations; those side effects remain unported. |
+| `com.aionemu.gameserver.world.WorldMap.addInstance(int, WorldMapInstance)` | `Aion.GameServer.World.WorldMapRuntimeState.AddWorldMapInstance` / `WorldMapRuntimeStateTable.AddWorldMapInstance` | Runtime State | Partial | Unit Tested | Needs Verification | C# restores an explicitly removed id for modeled lookups only. It does not create or store `WorldMapInstance` objects, handlers, max-player limits, registered players, owner ids, or spawned objects. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TELEPORT_ANIMATION_DONE` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleTeleportAnimationDoneAsync` | Client Packet Handler | Partial | Regression Tested | Partial Parity | Handler now covers no-pending, normal completion, dead-player fallback, and destroyed-instance fallback. Threading remains a direct async C# flow rather than Java controller `FutureTask` scheduling under `TaskId.TELEPORT`. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmPlayerInfo` | Server Packet | Partial | Regression Tested | Needs Verification | Destroyed-instance fallback verifies packet object emission. No Java-generated golden vector or live encrypted frame validation was run for this fallback packet. |
+
+Tests added:
+- `WorldMapRuntimeStateTests.WorldMapRuntimeStateTable_TracksExplicitInstanceRemovalLikeJavaWorldMap`: validates instance existence defaults, explicit remove/restore, instance id `0` normalization to `1`, and unknown-map false behavior. This is source-derived from Java `WorldMap.getWorldMapInstance`, `removeWorldMapInstance`, and `addInstance`; it does not execute Java.
+- `GameServerConnectionFlightZoneFanoutTests.QueueDelayedTeleportAsync_DestroyedInstanceFallbackSendsPlayerInfoWithoutMoving`: queues a delayed teleport, explicitly removes the pending destination instance from runtime state, completes animation, and verifies no movement, pending teleport cleared, `ArrivalAnimation.None`, and `SmPlayerInfo` emission.
+- Java comparison status: expectations are source-derived from Java `TeleportService.SpawnTask.run`, `InstanceService.instanceExists`, and `WorldMap` instance lookup/removal semantics. No Java runtime comparison, Java-generated packet vector, encrypted frame capture, or live client validation was run.
+
+Remaining risks:
+- This is not a full `InstanceService` or `WorldMapInstance` port. Registration, ownership, difficulty ids, max-player limits, auto-destroy scheduling, handler callbacks, temporary spawn cleanup, object deletion, and player/team membership remain missing.
+- Default modeled instance existence is intentionally permissive until a real dynamic instance registry exists; this is documented to avoid breaking existing modeled teleport tests, but it is not full Java parity.
+- Fallback still sends `SmPlayerInfo` without Java `World.spawn(player)` side effects such as spawned-state mutation, known-list rebuilding, nearby visibility fanout, zone callbacks, and object lifecycle notifications.
+- The pending teleport model remains a typed field rather than Java controller tasks/futures, so cancellation/threading behavior remains a known intentional difference.
+- No database schema, persistence, date/time handling, reflection behavior, precision/rounding behavior, or packet serialization format changed in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 minimal instance-existence fallback slice for delayed teleport completion
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 7 full Java `InstanceService`, real `WorldMapInstance` objects/registry, full `World.spawn` fallback side effects, general controller task scheduler/futures, Java-generated packet/live socket validation, production teleport caller wiring, and instance handler/temporary spawn destroy callbacks
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this closes another narrow delayed-teleport fallback but broad instance, world lifecycle, teleport caller, object visibility, AI, rewards, team, effects, dynamic handler, and quest systems remain open.
+
+Next recommended unit of work:
+- Either deepen instance lifecycle parity by introducing a small `WorldMapInstance` runtime object with owner/registration state and handler placeholders, or switch to Java-generated golden-vector coverage for the delayed teleport packet set (`SM_TELEPORT_LOC`, `SM_DELETE`, `SM_PLAYER_INFO`, and `SM_SYSTEM_MESSAGE` id `1400640`) before expanding more side effects.
+
 ---
 
 ## Next Steps
