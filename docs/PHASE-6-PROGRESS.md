@@ -8767,6 +8767,45 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the generic direct world-removal audit by reviewing `WorldNpcSpawnService` rollback paths and `PlayerKiskLifetimeService.DespawnExpiredKisk` direct service usage for any remaining stale counter edge cases outside the already-covered cleanup boundary.
 
+### Session 496 (May 23, 2026)
+- Audited remaining direct `World.TryRemoveObject` callers after Sessions 494-495. Walker swap rollback paths add inactive variants but do not revalidate them until success, so no modeled PVP/FORT counters are created on those rollback removals.
+- Wired `GameServerConnection.RemoveRuntimeKiskAsync` to always invoke `PlayerKiskRemovalRuntimeCleanupService.ApplyAsync` after runtime kisk registry removal, even when no `IGameClientConnectionRegistry` is available.
+- Made `RemoveRuntimeKiskAsync` internal so the kisk lifetime cleanup boundary can be regression-tested directly without waiting for a timer callback.
+- Added a no-registry regression that preloads a kisk world object and runtime state, revalidates it into real Java PVP geometry, removes it through the connection runtime-kisk cleanup path, and verifies world removal, runtime unregister, ID release, and empty modeled PVP/FORT counters.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests|FullyQualifiedName~PlayerKiskLifetimeServiceTests|FullyQualifiedName~CreaturePvpZoneRevalidationServiceTests|FullyQualifiedName~CreaturePvpZoneCounterServiceTests"` passes with 21 tests.
+
+#### Migration Parity Table - Session 496
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.Kisk.KiskLifeTask` | `Aion.GameServer.Network.Aion.GameServerConnection.RemoveRuntimeKiskAsync` + `PlayerKiskLifetimeService.DespawnExpiredKisk` | Kisk Lifetime Cleanup | Partial | Regression Tested | Partial Parity | Connection-level runtime kisk removal now clears modeled counters even without a connection registry. Java scheduled task/controller delete flow, exact timer semantics, and full controller callbacks remain incomplete. |
+| `com.aionemu.gameserver.services.KiskService.removeKisk` | `Aion.GameServer.Services.PlayerKiskRemovalRuntimeCleanupService.ApplyAsync` | Kisk Runtime Cleanup Service | Partial | Regression Tested | Partial Parity | Cleanup service is now invoked for registry-less contexts, allowing counter cleanup without player packet fanout. Java offline bind removal, creator update, member bind reset, and resurrection refresh are covered only when registry data is available. |
+| `com.aionemu.gameserver.world.World.removeObject` / `World.despawn` | `PlayerKiskLifetimeService.DespawnExpiredKisk` world removal plus cleanup apply | World Despawn Boundary | Partial | Regression Tested | Intentional Difference | C# lifetime service removes the world object directly and then runs modeled cleanup. Java despawn flows through controller/map-region internals and executes zone handlers/callbacks, which are not ported. |
+| `com.aionemu.gameserver.world.zone.PvPZoneInstance.onLeave` | `CreaturePvpZoneCounterService.ClearCounters` via no-registry kisk removal cleanup | Zone Callback Boundary | Partial | Unit + Regression Tested | Partial Parity | Test proves stale modeled PVP counters clear after no-registry runtime kisk removal. Java handler ordering and side effects remain unverified. |
+| `com.aionemu.gameserver.spawnengine.InstanceWalkerFormations.changeWalker/changeCluster` rollback paths | `WorldNpcSpawnService.RollBackSpawnedInactiveVariants` / `RollBackFormationSwap` | Walker Rollback Boundary | Partial | Manual Audit | Needs Verification | Audit found rollback removals happen before revalidation in current C# code, so no new modeled counters are created in those failure branches. Dedicated failure regressions remain optional future hardening. |
+
+Tests added:
+- `GameServerConnectionFlightZoneFanoutTests.RemoveRuntimeKiskAsync_ClearsCreaturePvpZoneCountersWithoutConnectionRegistry`: loads real Java static data, revalidates a runtime kisk into `PVP_87_210040000`, removes it through `RemoveRuntimeKiskAsync` without a registry, and verifies world removal, no runtime kisk ownership, empty counters, and ID reuse.
+- Java comparison status: expectations are source-derived from Java `Kisk.KiskLifeTask`, `KiskService.removeKisk`, `World.removeObject/despawn`, `PvPZoneInstance`, and the current C# direct-removal audit. No live Java runtime side-by-side validation or timer-scheduler parity validation was run.
+
+Remaining risks:
+- Registry-less cleanup cannot send Java-equivalent `SM_KISK_UPDATE`, bind-point reset, or resurrection-option refresh packets because there is no player registry to address; it only guarantees modeled counter cleanup.
+- C# still clears modeled counters directly rather than executing Java zone `onLeave` handlers, controller callbacks, quest/material handlers, fortress observers, or instance callbacks.
+- Timer scheduling semantics, Java controller delete ordering, and live encrypted packet ordering remain unverified.
+- Walker rollback branches were audited, not newly regression-tested; future tests can force partial formation failure once the service exposes suitable seams.
+- No packet serialization, database schema, date/time, reflection, or public protocol behavior changed. One connection helper became internal for regression access; threading remains immediate over the concurrent counter store rather than Java's zone scheduler.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 registry-less runtime kisk removal PVP/FORT counter cleanup boundary
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 6 Java zone handlers/controller callbacks, Java kisk controller/timer ordering, live registry packet fanout without registry unavailable by design, walker rollback failure regressions, full fortress/siege side effects, and Java queued scheduler/levels
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because remaining kisk revive cleanup, live team membership wiring, production socket-order validation, broader teleport/map-change zone revalidation, remaining direct-removal cleanup, generic visible-object cleanup, full dedicated kisk controller/AI, full NPC/dialog AI, resurrection skill/effect callers, per-zone bind membership, live option mutation callers, admin option consumers, world-map instance ownership, object iteration, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Add a compact formation route-walker or formation variant PVP/SIEGE regression now that direct removal cleanup has covered the obvious stale-counter edges, or continue remaining teleport/map-change completion paths outside kisk revive.
+
 ---
 
 ## Next Steps
