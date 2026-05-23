@@ -13050,6 +13050,59 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the team movement-update parity by source-reading Java `PlayerAllianceUpdateEvent`, `SM_ALLIANCE_MEMBER_INFO`, and `PlayerAllianceService.updateAlliance(..., MOVEMENT)`, then add the first non-sending alliance movement member-info packet plan that mirrors the group movement planner's deferred branch. Keep live alliance socket fanout, alliance effect slots, and scheduler integration deferred until packet bodies and recipient shaping are covered.
 
+### Session 591 (May 23, 2026)
+- Source-read Java `PlayerAllianceUpdateEvent`, `SM_ALLIANCE_MEMBER_INFO`, `PlayerAllianceService.updateAlliance`, and `PlayerAllianceEvent`.
+- Added C# `PlayerAllianceEvent` with the Java legacy ids, including aliases for `LEAVE`/`BANNED`, `JOIN`/`MEMBER_GROUP_CHANGE`, and the id-13 update/reconnect/captain events.
+- Added `SmAllianceMemberInfo` for Java opcode `246`, supporting the fixed prefix and branchless movement-style events.
+- Added packet planning DTOs:
+  - `PlayerAllianceMemberInfoUpdatePlan`;
+  - `PlayerAllianceMemberInfoIntent`;
+  - `PlayerAllianceMemberInfoPacketPlan`;
+  - `PlayerAllianceMemberInfoPrefixSnapshot`.
+- Added `PlayerAllianceMovementUpdatePlanner.CreateMovementUpdatePlan`, modeling Java `PlayerAllianceUpdateEvent` movement fanout to `Predicates.Players.allExcept(player)`.
+- Added regression coverage for Java alliance event ids, all-except-player alliance movement intents, missing-member null boundaries, prefix metadata, and serialized `SM_ALLIANCE_MEMBER_INFO` movement packet bodies.
+- Kept live alliance membership runtime, live socket sends, alliance `JOIN`/`UPDATE`/`UPDATE_EFFECTS` branches, effect extraction, alliance group-change/captain events, scheduler integration, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests|FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 122 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1220 tests.
+
+#### Migration Parity Table - Session 591
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.common.legacy.PlayerAllianceEvent` | `Aion.GameServer.Model.GameObjects.PlayerAllianceEvent` | Enum | Partial | Unit Tested | Needs Verification | Java numeric ids are source-modeled, including duplicate aliases. C# enum alias display/diagnostics may differ from Java names. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` / `PlayerAllianceMemberInfoPacketPlan` | Server Packet / Planning DTO | Partial | Unit Tested | Needs Verification | C# serializes fixed prefix and branchless movement-style events. Name/effect/update-effects/member-group-change branches, Java golden bytes, encoded frames, and client validation remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceUpdateEvent` | `Aion.GameServer.Services.PlayerAllianceMovementUpdatePlanner.CreateMovementUpdatePlan` / `PlayerAllianceMemberInfoUpdatePlan` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# models only `MOVEMENT` all-except-player fanout as non-sending intents. `UPDATE`, `UPDATE_EFFECTS`, live `alliance.sendPacket`, and runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.updateAlliance` | `PlayerAllianceMovementUpdatePlanner.CreateMovementUpdatePlan` | Service / Caller Bridge | Partial | Regression Tested | Needs Verification | C# adds a caller-facing movement plan but does not yet provide an alliance registry/runtime equivalent to Java `player.getPlayerAlliance()`. |
+| `com.aionemu.gameserver.utils.collections.Predicates.Players.allExcept` | `PlayerAllianceMovementUpdatePlanner` recipient filter | Utility / Predicate | Partial | Regression Tested | Needs Verification | C# excludes by subject object id. Java object identity and live connection filtering are not runtime-compared. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceMember` | `PlayerAllianceMemberInfoPacketPlan.FromPlayer` direct player input | Team Member Dependency | Partial | Unit Tested | Needs Verification | C# bypasses a full `PlayerAllianceMember` runtime wrapper in this first slice. Alliance id/object id packet fields are modeled, but group slot/captain/member metadata is not. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.PlayerAllianceEvent_JavaIdsMatchLegacyEnum`: validates Java `PlayerAllianceEvent` ids and duplicate aliases.
+- `PlayerAllianceMemberInfoTests.CreateMovementUpdatePlan_ReturnsAllExceptPlayerIntentsLikeJavaPlayerAllianceUpdateEvent`: validates movement fanout, packet-plan metadata, prefix fields, and serialized movement packet body.
+- `PlayerAllianceMemberInfoTests.CreateMovementUpdatePlan_ReturnsNullForMissingAllianceMember`: validates the missing subject/member boundary.
+- Java comparison status: expectations are source-derived from Java alliance event, service, predicate, and packet source. No Java runtime execution, Java-generated golden vector, live send/fanout comparison, encoded frame comparison, reflection behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Live alliance registry/runtime membership is not implemented.
+- Live alliance member-info sends are not wired to sockets.
+- `SM_ALLIANCE_MEMBER_INFO` name/effect/update-effects/member-group-change branches remain missing.
+- Alliance effect extraction and slot targeting are not implemented.
+- Java object identity filtering and connection predicates are only approximated by object-id filtering.
+- Java runtime ordering/event-loop behavior is not compared.
+- Serialization is packet-body tested only; Java golden bytes and encoded frames are still unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 alliance movement member-info packet/planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 8 live alliance registry/runtime, live alliance socket fanout, alliance name/effect/update-effects branches, alliance effect extraction, Java object-identity/runtime comparison, encoded opcode/frame golden validation, active connection/runtime comparison, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; the first alliance movement packet/planning boundary exists, but alliance runtime and broader packet/event parity are still incomplete.
+
+Next recommended unit of work:
+- Continue `SM_ALLIANCE_MEMBER_INFO` parity by adding the Java name branches for `JOIN`, `ENTER`, `ENTER_OFFLINE`, `UPDATE`, and `RECONNECT` with zero-effect online handling and offline `ENTER -> ENTER_OFFLINE` behavior, mirroring the already-ported group member-info packet strategy. Keep live alliance membership/runtime sends and non-empty effect extraction deferred.
+
 ---
 
 ## Next Steps
