@@ -9462,6 +9462,50 @@ Summary metrics:
 Next recommended unit of work:
 - Continue instance lifecycle parity by adding a tiny `Player`-aware wrapper for `GetNextAvailableInstance(worldId, Player)` that reads race/max-member data from `InstanceCooltimeTable` where possible, or pivot to Java-generated packet golden-vector coverage for the delayed teleport packet set before more instance side effects are layered on.
 
+### Session 513 (May 23, 2026)
+- Extended C# instance cooltime summaries to load Java `InstanceCooltime.max_member_light` and `max_member_dark` values from `instance_cooltimes.xml`.
+- Added `InstanceCooltimeTable.GetMaxMemberCount(worldId, race)` mirroring Java `InstanceCooltimeData.getMaxMemberCount`: `ELYOS` uses light capacity, every other race value uses dark capacity, and missing templates return `0`.
+- Added `Player`-aware `InstanceRuntimeService.GetNextAvailableInstanceForPlayer` and `GetOrRegisterInstance` overloads that derive max players from cooltime data before creating/registering the runtime instance.
+- Preserved existing object-id/max-player overloads so lower-level tests and future non-player allocation callers can continue to drive explicit capacities.
+- Focused validation: `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~StaticDataLoadingTests"` passes with 19 tests.
+- Full validation: `dotnet test dotnetConversion/AionServer.slnx` passes with 1063 tests.
+
+#### Migration Parity Table - Session 513
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dataholders.InstanceCooltimeData.getMaxMemberCount` | `Aion.GameServer.Dataholders.InstanceCooltimeTable.GetMaxMemberCount` | Dataholder Lookup | Complete | Unit Tested | Partial Parity | C# mirrors the source branch: missing template returns `0`, `ELYOS` selects light capacity, all other race strings select dark capacity. No Java runtime execution was performed; string race values are compared case-insensitively rather than Java enum identity, an intentional C# model difference that still needs broader race-model verification. |
+| `com.aionemu.gameserver.model.templates.InstanceCooltime` | `Aion.GameServer.Dataholders.InstanceCooltimeSummary` / `StaticData.InstanceCooltimeBuilder` | Static Data DTO | Partial | Unit Tested | Partial Parity | `maxcount`, `max_member_light`, and `max_member_dark` are now loaded and exposed. Other Java template fields remain outside the C# summary unless already consumed by existing packet/static-data paths. XML parsing defaults invalid/missing integer elements to `0`; Java JAXB primitive ints also default missing values to `0`. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getNextAvailableInstance(int, Player)` | `Aion.GameServer.Services.InstanceRuntimeService.GetNextAvailableInstanceForPlayer(WorldMapRuntimeStateTable, int, Player, InstanceCooltimeTable)` | Service | Partial | Unit Tested | Partial Parity | C# now derives `maxPlayers` from cooltime data and registers `player.ObjectId`, matching the narrow Java overload. It still lacks difficulty ids, handler supplier selection, event spawns, `SpawnEngine.spawnInstance`, instance callbacks, auto-destroy scheduling, Panesterra restrictions, full entry validation, cooldown lockout, and production caller wiring. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getOrRegisterInstance(int, Player)` | `Aion.GameServer.Services.InstanceRuntimeService.GetOrRegisterInstance(WorldMapRuntimeStateTable, int, Player, InstanceCooltimeTable)` | Service | Partial | Unit Tested | Partial Parity | Existing registered runtime instance reuse is covered for the same player object id; otherwise C# allocates through the new player-aware overload. Java scans full `WorldMapInstance` registrations and can include richer team/instance state that remains unported. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getObjectId` / `getRace` | `Aion.GameServer.Model.GameObjects.Player.ObjectId` / `Race` | Domain Model | Partial | Unit Tested | Needs Verification | This unit consumes existing C# `Player` properties only. C# stores race as a string, not Java `Race` enum; reflection/serialization compatibility and invalid-race handling are not verified beyond the source-derived cooltime branch. |
+| `com.aionemu.gameserver.model.Race` | String race values in `Player.Race` and `InstanceCooltimeTable.GetMaxMemberCount` | Enum / Model Boundary | Partial | Unit Tested | Needs Verification | The tested values cover `ELYOS`, `ASMODIANS`, and an unknown non-ELYOS string selecting dark capacity like Java's non-ELYOS branch. A full Race enum port and cross-system normalization remain open. |
+| `com.aionemu.gameserver.world.WorldMapInstance.register(int)` / `getMaxPlayers` equivalent constructor input | `Aion.GameServer.World.WorldMapInstanceRuntimeState.Register` / `MaxPlayers` | Runtime State | Partial | Unit Tested | Partial Parity | New service tests validate player registration and race-derived max-player storage. The runtime instance still omits regions, zones, object dictionaries, handlers, empty-instance task, registered team state, door state, quest ids, and last-player-leave tracking. |
+
+Tests added:
+- `WorldMapRuntimeStateTests.InstanceCooltimeTable_MatchesJavaRaceSpecificMaxMemberLookup`: validates light capacity for `ELYOS`, dark capacity for `ASMODIANS` and unknown non-ELYOS values, and `0` for unknown worlds. Expectations are source-derived from Java `InstanceCooltimeData.getMaxMemberCount`; no Java runtime comparison was run.
+- `WorldMapRuntimeStateTests.InstanceRuntimeService_PlayerOverloadUsesInstanceCooltimeMaxMembers`: validates player overload allocation, registration, registered-instance reuse, and separate ELYOS/ASMODIANS max-player values.
+- `StaticDataLoadingTests.StaticData_LoadsBundledGameServerData`: expanded to verify bundled XML loads `MaxMemberLight` and `GetMaxMemberCount` for a known world id.
+- Java comparison status: source-derived only from `InstanceService`, `InstanceCooltimeData`, and `InstanceCooltime`. No Java-generated runtime fixture, live client validation, encrypted frame capture, database persistence validation, or production caller path was executed.
+
+Remaining risks:
+- Full instance entry/cooldown enforcement remains missing: cooldown lockouts, entry preconditions, reset-time handling, team/member constraints, and portal/teleport callers are not wired to this service slice.
+- `InstanceRuntimeService` still lacks Java difficulty handling, handler supplier selection, event spawn integration, `SpawnEngine.spawnInstance`, `InstanceHandler.onInstanceCreate`, auto-destroy scheduling, Panesterra restrictions, and logging.
+- Race handling is string-based in C#, while Java uses a `Race` enum. Invalid or differently-cased values are only covered for the new lookup method, not the broader player model.
+- Threading differs: this unit layers onto existing C# locks/snapshots and does not validate Java concurrent map/set behavior under live load.
+- Serialization, database persistence, date/time handling, precision/rounding behavior, reflection behavior, and packet wire format are unchanged in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 narrow player-aware instance allocation/cooltime-member-count slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 7 full Java `InstanceService`, cooldown/entry validation, full race enum/model parity, production portal/teleport caller wiring, `WorldMapInstanceFactory` handler/engine integration, full `WorldMapInstance` lifecycle, and Java runtime/live-client validation
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this closes the next player-aware allocation gap but the broader instance and world lifecycle remain open.
+
+Next recommended unit of work:
+- Continue instance lifecycle parity by adding a source-shaped instance cooldown/entry-validation service boundary around the new cooltime member data, or pivot to Java-generated golden-vector coverage for the delayed teleport packet set before adding more instance side effects.
+
 ---
 
 ## Next Steps
