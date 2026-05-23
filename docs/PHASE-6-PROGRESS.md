@@ -9636,6 +9636,50 @@ Summary metrics:
 Next recommended unit of work:
 - Wire a production-shaped portal/autogroup caller to combine `InstanceCooldownRateService`, `InstanceCooltimeTable.CalculateInstanceEntranceCooltime`, and `PlayerPortalCooldownService.AddPortalCooldown`, keeping DAO persistence and `SM_INSTANCE_INFO` fanout explicit if not completed in the same unit.
 
+### Session 517 (May 23, 2026)
+- Added `InstanceEntranceCooldownService.ApplyEntranceCooldown` as a narrow composition boundary for the Java post-entry cooldown path.
+- The helper resolves Java-shaped cooldown rate, calculates entrance cooldown, skips cooldown mutation for reentry, and adds a portal cooldown only when the calculated reuse time is positive.
+- Added a result DTO so future portal/autogroup callers can decide whether to send `SM_INSTANCE_INFO` and persist cooldowns without redoing the calculation.
+- Kept actual portal/autogroup caller wiring, immediate DAO persistence, and packet/team fanout out of this slice because the current C# general portal flow is not yet a clean production equivalent of Java `PortalService.transfer`.
+- Focused validation: `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~InstanceEntranceCooldownServiceTests|FullyQualifiedName~InstanceCooldownRateServiceTests|FullyQualifiedName~PlayerStateTests|FullyQualifiedName~WorldMapRuntimeStateTests"` passes with 38 tests.
+- Full validation: `dotnet test dotnetConversion/AionServer.slnx` passes with 1073 tests.
+
+#### Migration Parity Table - Session 517
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.transfer` | `Aion.GameServer.Services.InstanceEntranceCooldownService.ApplyEntranceCooldown` | Service Boundary | Partial | Unit Tested | Partial Parity | C# models the cooldown side-effect shape after entry: calculate delay, skip add on reenter, add positive delay. It does not teleport the player, set instance start position, create/register the instance, decrease items/kinah, or validate portal path requirements. |
+| `com.aionemu.gameserver.model.autogroup.AutoInstance.onPressEnter` | `Aion.GameServer.Services.InstanceEntranceCooldownService.ApplyEntranceCooldown` | Service Boundary | Partial | Unit Tested | Partial Parity | C# can model the non-reentry cooldown mutation used by autogroup entry. It is not wired into a C# autogroup runtime or `WorldMapInstance` handler path. |
+| `com.aionemu.gameserver.dataholders.InstanceCooltimeData.calculateInstanceEntranceCooltime` | `Aion.GameServer.Dataholders.InstanceCooltimeTable.CalculateInstanceEntranceCooltime` via `InstanceEntranceCooldownService` | Dataholder Lookup / Time Calculation | Partial | Unit Tested | Partial Parity | This unit composes the calculation with rate resolution and mutation. Date/time is still caller-injected; server timezone and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getInstanceRate` | `Aion.GameServer.Services.InstanceCooldownRateService.GetInstanceRate` via `InstanceEntranceCooldownService` | Service / Config Boundary | Complete | Unit Tested | Partial Parity | The composed boundary now uses the C# rate helper. Production portal/autogroup callers still need to pass the correct `GameServerOptions`. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.addPortalCooldown` | `Aion.GameServer.Services.PlayerPortalCooldownService.AddPortalCooldown` via `InstanceEntranceCooldownService` | Player State | Partial | Unit Tested | Partial Parity | C# mutates in-memory cooldowns when positive and not reentering. Missing Java side effects remain: `PortalCooldownsDAO.storePortalCooldowns(owner)` and `sendEntryInfo(worldId)`. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldown` | `Aion.GameServer.Model.GameObjects.PlayerPortalCooldown` | DTO | Partial | Unit Tested | Partial Parity | Cooldown reuse time and entry count are checked after composed add. C# immutable record replacement differs from Java mutable object semantics. |
+| No direct Java DTO; behavior is implicit in call path | `Aion.GameServer.Services.InstanceEntranceCooldownResult` | DTO | Refactored | Unit Tested | Intentional Difference | C# returns a structured result to make future packet/persistence fanout testable. Java performs side effects inline and returns void. |
+
+Tests added:
+- `InstanceEntranceCooldownServiceTests.ApplyEntranceCooldown_ComposesJavaPortalTransferCooldownPath`: validates membership-rate shortening, positive cooldown add, reuse time storage, and entry count increment.
+- `InstanceEntranceCooldownServiceTests.ApplyEntranceCooldown_SkipsAddForReentryLikeJavaPortalTransfer`: validates Java `PortalService.transfer` `!reenter` guard.
+- `InstanceEntranceCooldownServiceTests.ApplyEntranceCooldown_SkipsAddWhenJavaCalculationReturnsZero`: validates `maxcount == 0`/zero-delay no-op behavior.
+- Java comparison status: expectations are source-derived from `PortalService.transfer`, `AutoInstance.onPressEnter`, `InstanceCooltimeData.calculateInstanceEntranceCooltime`, `InstanceService.getInstanceRate`, and `PortalCooldownList.addPortalCooldown`. No Java runtime execution, portal socket flow, DAO persistence validation, team packet fanout, or live client validation was run.
+
+Remaining risks:
+- `InstanceEntranceCooldownService` is not yet wired into actual portal, teleport, or autogroup callers.
+- Immediate `PortalCooldownsDAO.storePortalCooldowns` parity is still missing; cooldowns are in-memory until existing broader save flows handle them.
+- `SM_INSTANCE_INFO` fanout to the player/team is not emitted by this helper.
+- Full portal entry validation, item/kinah consumption, instance creation/registration, start-position state, and teleport packet ordering remain outside this unit.
+- Date/time still depends on caller-supplied `DateTimeOffset`; serialization, database schema, packet wire format, reflection behavior, precision/rounding beyond prior millisecond division, and threading behavior are unchanged.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 narrow composed instance entrance cooldown boundary
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 5 production portal/autogroup caller integration, immediate cooldown persistence, `SM_INSTANCE_INFO` fanout, full portal validation/teleport flow, and Java runtime/live-client validation
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this makes the cooldown side-effect reusable but still does not close end-to-end instance entry parity.
+
+Next recommended unit of work:
+- Add `SM_INSTANCE_INFO` fanout support around portal cooldown changes, preferably as a testable packet-emission boundary that future portal/autogroup callers can invoke after `InstanceEntranceCooldownService.ApplyEntranceCooldown`.
+
 ---
 
 ## Next Steps
