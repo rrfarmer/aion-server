@@ -11378,6 +11378,53 @@ Summary metrics:
 Next recommended unit of work:
 - Add an explicit group capacity planning surface for the Java `instance.getPlayersInside().size() < maxPlayers` guard. Keep it non-executing: expose unknown/current player count when the runtime state cannot provide live players, record that transfer remains blocked before `PortalService.transfer`, and add tests that registered/allocation-needed group plans carry the capacity guard state without packet/cooldown/allocation side effects.
 
+### Session 556 (May 23, 2026)
+- Added a non-executing `GroupPortalCapacityPlan` under `GroupPortalTransferPlan`.
+- The capacity plan documents Java's final group branch guard: `instance.getPlayersInside().size() < maxPlayers`.
+- Registered group-instance plans now carry the runtime `PlayerCount` and mark whether the capacity guard would pass or fail before transfer.
+- Fresh allocation-needed group plans mark capacity as unknown until allocation because no runtime instance exists yet.
+- Invalid/missing team-id group plans block the capacity guard with an explicit missing-team-id reason.
+- Kept transfer execution, allocation, `registerTeam`, live player-list comparison, capacity rejection packet behavior, and cooldown/teleport side effects out of scope.
+- Extended focused transfer-boundary tests to cover registered-instance current player count, allocation-needed unknown capacity, and invalid-team capacity blocking without packet/cooldown side effects.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passes with 119 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1172 tests.
+
+#### Migration Parity Table - Session 556
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` group capacity guard | `Aion.GameServer.Services.GroupPortalCapacityPlan` | DTO / Planning | Partial | Unit Tested | Needs Verification | C# records the capacity guard result for registered group instances and unknown capacity for fresh allocation plans. It still does not gate or execute transfer. |
+| `com.aionemu.gameserver.world.WorldMapInstance.getPlayersInside` | `WorldMapInstanceRuntimeState.PlayerCount` used by `GroupPortalCapacityPlan.CurrentPlayerCount` | Runtime State | Partial | Unit Tested | Needs Verification | C# counts tracked runtime player ids, not live Java `Player` objects. Region/world membership lifecycle and concurrency behavior are not runtime-compared. |
+| `com.aionemu.gameserver.world.WorldMapInstance.getPlayerCount` / `isFull` related state | `GroupPortalCapacityState.WouldPassCapacityGuard` / `WouldFailCapacityGuard` | Runtime State / Planning | Partial | Unit Tested | Needs Verification | Registered instance count is compared against max players. No test covers a full group instance yet, and no production transfer is gated by this state. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getNextAvailableInstance(int, byte, int)` allocation before capacity check | `GroupPortalCapacityState.UnknownUntilInstanceAllocated` | Service Dependency | Not Started | Unit Tested | Needs Verification | Fresh allocation plans cannot know capacity until C# allocates an instance, which is still unported for group portals. |
+| `com.aionemu.gameserver.world.WorldMapInstance.registerTeam` | Future allocation path before capacity guard | Runtime State / Dependency | Partial | No Tests In This Unit | Needs Verification | This unit does not call `RegisterTeamId`; full Java `GeneralTeam` storage remains missing. |
+| `com.aionemu.gameserver.services.teleport.PortalService.transfer` | Unsupported group result with `GroupPortalCapacityPlan` and null teleport/cooldown | Service / Packet Boundary | Partial | Unit Tested | Needs Verification | Tests prove blocked plans still send no packet, create no pending teleport, and save no cooldown. Java positive transfer remains missing. |
+
+Tests added or extended:
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_UnsupportedTeamPlanReturnsBlockedResultWithoutPackets`: extended to assert registered group capacity guard reads current runtime player count and would pass before blocked fanout.
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_GroupPlanWithoutRegisteredInstanceRecordsAllocationNeededWithoutPackets`: extended to assert allocation-needed group plans report unknown capacity until allocation.
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_GroupPlanWithoutTeamIdRecordsMissingTeamIdWithoutPackets`: extended to assert invalid team id blocks capacity planning with a missing-team-id reason.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `WorldMapInstance.getPlayersInside`, `InstanceService.getNextAvailableInstance`, `WorldMapInstance.registerTeam`, and `PortalService.transfer`. No Java runtime execution, full-instance rejection test, live player-list comparison, allocation, `registerTeam`, transfer fanout, encrypted socket validation, or concurrency comparison was run.
+
+Remaining risks:
+- Capacity planning is advisory metadata only and does not execute or reject production transfer.
+- Registered instance player counts come from C# runtime ids, not Java live `Player` objects; spawn/despawn lifecycle and concurrent world updates remain unverified.
+- Fresh allocation capacity is unknown because group allocation is not ported.
+- Full-instance behavior, messages, and caller status remain unimplemented.
+- Alliance and league capacity planning remain outside this group-specific DTO.
+- Date/time cooldown behavior, serialization/live packet behavior, Java threading semantics, reflection/JAXB behavior, precision/rounding, and runtime/client comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 blocked group capacity planning DTO under the existing group transfer plan
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 11 production capacity gating, full-instance rejection behavior, group allocation, full `registerTeam`, live player list parity, group member transfer fanout, alliance transfer planning, league model/transfer, team cooldown timing, team lifecycle/concurrency, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group portal planning now documents the capacity guard, but successful team portal entry is still missing.
+
+Next recommended unit of work:
+- Begin turning the non-executing group plan into an allocation preview: add a blocked `GroupPortalAllocationPlan` that records target world id, difficulty id placeholder, max players, intended team id registration, and why allocation is still not performed. Keep all `WorldMapRuntimeStateTable.AddWorldMapInstance`, `RegisterTeamId`, teleport, and cooldown side effects disabled until the live group aggregate and caller semantics exist.
+
 ---
 
 ## Next Steps
