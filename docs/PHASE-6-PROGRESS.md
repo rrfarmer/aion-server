@@ -13303,6 +13303,71 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance role/event parity by source-reading `SM_ALLIANCE_INFO`, `ChangeAllianceLeaderEvent`, and `AssignViceCaptainEvent`, then add the first non-sending alliance role-info plan for vice-captain promote/demote system/alliance-info packet outputs. Keep live vice-captain id mutation, league broadcast, permissions, and socket fanout deferred unless a safe runtime surface exists.
 
+### Session 596 (May 23, 2026)
+- Source-read Java `SM_ALLIANCE_INFO`, `AssignViceCaptainEvent`, `ChangeAllianceLeaderEvent`, `PlayerAllianceService.changeViceCaptain`, `TeamType`, and the `STR_FORCE_CANNOT_PROMOTE_MANAGER` system-message factory.
+- Added alliance role-info planning DTOs:
+  - `PlayerAllianceInfoPacketPlan`;
+  - `PlayerAllianceInfoIntent`;
+  - `PlayerAllianceViceCaptainAssignmentPlan`;
+  - `PlayerAllianceSystemMessageIntent`;
+  - `PlayerAllianceAssignType`;
+  - `PlayerAllianceRolePlanStatus`;
+  - `PlayerAllianceTeamType`.
+- Added `PlayerAllianceViceCaptainAssignmentPlanner.CreateAssignmentPlan` as a non-sending bridge for Java `AssignViceCaptainEvent`.
+- Modeled Java vice-captain assignment outputs:
+  - `PROMOTE` adds the event player to the post-event vice-captain id snapshot and plans `SM_ALLIANCE_INFO.VICECAPTAIN_PROMOTE` (`1300984`) to every alliance member;
+  - `DEMOTE` removes the event player and plans `SM_ALLIANCE_INFO.VICECAPTAIN_DEMOTE` (`1300985`) to every alliance member;
+  - `DEMOTE_CAPTAIN_TO_VICECAPTAIN` adds the old captain only when the current vice-captain count is below 3 and plans `SM_ALLIANCE_INFO` with message id `0`;
+  - `PROMOTE` at four existing vice-captains plans only `STR_FORCE_CANNOT_PROMOTE_MANAGER` (`1301061`) to the leader and returns without alliance-info or league-broadcast intents;
+  - missing/offline event players return no-op plans, matching Java `checkCondition`.
+- Modeled Java `SM_ALLIANCE_INFO` packet metadata as a DTO, including alliance group size, alliance id, leader id, active-recipient map id, up to four padded vice-captain ids, loot rules, `0x02` marker, `0x00` byte, alliance team type/subtype, league id, four fixed group placeholders (`0/1000` through `3/1003`), message id, and message text.
+- Added `SmSystemMessage.ForceCannotPromoteManager()` for Java `SM_SYSTEM_MESSAGE.STR_FORCE_CANNOT_PROMOTE_MANAGER`.
+- Kept live `PlayerAlliance` mutation, socket sends, league broadcast execution, leader-change system-message fanout, permissions, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests|FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 135 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1233 tests.
+
+#### Migration Parity Table - Session 596
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.events.AssignViceCaptainEvent` | `Aion.GameServer.Services.PlayerAllianceViceCaptainAssignmentPlanner` / `PlayerAllianceViceCaptainAssignmentPlan` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# models source-derived branch outputs and post-event vice-captain id snapshots, but does not mutate a live `PlayerAlliance`, execute Java event dispatch, or send sockets. Missing methods: live `handleEvent` equivalent, `checkCondition` integration, and league broadcast execution. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Services.PlayerAllianceInfoPacketPlan` | Server Packet Planning DTO | Partial | Unit Tested | Needs Verification | C# models packet metadata used by vice-captain role events. It does not yet serialize a `SmAllianceInfo` packet body, include league member rows, or compare Java golden bytes/encoded frames. Serialization differences remain possible because this is DTO-only. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_CANNOT_PROMOTE_MANAGER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceCannotPromoteManager` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Factory returns Java message id `1301061`; packet framing is covered by existing `SmSystemMessage` infrastructure, but this specific message was not compared against a Java runtime frame. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.changeViceCaptain` | `PlayerAllianceViceCaptainAssignmentPlanner.CreateAssignmentPlan` caller-facing bridge | Service / Caller Bridge | Partial | Regression Tested | Needs Verification | C# provides a deterministic planning surface only. Java `player.getPlayerAlliance()`, `alliance.onEvent`, permissions, and live role mutation are not implemented here. |
+| `com.aionemu.gameserver.model.team.alliance.events.ChangeAllianceLeaderEvent` | Documented dependency; `PlayerAllianceAssignType.DemoteCaptainToViceCaptain` role plan | Event Dependency | Partial | Unit Tested | Needs Verification | Source-read because Java calls `PlayerAllianceService.changeViceCaptain(oldLeader, DEMOTE_CAPTAIN_TO_VICECAPTAIN)` after changing leaders. C# models the role-info sub-plan, but leader mutation and `STR_FORCE_HE_IS_NEW_LEADER` / `STR_FORCE_YOU_BECOME_NEW_LEADER` fanout remain missing. |
+| `com.aionemu.gameserver.model.team.TeamType` | `Aion.GameServer.Services.PlayerAllianceTeamType` / `ToJavaPacketFields` | Enum / Packet Dependency | Partial | Unit Tested | Needs Verification | Alliance packet type/subtype values are source-modeled for alliance variants. Runtime team-type lifecycle is not ported. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootGroupRules` | `Aion.GameServer.Model.GameObjects.PlayerGroupLootRules` reused by `PlayerAllianceInfoPacketPlan` | Packet Dependency | Partial | Unit Tested | Needs Verification | Existing C# loot-rule DTO is reused for alliance-info packet metadata. Live alliance loot-rule mutation and league loot-rule rows are not modeled in this unit. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `PlayerAllianceInfoPacketPlan` snapshot inputs | Team Runtime Dependency | Not Started | No Tests | Unknown | Newly re-emphasized runtime dependency. C# still lacks full alliance state, group size semantics, leader member wrapper, vice-captain collection mutation, league object integration, and live iteration behavior. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.ViceCaptainAssignmentPlanner_PlansPromoteAllianceInfoBroadcastLikeJavaAssignViceCaptainEvent`: validates source-derived promote id `1300984`, all-member fanout, per-recipient active map id, and padded vice-captain ids after promotion.
+- `PlayerAllianceMemberInfoTests.ViceCaptainAssignmentPlanner_PlansDemoteAllianceInfoBroadcastLikeJavaAssignViceCaptainEvent`: validates source-derived demote id `1300985`, all-member fanout, and removed vice-captain id snapshot.
+- `PlayerAllianceMemberInfoTests.ViceCaptainAssignmentPlanner_PlansCaptainDemotionWithEmptyMessageLikeJavaAssignViceCaptainEvent`: validates `DEMOTE_CAPTAIN_TO_VICECAPTAIN` count rule, message id `0` empty message behavior, and league metadata flagging.
+- `PlayerAllianceMemberInfoTests.ViceCaptainAssignmentPlanner_ReturnsLeaderSystemMessageWhenPromoteLimitReachedLikeJava`: validates the promote-limit early return and system message id `1301061`.
+- `PlayerAllianceMemberInfoTests.ViceCaptainAssignmentPlanner_SkipsMissingOrOfflineEventPlayerLikeJavaCheckCondition`: validates Java `checkCondition`-style no-op behavior for missing/offline event players.
+- Java comparison status: expectations are source-derived from `AssignViceCaptainEvent`, `SM_ALLIANCE_INFO.writeImpl`, `SM_SYSTEM_MESSAGE`, `TeamType`, and `ChangeAllianceLeaderEvent`. No Java runtime execution, Java-generated golden vector, live alliance mutation comparison, socket fanout comparison, encoded frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Live `PlayerAlliance` runtime is still missing, including vice-captain id collection mutation and leader/member wrappers.
+- `SM_ALLIANCE_INFO` is DTO-planned only; packet-body serialization, Java golden bytes, encoded frames, and client validation remain unavailable.
+- League broadcast is only represented as metadata and not executed; league row serialization remains missing.
+- `ChangeAllianceLeaderEvent` leader mutation and leader-change system messages are not ported.
+- `PlayerAllianceService.changeViceCaptain` live alliance lookup and event invocation are not wired.
+- Permission checks and caller command routing are not included in this unit.
+- Java iteration order and threading/event-dispatch behavior are not runtime-compared.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 alliance vice-captain role-info planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 9 live alliance runtime, live vice-captain mutation, live socket fanout, full `SM_ALLIANCE_INFO` serialization, league row serialization/broadcast, leader-change fanout, service event invocation/permissions, Java runtime ordering comparison, and encoded opcode/frame golden validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; alliance role-info outputs are now planned, but live alliance role/runtime behavior and packet serialization remain incomplete.
+
+Next recommended unit of work:
+- Continue alliance role parity by adding a focused `SM_ALLIANCE_INFO` serializer for the non-league vice-captain packet body, using `PlayerAllianceInfoPacketPlan` as input and packet-body tests for promote/demote/message-id-zero fields. Keep league rows, live socket fanout, leader-change fanout, and Java runtime golden comparison deferred unless a safe comparison harness becomes available.
+
 ---
 
 ## Next Steps
