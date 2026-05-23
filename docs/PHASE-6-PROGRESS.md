@@ -10293,6 +10293,51 @@ Summary metrics:
 Next recommended unit of work:
 - Add a minimal `PortalPath` static-data model/loading slice before more portal guards, because level/race/rank/title now all rely on explicit portal-path parameters and quest/item/kinah checks will otherwise compound that gap.
 
+### Session 532 (May 23, 2026)
+- Added `PortalPathTable`, `PortalPathSummary`, and `PortalPathSource`, a minimal C# static-data surface for Java `Portal2Data` / `PortalPath` scalar fields.
+- Threaded portal-template parsing through `StaticData.LoadFromCacheAsync` for Java `<portal_use>`, `<portal_dialog>`, `<portal_scroll>`, and nested `<portal_path>` entries.
+- Preserved Java holder shape: dialog paths are keyed by NPC id plus dialog action id, use paths are keyed by NPC id, scroll paths are keyed by scroll name, and `GetTeleportDialogId` defaults to `1011` when no dialog holder exists.
+- Preserved Java race fallback behavior from `Portal2Data.getPortalDialogPath` and `getPortalUsePath`: if no same-race or `PC_ALL` path exists, C# returns the last matching opposite-race path so a future caller can emit the invalid-race failure.
+- Kept child requirements out of this unit intentionally: Java `quest_req` and `item_req` are discovered dependencies but are not yet parsed into C#.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaticDataLoadingTests"` passes with 12 tests.
+
+#### Migration Parity Table - Session 532
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dataholders.Portal2Data` | `Aion.GameServer.Dataholders.PortalPathTable` | Static Data Holder | Partial | Unit Tested / Regression Tested | Partial Parity | C# mirrors Java's separate use/dialog/scroll maps, `isPortalNpc`, teleport-dialog default, and race fallback lookups. Java JAXB lifecycle and production `DataManager.PORTAL2_DATA` access are not wired. |
+| `com.aionemu.gameserver.model.templates.portal.PortalPath` | `Aion.GameServer.Dataholders.PortalPathSummary` | DTO / Template | Partial | Unit Tested / Regression Tested | Partial Parity | C# parses scalar attributes `dialog`, `loc_id`, `siege_id`, `race`, `min_level`, `min_rank`, `kinah`, `title_id`, `err_group`, and `err_level`. Missing methods/children: `getQuestReq` and `getItemReq` equivalents are not implemented. |
+| `com.aionemu.gameserver.model.templates.portal.PortalUse` | `PortalPathTable.GetUsePaths` / `GetPortalUsePath` | Template Holder | Partial | Unit Tested / Regression Tested | Partial Parity | C# groups use paths by `npc_id` and matches Java's same-race/`PC_ALL` preference with opposite-race fallback. Production portal-use handler remains unwired. |
+| `com.aionemu.gameserver.model.templates.portal.PortalDialog` | `PortalPathTable.GetDialogPaths` / `GetPortalDialogPath` / `GetTeleportDialogId` | Template Holder | Partial | Unit Tested / Regression Tested | Partial Parity | C# groups dialog paths by `npc_id`, filters by dialog action id, and honors `teleport_dialog_id` default `1011`. Production dialog selection remains unwired. |
+| `com.aionemu.gameserver.model.templates.portal.PortalScroll` | `PortalPathTable.GetPortalScroll` | Template Holder | Partial | Unit Tested / Regression Tested | Partial Parity | C# keeps one scroll path keyed by scroll name, matching Java's `portalScrolls` map. Duplicate-name behavior is not runtime-compared to Java and would currently throw during table construction. |
+| `game-server/data/static_data/portals/portal_template2.xml` | `Aion.GameServer.Dataholders.StaticData` XML reader | Static Data Loader | Partial | Regression Tested | Partial Parity | Real Java data is loaded and spot-checked for portal-use race selection, dialog teleport id default/override, dialog lookup, and scroll lookup. Full XML parity and schema validation for all portal files were not run in this unit. |
+| `com.aionemu.gameserver.model.templates.portal.QuestReq` | Future C# portal quest requirement model | Template Dependency | Not Started | No Tests | Unknown | Newly discovered dependency for Java `PortalService.checkQuests`; not parsed yet. |
+| `com.aionemu.gameserver.model.templates.portal.ItemReq` | Future C# portal item requirement model | Template Dependency | Not Started | No Tests | Unknown | Newly discovered dependency for Java required-item and kinah/item-consumption checks; not parsed yet. |
+
+Tests added or extended:
+- `StaticDataLoadingTests.StaticData_LoadsPortalPathSummariesWithJavaRaceFallbacks`: validates synthetic `<portal_templates2>` parsing, scalar field capture, `PC_ALL` default race, teleport dialog default/override, scroll lookup, and Java opposite-race fallback behavior. Expectations are source-derived from `Portal2Data`, `PortalUse`, `PortalDialog`, `PortalScroll`, and `PortalPath`.
+- `StaticDataLoadingTests.LoadsStaticDataFromJavaProject`: extended to assert real `portal_template2.xml` path count, `700438` use-path race selection and fallback, `832998` teleport dialog id `1352`, default dialog id `1011`, dialog path lookup, and scroll `LC1_RETURN_AREA_1`.
+- Java comparison status: deterministic behavior is verified through source-derived tests against the real Java XML. No Java runtime/JAXB execution, live portal handler, encrypted client validation, quest/item children, or production packet dispatch was run.
+
+Remaining risks:
+- The portal validation helpers still accept primitive portal-path values; they have not been refactored to consume `PortalPathSummary` directly.
+- Production portal use/dialog/scroll handlers are still absent, so loaded data is not used for live teleport decisions.
+- Java `QuestReq` and `ItemReq` children are not parsed; quest gating, item removal, and item-count behavior remain blocked.
+- `PortalLocData` / `PortalLoc` destination coordinates are still not ported, so `loc_id` cannot yet resolve to teleport positions.
+- Race remains string-based in C# rather than Java enum identity; invalid race names and enum serialization differences need broader verification.
+- Reflection/JAXB behavior, threading, mutable Java holder replacement after `afterUnmarshal`, date/time handling, precision/rounding, and live-client packet timing were not exercised.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 5 partial static-data holder/template surfaces plus loader wiring
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 4 production portal handler wiring, `PortalLocData`, `QuestReq`, and `ItemReq`
+- Estimated overall migration completion: Phase 6 remains about 57% complete; portal template data is now available, but the live guard and teleport chain is still incomplete.
+
+Next recommended unit of work:
+- Refactor the existing portal guard helpers to accept `PortalPathSummary` or add a small orchestration method that applies level, mentor, race, rank, and title checks from loaded portal data, then add tests using real `portal_template2.xml` paths. Keep quest/item/kinah as explicit gaps until `QuestReq`, `ItemReq`, inventory, and kinah-consumption parity are in place.
+
 ---
 
 ## Next Steps
