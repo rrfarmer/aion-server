@@ -9807,6 +9807,50 @@ Summary metrics:
 Next recommended unit of work:
 - Continue toward the actual Java `PortalService.transfer` caller by wiring the connection helper into the narrowest C# portal/teleport entry surface available, or first add a MySQL-backed regression for `SavePlayerPortalCooldownsAsync` if a database fixture is cheap to run.
 
+### Session 521 (May 23, 2026)
+- Added `GameServerConnection.QueueInstancePortalTransferAsync` as a production-shaped instance portal transfer boundary that preserves Java `PortalService.transfer` ordering: queue the delayed teleport first, then apply/persist/send the entrance cooldown update.
+- Added `InstancePortalTransferResult` so future callers can inspect both the queued teleport request and the cooldown side effect without duplicating logic.
+- Added a connected-socket test that asserts the packet order is `SmTeleportLoc` followed by `SmInstanceInfo`, and that portal cooldown persistence receives the updated cooldown map.
+- Kept full portal validation, item/kinah consumption, instance allocation/registration, and actual packet-handler routing outside this slice because the C# general `PortalService` equivalent is not present yet.
+- Focused validation: `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests|FullyQualifiedName~InstanceEntranceCooldownServiceTests"` passes with 27 tests.
+
+#### Migration Parity Table - Session 521
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.transfer` | `Aion.GameServer.Network.Aion.GameServerConnection.QueueInstancePortalTransferAsync` | Connection / Transfer Boundary | Partial | Unit Tested | Partial Parity | C# now preserves the source ordering for the narrow transfer side effects: delayed teleport packet first, then cooldown add/persist/update packet. Missing Java behavior remains start-position initialization, instance registration, full portal guard validation, item/kinah removal, handler callbacks, and actual caller wiring. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.teleportTo` | `Aion.GameServer.Network.Aion.GameServerConnection.QueueDelayedTeleportAsync` via `QueueInstancePortalTransferAsync` | Teleport Boundary | Partial | Unit Tested / Regression Tested | Partial Parity | Existing delayed teleport queuing is reused and packet order is asserted with the new cooldown update. Full `SpawnTask`, world despawn/spawn side effects, live client timing, and `CM_TELEPORT_ANIMATION_DONE` ordering beyond existing tests remain incomplete. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.addPortalCooldown` | `Aion.GameServer.Network.Aion.GameServerConnection.ApplyInstanceEntranceCooldownAsync` via `QueueInstancePortalTransferAsync` | Player State / Persistence / Packet Boundary | Partial | Unit Tested | Partial Parity | Cooldown mutation, optional persistence, and owner packet update are composed after the teleport request. Team fanout remains missing, and the path is still not reached from a production portal packet handler. |
+| `com.aionemu.gameserver.dao.PortalCooldownsDAO.storePortalCooldowns` | `Aion.GameServer.Services.PlayerEnterWorldService.SavePortalCooldownsAsync` via `QueueInstancePortalTransferAsync` | Repository / Persistence Boundary | Partial | Unit Tested | Partial Parity | The test validates repository handoff after transfer composition, not real MySQL execution. Delete/insert SQL still needs integration validation. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_TELEPORT_LOC` | `Aion.GameServer.Network.Aion.ServerPackets.SmTeleportLoc` | Server Packet | Partial | Regression Tested | Partial Parity | This unit asserts packet type ordering, not full byte layout. Existing packet tests cover representative `SmTeleportLoc` payloads. Instance-map flag depends on provided static data; this test does not revalidate that byte. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INSTANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmInstanceInfo` | Server Packet | Partial | Unit Tested / Regression Tested | Partial Parity | The packet is asserted as the second transfer packet. Existing single-world byte tests cover payload details. Multi-player/team constructor remains unported. |
+| `com.aionemu.gameserver.world.WorldMapInstance.register` / `setStartPos` | No C# call in this unit | Instance Runtime State | Not Started | No Tests | Unknown | Discovered dependency remains outside this boundary. C# transfer helper assumes the caller has already resolved/registered the destination instance. |
+| `com.aionemu.gameserver.model.team.PlayerTeam.sendPackets` / `owner.getCurrentTeam().sendPackets` | No C# equivalent in this unit | Team Fanout | Not Started | No Tests | Unknown | Team update routing remains blocked by missing current-team packet sender. |
+| No direct Java DTO; behavior is implicit in call path | `Aion.GameServer.Services.InstancePortalTransferResult` | DTO | Refactored | Unit Tested | Intentional Difference | C# returns a composed result for testability and future caller wiring. Java performs side effects inline and returns void. |
+
+Tests added:
+- `GameServerConnectionInstanceCooldownTests.QueueInstancePortalTransferAsync_SendsTeleportBeforeCooldownLikeJavaPortalTransfer`: validates the narrow transfer helper queues pending teleport, sends `SmTeleportLoc` before `SmInstanceInfo`, calculates/persists portal cooldown state, and exposes both side-effect results. Expectations are source-derived from Java `PortalService.transfer`; no Java runtime comparison was run.
+- Java comparison status: source-derived from `PortalService.transfer`, `TeleportService.teleportTo`, `PortalCooldownList.addPortalCooldown`, `PortalCooldownsDAO.storePortalCooldowns`, `SM_TELEPORT_LOC`, and `SM_INSTANCE_INFO`. No live portal packet flow, MySQL integration, Java runtime execution, team fanout validation, or real-client validation was run.
+
+Remaining risks:
+- The helper is still not wired to a production packet handler or full C# portal service, so live instance entry remains incomplete.
+- Java instance start-position initialization and `WorldMapInstance.register(player)` are not performed by this method; callers must supply an already-resolved destination.
+- Full portal checks for level/rank/group/alliance/quests/items/kinah are still missing.
+- Packet order is unit-tested at the connection observer level only; encrypted client consumption and timing around `CM_TELEPORT_ANIMATION_DONE` remain unverified.
+- Team fanout, multi-player `SM_INSTANCE_INFO`, and MySQL portal-cooldown round-trip validation remain open.
+- Date/time is still injected for deterministic cooldown tests; Java wall-clock behavior has not been runtime-compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 narrow instance portal transfer ordering boundary
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 7 production portal packet-handler wiring, full portal validation, instance registration/start-position state, MySQL integration validation, team packet fanout/current-team model, live teleport packet ordering, and Java runtime/live-client validation
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this improves transfer composition but still does not close end-to-end instance entry parity.
+
+Next recommended unit of work:
+- Add a minimal source-shaped portal transfer service around instance allocation/registration and start-position state if the current `InstanceRuntimeService` can supply the destination instance id, or add MySQL integration coverage for `SavePlayerPortalCooldownsAsync` before more caller wiring.
+
 ---
 
 ## Next Steps
