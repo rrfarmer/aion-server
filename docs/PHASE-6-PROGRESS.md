@@ -11283,6 +11283,53 @@ Summary metrics:
 Next recommended unit of work:
 - Start the smallest real group transfer building block: add a non-executing `GroupPortalTransferPlan` DTO that captures Java's `group != null`, registered instance reuse, fresh allocation need, max player capacity, and member object ids. Keep the dialog/transfer path blocked, but make the next transition from metadata to executable planning explicit and testable.
 
+### Session 554 (May 23, 2026)
+- Added a non-executing `GroupPortalTransferPlan` DTO at the portal continuation-transfer boundary.
+- `PortalContinueTransferResult` now carries `GroupTransferPlan` when an unsupported group team plan reaches `QueuePortalContinueTransferAsync`.
+- `GroupPortalTransferPlan` records the Java-relevant group team id, member object ids, max-player limit, registered instance if present, the blocked planning state, and the explicit blocked reason.
+- The new group plan distinguishes registered team instance reuse, fresh group allocation needed, and invalid/missing team id.
+- Kept group member solo-instance scanning, fresh instance allocation, `WorldMapInstance.registerTeam`, capacity checks, `PortalService.transfer`, teleport packets, and cooldown writes blocked.
+- Extended transfer-boundary tests to prove registered group plans, allocation-needed group plans, and missing-team-id group plans all return explicit blocked group planning metadata without packets, pending teleports, or cooldown persistence.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passes with 119 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1172 tests.
+
+#### Migration Parity Table - Session 554
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` group branch after `checkAndRemoveRequiredItems` | `Aion.GameServer.Services.GroupPortalTransferPlan` / `PortalContinueTransferResult.GroupTransferPlan` | DTO / Planning | Partial | Unit Tested | Needs Verification | C# now produces a blocked group transfer plan with team id, member ids, max players, registered-instance state, and explicit blocked reason. It does not execute Java's group transfer branch. |
+| `com.aionemu.gameserver.model.team2.group.PlayerGroup.getTeamId` | `GroupPortalTransferPlan.TeamId` | Model Dependency | Partial | Unit Tested | Needs Verification | Numeric team id is preserved for registered-instance reuse or missing-id detection. No full C# `PlayerGroup` aggregate, team ownership, leader state, or lifecycle exists. |
+| `com.aionemu.gameserver.model.team2.group.PlayerGroup.getMembers` | `GroupPortalTransferPlan.MemberObjectIds` | Model Dependency | Partial | Unit Tested | Needs Verification | Member object ids are copied as planning metadata only. Java uses live `Player` objects for member solo-instance scanning and later transfer behavior; C# does not yet model online/offline, eligibility, or mutation behavior. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getRegisteredInstance(int, int)` | `GroupPortalTransferPlan.RegisteredInstance` from `PortalTeamEntryPlan.RegisteredInstance` | Service Dependency | Partial | Unit Tested | Needs Verification | Registered team instance metadata is preserved into the group transfer plan. Lookup itself was covered in prior sessions; no Java runtime comparison or live registry scan comparison was run here. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getNextAvailableInstance(int, byte, int)` | `GroupPortalTransferState.FreshInstanceAllocationNeeded` | Service Dependency | Not Started | Unit Tested | Needs Verification | C# records that Java would need a fresh group allocation, but does not allocate, choose difficulty, invoke handlers, set max players, or register the team. |
+| `com.aionemu.gameserver.world.WorldMapInstance.registerTeam` | `GroupPortalTransferBlockedReason.GroupFanoutNotImplemented` / future `WorldMapInstanceRuntimeState.RegisterTeamId` caller | Runtime State / Dependency | Partial | Unit Tested | Needs Verification | The blocked reason documents that team registration and fanout are still missing. Prior helper stores only numeric team id; this unit does not call it. |
+| `com.aionemu.gameserver.services.teleport.PortalService.transfer` | `GameServerConnection.QueuePortalContinueTransferAsync` unsupported group result with null teleport/cooldown | Service / Packet Boundary | Partial | Unit Tested | Needs Verification | Tests prove blocked group plans send no teleport packet, create no pending teleport, and save no cooldown. Java's positive group transfer path remains unimplemented. |
+
+Tests added or extended:
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_UnsupportedTeamPlanReturnsBlockedResultWithoutPackets`: extended to assert registered group transfer planning metadata, registered instance preservation, and explicit `GroupFanoutNotImplemented` reason.
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_GroupPlanWithoutRegisteredInstanceRecordsAllocationNeededWithoutPackets`: validates a group plan with no registered instance maps to `FreshInstanceAllocationNeeded` and still sends no packets or cooldowns.
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_GroupPlanWithoutTeamIdRecordsMissingTeamIdWithoutPackets`: validates a group plan with team id `0` maps to `InvalidTeamId` with `MissingTeamId` and still sends no packets or cooldowns.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `InstanceService.getRegisteredInstance`, `InstanceService.getNextAvailableInstance`, `WorldMapInstance.registerTeam`, and `PortalService.transfer`. No Java runtime execution, live client capture, encrypted socket validation, actual instance allocation, member solo-instance scanning, group fanout, cooldown timing comparison, or concurrency comparison was run.
+
+Remaining risks:
+- Successful group portal entry is still unsupported; this unit only makes the next non-executing planning DTO explicit.
+- The Java loose-requirement path that scans each group member for a solo registered instance is not represented.
+- Fresh allocation is only a state value; C# does not call `InstanceService.getNextAvailableInstance`, select an instance handler, set start position, or register the team.
+- `GroupPortalTransferPlan.MemberObjectIds` is metadata only and can diverge from live Java `PlayerGroup.getMembers` behavior under online/offline or concurrent membership changes.
+- Alliance and league transfer planning are intentionally not modeled by this group-specific DTO.
+- Date/time behavior around cooldowns, serialization/live packet behavior, Java threading semantics, reflection/JAXB behavior, precision/rounding, and runtime/client comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 non-executing group transfer planning DTO plus transfer-result carrier
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 10 group member solo-instance scan, group instance allocation, full `registerTeam`, group member transfer fanout, group capacity check, alliance transfer planning, league model/transfer, team cooldown timing, team lifecycle/concurrency, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group portal transfer now has explicit blocked planning metadata, but the Java-positive group entry path is still missing.
+
+Next recommended unit of work:
+- Add the next group planning subcase without executing transfer: model Java's loose group requirement member scan (`!instanceGroupReq`) as a blocked planning note/result. Use member object ids to document which future lookup would be attempted, keep all teleport/cooldown/allocation behavior blocked, and test both "would scan members" and "scan unsupported because only ids/no live group aggregate" outcomes conservatively.
+
 ---
 
 ## Next Steps
