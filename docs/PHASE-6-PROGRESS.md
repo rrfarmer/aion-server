@@ -11571,6 +11571,52 @@ Summary metrics:
 Next recommended unit of work:
 - Add the first minimal live group aggregate model needed by the blocked portal plan: introduce a C# `PlayerGroup`/team snapshot or resolver that can hold team id and live member object ids separately from `Player.CurrentTeamMemberObjectIds`, then adapt `PortalTeamEntryPlan` creation to source metadata from that resolver when present. Keep portal execution blocked and document Java `PlayerGroup` lifecycle gaps clearly.
 
+### Session 560 (May 23, 2026)
+- Added a minimal `PlayerGroupSnapshot` bridge for Java `PlayerGroup.getTeamId` and `PlayerGroup.getMembers`.
+- Added `PlayerGroupSnapshotResolver` so portal planning can prefer a group snapshot when present, while preserving fallback `Player.CurrentTeamId` / `CurrentTeamMemberObjectIds` behavior.
+- Added `Player.CurrentGroupSnapshot` as a narrow bridge for a future live group aggregate; `RemoveCurrentTeam` clears the snapshot.
+- `PortalEntryValidationService.CreateUnsupportedTeamPlan` now resolves group team id/member metadata through the resolver before creating blocked group portal plans.
+- Kept Java `PlayerGroup` lifecycle, leader state, max member enforcement, stats, add/remove events, packet fanout, locking, disband behavior, alliance/league integration, and portal execution out of scope.
+- Added focused validation proving a group snapshot overrides stale fallback metadata, finds the registered team instance by snapshot team id, and keeps the group portal blocked before fanout.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passes with 121 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1174 tests.
+
+#### Migration Parity Table - Session 560
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getPlayerGroup` | `Aion.GameServer.Model.GameObjects.Player.CurrentGroupSnapshot` / `PlayerGroupSnapshotResolver.Resolve` | Model / Resolver | Partial | Unit Tested | Needs Verification | C# can now expose a group snapshot for portal planning. It is not a live Java `PlayerGroup` object and has no lifecycle callbacks, locking, or packet fanout. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup` | `Aion.GameServer.Model.GameObjects.PlayerGroupSnapshot` | Model Snapshot | Partial | Unit Tested | Needs Verification | Snapshot captures only team id and member object ids. Java group stats, leader, type, max-member enforcement, add/remove events, mentoring, and disband behavior remain missing. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.getTeamId` | `PlayerGroupSnapshot.TeamId` | Model Dependency | Partial | Unit Tested | Needs Verification | Team id is used for registered-instance lookup. C# does not yet allocate ids through Java `IDFactory` semantics or enforce ownership/lifecycle. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.getMembers` | `PlayerGroupSnapshot.MemberObjectIds` / `PlayerGroupSnapshot.FromMembers` | Model Dependency | Partial | Unit Tested | Needs Verification | Snapshot can be built from `Player` objects and stores object ids. Java returns live `Player` objects; online/offline filtering and concurrent mutation are not modeled. |
+| `com.aionemu.gameserver.services.teleport.PortalService.port` group metadata source | `PortalEntryValidationService.CreateUnsupportedTeamPlan` using `PlayerGroupSnapshotResolver` | Service / Planning | Partial | Unit Tested | Needs Verification | Blocked group portal planning now prefers snapshot metadata over fallback player fields. Successful transfer, member fanout, allocation, cooldown mutation, and capacity enforcement remain disabled. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.addMember` / `onRemoveMember` | `Player.CurrentGroupSnapshot` manual assignment and `RemoveCurrentTeam` clearing | Lifecycle Dependency | Not Started | Unit Tested | Needs Verification | C# has no automatic add/remove propagation; `RemoveCurrentTeam` clears only the snapshot bridge. Full Java team lifecycle is unsupported. |
+
+Tests added or extended:
+- `PortalEntryValidationServiceTests.ValidatePortalEntryPlan_GroupSnapshotOverridesFallbackTeamMetadataBeforeBlockedFanout`: validates portal planning prefers snapshot team id/member ids over fallback player metadata, finds the registered team instance by snapshot team id, and still returns `UnsupportedTeamPortal`.
+- Existing fallback tests continue to validate `CurrentTeamId` / `CurrentTeamMemberObjectIds` behavior when no snapshot exists.
+- Java comparison status: expectations are source-derived from `Player.getPlayerGroup`, `PlayerGroup.getTeamId`, `GeneralTeam.getMembers`, and `PortalService.port`. No Java runtime execution, live group lifecycle, concurrent membership mutation, packet fanout, alliance/league integration, or live client validation was run.
+
+Remaining risks:
+- `PlayerGroupSnapshot` is a bridge, not a full Java `PlayerGroup`.
+- Group lifecycle is manual; no invite, add, remove, leader, disband, mentoring, stats, or packet fanout behavior exists.
+- Snapshot member ids can become stale because no live team service updates them.
+- Threading/locking differs completely from Java's team structures and remains unverified.
+- Alliance and league aggregates are still absent.
+- Group portal execution remains blocked: no allocation, `registerTeam`, capacity gate enforcement, member fanout, teleport, or cooldown side effects.
+- Serialization/live packet behavior, reflection/JAXB behavior, date/time behavior, precision/rounding, and runtime/client comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 minimal group snapshot/resolver bridge
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 12 full `PlayerGroup` lifecycle, leader/type/stats support, Java ID allocation, add/remove events, live member mutation, team locking/concurrency, group packet fanout, alliance/league aggregates, actual group portal allocation, `registerTeam`, member transfer fanout, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group portal planning can now consume a snapshot-style group source, but successful group portal entry and full team runtime remain missing.
+
+Next recommended unit of work:
+- Add a minimal `PlayerGroupRuntime`/registry service around `PlayerGroupSnapshot` that can create/update/remove snapshots for players by team id and resolve a player's current group snapshot without manually setting `Player.CurrentGroupSnapshot`. Keep it intentionally narrow, unit-test add/remove/resolve semantics, and continue to document that Java invite, leader, stats, packet fanout, locking, and disband behavior are not yet ported.
+
 ---
 
 ## Next Steps
