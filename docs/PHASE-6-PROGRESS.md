@@ -5187,6 +5187,46 @@ Summary metrics:
 Next recommended unit of work:
 - Re-check whether a small reward/distribution DP caller can now be isolated without inventing missing models. Good candidates remain Java `NpcController.doReward`, `PlayerTeamDistributionService.doReward`, `QuestService.giveReward`, or `PvpService.doReward`; if their surrounding C# scaffolding is still too thin, continue with an adjacent resource side effect such as group stat fanout or the concrete `PlayerGameStats.updateStatsAndSpeedVisually()` packet path.
 
+### Session 414 (May 23, 2026)
+- Added Java `PlayerEnterWorldService.enterWorld` offline DP reset parity to C# `PlayerEnterWorldService`.
+- C# now captures the previously stored `LastOnline` before marking the player online and resets advanced-class player DP to zero when the offline duration is greater than five minutes.
+- The reset preserves Java `PlayerCommonData.setDp` starting-class guard by leaving starting classes unchanged.
+- Current gaps in this cluster: Java emits DP packets through `PlayerCommonData.setDp(0)` because the player is already online/world-stored; the current C# enter-world path updates the loaded player state before later enter-world packet emission but does not yet emit standalone `SmDpInfo` / `SmStatUpdateDp` from this service.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~SkillDpConditionServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~GamePacketTests"` passes with 123 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "PlayerEnterWorldServiceTests|SkillDpConditionServiceTests|CraftServiceTests|WorldNpcResourceStatsServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 293 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 912 tests.
+
+#### Migration Parity Table - Session 414
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerEnterWorldService` | `Aion.GameServer.Services.PlayerEnterWorldService.ApplyOfflineDpReset` via `EnterWorldAsync` | Service | Partial | Unit Tested | Partial Parity | C# mirrors Java's `secondsOffline > 5 * 60` DP reset for advanced classes after successful online marking. Immediate DP packet output remains pending in C# enter-world. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `Aion.GameServer.Model.GameObjects.Player.Dp` plus local starting-class guard | Runtime/Model | Partial | Unit Tested | Partial Parity | C# preserves the starting-class skip from Java `setDp`. It does not yet call the packeted DP boundary at this enter-world location. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DP_INFO` | Existing `Aion.GameServer.Network.Aion.ServerPackets.SmDpInfo` | Packet | Partial | Unit Tested elsewhere | Needs Verification | Java `setDp(0)` can broadcast DP info during enter-world. C# login reset currently relies on later enter-world/player-info state rather than immediate broadcast. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_DP` | Existing `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateDp` | Packet | Partial | Unit Tested elsewhere | Needs Verification | Java `setDp(0)` sends owner DP stat update during enter-world. C# enter-world packet hook remains pending. |
+
+Tests added or extended:
+- `PlayerEnterWorldServiceTests.EnterWorld_ResetsDpAfterFiveMinutesOfflineForAdvancedClass`: validates DP reset for an advanced class after more than five minutes offline.
+- `PlayerEnterWorldServiceTests.EnterWorld_KeepsDpForRecentOfflineOrStartingClass`: validates both the five-minute threshold and Java starting-class guard.
+- Java comparison status: tests are source-derived from Java `PlayerEnterWorldService.enterWorld` offline-time branch and `PlayerCommonData.setDp`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- C# does not yet perform Java's immediate `SM_DP_INFO` / `SM_STATUPDATE_DP` sends from this enter-world reset. The loaded player state is correct for subsequent player-info/stat packets.
+- The C# reset uses server-local `DateTime.Now`, matching the current C# service style; Java uses `System.currentTimeMillis()`.
+- Starting-class detection is duplicated locally until player class metadata or a shared class helper is introduced.
+- Reflection is not involved. Threading parity remains approximate because Java enter-world sequencing is synchronous around DAO/world/packet calls while C# uses async repository calls.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 partial C# enter-world DP reset branch
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because enter-world packet fanout, reward/distribution DP callers, full skill condition/action runtime, group stat fanout, restore/flight timers, DP visual stat updates, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue looking for a reward/distribution DP caller with enough C# scaffolding, especially `QuestService.giveReward` or NPC kill reward DP, but avoid inventing broad quest/reward models just to wire DP. If no clean caller exists, the next valuable resource-side effect is still group stat fanout or the concrete visual stat/speed update path after resource mutations.
+
 ---
 
 ## Next Steps
