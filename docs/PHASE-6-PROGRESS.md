@@ -8021,6 +8021,46 @@ Summary metrics:
 Next recommended unit of work:
 - Continue kisk/zone parity by registering `CreaturePvpZoneCounterService`, clearing counters on despawn/removal, and wiring a safe live viewer-specific NPC-info fanout path only after real PVP/SIEGE zone enter/leave callbacks can feed the counter service.
 
+### Session 478 (May 23, 2026)
+- Registered `CreaturePvpZoneCounterService` in game-server DI and threaded it through the game client socket/connection path for runtime kisk cleanup.
+- Extended `PlayerKiskRemovalRuntimeCleanupService` to clear tracked PvP/siege zone counters when a kisk NPC is removed, matching Java's object-instance counter lifetime after despawn/delete.
+- Added an explicit `ClearCounters` boundary to `CreaturePvpZoneCounterService` and kept empty counter state removable after zone leaves.
+- Extended kisk death workflow coverage to seed PVP/SIEGE counters for a spawned kisk, remove it through the Java-shaped death cleanup path, and assert the counters are cleared.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CreaturePvpZoneCounterServiceTests|FullyQualifiedName~WorldNpcDeathDropWorkflowServiceTests|FullyQualifiedName~PlayerKiskNpcInfoPacketServiceTests"` passes with 17 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1020 tests.
+
+#### Migration Parity Table - Session 478
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.Creature` zone counter lifetime | `CreaturePvpZoneCounterService.ClearCounters` | Runtime Cleanup Boundary | Partial | Unit Tested | Partial Parity | Clears per-creature counter state when the C# runtime removes a tracked creature. Full generic despawn/delete coverage remains broader world-object work. |
+| `com.aionemu.gameserver.services.KiskService.removeKisk` / `KiskController.delete` side effects | `PlayerKiskRemovalRuntimeCleanupService` + `CreaturePvpZoneCounterService` | Kisk Removal Cleanup | Partial | Workflow Tested | Partial Parity | Runtime kisk removal now clears zone counters alongside creator update, member bind cleanup, revive-option refresh, and NPC visibility refresh. |
+| `com.aionemu.gameserver.world.zone.PvPZoneInstance` / `FortressLocation` counter sources | `CreaturePvpZoneCounterService` registered in DI | Zone Runtime Boundary | Partial | Composition + Workflow Guarded | Needs Verification | The counter service is now available to live services, but real PVP/SIEGE zone enter/leave callbacks are still not ported. |
+| `com.aionemu.gameserver.network.aion.GameConnection` kisk lifetime despawn path | `GameServerConnection.RemoveRuntimeKiskAsync` cleanup call | Socket Runtime Boundary | Partial | Compile + Full Suite | Needs Verification | Lifetime despawn can pass the counter service into cleanup when the socket server constructs connections with DI. Real client ordering remains unverified. |
+
+Tests added or extended:
+- `CreaturePvpZoneCounterServiceTests.ClearCountersRemovesTrackedCreatureState`.
+- `WorldNpcDeathDropWorkflowServiceTests.HandleKiskDeathAsync_RemovesRuntimeKiskAndRunsJavaCleanup` now asserts PVP/SIEGE counter cleanup.
+- Java comparison status: tests are source-derived from Java `Creature` zone counter lifetime, `KiskService.removeKisk`, `KiskController.delete`, `PvPZoneInstance`, and `FortressLocation`; no live Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Real movement/zone enter/leave flows still do not feed `CreaturePvpZoneCounterService`.
+- Generic world-object despawn/delete paths outside kisk removal do not clear counters yet.
+- Fortress shield observers, balance buffs, and other siege-zone side effects remain unported.
+- Live viewer-specific kisk `SmNpcInfo` dispatch still waits on real zone callbacks and socket-order validation.
+- No reflection, date/time, database, or persistence behavior changed. Threading risk is limited to the new concurrent counter cleanup boundary and existing runtime kisk cleanup fanout.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 DI/runtime cleanup path for creature PvP-zone counters during kisk removal
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 4 live PVP/SIEGE zone callbacks, generic world-object cleanup, fortress side effects, and live viewer-specific NPC-info dispatch
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because remaining kisk revive cleanup, live team membership wiring, production socket-order validation, live viewer-specific kisk attackability dispatch, full dedicated kisk controller/AI, full NPC/dialog AI, resurrection skill/effect callers, per-zone bind membership, live option mutation callers, admin option consumers, world-map instance ownership, object iteration, full socket-order harnesses, full zone lifecycle handlers, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue zone/kisk parity by adding real PVP/SIEGE zone template/callback ingestion into `CreaturePvpZoneCounterService`, then wire `PlayerKiskNpcInfoPacketService` into live NPC visibility fanout with socket-order tests.
+
 ---
 
 ## Next Steps
@@ -8028,7 +8068,7 @@ Next recommended unit of work:
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
-4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, live viewer-specific kisk `SmNpcInfo` dispatch wired to `CreaturePvpZoneCounterService` after real PvP/siege zone enter/leave callbacks exist, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
+4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, real PvP/siege zone enter/leave callbacks feeding `CreaturePvpZoneCounterService`, live viewer-specific kisk `SmNpcInfo` dispatch plus socket-order tests, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
