@@ -9594,6 +9594,48 @@ Summary metrics:
 Next recommended unit of work:
 - Wire a production-shaped portal/autogroup caller to calculate entrance cooldowns and update `PlayerPortalCooldownService`, including `SM_INSTANCE_INFO` fanout if packet ordering can be tested, or first add the missing `InstanceService.getInstanceRate` membership/config gate if the caller needs non-default cooldown rates.
 
+### Session 516 (May 23, 2026)
+- Added Java config bindings for `gameserver.instances.cooldown`, `gameserver.instance.cooldown_rate`, and `gameserver.instance.cooldown_rate.excluded_maps`.
+- Added `InstanceCooldownRateService.GetInstanceRate(player, mapId, options)` as a narrow C# equivalent for Java `InstanceService.getInstanceRate(Player, int)`.
+- Modeled Java `Player.hasPermission(byte)` for this boundary as `Player.AccountMembership >= Membership.InstancesCooldown`.
+- Added unit coverage for regular membership fallback, excluded-map fallback, premium/member rate usage, and the Java-shaped edge where a configured `0` rate is returned unchanged.
+- Focused validation: `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~InstanceCooldownRateServiceTests|FullyQualifiedName~GameServerOptionsTests|FullyQualifiedName~WorldMapRuntimeStateTests"` passes with 17 tests.
+- Full validation: `dotnet test dotnetConversion/AionServer.slnx` passes with 1070 tests.
+
+#### Migration Parity Table - Session 516
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.instance.InstanceService.getInstanceRate` | `Aion.GameServer.Services.InstanceCooldownRateService.GetInstanceRate` | Service / Config Boundary | Complete | Unit Tested | Partial Parity | C# matches the Java branch shape: membership permission plus non-excluded map returns configured rate, otherwise `1`. No Java runtime comparison or production caller integration was run. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.hasPermission(byte)` | Private `InstanceCooldownRateService.HasPermission` using `Player.AccountMembership` | Player Permission Boundary | Partial | Unit Tested | Partial Parity | C# models the account-membership comparison for this rate gate only. A shared `Player.HasPermission` API was not added, and broader permission call sites remain independently modeled. |
+| `com.aionemu.gameserver.configs.main.MembershipConfig.INSTANCES_COOLDOWN` | `Aion.GameServer.Configuration.GameServerMembershipOptions.InstancesCooldown` | Config | Complete | Unit Tested | Partial Parity | Default `10` is loaded from Java config keys. Environment override behavior is inherited from existing options loader but not separately tested for this key. |
+| `com.aionemu.gameserver.configs.main.InstanceConfig.INSTANCE_COOLDOWN_RATE` | `Aion.GameServer.Configuration.GameServerInstanceOptions.CooldownRate` | Config | Complete | Unit Tested | Partial Parity | Default `1` is loaded. C# returns configured `0` like Java would before any later division; callers must avoid invalid rate usage just as Java config should. |
+| `com.aionemu.gameserver.configs.main.InstanceConfig.INSTANCE_COOLDOWN_RATE_EXCLUDED_MAPS` | `Aion.GameServer.Configuration.GameServerInstanceOptions.CooldownRateExcludedMaps` | Config | Complete | Unit Tested | Partial Parity | Empty default set is loaded, and excluded-map behavior is unit-tested. Java `Set<Integer>` parsing edge cases beyond comma-separated integer lists are not separately tested. |
+
+Tests added:
+- `InstanceCooldownRateServiceTests.GetInstanceRate_MatchesJavaMembershipAndExcludedMapGate`: validates non-member fallback, excluded-map fallback, and member rate usage.
+- `InstanceCooldownRateServiceTests.GetInstanceRate_UsesConfiguredRateEvenWhenRateIsZeroLikeJava`: validates the helper returns configured `0` before any caller calculation.
+- `GameServerOptionsTests.LoadFromJavaConfig_ReadsCoreAndNetworkDefaults`: expanded to verify the new Java config defaults.
+- Java comparison status: source-derived from `InstanceService.getInstanceRate`, `Player.hasPermission`, `MembershipConfig`, and `InstanceConfig`. No Java runtime execution, config override fixture, live client validation, or portal/autogroup caller integration was run.
+
+Remaining risks:
+- The rate helper is not yet wired into production portal/autogroup cooldown creation paths.
+- A configured cooldown rate of `0` is returned unchanged, matching the source gate but still dangerous if passed into `CalculateInstanceEntranceCooltime`; Java would also fail later on division if misconfigured.
+- C# still lacks a shared `Player.HasPermission(byte)` API; this unit only models the comparison for instance cooldown rates.
+- Environment override parsing for the new keys relies on existing loader behavior but has no dedicated override test.
+- Serialization, database persistence, date/time reset calculations, packet wire format, reflection behavior, and threading behavior are unchanged in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 narrow instance cooldown-rate gate
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 4 production portal/autogroup caller integration, immediate cooldown persistence, `SM_INSTANCE_INFO` fanout, and Java runtime/live-client validation
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this removes the config/membership blocker for calculated instance cooldowns but does not yet wire end-to-end entry behavior.
+
+Next recommended unit of work:
+- Wire a production-shaped portal/autogroup caller to combine `InstanceCooldownRateService`, `InstanceCooltimeTable.CalculateInstanceEntranceCooltime`, and `PlayerPortalCooldownService.AddPortalCooldown`, keeping DAO persistence and `SM_INSTANCE_INFO` fanout explicit if not completed in the same unit.
+
 ---
 
 ## Next Steps
