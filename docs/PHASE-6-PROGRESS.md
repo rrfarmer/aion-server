@@ -5775,6 +5775,43 @@ Summary metrics:
 Next recommended unit of work:
 - Continue visual stat/resource convergence by extracting a shared player-stat resolver from `SmStatsInfo` calculations so `MAXDP`, attack speed, movement speed, fly time, and future HP/MP/FP caps come from one Java-shaped stat boundary. A smaller alternative is to continue flight parity with `CM_LEVEL_READY` fly-state notification and `SM_STATS_INFO` movement-mask serialization.
 
+### Session 425 (May 23, 2026)
+- Updated `SmStatsInfo` to serialize `Player.Movement.Mask` in the Java `SM_STATS_INFO.writeImpl` movement-mask byte.
+- Extended the fly-state packet regression test so it now validates both adjacent Java bytes: `player.getFlyState()` and `player.getMoveController().getMovementMask()`.
+- Kept the existing packet layout otherwise unchanged.
+- Current gaps in this cluster: C# still does not model Java's `PlayerMoveController.lastMovementMask`, movement controller callbacks, movement-mask transitions from every controller path, or the group/alliance/GM status packet fly-state and movement-mask fanout.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.SmStatsInfo"` passes with 6 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests|FullyQualifiedName~PlayerStateTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~WorldNpcResourceStatsServiceTests"` passes with 145 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 944 tests.
+
+#### Migration Parity Table - Session 425
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATS_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatsInfo` | Packet / Serialization | Partial | Regression Tested | Partial Parity | Movement-mask byte now writes `Player.Movement.Mask` after the fly-state byte. Packet test is source-derived, not a live Java golden capture. |
+| `com.aionemu.gameserver.controllers.movement.PlayerMoveController` | `Aion.GameServer.Model.GameObjects.PlayerMovementState` | Runtime State / Movement Controller Summary | Partial | Regression Tested | Needs Verification | C# stores the current movement mask but does not yet model Java controller callbacks, `lastMovementMask`, movement validation, or movement-task integration. |
+| `com.aionemu.gameserver.controllers.movement.MovementMask` | `Aion.GameServer.Controllers.Movement.MovementMask` | Utility / Constants | Partial | Regression Tested | Partial Parity | Existing constants are reused for the packet byte. Broader movement semantics remain incomplete. |
+
+Tests added or extended:
+- `GamePacketTests.SmStatsInfo_WritesPlayerFlyStateByte`: now also validates the following movement-mask byte uses `Player.Movement.Mask`.
+- Java comparison status: the test is source-derived from Java `SM_STATS_INFO.writeImpl`, `Player.getFlyState`, and `PlayerMoveController.getMovementMask`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Serialization parity is improved for `SM_STATS_INFO`, but group, alliance, and GM status packets that also serialize fly/movement state were not audited in this unit.
+- `Player.Movement.Mask` is only as accurate as currently ported movement handlers; Java movement-controller callbacks and `lastMovementMask` are not fully modeled.
+- Reflection, date/time, and precision/rounding are not involved. Threading is unchanged. Serialization changed only for one packet byte and is covered by a source-derived unit test.
+
+Summary metrics:
+- Total Java artifacts discovered: 3
+- Total artifacts ported: 1 packet byte bridge to existing movement state
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because shared stat resolution, full movement-controller parity, flight controller validation, group/alliance state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue flight/movement packet parity by auditing fly-state and movement-mask serialization in group/alliance/GM status packets, or step up to the shared player-stat resolver so `SmStatsInfo`, DP mutation caps, and speed snapshots stop duplicating Java stat logic.
+
 ---
 
 ## Next Steps
