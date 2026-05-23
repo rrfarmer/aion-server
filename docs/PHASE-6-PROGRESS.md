@@ -13762,6 +13762,54 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance lifecycle parity by composing `PlayerAllianceLeavedPlanner` with `PlayerBaseLeavePlanner` in a higher-level leave workflow plan, so alliance leave/ban/timeout/disband outputs and base leave side effects can be consumed in Java order. Keep live `PlayerAlliance` mutation, scheduler execution, instance movement, disband/league execution, and socket sends deferred.
 
+### Session 604 (May 23, 2026)
+- Added `PlayerAllianceLeaveWorkflowPlan`, `PlayerAllianceLeaveWorkflowStep`, `PlayerAllianceLeaveWorkflowStepKind`, and `PlayerAllianceLeaveWorkflowPlanner`.
+- Composed the Session 602 alliance leave planner with the Session 603 base leave planner.
+- Modeled Java override ordering:
+  - `PlayerAllianceLeavedEvent.handleEvent` performs alliance leave logic first;
+  - then it calls `super.handleEvent()`, represented by the base leave side-effect plan.
+- Added regression coverage for a ban workflow that verifies:
+  - alliance leave fanout and ban-to-leaved-player message remain first;
+  - base `SM_LEAVE_GROUP_MEMBER` and `STR_MSG_LEAVE_INSTANCE_NOT_PARTY` side effects follow;
+  - the instance-kick scheduling and `EventService.onLeftTeam` metadata remain available to consumers.
+- Kept live `PlayerAlliance` mutation, scheduler execution, instance movement, event-service invocation, disband/league execution, socket sends, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests|FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 152 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1250 tests.
+
+#### Migration Parity Table - Session 604
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceLeavedEvent` | `Aion.GameServer.Services.PlayerAllianceLeaveWorkflowPlanner` / `PlayerAllianceLeaveWorkflowPlan` | Workflow Planning Bridge | Partial | Regression Tested | Needs Verification | C# now composes alliance leave fanout before base leave side effects, matching Java override order. Live `team.removeMember`, leader-change composition, disband/league execution, and sockets remain missing. |
+| `com.aionemu.gameserver.model.team.common.events.PlayerLeavedEvent` | `PlayerAllianceLeaveWorkflowPlan.BaseLeavePlan` | Base Event Dependency | Partial | Regression Tested | Needs Verification | Base leave side-effect metadata is included after alliance leave work. Live scheduler, instance movement, and event-service invocation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LEAVE_GROUP_MEMBER` | `Aion.GameServer.Network.Aion.ServerPackets.SmLeaveGroupMember` through composed base plan | Server Packet | Partial | Regression Tested | Needs Verification | Packet body is tested through the composed workflow. Java golden bytes, encoded frames, and client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `SmAllianceMemberInfo` through composed alliance leave plan | Server Packet | Partial | Regression Tested | Needs Verification | Composed workflow preserves leave member-info intent ordering. Live wrapper metadata and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` leave/base methods | `SmSystemMessage` leave/base factories through composed workflow | Server Packet Factory | Partial | Regression Tested | Needs Verification | Ban, base leave, and instance-warning message ids are tested in composed order. Java frame/parameter comparison remains missing. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.LeaveWorkflowPlanner_ComposesAllianceLeaveBeforeBaseLeaveLikeJavaOverride`: validates workflow step order, alliance ban fanout, base leave packet/message side effects, instance-kick metadata, and event-service metadata.
+- Java comparison status: expectations are source-derived from `PlayerAllianceLeavedEvent.handleEvent` and `PlayerLeavedEvent.handleEvent`. No Java runtime execution, Java-generated golden vector, live remove-member comparison, scheduler execution comparison, instance movement comparison, event-service invocation comparison, disband/league comparison, socket fanout comparison, encoded frame comparison, reflection behavior, precision/rounding behavior, or client validation was run.
+
+Remaining risks:
+- Workflow composition is still non-sending and non-mutating.
+- Live alliance mutation, leader-change composition, disband, and league broadcast remain deferred.
+- Base leave scheduler execution and instance movement remain deferred.
+- Event-service invocation remains metadata only.
+- Java runtime ordering and threading behavior are not compared beyond source-derived ordering.
+- Java golden byte vectors and encoded-frame validation remain unavailable.
+- Reflection and precision/rounding are not involved; date/time handling remains metadata-only for the 30-second instance-kick boundary.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 alliance/base leave workflow composition slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 live alliance mutation, leader-change composition, disband/league execution, scheduler execution, instance movement, event-service invocation, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; leave workflow ordering is now explicit, but live runtime execution remains incomplete.
+
+Next recommended unit of work:
+- Continue alliance lifecycle parity by adding a minimal live `PlayerAlliance` runtime/snapshot bridge for add/remove/member lookup around the existing planners, or, if keeping runtime deferred, source-read alliance ready-check/brand events and port the next isolated packet fanout slice. Prefer the live runtime bridge if it can stay narrow and non-invasive.
+
 ---
 
 ## Next Steps
