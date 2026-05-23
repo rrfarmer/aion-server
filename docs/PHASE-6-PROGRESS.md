@@ -12889,6 +12889,51 @@ Summary metrics:
 Next recommended unit of work:
 - Continue from packet planning to live-safe boundaries by adding a non-sending `PlayerGroupMemberInfoUpdatePlan` for Java `PlayerGroupUpdateEvent`: source-read `PlayerGroupUpdateEvent.handleEvent`, model the all-except-player recipient set for `SM_GROUP_MEMBER_INFO(group, player, groupEvent, slot)`, and reuse `PlayerGroupMemberInfoIntent.CreatePacket()` in tests. Keep actual effect-controller extraction and socket sends deferred.
 
+### Session 588 (May 23, 2026)
+- Re-read Java `PlayerGroupUpdateEvent.handleEvent`, which broadcasts `SM_GROUP_MEMBER_INFO(group, player, groupEvent, slot)` through `Predicates.Players.allExcept(player)`.
+- Added `PlayerGroupMemberInfoUpdatePlan` as a non-sending C# plan for member-info update events.
+- Added `PlayerGroupRuntime.CreateMemberInfoUpdatePlan`, preserving the Java source breadcrumb and returning member-info intents for every group member except the subject player.
+- Reused `PlayerGroupMemberInfoPacketPlan.FromMember` and `PlayerGroupMemberInfoIntent.CreatePacket()` so planned update events can materialize the existing `SmGroupMemberInfo` packet.
+- Added regression coverage for `UPDATE_EFFECTS` slot updates: recipients exclude the subject player, packet metadata carries the requested slot, and the serialized zero-effect payload writes Java's no-name update-effects branch.
+- Kept live socket sends, effect-controller extraction, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 112 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1210 tests.
+
+#### Migration Parity Table - Session 588
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.group.events.PlayerGroupUpdateEvent` | `Aion.GameServer.Services.PlayerGroupRuntime.CreateMemberInfoUpdatePlan` / `PlayerGroupMemberInfoUpdatePlan` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# now models Java's non-self recipient fanout and `SM_GROUP_MEMBER_INFO(group, player, groupEvent, slot)` packet plan. Live `group.sendPacket(...)` dispatch, superclass behavior, and runtime comparison remain missing. |
+| `com.aionemu.gameserver.utils.collections.Predicates.Players.allExcept` | `PlayerGroupRuntime.CreateMemberInfoUpdatePlan` recipient filter | Utility / Predicate | Partial | Regression Tested | Needs Verification | Recipient filtering excludes the subject player's object id. Java predicate object identity and live connection filtering have not been runtime-compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` through `PlayerGroupMemberInfoIntent.CreatePacket` | Server Packet / Intent Factory | Partial | Unit Tested | Needs Verification | Update-event plans reuse the packet factory and validate zero-effect `UPDATE_EFFECTS` slot serialization. Live effect extraction, non-empty live effects, encoded opcode/frame comparison, and client validation remain deferred. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.sendPacket` | Non-sending `PlayerGroupMemberInfoIntent` records | Service / Send Bridge | Refactored | Unit Tested | Intentional Difference | C# returns send intents instead of writing to sockets until group packet fanout is wired safely. This is intentional during the parity planning bridge. |
+
+Tests added:
+- `PlayerGroupRuntimeTests.CreateMemberInfoUpdatePlan_ReturnsAllExceptPlayerIntentsLikeJavaPlayerGroupUpdateEvent`: validates the Java-shaped all-except-player recipient set, subject/event/slot metadata, packet-plan metadata, and zero-effect `UPDATE_EFFECTS` payload construction through `CreatePacket()`.
+- `PlayerGroupRuntimeTests.CreateMemberInfoUpdatePlan_ReturnsNullWhenGroupOrSubjectIsMissing`: validates missing-group and missing-subject boundaries for the non-sending plan.
+- Java comparison status: expectations are source-derived from `PlayerGroupUpdateEvent.handleEvent`, `Predicates.Players.allExcept(player)`, and `SM_GROUP_MEMBER_INFO.writeImpl`. No Java runtime execution, Java-generated golden vector, live send/fanout comparison, encoded frame comparison, reflection behavior comparison, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Live group member-info update sends are still not wired to sockets.
+- Effect-controller extraction remains missing; update plans currently serialize packet DTO data only.
+- Java predicate behavior is represented by object id filtering, but live object identity/connection filtering has not been compared.
+- Java packet ordering is represented by list order only.
+- Encoded opcode/frame and real-client handling remain unverified.
+- Threading behavior is C# lock-based and not Java executor/event-loop validated.
+- Serialization is packet-body tested, but Java golden bytes are still unavailable for this branch.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 `PlayerGroupUpdateEvent` non-sending member-info update planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 7 live group member-info update sends, Java predicate/runtime comparison, live effect-controller extraction, encoded opcode/frame golden validation, active connection/runtime comparison, Java event ordering comparison, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group member-info update packets now have a non-sending planning boundary, but live dispatch and runtime comparisons are still incomplete.
+
+Next recommended unit of work:
+- Continue the group member-info event bridge by source-reading Java `PlayerStartMentoringEvent` and `PlayerGroupStopMentoringEvent`, then add a non-sending movement/update plan that models their `PlayerGroupUpdateEvent(..., GroupEvent.MOVEMENT)` behavior and validates the `SM_GROUP_MEMBER_INFO` movement branch through `PlayerGroupMemberInfoIntent.CreatePacket()`. Keep mentor state mutation, live sends, and socket fanout deferred unless the supporting runtime surface is already present.
+
 ---
 
 ## Next Steps
