@@ -11473,6 +11473,54 @@ Summary metrics:
 Next recommended unit of work:
 - Add a blocked group transfer execution preview that records Java's future `PortalService.transfer(player, loc, instance, reenter)` inputs: target instance id when registered, start-position intent, reenter flag, teleport animation, and cooldown-add eligibility. Keep `SetStartPositionIfMissing`, `Register(player.ObjectId)`, teleport queueing, and cooldown persistence disabled until the actual group execution path is safe to port.
 
+### Session 558 (May 23, 2026)
+- Added a non-executing `GroupPortalExecutionPlan` under `GroupPortalTransferPlan`.
+- `PortalContinueTransferResult.UnsupportedTeamPortal` now receives the active player object id so blocked group execution planning can record the future `instance.register(player.getObjectId())` input.
+- Registered group-instance plans now record target instance id, start-position intent, player registration intent, reenter flag, `FadeOutBeam` teleport animation intent, and cooldown-preview state.
+- Allocation-needed group plans now record start-position and player-registration intent but block execution until allocation.
+- Invalid/missing-team-id group plans now block execution before player registration intent is exposed.
+- Kept `WorldMapInstanceRuntimeState.SetStartPositionIfMissing`, `Register(player.ObjectId)`, teleport queueing, cooldown calculation/persistence, and fanout disabled.
+- Extended focused transfer-boundary tests to assert execution-preview metadata and prove blocked registered group plans do not mutate start position or register the player object id.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passes with 119 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1172 tests.
+
+#### Migration Parity Table - Session 558
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.transfer` | `Aion.GameServer.Services.GroupPortalExecutionPlan` | DTO / Planning | Partial | Unit Tested | Needs Verification | C# now records the inputs Java transfer would consume for blocked group plans. It does not execute start-position mutation, registration, teleport, or cooldown side effects. |
+| `com.aionemu.gameserver.world.WorldMapInstance.setStartPos` | `GroupPortalExecutionPlan.StartPosition` | Runtime State Dependency | Not Started | Unit Tested | Needs Verification | Start-position intent is recorded from portal loc. Tests assert the registered instance `StartPosition` remains null. Actual `SetStartPositionIfMissing` behavior remains disabled. |
+| `com.aionemu.gameserver.world.WorldMapInstance.register(int)` | `GroupPortalExecutionPlan.PlayerObjectIdToRegister` | Runtime State Dependency | Partial | Unit Tested | Needs Verification | Player object id registration intent is recorded. Tests assert the blocked registered instance does not register the player id. Actual registration remains disabled. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.teleportTo` | `GroupPortalExecutionPlan.TeleportAnimation` / `TargetInstanceId` | Service / Packet Dependency | Not Started | Unit Tested | Needs Verification | C# records `FadeOutBeam` and target instance id for registered plans. No `SM_TELEPORT_LOC`, pending teleport, or position mutation occurs. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.addPortalCooldown` | `GroupPortalExecutionPlan.CooldownState` | Cooldown Dependency | Not Started | Unit Tested | Needs Verification | C# records whether cooldown would be evaluated after teleport or skipped for reentry. It does not calculate reuse time or persist cooldown. Date/time behavior remains unverified. |
+| `com.aionemu.gameserver.model.templates.portal.PortalLoc` | `PortalLocSummary` feeding `GroupPortalExecutionPlan.StartPosition` | DTO / Static Data Dependency | Partial | Unit Tested | Needs Verification | C# maps world id, xyz, heading, and instance id intent from portal loc. Static-data loading parity is not newly verified in this unit. |
+| `com.aionemu.gameserver.model.animations.TeleportAnimation.FADE_OUT_BEAM` | `Aion.GameServer.Model.TeleportAnimation.FadeOutBeam` | Enum / Animation Dependency | Partial | Unit Tested | Needs Verification | Animation intent is recorded, not serialized or sent. Packet/live-client animation behavior remains unverified. |
+
+Tests added or extended:
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_UnsupportedTeamPlanReturnsBlockedResultWithoutPackets`: extended to assert registered group execution preview fields, no `StartPosition` mutation, and no player registration on the registered instance.
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_GroupPlanWithoutRegisteredInstanceRecordsAllocationNeededWithoutPackets`: extended to assert allocation-needed execution preview is blocked until allocation while preserving start-position/player-registration intent.
+- `GameServerConnectionInstanceCooldownTests.QueuePortalContinueTransferAsync_GroupPlanWithoutTeamIdRecordsMissingTeamIdWithoutPackets`: extended to assert invalid team id blocks execution before player registration intent.
+- Java comparison status: expectations are source-derived from `PortalService.transfer`, `WorldMapInstance.setStartPos`, `WorldMapInstance.register`, `TeleportService.teleportTo`, `PortalCooldownList.addPortalCooldown`, `PortalLoc`, and `TeleportAnimation.FADE_OUT_BEAM`. No Java runtime execution, actual transfer, start-position mutation, player registration, teleport packet serialization, cooldown calculation, encrypted socket validation, or concurrency comparison was run.
+
+Remaining risks:
+- Execution preview is advisory metadata only and does not transfer a player.
+- Start-position mutation and player registration are deliberately disabled for team portals.
+- Cooldown eligibility is coarse; actual Java reuse-time calculation and date/time persistence are still missing.
+- Allocation-needed plans cannot provide target instance id until allocation exists.
+- Group member fanout, live group aggregate, capacity gate enforcement, allocation, full `registerTeam`, alliance/league execution, and team lifecycle cleanup remain unimplemented.
+- Serialization/live packet behavior, Java threading semantics, reflection/JAXB behavior, precision/rounding, and runtime/client comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 blocked group execution preview DTO under the existing group transfer plan
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 12 actual group transfer execution, start-position mutation, player registration, teleport packet queueing, cooldown calculation/persistence, allocation target instance id, group member fanout, live group aggregate, capacity gate enforcement, alliance/league execution, team lifecycle/concurrency, and live client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group portal planning now documents transfer execution intent, but successful group portal entry is still missing.
+
+Next recommended unit of work:
+- Add a blocked cooldown-preview refinement for group execution: thread `InstanceCooltimeTable` and `now` into the unsupported group result enough to record whether Java would add cooldown when `!reenter` and a positive reuse delay exists, but still avoid `PortalCooldownList.addPortalCooldown`, persistence, and packet sends. Keep date/time parity conservative and mark runtime comparison as needed.
+
 ---
 
 ## Next Steps
