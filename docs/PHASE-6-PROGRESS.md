@@ -6582,6 +6582,49 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the zone-option path by identifying the first live Java call site that consumes `ZoneInstance.canFly/canGlide` or add a mutable C# `WorldMap` option holder for `setWorldOption` / `removeWorldOption`. If staying with flight packet verification, extend the connection harness down to an actual `CM_MOVE`, `CM_MOVE_IN_AIR`, or `CM_SUBZONE_CHANGE` packet-loop test.
 
+### Session 444 (May 23, 2026)
+- Filled out the remaining Java `WorldMap` world-option reader helpers on immutable `WorldMapSummary`.
+- Added C# pure-return equivalents for Java `WorldMap.setWorldOption` and `removeWorldOption`, preserving the exact bit operations while documenting that C# does not yet have a mutable runtime `WorldMap` owner.
+- Added readers for bind/kisk, recall, ride, fly-ride, PvP, same-race duel, other-race duel, and return-to-battle, including Java's inverted `NO_RETURN_BATTLE` semantics.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaticDataLoadingTests.WorldMapSummary_OptionReadersMatchJavaWorldMap|FullyQualifiedName~StaticDataLoadingTests.WorldMapSummary_HasOverriddenOptionMatchesJavaWorldMap|FullyQualifiedName~StaticDataLoadingTests.FlightZoneSummary_CanFlyCanGlideMatchesJavaZoneInstanceOptions"` passes with 3 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~PlayerZoneStateServiceTests"` passes with 14 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 956 tests.
+
+#### Migration Parity Table - Session 444
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMap.canPutKisk` | `Aion.GameServer.Dataholders.WorldMapSummary.CanPutKisk` | World Option Utility | Partial | Unit Tested | Partial Parity | Reads supplied current flags for Java `BIND`. No live kisk/pet action caller consumes it yet. |
+| `com.aionemu.gameserver.world.WorldMap.canRecall` | `Aion.GameServer.Dataholders.WorldMapSummary.CanRecall` | World Option Utility | Partial | Unit Tested | Partial Parity | Reads supplied current flags for Java `RECALL`. Live recall restrictions remain unported. |
+| `com.aionemu.gameserver.world.WorldMap.canRide` | `Aion.GameServer.Dataholders.WorldMapSummary.CanRide` | World Option Utility | Partial | Unit Tested | Partial Parity | Reads supplied current flags for Java `RIDE`. Java `RideAction` / `PlayerController.onEnterZone` callers are not wired. |
+| `com.aionemu.gameserver.world.WorldMap.canFlyRide` | `Aion.GameServer.Dataholders.WorldMapSummary.CanFlyRide` | World Option Utility | Partial | Unit Tested | Partial Parity | Reads supplied current flags for Java `FLY_RIDE`. No live fly-ride caller consumes it yet. |
+| `com.aionemu.gameserver.world.WorldMap.isPvpAllowed` | `Aion.GameServer.Dataholders.WorldMapSummary.IsPvpAllowed` | World Option Utility | Partial | Unit Tested | Partial Parity | Reads supplied current flags for Java `PVP_ENABLED`. Full PvP zone/world behavior remains broad and partial. |
+| `com.aionemu.gameserver.world.WorldMap.isSameRaceDuelsAllowed` / `isOtherRaceDuelsAllowed` | `Aion.GameServer.Dataholders.WorldMapSummary.IsSameRaceDuelsAllowed` / `IsOtherRaceDuelsAllowed` | World Option Utility | Partial | Unit Tested | Partial Parity | Reads supplied current flags for duel options. Duel service/runtime handlers are not ported. |
+| `com.aionemu.gameserver.world.WorldMap.canReturnToBattle` | `Aion.GameServer.Dataholders.WorldMapSummary.CanReturnToBattle` | World Option Utility | Partial | Unit Tested | Partial Parity | Mirrors Java's inverted `NO_RETURN_BATTLE` check. No return-to-battle service caller consumes it yet. |
+| `com.aionemu.gameserver.world.WorldMap.setWorldOption` / `removeWorldOption` | `Aion.GameServer.Dataholders.WorldMapSummary.SetWorldOption` / `RemoveWorldOption` | World Option Mutation Helper | Refactored | Unit Tested | Intentional Difference | Java mutates `worldOptions` in place. C# `WorldMapSummary` is immutable, so helpers return the updated flag value for a future runtime owner. |
+| `com.aionemu.gameserver.world.zone.ZoneAttributes` | `Aion.GameServer.Dataholders.WorldZoneAttributes` | Enum / Bit Flags | Partial | Unit Tested | Partial Parity | Existing bit values now feed the full world-option reader surface. Serialization is unchanged. |
+
+Tests added or extended:
+- `StaticDataLoadingTests.WorldMapSummary_OptionReadersMatchJavaWorldMap`: validates every modeled Java world-option reader, plus set/remove bit operations and the inverted `NO_RETURN_BATTLE` branch.
+- Java comparison status: tests are source-derived from Java `WorldMap` and `ZoneAttributes`; no live Java runtime side-by-side validation was run.
+
+Remaining risks:
+- These helpers still have no mutable runtime `WorldMap` owner, so runtime behavior is unchanged.
+- Live Java callers such as `RideAction`, `ToyPetSpawnAction`, admin zone info, recall, PvP, duel, and return-to-battle flows remain unported or unwired.
+- C# uses pure-return set/remove helpers as an intentional immutable-data difference until a runtime owner exists.
+- Reflection is not used. Serialization is unchanged. Date/time is not involved. Threading is not involved in this immutable helper slice, but a future mutable owner will need concurrency review.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 world-option reader/mutation helper slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because mutable world-map owners, live option consumers, full socket-order harnesses, full zone lifecycle handlers, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Add a small runtime world-map option owner around `WorldMapSummary` current flags, or wire the first live consumer of these option helpers such as ride restriction, kisk/pet spawn restriction, or admin zone-info output. If continuing flight verification instead, drive the existing connection fanout through an actual `CM_MOVE`, `CM_MOVE_IN_AIR`, or `CM_SUBZONE_CHANGE` packet path.
+
 ---
 
 ## Next Steps
