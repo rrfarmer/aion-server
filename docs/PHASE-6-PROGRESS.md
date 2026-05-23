@@ -9765,6 +9765,48 @@ Summary metrics:
 Next recommended unit of work:
 - Add the immediate `PortalCooldownsDAO.storePortalCooldowns(owner)` equivalent as a repository boundary if the current player persistence layer can store portal cooldowns safely; otherwise, continue toward the actual portal transfer caller and document persistence/team fanout as blocked.
 
+### Session 520 (May 23, 2026)
+- Added a C# repository boundary for Java `PortalCooldownsDAO.storePortalCooldowns`: delete all portal cooldown rows for the player, then insert only active cooldowns with `player_id`, `world_id`, `reuse_time`, and `entry_count`.
+- Added `PlayerEnterWorldService.SavePortalCooldownsAsync` so gameplay/connection callers can request immediate portal-cooldown persistence without reaching into the repository directly.
+- Extended `GameServerConnection.ApplyInstanceEntranceCooldownAsync` to persist portal cooldowns before sending the entry-info packet when a `PlayerEnterWorldService` is available, matching Java's store-before-send order for the owner-connection path.
+- Extended the connected owner-send test to assert the updated cooldown map is handed to the repository before the packet boundary is observed.
+- Focused validation: `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionInstanceCooldownTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~InstanceEntranceCooldownServiceTests"` passes with 20 tests.
+
+#### Migration Parity Table - Session 520
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dao.PortalCooldownsDAO.storePortalCooldowns` | `Aion.GameServer.Data.IPlayerEnterWorldRepository.SavePlayerPortalCooldownsAsync` / `MySqlPlayerEnterWorldRepository.SavePlayerPortalCooldownsAsync` | Repository / Persistence | Partial | Unit Tested | Partial Parity | C# implements the Java-shaped delete-all then insert-active behavior and reuses the existing `portal_cooldowns` schema. No MySQL integration test was run, so SQL execution, autocommit behavior, and DB error handling remain unverified. |
+| `com.aionemu.gameserver.dao.PortalCooldownsDAO.deletePortalCooldowns` | Private `MySqlPlayerEnterWorldRepository.SavePlayerPortalCooldownsAsync(MySqlConnection, ...)` delete phase | Repository / Persistence | Partial | No Tests | Needs Verification | Delete SQL matches the Java table/key shape. It runs on the same connection as inserts, while Java opens a fresh connection for delete and each insert. This is a C# direct-DB implementation difference that needs integration validation. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.addPortalCooldown` | `Aion.GameServer.Network.Aion.GameServerConnection.ApplyInstanceEntranceCooldownAsync` plus `PlayerEnterWorldService.SavePortalCooldownsAsync` | Connection / Persistence Boundary | Partial | Unit Tested | Partial Parity | The owner-connection path now mutates cooldowns, persists through the service when available, then sends `SmInstanceInfo`. It is still not wired into full portal/autogroup callers. |
+| `com.aionemu.gameserver.services.player.PlayerService.storePlayer` | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.SavePlayerLogoutAsync` | Logout Persistence | Partial | No Tests | Needs Verification | Logout save now includes portal cooldown persistence alongside skill/item/house-object cooldowns. Existing logout tests use a fake repository and do not execute MySQL SQL. |
+| `com.aionemu.gameserver.services.player.PlayerService.getPlayer` / `PortalCooldownsDAO.loadPortalCooldowns` | Existing `IPlayerEnterWorldRepository.LoadPlayerPortalCooldownsAsync` | Repository / Load Boundary | Partial | Existing Unit Tested | Partial Parity | Load behavior was already present and unchanged. This unit pairs it with save support, but round-trip DB validation is still missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `Aion.GameServer.Network.Aion.GameServerConnection.SendPacketAsync` after persistence | Socket Dispatch | Partial | Unit Tested | Partial Parity | Packet send still occurs after persistence in the connection helper. Live encrypted client validation and packet ordering with teleport remain unverified. |
+| `com.aionemu.gameserver.model.team.PlayerTeam.sendPackets` / `owner.getCurrentTeam().sendPackets` | No C# equivalent in this unit | Team Fanout | Not Started | No Tests | Unknown | Team broadcast remains blocked by missing current-team packet routing. |
+
+Tests added or extended:
+- `GameServerConnectionInstanceCooldownTests.ApplyInstanceEntranceCooldownAsync_SendsJavaEntryInfoPacketToOwner`: now also validates that the post-add `PlayerPortalCooldown` map is handed to the repository boundary before asserting the owner packet.
+- Existing fake repository support in `PlayerEnterWorldServiceTests.CapturingEnterWorldRepository` and `EmptyPlayerEnterWorldRepository` was extended to satisfy and observe the new persistence method.
+- Java comparison status: expectations are source-derived from `PortalCooldownsDAO.storePortalCooldowns`, `PortalCooldownList.addPortalCooldown`, `PlayerService.storePlayer`, and `SM_INSTANCE_INFO.writeImpl`. No Java runtime execution, MySQL integration test, transaction/autocommit comparison, live client validation, or team fanout validation was run.
+
+Remaining risks:
+- `SavePlayerPortalCooldownsAsync` has not been run against a real MySQL schema in this unit; SQL syntax and schema compatibility are source-derived only.
+- C# uses one connection for delete plus inserts, while Java opens separate connections in the DAO method. This should be behaviorally equivalent under normal autocommit, but failure modes may differ.
+- The immediate persistence call is only reached through the new connection helper, which is still not wired into production portal, teleport, or autogroup entry code.
+- Team fanout and Java multi-player `SM_INSTANCE_INFO` constructor remain missing.
+- Date/time filtering uses caller-provided or UTC milliseconds. Java uses `System.currentTimeMillis()`. Clock-source parity and crash/restart edge cases remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 narrow portal-cooldown persistence boundary
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 MySQL integration validation, production portal/autogroup caller wiring, team packet fanout/current-team model, teleport packet ordering, Java runtime/live-client validation, and Java multi-player `SM_INSTANCE_INFO` constructor
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this adds persistence plumbing for the cooldown update path but does not complete instance entry parity.
+
+Next recommended unit of work:
+- Continue toward the actual Java `PortalService.transfer` caller by wiring the connection helper into the narrowest C# portal/teleport entry surface available, or first add a MySQL-backed regression for `SavePlayerPortalCooldownsAsync` if a database fixture is cheap to run.
+
 ---
 
 ## Next Steps
