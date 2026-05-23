@@ -3136,6 +3136,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcGlobalDropServiceTests|StaticDataLoadingTests|GameServerBootstrapTests"` passes with 22 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 735 tests.
 
+### Session 370 (May 23, 2026)
+- Added Java `GlobalDropData.processRules` parity in `StaticData`: `gd_npc_names` rules are expanded once after NPC templates load, merging matched NPC template ids into `NpcIds` and clearing the matcher list when Java would replace it with `GlobalDropNpcs`.
+- Tightened `GlobalDropRuleSummary.HasNpcRestriction` to Java's `rule.getGlobalRuleNpcs() != null` gate, so default global-drop exclusions are bypassed only by concrete NPC-id rules instead of raw name matchers.
+- Preserved Java's name matching behavior for `CONTAINS`, `START_WITH`, `END_WITH`, and `EQUALS`, including lowercased matcher values for the non-equals functions and case-insensitive equals matching.
+- Added real static-data coverage that the `Morphable Spirit Essences` rule clears `NpcNames` and expands to include the `wind spirit` template id, plus service coverage that only concrete NPC-id rules bypass the default-global NPC guard.
+- Current gaps in this cluster: world-drop-type restrictions, zone restrictions, siege/base spawn restrictions, runtime event lifecycle side effects, optional sockets, and instance/AI `onDropRegistered` callbacks remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcGlobalDropServiceTests|StaticDataLoadingTests|GameServerBootstrapTests"` passes with 22 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 735 tests.
+
 ---
 
 ## Next Steps
