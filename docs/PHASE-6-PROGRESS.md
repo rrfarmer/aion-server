@@ -3145,6 +3145,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcGlobalDropServiceTests|StaticDataLoadingTests|GameServerBootstrapTests"` passes with 22 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 735 tests.
 
+### Session 371 (May 23, 2026)
+- Extended `WorldMapSummary` and `StaticData` world-map loading with Java `WorldMapTemplate.dropWorldType` / `world_maps.xml drop_type`, while keeping the field defaulted to `NONE` for older packet/test fixtures.
+- Wired `WorldNpcGlobalDropService` to use the loaded map drop type for Java `DropRegistrationService.checkGlobalRuleWorlds`, so `gd_world wd_type=...` restrictions now match the NPC's current world instead of being staged as misses.
+- Added Java's default global-drop skip for known `WorldDropType.NONE` maps, preserving an "unknown map" fallback for isolated service tests that construct no world-map data.
+- Added coverage for matching and mismatched world drop types, explicit `NONE` map suppression, and real static-data map drop types for Poeta (`ELYSEA`) and Nochsana Training Camp (`ABYSS_INSTANCE`).
+- Current gaps in this cluster: zone restrictions, siege/base spawn restrictions, runtime event lifecycle side effects, optional sockets, and instance/AI `onDropRegistered` callbacks remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcGlobalDropServiceTests|StaticDataLoadingTests|GamePacketTests|GameServerBootstrapTests"` passes with 96 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 736 tests.
+
 ---
 
 ## Next Steps
