@@ -12506,6 +12506,64 @@ Summary metrics:
 Next recommended unit of work:
 - Add the next smallest `SM_GROUP_MEMBER_INFO` dependency model: a packet-facing member snapshot DTO for life stats and common/position data needed by the fixed prefix after group id/member id. Keep effect serialization and live sends deferred, and do not serialize the packet until the prefix can be byte-tested without placeholders.
 
+### Session 580 (May 23, 2026)
+- Re-read Java `SM_GROUP_MEMBER_INFO.writeImpl`, `GroupEvent`, `PlayerClass`, and `Gender` before extending the C# member-info plan.
+- Added `PlayerGroupMemberInfoPrefixSnapshot`, a non-serializing DTO for the Java fixed prefix immediately after group id and member object id.
+- The prefix snapshot records source-shaped life-stat, position, common-data, event, fly-state, mentor, and name values:
+  - online current HP/MP/FP values from C# `PlayerLifeStats`;
+  - offline HP/MP/FP zeroing like Java;
+  - unresolved online max HP/MP/FP as explicit nullable fields until a reliable max-stat source is threaded in;
+  - Java map-instance id calculation `mapId + instanceId - 1`;
+  - Java class ids, including `RIDER = 13`, `GUNNER = 14`, `ARTIST = 15`, and `BARD = 16`;
+  - Java gender ids `MALE = 0`, `FEMALE = 1`;
+  - event id, constant `1`, fly state, mentor flag, and player name.
+- Corrected the next-work interpretation from the handoff: Java `SM_GROUP_MEMBER_INFO` writes flight-time FP in this prefix, not DP.
+- Added `PlayerGroupMemberInfoPrefixSnapshot.WithKnownMaximums(...)` so a future stat calculation slice can supply max HP/MP/FP without changing the plan shape.
+- Wired the prefix snapshot into `PlayerGroupMemberInfoPacketPlan.FromMember`.
+- Kept full `SM_GROUP_MEMBER_INFO` byte serialization disabled because online max-stat calculation, abnormal effects, slot timers, and live member fanout are still incomplete.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 104 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1202 tests.
+
+#### Migration Parity Table - Session 580
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `Aion.GameServer.Services.PlayerGroupMemberInfoPacketPlan` / `PlayerGroupMemberInfoPrefixSnapshot` | Packet Planning DTO | Partial | Unit Tested | Needs Verification | C# now models the fixed prefix fields after group/member ids, including offline zero life stats, map-instance calculation, class/gender ids, event id, fly state, mentor flag, and name. It still does not serialize bytes or write effects/slot timers. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats` | `Aion.GameServer.Model.GameObjects.PlayerLifeStats` consumed by `PlayerGroupMemberInfoPrefixSnapshot` | Packet Dependency | Partial | Unit Tested | Needs Verification | C# reads current HP/MP/FP and applies Java offline zeroing. Online max HP/MP/FP are explicit nullable gaps because the C# player model does not yet carry Java `getMaxHp/getMaxMp/getMaxFp` values at this call site. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `Aion.GameServer.Model.GameObjects.Player` common fields consumed by `PlayerGroupMemberInfoPrefixSnapshot` | Packet Dependency | Partial | Unit Tested | Needs Verification | C# maps class id, gender id, level, and name. Race is intentionally not included in this DTO because Java `SM_GROUP_MEMBER_INFO.writeImpl` does not write race in this packet prefix. |
+| `com.aionemu.gameserver.world.WorldPosition` | `Aion.GameServer.World.WorldPosition` consumed by `PlayerGroupMemberInfoPrefixSnapshot` | Packet Dependency | Partial | Unit Tested | Needs Verification | C# captures map id, `mapId + instanceId - 1`, and XYZ floats. No byte serialization has verified float precision or endian layout yet. |
+| `com.aionemu.gameserver.model.PlayerClass` | `PlayerGroupMemberInfoPrefixSnapshot.ToJavaClassId` | Enum Mapping Dependency | Partial | Unit Tested | Needs Verification | Java class ids are source-derived and covered for `BARD` and `RIDER` in this unit. Broader packet callers still have duplicated class-id helpers that may need consolidation/audit. |
+| `com.aionemu.gameserver.model.Gender` | `PlayerGroupMemberInfoPrefixSnapshot.ToJavaGenderId` | Enum Mapping Dependency | Partial | Unit Tested | Needs Verification | Java gender ids are source-derived and tested for female/implicit male values in this unit. |
+| `com.aionemu.gameserver.model.team.common.legacy.GroupEvent` | `Aion.GameServer.Model.GameObjects.PlayerGroupEvent` consumed by prefix snapshot | Enum / Packet Dependency | Partial | Regression Tested | Needs Verification | Effective event id is recorded in the prefix snapshot after Java's offline `ENTER` rewrite. Full packet byte branch coverage remains missing. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.PlayerGroupMemberInfoPrefixSnapshot_ModelsJavaLifeCommonAndPositionPrefix`: validates online current HP/MP/FP capture, negative FP clamping, explicit unknown max-stat fields, Java map-instance calculation, class/gender ids, level, event id, constant `1`, fly state, mentor flag, name, supplied max-stat clamping, and offline zero life stats.
+- `PlayerGroupRuntimeTests.PlayerGroupMemberInfoPacketPlan_ModelsStableJavaHeaderAndEventBranches`: indirectly verifies every plan now carries a prefix snapshot with effective event metadata.
+- `PlayerGroupRuntimeTests.ReconnectMember_ReturnsNonSendingPacketIntentPlanLikeJavaPlayerConnectedEvent`: regression coverage confirms reconnect member-info intents still carry Java-shaped plans after adding the prefix snapshot.
+- Java comparison status: expectations are source-derived from `SM_GROUP_MEMBER_INFO.writeImpl`, `PlayerClass`, `Gender`, `WorldPosition`, and `GroupEvent`. No Java runtime execution, Java-generated golden vector, packet byte serialization, online max-stat comparison, effect serialization comparison, slot timer comparison, socket send/fanout comparison, or client validation was run.
+
+Remaining risks:
+- No `SM_GROUP_MEMBER_INFO` C# packet serializer exists yet.
+- Online max HP/MP/FP are not available at the group-member packet planning boundary and are represented as nullable unknowns.
+- The current snapshot uses existing C# `PlayerLifeStats` current values; Java's stat container clamps against calculated max stats during packet serialization.
+- Full byte layout, opcode/frame encoding, endian behavior, and float precision are still unverified.
+- Race/DP are intentionally absent from this DTO because Java does not write them in `SM_GROUP_MEMBER_INFO.writeImpl`; any later caller requiring those values must be modeled separately.
+- Abnormal effects, `SkillTargetSlot` timers, effect remaining-time calculation, and reflection-sensitive effect data remain missing.
+- Live reconnect/group-enter member-info fanout and Java event ordering remain unverified.
+- Threading behavior remains plan-only under the C# runtime lock; Java live packet send timing has not been compared.
+- Date/time handling is not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 focused `SM_GROUP_MEMBER_INFO` fixed-prefix snapshot planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 10 online max-stat source for group member packets, full `SM_GROUP_MEMBER_INFO` byte serialization, abnormal effect serialization, `SkillTargetSlot` timers, live group member fanout, Java packet ordering comparison, encoded opcode/frame golden validation, float precision/runtime comparison, duplicate class-id helper audit, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; `SM_GROUP_MEMBER_INFO` planning is deeper, but the packet is still not serializable end-to-end.
+
+Next recommended unit of work:
+- Add the online max-stat provider needed by `PlayerGroupMemberInfoPrefixSnapshot`: source-read Java `PlayerLifeStats.getMaxHp/getMaxMp/getMaxFp` and the C# `SmStatsInfo` stat calculation path, then thread a narrow `PlayerGroupMemberInfoResourceMaximums` input into `FromMember` or the runtime reconnect/entered planners. Keep full packet serialization deferred until max/current life stats can be byte-tested together with the existing prefix snapshot.
+
 ---
 
 ## Next Steps
