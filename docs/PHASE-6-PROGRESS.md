@@ -5661,6 +5661,59 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the visual stat/resource convergence by extracting or adding a shared player-stat resolver for `MAXDP`, attack speed, and eventually non-ride movement speed from Java `PlayerGameStats` / `StatsTemplate`. If keeping the slice smaller, add non-ride class movement-speed snapshots from Java `PlayerClass.PlayerStatsTemplate` (`walk=1.5`, `run=6`, `fly=9`) so ordinary players can emit `CHANGE_SPEED`.
 
+### Session 423 (May 23, 2026)
+- Added ordinary non-ride player movement-speed snapshot resolution to `PlayerVisualStatsUpdateService`.
+- C# now uses Java `PlayerClass.PlayerStatsTemplate` base movement speeds for non-ride players: walk `1.5`, run `6.0`, fly `9.0`.
+- Ordinary online DP mutations now emit `SmEmotion(ChangeSpeed)` after owner `SmStatsInfo` instead of reporting `SpeedSnapshotMissing`.
+- Updated quest, craft, solo-NPC, PVP, enter-world DP reset, and direct resource tests to assert the fuller Java packet order: `SmDpInfo`, `SmStatsInfo`, `SmEmotion(ChangeSpeed)`, `SmStatUpdateDp`.
+- Kept ride-mode speed behavior from Session 421 intact, with ride move/sprint/fly speeds still taking precedence over class speeds.
+- Current gaps in this cluster: C# still does not model Java `Player.flyState` separately from creature-state flags, the Java non-flying `CreatureState.FLYING && !RESTING` fallback speed of `12.0` is not represented, and speed stat modifiers/effects/equipment caps remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerVisualStatsUpdateServiceTests|FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~QuestRewardServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~WorldNpcSoloDpRewardServiceTests|FullyQualifiedName~PvpDpRewardServiceTests"` passes with 62 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PvpDpRewardServiceTests|WorldNpcSoloDpRewardServiceTests|QuestRewardServiceTests|CraftServiceTests|PlayerEnterWorldServiceTests|PlayerVisualStatsUpdateServiceTests|WorldNpcResourceStatsServiceTests|SkillDpConditionServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 322 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 941 tests.
+
+#### Migration Parity Table - Session 423
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats.getMovementSpeed` | `PlayerVisualStatsUpdateService.ResolveKnownMovementSpeed` | Stats Container / Service Boundary | Partial | Unit Tested | Partial Parity | Adds ordinary class walk/run/fly speeds and keeps ride speed precedence. Full stat modifier/cap pipeline is still missing. |
+| `com.aionemu.gameserver.model.PlayerClass.PlayerStatsTemplate` | `PlayerVisualStatsUpdateService` default class speed constants | Stats Template / Static Data | Partial | Unit Tested | Partial Parity | Ports Java base movement speeds: walk `1.5`, run `6.0`, fly `9.0`. This is not yet a shared `StatsTemplate` model. |
+| `com.aionemu.gameserver.model.stats.container.StatEnum.SPEED` | Non-ride run/walk `PlayerVisualSpeedSnapshot` | Stat Enum / Formula | Partial | Unit Tested | Partial Parity | Emits run/walk speed snapshots before packet broadcast. Speed modifiers from stat functions remain deferred. |
+| `com.aionemu.gameserver.model.stats.container.StatEnum.FLY_SPEED` | Non-ride flying `PlayerVisualSpeedSnapshot` | Stat Enum / Formula | Partial | Unit Tested | Partial Parity | Uses C# `Player.IsFlying()` over current creature-state bits. Java's separate `flyState` model is not ported. |
+| `com.aionemu.gameserver.model.gameobjects.state.CreatureState.WALK_MODE` | `PlayerCreatureState.WalkMode` | Runtime State | Partial | Unit Tested | Partial Parity | Walk-mode snapshots now resolve to `1.5` and broadcast `CHANGE_SPEED`. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.isInFlyingState` / `isFlying` | `Player.IsFlying()` plus `PlayerCreatureState.Flying/Gliding` | Runtime State | Partial | Unit Tested | Needs Verification | C# currently conflates flying/gliding state bits; Java stores player fly state separately. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_EMOTION` `CHANGE_SPEED` | `SmEmotion(ChangeSpeed)` from ordinary DP visual updates | Packet | Partial | Regression Tested | Partial Parity | Ordinary DP mutations now broadcast `CHANGE_SPEED` with class run speed in Java order. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData.setDp` | `WorldNpcResourceStatsService.AddPlayerDpAsync` visual update path | Resource Mutation / Packet Order | Partial | Regression Tested | Partial Parity | Non-ride online DP mutations now send stats, speed, then DP stat update. |
+| `com.aionemu.gameserver.services.QuestService.giveReward` DP branch | `QuestRewardService.ApplyDpRewardAsync` | Quest Reward Boundary | Partial | Regression Tested | Partial Parity | Packet-order assertions now include ordinary `CHANGE_SPEED`. |
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft/startCrafting` DP branch | `CraftService.SpendRecipeDpForCraftStartAsync` | Craft Cost Boundary | Partial | Regression Tested | Partial Parity | Packet-order assertions now include ordinary `CHANGE_SPEED`, including zero-cost DP path. |
+| `com.aionemu.gameserver.controllers.NpcController.doReward` solo DP branch | `WorldNpcSoloDpRewardService.ApplySoloDpRewardAsync` | NPC Reward Boundary | Partial | Regression Tested | Partial Parity | Solo reward tests now cover ordinary speed broadcast after DP visual stats. |
+| `com.aionemu.gameserver.services.PvpService.doReward` member DP branch | `PvpDpRewardService.ApplyMemberDpRewardAsync` | PVP Reward Boundary | Partial | Regression Tested | Partial Parity | PVP DP tests now cover ordinary speed broadcast after DP visual stats. |
+| `com.aionemu.gameserver.services.player.PlayerEnterWorldService` DP reset path | `PlayerEnterWorldService.EnterWorldAsync` DP reset through resource service | Login / Resource Boundary | Partial | Regression Tested | Partial Parity | Offline DP reset on enter world now includes class-run `CHANGE_SPEED` in the asserted packet order. |
+
+Tests added or extended:
+- `PlayerVisualStatsUpdateServiceTests.UpdateStatsAndSpeedVisuallyAsync_ResolvesClassRunSpeedWhenMissing`: validates non-ride run speed `6.0` produces stats then speed.
+- `PlayerVisualStatsUpdateServiceTests.UpdateStatsAndSpeedVisuallyAsync_UsesClassWalkAndFlySpeeds`: validates walk `1.5` and fly `9.0` snapshot selection.
+- Existing DP reward/resource tests were updated to assert `SmEmotion(ChangeSpeed)` after `SmStatsInfo` for ordinary non-ride players.
+- Java comparison status: tests are source-derived from Java `PlayerGameStats.getMovementSpeed`, `PlayerClass.PlayerStatsTemplate`, `PlayerCommonData.setDp`, `SM_EMOTION`, `SM_STATS_INFO`, `SM_STATUPDATE_DP`, and the existing reward/craft/enter-world DP callers; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Speed snapshots still bypass Java's full stat-function stack: effects, equipment, titles, abnormal states, caps, and dynamic stat listeners are not applied.
+- C# does not yet represent Java's separate `flyState`, so flying/gliding parity is approximate.
+- The Java `CreatureState.FLYING && !RESTING` fallback speed `12.0` has no C# trigger yet.
+- `PlayerVisualStatsUpdateService` still carries a service-level speed cache rather than Java `GameStats` instance fields with lifecycle cleanup.
+- Reflection, date/time, and serialization are not changed in this unit. Threading remains approximate because C# async registry calls replace Java synchronous packet utility calls.
+
+Summary metrics:
+- Total Java artifacts discovered: 13
+- Total artifacts ported: 1 partial ordinary class movement-speed snapshot bridge plus packet-order regression updates
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 13
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full player stat modifier resolution, separate player fly-state modeling, shared stat templates, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, group stat fanout, restore/flight timers, effect-controller state, full effect runtime, scheduled callbacks, real attack callers, dynamic observers, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Extract a shared player-stat resolver from the private `SmStatsInfo` calculations so `MAXDP`, attack speed, movement speed, and future HP/MP/FP caps are sourced from one Java-shaped stat boundary. A smaller fallback is to model Java `Player.flyState` separately enough to cover `isInFlyingState`, `isFlying`, and the remaining `PlayerGameStats.getMovementSpeed` fallback branches.
+
 ---
 
 ## Next Steps
