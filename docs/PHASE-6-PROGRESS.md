@@ -4726,6 +4726,50 @@ Summary metrics:
 Next recommended unit of work:
 - Wire staged HP heal outputs into the new HP boundary one narrow path at a time. Start with `HealEffect` / over-time HP heal adapter coverage from `WorldNpcSkillResourceOverTimePeriodicActionResult` into `IncreaseNpcHpAsync` / `IncreasePlayerHpAsync`, preserving disease/dead-target guards and keeping live observers, stat packets, restore tasks, and full effect runtime as explicit gaps if needed.
 
+### Session 404 (May 23, 2026)
+- Wired staged HP heal over-time outputs into the new HP resource boundary.
+- Extended `WorldNpcResourceMutationTarget` with HP-specific context for NPC disease, killing-blow reset intent, effector, and death options, without modeling a full Java `Creature` / `EffectController` runtime yet.
+- `ApplyResourceOverTimePeriodicResultAsync` now routes staged `HpHeal` results into `IncreaseNpcHpAsync` or `IncreasePlayerHpAsync`, preserving Java HP packet metadata and max-HP cap behavior.
+- Staged HP heals now cover NPC and player targets; player targets require caller-supplied max HP, matching the current staged stat-boundary pattern.
+- Current gaps in this cluster: real `HealEffect` scheduling/runtime, actual effect-controller disease lookup, live HP observer execution, player/group stat packets, restore tasks, aggro clearing, and HP stat calculation remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcResourceStatsServiceTests"` passes with 21 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcResourceStatsServiceTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GamePacketTests|GameServerBootstrapTests"` passes with 266 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 895 tests.
+
+#### Migration Parity Table - Session 404
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.HealEffect.onPeriodicAction` / HP heal over-time path | `WorldNpcSkillResourceOverTimePeriodicActionResult`; `WorldNpcResourceStatsService.ApplyResourceOverTimePeriodicResultAsync` | Effect-to-Stats Adapter | Partial | Unit Tested | Partial Parity | C# applies already-staged HP heal output to NPC or player HP through the new boundary, preserving packet type/log, cap, and side-effect intents. Real Java `Effect` scheduling, target resolution, and template runtime remain pending. |
+| `com.aionemu.gameserver.model.stats.container.CreatureLifeStats.increaseHp` | `WorldNpcResourceStatsService.IncreaseNpcHpAsync`; `IncreasePlayerHpAsync` via staged adapter | Runtime/Service | Partial | Unit Tested | Partial Parity | Staged HP heal output now reaches the direct HP boundary for NPC and player targets. Disease, dead-target, cap, and packet behavior are covered as service behavior; live observer and packet sends remain intents/gaps. |
+| `com.aionemu.gameserver.controllers.effect.EffectController.isAbnormalSet(AbnormalState.DISEASE)` | `WorldNpcResourceMutationTarget.TargetHasDisease`; `PlayerAbnormalState.Disease` | Guard/Adapter Context | Partial | Unit Tested | Needs Verification | NPC disease can be supplied as adapter context; player disease still comes from `Player.AbnormalState`. Full NPC effect-controller state is not ported. |
+| `com.aionemu.gameserver.skillengine.model.EffectReserved` | `WorldNpcSkillResourceOverTimePeriodicActionResult`; `WorldNpcResourceMutationTarget` | Staged DTO/Context | Partial | Unit Tested | Needs Verification | C# consumes staged HP heal DTOs, not real Java effect reserve storage or periodic task callbacks. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ATTACK_STATUS.TYPE.HP` / `LOG.HEAL` | `SmAttackStatusType.Hp`; `SmAttackStatusLog.Heal`; resource adapter packet propagation | Packet Metadata | Partial | Unit Tested | Partial Parity | HP heal packet metadata now flows from staged effect calculation through live resource mutation. Broader client validation is still pending. |
+
+Tests added or extended:
+- `WorldNpcResourceStatsServiceTests.ApplyResourceOverTimePeriodicResultAsync_IncreasesNpcHpFromStagedHpHeal`: validates staged HP heal output can increase stored NPC HP, cap to max, preserve `HP` / `HEAL` packet metadata, and carry killing-blow reset intent.
+- `WorldNpcResourceStatsServiceTests.ApplyResourceOverTimePeriodicResultAsync_IncreasesPlayerHpFromStagedHpHeal`: validates staged HP heal output can increase player HP and record HP stat, group stat, observer, full-HP aggro-clear, and killing-blow reset intents.
+- `WorldNpcResourceStatsServiceTests.ApplyResourceOverTimePeriodicResultAsync_BlocksNpcHpHealWhenDiseaseContextIsProvided`: validates adapter-supplied NPC disease context blocks HP heal mutation and suppresses packet broadcast.
+- Java comparison status: tests are source-derived from Java `HealEffect.onPeriodicAction`, `CreatureLifeStats.increaseHp`, `EffectController.isAbnormalSet`, and `SM_ATTACK_STATUS.writeImpl`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- The adapter applies staged DTOs only. It does not execute Java `Effect`, `EffectReserved`, periodic scheduling, target resolution, or effect-template lookup.
+- NPC disease remains caller-provided adapter context, not live effect-controller state.
+- Player and NPC HP side effects are still result intents or existing packet broadcasts. Real HP observers, `SM_STATUPDATE_HP`, group stat updates, restore tasks, FP restore triggers, and aggro-list clearing remain unported.
+- HP damage from staged HP effects is only represented through the negative-heal route if such a staged result appears; dedicated live HP damage effect wiring remains elsewhere.
+- Reflection, date/time, and precision/rounding are not materially involved. Threading parity remains approximate through service-level locking and staged DTO inputs.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 2 partial C# adapter/runtime artifacts plus target context fields
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full effect runtime, live HP observer/stat packet side effects, effect controller state, real resource packet classes, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue resource side-effect concretization with the smallest packet/intent closure: port or wire player HP stat-update output (`SM_STATUPDATE_HP`) from the existing `SendHpStatUpdate` intent, or deepen HP observer/restore-task intents if packet prerequisites are still missing. Keep full `SkillEngine` runtime and NPC effect-controller state out of scope unless their supporting models are ready.
+
 ---
 
 ## Next Steps
