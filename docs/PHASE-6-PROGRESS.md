@@ -12841,6 +12841,54 @@ Summary metrics:
 Next recommended unit of work:
 - Add non-sending `SM_GROUP_MEMBER_INFO` packet creation helpers to group-enter/reconnect plans now that the packet can serialize the source-shaped branches used by those plans. Keep live socket sends deferred, but expose `CreatePacket()` from `PlayerGroupMemberInfoIntent` when `PacketPlan` is present and add tests for join/enter/reconnect packet construction.
 
+### Session 587 (May 23, 2026)
+- Re-read Java `PlayerGroupEnteredEvent.handleEvent` to align group-enter member-info intent planning with Java send order.
+- Added `PlayerGroupMemberInfoIntent.CreatePacket()` so non-sending member-info intents can materialize `SmGroupMemberInfo` packets when a `PacketPlan` exists.
+- Extended `PlayerGroupEnteredPacketPlan` with `MemberInfoIntents`.
+- `PlayerGroupRuntime.CreateEnteredPacketPlan` now records Java's member-info outputs:
+  - `JOIN` to the entering player for the entering player;
+  - `ENTER` to each existing member for the entering player;
+  - `ENTER` to the entering player for each existing member.
+- Reconnect packet tests now validate `CreatePacket()` for the reconnecting player's `JOIN` intent.
+- Group-enter tests now validate `JOIN` packet creation and zero-effect `ENTER` packet creation for the entering player.
+- Kept live socket sends, Java packet ordering execution, and live effect extraction deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 110 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1208 tests.
+
+#### Migration Parity Table - Session 587
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.group.events.PlayerGroupEnteredEvent` | `Aion.GameServer.Services.PlayerGroupRuntime.CreateEnteredPacketPlan` / `PlayerGroupEnteredPacketPlan.MemberInfoIntents` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# now plans Java's group-enter member-info `JOIN`/`ENTER` sends as non-sending intents. Live `PacketSendUtility` fanout and superclass handling remain missing. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerConnectedEvent` | `PlayerGroupReconnectPacketPlan.MemberInfoIntents` with `CreatePacket()` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | Reconnect intents can now instantiate `SmGroupMemberInfo` packets. Live socket sends and Java ordering are still deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` through `PlayerGroupMemberInfoIntent.CreatePacket` | Server Packet / Intent Factory | Partial | Unit Tested | Needs Verification | Packet construction is covered for planned `JOIN` and zero-effect `ENTER` branches. Encoded frame/client validation is still missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | Non-sending packet intent records | Utility / Send Bridge | Refactored | Unit Tested | Intentional Difference | C# returns packet factories instead of sending to sockets until live group fanout is safe to wire. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.CreateEnteredPacketPlan_ReturnsNonSendingGroupInfoPlanLikeJavaPlayerGroupEnteredEvent`: extended to validate Java-shaped member-info `JOIN`/`ENTER` intent order, packet-plan metadata, and `SmGroupMemberInfo` payload construction for group-enter.
+- `PlayerGroupRuntimeTests.ReconnectMember_ReturnsNonSendingPacketIntentPlanLikeJavaPlayerConnectedEvent`: extended to validate `CreatePacket()` for reconnect `JOIN` packet construction.
+- Java comparison status: expectations are source-derived from `PlayerGroupEnteredEvent.handleEvent`, `PlayerConnectedEvent.handleEvent`, and `SM_GROUP_MEMBER_INFO.writeImpl`. No Java runtime execution, Java-generated golden vector, live send/fanout comparison, encoded frame comparison, or client validation was run.
+
+Remaining risks:
+- Live group member-info sends are still not wired to sockets.
+- Java packet ordering is represented by list order but not runtime-compared.
+- Existing member online/offline state in tests is fixture-controlled and not a live Java team snapshot comparison.
+- Effect-controller extraction remains missing; only packet DTO serialization exists.
+- Encoded opcode/frame and real-client handling remain unverified.
+- Threading behavior and superclass `PlayerEnteredEvent` handling remain deferred.
+- Date/time handling is not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 group-enter/reconnect member-info packet intent factory slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 7 live group member-info sends, Java packet ordering comparison, superclass player-entered handling, live effect-controller extraction, encoded opcode/frame golden validation, active connection/runtime comparison, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group-enter/reconnect member-info packets are now creatable from plans, but live dispatch and runtime comparisons are still incomplete.
+
+Next recommended unit of work:
+- Continue from packet planning to live-safe boundaries by adding a non-sending `PlayerGroupMemberInfoUpdatePlan` for Java `PlayerGroupUpdateEvent`: source-read `PlayerGroupUpdateEvent.handleEvent`, model the all-except-player recipient set for `SM_GROUP_MEMBER_INFO(group, player, groupEvent, slot)`, and reuse `PlayerGroupMemberInfoIntent.CreatePacket()` in tests. Keep actual effect-controller extraction and socket sends deferred.
+
 ---
 
 ## Next Steps
