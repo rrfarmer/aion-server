@@ -3864,6 +3864,56 @@ Summary metrics:
 Next recommended unit of work:
 - Add Java `AttackStatus` helper parity on the C# staged enum (`getBaseStatus`, `getOffHandStats`, `getCriticalStatusFor`, critical/counter flags) so later status calculation can build on tested enum behavior.
 
+### Session 387 (May 23, 2026)
+- Added Java `AttackStatus` helper parity to the staged C# skill-result surface.
+- Added `WorldNpcSkillAttackStatusExtensions` with Java-id exposure, counter-skill flags, critical flags, off-hand status mapping, base-status mapping, and critical-status mapping.
+- Kept the helper methods deterministic and side-effect free so the later `AttackUtil.calculatePhysicalStatus` / `calculateMagicalStatus` ports can build on tested enum behavior.
+- Added focused coverage for Java status ids, counter/critical classification, off-hand conversion, invalid off-hand conversion rejection, base-status conversion, and critical-status conversion.
+- Current gaps in this cluster: status probability calculation, physical/magical hit resolution, no-resist/cannot-miss handling beyond metadata, critical chance, off-hand attack generation, shield observer status mutation, and live `AttackResult` mutation remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcSkillResultCalculationServiceTests"` passes with 39 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcDamageServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GamePacketTests|GameServerBootstrapTests"` passes with 186 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 815 tests.
+
+#### Migration Parity Table - Session 387
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.attack.AttackStatus` | `Aion.GameServer.Services.WorldNpcSkillAttackStatus`; `WorldNpcSkillAttackStatusExtensions` | Enum/Utility | Partial | Unit Tested | Partial Parity | C# now mirrors Java ids and helper behavior for counter flags, critical flags, off-hand conversion, base-status conversion, and critical-status conversion. Attack probability calculation remains pending. |
+| `com.aionemu.gameserver.controllers.attack.AttackStatus.isCounterSkill` | `Aion.GameServer.Services.WorldNpcSkillAttackStatusExtensions.IsCounterSkill` | Utility | Ported | Unit Tested | Source Parity | Mirrors the Java counter-status set for dodge/parry/block/resist and critical/off-hand variants. |
+| `com.aionemu.gameserver.controllers.attack.AttackStatus.isCritical` | `Aion.GameServer.Services.WorldNpcSkillAttackStatusExtensions.IsCritical` | Utility | Ported | Unit Tested | Source Parity | Mirrors Java critical classification for main-hand and off-hand critical statuses. |
+| `com.aionemu.gameserver.controllers.attack.AttackStatus.getOffHandStats` | `Aion.GameServer.Services.WorldNpcSkillAttackStatusExtensions.GetOffHandStatus` | Utility | Ported | Unit Tested | Source Parity | Mirrors Java main-hand to off-hand conversion and rejects invalid main-hand inputs. |
+| `com.aionemu.gameserver.controllers.attack.AttackStatus.getBaseStatus` | `Aion.GameServer.Services.WorldNpcSkillAttackStatusExtensions.GetBaseStatus` | Utility | Ported | Unit Tested | Source Parity | Mirrors Java base-status normalization for dodge, resist, parry, and block families. |
+| `com.aionemu.gameserver.controllers.attack.AttackStatus.getCriticalStatusFor` | `Aion.GameServer.Services.WorldNpcSkillAttackStatusExtensions.GetCriticalStatusFor` | Utility | Ported | Unit Tested | Source Parity | Mirrors Java critical-status conversion for dodge/parry/block and normal hit families. |
+| `com.aionemu.gameserver.controllers.attack.AttackUtil.calculatePhysicalStatus` | Not started; future status calculation service | Utility | Not Started | No Tests | Unknown | The new helpers unblock status calculation, but physical status probability, critical chance, and off-hand handling are not ported. |
+| `com.aionemu.gameserver.controllers.attack.AttackUtil.calculateMagicalStatus` | Not started; future status calculation service | Utility | Not Started | No Tests | Unknown | Magical resist/no-resist status resolution remains pending. |
+| `com.aionemu.gameserver.controllers.attack.AttackResult` | `Aion.GameServer.Services.WorldNpcSkillAttackResult` | DTO | Partial | Unit Tested | Needs Verification | Attack status can now use tested helper behavior, but result mutation still uses staged caller-supplied status metadata. |
+
+Tests added or extended:
+- `WorldNpcSkillResultCalculationServiceTests.AttackStatusHelpers_MirrorJavaIdsAndFlags`: validates Java ids, counter flags, and critical flags.
+- `WorldNpcSkillResultCalculationServiceTests.GetOffHandStatus_MirrorsJavaMainHandMapping`: validates Java main-hand to off-hand status conversion.
+- `WorldNpcSkillResultCalculationServiceTests.GetOffHandStatus_RejectsJavaInvalidMainHandStatus`: validates invalid main-hand inputs are rejected by the C# helper.
+- `WorldNpcSkillResultCalculationServiceTests.GetBaseStatus_MirrorsJavaBaseStatusMapping`: validates Java base-status normalization.
+- `WorldNpcSkillResultCalculationServiceTests.GetCriticalStatusFor_MirrorsJavaCriticalMapping`: validates Java critical-status conversion.
+- Java comparison status: tests are source-derived from Java `AttackStatus`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Attack status probability calculation is not ported; the helpers only map already-known statuses.
+- `cannotmiss` and no-resist behavior still remain staged metadata instead of calculated status outcomes.
+- Off-hand status generation is helper-only; no dual-wield attack path creates off-hand `AttackResult` entries yet.
+- Critical chance, magical resist chance, dodge/parry/block rates, shield observers, and reflected/protected status mutations remain missing.
+- Threading, serialization, reflection, precision/rounding, and date/time behavior are not exercised by this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 6 partial/staged C# artifacts plus 5 source-parity helper methods
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 55% because full `AttackUtil`, status probability, shield observer execution, full effect runtime, real skill runtime, live drain/heal side effects, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Add a staged `AttackUtil.calculatePhysicalStatus` / `calculateMagicalStatus` input/result shell that records physical-vs-magical status candidates, no-resist/cannot-miss overrides, critical-upgrade intent, and unresolved probability inputs before real creature stats are available.
+
 ---
 
 ## Next Steps
@@ -3873,5 +3923,5 @@ Next recommended unit of work:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add Java `AttackStatus` helper parity on the C# staged enum (`getBaseStatus`, `getOffHandStats`, `getCriticalStatusFor`, critical/counter flags) so later status calculation can build on tested enum behavior, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add a staged `AttackUtil.calculatePhysicalStatus` / `calculateMagicalStatus` input/result shell that records physical-vs-magical status candidates, no-resist/cannot-miss overrides, critical-upgrade intent, and unresolved probability inputs before real creature stats are available, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
