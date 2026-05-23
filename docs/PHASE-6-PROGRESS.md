@@ -5812,6 +5812,44 @@ Summary metrics:
 Next recommended unit of work:
 - Continue flight/movement packet parity by auditing fly-state and movement-mask serialization in group/alliance/GM status packets, or step up to the shared player-stat resolver so `SmStatsInfo`, DP mutation caps, and speed snapshots stop duplicating Java stat logic.
 
+### Session 426 (May 23, 2026)
+- Updated `SmPlayerInfo` to mirror the Java `SM_PLAYER_INFO.writeImpl` `MovementMask.ABSOLUTE` branch: compute the visible movement vector from target coordinates to current position, scale it by the serialized movement speed, and clear the `ABSOLUTE` bit before writing the visible movement mask.
+- Kept the non-absolute branch on the existing stored movement vector path.
+- Extended the `SM_PLAYER_INFO` packet regression so a stale stored vector is ignored when `ABSOLUTE` is set; the test now asserts the normalized Java-shaped `3-4-0` vector scaled to run speed and the stripped `POSITION|MANUAL` mask.
+- Current gaps in this cluster: `SmPlayerInfo` still uses the existing C# default visible movement speed rather than a shared Java stat resolver, `PlayerMovementState` does not yet model Java's full `PlayerMoveController` target/vector lifecycle, and the group/alliance/GM status packet surfaces are still absent or unaudited.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.SmPlayerInfo"` passes with 1 test.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests"` passes with 76 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 944 tests.
+
+#### Migration Parity Table - Session 426
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmPlayerInfo` | Packet / Serialization | Partial | Regression Tested | Partial Parity | Absolute movement now writes a normalized target-direction vector and strips `MovementMask.ABSOLUTE`, matching the Java visible-player packet branch. |
+| `com.aionemu.gameserver.controllers.movement.PlayerMoveController` | `Aion.GameServer.Model.GameObjects.PlayerMovementState` | Runtime State / Movement Controller Summary | Partial | Regression Tested | Needs Verification | Target coordinates are consumed for the packet branch, but Java controller callbacks, `targetX2/targetY2/targetZ2` lifecycle, `lastMovementMask`, validation, and movement-task integration remain missing. |
+| `com.aionemu.gameserver.controllers.movement.MovementMask` | `Aion.GameServer.Controllers.Movement.MovementMask` | Utility / Constants | Partial | Regression Tested | Partial Parity | Existing `ABSOLUTE`, `POSITION`, and `MANUAL` constants are now exercised in the visible-player packet branch. Broader movement semantics remain incomplete. |
+
+Tests added or extended:
+- `GamePacketTests.SmPlayerInfo_WritesJavaShapedBaseline`: now covers the Java absolute-target movement vector branch and confirms the serialized movement mask clears the `ABSOLUTE` bit.
+- Java comparison status: the test is source-derived from Java `SM_PLAYER_INFO.writeImpl`, `PlayerMoveController`, and `MovementMask`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- `SmPlayerInfo` still writes a default movement speed rather than Java's fully resolved `player.getGameStats().getMovementSpeedFloat()` output.
+- The absolute-vector calculation is covered for a source-derived `3-4-0` target case, but live client captures and full Java controller target state transitions are not yet verified.
+- Group/alliance/GM member status packets that serialize fly-state or movement-mask remain future work because those C# packet/team surfaces are not yet present.
+- Reflection and date/time are not involved. Precision is limited to float vector normalization and covered by tolerance-based packet assertions. Threading is unchanged.
+
+Summary metrics:
+- Total Java artifacts discovered: 3
+- Total artifacts ported: 1 packet branch bridge to existing movement state
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because shared stat resolution, full movement-controller parity, flight controller validation, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Step up to the shared player-stat resolver so `SmStatsInfo`, DP mutation caps, speed snapshots, and `SmPlayerInfo` movement speed stop duplicating Java stat logic. A smaller alternative is to introduce the first narrow team/status packet scaffold for `SM_GROUP_MEMBER_INFO`, `SM_ALLIANCE_MEMBER_INFO`, or `SM_GM_SHOW_PLAYER_STATUS` so fly-state and movement-mask fanout can be tested.
+
 ---
 
 ## Next Steps
