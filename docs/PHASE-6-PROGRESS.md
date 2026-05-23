@@ -12321,6 +12321,51 @@ Summary metrics:
 Next recommended unit of work:
 - Continue group-enter parity by adding non-sending intent rows for the remaining Java `PlayerGroupEnteredEvent` caller outputs in dependency order: first party-enter system-message intent (`STR_PARTY_ENTERED_PARTY` / `STR_PARTY_HE_ENTERED_PARTY`) if existing `SmSystemMessage` helpers cover those ids, otherwise add source-derived message constants with tests. Keep `SM_GROUP_MEMBER_INFO`, brands, and abyss-rank fanout deferred until their dependencies are ready.
 
+### Session 576 (May 23, 2026)
+- Source-read Java `SM_SYSTEM_MESSAGE.STR_PARTY_ENTERED_PARTY` and `STR_PARTY_HE_ENTERED_PARTY`.
+- Added C# `SmSystemMessage.PartyEnteredParty()` for Java message id `1390262`.
+- Added C# `SmSystemMessage.PartyHeEnteredParty(string playerName)` for Java message id `1400009`.
+- Extended `PlayerGroupEnteredPacketPlan` with non-sending `PlayerGroupSystemMessageIntent` entries.
+- `PlayerGroupRuntime.CreateEnteredPacketPlan` now records Java's group-enter party-message intent: the entering player receives `STR_PARTY_ENTERED_PARTY`, and each existing member receives `STR_PARTY_HE_ENTERED_PARTY(enteringPlayer.Name)`.
+- Extended the group-enter runtime test to serialize and validate the `SmSystemMessage` payload ids and parameters.
+- Kept live socket sends, `SM_GROUP_MEMBER_INFO`, group brands, abyss-rank broadcast, superclass event handling, and full Java event ordering disabled.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 99 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1197 tests.
+
+#### Migration Parity Table - Session 576
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_ENTERED_PARTY` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyEnteredParty` | Server Packet Helper | Partial | Unit Tested | Needs Verification | C# helper uses Java message id `1390262` and payload serialization is tested through group-enter intent. No live client capture or Java golden vector validates the full frame. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_HE_ENTERED_PARTY` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyHeEnteredParty` | Server Packet Helper | Partial | Unit Tested | Needs Verification | C# helper uses Java message id `1400009` with entering-player name parameter. Parameter order is source-derived and tested, but not Java-runtime compared. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerGroupEnteredEvent` | `Aion.GameServer.Services.PlayerGroupRuntime.CreateEnteredPacketPlan` / `PlayerGroupEnteredPacketPlan` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# now records the entering-player `SM_GROUP_INFO` and party-message intents. Java also sends `SM_GROUP_MEMBER_INFO`, brands, abyss rank update, and superclass event handling; live sends are still missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `PlayerGroupSystemMessageIntent` | Packet Intent Dependency | Refactored | Unit Tested | Intentional Difference | Java sends immediately to connections. C# records non-sending intents until live group fanout is safe to wire. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | No C# packet equivalent in this unit | Server Packet Dependency | Not Started | No Tests | Unknown | Java sends JOIN/ENTER member-info packets around these system messages. C# still lacks serializer and live fanout. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.sendBrands` | No C# equivalent in this unit | Event Dependency | Not Started | No Tests | Unknown | Java sends existing brands to the entering player. Brand state/packet surface remains missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK_UPDATE` | No C# group-enter abyss-rank fanout in this unit | Server Packet Dependency | Not Started | No Tests | Unknown | Java broadcasts abyss rank update after group-enter fanout. C# does not model this caller here. |
+
+Tests added or extended:
+- `PlayerGroupRuntimeTests.CreateEnteredPacketPlan_ReturnsNonSendingGroupInfoPlanLikeJavaPlayerGroupEnteredEvent`: extended to validate `STR_PARTY_ENTERED_PARTY` id `1390262` for the entering player, `STR_PARTY_HE_ENTERED_PARTY` id `1400009` for existing members, and entering-player-name parameter serialization.
+- Java comparison status: expectations are source-derived from `PlayerGroupEnteredEvent.handleEvent` and Java `SM_SYSTEM_MESSAGE` factory ids. No Java runtime execution, Java-generated golden vector, live packet send comparison, encoded opcode/frame comparison, client capture, `SM_GROUP_MEMBER_INFO` comparison, brand comparison, abyss-rank comparison, or superclass event comparison was run.
+
+Remaining risks:
+- Group-enter message packets are still intent-only and are not sent through live sockets.
+- `SM_GROUP_MEMBER_INFO` remains missing, so Java's complete group-enter packet order is not represented.
+- Existing member iteration order follows C# runtime list order; Java team iteration ordering is not runtime-compared.
+- Brand sends, abyss-rank broadcast, superclass event behavior, and real add-member event dispatch are still missing.
+- Serialization is validated for unencrypted payload only. Full frame/opcode/header parity, reflection/JAXB behavior, threading behavior, date/time behavior, and precision/rounding were not newly validated.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 non-sending group-enter party-message intent slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 12 live group-enter send path, `SM_GROUP_MEMBER_INFO` serialization, group-enter member-info fanout, group brand sends, abyss rank update broadcast, superclass player-entered handling, Java add/send event ordering, Java member iteration/order comparison, encoded opcode/frame golden validation, full team event ordering/threading, active connection/runtime comparison, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; group-enter now plans group-info and party-message packets, but member-info, brands, abyss rank, and live sends remain missing.
+
+Next recommended unit of work:
+- Inspect existing C# `SmAbyssRankUpdate` support and Java `SM_ABYSS_RANK_UPDATE(1, player)` shape, then add a non-sending group-enter abyss-rank broadcast intent if the modeled fields are sufficient. If not, defer abyss-rank and add an explicit blocked dependency note, then consider a tiny brand-intent placeholder only if Java `PlayerGroup.sendBrands` can be source-read without broad dependencies.
+
 ---
 
 ## Next Steps
