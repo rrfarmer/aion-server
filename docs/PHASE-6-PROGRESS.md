@@ -6067,6 +6067,50 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the flight controller cluster by adding Java `FlyController.onStopGliding` / `endFly` visual stat refresh from the ordinary `CM_MOVE` stop-glide and `CM_EMOTION` land paths, or by introducing the missing fly-zone/free-flight/audit support needed to finish `canFly` guard parity.
 
+### Session 432 (May 23, 2026)
+- Added a local `GameServerConnection` visual-stat bridge for ordinary flight transitions that map to Java `PlayerGameStats.updateStatsAndSpeedVisually`.
+- Wired successful `CM_EMOTION(FLY)` starts to refresh owner stats and visible speed before the final `SM_EMOTION(FLY)` broadcast, matching Java `FlyController.startFly` packet order as closely as the current async connection model allows.
+- Wired `CM_EMOTION(LAND)` to refresh stats/speed after `Player.EndFlying()` and before the final land emotion broadcast, matching the Java `FlyController.endFly` stat-before-emotion ordering while leaving the already-modeled FP restore flag on the player method.
+- Wired `CM_MOVE` stop-glide transitions to refresh stats/speed after the optional `SM_EMOTION(STOP_GLIDE)` broadcast, matching Java `FlyController.onStopGliding`.
+- Reused the same bridge for successful `CM_MOVE` glide starts instead of constructing a separate visual-stat service inline.
+- Current gaps in this cluster: the connection-level packet order remains source-derived rather than socket-harness verified, the bridge uses a fresh visual-stat cache per call, FP restore/reduce timers are still represented as flags, and full Java stat-function/effect values remain partial.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerStateTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests|FullyQualifiedName~GamePacketTests"` passes with 106 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 947 tests.
+
+#### Migration Parity Table - Session 432
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.FlyController.startFly` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleEmotionAsync` | Client Packet Handler / Transition Fanout | Partial | Existing Packet + Service Coverage | Partial Parity | Ordinary fly start now invokes visual stat/speed refresh before the final `SM_EMOTION(FLY)` broadcast. Guard, state, and cooldown coverage comes from Sessions 430-431; socket-level order remains unverified. |
+| `com.aionemu.gameserver.controllers.FlyController.endFly` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleEmotionAsync` | Client Packet Handler / Transition Fanout | Partial | Existing Packet + Service Coverage | Partial Parity | Land now refreshes stats/speed before the final land emotion broadcast. C# `EndFlying` still represents FP restore as a flag rather than Java's scheduled life-stat task. |
+| `com.aionemu.gameserver.controllers.FlyController.onStopGliding` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleMoveAsync` | Client Packet Handler / Transition Fanout | Partial | Existing Packet + Service Coverage | Partial Parity | Stop-glide now refreshes stats/speed after the optional `SM_EMOTION(STOP_GLIDE)` broadcast. Java movement-controller notifications and falling updates remain incomplete. |
+| `com.aionemu.gameserver.controllers.FlyController.switchToGliding` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleMoveAsync` | Client Packet Handler / Transition Fanout | Partial | Existing Packet + Service Coverage | Partial Parity | Successful glide-start visual refresh now uses the shared connection helper introduced in this session. Guard coverage remains the Session 431 source-derived unit slice. |
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats.updateStatsAndSpeedVisually` | `Aion.GameServer.Services.PlayerVisualStatsUpdateService` | Service / Packet Fanout | Partial | Existing Unit Coverage | Partial Parity | The ordinary flight transition callsites now reuse the existing stats-then-speed bridge. Underlying stat/effect/equipment resolution and persistent speed-cache sharing remain partial. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATS_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatsInfo` | Packet / Serialization | Partial | Existing Regression Coverage | Partial Parity | Emitted by the visual-stat bridge for flight transitions when a connection registry exists. Full Java stat context remains incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_EMOTION` | `Aion.GameServer.Network.Aion.ServerPackets.SmEmotion` | Packet / Serialization | Partial | Existing Regression Coverage | Partial Parity | Existing fly/land/stop-glide/change-speed serialization is reused by the newly wired transition fanout. Live Java-golden packet captures were not run. |
+
+Tests added or extended:
+- No new test method was required for this wiring-only unit; validation reused the existing `PlayerStateTests`, `PlayerVisualStatsUpdateServiceTests`, and `GamePacketTests` coverage for the state mutations and packet payloads now connected by `GameServerConnection`.
+- Java comparison status: behavior is source-derived from Java `FlyController.startFly`, `FlyController.endFly`, `FlyController.onStopGliding`, `FlyController.switchToGliding`, and `PlayerGameStats.updateStatsAndSpeedVisually`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- `HandleEmotionAsync` and `HandleMoveAsync` still lack socket-level regression coverage for exact packet ordering across `SM_STATS_INFO`, `SM_EMOTION(CHANGE_SPEED)`, and the final flight emotion packets.
+- The connection helper creates a new `PlayerVisualStatsUpdateService` per transition, so the speed-cache lifetime is narrower than a future dependency-injected Java-shaped game-stat container.
+- FP timers remain flags on `Player`, not Java scheduled `PlayerLifeStats` tasks.
+- `PlayerVisualStatsUpdateService` still has partial stat, movement-speed, and attack-speed resolution.
+- Reflection is not used. Date/time is not introduced in this unit beyond the existing glide/fly cooldown callsites. Serialization is covered by existing packet tests, but not by live Java-golden captures. Threading remains approximate because Java synchronous `PacketSendUtility` fanout is represented with async registry sends.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 ordinary flight-transition visual-stat fanout bridge across 4 callsites
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full movement-controller parity, fly zone/access validation, cooldown audit logging, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue the flight guard cluster by introducing a narrow fly-zone/free-flight access model for Java `FlyController.canFly`, or add a focused `CM_MOVE` / `CM_EMOTION` socket harness to verify the transition packet ordering now wired through `GameServerConnection`.
+
 ---
 
 ## Next Steps
