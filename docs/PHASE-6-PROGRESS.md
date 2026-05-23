@@ -3706,6 +3706,58 @@ Summary metrics:
 Next recommended unit of work:
 - Add the next staged skill/effect mappings for delayed/proc/bleed-style damage (`DelayedSpellAttackInstantEffect`, `ProcAtkInstantEffect`, `BleedEffect`) and their log/observer differences before attempting full `AttackUtil` damage calculation.
 
+### Session 384 (May 23, 2026)
+- Extended `WorldNpcSkillDamageService` with staged delayed, proc, and bleed damage mappings.
+- Added `WorldNpcSkillDamageKind.DelayedSpellAttackInstant` for Java `DelayedSpellAttackInstantEffect`, mapping to `TYPE.DELAYDAMAGE`, `LOG.DELAYEDSPELLATKINSTANT`, `notifyAttack = true`, staged effector attack-observer notification, and staged delay metadata.
+- Added `WorldNpcSkillDamageKind.ProcAttackInstant` for Java `ProcAtkInstantEffect`, mapping to `TYPE.DAMAGE`, `LOG.PROCATKINSTANT`, `notifyAttack = true`, and no effector attack-observer notification.
+- Added `WorldNpcSkillDamageKind.BleedPeriodic` for Java `BleedEffect.onPeriodicAction`, mapping to `TYPE.DAMAGE`, `LOG.BLEED`, `notifyAttack = false`, and a staged DOT-attacked observer notification.
+- Added `WorldNpcSkillDelayResult` to carry delayed-effect timing metadata without scheduling work yet.
+- Added focused coverage for delayed spell attack packet/log/observer/delay mapping, proc instant no-observer mapping, and bleed DOT observer mapping.
+- Current gaps in this cluster: Java delayed scheduling, `AttackUtil.calculateSkillResult`, shield-ignore behavior, bleed resistance/abnormal-state lifecycle, movement modifier behavior, and real `SkillEngine` callers remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcDamageServiceTests"` passes with 14 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcDamageServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GamePacketTests|GameServerBootstrapTests"` passes with 146 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 775 tests.
+
+#### Migration Parity Table - Session 384
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.DelayedSpellAttackInstantEffect` | `Aion.GameServer.Services.WorldNpcSkillDamageKind.DelayedSpellAttackInstant`; `Aion.GameServer.Services.WorldNpcSkillDelayResult` | Skill Effect/Caller Kind | Partial | Unit Tested | Partial Parity | C# maps delayed damage type/log, attack observer, and delay metadata. It does not schedule delayed execution or calculate final damage. |
+| `com.aionemu.gameserver.skillengine.effect.ProcAtkInstantEffect` | `Aion.GameServer.Services.WorldNpcSkillDamageKind.ProcAttackInstant` | Skill Effect/Caller Kind | Partial | Unit Tested | Partial Parity | C# maps proc instant damage to `TYPE.DAMAGE`, `LOG.PROCATKINSTANT`, and no attack observer. Java movement-modifier and provoked base-value details remain pending. |
+| `com.aionemu.gameserver.skillengine.effect.BleedEffect` | `Aion.GameServer.Services.WorldNpcSkillDamageKind.BleedPeriodic`; `Aion.GameServer.Services.WorldNpcSkillDotAttackedObserverNotification` | Skill Effect/Caller Kind | Partial | Unit Tested | Partial Parity | C# maps periodic bleed damage to `LOG.BLEED`, `notifyAttack = false`, and DOT observer DTO. Bleed resistance, abnormal-state lifecycle, and over-time scheduling are not ported. |
+| `com.aionemu.gameserver.utils.ThreadPoolManager` | `Aion.GameServer.Services.WorldNpcSkillDelayResult` | Scheduler/DTO | Partial | Unit Tested | Needs Verification | C# records delay metadata only. Java schedules delayed spell attack work after `delay` milliseconds. |
+| `com.aionemu.gameserver.controllers.ObserveController.notifyAttackObservers` | `Aion.GameServer.Services.WorldNpcSkillAttackObserverNotification` | Observer Surface/DTO | Partial | Unit Tested | Partial Parity | C# returns attack-observer DTOs for delayed spell attack. Dynamic callback execution remains missing. |
+| `com.aionemu.gameserver.controllers.ObserveController.notifyDotAttackedObservers` | `Aion.GameServer.Services.WorldNpcSkillDotAttackedObserverNotification` | Observer Surface/DTO | Partial | Unit Tested | Partial Parity | C# returns DOT-observer DTOs for bleed. Dynamic callback execution remains missing. |
+| `com.aionemu.gameserver.skillengine.effect.AbnormalState.BLEED` | Not started; future abnormal-state/effect lifecycle service | Effect State | Not Started | No Tests | Unknown | Java starts/ends bleed abnormal state around periodic damage. C# does not model abnormal states in this caller. |
+| `com.aionemu.gameserver.controllers.attack.AttackUtil` | Not started; future C# skill result calculation service | Utility | Not Started | No Tests | Unknown | Java calculates final delayed/proc/bleed damage before the attack call. C# request still supplies final damage directly. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ATTACK_STATUS.LOG` | `Aion.GameServer.Network.Aion.ServerPackets.SmAttackStatusLog` | Packet Enum | Partial | Unit Tested | Partial Parity | C# now selects delayed spell, proc, and bleed logs. More effect logs remain pending. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ATTACK_STATUS.TYPE` | `Aion.GameServer.Network.Aion.ServerPackets.SmAttackStatusType` | Packet Enum | Partial | Unit Tested | Partial Parity | C# now selects `DelayDamage` for delayed spell attack and `Damage` for proc/bleed. Runtime packet comparison remains pending. |
+
+Tests added or extended:
+- `ApplyDamageEffectAsync_MapsDelayedSpellAttackToDelayDamageAndAttackObserver`: validates delayed spell type/log, attack-observer DTO, no DOT DTO, and delay metadata.
+- `ApplyDamageEffectAsync_MapsProcAttackInstantWithoutAttackObserver`: validates proc instant type/log and no attack/DOT observer DTO.
+- `ApplyDamageEffectAsync_MapsBleedPeriodicToDotObserver`: validates bleed type/log, `notifyAttack = false`, no attack-observer DTO, and DOT observer DTO.
+- Java comparison status: tests are source-derived from Java `DelayedSpellAttackInstantEffect.applyEffect`, `ProcAtkInstantEffect.applyEffect`, `BleedEffect.onPeriodicAction`, `ThreadPoolManager.schedule`, and observer calls; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Delayed execution is metadata-only; no scheduler call runs the attack later.
+- Damage is still supplied as a final value; Java `AttackUtil`, shield-ignore, magical boost, movement modifiers, and resistance checks remain missing.
+- Bleed abnormal-state lifecycle and resistance calculation are not ported.
+- Observer DTOs are not dispatched to dynamic observer callbacks.
+- Threading and timing are not Java-equivalent because no delayed task is scheduled yet.
+- Reflection, serialization, precision/rounding, and date/time behavior are not exercised by this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 6 partial/staged C# artifacts
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 55% because delayed scheduling, full skill runtime, `AttackUtil`, live drain/heal side effects, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Begin a staged `AttackUtil`-style skill result calculation shell for the skill-damage caller, starting with explicit inputs for `SkillAttackInstantEffect` `rnddmg` / `cannotmiss` and movement-modifier flags while continuing to accept caller-provided final damage until stats/resists are available.
+
 ---
 
 ## Next Steps
@@ -3715,5 +3767,5 @@ Next recommended unit of work:
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue `CM_EMOTION` only if the next slice first introduces one missing support model: full fly-zone/cooldown/FP timers, stance observers, sit observers, quest/summon observers, or reusable stat-speed calculation.
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
-6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, add the next staged skill/effect mappings for delayed/proc/bleed-style damage (`DelayedSpellAttackInstantEffect`, `ProcAtkInstantEffect`, `BleedEffect`) and their log/observer differences before attempting full `AttackUtil` damage calculation, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
+6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, begin a staged `AttackUtil`-style skill result calculation shell for the skill-damage caller, starting with explicit inputs for `SkillAttackInstantEffect` `rnddmg` / `cannotmiss` and movement-modifier flags while continuing to accept caller-provided final damage until stats/resists are available, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
