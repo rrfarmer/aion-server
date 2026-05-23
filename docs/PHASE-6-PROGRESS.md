@@ -9550,6 +9550,50 @@ Summary metrics:
 Next recommended unit of work:
 - Wire one production-shaped caller boundary to `PlayerPortalCooldownService` where C# already has enough portal/autogroup context, or add source-shaped `InstanceCooltimeData.calculateInstanceEntranceCooltime` support for relative/daily/weekly reset calculations before caller wiring.
 
+### Session 515 (May 23, 2026)
+- Extended C# instance cooltime summaries and the static-data loader to preserve Java `InstanceCooltime.type`, `typevalue`, and `ent_cool_time` fields.
+- Added `InstanceCooltimeTable.CalculateInstanceEntranceCooltime(worldId, now, instanceCooldownRate)` as a source-shaped helper for Java `InstanceCooltimeData.calculateInstanceEntranceCooltime`.
+- Modeled Java cooldown calculation behavior for `RELATIVE`, `DAILY`, and `WEEKLY` cooltime types, including `maxcount == 0` and missing-template returning `0`, `ent_cool_time == 0` relative cooldowns returning `0`, strict daily rollover after the entrance time, weekly reset-day selection, and cooldown-rate shortening.
+- Kept `InstanceService.getInstanceRate(player, worldId)` out of this unit; C# callers must supply the already-resolved rate until membership/config gates have a complete parity surface.
+- Focused validation: `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~StaticDataLoadingTests"` passes with 22 tests.
+- Full validation: `dotnet test dotnetConversion/AionServer.slnx` passes with 1068 tests.
+
+#### Migration Parity Table - Session 515
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dataholders.InstanceCooltimeData.calculateInstanceEntranceCooltime` | `Aion.GameServer.Dataholders.InstanceCooltimeTable.CalculateInstanceEntranceCooltime` | Dataholder Lookup / Time Calculation | Partial | Unit Tested | Partial Parity | C# models relative, daily, and weekly reset calculations with deterministic `DateTimeOffset` input and caller-supplied cooldown rate. Java uses `ServerTime.now()` and `System.currentTimeMillis()` internally; C# does not yet resolve server timezone or membership/config rate from `Player`. No Java runtime comparison was run. |
+| `com.aionemu.gameserver.model.templates.InstanceCooltime.getCoolTimeType` / `getTypeValue` / `getEntCoolTime` | `Aion.GameServer.Dataholders.InstanceCooltimeSummary.CoolTimeType` / `TypeValue` / `EntCoolTime` plus `StaticData.InstanceCooltimeBuilder` | Static Data DTO | Partial | Unit Tested | Partial Parity | C# now loads the fields required for entrance reset calculations. Other Java template fields such as min/max level and mentor entry remain unported unless covered by earlier slices. XML parsing defaults invalid/missing `ent_cool_time` to `0`; Java primitive `int` defaults to `0`. |
+| `com.aionemu.gameserver.model.instance.InstanceCoolTimeType` | String values on `Aion.GameServer.Dataholders.InstanceCooltimeSummary.CoolTimeType` | Enum | Refactored | Unit Tested | Needs Verification | C# currently uses string values (`RELATIVE`, `DAILY`, `WEEKLY`) rather than a dedicated enum. This keeps the XML summary light but is not Java enum/reflection compatible; invalid values return `0` instead of logging Java's warning. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getInstanceRate` | Caller-supplied `instanceCooldownRate` argument | Service / Config Boundary | Partial | Unit Tested | Needs Verification | Rate shortening formula is tested, but C# does not yet evaluate `MembershipConfig.INSTANCES_COOLDOWN`, `InstanceConfig.INSTANCE_COOLDOWN_RATE`, or excluded maps. Production callers must supply the rate until those config/membership gates are ported. |
+| `com.aionemu.gameserver.utils.time.ServerTime.now` | `DateTimeOffset now` argument | Time Utility | Refactored | Unit Tested | Intentional Difference | C# injects time for deterministic tests. Server timezone handling is not wired here; callers must pass a correctly-zoned value when production integration happens. |
+| `java.time.DayOfWeek` reset-day mapping | Private day mapping in `InstanceCooltimeTable` | Utility | Partial | Unit Tested | Partial Parity | C# maps Mon-Sun to Java values 1-7 and validates weekly reset selection. Invalid day strings throw `ArgumentException`, matching Java's `IllegalArgumentException` meaning but not type/reflection identity. |
+
+Tests added:
+- `WorldMapRuntimeStateTests.InstanceCooltimeTable_CalculatesRelativeEntranceCooldownLikeJava`: validates relative minutes, `ent_cool_time == 0`, unknown world `0`, and cooldown-rate shortening. Expectations are source-derived from Java; no Java runtime comparison was run.
+- `WorldMapRuntimeStateTests.InstanceCooltimeTable_CalculatesDailyEntranceCooldownLikeJava`: validates same-day reset before the daily time and next-day reset after the daily time.
+- `WorldMapRuntimeStateTests.InstanceCooltimeTable_CalculatesWeeklyEntranceCooldownLikeJava`: validates Java's weekly behavior where daily rollover happens before reset-day calculation.
+- `StaticDataLoadingTests.StaticData_LoadsBundledGameServerData`: expanded to verify bundled XML loads `CoolTimeType` and `EntCoolTime` for a known instance.
+- Java comparison status: source-derived from `InstanceCooltimeData`, `InstanceCooltime`, and `InstanceCoolTimeType`. No Java runtime execution, server-time fixture, live client validation, or production portal/autogroup caller path was executed.
+
+Remaining risks:
+- `InstanceService.getInstanceRate` membership/config logic is not wired; C# callers must supply the rate explicitly.
+- `InstanceCooltimeTable.CalculateInstanceEntranceCooltime` is not yet called by portal, autogroup, teleport, or cooldown persistence flows.
+- C# uses string cooltime types instead of Java's enum, so reflection/serialization identity differs and invalid type handling is less diagnostic than Java's logger warning.
+- Server timezone handling depends on the caller-provided `DateTimeOffset`; Java obtains `ZonedDateTime` from `ServerTime.now()`.
+- Date/time behavior is unit-tested but not Java-runtime compared. Serialization, database persistence, packet wire format, precision/rounding beyond integer millisecond division, and threading behavior are unchanged in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 narrow instance entrance cooldown calculation slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 5 `InstanceService.getInstanceRate` config/membership wiring, production portal/autogroup caller integration, immediate cooldown persistence, `SM_INSTANCE_INFO` fanout, and Java runtime/live-client validation
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this adds reset-time calculation support but does not yet close end-to-end instance entry parity.
+
+Next recommended unit of work:
+- Wire a production-shaped portal/autogroup caller to calculate entrance cooldowns and update `PlayerPortalCooldownService`, including `SM_INSTANCE_INFO` fanout if packet ordering can be tested, or first add the missing `InstanceService.getInstanceRate` membership/config gate if the caller needs non-default cooldown rates.
+
 ---
 
 ## Next Steps
