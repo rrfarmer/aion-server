@@ -5491,6 +5491,64 @@ Summary metrics:
 Next recommended unit of work:
 - Continue reward/distribution DP callers with the next bounded branch. Good candidates are Java `PvpService.doReward` DP gain if existing C# abyss/player-rank context is sufficient, or `PlayerTeamDistributionService.doReward` only if enough team-member/damage scaffolding exists. If both would require broad new runtime systems, switch to live speed snapshot support so DP mutations can emit `CHANGE_SPEED` like Java `PlayerGameStats.checkSpeedStats`.
 
+### Session 420 (May 23, 2026)
+- Added a focused C# `PvpDpRewardService.ApplyMemberDpRewardAsync` boundary for the Java `PvpService.doReward` per-member DP reward branch.
+- Ported the source DP formulas used by that branch: `StatFunctions.calculatePvpDpGained`, `StatFunctions.adjustPvpDpGained`, Java `Math.round` for per-member reward sharing, Java float-to-int narrowing, and `Rates.DP_PVP` style rate multiplication through an explicit effective rate.
+- Preserved Java's minimum DP behavior: `memberDpGain` starts at `1`, so a member still receives 1 DP when the daily kill cap is reached or the rounded DP share is non-positive.
+- Routed the final member DP gain through `WorldNpcResourceStatsService.AddPlayerDpAsync`, preserving visible `SmDpInfo`, owner `SmStatsInfo`, then owner `SmStatUpdateDp` ordering for online advanced-class players.
+- Added explicit missing-member, missing-victim, no-eligible-member, missing-max-DP, and starting-class states so later PVP reward orchestration can separate reward-input skips from shared DP-boundary skips.
+- Registered `PvpDpRewardService` in game-server DI for future PVP reward wiring.
+- Current gaps in this cluster: the service is not yet invoked from the live player-death reward loop, and Java final damage lists, team/range filtering, `KillCounter`, `CustomConfig.MAX_DAILY_PVP_KILLS`, AP rewards, XP rewards, quest kill updates, headhunter/custom PVP hooks, and real `Rates.DP_PVP` membership/config lookup remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PvpDpRewardServiceTests|FullyQualifiedName~WorldNpcSoloDpRewardServiceTests|FullyQualifiedName~QuestRewardServiceTests|FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests|FullyQualifiedName~GamePacketTests"` passes with 128 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PvpDpRewardServiceTests|WorldNpcSoloDpRewardServiceTests|QuestRewardServiceTests|PlayerEnterWorldServiceTests|PlayerVisualStatsUpdateServiceTests|WorldNpcResourceStatsServiceTests|CraftServiceTests|SkillDpConditionServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 317 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 936 tests.
+
+#### Migration Parity Table - Session 420
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.PvpService.doReward` per-member DP branch | `Aion.GameServer.Services.PvpDpRewardService.ApplyMemberDpRewardAsync` | Service Boundary | Partial | Unit Tested | Partial Parity | Covers one eligible member's DP gain calculation and mutation only. Full PVP death reward orchestration remains pending. |
+| `com.aionemu.gameserver.utils.stats.StatFunctions.calculatePvpDpGained` | `PvpDpRewardService.CalculatePvpDpGained` | Formula / Service Helper | Ported | Unit Tested | Needs Runtime Verification | Source-derived rank and max-level calculation; no Java runtime side-by-side validation was run. |
+| `com.aionemu.gameserver.utils.stats.StatFunctions.adjustPvpDpGained` | `PvpDpRewardService.AdjustPvpDpGained` | Formula / Service Helper | Ported | Unit Tested | Needs Runtime Verification | Preserves Java lossy compound assignment behavior across level penalty/bonus branches. |
+| `java.lang.Math.round` per-member DP share in `PvpService.doReward` | `PvpDpRewardService.CalculateRewardPerMember` | Formula / Rounding | Ported | Unit Tested | Needs Runtime Verification | Uses Java-style `floor(value + 0.5)` instead of .NET banker's rounding. |
+| `com.aionemu.gameserver.services.PvpService` `memberDpGain = 1` fallback | `PvpDpRewardService.CalculateMemberDpGain` | Reward Rule | Ported | Unit Tested | Needs Runtime Verification | Preserves Java minimum DP gain when daily kill limit blocks replacement or rounded reward is non-positive. |
+| `com.aionemu.gameserver.model.gameobjects.player.Rates.DP_PVP` | Explicit `dpPvpRate` parameter to `CalculateMemberDpGain` / `ApplyMemberDpRewardAsync` | Rate Config | Partial | Unit Tested | Needs Verification | Java selects membership/config rates from `RatesConfig.DP_PVP_RATES`; C# caller supplies the effective multiplier for now. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `WorldNpcResourceStatsService.AddPlayerDpAsync` reused by PVP DP reward service | Runtime / Service Boundary | Partial | Regression Tested | Partial Parity | PVP DP reward now uses shared packeted DP mutation. Live `PlayerGameStats.getMaxDp()` lookup remains absent. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmDpInfo` | Packet | Partial | Regression Tested | Partial Parity | Reused for visible PVP DP reward broadcast. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATS_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatsInfo` | Packet | Partial | Regression Tested | Partial Parity | Reused for owner visual stats after PVP DP reward mutation. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_DP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateDp` | Packet | Partial | Regression Tested | Partial Parity | Reused for owner DP stat update after visual stats. |
+| `com.aionemu.gameserver.configs.main.CustomConfig.MAX_DAILY_PVP_KILLS` and `KillCounter` | Explicit `underDailyKillLimit` input | PVP Limit / State | Not Started | No Tests | Needs Verification | C# boundary accepts the resolved limit result; actual per-victim daily kill tracking remains pending. |
+| `PvpService` final damage list, range filtering, and team member selection | Explicit `maxRank`, `maxLevel`, `groupDamagePercentage`, and `eligibleMemberCount` inputs | Combat Reward Input | Not Started | No Tests | Needs Verification | C# does not yet build Java killer/team reward member lists. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService.addAp` and `Rates.AP_PVP` | No C# PVP AP reward branch in this unit | Abyss Reward | Not Started | No Tests | Needs Verification | AP reward mutation, rank side effects, and packets remain outside this DP slice. |
+| `PlayerCommonData.addExp` and `Rates.XP_PVP` | No C# PVP XP reward branch in this unit | Progression / Reward | Not Started | No Tests | Needs Verification | XP reward and rate application remain pending. |
+| `PvpService.updateKillQuests`; `QuestEngine.onKillInZone/onKillInWorld/onKillRanked` | No C# PVP quest kill update bridge yet | Quest Event | Not Started | No Tests | Needs Verification | Quest kill side effects remain pending. |
+
+Tests added or extended:
+- `PvpDpRewardServiceTests.ApplyMemberDpRewardAsync_CalculatesRatesAndAddsDpThroughPacketedBoundary`: validates base PVP DP, per-member rounding, member adjustment/rate application, mutation, and packet order.
+- `PvpDpRewardServiceTests.ApplyMemberDpRewardAsync_DailyCapStillAddsJavaMinimumDp`: validates Java's 1-DP fallback when the daily kill cap blocks calculated DP replacement.
+- `PvpDpRewardServiceTests.AdjustPvpDpGained_MatchesJavaLevelPenalty`: validates the level-difference penalty/bonus branches.
+- `PvpDpRewardServiceTests.CalculatePvpDpGainedAndMemberShare_MatchJavaFormulas`: validates base reward, group share rounding, and zero-share fallback behavior.
+- `PvpDpRewardServiceTests.ApplyMemberDpRewardAsync_SkipsMissingInputsAndBoundaryCases`: validates missing inputs and shared DP-boundary skip states.
+- Java comparison status: tests are source-derived from Java `PvpService.doReward`, `StatFunctions.calculatePvpDpGained`, `StatFunctions.adjustPvpDpGained`, `Rates.DP_PVP`, `PlayerCommonData.addDp/setDp`, `SM_DP_INFO`, `SM_STATS_INFO`, and `SM_STATUPDATE_DP`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- The service is still an isolated boundary and is not invoked from the live player-death reward flow.
+- The caller must supply `maxRank`, `maxLevel`, `groupDamagePercentage`, `eligibleMemberCount`, `underDailyKillLimit`, `maxDp`, and `dpPvpRate` until C# has Java final damage lists, team/range filtering, kill counters, live max-DP lookup, and rate/membership config at this boundary.
+- PVP AP rewards, XP rewards, rank side effects, persistence, quest kill updates, and headhunter/custom-PVP hooks remain unported from the surrounding Java branch.
+- C# still sends owner visual stats but does not emit `CHANGE_SPEED` without a live speed snapshot.
+- Reflection and date/time are not involved. Threading parity remains approximate because Java reward mutation is synchronous while C# packet delivery is async through the registry.
+
+Summary metrics:
+- Total Java artifacts discovered: 15
+- Total artifacts ported: 1 partial PVP DP member reward service boundary plus source-derived PVP DP formula helpers
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 15
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because the live PVP death/reward loop, team distribution, PVP AP/XP reward branches, full quest reward pipeline, live NPC death/reward loop, speed snapshot/cached-stat parity, group stat fanout, restore/flight timers, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- The DP reward caller surface now has focused quest, solo-NPC, and PVP member boundaries. Continue with live speed snapshot support for `CHANGE_SPEED` after DP mutations, or take `PlayerTeamDistributionService.doReward` only after enough team-member/final-damage scaffolding exists to avoid inventing broad runtime state.
+
 ---
 
 ## Next Steps
