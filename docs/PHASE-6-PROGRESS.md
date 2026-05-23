@@ -6495,6 +6495,50 @@ Next recommended unit of work:
 - Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx` passing with 952 tests from Session 440.
 - Next recommended unit remains either focused connection/socket-level tests for the fly-zone transition fanout path, or carefully applying Java `ZoneInstance.canFly/canGlide` precedence only to zone option checks that actually consume those helpers. Do not apply that precedence blindly to `ZoneType.FLY` polygon membership.
 
+### Session 442 (May 23, 2026)
+- Added focused connection-level regression coverage for the Java `PlayerController.onLeaveFlyArea` fanout order.
+- Exposed `GameServerConnection.RevalidatePlayerFlightZonesAsync` internally to the test assembly through `InternalsVisibleTo`, avoiding reflection while keeping the helper out of the public API.
+- Added tests for both Java leave branches already ported in Session 439: flying+gliding downgrade sends owner stats, visible-player `CHANGE_SPEED`, then `STOP_FLY`; flying-only forced end sends owner stats, visible-player `CHANGE_SPEED`, then `LAND`.
+- The tests use a real `GameServerConnection` with a connected loopback `TcpClient` pair and a fake `IGameClientConnectionRegistry`, but they invoke the internal helper directly instead of running the encrypted client socket packet loop.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests|FullyQualifiedName~PlayerZoneStateServiceTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests"` passes with 15 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests|FullyQualifiedName~PlayerZoneStateServiceTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests|FullyQualifiedName~PlayerStateTests.PlayerFlightActionService"` passes with 93 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 954 tests.
+
+#### Migration Parity Table - Session 442
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController.onLeaveFlyArea` | `Aion.GameServer.Network.Aion.GameServerConnection.RevalidatePlayerFlightZonesAsync` / `ApplyFlightZoneTransitionFanoutAsync` | Connection Fanout / Zone Callback | Partial | Regression Tested | Partial Parity | New connection-level tests assert the two currently ported leave branches emit stats, speed, and `STOP_FLY` / `LAND` in Java source order. Spawned guard, full controller side effects, and socket-loop invocation remain incomplete. |
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats.updateStatsAndSpeedVisually` | `Aion.GameServer.Services.PlayerVisualStatsUpdateService.UpdateStatsAndSpeedVisuallyAsync` | Service / Packet Fanout | Partial | Regression Tested | Partial Parity | Tests verify the connection fanout calls the visual-stats bridge before the terminal flight emotion. Underlying stat/effect/equipment formulas and speed cache lifetime still differ from Java's full runtime. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATS_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatsInfo` | Server Packet | Partial | Regression Tested | Partial Parity | Tests assert `SM_STATS_INFO` is first in the fanout order. Payload parity is covered elsewhere; this unit does not add a new Java golden vector. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_EMOTION` | `Aion.GameServer.Network.Aion.ServerPackets.SmEmotion` | Server Packet / Serialization | Partial | Regression Tested | Partial Parity | Tests parse unencrypted C# payloads to confirm `CHANGE_SPEED`, `STOP_FLY`, and `LAND` emotion ids in fanout order. Existing packet tests still carry most serialization coverage. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.broadcastPacket` | `Aion.GameServer.Network.Aion.IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync` | Broadcast Utility Boundary | Partial | Regression Tested | Partial Parity | The fake registry verifies visible-player broadcasts include the source player, matching Java `broadcastPacket(player, packet, true)`. Known-list range behavior is not retested in this unit. |
+| `com.aionemu.gameserver.world.zone.FlyZoneInstance` / `NoFlyZoneInstance` | `Aion.GameServer.Services.PlayerZoneStateService.RevalidateFlightZones` + connection helper | Zone Transition Dependency | Partial | Regression Tested | Partial Parity | The test drives a leave-valid-fly-area result through the connection helper. It still recomputes booleans rather than using Java synchronized zone membership counters. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_MOVE` / `CM_MOVE_IN_AIR` / `CM_SUBZONE_CHANGE` | `Aion.GameServer.Network.Aion.GameServerConnection` packet switch call sites | Client Packet Handler Dependency | Partial | Source-Derived Integration Path | Needs Verification | The tested helper is the one these packet paths call, but the encrypted socket loop and exact packet-handler invocation are still not directly exercised. |
+
+Tests added or extended:
+- `GameServerConnectionFlightZoneFanoutTests.RevalidatePlayerFlightZonesAsync_BroadcastsStatsSpeedThenStopFlyWhenFlyingGliderLeavesFlyArea`: validates the Java flying+gliding downgrade branch state change plus packet order: `SM_STATS_INFO`, `SM_EMOTION(CHANGE_SPEED)`, `SM_EMOTION(STOP_FLY)`.
+- `GameServerConnectionFlightZoneFanoutTests.RevalidatePlayerFlightZonesAsync_BroadcastsStatsSpeedThenLandWhenFlyingPlayerLeavesFlyArea`: validates the Java forced end-fly branch state change plus packet order: `SM_STATS_INFO`, `SM_EMOTION(CHANGE_SPEED)`, `SM_EMOTION(LAND)`.
+- Java comparison status: tests are source-derived from Java `PlayerController.onLeaveFlyArea`, `PlayerGameStats.updateStatsAndSpeedVisually`, `PacketSendUtility.broadcastPacket`, and `SM_EMOTION`; no live Java runtime side-by-side validation was run.
+
+Remaining risks:
+- These are connection-level tests, not full socket tests; `CM_MOVE`, `CM_MOVE_IN_AIR`, and `CM_SUBZONE_CHANGE` encrypted packet-loop invocation remains needs-verification.
+- Java synchronized `ZoneInstance` membership and nested `ZoneType` counters are still approximated by C# current-position booleans.
+- Java `player.isSpawned()` audit gating remains unmodeled.
+- Visual stat/effect/equipment formulas and FP scheduler behavior remain partial.
+- Reflection is not used; `InternalsVisibleTo` is used for the test-only helper access. Serialization is parsed for emotion ids only. Date/time is not introduced. Threading still differs from Java synchronized controller/zone paths and FIFO zone updates.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 0 new runtime artifacts; 1 connection-level fanout verification slice added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full socket-order harnesses, mutable world-map options, zone-template precedence, full zone lifecycle handlers, full movement-controller parity, full audit subsystem, full transform model, full stat-function/effect resolution, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Either extend this harness down one level to an actual `CM_MOVE`, `CM_MOVE_IN_AIR`, or `CM_SUBZONE_CHANGE` packet-loop test, or apply Java `ZoneInstance.canFly/canGlide` precedence only to option checks that actually consume zone option flags. Keep `ZoneType.FLY` polygon membership separate unless a Java call site proves it should use `canFly`.
+
 ---
 
 ## Next Steps
