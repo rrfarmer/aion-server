@@ -4672,6 +4672,60 @@ Summary metrics:
 Next recommended unit of work:
 - Add a dedicated HP heal boundary for Java `CreatureLifeStats.increaseHp`, including disease guard, negative-heal-to-damage branch, max-HP cap, killing-blow reset, HP percentage packet metadata, and explicit gaps for HP observers, player `SM_STATUPDATE_HP`, team stat update, and restore-task triggers.
 
+### Session 403 (May 23, 2026)
+- Added a dedicated HP increase boundary for Java `CreatureLifeStats.increaseHp`.
+- Added `WorldNpcLifeStatsService.ApplyHpIncrease` for existing NPC life-stat snapshots, including disease blocking, dead-target no-op behavior, max-HP cap, no-delta skill-packet support through the caller, and killing-blow reset intent.
+- Added `WorldNpcResourceStatsService.IncreaseNpcHpAsync` and `IncreasePlayerHpAsync`, including Java's negative-heal redirect into HP damage, HP percentage packet metadata, disease guard, dead-target guard, player HP stat/team stat/observer/restore/aggro side-effect intents, and explicit current gaps for the unported live side effects.
+- Added sign override support to `SmAttackStatus` so C# can distinguish Java enum constants that share wire values, such as `DAMAGE`/`HP`, `FP_DAMAGE`/`FP`, and `DAMAGE_MP`/`ABSORBED_MP`.
+- Kept staged HP effect application unsupported for this unit. The direct HP boundary exists, but `HealEffect` / over-time HP adapter wiring still needs its own focused pass.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~GamePacketTests.SmAttackStatus"` passes with 21 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcResourceStatsServiceTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GamePacketTests|GameServerBootstrapTests"` passes with 264 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 893 tests.
+
+#### Migration Parity Table - Session 403
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.stats.container.CreatureLifeStats.increaseHp` | `Aion.GameServer.Services.WorldNpcLifeStatsService.ApplyHpIncrease`; `WorldNpcResourceStatsService.IncreaseNpcHpAsync`; `IncreasePlayerHpAsync` | Runtime/Service | Partial | Unit Tested | Partial Parity | C# covers positive HP heal cap, disease block, dead-target no-op, no-delta skill packet branch, negative-heal-to-damage redirect, HP percentage metadata, and killing-blow reset intent. Live Java synchronization is approximated through the existing service lock; live HP observers and full creature runtime are pending. |
+| `com.aionemu.gameserver.model.stats.container.CreatureLifeStats.reduceHp` | `WorldNpcLifeStatsService.ReduceHpAsync`; `WorldNpcResourceStatsService` negative-heal damage helpers | Runtime/Service | Partial | Unit Tested | Partial Parity | Negative HP heal now routes through the existing HP damage path and can emit Java-shaped attack-status metadata. Invulnerability, full attacker requirements, and full `CreatureController.onDie` parity remain broader gaps. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats.onHpChanged` | `WorldNpcResourceChangeResult.SendHpStatUpdate`; `SendGroupStatUpdate`; `TriggerRestoreTask`; `NotifyHpObservers`; `ClearAggroOnFullHp` | Player Side-Effect Intent | Partial | Unit Tested as Intent | Needs Verification | C# records player side-effect intent for HP changes but does not send `SM_STATUPDATE_HP`, group updates, run restore tasks, notify live observers, or clear live aggro lists yet. |
+| `com.aionemu.gameserver.controllers.effect.EffectController.isAbnormalSet(AbnormalState.DISEASE)` | `Player.IsAbnormalSet(PlayerAbnormalState.Disease)` and NPC `targetHasDisease` boundary input | Guard/Model | Partial | Unit Tested | Partial Parity | Player disease uses existing abnormal-state flags; NPC disease remains caller-provided until NPC effect-controller state exists. |
+| `com.aionemu.gameserver.skillengine.effect.AbnormalState.DISEASE` | `Aion.GameServer.Model.GameObjects.PlayerAbnormalState.Disease` | Enum/State | Partial | Unit Tested | Partial Parity | Disease bit exists for players and is consumed by HP heal guard. Full abnormal-state effect controller parity remains pending. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ATTACK_STATUS.TYPE.DAMAGE` / `HP` / `FP_DAMAGE` / `FP` / `DAMAGE_MP` / `ABSORBED_MP` | `Aion.GameServer.Network.Aion.ServerPackets.SmAttackStatus`; `SmAttackStatusType`; constructor sign override | Packet/Enum | Partial | Unit Tested | Partial Parity | Java has distinct enum constants sharing wire values. C# enum aliases need an explicit sign override so HP/FP/absorbed-MP heals serialize positive while damage aliases serialize negative. More golden packet vectors remain useful. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_HP` | `WorldNpcResourceChangeResult.SendHpStatUpdate` | Packet Intent | Not Started | Unit Tested as Intent | Needs Verification | C# records when Java would send HP stat updates, but the packet and self-send path are not ported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` / team stat update path | `WorldNpcResourceChangeResult.SendGroupStatUpdate` | Team Packet Intent | Not Started | Unit Tested as Intent | Needs Verification | C# records group stat update intent only. Real group/alliance fanout is pending. |
+| `com.aionemu.gameserver.skillengine.effect.HealEffect` / HP over-time heal callers | `WorldNpcResourceEffectApplicationStatus.UnsupportedResource` for staged HP application | Effect Adapter Gap | Not Started | Unit Tested as Unsupported | Needs Verification | Direct HP heal boundary exists, but staged/live effect adapters are still blocked until a focused HP adapter unit wires them safely. |
+
+Tests added or extended:
+- `WorldNpcResourceStatsServiceTests.IncreaseNpcHpAsync_CapsToMaxAndBroadcastsHealPacket`: validates Java HP heal cap, applied heal amount, `HP` / `HEAL` metadata, HP percentage, observer intent, killing-blow reset intent, and stored NPC HP mutation.
+- `WorldNpcResourceStatsServiceTests.IncreaseNpcHpAsync_BlocksDiseaseBeforePacketEvenForSkillHeal`: validates Java disease guard prevents mutation and suppresses even skill-triggered heal packets.
+- `WorldNpcResourceStatsServiceTests.IncreaseNpcHpAsync_RoutesNegativeHealToHpDamage`: validates Java negative-heal redirect into HP damage, HP percentage metadata, observer intent, and stored NPC HP damage mutation.
+- `WorldNpcResourceStatsServiceTests.IncreaseNpcHpAsync_SendsSkillPacketWhenHealDoesNotChangeHp`: validates Java's `newHp != previousHp || skillId != 0` attack-status branch for no-delta skill heals.
+- `WorldNpcResourceStatsServiceTests.IncreasePlayerHpAsync_CapsHealAndRecordsPlayerSideEffectIntents`: validates player HP heal cap plus HP stat, group stat, observer, full-HP aggro-clear, and killing-blow reset intents.
+- `WorldNpcResourceStatsServiceTests.IncreasePlayerHpAsync_RoutesNegativeHealToHpDamage`: validates player negative-heal-to-damage route, death status, MP zeroing on death, restore-task intent, and attack-status metadata.
+- `WorldNpcResourceStatsServiceTests.IncreasePlayerHpAsync_BlocksDiseaseAndDoesNotMutate`: validates player disease guard leaves HP unchanged and sends no packet.
+- `GamePacketTests.SmAttackStatus_WritesJavaHealAliasPayloadsWithPositiveValues`: validates positive wire values for Java heal aliases whose C# enum values overlap damage aliases.
+- Java comparison status: tests are source-derived from Java `CreatureLifeStats`, `PlayerLifeStats`, `EffectController`, `AbnormalState`, and `SM_ATTACK_STATUS.writeImpl`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- HP heal is available only as a direct service boundary. Staged `HealEffect` / HP resource effect adapter wiring remains unsupported.
+- NPC disease is modeled as a boundary input because NPC effect-controller abnormal state is not ported.
+- Player HP side effects are result intents only: real `SM_STATUPDATE_HP`, group updates, HP observer callbacks, restore task scheduling, FP restore triggers, and aggro-list clearing are pending.
+- C# does not model Java `killingBlow` storage; the service reports reset intent only.
+- `SmAttackStatus` alias sign override is covered by packet tests, but broader live client packet validation remains pending.
+- Reflection, date/time, and precision/rounding are not materially involved. Threading parity remains approximate: C# uses service-level locking for NPC snapshots, not full Java creature monitor semantics.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 3 partial C# runtime/service artifacts plus packet sign-override support and side-effect intent fields
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because staged HP effect wiring, real HP/MP/FP/DP packet classes, live observers, restore/flight tasks, effect controller state, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Wire staged HP heal outputs into the new HP boundary one narrow path at a time. Start with `HealEffect` / over-time HP heal adapter coverage from `WorldNpcSkillResourceOverTimePeriodicActionResult` into `IncreaseNpcHpAsync` / `IncreasePlayerHpAsync`, preserving disease/dead-target guards and keeping live observers, stat packets, restore tasks, and full effect runtime as explicit gaps if needed.
+
 ---
 
 ## Next Steps
