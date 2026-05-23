@@ -5275,6 +5275,59 @@ Summary metrics:
 Next recommended unit of work:
 - Wire the new `PlayerVisualStatsUpdateService` into the existing packeted DP/resource boundary so Java `PlayerCommonData.addDp/setDp -> PlayerGameStats.updateStatsAndSpeedVisually()` gets concrete owner `SmStatsInfo` output after DP mutation. Keep speed broadcast explicit until live speed snapshots/cached stat diffing exist, then re-check reward/distribution DP callers or group stat fanout once supporting models are present.
 
+### Session 416 (May 23, 2026)
+- Wired the new C# `PlayerVisualStatsUpdateService` into `WorldNpcResourceStatsService.AddPlayerDpAsync`.
+- Online DP mutations now preserve Java `PlayerCommonData.setDp` packet order with concrete packets: `SmDpInfo` visible broadcast, owner `SmStatsInfo` visual stat update, then owner `SmStatUpdateDp`.
+- Surfaced the visual stat update as `WorldNpcResourceChangeResult.VisualStatsUpdate` so DP callers and tests can verify the inserted Java side effect without scraping registry state.
+- Kept speed handling explicit: DP mutation currently calls `UpdateStatsAndSpeedVisuallyAsync` without a live `PlayerGameStats` speed snapshot, so the service sends owner stats and reports `SpeedSnapshotMissing` instead of emitting a guessed `CHANGE_SPEED`.
+- Extended DP caller tests for skill DP spend, DP transfer, revive DP reset, staged DP heal, and craft-start DP cost to verify the new middle `SmStatsInfo` packet.
+- Current gaps in this cluster: Java movement/attack-speed cache comparison, actual `CHANGE_SPEED` emission after DP changes, enter-world offline DP packet fanout, and reward/distribution DP callers remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests"` passes with 37 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerVisualStatsUpdateServiceTests|WorldNpcResourceStatsServiceTests|CraftServiceTests|SkillDpConditionServiceTests|PlayerEnterWorldServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 297 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 916 tests.
+
+#### Migration Parity Table - Session 416
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `Aion.GameServer.Services.WorldNpcResourceStatsService.AddPlayerDpAsync`; `WorldNpcResourceChangeResult.VisualStatsUpdate` | Runtime / Service Boundary | Partial | Regression Tested | Partial Parity | C# now executes concrete DP-info, visual-stats, and DP-stat packet ordering for online DP mutation. Live `PlayerGameStats.getMaxDp()` and automatic speed snapshots remain missing. |
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats` | `Aion.GameServer.Services.PlayerVisualStatsUpdateService` invoked by `WorldNpcResourceStatsService` | Stats Container / Service Boundary | Partial | Unit Tested | Partial Parity | `SmStatsInfo` is now emitted from DP mutation. `checkSpeedStats` cache comparison and stat/effect recalculation are not ported. |
+| `com.aionemu.gameserver.model.stats.container.CreatureGameStats` | `Aion.GameServer.Services.PlayerVisualSpeedSnapshot` unresolved at DP mutation call site | Base Stats Container / DTO | Partial | Unit Tested | Needs Verification | Java fills movement speed and attack-speed values from live stats when speed changes. C# reports `SpeedSnapshotMissing` after sending stats until a live stats container can provide the snapshot. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmDpInfo` | Packet | Partial | Regression Tested | Partial Parity | Still broadcasts first for online DP mutation. Tests now verify it precedes visual stat output and owner DP stat update. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATS_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatsInfo` | Packet | Partial | Regression Tested | Partial Parity | Now emitted in the Java DP mutation order. Static data/game-time values depend on runtime context availability; live-client capture remains pending. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_DP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateDp` | Packet | Partial | Regression Tested | Partial Parity | Still sends after visual stat update for online DP mutation, matching Java `PlayerCommonData.setDp`. |
+| `com.aionemu.gameserver.skillengine.action.DpUseAction` | `Aion.GameServer.Services.WorldNpcResourceStatsService.SpendPlayerDpForSkillAsync` | Skill Action / Service Boundary | Partial | Regression Tested | Partial Parity | Skill DP spend now inherits concrete owner `SmStatsInfo` output between DP info and DP stat packets. Full skill action runtime remains pending. |
+| `com.aionemu.gameserver.skillengine.effect.DPTransferEffect` | `Aion.GameServer.Services.WorldNpcResourceStatsService.TransferPlayerDpAsync` | Effect / Service Boundary | Partial | Regression Tested | Partial Parity | Both effected and effector DP legs now include visual stat packets in effected-first then effector-second order. Full effect runtime and reserved-value lifecycle remain pending. |
+| `com.aionemu.gameserver.services.player.PlayerReviveService` | `Aion.GameServer.Services.WorldNpcResourceStatsService.ResetPlayerDpForReviveAsync` | Service Boundary | Partial | Regression Tested | Partial Parity | Revive DP reset now inherits concrete owner visual stat output through the shared DP boundary. Full revive flow remains pending. |
+| `com.aionemu.gameserver.services.craft.CraftService` | `Aion.GameServer.Services.CraftService.SpendRecipeDpForCraftStartAsync` | Service Boundary | Partial | Regression Tested | Partial Parity | Craft-start recipe DP cost now inherits concrete owner visual stat output through the shared DP boundary. Full craft request/task/material/reward flow remains pending. |
+
+Tests added or extended:
+- `WorldNpcResourceStatsServiceTests.AddPlayerDpAsync_CapsOnlinePlayerAndSendsDpPacketsInJavaOrder`: now validates `SmStatsInfo` is sent between `SmDpInfo` and `SmStatUpdateDp`.
+- `WorldNpcResourceStatsServiceTests.SpendPlayerDpForSkillAsync_SpendsDpThroughPacketedBoundary`: now validates skill DP spend inherits visual stat output.
+- `WorldNpcResourceStatsServiceTests.TransferPlayerDpAsync_MovesReservedDpInEffectedThenEffectorOrder`: now validates each transfer leg includes visual stat output in Java order.
+- `WorldNpcResourceStatsServiceTests.ResetPlayerDpForReviveAsync_ClearsDpThroughPacketedBoundary`: now validates revive DP reset includes visual stat output.
+- `WorldNpcResourceStatsServiceTests.ApplyResourceOverTimePeriodicResultAsync_AddsDpFromStagedDpHealWithPacketIntents`: now validates staged DP heal includes visual stat output.
+- `CraftServiceTests.SpendRecipeDpForCraftStartAsync_SpendsRecipeDpAfterCraftValidation` and `RoutesZeroCostThroughDpBoundary`: now validate craft-start DP cost includes visual stat output.
+- Java comparison status: tests are source-derived from Java `PlayerCommonData.setDp`, `PlayerGameStats.updateStatsAndSpeedVisually`, `SM_DP_INFO`, `SM_STATS_INFO`, and `SM_STATUPDATE_DP`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- C# now sends owner visual stats after DP mutation, but does not yet emit `CHANGE_SPEED` because live movement/attack-speed snapshots and cached speed diffing are absent.
+- `WorldNpcResourceStatsService` can still be manually constructed without `PlayerVisualStatsUpdateService`; production DI and updated tests provide it.
+- Enter-world offline DP reset still mutates loaded DP directly instead of routing through the packeted DP boundary.
+- Reward/distribution DP callers remain thin or unwired.
+- Reflection and date/time are not involved. Threading parity remains approximate because Java stat callbacks are synchronous while C# packet delivery is async through the registry.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 partial DP visual-stat invocation bridge plus regression-tested DP caller reuse
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because speed snapshot/cached-stat parity, enter-world DP packet fanout, reward/distribution DP callers, group stat fanout, restore/flight timers, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Use the packeted DP boundary from `PlayerEnterWorldService` for the offline DP reset so Java enter-world `setDp(0)` gains immediate `SmDpInfo`, `SmStatsInfo`, and `SmStatUpdateDp` output when the C# connection context is available. If that constructor wiring is too invasive, re-check the smallest reward/distribution DP caller or continue resource-side group stat fanout only after team packet scaffolding exists.
+
 ---
 
 ## Next Steps
