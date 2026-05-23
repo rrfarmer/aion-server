@@ -5008,6 +5008,51 @@ Summary metrics:
 Next recommended unit of work:
 - Continue DP caller concretization with Java `DPTransferEffect`: add a focused C# staged transfer boundary that moves reserved DP from effector to effected player through `AddPlayerDpAsync` for both players, preserving Java's effected-first then effector-second mutation order and leaving full `Effect` / `EffectReserved` runtime storage as an explicit gap.
 
+### Session 410 (May 23, 2026)
+- Added a focused Java `DPTransferEffect.applyEffect` boundary as `WorldNpcResourceStatsService.TransferPlayerDpAsync`.
+- The transfer boundary applies the reserved DP value to the effected player first, then subtracts the same value from the effector, preserving Java mutation order.
+- Both sides reuse `AddPlayerDpAsync`, so each online player receives the concrete DP info/stat packet sequence already established in Sessions 408-409.
+- Added `WorldNpcDpTransferEffectResult` / `WorldNpcDpTransferEffectStatus` to keep staged transfer status separate from individual DP resource changes.
+- Current gaps in this cluster: Java `EffectReserved` calculation/storage, `EffectTemplate.calculate`, live `Effect` execution, and target/effector type casting remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~GamePacketTests"` passes with 102 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcResourceStatsServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 272 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 901 tests.
+
+#### Migration Parity Table - Session 410
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.DPTransferEffect` | `Aion.GameServer.Services.WorldNpcResourceStatsService.TransferPlayerDpAsync`; `WorldNpcDpTransferEffectResult`; `WorldNpcDpTransferEffectStatus` | Effect/Service | Partial | Unit Tested | Partial Parity | C# applies the supplied reserved DP value to effected player first and effector second, matching Java `applyEffect` ordering. Full `calculate`, `Effect`, and XML effect runtime are not ported here. |
+| `com.aionemu.gameserver.skillengine.model.EffectReserved` | No dedicated C# live `EffectReserved` storage for DP transfer yet | DTO/Runtime | Not Started | No Tests | Needs Verification | Java stores `getCurrentStatValue(effect)` as a reserved DP value before apply. C# currently accepts the reserved value explicitly. |
+| `com.aionemu.gameserver.skillengine.model.Effect` | No dedicated C# live `Effect` runtime for DP transfer yet | Runtime/Model | Not Started | No Tests | Needs Verification | Java obtains effector/effected players and reserved values from `Effect`; C# takes explicit players and reserved DP value until the effect runtime exists. |
+| `com.aionemu.gameserver.skillengine.effect.EffectTemplate` | No dedicated C# `EffectTemplate.calculate` bridge for DP transfer yet | Abstract Effect | Not Started | No Tests | Needs Verification | Java `DPTransferEffect.calculate` depends on `super.calculate`. C# does not yet model this calculation pipeline. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `WorldNpcResourceStatsService.AddPlayerDpAsync` reused by `TransferPlayerDpAsync` | Runtime/Service | Partial | Unit Tested | Partial Parity | Both transfer legs mutate DP through the concrete packeted boundary. Live max-DP stat lookup and visual stat/speed packet output remain gaps. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmDpInfo` | Packet | Partial | Unit Tested | Partial Parity | Reused for both transfer legs. This session verifies effected-first then effector-second broadcast ordering; live-client capture remains pending. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_DP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateDp` | Packet | Partial | Unit Tested | Partial Parity | Reused for both transfer legs. This session verifies owner stat-update ordering after each DP info broadcast; live-client capture remains pending. |
+
+Tests added or extended:
+- `WorldNpcResourceStatsServiceTests.TransferPlayerDpAsync_MovesReservedDpInEffectedThenEffectorOrder`: validates DP transfer mutation, affected player ordering, packet output for both players, and packet order of effected `SM_DP_INFO`/`SM_STATUPDATE_DP` before effector `SM_DP_INFO`/`SM_STATUPDATE_DP`.
+- `WorldNpcResourceStatsServiceTests.TransferPlayerDpAsync_RequiresEffectedAndEffectorPlayers`: validates missing-target branches do not mutate or emit packets.
+- Java comparison status: tests are source-derived from Java `DPTransferEffect.applyEffect`, `PlayerCommonData.addDp/setDp`, `SM_DP_INFO.writeImpl`, and `SM_STATUPDATE_DP.writeImpl`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Java `DPTransferEffect.calculate` and `EffectReserved` lifecycle are not live. The C# transfer boundary accepts the reserved DP value directly.
+- Java casts both `effect.getEffected()` and `effect.getEffector()` to `Player`; C# accepts nullable `Player` inputs and reports missing-target statuses instead of exercising Java cast failure behavior.
+- Max-DP values are still explicit inputs to the C# DP boundary rather than live `PlayerGameStats.getMaxDp()` lookups.
+- `PlayerGameStats.updateStatsAndSpeedVisually()` remains a result intent only on both transfer legs.
+- Reflection and date/time are not involved. Threading parity remains approximate through async service methods and connection-registry calls outside Java synchronized semantics.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 partial C# transfer service boundary plus result DTO/status and packeted DP-boundary reuse
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full effect calculation/application runtime, `EffectReserved` storage, DP craft/reward/revive callers, group stat fanout, restore/flight timers, DP visual stat updates, effect-controller state, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue DP caller concretization with a small Java caller that spends or resets DP through the packeted boundary, such as `CraftService.startCrafting` recipe DP cost or `PlayerReviveService` DP reset, or take the visual-stat side effect next by wiring `PlayerGameStats.updateStatsAndSpeedVisually()` to concrete C# packet output if the required static-data context can be provided cleanly.
+
 ---
 
 ## Next Steps
