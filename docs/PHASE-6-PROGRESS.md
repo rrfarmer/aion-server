@@ -10250,6 +10250,49 @@ Summary metrics:
 Next recommended unit of work:
 - Continue source-order portal validation with `checkTitle` using explicit `portalPathTitleId` and `Player.Titles` membership until `PortalPath` loading exists, or pivot to a minimal `PortalPath` static-data model before adding more guards.
 
+### Session 531 (May 23, 2026)
+- Added `PortalEntryValidationService.ValidateTitle`, a narrow source-shaped equivalent of Java `PortalService.checkTitle`.
+- The helper compares explicit `portalPathTitleId` against `Player.TitleId`, matching Java's active `PlayerCommonData.titleId` check rather than learned-title-list membership.
+- The helper supports Java's membership/admin bypass boundary through an explicit `bypassTitleRequirement` parameter and returns `SM_DIALOG_WINDOW(npcObjectId, DialogPage.NO_RIGHT.id())` when the active title does not match.
+- Added tests for missing title requirement, matching active title, mismatched active title despite learned-title ownership, and bypass behavior.
+- Kept this parameterized until `PortalPath` static-data loading exists; no production portal handler calls the helper yet.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~GamePacketTests"` passes with 105 tests.
+
+#### Migration Parity Table - Session 531
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.checkTitle` | `Aion.GameServer.Services.PortalEntryValidationService.ValidateTitle` | Service / Validation | Partial | Unit Tested | Partial Parity | C# models the active-title comparison and `NO_RIGHT` dialog failure branch. It returns the packet rather than dispatching it and remains unwired to live portal flow. |
+| `com.aionemu.gameserver.model.templates.portal.PortalPath.getTitleId` | Explicit `portalPathTitleId` parameter to `ValidateTitle` | Template Boundary | Partial | Unit Tested | Needs Verification | Java portal-path title id is represented by a primitive parameter. C# still lacks `PortalPath` XML/static-data loading, so data fidelity is not verified. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData.getTitleId` | `Aion.GameServer.Model.GameObjects.Player.TitleId` | Player State | Partial | Unit Tested | Partial Parity | Tests deliberately show learned-title ownership alone does not satisfy the guard; the active title id must match. Live title activation/persistence behavior is not verified here. |
+| `com.aionemu.gameserver.model.gameobjects.player.title.TitleList` | `Aion.GameServer.Model.GameObjects.Player.Titles` | Player State Dependency | Not Started | No Tests | Unknown | Discovered non-dependency for this guard: Java `checkTitle` does not query `TitleList.contains`, so learned-title list parity remains outside this unit. |
+| `com.aionemu.gameserver.model.DialogPage.NO_RIGHT` / `SM_DIALOG_WINDOW` | `Aion.GameServer.Network.Aion.ServerPackets.SmDialogWindow.NoRightPageId` / `SmDialogWindow` | Packet Constant / Dialog | Partial | Unit Tested / Regression Tested | Partial Parity | Existing `NO_RIGHT` dialog payload support is reused and asserted. Live-client dispatch and full `DialogPage` enum parity remain unverified. |
+
+Tests added:
+- `PortalEntryValidationServiceTests.ValidateTitle_AllowsWhenJavaPortalTitleRequirementIsMissing`: validates title id `0` allows entry.
+- `PortalEntryValidationServiceTests.ValidateTitle_AllowsWhenActiveJavaCommonDataTitleMatches`: validates active title id match.
+- `PortalEntryValidationServiceTests.ValidateTitle_ReturnsNoRightDialogWhenActiveTitleDiffers`: validates learned-title ownership is insufficient if active title differs and asserts dialog payload.
+- `PortalEntryValidationServiceTests.ValidateTitle_AllowsMembershipBypassLikeJavaPermission`: validates explicit bypass behavior.
+- Java comparison status: expectations are source-derived from `PortalService.checkTitle`, `PortalPath.getTitleId`, `PlayerCommonData.getTitleId`, `DialogPage.NO_RIGHT`, and `SM_DIALOG_WINDOW`. No Java runtime execution, portal-template loading, production portal handler, title activation flow, or encrypted client validation was run.
+
+Remaining risks:
+- The title guard is not wired into production portal flow.
+- `PortalPath` static-data loading remains absent, so title ids are caller-supplied.
+- Player title activation/persistence and learned-title expiration behavior are outside this guard and not verified here.
+- Remaining portal checks include quests, player size, required item removal, kinah, and production transfer wiring.
+- Packet dispatch timing, threading, reflection identity, date/time behavior, precision/rounding, serialization beyond the tested dialog payload, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 narrow portal title-validation guard
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 4 production portal handler wiring, portal-path static-data model, remaining portal guards, and live-client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 56% complete; another source-order portal guard is represented, but end-to-end portal entry remains incomplete.
+
+Next recommended unit of work:
+- Add a minimal `PortalPath` static-data model/loading slice before more portal guards, because level/race/rank/title now all rely on explicit portal-path parameters and quest/item/kinah checks will otherwise compound that gap.
+
 ---
 
 ## Next Steps
