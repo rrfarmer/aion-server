@@ -10871,6 +10871,52 @@ Summary metrics:
 Next recommended unit of work:
 - Implement the next teleport-free-to-teleport transition slice for same-instance portal actions: consume `PortalEntryPreparationResult.EntryPlan.Action == SameInstanceTeleport` in the dialog caller and invoke a narrow C# same-map teleport service that mutates player position and emits the expected teleport/location packets, while still leaving instance transfer/allocation and group/alliance fanout for later.
 
+### Session 545 (May 23, 2026)
+- Added `PlayerTeleportService.TeleportWithinSameInstance`, a narrow immediate teleport mutation for Java `TeleportService.teleportTo(..., TeleportAnimation.NONE)` when portal entry stays in the same world and instance.
+- Added `GameServerConnection.TeleportSameInstancePortalAsync`, which consumes a `PortalLocSummary`, keeps the player's current instance id, broadcasts the Java-shaped despawn animation to visible players when a connection registry is available, mutates the player position immediately, revalidates C# creature PVP-zone counters, and sends the existing same-world spawn packet sequence.
+- Extended `PortalEntryInteractionService.HandleDialogSelectAsync` with an optional same-instance teleport delegate and wired `GameServerConnection` to pass `TeleportSameInstancePortalAsync`.
+- The dialog portal caller now sends required-item/kinah consumption packets first, then invokes same-instance teleport when `PortalEntryPreparationResult.EntryPlan.Action == SameInstanceTeleport`, matching Java's successful `checkAndRemoveRequiredItems` then `TeleportService.teleportTo` branch order.
+- Kept instance transfer/allocation, cooldown addition, delayed fade-out teleports, group/alliance/league fanout, map-change level-ready completion, pet movement, protection task restart, effect icon refresh, and legion member world updates out of scope.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryInteractionServiceTests|FullyQualifiedName~PlayerTeleportServiceTests"` passes with 7 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1156 tests.
+
+#### Migration Parity Table - Session 545
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` same-map branch | `Aion.GameServer.Services.PortalEntryInteractionService.HandleDialogSelectAsync` invoking same-instance teleport delegate | Service / Caller Boundary | Partial | Unit Tested | Partial Parity | C# now consumes `SameInstanceTeleport` after successful requirement packet sends. It only covers same world and same instance; transfer/allocation branches remain missing. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.teleportTo(Player, int, int, float, float, float, byte)` with `TeleportAnimation.NONE` | `Aion.GameServer.Network.Aion.GameServerConnection.TeleportSameInstancePortalAsync` | Service / Packet-Orchestration Boundary | Partial | Unit Tested | Partial Parity | C# mutates position immediately and sends same-world spawn packets. Java abort-player-actions, private-store close, skill cancel, target clear, ride unset, pet position, protection task restart, effect icon refresh, zone update depth, and legion member update are not fully represented. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.SpawnTask.run` same-world branch | `Aion.GameServer.Services.PlayerTeleportService.TeleportWithinSameInstance` plus `GameServerConnection.SendDelayedTeleportCompletionPacketsAsync` same-world sequence | Service / State Mutation | Partial | Unit Tested | Needs Verification | Position, movement vector reset, landing port animation before spawn packets, and same-world packet sequence reuse are represented. Java spawned-state guard, world despawn/spawn internals, pet spawn, and live known-list behavior are not runtime-compared. |
+| `com.aionemu.gameserver.world.World.despawn` with `TeleportAnimation.NONE.getDefaultObjectDeleteAnimation` | `IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync(..., SmDelete(..., ObjectDeleteAnimation.FadeOut))` | World / Visibility Boundary | Partial | No Tests | Needs Verification | Production method broadcasts visible-player delete when a registry exists. This path is not covered by a socket/order integration test and does not model full Java known-list despawn. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CHANNEL_INFO` | `SmChannelInfo` sent by same-world completion packet sequence | Packet | Partial | Regression Tested | Partial Parity | Existing packet surface is reused. Live-client same-instance portal capture not run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_INFO` | `SmPlayerInfo` sent by same-world completion packet sequence | Packet | Partial | Regression Tested | Partial Parity | Existing packet surface is reused. Player port-animation timing is source-derived but not live-client verified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATS_INFO` | `SmStatsInfo` sent by same-world completion packet sequence | Packet | Partial | Regression Tested | Partial Parity | Existing packet surface is reused. Stat recalculation/effect refresh depth is incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_MOTION` | `SmMotion` sent by same-world completion packet sequence | Packet | Partial | Regression Tested | Partial Parity | Existing packet surface is reused. Active motion state is C# loaded state only and not runtime-compared to Java. |
+
+Tests added or extended:
+- `PortalEntryInteractionServiceTests.HandleDialogSelect_SendsRequirementConsumptionPacketsInJavaOrder`: extended to validate same-instance teleport delegate invocation happens after delete/cube/item-update/kinah-update packets.
+- `PortalEntryInteractionServiceTests.TeleportWithinSameInstance_MutatesPositionAndSetsLandingBeforeSpawnPackets`: validates immediate same-instance teleport state mutation, previous/destination positions, same-world flag, landing port animation, and movement target reset.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `TeleportService.sendLoc`, `TeleportService.SpawnTask.run`, `TeleportAnimation.NONE`, and `spawnOnSameMap`. No Java runtime execution, live client capture, known-list comparison, pet movement validation, map-change transfer, instance allocation, or socket-order integration test was run.
+
+Remaining risks:
+- Same-instance portal teleport is now wired for the dialog caller, but the connection branch is still not covered by an encrypted live socket test.
+- Java action-abort side effects are incomplete: private store close, current skill cancel, target clear, ride-state unset, and full controller task handling are not represented in this slice.
+- Java world despawn/spawn internals, pet movement/spawn, protection task restart, effect icon refresh, and full zone-update callbacks remain partial or missing.
+- Instance transfer/allocation, delayed fade-out teleports, cooldown addition, group/alliance/league fanout, map-change level-ready flow, and destroyed-instance fallback remain outside this slice.
+- Packet serialization uses existing tested packet surfaces, but same-instance portal packet order has not been live-client captured.
+- Threading/locking, reflection/JAXB behavior, date/time behavior, precision/rounding, and live runtime/client comparison remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 narrow same-instance portal teleport execution slice over existing packet/state surfaces
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 8 instance transfer/allocation, cooldown addition, group/alliance fanout, full action-abort side effects, pet teleport/spawn, known-list despawn/spawn parity, live socket validation, and Java runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 62% complete; same-instance dialog portal execution now mutates position and sends the same-world packet sequence, but instance-entry transfer and broader teleport side effects remain incomplete.
+
+Next recommended unit of work:
+- Add the solo/open-world non-same-map portal transfer slice: consume `PortalEntryPreparationResult.EntryPlan.Action == Continue` for `maxPlayers` 0/1, allocate or reuse the target instance through `WorldMapRuntimeStateTable`, queue the existing delayed teleport request with `TeleportAnimation.FadeOutBeam`, and apply entrance cooldown after the teleport request, while still excluding group/alliance/league fanout.
+
 ---
 
 ## Next Steps
