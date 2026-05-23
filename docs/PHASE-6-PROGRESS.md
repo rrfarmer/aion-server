@@ -5968,6 +5968,56 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the flight cluster with Java `FlyController.canFly/canGlide` guard parity, or move to a first narrow status packet scaffold (`SM_GM_SHOW_PLAYER_STATUS`, `SM_GROUP_MEMBER_INFO`, or `SM_ALLIANCE_MEMBER_INFO`) now that fly-state, movement-mask, and visual speed fanout have stronger shared coverage.
 
+### Session 430 (May 23, 2026)
+- Added `PlayerFlightActionService.StartFlying` for the first Java `FlyController.startFly` guard slice.
+- The C# `CM_EMOTION` fly branch now goes through the guard service before mutating fly-state.
+- Ported Java guard order for the currently supported inputs: Daeva/start-class check, `AbnormalState.NOFLY`, transform flight restriction, private-store blocking, and non-ignored fly cooldown checks.
+- Added `Player.FlyReuseTimeMillis` and `Player.TransformForbidsFlight` as narrow runtime state needed by Java `FlyController`.
+- Added system-message factories for the Java flight/glide messages needed by this slice: flying forbidden here, no-fly abnormal, Daeva-only glide, glide polymorph, and fly polymorph. Zone/free-flight still needs a future zone/access model before `STR_FLYING_FORBIDDEN_HERE` can be emitted from the guard.
+- Current gaps in this cluster: Java `AdminConfig.FREE_FLIGHT`, `ZoneType.NO_FLY` / `ZoneType.FLY`, audit logging for cooldown violations, full `canGlide`, and visual stat refresh from ordinary `CM_EMOTION(FLY)` remain incomplete.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerStateTests.PlayerFlightActionService|FullyQualifiedName~GamePacketTests"` passes with 77 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerStateTests|FullyQualifiedName~PlayerVisualStatsUpdateServiceTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~WorldNpcResourceStatsServiceTests"` passes with 135 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 946 tests.
+
+#### Migration Parity Table - Session 430
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.FlyController` | `Aion.GameServer.Services.PlayerFlightActionService` | Controller / Service | Partial | Unit Tested | Partial Parity | `startFly` now validates Daeva/start-class, no-fly abnormal, transform block, private store, and fly cooldown before applying state. Zone/free-flight, audit logging, ordinary stat refresh, broadcast ordering, and `canGlide` are incomplete. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_EMOTION` | `Aion.GameServer.Network.Aion.GameServerConnection` | Client Packet Handler | Partial | Regression Tested | Partial Parity | `EmotionType.Fly` uses the guard service and sends guard system messages when available. Socket-level dispatch and full Java packet fanout remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Aion.GameServer.Model.GameObjects.Player` | Runtime State | Partial | Unit Tested | Partial Parity | Added `FlyReuseTimeMillis` and `TransformForbidsFlight` for Java `flyReuseTime` and `getTransformModel().getRes6() == 1`. Full transform model and persistence are not ported. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `Aion.GameServer.Services.PlayerFlightActionService` | Runtime Data / Guard Dependency | Partial | Unit Tested | Partial Parity | Java `isDaeva()` is approximated by rejecting known starting classes. Full class/common-data model remains fragmented across services. |
+| `com.aionemu.gameserver.skillengine.effect.AbnormalState` | `Aion.GameServer.Model.GameObjects.PlayerAbnormalState` | Enum / Effect State | Partial | Unit Tested | Partial Parity | `NoFly` is now consumed by the fly guard. Full effect-controller runtime, effect removal, and abnormal-state scheduling are incomplete. |
+| `com.aionemu.gameserver.model.gameobjects.TransformModel` | `Aion.GameServer.Model.GameObjects.Player.TransformForbidsFlight` | Runtime State / Transform Dependency | Partial | Unit Tested | Needs Verification | C# uses a boolean placeholder for Java `TransformModel.res6 == 1`. Full transform model, model ids, and polymorph behavior are not ported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Packet / Serialization | Partial | Regression Tested | Partial Parity | Added source-derived message ids for current/future fly and glide guards. Live Java-golden validation was not run. |
+| `com.aionemu.gameserver.configs.administration.AdminConfig` | No C# fly-zone access equivalent yet | Config / Guard Dependency | Not Started | No Tests | Needs Verification | Java `AdminConfig.FREE_FLIGHT` bypasses zone checks. No equivalent access-level threshold is modeled in this slice. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneType` | No C# flight-zone membership equivalent yet | Static Data / Runtime Zone Dependency | Not Started | No Tests | Needs Verification | Java blocks fly in `NO_FLY` or outside `FLY` zones. C# has no player zone-membership model here, so this behavior is explicitly deferred. |
+| `com.aionemu.gameserver.utils.audit.AuditLogger` | No C# fly-cooldown audit equivalent yet | Utility / Audit | Not Started | No Tests | Needs Verification | Java logs suspicious cooldown attempts; C# returns a cooldown status without audit logging. |
+
+Tests added or extended:
+- `PlayerStateTests.PlayerFlightActionService_StartFlyingMatchesJavaGuardAndCooldownSlice`: validates guard statuses, system-message presence for message-producing branches, no mutation on failure, successful fly-state/creature-state/FP-reduce mutation, `flyReuseTime` update to `now + 9900ms`, and ignored-cooldown behavior.
+- `GamePacketTests.SmSystemMessages`: now validates source-derived message ids for `STR_FLYING_FORBIDDEN_HERE`, `STR_CANT_FLY_NOW_DUE_TO_NOFLY`, `STR_GLIDE_ONLY_DEVA_CAN`, `STR_GLIDE_CANNOT_GLIDE_POLYMORPH_STATUS`, and `STR_FLY_CANNOT_FLY_POLYMORPH_STATUS`.
+- Java comparison status: tests are source-derived from Java `FlyController.startFly/canFly`, `Player.flyReuseTime`, `PlayerCommonData.isDaeva`, `AbnormalState.NOFLY`, `TransformModel.res6`, and `SM_SYSTEM_MESSAGE`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- Zone/free-flight parity is not implemented because C# does not yet expose Java-equivalent `ZoneType.FLY`, `ZoneType.NO_FLY`, or `AdminConfig.FREE_FLIGHT` access checks.
+- Cooldown audit logging is missing; the service returns a cooldown failure but does not call a C# equivalent of `AuditLogger.log`.
+- `TransformForbidsFlight` is a narrow placeholder, not a full transform model.
+- `CM_EMOTION(FLY)` now guards state mutation but still does not run the broader Java `PlayerGameStats.updateStatsAndSpeedVisually` fanout from ordinary fly start.
+- `canGlide` remains future work; glide still lacks Daeva/transform/cooldown guard parity.
+- Reflection and date/time differences: no reflection is used; cooldown uses `DateTimeOffset.ToUnixTimeMilliseconds()` instead of Java `System.currentTimeMillis()`. Serialization differences are limited to new source-derived system-message factories. Threading remains approximate because Java synchronous packet utility/audit calls are represented by service return values and async connection sends.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 partial `startFly/canFly` guard service slice plus supporting player state and message ids
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full fly zone/access validation, `canGlide`, cooldown audit logging, full transform model, full stat-function/effect resolution, full movement-controller parity, attack-speed extraction, DP cap extraction, group/alliance/GM state fanout, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, full effect runtime, scheduled callbacks, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue the flight guard cluster by porting `FlyController.switchToGliding/canGlide` guard parity: Daeva/start-class block, transform block, `flyReuseTime` cooldown when starting glide from walking, and the stat/speed visual refresh after successful gliding.
+
 ---
 
 ## Next Steps
