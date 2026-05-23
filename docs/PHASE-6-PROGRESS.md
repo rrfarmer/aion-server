@@ -4906,6 +4906,61 @@ Summary metrics:
 Next recommended unit of work:
 - Continue resource side-effect concretization with DP packet output: port and wire `SM_STATUPDATE_DP` and/or `SM_DP_INFO` from the existing `SendDpStatUpdate` / `BroadcastDpInfo` intents, preserving Java `PlayerCommonData.addDp/setDp` ordering and leaving stat/speed recalculation as an explicit gap if needed.
 
+### Session 408 (May 23, 2026)
+- Ported Java `SM_STATUPDATE_DP` as `SmStatUpdateDp`.
+- Ported Java `SM_DP_INFO` as `SmDpInfo`.
+- Converted the focused player DP resource boundary to `WorldNpcResourceStatsService.AddPlayerDpAsync` so online player DP mutations now broadcast `SmDpInfo`, retain the existing visual stat/speed update intent, then send owner `SmStatUpdateDp` in Java `PlayerCommonData.setDp` order.
+- `WorldNpcResourceChangeResult` now carries the concrete DP info packet, DP info broadcast count, DP stat-update packet, and owner-send result.
+- Staged DP heal adapter coverage now observes concrete DP packet output through the same resource boundary.
+- Current gaps in this cluster: `PlayerGameStats.updateStatsAndSpeedVisually` is still an intent only, live `PlayerGameStats.getMaxDp()` is still represented by explicit max-DP input, and the broader DP callers remain future slices.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~GamePacketTests"` passes with 98 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcResourceStatsServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 268 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 897 tests.
+
+#### Migration Parity Table - Session 408
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_DP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateDp` | Packet | Partial | Unit Tested | Partial Parity | C# writes Java payload shape `currentDp` as a 16-bit value with opcode 6. Full live-client validation remains pending. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmDpInfo` | Packet | Partial | Unit Tested | Partial Parity | C# writes Java payload shape `playerObjectId` as 32-bit value then `currentDp` as 16-bit value with opcode 7. Full live-client validation remains pending. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `Aion.GameServer.Services.WorldNpcResourceStatsService.AddPlayerDpAsync`; `Aion.GameServer.Services.WorldNpcResourceChangeResult` DP packet fields | Runtime/Service | Partial | Unit Tested | Partial Parity | C# keeps the starting-class guard, online max-DP requirement, max-DP cap, DP mutation, `SM_DP_INFO` broadcast, visual stat/speed update intent, then owner `SM_STATUPDATE_DP` send order. Java live `PlayerGameStats.getMaxDp()` and `updateStatsAndSpeedVisually()` are still not concrete here. |
+| `com.aionemu.gameserver.skillengine.effect.AbstractHealEffect` | `Aion.GameServer.Services.WorldNpcResourceStatsService.ApplyResourceOverTimePeriodicResultAsync`; staged DP heal branch | Effect-to-Stats Adapter | Partial | Unit Tested | Partial Parity | Staged DP heal output now reaches concrete DP packet sends for online player targets. Full Java effect runtime, target resolution, scheduling, and template application remain pending. |
+| `com.aionemu.gameserver.skillengine.effect.HealOverTimeEffect` | `Aion.GameServer.Services.WorldNpcSkillDamageService`; `WorldNpcResourceStatsService` staged DP boundary | Effect/Service | Partial | Unit Tested | Partial Parity | Existing staged over-time DP heal can flow into the concrete DP packet path. Java periodic task lifecycle and `Effect` storage remain pending. |
+| `com.aionemu.gameserver.skillengine.effect.DPTransferEffect` | No dedicated C# live DP-transfer effect yet | Effect | Not Started | No Tests | Needs Verification | Discovered DP dependency. Future live effect slice must add DP to effected player and subtract DP from effector using the concrete DP boundary. |
+| `com.aionemu.gameserver.skillengine.action.DpUseAction` | No dedicated C# DP-use action yet | Action | Not Started | No Tests | Needs Verification | Discovered DP dependency. Future skill-use action slice must spend DP through the same packeted boundary. |
+| `com.aionemu.gameserver.services.craft.CraftService` | No dedicated C# craft DP spend boundary yet | Service | Not Started | No Tests | Needs Verification | Discovered DP dependency. Craft recipe DP costs are not wired into C# resource mutation. |
+| `com.aionemu.gameserver.controllers.NpcController` | No dedicated C# NPC reward-DP callback yet | Controller/Service | Not Started | No Tests | Needs Verification | Discovered DP dependency. NPC reward DP from Java death/reward flow is not wired through the C# DP packet path. |
+| `com.aionemu.gameserver.services.QuestService` | No dedicated C# quest reward-DP callback yet | Service | Not Started | No Tests | Needs Verification | Discovered DP dependency. Quest DP rewards are not wired through the C# DP packet path. |
+| `com.aionemu.gameserver.services.PvpService` | No dedicated C# PVP reward-DP callback yet | Service | Not Started | No Tests | Needs Verification | Discovered DP dependency. PVP DP distribution is not wired through the C# DP packet path. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamDistributionService` | No dedicated C# team DP distribution boundary yet | Service | Not Started | No Tests | Needs Verification | Discovered DP dependency. Group/alliance DP reward distribution is not wired through the C# DP packet path. |
+| `com.aionemu.gameserver.services.player.PlayerReviveService` | No dedicated C# revive DP reset boundary yet | Service | Not Started | No Tests | Needs Verification | Discovered DP dependency. Revive-time `setDp(0)` behavior is not wired through the C# DP packet path. |
+| `com.aionemu.gameserver.services.player.PlayerEnterWorldService` | C# enter-world DP state load plus packeted runtime DP boundary | Service | Partial | Unit Tested elsewhere | Needs Verification | C# already loads/sends DP in stats/player info paths, but Java login-time DP reset for non-Daeva/starting cases and full runtime ordering need broader verification. |
+
+Tests added or extended:
+- `GamePacketTests.CharacterSelectionServerPackets_WriteJavaShapedPayloads`: now validates `SmStatUpdateDp` and `SmDpInfo` serialize Java DP payload order and integer widths.
+- `WorldNpcResourceStatsServiceTests.AddPlayerDpAsync_CapsOnlinePlayerAndSendsDpPacketsInJavaOrder`: validates max-DP cap, concrete `SmDpInfo` broadcast with source inclusion, visual-update intent, concrete `SmStatUpdateDp` owner send, and packet order.
+- `WorldNpcResourceStatsServiceTests.AddPlayerDpAsync_SkipsStartingClassAndRequiresOnlineMaxDp`: validates Java starting-class guard and C# online max-DP prerequisite suppress mutation and packet output.
+- `WorldNpcResourceStatsServiceTests.ApplyResourceOverTimePeriodicResultAsync_AddsDpFromStagedDpHealWithPacketIntents`: now validates staged DP heal output carries concrete DP info and DP stat-update packets.
+- Java comparison status: tests are source-derived from Java `SM_STATUPDATE_DP.writeImpl`, `SM_DP_INFO.writeImpl`, `PlayerCommonData.addDp`, and `PlayerCommonData.setDp`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- `PlayerGameStats.updateStatsAndSpeedVisually()` remains a result intent only. C# does not yet emit the concrete stat/speed visual packet fanout that Java triggers between `SM_DP_INFO` and `SM_STATUPDATE_DP`.
+- C# still requires an explicit `maxDp` input for online DP mutation because live `PlayerGameStats.getMaxDp().getCurrent()` is not available at this service boundary.
+- DP values are serialized with `writeH` semantics like Java; negative or over-65535 values would wrap at the wire layer, and no live-client capture validation has been run.
+- Newly discovered DP callers such as DP transfer, skill DP spend, craft DP spend, NPC/quest/PVP/team rewards, and revive reset are not wired into this boundary yet.
+- Reflection and date/time are not involved. Threading parity remains approximate through async service methods and connection-registry calls outside Java synchronized semantics.
+
+Summary metrics:
+- Total Java artifacts discovered: 14
+- Total artifacts ported: 3 partial C# packet/service artifacts plus result DTO fields and staged adapter coverage
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 14
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because group stat fanout, restore/flight timers, DP visual stat updates, live DP callers, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue resource side-effect concretization by choosing the smallest remaining runtime side effect: either wire Java `PlayerGameStats.updateStatsAndSpeedVisually()` into a concrete C# visual stat/speed packet path after DP changes, or start group stat update fanout for HP/MP changes if the team/connection surfaces are ready. Keep full effect runtime and broad DP caller integration as follow-up slices unless their supporting systems are already available.
+
 ---
 
 ## Next Steps
