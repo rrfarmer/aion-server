@@ -9936,6 +9936,49 @@ Summary metrics:
 Next recommended unit of work:
 - Start a minimal source-shaped portal validation service by porting one Java `PortalService` guard at a time, beginning with cooldown lockout (`PortalCooldownList.isPortalUseDisabled`) or group/alliance size requirements, before wiring the composed transfer helper to an actual dialog packet path.
 
+### Session 524 (May 23, 2026)
+- Added `PortalEntryValidationService.ValidateCooldown` as the first source-shaped guard from Java `PortalService.port`: when a player is not reentering a registered instance and `PortalCooldownList.isPortalUseDisabled(mapId)` is true, return a rejected result with Java's cooldown-lock system message.
+- Added `SmSystemMessage.CannotMakeInstanceCoolTime()` for `SM_SYSTEM_MESSAGE.STR_MSG_CANNOT_MAKE_INSTANCE_COOL_TIME` (`1400043`).
+- Added tests for allowed cooldown counts, locked cooldown counts, expired cooldown removal, and packet message-id serialization.
+- Kept the unit intentionally narrow: this does not wire validation into the production portal dialog/selection path and does not implement mentor, race, rank, title, quest, group/alliance size, level, item, or kinah checks.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~PlayerStateTests|FullyQualifiedName~GamePacketTests"` passes with 102 tests.
+
+#### Migration Parity Table - Session 524
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` cooldown guard | `Aion.GameServer.Services.PortalEntryValidationService.ValidateCooldown` | Service / Validation | Partial | Unit Tested | Partial Parity | C# now models the cooldown-lock branch that rejects fresh instance creation when `PortalCooldownList.isPortalUseDisabled(mapId)` is true and returns the Java system-message packet. The full guard order and production caller wiring remain missing, including mentor, race, rank, title, quest, group/alliance/league size, level, required items, kinah, same-instance teleport, and registered-instance reentry routing. |
+| `com.aionemu.gameserver.model.gameobjects.player.PortalCooldownList.isPortalUseDisabled` | `Aion.GameServer.Services.PlayerPortalCooldownService.IsPortalUseDisabled` via `PortalEntryValidationService` | Player State / Cooldown Guard | Partial | Unit Tested | Partial Parity | Existing C# behavior is now consumed by a portal-validation boundary. Tests cover below-max allow, max-count reject, and expired-cooldown removal. C# defensively returns false when the static instance-cooltime row is missing, while Java dereferences `DataManager.INSTANCE_COOLTIME_DATA.getInstanceMaxCountByWorldId(worldId)`; this remains a C# safety difference needing live-data validation. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_CANNOT_MAKE_INSTANCE_COOL_TIME` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.CannotMakeInstanceCoolTime` | Server Packet / System Message | Complete | Regression Tested | Partial Parity | Message id `1400043` is source-derived and serialized by the existing `SmSystemMessage` payload writer. Parameterless packet bytes are covered through `GamePacketTests`; no Java runtime packet capture or live-client verification was run. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | Future caller consuming `PortalEntryValidationResult.FailurePacket` | Socket Dispatch | Not Started | No Tests | Unknown | Discovered dependency. This unit returns the failure packet but does not send it through a connection, registry, or live portal handler. Packet ordering with dialog close/failure responses remains unverified. |
+| `com.aionemu.gameserver.dataholders.DataManager.INSTANCE_COOLTIME_DATA.getInstanceMaxCountByWorldId` | `Aion.GameServer.Dataholders.InstanceCooltimeTable.GetInstanceCooltimeByWorldId(...).MaxCount` | Static Data Lookup | Partial | Unit Tested | Partial Parity | The validation path uses the existing static-data table to compare entry count against max count. XML load fidelity is covered elsewhere; this unit does not runtime-compare against Java data managers. |
+
+Tests added or extended:
+- `PortalEntryValidationServiceTests.ValidateCooldown_AllowsWhenJavaCooldownCountIsBelowMax`: validates an active cooldown below `MaxCount` allows entry and keeps cooldown state intact; source-derived from `PortalCooldownList.isPortalUseDisabled`.
+- `PortalEntryValidationServiceTests.ValidateCooldown_RejectsWithJavaSystemMessageWhenCountMeetsMax`: validates an active cooldown at `MaxCount` rejects with `STR_MSG_CANNOT_MAKE_INSTANCE_COOL_TIME` message id `1400043`; source-derived from `PortalService.port`.
+- `PortalEntryValidationServiceTests.ValidateCooldown_RemovesExpiredJavaCooldownAndAllowsEntry`: validates expired cooldowns are removed and entry is allowed, matching Java's removal side effect.
+- `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages`: extended to serialize `SmSystemMessage.CannotMakeInstanceCoolTime`.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `PortalCooldownList.isPortalUseDisabled`, and `SM_SYSTEM_MESSAGE.STR_MSG_CANNOT_MAKE_INSTANCE_COOL_TIME`. No Java runtime execution, live portal handler, encrypted client, or socket-order comparison was run.
+
+Remaining risks:
+- The validation result is not wired into a production `CM_DIALOG_SELECT` or portal service path, so live instance entry still bypasses this guard.
+- Registered-instance reentry detection is not part of this service yet; Java only applies the cooldown-lock branch when the player is not registered in the target instance.
+- Missing portal checks remain significant: mentor, race, abyss rank, title, quests, group/alliance/league size, level, required item removal, kinah costs, and same-instance teleports.
+- Serialization is packet-regression tested for the system message, but failure dispatch timing and any surrounding dialog packets are unknown.
+- Date/time handling uses injected `DateTimeOffset` for deterministic tests; Java uses `System.currentTimeMillis()`.
+- Reflection identity, threading behavior around concurrent portal clicks, and full static-data fidelity were not verified in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 narrow cooldown-lock validation boundary plus 1 source-derived system-message factory
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 4 production portal handler wiring, registered-instance reentry routing, remaining portal guards, and live-client/socket-order validation
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this starts portal validation but does not complete live portal entry.
+
+Next recommended unit of work:
+- Compose `PortalEntryValidationService.ValidateCooldown` into a broader `PortalService.port` planning helper that first resolves registered-instance/reentry state, so the cooldown lockout only applies in the same source-shaped branch Java uses before transfer allocation.
+
 ---
 
 ## Next Steps
