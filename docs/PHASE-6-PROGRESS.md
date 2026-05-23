@@ -9176,6 +9176,43 @@ Summary metrics:
 Next recommended unit of work:
 - Continue teleport/map-change parity by covering the map/instance-change delayed teleport branch's arrival-animation retention through `CM_LEVEL_READY`, or add Java-generated golden-vector coverage for `SM_TELEPORT_LOC`, `SM_DELETE`, and `SM_PLAYER_INFO` before wiring a real teleporter/portal caller.
 
+### Session 506 (May 23, 2026)
+- Added map/instance-change delayed teleport regression coverage for the arrival-animation lifecycle across `CM_TELEPORT_ANIMATION_DONE` and `CM_LEVEL_READY`.
+- The new regression queues a delayed teleport from instance 1 to instance 2 on the same map, completes the teleport animation, verifies the map/instance-change branch retains `ArrivalAnimation.FadeInBeam`, then runs `HandleLevelReadyAsync` and verifies `ArrivalAnimation.None` reset.
+- The test also verifies modeled PVP counters remain entered after animation completion and level-ready revalidation.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests"` passes with 15 tests.
+
+#### Migration Parity Table - Session 506
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.TeleportService.SpawnTask.run` | `Aion.GameServer.Services.PlayerTeleportService.CompletePendingTeleport` + `GameServerConnection.SendDelayedTeleportCompletionPacketsAsync` | Teleport Completion Boundary | Partial | Regression Tested | Partial Parity | Regression now covers the map/instance-change delayed branch retaining `animation.getDefaultArrivalAnimation()` after animation completion until level-ready clears it. Java dead-player fallback, instance-exists guard, delayed action abort, pet position, conqueror/instance leave callbacks, legion update, protection task, effect icon refresh, instance-open system message, and full `World.spawn` remain incomplete. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_LEVEL_READY` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLevelReadyAsync` | Client Packet Handler | Partial | Regression Tested | Partial Parity | Map/instance-change regression verifies `HandleLevelReadyAsync` resets the retained arrival animation after full-map-load continuation. Full Java level-ready service fanout, quest/weather callbacks, pet spawn, town/event services, delayed team brands, and complete world/instance callbacks remain incomplete. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getPortAnimationId/setPortAnimation` | `Aion.GameServer.Model.GameObjects.Player.PortAnimation` | Player State | Partial | Unit + Regression Tested | Partial Parity | Same-map reset, level-ready reset, and map/instance-change retention-until-level-ready are now regression-covered. Direct outbound frame capture is still missing, so this does not prove the encrypted `SM_PLAYER_INFO` delivery order or byte from `HandleLevelReadyAsync`. |
+| `com.aionemu.gameserver.model.animations.ArrivalAnimation` | `Aion.GameServer.Model.ArrivalAnimation` | Enum | Complete | Unit + Regression Tested | Partial Parity | `FadeInBeam` retention and `None` reset are now covered through delayed teleport map/instance-change flow. Other arrival-animation producers/consumers remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.revalidateZones()` / `com.aionemu.gameserver.world.MapRegion.revalidateZones(Creature)` | `CreaturePvpZoneRevalidationService.Revalidate` from delayed teleport completion and level-ready | Zone Revalidation Boundary | Partial | Regression Tested | Partial Parity | Regression verifies modeled PVP counters remain entered across animation completion and level-ready revalidation after instance change. Java zone priorities, neighboring regions, full handler callback ordering, and live side effects remain incomplete. |
+
+Tests added:
+- `GameServerConnectionFlightZoneFanoutTests.QueueDelayedTeleportAsync_MapInstanceChangeKeepsArrivalAnimationUntilLevelReady`: queues a delayed same-map/different-instance teleport, completes animation, verifies `UsesSameWorldSpawnPath` is false, verifies `Player.PortAnimation` remains `FadeInBeam`, then calls `HandleLevelReadyAsync` and verifies reset to `None` while PVP counters remain entered.
+- Java comparison status: expectations are source-derived from Java `TeleportService.SpawnTask.run` setting `player.setPortAnimation(animation.getDefaultArrivalAnimation())`, the map/instance-change branch deferring full spawn to `CM_LEVEL_READY`, and Java `CM_LEVEL_READY.runImpl` resetting `ArrivalAnimation.NONE`. No Java runtime comparison, Java-generated packet vector, direct outbound frame capture, or live client visual validation was run.
+
+Remaining risks:
+- This unit verifies state lifecycle and modeled counter behavior only. It does not capture direct outbound `SM_PLAYER_SPAWN`/`SM_PLAYER_INFO` frames or prove encrypted packet ordering.
+- Full Java map/instance-change behavior remains partial: instance-exists fallback, instance-open system message, pet movement/spawn, conqueror/protector leave, instance leave/enter, legion update, protection task, effect icon refresh, and full `World.spawn` callbacks remain incomplete.
+- `QueueDelayedTeleportAsync` is still not wired from a real teleporter/portal/item/event caller.
+- No database schema, persistence, date/time, reflection, precision/rounding, serialization format, or scheduler/threading behavior changed in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 map/instance-change delayed teleport arrival-animation regression
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 7 direct outbound frame capture, full Java map/instance spawn side effects, instance-exists fallback/open message, pet/legion/conqueror/instance callbacks, production teleport caller wiring, Java-generated packet/live socket validation, and Java zone handler callback ordering
+- Estimated overall migration completion: Phase 6 remains about 56% complete; this is a narrow teleport/map-change verification gain while broad game-core systems remain open.
+
+Next recommended unit of work:
+- Continue teleport/map-change parity by adding deterministic packet-order or frame-capture coverage for delayed teleport map/instance-change `SM_CHANNEL_INFO`/`SM_PLAYER_SPAWN` and subsequent level-ready `SM_PLAYER_INFO`, or begin Java-generated golden-vector coverage for `SM_TELEPORT_LOC`, `SM_DELETE`, and the `SM_PLAYER_INFO` port-animation byte.
+
 ---
 
 ## Next Steps
