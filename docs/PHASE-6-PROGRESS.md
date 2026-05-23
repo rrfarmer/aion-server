@@ -13872,6 +13872,58 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance runtime parity by source-reading Java alliance ready-check and brand/group-move flows, then port the smallest isolated planner/runtime method that uses the new `PlayerAllianceRuntime` snapshot. Prefer `ChangeMemberGroupEvent`/group move runtime support if it stays narrow, because the runtime now has group buckets but no move/swap mutation.
 
+### Session 606 (May 23, 2026)
+- Source-read Java `ChangeMemberGroupEvent` and `PlayerAllianceService.changeMemberGroup`.
+- Added `PlayerAllianceRuntime.ChangeMemberGroup` to mutate the narrow runtime bridge before producing the existing member-group-change plan:
+  - missing first member returns `null`, matching Java's early return when the event target left before handling;
+  - missing second member returns `null` for swap requests;
+  - nonzero second member swaps the two stored alliance group ids;
+  - zero second member moves the first member to the target Java alliance group id;
+  - snapshots are refreshed for all remaining members after mutation.
+- Reused `PlayerAllianceMemberGroupChangePlanner` for the packet-intent side of Java `alliance.sendPackets(new SM_ALLIANCE_MEMBER_INFO(... MEMBER_GROUP_CHANGE))`.
+- Kept command permission checks, live `PacketSendUtility`, client command decoding, Java `onEvent` locking semantics, and full live group object identity deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerAllianceRuntimeTests|PlayerAllianceMemberInfoTests"` passes with 40 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1050 tests.
+
+#### Migration Parity Table - Session 606
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.events.ChangeMemberGroupEvent` | `Aion.GameServer.Services.PlayerAllianceRuntime.ChangeMemberGroup` + `PlayerAllianceMemberGroupChangePlanner` | Event Runtime/Planning Bridge | Partial | Regression Tested | Needs Verification | C# now mutates runtime group ids for move/swap and returns the existing member-info packet plan. Java live `alliance.onEvent` lock/check wrapper, live `sendPackets`, and object identity of `PlayerAllianceGroup` remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.changeMemberGroup` | Deferred caller/permission boundary around `PlayerAllianceRuntime.ChangeMemberGroup` | Service Boundary | Not Started | No Tests | Unknown | Java validates current alliance membership and `isSomeCaptain`, then sends system messages for no alliance/no rights. C# runtime method assumes an authorized caller and does not send failure messages. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Services.PlayerAllianceRuntime` | Team Runtime Bridge | Partial | Regression Tested | Needs Verification | Runtime now supports group move/swap on top of create/add/remove/lookup. Java ready status, brand map, league, disband, leader-change event execution, and service registry are still missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceGroup` | `PlayerAllianceMember.AllianceGroupId` and snapshot group buckets | Team Group Runtime Bridge | Partial | Regression Tested | Needs Verification | C# changes stored group ids and snapshot buckets. Java removes/re-adds `PlayerAllianceMember` objects to live `PlayerAllianceGroup` instances; C# does not preserve group object identity or group collection insertion semantics. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceMember` | `Aion.GameServer.Model.GameObjects.PlayerAllianceMember.MoveToAllianceGroup` | Team Member Wrapper | Partial | Regression Tested | Needs Verification | C# records the member's current alliance group id. Java delegates through `Player.setPlayerAllianceGroup`; C# still uses snapshot metadata rather than a live player group reference. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `PlayerAllianceMemberGroupChangePlan` / `PlayerAllianceMemberInfoPacketPlan` through runtime change | Server Packet Planning | Partial | Regression Tested | Needs Verification | Runtime returns one member-info intent for a move and two for a swap, matching Java event shape. Packet bytes are source-derived; no Java golden frame or live broadcast comparison was run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_YOU_ARE_NOT_FORCE_MEMBER` | Deferred | Server Packet Factory Dependency | Not Started | No Tests | Unknown | Java service sends this when the caller has no alliance. C# runtime does not model service-level failure messages. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_RIGHT_NOT_HAVE` | Deferred | Server Packet Factory Dependency | Not Started | No Tests | Unknown | Java service sends this when the caller is not a leader/vice-captain. C# runtime does not model authorization failure messages. |
+
+Tests added:
+- `PlayerAllianceRuntimeTests.ChangeMemberGroup_MovesMemberToTargetJavaAllianceGroupAndReturnsBroadcastPlan`: validates runtime group move to Java group id `1003`, snapshot refresh, member wrapper group id, and one `MEMBER_GROUP_CHANGE` packet intent.
+- `PlayerAllianceRuntimeTests.ChangeMemberGroup_SwapsMemberGroupsLikeJavaEvent`: validates swap mutation across stored group buckets and two `MEMBER_GROUP_CHANGE` packet intents.
+- `PlayerAllianceRuntimeTests.ChangeMemberGroup_ReturnsNullWhenEventMemberLeftBeforeHandling`: validates Java early-return behavior for missing first/second members and documents invalid group id rejection.
+- Java comparison status: expectations are source-derived from `ChangeMemberGroupEvent.handleEvent`, `PlayerAllianceGroup.addMember/removeMember`, `PlayerAllianceService.changeMemberGroup`, and `SM_ALLIANCE_MEMBER_INFO.writeImpl`. No Java runtime execution, Java-generated golden vector, live `onEvent` lock comparison, live `PacketSendUtility` broadcast comparison, service authorization comparison, object identity comparison, reflection behavior, serialization frame comparison, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Service-level authorization and no-alliance/no-rights system messages are not implemented.
+- Java live `PlayerAllianceGroup` object identity remains represented by integer group ids.
+- Target-group capacity behavior is source-observed as not enforced by `GeneralTeam.addMember`, but client/UI constraints are not validated.
+- Java event locking/threading semantics are not runtime-compared.
+- Live broadcast ordering is represented by packet intents only.
+- Java golden byte vectors and encoded-frame validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 alliance group move/swap runtime mutation slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 8 service authorization/failure-message handling, live `onEvent` locking comparison, live group object identity, live socket broadcast, Java runtime ordering comparison, encoded opcode/frame golden validation, client validation, and UI command decoding
+- Estimated overall migration completion: Phase 6 remains about 64% complete; the new alliance runtime now supports group move/swap mutation, but service-level command handling and live fanout remain incomplete.
+
+Next recommended unit of work:
+- Continue alliance service parity by adding a narrow authorization/failure-message planner for `PlayerAllianceService.changeMemberGroup`: model no-alliance `STR_FORCE_YOU_ARE_NOT_FORCE_MEMBER`, no-rights `STR_FORCE_RIGHT_NOT_HAVE`, and authorized dispatch to `PlayerAllianceRuntime.ChangeMemberGroup`. Keep command packet decoding and live socket sends deferred.
+
 ---
 
 ## Next Steps
