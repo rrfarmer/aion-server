@@ -6665,6 +6665,11 @@ Summary metrics:
 Next recommended unit of work:
 - Wire `WorldMapRuntimeState` into a map-id registry owned by the game runtime, then switch future zone option consumers to read current flags from that registry. A smaller alternative is to wire the first live option consumer directly: ride restriction, kisk/pet spawn restriction, or admin zone-info output.
 
+### Session 446 (May 23, 2026)
+- Created `docs/Phase-6BQ-Completion.md` as the next handoff after the 6BP continuation, summarizing Sessions 442-445, the four committed flight-zone verification and world-option units, the current 957-test validation baseline, important limits, and the next focused unit queue.
+- Validation: not rerun for this docs-only handoff. Latest full validation remains `dotnet test dotnetConversion\AionServer.slnx` passing with 957 tests from Session 445.
+- Next recommended unit is to wire `WorldMapRuntimeState` into a small map-id runtime registry, or to wire the first live option consumer such as ride restriction, kisk/pet spawn restriction, or admin zone-info output.
+
 ---
 
 ## Next Steps
