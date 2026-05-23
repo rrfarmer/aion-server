@@ -9979,6 +9979,48 @@ Summary metrics:
 Next recommended unit of work:
 - Compose `PortalEntryValidationService.ValidateCooldown` into a broader `PortalService.port` planning helper that first resolves registered-instance/reentry state, so the cooldown lockout only applies in the same source-shaped branch Java uses before transfer allocation.
 
+### Session 525 (May 23, 2026)
+- Extended `PortalEntryValidationService` with `ValidateCooldownForRegisteredInstance`, a source-shaped planning helper for the Java `PortalService.port` registered-instance branch.
+- The helper resolves the currently supported solo registered instance (`maxPlayers == 1`) before applying cooldown lockout, allowing already-registered solo instance entries even when the cooldown count is at the max.
+- The helper marks `reenter` when the player is registered for the target instance but is currently outside that world or instance id, matching the Java `else if (player.getWorldId() != mapId || player.getInstanceId() != instance.getInstanceId())` branch.
+- Added tests for same-instance registered entry, registered reentry from another world/instance, and unregistered solo cooldown rejection.
+- Kept group/alliance/league registered-instance resolution intentionally out of scope because the C# model still lacks Java-equivalent team ids/current-team objects.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PortalEntryValidationServiceTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~PlayerStateTests"` passes with 40 tests.
+
+#### Migration Parity Table - Session 525
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.PortalService.port` registered-instance and reentry branch | `Aion.GameServer.Services.PortalEntryValidationService.ValidateCooldownForRegisteredInstance` | Service / Validation / Planning | Partial | Unit Tested | Partial Parity | C# now resolves solo registered instances before cooldown lockout and marks reentry when the player is outside the registered target. Java group (`maxPlayers` 3/6), alliance, and league registered-instance resolution remain missing because C# has no equivalent team id/current-team model yet. |
+| `com.aionemu.gameserver.services.instance.InstanceService.getRegisteredInstance` | `Aion.GameServer.World.WorldMapRuntimeStateTable.GetRegisteredInstance` consumed by `PortalEntryValidationService` | Service / Runtime Lookup | Partial | Unit Tested | Partial Parity | The solo player-object-id lookup is now used in the portal-validation path. Team object id lookups for group/alliance/league are not modeled in this unit. |
+| `com.aionemu.gameserver.world.WorldMapInstance.isRegistered` | `Aion.GameServer.World.WorldMapInstanceRuntimeState.IsRegistered` consumed by `PortalEntryValidationService` | Runtime State | Partial | Unit Tested | Partial Parity | Tests validate registered players skip the cooldown-lock failure branch. Java registered team objects and mutable world instance behavior remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getWorldId` / `getInstanceId` | `Aion.GameServer.Model.GameObjects.Player.Position.WorldId` / `Position.InstanceId` | Player State / Position | Partial | Unit Tested | Partial Parity | Reentry is source-shaped from current position fields. C# stores position as an immutable value record; Java uses mutable world-position state and world object references. Threading and live movement updates remain unverified. |
+| `com.aionemu.gameserver.model.team.PlayerGroup` / `PlayerAlliance` / league object ids | Existing `Player.TeamMembership` only | Team / Registration Dependency | Not Started | No Tests | Unknown | Newly emphasized dependency. C# cannot yet resolve group/alliance/league registered-instance owners, so non-solo registered-instance parity is blocked. |
+
+Tests added:
+- `PortalEntryValidationServiceTests.ValidateCooldownForRegisteredInstance_SkipsCooldownLockoutForSameSoloInstance`: validates an already-registered solo player in the same target instance is allowed despite a maxed active cooldown.
+- `PortalEntryValidationServiceTests.ValidateCooldownForRegisteredInstance_MarksReenterWhenRegisteredElsewhere`: validates registered solo entry from another world/instance is allowed and marked `Reenter`.
+- `PortalEntryValidationServiceTests.ValidateCooldownForRegisteredInstance_RejectsUnregisteredSoloEntryWhenCooldownLocked`: validates unregistered solo entry still returns the Java cooldown-lock system message.
+- Java comparison status: expectations are source-derived from `PortalService.port`, `InstanceService.getRegisteredInstance`, and `WorldMapInstance.isRegistered`. No Java runtime execution, live portal packet flow, team registration comparison, or client validation was run.
+
+Remaining risks:
+- The helper is still not wired into a production portal dialog/selection handler.
+- Group, alliance, and league registered-instance owner resolution remain blocked by missing C# team models and team ids.
+- Java admin/membership bypasses and the preceding guard order (`checkMentor`, `checkRace`, `checkRank`, `checkTitle`, `checkQuests`, `checkPlayerSize`) are not represented.
+- Subsequent checks (`checkEnterLevel`, `checkAndRemoveRequiredItems`, same-instance teleport, transfer allocation) remain separate building blocks.
+- Date/time remains injected; live clock behavior, concurrent portal clicks, and mutable Java position/reference semantics are not verified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 narrow registered-instance/reentry planning boundary for solo portals
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 4 production portal handler wiring, group/alliance/league team model, remaining portal guards, and live-client/runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 56% complete; solo registered-instance handling is now represented in validation planning, but end-to-end portal entry remains incomplete.
+
+Next recommended unit of work:
+- Add the next source-shaped portal guard after admin bypass, preferably `checkEnterLevel` because `Player.Level` and `InstanceCooltime` min/max-level fields are available enough to model and test without inventory mutation or team routing.
+
 ---
 
 ## Next Steps
