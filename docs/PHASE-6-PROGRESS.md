@@ -5146,6 +5146,47 @@ Summary metrics:
 Next recommended unit of work:
 - Continue remaining DP caller concretization with reward/distribution surfaces such as Java `NpcController` DP rewards, `QuestService` DP rewards, `PvpService` DP distribution, or `PlayerTeamDistributionService` team DP distribution; choose the smallest caller whose surrounding C# model already exists. If reward scaffolding is not ready, return to resource side-effect concretization with group stat fanout or the `PlayerGameStats.updateStatsAndSpeedVisually()` packet path.
 
+### Session 413 (May 23, 2026)
+- Added a focused Java `DpCondition.validate` boundary as `SkillDpConditionService.Validate`.
+- The C# condition checks the player effector's current DP against the XML-required value using the Java `>=` rule.
+- Added `SkillDpConditionResult` / `SkillDpConditionStatus` so condition success, missing effector, and insufficient DP are explicit before later live skill-action dispatch.
+- Current gaps in this cluster: XML condition loading, the base `Condition` hierarchy, live `Skill` action/condition sequencing, and Java's direct `Player` cast failure behavior remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "FullyQualifiedName~SkillDpConditionServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~GamePacketTests"` passes with 111 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "SkillDpConditionServiceTests|CraftServiceTests|WorldNpcResourceStatsServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 281 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 910 tests.
+
+#### Migration Parity Table - Session 413
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.condition.DpCondition` | `Aion.GameServer.Services.SkillDpConditionService.Validate`; `SkillDpConditionResult`; `SkillDpConditionStatus` | Condition/Service | Partial | Unit Tested | Partial Parity | C# mirrors Java's `((Player) skill.getEffector()).getCommonData().getDp() >= value` check against an explicit player and required DP value. Full XML-backed condition runtime is pending. |
+| `com.aionemu.gameserver.skillengine.condition.Condition` | No dedicated C# XML condition base yet | Abstract Condition | Not Started | No Tests | Needs Verification | Java invokes `DpCondition` through the shared condition hierarchy. C# keeps this as a focused static boundary until that hierarchy is ported. |
+| `com.aionemu.gameserver.skillengine.model.Skill` | No dedicated C# live skill host for DP condition yet | Runtime/Model | Not Started | No Tests | Needs Verification | Java obtains the effector from `Skill`. C# accepts `Player?` directly and reports missing-effector instead of exercising Java cast failure behavior. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData` | `Aion.GameServer.Model.GameObjects.Player.Dp` | Runtime/Model | Partial | Unit Tested | Partial Parity | C# condition reads the current DP value already maintained by the packeted DP mutation boundary. |
+
+Tests added or extended:
+- `SkillDpConditionServiceTests.Validate_SucceedsWhenCurrentDpMeetsRequiredValue`: validates equality satisfies the Java `>=` condition.
+- `SkillDpConditionServiceTests.Validate_FailsWhenCurrentDpIsBelowRequiredValue`: validates insufficient current DP fails without mutation or packets.
+- `SkillDpConditionServiceTests.Validate_RequiresPlayerEffector`: validates the focused C# missing-effector status.
+- Java comparison status: tests are source-derived from Java `DpCondition.validate` and `PlayerCommonData.getDp`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- This is a focused condition boundary, not live XML/JAXB condition loading or full skill-engine condition sequencing.
+- Java casts `skill.getEffector()` to `Player`; C# accepts `Player?` and records missing-effector rather than throwing.
+- No system-message output is attached here. Java `DpCondition` only returns `false`; later skill-use dispatch decides the client-facing failure path.
+- Reflection and date/time are not involved. Threading parity is not involved for this pure condition check.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 partial C# DP condition boundary plus result DTO/status
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full skill condition/action runtime, reward/distribution DP callers, group stat fanout, restore/flight timers, DP visual stat updates, effect-controller state, full effect runtime, scheduled callbacks, live stat/equipment/effect-template lookup, real attack callers, dynamic observers, support AI handlers, full aggro behavior, creature modeling, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Re-check whether a small reward/distribution DP caller can now be isolated without inventing missing models. Good candidates remain Java `NpcController.doReward`, `PlayerTeamDistributionService.doReward`, `QuestService.giveReward`, or `PvpService.doReward`; if their surrounding C# scaffolding is still too thin, continue with an adjacent resource side effect such as group stat fanout or the concrete `PlayerGameStats.updateStatsAndSpeedVisually()` packet path.
+
 ---
 
 ## Next Steps
