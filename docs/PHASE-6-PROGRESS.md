@@ -3127,6 +3127,15 @@ From `csharp-port.md`, dependency order:
 - Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "GameServerOptionsTests|WorldNpcEventDropRuleServiceTests|GameServerBootstrapTests"` passes with 13 tests.
 - Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 735 tests.
 
+### Session 369 (May 23, 2026)
+- Extended `NpcTemplateSummary` and `StaticData` NPC-template loading with Java `NpcTemplate.groupDrop` / `NpcTemplate.abyssNpcType` attributes, keeping backward-compatible constructor defaults for existing tests and packet fixtures.
+- Wired `WorldNpcGlobalDropService` to apply Java `DropRegistrationService.checkGlobalRuleNpcGroups` with the loaded NPC group-drop value, instead of treating all `gd_npc_group` rules as staged misses.
+- Added abyss-type parity for Java `hasGlobalNpcExclusions` and the default global-drop guard: excluded abyss template types now block global drops, while default global drops continue only for `NONE` / missing abyss types and `DEFENDER`.
+- Added real static-data assertions for `group_drop="SPAKY"` and `group_drop="DRAGON" abyss_type="BOSS"`, plus focused service coverage for matching/mismatched NPC groups, abyss exclusions, `BOSS` default-drop rejection, and `DEFENDER` allowance.
+- Current gaps in this cluster: world-drop-type restrictions, zone restrictions, siege/base spawn restrictions, Java `GlobalDropData.processRules` expansion, runtime event lifecycle side effects, optional sockets, and instance/AI `onDropRegistered` callbacks remain pending.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore --filter "WorldNpcGlobalDropServiceTests|StaticDataLoadingTests|GameServerBootstrapTests"` passes with 22 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx --no-restore` passes with 735 tests.
+
 ---
 
 ## Next Steps
