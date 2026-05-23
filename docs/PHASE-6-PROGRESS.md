@@ -13710,6 +13710,58 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance lifecycle parity by adding a focused base-leave side-effect plan for `PlayerLeavedEvent.handleEvent`: model `SM_LEAVE_GROUP_MEMBER`, optional `STR_MSG_LEAVE_INSTANCE_NOT_PARTY`, the 30-second instance-kick scheduling boundary, and `EventService.onLeftTeam` metadata. Keep actual instance/team runtime, scheduler execution, and socket sends deferred.
 
+### Session 603 (May 23, 2026)
+- Source-read Java `SM_LEAVE_GROUP_MEMBER.writeImpl`, opcode registration, and `STR_MSG_LEAVE_INSTANCE_NOT_PARTY`.
+- Added `SmLeaveGroupMember` with opcode `247`.
+- Added `PlayerBaseLeaveSideEffectPlan`, `PlayerBaseLeavePacketIntent`, `PlayerBaseLeavePacketIntentKind`, and `PlayerBaseLeavePlanner`.
+- Added `SmSystemMessage.LeaveInstanceNotParty()` for Java `STR_MSG_LEAVE_INSTANCE_NOT_PARTY` (`1400042`).
+- Modeled Java `PlayerLeavedEvent.handleEvent` side-effect boundaries:
+  - online leavers receive `SM_LEAVE_GROUP_MEMBER`;
+  - online leavers registered to the team instance also receive `STR_MSG_LEAVE_INSTANCE_NOT_PARTY`;
+  - the registered-instance path records a 30-second instance-kick scheduling boundary;
+  - offline leavers receive no packets from the base event;
+  - `EventService.onLeftTeam(leavedPlayer, team)` is recorded for all paths.
+- Kept actual world-map-instance registered-team comparison, task scheduling/execution, `InstanceService.moveToExitPoint`, `SM_LEAVE_GROUP_MEMBER` live socket send, `EventService` invocation, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests|FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 151 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1249 tests.
+
+#### Migration Parity Table - Session 603
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.common.events.PlayerLeavedEvent` | `Aion.GameServer.Services.PlayerBaseLeavePlanner` / `PlayerBaseLeaveSideEffectPlan` | Base Event Planning Bridge | Partial | Regression Tested | Needs Verification | C# models online/offline packet side effects, registered-instance warning metadata, 30-second kick delay metadata, and `EventService` notification metadata. Live scheduler, instance runtime, event service, and socket sends remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LEAVE_GROUP_MEMBER` | `Aion.GameServer.Network.Aion.ServerPackets.SmLeaveGroupMember` | Server Packet | Partial | Unit Tested | Needs Verification | C# serializes Java's fixed packet body and opcode `247`. Java golden bytes, encoded frames, and live client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.ServerPacketsOpcodes` | `SmLeaveGroupMember.PacketOpCode` | Opcode Mapping | Partial | Unit Tested | Needs Verification | Opcode `247` is source-modeled from Java registration. Encoded opcode validation remains missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_LEAVE_INSTANCE_NOT_PARTY` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.LeaveInstanceNotParty` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Factory returns Java message id `1400042`; Java runtime frame comparison is missing. |
+| `com.aionemu.gameserver.model.TaskId.INSTANCE_KICK` | `PlayerBaseLeaveSideEffectPlan.InstanceKickDelay` metadata | Scheduler Dependency | Not Started | Unit Tested as Metadata | Unknown | Java schedules a 30-second task. C# records `TimeSpan.FromSeconds(30)` only; no scheduler execution or cancellation semantics are ported. Date/time handling is explicitly deferred. |
+| `com.aionemu.gameserver.services.instance.InstanceService.moveToExitPoint` | `PlayerBaseLeaveSideEffectPlan.WouldScheduleInstanceKick` metadata | Service Dependency | Not Started | No Tests | Unknown | Actual exit-point move is not ported in this unit. |
+| `com.aionemu.gameserver.services.event.EventService.onLeftTeam` | `PlayerBaseLeaveSideEffectPlan.WouldNotifyEventServiceOnLeftTeam` metadata | Service Dependency | Not Started | Unit Tested as Metadata | Unknown | Event-service notification is represented but not invoked. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.BaseLeavePlanner_PlansOnlineLeavePacketsAndInstanceKickBoundaryLikeJavaPlayerLeavedEvent`: validates online base-leave packet ordering, serialized `SM_LEAVE_GROUP_MEMBER` body, instance-warning message id `1400042`, 30-second kick metadata, and event-service metadata.
+- `PlayerAllianceMemberInfoTests.BaseLeavePlanner_OfflineLeaveOnlyNotifiesEventServiceLikeJavaPlayerLeavedEvent`: validates offline base leave emits no packets and still records `EventService.onLeftTeam`.
+- Java comparison status: expectations are source-derived from `PlayerLeavedEvent.handleEvent`, `SM_LEAVE_GROUP_MEMBER.writeImpl`, `ServerPacketsOpcodes`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live registered-team comparison, scheduler timing/execution comparison, instance move comparison, event-service invocation comparison, socket fanout comparison, encoded frame comparison, reflection behavior, precision/rounding behavior, or client validation was run.
+
+Remaining risks:
+- Live registered-team/world-map-instance comparison is not implemented.
+- Java `TaskId.INSTANCE_KICK` scheduling/execution and 30-second delayed behavior are metadata only.
+- `InstanceService.moveToExitPoint` is not invoked.
+- `EventService.onLeftTeam` is not invoked.
+- Live socket fanout and Java threading/event-dispatch behavior are not runtime-compared.
+- Java golden byte vectors and encoded-frame validation remain unavailable.
+- Reflection and precision/rounding are not involved; date/time handling remains deferred to future scheduler/runtime work.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 base leave side-effect planning and packet slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 7 live registered-team runtime, live scheduler execution, instance exit movement, event-service invocation, Java runtime ordering comparison, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; the base leave packet and side-effect boundaries are modeled, but live runtime execution remains incomplete.
+
+Next recommended unit of work:
+- Continue alliance lifecycle parity by composing `PlayerAllianceLeavedPlanner` with `PlayerBaseLeavePlanner` in a higher-level leave workflow plan, so alliance leave/ban/timeout/disband outputs and base leave side effects can be consumed in Java order. Keep live `PlayerAlliance` mutation, scheduler execution, instance movement, disband/league execution, and socket sends deferred.
+
 ---
 
 ## Next Steps
