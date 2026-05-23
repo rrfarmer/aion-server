@@ -13368,6 +13368,66 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance role parity by adding a focused `SM_ALLIANCE_INFO` serializer for the non-league vice-captain packet body, using `PlayerAllianceInfoPacketPlan` as input and packet-body tests for promote/demote/message-id-zero fields. Keep league rows, live socket fanout, leader-change fanout, and Java runtime golden comparison deferred unless a safe comparison harness becomes available.
 
+### Session 597 (May 23, 2026)
+- Continued Java `SM_ALLIANCE_INFO.writeImpl` parity from the Session 596 DTO into a focused non-league packet serializer.
+- Added `SmAllianceInfo` with opcode `245`, matching Java `ServerPacketsOpcodes` registration for `[S_ALLIANCE_INFO]`.
+- Added `PlayerAllianceInfoIntent.CreatePacket()` so vice-captain role plans can produce the new packet object.
+- Serialized the Java non-league field order:
+  - alliance group size;
+  - alliance id;
+  - leader id;
+  - active recipient map id;
+  - four padded vice-captain ids;
+  - loot-rule fields;
+  - constant marker `0x02`;
+  - byte `0x00`;
+  - team type/subtype;
+  - league id `0`;
+  - four Java placeholder group pairs (`0/1000` through `3/1003`);
+  - system message id;
+  - system message text only when message id is non-zero.
+- Added an explicit guard for `LeagueId != 0` in `SmAllianceInfo` because Java writes additional league loot-rule/member rows that are not ported in this unit.
+- Kept live `PlayerAlliance` state, live socket sends, league row serialization, Java runtime comparison, encoded frame validation, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests|FullyQualifiedName~PlayerGroupRuntimeTests|FullyQualifiedName~GamePacketTests"` passes with 138 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 1236 tests.
+
+#### Migration Parity Table - Session 597
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` / `PlayerAllianceInfoPacketPlan` | Server Packet | Partial | Unit Tested | Needs Verification | C# now serializes the source-derived non-league packet body for alliance role-info outputs. League rows, Java golden bytes, encoded frames, live sends, and client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.ServerPacketsOpcodes` | `SmAllianceInfo.PacketOpCode` | Opcode Mapping | Partial | Unit Tested | Needs Verification | C# uses opcode `245`, source-read from Java opcode registration. Encoded-frame opcode validation against Java/client remains missing. |
+| `com.aionemu.gameserver.model.team.alliance.events.AssignViceCaptainEvent` | `PlayerAllianceViceCaptainAssignmentPlanner` plus `PlayerAllianceInfoIntent.CreatePacket` | Event Planning Bridge | Partial | Regression Tested | Needs Verification | Vice-captain plans can now create serializable `SmAllianceInfo` packets for non-league cases. Live event mutation, permissions, socket fanout, and league broadcasts remain missing. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootGroupRules` | `PlayerGroupLootRules` fields serialized by `SmAllianceInfo` | Packet Dependency | Partial | Unit Tested | Needs Verification | Default loot-rule field order is packet-body tested. Live alliance loot-rule mutation and league loot-rule serialization are not included. |
+| `com.aionemu.gameserver.model.team.league.League` | `SmAllianceInfo` explicit `LeagueId != 0` guard | Runtime / Packet Dependency | Not Started | Unit Tested as Unsupported | Unknown | Java writes league rows when a league exists. C# intentionally throws for league plans until row DTOs and serialization are ported. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `PlayerAllianceInfoPacketPlan` snapshot inputs | Team Runtime Dependency | Not Started | No Tests | Unknown | Full alliance runtime remains missing: group size semantics, leader object lookup, vice-captain collection ownership, league state, and live member iteration. |
+
+Tests added:
+- `PlayerAllianceMemberInfoTests.SmAllianceInfo_WritesViceCaptainPromotePayloadLikeJava`: validates the source-derived promote packet body, including opcode-backed packet serialization, group size, ids, map id, padded vice-captains, loot rules, group placeholders, message id `1300984`, and message text.
+- `PlayerAllianceMemberInfoTests.SmAllianceInfo_WritesMessageIdZeroEmptyMessageLikeJava`: validates Java's `writeS(messageId != 0 ? message : "")` behavior for message id `0`.
+- `PlayerAllianceMemberInfoTests.SmAllianceInfo_RejectsLeagueRowsUntilPorted`: validates that league plans fail explicitly instead of emitting an incomplete Java league packet.
+- Java comparison status: expectations are source-derived from `SM_ALLIANCE_INFO.writeImpl`, `ServerPacketsOpcodes`, `AssignViceCaptainEvent`, and `LootGroupRules`. No Java runtime execution, Java-generated golden vector, live alliance mutation comparison, socket fanout comparison, encoded frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- `SmAllianceInfo` only covers the non-league body; Java league loot-rule/member row serialization is blocked.
+- Live `PlayerAlliance` runtime, mutation, and socket fanout are still missing.
+- Java golden byte vectors and encoded-frame opcode validation remain unavailable.
+- `ChangeAllianceLeaderEvent` leader mutation and system-message fanout remain unported.
+- `PlayerAllianceService.changeViceCaptain` live lookup/event invocation and permissions remain unported.
+- Java iteration order and threading/event-dispatch behavior are not runtime-compared.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 non-league `SM_ALLIANCE_INFO` serializer slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 league row serialization, live alliance runtime, live socket fanout, leader-change fanout, service event invocation/permissions, Java runtime ordering comparison, encoded opcode/frame golden validation, and live client validation
+- Estimated overall migration completion: Phase 6 remains about 63% complete; non-league alliance-info packet bodies now serialize, but live alliance runtime and league behavior remain incomplete.
+
+Next recommended unit of work:
+- Continue alliance role parity with a non-sending `ChangeAllianceLeaderEvent` plan for non-league leader changes: model leader id update, removal of the new leader from vice-captain ids, `SM_ALLIANCE_INFO` fanout to members, and `STR_FORCE_HE_IS_NEW_LEADER` / `STR_FORCE_YOU_BECOME_NEW_LEADER` system-message intents. Keep league-specific union messages, live mutation, and socket sends deferred.
+
 ---
 
 ## Next Steps
