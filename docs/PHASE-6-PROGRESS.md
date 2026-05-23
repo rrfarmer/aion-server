@@ -10021,6 +10021,46 @@ Summary metrics:
 Next recommended unit of work:
 - Add the next source-shaped portal guard after admin bypass, preferably `checkEnterLevel` because `Player.Level` and `InstanceCooltime` min/max-level fields are available enough to model and test without inventory mutation or team routing.
 
+### Session 526 (May 23, 2026)
+- Added C# static-data support for Java `InstanceCooltime` race-specific entrance levels: `enter_min_level_light`, `enter_max_level_light`, `enter_min_level_dark`, and `enter_max_level_dark`.
+- Extended `InstanceCooltimeSummary` and `InstanceCooltimeTable` with source-shaped `GetEnterMinLevel(worldId, race)` and `GetEnterMaxLevel(worldId, race)` helpers, preserving Java's light-only-for-ELYOS branch and dark fallback for other race strings.
+- Extended XML loading to parse the four entrance-level elements from `instance_cooltimes.xml`.
+- Added focused unit/static-data tests for race-specific lookup and real static-data load for world `300030000`.
+- Kept this as prerequisite data plumbing only; `PortalService.checkEnterLevel` itself is still not ported.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~StaticDataLoadingTests"` passes with 24 tests.
+
+#### Migration Parity Table - Session 526
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.InstanceCooltime` entrance-level fields | `Aion.GameServer.Dataholders.InstanceCooltimeSummary` | DTO / Static Data | Partial | Unit Tested / Regression Tested | Partial Parity | C# now carries Java `enterMinLevelLight`, `enterMaxLevelLight`, `enterMinLevelDark`, and `enterMaxLevelDark` equivalents from XML. Mentor flags and sync-id remain outside this summary. |
+| `com.aionemu.gameserver.dataholders.InstanceCooltimeData.getInstanceCooltimeByWorldId` as consumed by `PortalService.checkEnterLevel` | `Aion.GameServer.Dataholders.InstanceCooltimeTable.GetEnterMinLevel` / `GetEnterMaxLevel` | Static Data Lookup | Partial | Unit Tested | Partial Parity | Race-specific min/max lookup now follows Java's ELYOS/light and non-ELYOS/dark split. No Java runtime comparison was run, and this is not yet used by a portal level guard. |
+| `game-server/data/static_data/instance_cooltimes/instance_cooltimes.xml` parsing through JAXB | `Aion.GameServer.Dataholders.StaticData` XML reader | Static Data Loader | Partial | Regression Tested | Partial Parity | Loader now parses entrance-level elements. Static-data regression checks world `300030000` min-level values and max-level default. Broader XML coverage remains implicit through load success only. |
+| `com.aionemu.gameserver.services.teleport.PortalService.checkEnterLevel` | Future `PortalEntryValidationService` level guard | Service / Validation | Not Started | No Tests | Unknown | Discovered dependency. This unit supplies data but does not enforce portal min/max levels, membership bypass, portal-path min-level override, err-level dialog window, or fallback `STR_MSG_CANT_INSTANCE_ENTER_LEVEL`. |
+
+Tests added or extended:
+- `WorldMapRuntimeStateTests.InstanceCooltimeTable_MatchesJavaRaceSpecificEnterLevelLookup`: validates race-specific min/max lookup and unknown-map defaults from source-derived behavior.
+- `StaticDataLoadingTests.LoadsStaticDataFromJavaProject`: extended to assert loaded entrance level values for world `300030000`.
+- Java comparison status: expectations are source-derived from `InstanceCooltime.java`, Java JAXB field names, and `PortalService.checkEnterLevel` usage. No Java runtime execution or portal-level guard execution was performed.
+
+Remaining risks:
+- `PortalService.checkEnterLevel` remains unported; these fields are not yet enforced.
+- C# still lacks `PortalPath`/portal template loading for `portalPath.getMinLevel()` override and `portalPath.getErrLevel()` dialog selection.
+- The `SM_DIALOG_WINDOW` err-level branch and fallback `STR_MSG_CANT_INSTANCE_ENTER_LEVEL` system message are not wired to validation.
+- Mentor access, admin/membership bypass, item/kinah consumption, race/rank/title/quest guards, and team-size checks remain missing.
+- Static data is parser-regression tested, not runtime-compared against Java JAXB object graphs.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 narrow instance-cooltime entrance-level data slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 3 portal path template model, level-failure packet/dialog branch, and production portal validation wiring
+- Estimated overall migration completion: Phase 6 remains about 56% complete; the data needed for the next portal level guard is now available.
+
+Next recommended unit of work:
+- Port a narrow `PortalService.checkEnterLevel` equivalent using the new entrance-level helpers, initially with explicit method parameters for portal-path min-level and err-level until full portal template loading exists; add `STR_MSG_CANT_INSTANCE_ENTER_LEVEL` and `SM_DIALOG_WINDOW` coverage if not already present.
+
 ---
 
 ## Next Steps
