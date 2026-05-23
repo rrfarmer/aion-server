@@ -5606,6 +5606,61 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the visual stat/speed cluster by adding a shared non-ride player movement-speed source from Java `StatsTemplate` / `CreatureSpeeds` if the C# class/static-data model can support it cleanly. If that would require too much class stat/template scaffolding, switch to live max-DP lookup for online DP mutations so reward callers no longer need explicit `maxDp`.
 
+### Session 422 (May 23, 2026)
+- Added Java-shaped online max-DP resolution to `WorldNpcResourceStatsService.AddPlayerDpAsync`.
+- When callers omit `maxDp`, online players now use the Java base `PlayerGameStats.getMaxDp()` value of `4000` instead of returning `MissingMaxResource`.
+- Offline players remain uncapped when no explicit max-DP is supplied, matching Java `PlayerCommonData.setDp` behavior when `getPlayer()` returns `null`.
+- Quest DP rewards, craft recipe DP spending, solo-NPC DP rewards, and PVP member DP rewards now route through the shared DP mutation boundary without passing explicit `maxDp`.
+- The packeted Java order remains unchanged: visible `SmDpInfo`, owner `SmStatsInfo` / optional `SmEmotion(ChangeSpeed)`, then owner `SmStatUpdateDp`.
+- Current gaps in this cluster: full `MAXDP` stat modifiers from effects/equipment/absolute stat functions are not yet resolved at this boundary, and HP/MP/FP resource mutations still rely on caller-supplied max-resource values.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcResourceStatsServiceTests|FullyQualifiedName~QuestRewardServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~WorldNpcSoloDpRewardServiceTests|FullyQualifiedName~PvpDpRewardServiceTests"` passes with 54 tests.
+- Broader validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PvpDpRewardServiceTests|WorldNpcSoloDpRewardServiceTests|QuestRewardServiceTests|CraftServiceTests|PlayerEnterWorldServiceTests|PlayerVisualStatsUpdateServiceTests|WorldNpcResourceStatsServiceTests|SkillDpConditionServiceTests|GamePacketTests|WorldNpcDamageServiceTests|WorldNpcSkillResultCalculationServiceTests|WorldNpcCastingInterruptServiceTests|WorldNpcCombatEventServiceTests|WorldNpcCombatStateServiceTests|WorldNpcLifeStatsServiceTests|WorldNpcDeathDropWorkflowServiceTests|WorldNpcSpawnServiceTests|GameServerBootstrapTests"` passes with 321 tests.
+- Full validation: `dotnet test dotnetConversion\AionServer.slnx` passes with 940 tests.
+
+#### Migration Parity Table - Session 422
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData.addDp/setDp` | `WorldNpcResourceStatsService.AddPlayerDpAsync` | Runtime / Resource Mutation | Partial | Regression Tested | Partial Parity | Online DP mutations no longer require caller-supplied `maxDp`; they resolve the Java base cap before clamping and sending packets. |
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats.getMaxDp` | `WorldNpcResourceStatsService.ResolveOnlineMaxDp` | Stats Container / Service Boundary | Partial | Unit Tested | Partial Parity | Mirrors Java `getStat(StatEnum.MAXDP, 4000)` base value. Full stat modifiers are still deferred. |
+| `com.aionemu.gameserver.model.stats.container.StatEnum.MAXDP` | `WorldNpcResourceStatsService.DefaultMaxDp` | Stat Enum / Constant | Partial | Unit Tested | Needs Verification | Base `4000` is covered; absolute/effect/equipment modifier stacking is not. |
+| `com.aionemu.gameserver.services.QuestService.giveReward` DP branch | `QuestRewardService.ApplyDpRewardAsync` | Quest Reward Boundary | Partial | Unit Tested | Partial Parity | DP reward callers can omit `maxDp` and still mutate/send through the shared packeted boundary. |
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft/startCrafting` DP recipe branch | `CraftService.SpendRecipeDpForCraftStartAsync` | Craft Cost Boundary | Partial | Unit Tested | Partial Parity | Recipe DP spend now resolves online max-DP through the shared mutation path. |
+| `com.aionemu.gameserver.controllers.NpcController.doReward` solo DP branch | `WorldNpcSoloDpRewardService.ApplySoloDpRewardAsync` | NPC Reward Boundary | Partial | Unit Tested | Partial Parity | Solo reward service no longer needs an explicit max-DP argument for online players. |
+| `com.aionemu.gameserver.services.PvpService.doReward` member DP branch | `PvpDpRewardService.ApplyMemberDpRewardAsync` | PVP Reward Boundary | Partial | Unit Tested | Partial Parity | Member DP reward uses live base max-DP when omitted while preserving source-derived reward math. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmDpInfo` | Packet | Partial | Regression Tested | Partial Parity | Existing visible DP broadcast order remains covered after live cap resolution. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATS_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatsInfo` | Packet | Partial | Regression Tested | Partial Parity | Owner stat refresh remains in the Java `setDp` order. The packet has a richer private stat calculation than this new DP cap resolver. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_DP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateDp` | Packet | Partial | Regression Tested | Partial Parity | Owner DP stat update remains last in the Java `setDp` packet sequence. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry` send/broadcast calls | Network Utility / Bridge | Partial | Regression Tested | Partial Parity | Registry send/broadcast order remains source-derived; exact live visibility filtering still needs runtime validation. |
+| `game-server/data/static_data/stats/absolute_stats.xml` `MAXDP` entries | No shared C# max-DP modifier resolver yet | Static Data / Stat Function | Not Started | No Tests | Needs Verification | Absolute `MAXDP` bonuses exist in Java static data; this unit only ports the base online cap lookup. |
+
+Tests added or extended:
+- `WorldNpcResourceStatsServiceTests.AddPlayerDpAsync_CapsOnlinePlayerAndSendsDpPacketsInJavaOrder`: now omits `maxDp` and validates the online base cap resolves to `4000`.
+- `WorldNpcResourceStatsServiceTests.AddPlayerDpAsync_SkipsStartingClassAndResolvesOnlineMaxDp`: validates starting-class guard plus omitted `maxDp` online clamping.
+- `QuestRewardServiceTests.ApplyDpRewardAsync_RequiresPlayerAndUsesOnlineMaxDp`: validates quest DP reward succeeds without explicit max-DP.
+- `CraftServiceTests.SpendRecipeDpForCraftStartAsync_RequiresPlayerRecipeAndUsesOnlineMaxDp`: validates recipe DP spend succeeds without explicit max-DP.
+- `WorldNpcSoloDpRewardServiceTests.ApplySoloDpRewardAsync_SkipsMissingDeadAndUsesOnlineMaxDp`: validates solo-NPC DP reward succeeds without explicit max-DP.
+- `PvpDpRewardServiceTests.ApplyMemberDpRewardAsync_SkipsMissingInputsAndUsesOnlineMaxDp`: validates PVP member DP reward succeeds without explicit max-DP.
+- Java comparison status: tests are source-derived from Java `PlayerCommonData.addDp/setDp`, `PlayerGameStats.getMaxDp`, `StatEnum.MAXDP`, quest reward DP calls, craft DP spending, solo NPC reward DP, PVP reward DP, `SM_DP_INFO`, `SM_STATS_INFO`, and `SM_STATUPDATE_DP`; no Java runtime side-by-side validation was run.
+
+Remaining risks:
+- The live resolver returns Java's base `4000` only; it does not yet apply absolute stat functions, effects, equipment, titles, or future stat-template modifiers that can alter `MAXDP`.
+- `SmStatsInfo` still owns a richer private player stat calculation than the DP mutation service. A future shared player-stat resolver would reduce drift for `MAXDP`, attack speed, and other visual stats.
+- Existing explicit `maxDp` parameters remain accepted for staged tests/callers; live reward callers should gradually stop supplying them as supporting stat lookups land.
+- HP, MP, and FP mutation boundaries still require caller-supplied max-resource values.
+- Reflection, date/time, and serialization are not changed in this unit. Threading remains approximate because C# async packet delivery replaces Java synchronous `PacketSendUtility` calls.
+
+Summary metrics:
+- Total Java artifacts discovered: 12
+- Total artifacts ported: 1 partial online max-DP resolver in the shared DP mutation boundary
+- Total artifacts with verified runtime parity: 0
+- Total artifacts needing verification: 12
+- Total blocked artifacts: 0
+- Estimated overall migration completion: Phase 6 remains in progress; conservative game-core estimate remains about 56% because full player stat modifier resolution, non-ride speed stats, live HP/MP/FP max-resource lookup, full reward-loop orchestration, team distribution, PVP AP/XP reward branches, quest reward pipeline, group stat fanout, restore/flight timers, effect-controller state, full effect runtime, scheduled callbacks, real attack callers, dynamic observers, AI handlers, team loot, dynamic handlers, instances, and quests remain broad open areas.
+
+Next recommended unit of work:
+- Continue the visual stat/resource convergence by extracting or adding a shared player-stat resolver for `MAXDP`, attack speed, and eventually non-ride movement speed from Java `PlayerGameStats` / `StatsTemplate`. If keeping the slice smaller, add non-ride class movement-speed snapshots from Java `PlayerClass.PlayerStatsTemplate` (`walk=1.5`, `run=6`, `fly=9`) so ordinary players can emit `CHANGE_SPEED`.
+
 ---
 
 ## Next Steps
