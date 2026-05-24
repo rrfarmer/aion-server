@@ -19377,6 +19377,58 @@ Next recommended unit of work:
 
 ---
 
+### Session 710 (May 24, 2026)
+- Continued kisk lifecycle parity by adding registry-backed cleanup/fanout coverage for Java `KiskService.removeKisk` when a production `CM_REVIVE` kisk revive consumes the final resurrection charge.
+- Added `GameServerConnectionKiskReviveWorkflowTests.HandleReviveAsync_DepletedKiskRunsRegistryCleanupFanout`.
+- Extended the kisk revive workflow fixture with an online-player connection registry that records direct sends, visible-player broadcasts, and NPC visibility refreshes.
+- The new test proves the represented depleted-kisk cleanup workflow:
+  - removes the depleted kisk from runtime registry and world state,
+  - sends the final creator `SM_KISK_UPDATE`,
+  - clears an online member's bound kisk id,
+  - sends the online member an obelisk `SM_BIND_POINT_INFO`,
+  - sends a dead online member `SM_DIE` to refresh revive choices,
+  - clears a pending kisk-bind question/requester for an online player,
+  - refreshes NPC visibility after kisk world removal while preserving the revived player's restore/teleport path.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionKiskReviveWorkflowTests|PlayerKiskRemovalCleanupServiceTests|PlayerKiskReviveServiceTests|PlayerKiskLifetimeServiceTests"` passes with 11 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1277 tests.
+
+#### Migration Parity Table - Session 710
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_REVIVE` | `Aion.GameServer.Network.Aion.ClientPackets.CmRevive` / `GameServerConnection.HandleReviveAsync` | Client Packet / Handler | Partial | Regression Tested | Needs Verification | Production kisk revive route now covers registry-backed cleanup after the last charge is consumed. Other revive ids, invalid-id behavior, encrypted parser-to-handler execution, and live-client behavior remain outside this unit. |
+| `com.aionemu.gameserver.model.gameobjects.Kisk.resurrectionUsed` | `PlayerKiskResurrectionService.UseResurrection` / `PlayerKiskReviveService.TryUseKiskRevive` | Runtime Model / Kisk State | Partial | Regression Tested | Needs Verification | Final-charge route is now covered through handler-level cleanup/fanout after deletion intent. Java's live `Kisk` known-list broadcast, controller deletion timing, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.controllers.KiskController.delete` | `GameServerConnection.RemoveRuntimeKiskAsync` / `PlayerKiskLifetimeService.DespawnExpiredKisk` | Controller / Runtime Cleanup | Partial | Regression Tested | Needs Verification | Handler-level test now verifies registry/world removal under an online-player registry. ID release is still not asserted by this fixture, and Java AI/death hooks, thread/task cancellation, and controller event ordering remain partial. |
+| `com.aionemu.gameserver.services.KiskService.removeKisk` | `PlayerKiskRemovalRuntimeCleanupService.ApplyAsync` | Service / Cleanup Fanout | Partial | Regression Tested | Needs Verification | Registry-backed workflow now verifies final creator update, online member bind reset, dead-member `SM_DIE`, pending bind request clearing, and NPC visibility refresh. Offline bind cleanup internals, exact Java collection iteration order, live same-race known-list fanout, and client rendering remain unverified. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.sendKiskBindPoint` / `sendObeliskBindPoint` | `SmBindPointInfo.Kisk` / `SmBindPointInfo` from removal cleanup | Service / Packet Helper | Partial | Regression Tested indirectly | Needs Verification | Depleted cleanup proves member fallback bind-point packet is sent after kisk removal. Serialized packet bytes, bind-point source precedence against Java, and live client UI behavior remain unverified. |
+| `com.aionemu.gameserver.controllers.PlayerController.showResurrectionOptions` / `SM_DIE` | `SmDie` from `PlayerKiskRemovalRuntimeCleanupService.ApplyAsync` | Controller / Server Packet | Partial | Regression Tested indirectly | Needs Verification | Dead member receives represented `SM_DIE` after kisk removal. Java skill/item/instance revive option flags, remaining-kisk-time fields, invasion flag, exact serialization, and live client behavior remain unverified. |
+| `com.aionemu.gameserver.world.World.getNpcs` / known-list refresh after kisk delete | `GameWorld.GetNpcs` / `IGameClientConnectionRegistry.RefreshNpcVisibilityAsync` | World / Visibility Fanout | Partial | Regression Tested indirectly | Needs Verification | Test proves cleanup invokes NPC visibility refresh after kisk removal and includes another NPC still present on the map. Java known-list diff behavior, viewer filtering, threading, and exact packet order remain unverified. |
+
+Tests added/updated:
+- `GameServerConnectionKiskReviveWorkflowTests.HandleReviveAsync_DepletedKiskRunsRegistryCleanupFanout`: validates production `CM_REVIVE` last-charge kisk revive cleanup with an online registry, final creator update, member bind reset, dead-member revive option refresh, pending request clearing, and NPC visibility refresh.
+- Existing connection-level non-depleted/depleted kisk revive workflow tests and service-level kisk cleanup/revive tests matched by the focused filter were rerun.
+- Java comparison status: expectations are source-derived from `CM_REVIVE`, `PlayerReviveService.kiskRevive`, `Kisk.resurrectionUsed`, `KiskController.delete`, `KiskService.removeKisk`, `TeleportService.sendKiskBindPoint`, `PlayerController.showResurrectionOptions`, `SM_KISK_UPDATE`, `SM_BIND_POINT_INFO`, and `SM_DIE`. No Java runtime execution, Java-generated golden vector, exact known-list fanout comparison, encrypted-frame comparison, full socket-order capture, threading/task comparison, reflection behavior, date/time behavior beyond bounded kisk lifetime, or live-client validation was run.
+
+Remaining risks:
+- The new registry is a test double, not the real socket registry, so encrypted frame parsing and live socket dispatch remain unverified.
+- Exact Java packet ordering across immediate kisk update, final creator update, member bind reset, `SM_DIE`, stat visual refresh, and teleport packets remains source-inferred rather than captured from Java.
+- ID release on depleted revive is still covered only by a separate `RemoveRuntimeKiskAsync` test with `IDFactory`, not this combined workflow.
+- Java `KiskController.delete` AI/death hooks and known-list internals may perform additional work not represented by this C# cleanup route.
+- Other revive types, invalid revive ids, prison/event kisk branches, no-resurrect-penalty live effect detection, unset res-position state, exact serialization, and live client behavior remain partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 registry-backed depleted kisk cleanup/fanout coverage slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 encrypted socket processor comparison, Java runtime/golden comparison, exact known-list/socket ordering, Java controller/AI side-effect comparison, other revive-type routing, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; kisk depleted cleanup/fanout coverage is stronger, but full live kisk/revive parity remains partial.
+
+Next recommended unit of work:
+- Continue kisk/revive parity with one remaining caller-side gap such as live no-resurrect-penalty effect detection into `HandleReviveAsync`, unset res-position state after kisk revive, or ID release assertion in the combined depleted workflow; otherwise pivot to charge/power-shard/idiani burn hooks or loot/drop handler-side quest/event paths.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
