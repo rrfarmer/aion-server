@@ -1,0 +1,128 @@
+# Phase 6MY Completion Handoff - Decompose Cancel-State Metadata
+
+Date: May 24, 2026
+Unit of Work: UOW-851
+Branch: `4.8`
+Commit: pending at handoff creation (`[Phase 6][UOW-851] Map decompose cancel state`)
+
+## Status
+
+Phase 6 is still in progress. This unit added source-derived metadata for the normal `DecomposeAction` positive-time cancel path.
+
+No runtime decompose fixture was added. The work is a conservative metadata slice backed by Java and C# source review plus existing decompose service tests.
+
+## Files Changed
+
+- `dotnetConversion/src/Aion.GameServer/Services/PlayerSummonSkillExecutionService.cs`
+- `dotnetConversion/tests/Aion.GameServer.Tests/PlayerSummonSkillExecutionServiceTests.cs`
+- `docs/PHASE-6-PROGRESS.md`
+- `docs/Phase-6MY-Completion.md`
+
+## What Changed
+
+- Added `Decompose` to `PlayerSummonKnownObjectNpcSkillItemUsageStatePathKind`.
+- Added a normal decompose positive-time path to `PlayerSummonKnownObjectNpcSkillItemUsageStateTrace`:
+  - broadcast including source
+  - 3000 ms duration
+  - decompose-canceled message category
+  - cancel `end=2`
+  - sets C# `UsingItemObjectId`
+- Updated the existing metadata regression to assert the decompose path.
+
+## Java Source Notes
+
+- `DecomposeAction.canAct` rejects missing decomposable data, non-decomposable items, and full inventories.
+- Selectable decomposables send `SM_FIRST_SHOW_DECOMPOSABLE` and do not schedule item use.
+- Normal decomposables broadcast a 3000 ms positive-time `SM_ITEM_USAGE_ANIMATION`.
+- Java attaches an `ItemUseObserver`; abort cancels `TaskId.ITEM_USE`, removes cooldown, sends `STR_DECOMPOSE_ITEM_CANCELED`, broadcasts zero-time `end=2`, and removes the observer.
+- Completion removes the observer, revalidates, consumes the source item, sends success/reward packets, and broadcasts final `end=1` on success or `end=2` on failure.
+
+## Tests
+
+Focused:
+
+```powershell
+dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|DecomposeServiceTests"
+```
+
+Result: passed, 73 tests.
+
+Full:
+
+```powershell
+dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj
+```
+
+Result: passed, 1423 tests.
+
+Updated test:
+
+| Test Name | What It Validates | Java Comparison |
+|---|---|---|
+| `PlayerSummonSkillExecutionServiceTests.ProjectMercenaryNpcSkillItemUsageStateTrace_MapsPositiveTimeUsingItemTiming` | Metadata includes normal decompose as a broadcast 3000 ms positive-time path with decompose cancel message and cancel `end=2`. | Source-derived Java/C# review; no Java runtime comparison. |
+
+## Migration Parity Snapshot
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.DecomposeAction` | `PlayerSummonKnownObjectNpcSkillItemUsageStateTrace` / `GameServerConnection.HandleDecomposeUseItemAsync` | Dynamic Item Action Caller / Metadata | Partial | Unit Tested as metadata | Partial Parity | Trace records normal decompose scheduling: broadcast positive-time animation, 3000 ms duration, decompose-canceled message, and `end=2` cancel animation. Runtime cancellation, selectable path, observer abort, success/failure final packets, reward mutation, persistence, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.controllers.observer.ItemUseObserver` | `GameServerConnection.CancelPendingItemUseAsync` centralized pending cleanup | Observer / Scheduler Dependency | Partial | Unit Tested as metadata | Needs Verification | Java decompose cancellation is observer-driven; C# uses centralized pending cleanup. Observer lifecycle, abort triggers, threading, and races remain unverified. |
+| `com.aionemu.gameserver.model.TaskId` / `com.aionemu.gameserver.utils.ThreadPoolManager` | `Aion.GameServer.Utils.ThreadPoolManager` / pending item-use scheduler metadata | Scheduler / Task Dependency | Partial | Unit Tested as metadata | Needs Verification | Java schedules `TaskId.ITEM_USE` for 3000 ms; C# schedules `DecomposeService.UsageDelayMilliseconds`. Task-id storage, cancellation races, and timing precision remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_FIRST_SHOW_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ServerPackets.SmFirstShowDecomposable` | Packet / Selectable Decompose Dependency | Partial | Existing packet tests; metadata notes this unit | Partial Parity | Java selectable branch sends first-show packet and returns. C# branch shape matches, but runtime selectable-decompose behavior and Java-generated packet bytes remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` | `Aion.GameServer.Network.Aion.ServerPackets.SmItemUsageAnimation` / trace row | Packet / Cancel Payload Dependency | Partial | Unit Tested as metadata | Partial Parity | Metadata records source-derived normal decompose start/cancel/final end states. Java-generated bytes, opcode/frame/crypto, and packet-write `usingItem` side effect remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `PendingItemUseCancelMessage.Decompose` / `SmSystemMessage.DecomposeItemCanceled(...)` | System Message / Cancel Feedback Metadata | Partial | Existing packet tests; metadata notes this unit | Needs Verification | Java abort sends `STR_DECOMPOSE_ITEM_CANCELED`; C# maps to `DecomposeItemCanceled`. Runtime ordering and localization remain unverified. |
+| `com.aionemu.gameserver.dataholders.DecomposableItemsData` | `Aion.GameServer.Dataholders.DecomposableItemTable` / `DecomposeService` | Static Data / Service Dependency | Partial | Unit Tested | Needs Verification | Existing tests cover selectable and normal reward planning plus inventory-full behavior. Parser edge cases, random distribution, special-cube cases, and Java runtime output remain unverified. |
+
+## Remaining Risks
+
+- Decompose runtime cancellation remains untested.
+- Java observer abort and C# centralized pending cleanup may differ.
+- Selectable decompose branch is source-reviewed but not runtime-tested through `GameServerConnection`.
+- Reward mutation, random rewards, special-cube checks, final success/failure animations, persistence rollback, system-message localization, opcode/frame/crypto, socket fanout, scheduler races, threading/date-time precision, reflection/dynamic item actions, serialization side effects, and live-client validation remain unverified.
+
+## Summary Metrics
+
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 source-derived metadata alignment slice covering decompose positive-time cancel-state
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 29 blocked/not-started categories
+- Estimated overall migration completion: Phase 6 remains about 66% complete
+
+## Next Recommended Unit of Work
+
+Add a narrow `GameServerConnection` runtime test for the normal decompose positive-time path if fixture setup stays small: verify start animation broadcast/self fallback, `UsingItemObjectId` scheduling, emotion/move cancellation clearing, `end=2` cancel animation, `DecomposeItemCanceled` ordering, and no delayed completion after cancellation.
+
+Suggested scope:
+
+- Reuse patterns from `GameServerConnectionInventoryExpansionUseItemTests` if possible.
+- Add minimal static data with one decomposable item, one reward template, and one normal decomposable group.
+- Use a live `ThreadPoolManager`.
+- Trigger cancellation through the same reflected select-target emotion helper or move handler.
+- Avoid broad decompose mutation/persistence coverage in the same unit.
+
+## Safe Parallel Work Candidates
+
+| Candidate | Files | Parallel Safe? | Notes |
+|---|---|---|---|
+| Runtime fixture feasibility | decompose test file only | Yes, if exclusive | Find minimal XML/static-data setup. |
+| Java selectable branch audit | Java `DecomposeAction` read-only | Yes | Confirm selectable no-schedule behavior. |
+| C# selectable branch audit | `GameServerConnection.cs`, `DecomposeService.cs` read-only | Yes | Decide whether next test should be normal or selectable. |
+| Progress/handoff docs | docs | No | Orchestrator-owned after validation. |
+
+## Do Not Parallelize
+
+- `GameServerConnection.cs` implementation edits.
+- Shared test fixtures used by existing item-use tests.
+- Progress and handoff docs.
+
+## Resume Checklist
+
+1. Read `docs/csharp-port.md`, orchestration docs, `docs/PHASE-6-PROGRESS.md`, and this handoff.
+2. Confirm branch status and latest commit.
+3. Run parallel work discovery before selecting subagents.
+4. Use Java as source of truth and preserve breadcrumbs.
+5. Keep the next unit narrow: normal decompose runtime cancellation if feasible.
+6. Run focused and full tests.
+7. Update Migration Parity Table, Remaining Risks, Summary Metrics, and Next Recommended Unit.
+8. Create the next handoff and commit the completed unit.
