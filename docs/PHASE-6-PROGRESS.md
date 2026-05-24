@@ -18785,6 +18785,53 @@ Summary metrics:
 Next recommended unit of work:
 - Add persistence support for accepted NPC expansion mutations (`npc_expands`, `wh_npc_expands`) so cube/warehouse NPC expansion survives logout, then cover the repository boundary with source-derived tests. Keep full real XML count comparison and end-to-end dialog/socket validation as follow-up readiness work.
 
+---
+
+### Session 698 (May 24, 2026)
+- Continued storage expansion parity by covering the accepted NPC expansion logout persistence boundary.
+- Added a regression test that accepts one cube NPC expansion and one warehouse NPC expansion, then leaves the world and asserts the logout repository receives:
+  - `Player.NpcExpands = 1`,
+  - `Player.WarehouseNpcExpands = 1`,
+  - represented Kinah decreased by both Java-source-derived expansion prices.
+- Confirmed the existing C# logout repository path already writes Java `players.npc_expands` and `players.wh_npc_expands` columns through `SavePlayerLogoutAsync`, matching Java `PlayerDAO.storePlayer` column coverage.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "LeaveWorld_PersistsAcceptedStorageExpansionFields|StorageExpansionNpcServiceTests"` passes with 10 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1264 tests.
+
+#### Migration Parity Table - Session 698
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.CubeExpandService.expandCube` / `npcExpand` | `Aion.GameServer.Services.StorageExpansionNpcService.RequestCubeExpansion` / `HandleResponse` | Service / Mutation Source | Partial | Regression Tested | Needs Verification | Accepted cube NPC expansion now has test coverage through logout persistence boundary after represented Kinah decrement and `NpcExpands` mutation. Java `player.setCubeLimit()`, deeper storage limit state, DAO transaction timing, Java runtime comparison, and live socket-order validation remain unverified. |
+| `com.aionemu.gameserver.services.WarehouseService.expandWarehouse` / `expand` | `Aion.GameServer.Services.StorageExpansionNpcService.RequestWarehouseExpansion` / `HandleResponse` | Service / Mutation Source | Partial | Regression Tested | Needs Verification | Accepted warehouse NPC expansion now has test coverage through logout persistence boundary after represented Kinah decrement and `WarehouseNpcExpands` mutation. Java `player.setWarehouseLimit()`, deeper storage limit state, DAO transaction timing, Java runtime comparison, and live socket-order validation remain unverified. |
+| `com.aionemu.gameserver.services.player.PlayerLeaveWorldService.leaveWorld` / `PlayerService.storePlayer` | `Aion.GameServer.Services.PlayerEnterWorldService.LeaveWorldAsync` | Service / Logout Persistence Boundary | Partial | Regression Tested | Needs Verification | Leave-world path passes the mutated player to `SavePlayerLogoutAsync`, preserving accepted NPC expansion fields. Java logout side effects beyond represented pending-request cleanup, online flags, and save call ordering remain broader than this test. Threading and shutdown-race behavior were not compared. |
+| `com.aionemu.gameserver.dao.PlayerDAO.storePlayer` | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.SavePlayerLogoutAsync` | Repository / DAO | Partial | Regression Tested indirectly | Needs Verification | Existing SQL update includes `npc_expands` and `wh_npc_expands` in the same logout save statement as Java. This unit uses a capturing repository seam, not a live MySQL write/readback, so database autocommit behavior, parameter ordering against a real server, schema drift, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData.setNpcExpands/setWhNpcExpands` | `Aion.GameServer.Model.GameObjects.Player.NpcExpands` / `WarehouseNpcExpands` | Runtime Model | Partial | Regression Tested | Needs Verification | In-memory mutations survive through leave-world save handoff. Java common-data observer side effects, serialization differences beyond represented packet fields, and thread-safety semantics remain unverified. |
+| `com.aionemu.gameserver.model.items.storage.StorageType.CUBE/REGULAR_WAREHOUSE` | `SmCubeUpdate.CubeSize` / `SmWarehouseInfo.CreateRegularWarehouseUpdatePackets` dependencies | Storage / Packet Dependency | Partial | Existing Regression Tested | Needs Verification | Expansion response still sends represented cube/warehouse refresh packets before logout. This unit did not add new storage-limit recalculation support, Java golden bytes, encrypted frames, or live-client inventory/warehouse UI validation. |
+
+Tests added/updated:
+- `PlayerEnterWorldServiceTests.LeaveWorld_PersistsAcceptedStorageExpansionFields`: validates a source-derived cube expansion and warehouse expansion mutate represented expansion fields, consume Kinah, and pass those values into the leave-world logout repository boundary. It does not execute Java, compare Java-generated golden vectors, or write/read a live MySQL database.
+- Existing `StorageExpansionNpcServiceTests` were rerun with the new persistence-boundary test to keep request/response behavior covered.
+- Java comparison status: expectations are source-derived from `CubeExpandService`, `WarehouseService`, `PlayerLeaveWorldService`, `PlayerService.storePlayer`, `PlayerDAO.storePlayer`, and `PlayerCommonData`. No Java runtime execution, Java-generated golden vector, live MySQL round trip, autocommit comparison, encrypted-frame comparison, socket-order validation, threading behavior comparison, reflection behavior comparison, precision/rounding issue, date/time behavior comparison beyond existing logout timestamp handling, or live-client validation was run.
+
+Remaining risks:
+- The persistence boundary is covered with a capturing repository seam only; live MySQL write/readback remains unverified.
+- Java `player.setCubeLimit()` and `player.setWarehouseLimit()` deeper storage-object recalculation are still represented only by fields and outgoing packets.
+- Full real `storage_expander` XML count parity and duplicate NPC id overwrite behavior remain unverified.
+- End-to-end production dialog tests for action ids `47` and `48` remain missing.
+- Java golden packet bytes, encrypted frames, localized client rendering, and live client validation remain unperformed.
+- Logout ordering and shutdown-race behavior are not compared against Java.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 storage-expansion logout persistence-boundary coverage slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 6 live MySQL persistence comparison, storage limit recalculation, full real-data comparison, end-to-end dialog tests, golden/encrypted packet comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; storage expansion persistence handoff is better covered, but real database/runtime/client parity remains partial.
+
+Next recommended unit of work:
+- Add an end-to-end production dialog test for `CM_DIALOG_SELECT` actions `47` and `48` using loaded storage-expander templates and targeted NPC validation, or add a real-XML count comparison for cube/warehouse expansion template loading. Keep live MySQL write/readback and storage-limit recalculation as follow-up work.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
