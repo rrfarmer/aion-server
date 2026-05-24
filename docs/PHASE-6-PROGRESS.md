@@ -21970,6 +21970,60 @@ Next recommended unit of work:
 
 ---
 
+### Session 763 (May 24, 2026)
+- Re-inspected Java `NpcController.useSkill(int, int)` and `Creature.isSkillDisabled(SkillTemplate)`:
+  - `NpcController` resolves a `SkillTemplate` from `DataManager.SKILL_DATA`;
+  - it checks `getOwner().isSkillDisabled(skillTemplate)` before `CreatureController.useSkill`;
+  - when the skill is allowed, it renews NPC last-skill time before invoking the superclass controller;
+  - `Creature.isSkillDisabled` checks the template cooldown id in the creature cooldown map, including cooldown id `0` if present.
+- Extended represented known-object metadata with disabled skill cooldown ids and optional last-skill-time metadata for future live NPC state.
+- Updated `PlayerSummonSkillExecutionService.PlanInvocationExecution` to accept optional player context:
+  - valid mercenary plans now check represented known-object cooldown-disabled metadata after static template lookup;
+  - disabled mercenary skills return `DisabledNpcSkill` without use actions or last-skill-time renewal;
+  - allowed mercenary skills set `WouldRenewLastSkillTime` and include a `RenewLastSkillTime` preview action before `UseSkill`.
+- Updated `GameServerConnection.HandleSummonCastSpellAsync` to pass the active player into invocation execution planning.
+- Kept disabled-skill and last-skill-time behavior as preview metadata only; no live cooldown map mutation, game-stat timestamp mutation, controller invocation, or effects run.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 32 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1356 tests.
+
+#### Migration Parity Table - Session 763
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.NpcController.useSkill(int, int)` | `PlayerSummonSkillExecutionService.PlanInvocationExecution` / mercenary `PlayerSummonSkillInvocationExecutionResult` | NPC Controller Precondition Projection | Partial | Regression Tested | Needs Verification | C# now models disabled-skill blocking and last-skill-time renewal intent for represented mercenary plans. It does not mutate live NPC game stats, call `CreatureController.useSkill`, catch exceptions, or run cooldown/effect/packet behavior. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.isSkillDisabled(SkillTemplate)` | `PlayerSummonKnownObject.DisabledSkillCooldownIds` / `IsSkillCooldownDisabled` | Cooldown / Restriction Projection | Partial | Regression Tested | Needs Verification | C# checks represented cooldown ids, including id `0` when present, matching Java's map lookup shape. It does not model actual cooldown expiry, removal of expired cooldowns, synchronized cooldown maps, date/time mutation, or Java null-template behavior. |
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.renewLastSkillTime` | `PlayerSummonSkillInvocationExecutionResult.WouldRenewLastSkillTime` / `RenewLastSkillTime` action | Game Stats Timestamp Projection | Not Started | Regression Tested as preview metadata | Needs Verification | C# records that Java would renew last-skill time for allowed mercenary skills. It does not store current time, mutate live stats, compare date/time behavior, or affect AI skill choice. |
+| `com.aionemu.gameserver.controllers.CreatureController.useSkill(int, int)` | `PlayerSummonSkillInvocationExecutionAction.UseSkill` after `RenewLastSkillTime` | Controller Invocation Projection | Partial | Regression Tested as preview metadata | Needs Verification | C# preserves ordering after the NPC disabled check but still does not create/use a live skill, update cooldowns, handle exceptions, mutate target, or send packets. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL.runImpl` mercenary branch | `GameServerConnection.HandleSummonCastSpellAsync` passing player context into invocation planning | Client Packet Handler / Service Composition | Partial | Regression Tested | Needs Verification | Connection-level mercenary planning now sees represented known-object disabled cooldown metadata. Live `Npc` ownership, target mutation, audit/log sinks, and controller execution remain missing. |
+| `com.aionemu.gameserver.skillengine.model.SkillTemplate.getCooldownId` | `SkillTemplateSummary.CooldownId` consumed by mercenary planning | Static Data Projection | Partial | Regression Tested with loaded static data | Needs Verification | C# uses loaded static template cooldown ids for represented disabled checks. Full Java XML/default comparison, null-template behavior, precision/rounding, threading, and serialization remain unverified. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ValidateMercenaryExecution_PlansControllerUseAndAuditsInvalidSkill`: now validates allowed mercenary invocation previews set `WouldRenewLastSkillTime` and include `RenewLastSkillTime` before `UseSkill`.
+- `PlayerSummonSkillExecutionServiceTests.PlanInvocationExecution_BlocksDisabledMercenarySkillBeforeControllerUse`: validates represented disabled cooldown metadata returns `DisabledNpcSkill`, preserves skill/cooldown ids, does not renew last-skill time, and emits no use actions.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_ValidRepresentedMercenarySkillPlansControllerUse`: now validates connection-level allowed mercenary previews include last-skill-time renewal metadata.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_DisabledRepresentedMercenarySkillStopsBeforeControllerUse`: validates connection-level disabled mercenary skill planning stops before controller use.
+- Java comparison status: expectations are source-derived from Java `NpcController.useSkill`, `Creature.isSkillDisabled`, `SkillTemplate.getCooldownId`, `CreatureController.useSkill`, and `CM_SUMMON_CASTSPELL.runImpl`. No Java runtime execution, live cooldown expiry/removal comparison, live `NpcGameStats` timestamp comparison, controller invocation comparison, object identity comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Disabled-skill behavior is represented by static metadata on `PlayerSummonKnownObject`, not a live NPC cooldown map.
+- Expired cooldown removal, synchronization/threading behavior, and Java null-template exceptions are not modeled.
+- Last-skill-time renewal remains preview metadata only and does not affect AI skill choice or scheduling.
+- Controller execution, live target mutation, skill runtime, cooldown mutation, effects, packets, audit/log sinks, Java runtime, and live-client behavior remain unverified.
+- Reflection, serialization, date/time, and precision/rounding behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 represented NPC disabled-skill/last-skill-time preview slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 10 live NPC cooldown map, expired cooldown cleanup, live `NpcGameStats`, controller execution, live skill runtime, target mutation, packet fanout, Java runtime comparison, live-client validation, and threading/serialization verification
+- Estimated overall migration completion: Phase 6 remains about 66% complete; mercenary invocation planning now models the Java NPC disabled-skill gate, but live controller parity remains partial.
+
+Next recommended unit of work:
+- Continue from the mercenary controller precondition by either mutating represented last-skill-time metadata with an injectable clock, or by modeling one concrete `Skill.useSkill` can-use failure reason that feeds the existing outcome gate. Keep live `SkillEngine`, cooldown expiry/removal, effects, observers, packets, and live NPC state explicit until their supporting systems exist.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
