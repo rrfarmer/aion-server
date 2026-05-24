@@ -18543,6 +18543,61 @@ Summary metrics:
 Next recommended unit of work:
 - Continue compact `ResponseRequester` parity with cube/warehouse expansion warning, or take the remaining craft helper methods (`getProfessionByNpc`, expert/master counts and caps) as a small service-only slice before moving back to larger exchange/inventory work. Do not claim craft rank-up parity complete until Java skill/inventory persistence and `PlayerSkillList.addSkill` side effects have C# homes.
 
+---
+
+### Session 694 (May 24, 2026)
+- Continued the craft parity line with Java `CraftSkillUpdateService` helper methods.
+- Added `CraftSkillUpdateService.GetProfessionByNpc` with explicit unknown-NPC null behavior.
+- Added Java default craft cap constants:
+  - `DefaultMaxExpertCraftingSkills = 2`,
+  - `DefaultMaxMasterCraftingSkills = 1`.
+- Added `GetTotalExpertCraftingSkills` and `GetTotalMasterCraftingSkills` using Java thresholds:
+  - expert crafting skills are crafting professions with levels `> 399 && <= 499`,
+  - master crafting skills are crafting professions with levels `> 499`,
+  - gathering skills are ignored because Java checks `Profession.isCrafting()`.
+- Added `CanLearnMoreExpertCraftingSkill` and `CanLearnMoreMasterCraftingSkill` with Java source-derived block messages represented as `SmMessage`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter CraftSkillUpdateServiceTests` passes with 10 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1253 tests.
+
+#### Migration Parity Table - Session 694
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftSkillUpdateService.getProfessionByNpc` | `Aion.GameServer.Services.CraftSkillUpdateService.GetProfessionByNpc` | Service Method | Complete | Regression Tested | Needs Verification | Maps represented NPC template ids through the Java profession map and returns null for unknown NPCs. Java singleton initialization/logging and live NPC-template coverage were not runtime-compared. |
+| `com.aionemu.gameserver.services.craft.CraftSkillUpdateService.getTotalExpertCraftingSkills` | `Aion.GameServer.Services.CraftSkillUpdateService.GetTotalExpertCraftingSkills` | Service Method | Complete | Regression Tested | Needs Verification | Counts crafting professions with levels `>399 && <=499` and ignores gathering, matching Java source. Duplicate skill rows, DAO-loaded skill-list ordering, Java `PlayerSkillList` behavior, and live data migration edge cases remain unverified. |
+| `com.aionemu.gameserver.services.craft.CraftSkillUpdateService.getTotalMasterCraftingSkills` | `Aion.GameServer.Services.CraftSkillUpdateService.GetTotalMasterCraftingSkills` | Service Method | Complete | Regression Tested | Needs Verification | Counts crafting professions with levels `>499`, matching Java source. Duplicate skill rows, DAO-loaded skill-list ordering, Java `PlayerSkillList` behavior, and live data migration edge cases remain unverified. |
+| `com.aionemu.gameserver.services.craft.CraftSkillUpdateService.canLearnMoreExpertCraftingSkill` | `Aion.GameServer.Services.CraftSkillUpdateService.CanLearnMoreExpertCraftingSkill` | Service Method / Validation | Partial | Regression Tested | Needs Verification | Uses expert-plus-master count and configurable max cap, defaulting to Java `CraftConfig` value `2`, and returns a Java-shaped `SmMessage` when blocked. Future quest/craft callers still need to send the packet; Java config loading and live quest integration were not compared. |
+| `com.aionemu.gameserver.services.craft.CraftSkillUpdateService.canLearnMoreMasterCraftingSkill` | `Aion.GameServer.Services.CraftSkillUpdateService.CanLearnMoreMasterCraftingSkill` | Service Method / Validation | Partial | Regression Tested | Needs Verification | Uses master-only count and configurable max cap, defaulting to Java `CraftConfig` value `1`, and returns a Java-shaped `SmMessage` when blocked. Future quest/craft callers still need to send the packet; Java config loading and live quest integration were not compared. |
+| `com.aionemu.gameserver.model.craft.Profession.isCrafting/getSkillId` | `Aion.GameServer.Services.CraftProfessionExtensions.IsCrafting/GetSkillId` | Enum / Utility Dependency | Partial | Regression Tested | Needs Verification | Existing skill-id and crafting predicate support the helper counts. Java enum identity/reflection behavior and `Profession.getBySkillId` remain unported. |
+| `com.aionemu.gameserver.configs.main.CraftConfig` | `CraftSkillUpdateService.DefaultMaxExpertCraftingSkills` / `DefaultMaxMasterCraftingSkills` | Config Dependency | Partial | Regression Tested | Needs Verification | Java default caps are represented as method defaults. Runtime config-file loading, admin overrides, and other craft config flags remain unported here. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendMessage` / `SM_MESSAGE` | `CraftSkillLimitResult.Message` with `Aion.GameServer.Network.Aion.ServerPackets.SmMessage` | Packet Dependency | Partial | Regression Tested | Needs Verification | Blocked cap checks return the same source-derived text in an `SmMessage`. Caller fanout is not wired in this unit, and Java packet bytes/encrypted frames/live client display were not compared. |
+| `com.aionemu.gameserver.model.skill.PlayerSkillList` | `Player.Skills` represented skill array | Runtime Model Dependency | Partial | Regression Tested | Needs Verification | Helper methods read represented skill rows by profession skill id. Java DAO load shape, duplicate handling, thread safety, serialization differences, and persistence behavior remain unverified. |
+
+Tests added/updated:
+- `CraftSkillUpdateServiceTests.GetProfessionByNpc_MapsJavaNpcIdsAndRejectsUnknownNpc`: validates known Elyos/base NPC ids map to Cooking and unknown ids return null.
+- `CraftSkillUpdateServiceTests.CraftingSkillCounts_UseJavaExpertAndMasterThresholds`: validates expert/master thresholds, crafting-only counting, and gathering exclusion.
+- `CraftSkillUpdateServiceTests.CanLearnMoreExpertCraftingSkill_UsesExpertPlusMasterCapAndJavaMessage`: validates expert cap includes expert plus master counts and returns the Java text message when blocked.
+- `CraftSkillUpdateServiceTests.CanLearnMoreMasterCraftingSkill_UsesMasterOnlyCapAndJavaMessage`: validates master cap counts master skills only and returns the Java text message when blocked.
+- Java comparison status: expectations are source-derived from `CraftSkillUpdateService`, `Profession`, `CraftConfig`, `PacketSendUtility.sendMessage`, and `SM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live quest/craft caller integration, config-file loading comparison, DAO-loaded skill-list comparison, encrypted frame comparison, reflection behavior, threading behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Quest/craft callers such as Java `CraftingRewards` are not wired to the C# helper result yet.
+- Craft cap values are represented as defaults, not loaded from the Java-style config pipeline.
+- Java `Profession.getBySkillId` remains unported.
+- Duplicate skill-row behavior, DAO load ordering, and thread-safety around `PlayerSkillList` remain unverified.
+- Packet sends are represented as returned `SmMessage` packets only; production fanout, Java golden bytes, encrypted frames, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 craft helper/cap validation slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 7 quest caller integration, craft config loading, `Profession.getBySkillId`, DAO-loaded skill-list edge cases, thread-safety comparison, socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; craft rank-up and helper checks are better represented, but caller integration and persistence parity remain partial.
+
+Next recommended unit of work:
+- Continue compact `ResponseRequester` parity with cube/warehouse expansion warning, or wire the craft cap helper into the future `CraftingRewards`/quest path only if the surrounding quest reward validation surface is already represented. Larger exchange `performTrade` and craft/inventory persistence should remain deferred until their state models are scoped.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
