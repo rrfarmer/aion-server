@@ -19275,6 +19275,57 @@ Next recommended unit of work:
 
 ---
 
+### Session 708 (May 24, 2026)
+- Continued kisk lifecycle parity by adding caller-side production `CM_REVIVE` workflow coverage for Java `ReviveType.KISK_REVIVE`.
+- Made `GameServerConnection.HandleReviveAsync` internal for direct connection-boundary regression coverage.
+- Added a connection-level test proving the represented kisk revive workflow:
+  - requires Java revive id `4`,
+  - consumes one kisk resurrection charge,
+  - sends `SM_KISK_UPDATE`,
+  - restores the dead player with kisk revive percentages from the current represented max-stat source,
+  - clears DP, dead state, and sets active state,
+  - emits resurrect emotion,
+  - teleports directly to the kisk position without a fade-out request,
+  - sends same-map kisk revive teleport packets (`SM_CHANNEL_INFO`, `SM_PLAYER_SPAWN`, `SM_PLAYER_INFO`, `SM_STATS_INFO`, `SM_MOTION`).
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionKiskReviveWorkflowTests|PlayerKiskReviveServiceTests|PlayerReviveRestoreServiceTests"` passes with 10 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1275 tests.
+
+#### Migration Parity Table - Session 708
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_REVIVE` | `Aion.GameServer.Network.Aion.ClientPackets.CmRevive` / `GameServerConnection.HandleReviveAsync` | Client Packet / Handler | Partial | Regression Tested | Needs Verification | Production handler route now covers Java kisk revive id `4` through charge use, restore, emotion, and teleport packet intent. Other revive ids, unsupported-id exception behavior, encrypted parser-to-handler execution, and live-client behavior remain outside this unit. |
+| `com.aionemu.gameserver.model.gameobjects.player.ReviveType.KISK_REVIVE` | `PlayerKiskReviveService.KiskReviveId` | Enum / Constant Dependency | Partial | Regression Tested | Needs Verification | Test drives revive id `4` from the connection handler. Full Java enum mapping for bind/rebirth/item/skill/instance/obelisk revive and invalid-id behavior remain unported or untested here. |
+| `com.aionemu.gameserver.services.player.PlayerReviveService.kiskRevive` | `GameServerConnection.HandleReviveAsync` plus `PlayerKiskReviveService.TryUseKiskRevive` | Service / Revive Workflow | Partial | Regression Tested | Needs Verification | Caller-side workflow now covers charge consumption, `SM_KISK_UPDATE`, resource restore, resurrect emotion, and direct kisk teleport packet intent. Prison/event-mode branches, stat visual refresh via live registry, unset res-position state, Java runtime comparison, and full socket order remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.Kisk.resurrectionUsed` | `PlayerKiskRuntimeState.UseResurrection` via `PlayerKiskReviveService.TryUseKiskRevive` | Runtime Model / Kisk State | Partial | Regression Tested | Needs Verification | Connection workflow now proves one charge is consumed before revive/teleport fanout. Concurrency semantics, depletion deletion cleanup, member fanout with live registry, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.teleportTo(Player, WorldPosition)` | `PlayerTeleportService.TeleportToKiskPosition` / `TeleportPlayerToKiskPositionAsync` | Service / Teleport | Partial | Regression Tested | Needs Verification | Test proves the player moves to the kisk position and same-map no-fade packet intent is emitted. Full world despawn/spawn ownership, protection tasks, instance callbacks, housing/NPC refresh with live registry, and encrypted socket ordering remain partial. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_KISK_UPDATE` / `SM_EMOTION` / teleport packets | `SmKiskUpdate`, `SmEmotion`, `SmChannelInfo`, `SmPlayerSpawn`, `SmPlayerInfo`, `SmStatsInfo`, `SmMotion` | Server Packet Fanout | Partial | Regression Tested indirectly | Needs Verification | Packet type sequence is asserted for the direct no-registry connection path. Java golden bytes, live visible-player broadcasts, encrypted frames, and real client rendering remain unverified. |
+
+Tests added/updated:
+- `GameServerConnectionKiskReviveWorkflowTests.HandleReviveAsync_KiskReviveConsumesChargeRestoresAndTeleports`: validates production `CM_REVIVE` kisk route state mutation, kisk charge consumption, resource restore, direct teleport, and packet fanout intent.
+- Existing `PlayerKiskReviveServiceTests` and `PlayerReviveRestoreServiceTests` were rerun with the new connection workflow test.
+- Java comparison status: expectations are source-derived from `CM_REVIVE`, `ReviveType.KISK_REVIVE`, `PlayerReviveService.kiskRevive`, `PlayerReviveService.revive`, `Kisk.resurrectionUsed`, `TeleportService.teleportTo`, and related server packets. No Java runtime execution, Java-generated golden vector, live registry broadcast comparison, depletion cleanup comparison, prison/event-mode branch comparison, no-resurrect-penalty live effect detection, encrypted-frame comparison, full socket-order capture, threading behavior comparison, reflection behavior comparison, date/time behavior beyond bounded kisk lifetime, or live-client validation was run.
+
+Remaining risks:
+- Other Java revive types and invalid revive id behavior are not handled by this C# route yet.
+- Live no-resurrect-penalty effect detection still is not wired into the connection caller.
+- Kisk depletion deletion cleanup, live same-race/member update fanout, stat visual refresh via registry, and unset res-position state remain partial.
+- Full encrypted client socket processor coverage remains missing for `CM_REVIVE`.
+- Java golden packet bytes, exact socket order, and live client kisk revive behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 caller-side kisk revive workflow coverage slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 5 other revive-type routing, live effect detection, kisk depletion/live fanout cleanup, encrypted socket processor comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; kisk revive caller workflow is better covered, but full revive/kisk lifecycle parity remains partial.
+
+Next recommended unit of work:
+- Continue kisk lifecycle parity with a focused depletion cleanup route test for `CM_REVIVE` when the last kisk resurrection charge is consumed, or move to another Phase 6 gap such as charge/power-shard/idiani burn hooks or loot/drop handler-side quest/event paths.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
