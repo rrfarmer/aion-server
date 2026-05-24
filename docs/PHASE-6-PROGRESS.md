@@ -19229,6 +19229,52 @@ Next recommended unit of work:
 
 ---
 
+### Session 707 (May 24, 2026)
+- Pivoted from storage expansion back to kisk/revive lifecycle parity with a focused source-derived test for Java no-resurrect-penalty behavior during kisk revive restore.
+- Added kisk-specific regression coverage proving `ApplyKiskReviveRestore` preserves the Java `PlayerReviveService.revive` no-resurrect-penalty branch:
+  - effective HP/MP restore becomes `100%` instead of kisk default `30%`,
+  - DP is not reset,
+  - resurrection-active state is cleared,
+  - resurrection skill id is cleared,
+  - dead state is cleared and active state is set.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerReviveRestoreServiceTests|PlayerKiskReviveServiceTests|WorldNpcResourceStatsServiceTests"` passes with 39 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1274 tests.
+
+#### Migration Parity Table - Session 707
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerReviveService.kiskRevive` | `Aion.GameServer.Services.PlayerReviveRestoreService.ApplyKiskReviveRestore` | Service / Revive Helper | Partial | Regression Tested | Needs Verification | Kisk wrapper now has direct coverage that the no-resurrect-penalty flag flows into restore math. Full Java kisk revive caller behavior, kisk resurrection charge consumption, teleport, stat visual refresh, unset res-position state, and live socket fanout remain outside this unit. |
+| `com.aionemu.gameserver.services.player.PlayerReviveService.revive` | `Aion.GameServer.Services.PlayerReviveRestoreService.ApplyReviveRestore` | Service / Resource Restore | Partial | Regression Tested | Needs Verification | Kisk-specific test now asserts Java no-resurrect-penalty branch uses 100% HP/MP, preserves DP, clears player-res state/skill, clears dead state, and sets active state. Java aggro cleanup, target cleanup, soul sickness, group/alliance movement fanout, and `SM_EMOTION` broadcast remain broader than this helper. |
+| `com.aionemu.gameserver.skillengine.model.Effect.isNoResurrectPenalty` / `NoResurrectPenaltyEffect` | `hasNoResurrectPenalty` parameter into `ApplyKiskReviveRestore` | Skill Effect Dependency | Partial | Regression Tested indirectly | Needs Verification | Test simulates the detected effect flag but does not wire the C# skill/effect runtime to detect active no-resurrect-penalty effects. Reflection/JAXB skill-effect loading, effect lifecycle, and live effect-controller behavior remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData.getDp/setDp` | `Player.Dp` restore handling | Runtime Model / Resource State | Partial | Regression Tested | Needs Verification | Kisk no-penalty restore now proves DP is preserved when the flag is present. Live stat packet fanout, persistence timing, threading, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.controllers.PlayerController.onBeforeSpawn` | `Player.SetCreatureState` calls in `ApplyReviveRestore` | Controller / State Transition Dependency | Partial | Regression Tested | Needs Verification | Test asserts represented dead-state clear and active-state set. Full Java controller spawn hooks, movement/team cleanup, known-list updates, and live client state fanout remain outside this unit. |
+
+Tests added/updated:
+- `PlayerReviveRestoreServiceTests.ApplyKiskReviveRestoreHonorsNoResurrectPenaltyLikeJavaRevive`: validates kisk revive restore honors a represented no-resurrect-penalty flag by restoring full HP/MP, preserving DP, clearing resurrection flags, clearing dead state, and setting active state.
+- Existing `PlayerReviveRestoreServiceTests`, `PlayerKiskReviveServiceTests`, and `WorldNpcResourceStatsServiceTests` were rerun to keep kisk charge/depletion and DP reset surfaces covered.
+- Java comparison status: expectations are source-derived from `PlayerReviveService.kiskRevive`, `PlayerReviveService.revive`, `Effect.isNoResurrectPenalty`, `PlayerCommonData`, and `PlayerController.onBeforeSpawn`. No Java runtime execution, Java-generated golden vector, live skill/effect runtime comparison, target/aggro cleanup comparison, group/alliance fanout comparison, stat visual packet comparison, encrypted-frame comparison, socket-order capture, threading behavior comparison, reflection behavior comparison, precision/rounding comparison beyond deterministic integer percent math, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- The C# skill/effect runtime still does not feed real active `NoResurrectPenaltyEffect` state into kisk revive callers.
+- Full Java kisk revive caller behavior, including teleport, kisk charge update fanout, stat visual refresh, and unset res-position state, remains partial.
+- Java target cleanup, aggro cleanup, group/alliance movement fanout, and `SM_EMOTION` broadcast remain broader than this helper test.
+- Live client kisk revive behavior, packet order, and encrypted frames remain unverified.
+- Java runtime comparison for no-resurrect-penalty kisk revive remains unperformed.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 kisk revive no-resurrect-penalty restore coverage slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 5 live skill/effect detection wiring, full kisk revive caller fanout, Java runtime comparison, encrypted packet/socket-order comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; the kisk revive restore helper has stronger no-penalty coverage, but full kisk lifecycle parity remains partial.
+
+Next recommended unit of work:
+- Continue kisk lifecycle parity by adding one caller-side kisk revive workflow test for teleport/update/stat packet intent if the existing `PlayerKiskReviveService` and connection seams support it, or move to another Phase 6 gap such as charge/power-shard/idiani burn hooks or loot/drop handler-side quest/event paths.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
