@@ -24328,6 +24328,53 @@ Next recommended unit of work:
 
 ---
 
+### Session 812 (May 24, 2026)
+- Re-inspected Java `SkillAttackManager.performAttack`.
+- Added `PreviewMercenaryNpcSkillPerformAttack`.
+- Added represented `PlayerSummonKnownObjectNpcSkillPerformAttackPreview` and `PlayerSummonKnownObjectNpcSkillPerformAttackPreviewStatus`.
+- Modeled:
+  - melee NPC aggro-range pre-action abort with `TARGET_TOOFAR` intent;
+  - failed `setSubStateIfNot(AISubState.CAST)` as unchanged cast-substate metadata;
+  - successful cast-substate acquisition for immediate `skillAction`;
+  - successful cast-substate acquisition for delayed scheduler intent;
+  - optional linkage to the represented action workflow preview that would be invoked or scheduled later.
+- Kept live `NpcAI.setSubStateIfNot`, `AISubState` mutation, `ThreadPoolManager.schedule`, `CreatureController.abortCast`, live `PositionUtil.isInRange`, live owner target lookup, packet fanout, threading, serialization, date/time scheduling, reflection behavior, precision/rounding, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|StaticDataNpcSkillTests"` passes with 50 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1400 tests.
+
+#### Migration Parity Table - Session 812
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.performAttack` | `PlayerSummonSkillExecutionService.PreviewMercenaryNpcSkillPerformAttack` | Service | Partial | Regression Tested | Needs Verification | C# projects Java pre-action branch intent for target-too-far abort, cast-substate acquisition, immediate action, and delayed scheduling. It does not mutate live AI, schedule work, abort live casts, or compare runtime Java behavior. |
+| `com.aionemu.gameserver.ai.NpcAI` | `PlayerSummonKnownObjectNpcSkillPerformAttackPreview.ShouldEnterCastSubState` / status metadata | AI Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# records `setSubStateIfNot(CAST)` outcomes as caller-supplied facts. Live substate synchronization, state transitions, `think()`, AI event ordering, threading, and packets remain missing. |
+| `com.aionemu.gameserver.ai.AISubState` | `PlayerSummonKnownObjectNpcSkillPerformAttackPreviewStatus` | Enum / AI State | Partial | Regression Tested | Needs Verification | C# represents only the CAST acquisition/no-change outcomes touched by `performAttack`. Full Java substate enum, transition guards, and live mutation behavior remain unverified. |
+| `com.aionemu.gameserver.ai.event.AIEventType` | `PlayerSummonKnownObjectNpcSkillAiEvent.TargetTooFar` | Enum / Event | Partial | Regression Tested | Needs Verification | C# reuses represented `TARGET_TOOFAR` intent for the pre-action abort. Live event dispatch, handlers, ordering, threading, serialization, and packets remain missing. |
+| `com.aionemu.gameserver.controllers.CreatureController.abortCast` | `PlayerSummonKnownObjectNpcSkillPerformAttackPreview.ShouldAbortCast` | Controller Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# records abort intent only. It does not call live controller code, clear live casts, apply side effects, or send packets. |
+| `com.aionemu.gameserver.utils.PositionUtil.isInRange` | represented `currentTargetInAggroRange` input | Utility Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# consumes caller-provided aggro-range facts. Java coordinate math, collision/geo effects, float precision/rounding, and live target lookup remain missing. |
+| `com.aionemu.gameserver.utils.ThreadPoolManager.schedule` | `PlayerSummonKnownObjectNpcSkillPerformAttackPreview.ShouldScheduleSkillAction` / `DelayMilliseconds` | Scheduler Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# records delayed scheduling intent and delay value. It does not enqueue work, compare Java scheduler timing, handle cancellation, or validate threading/date-time behavior. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.PreviewMercenaryNpcSkillPerformAttack_ProjectsJavaPreActionBranches`: validates melee target-too-far abort metadata, cast-substate unchanged branch, immediate `skillAction` intent, delayed scheduler intent, represented AI event, abort flag, and workflow linkage.
+- Java comparison status: expectations are source-derived from Java `SkillAttackManager.performAttack`. No Java runtime execution, live AI substate comparison, live target/range comparison, controller abort comparison, scheduler/date-time comparison, reflection comparison, threading comparison, serialization comparison, precision/rounding comparison, packet comparison, or live-client validation was run.
+
+Remaining risks:
+- The pre-action preview is metadata only; it does not mutate live AI substate, abort casts, schedule delayed tasks, invoke `skillAction`, set targets, apply effects, or send packets.
+- Live target identity, Java range math, scheduler timing/cancellation, event ordering, threading, serialization, reflection behavior, precision/rounding, persistence, packet order, and live-client behavior remain missing or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 represented `performAttack` pre-action preview slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 16 live `SkillAttackManager.performAttack`, live `NpcAI`, full `AISubState`, live `AIEventType` dispatch, live `CreatureController.abortCast`, live `PositionUtil.isInRange`, live `ThreadPoolManager.schedule`, live owner target lookup, target identity, packets, threading/serialization, scheduler date/time behavior, precision/rounding, reflection behavior, persistence, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented pre-action attack scheduling/abort intent is modeled, but live AI scheduling and controller execution remain partial.
+
+Next recommended unit of work:
+- Continue NPC skill action parity by adding a capture/storage boundary for the represented `performAttack` preview so future live AI wiring can retain pre-action abort/schedule/immediate-action metadata together with the existing selection/action workflow snapshots. Keep live `ThreadPoolManager`, `NpcAI` mutation, controller aborts, packets, threading, serialization, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -24337,4 +24384,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill action parity by adding a represented `performAttack` pre-action preview for Java's melee aggro-range abort, cast-substate transition, immediate skillAction invocation, and delayed scheduler intent. Keep live `ThreadPoolManager`, live `NpcAI.setSubStateIfNot`, controller aborts, packets, threading, serialization, and live-client validation explicit until supported.
+8. Continue NPC skill action parity by adding a capture/storage boundary for the represented `performAttack` preview so future live AI wiring can retain pre-action abort/schedule/immediate-action metadata together with the existing selection/action workflow snapshots. Keep live `ThreadPoolManager`, `NpcAI` mutation, controller aborts, packets, threading, serialization, and live-client validation explicit until supported.
