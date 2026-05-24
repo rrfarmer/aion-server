@@ -23025,6 +23025,48 @@ Next recommended unit of work:
 
 ---
 
+### Session 784 (May 24, 2026)
+- Re-inspected Java `NpcSkillTemplateEntry` and the current C# represented `chooseNextSkill` pipeline.
+- Added `PlayerSummonKnownObjectNpcSkillCandidateMetadata` as a future static skill-list adapter DTO.
+- Added `ProjectMercenaryNpcSkillCandidate` to compose template projection, entry readiness, condition readiness, optional condition target metadata, optional target-range readiness, and list position into a represented candidate.
+- Kept live `NpcSkillList`, static XML loading, missing `SkillData` pruning, Java `Rnd.chance`, Java random delay generation, live HP/fight-time ownership, live condition target lookup, Java geometry, controller execution, effects, packets, threading, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 53 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1377 tests.
+
+#### Migration Parity Table - Session 784
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry` | `PlayerSummonSkillExecutionService.ProjectMercenaryNpcSkillCandidate` / `PlayerSummonKnownObjectNpcSkillCandidateMetadata` | Skill Entry Adapter Projection | Partial | Regression Tested | Needs Verification | C# adapts represented template metadata and last-used state into a candidate consumable by the represented selector. Live `NpcSkillTemplateEntry` ownership, static skill list construction, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillTemplate` | `PlayerSummonKnownObjectNpcSkillTemplateMetadata` consumed by candidate projection | Static Template DTO | Partial | Regression Tested | Needs Verification | Existing metadata fields are now composed into candidate readiness. XML/JAXB loading, default-value runtime comparison, missing-skill pruning, reflection behavior, and serialization behavior remain unverified. |
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.isReady` | `EvaluateMercenaryNpcSkillEntryReadiness` consumed by `ProjectMercenaryNpcSkillCandidate` | Entry Timing/Chance Projection | Partial | Regression Tested | Needs Verification | C# projects HP, fight-time, cooldown, and explicit chance readiness into the candidate. Java `Rnd.chance`, live HP/fight-time sourcing, precision/rounding behavior, and date/time runtime behavior remain caller-supplied/unverified. |
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.conditionReady` / `com.aionemu.gameserver.model.templates.npcskill.NpcSkillConditionTemplate` | `EvaluateMercenaryNpcSkillConditionReadiness` consumed by `ProjectMercenaryNpcSkillCandidate` | Condition Projection | Partial | Regression Tested | Needs Verification | C# evaluates represented condition targets inside the adapter. Live owner lookup, owner death/about-to-die checks, target lookup, geometry, unsupported Java behavior, and threading remain unwired. |
+| `com.aionemu.gameserver.model.skill.NpcSkillList` | future callers supplying `PlayerSummonKnownObjectNpcSkillCandidateMetadata` collections | Skill List Dependency | Not Started | Manual Only as explicit DTO shape | Needs Verification | Adapter DTO gives the future static-list bridge a target shape, but no live list creation, priority grouping, chain map ownership, XML load, pruning, randomization, or scheduler integration exists yet. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ProjectMercenaryNpcSkillCandidate_AdaptsStaticTemplateEntryIntoSelectableCandidate`: validates template metadata plus last-used timestamp is adapted into projection, timing readiness, condition readiness, target mode, optional target-range readiness, and a candidate selected by the existing ordinary-priority selector while a higher-priority cooldown candidate is skipped.
+- Java comparison status: expectations are source-derived from Java `NpcSkillTemplateEntry`, `NpcSkillTemplate`, `NpcSkillConditionTemplate`, and `NpcSkillList` roles. No Java runtime execution, XML/static-data load comparison, `Rnd.chance` comparison, live HP/fight-time comparison, live condition target comparison, geometry comparison, reflection comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, scheduler comparison, or live-client validation was run.
+
+Remaining risks:
+- The adapter is represented service logic and is not invoked by live AI or live static skill-list loading.
+- Live `NpcSkillList` creation, priority grouping ownership, chain ownership, static XML/JAXB loading, and missing `SkillData` pruning remain missing.
+- Chance readiness is explicit and does not execute Java `Rnd.chance`; random next-skill delay generation remains missing.
+- Live owner/target condition lookup, Java geometry, target mutation, controller execution, effects, packets, and AI scheduling remain unwired.
+- Reflection, threading, serialization, date/time runtime, precision/rounding, Java runtime, scheduler, RNG, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented static-entry candidate adapter slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 14 live `NpcSkillList`, XML/static loading, missing skill pruning, priority grouping ownership, chain map ownership, Java `Rnd.chance`, Java random delay generation, live HP/fight-time source, live condition target lookup, Java geometry, controller execution, effects, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented static-entry candidates can now be built for the selector, but live skill-list/static-data integration remains partial.
+
+Next recommended unit of work:
+- Continue by adding a collection-level adapter that converts future static NPC skill-list entries into represented candidate lists plus queued/last-skill inputs for `PreviewMercenaryNextNpcSkillSelection`, or wire one existing C# mercenary known-object path to consume the selection/action previews without executing live controller effects. Keep XML loading, Java `Rnd.chance`, random delay generation, Java geometry, controller execution, effects, packets, scheduler/date-time behavior, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -23034,4 +23076,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by wiring one existing C# mercenary known-object path to consume the represented `PreviewMercenaryNextNpcSkillSelection` and `PreviewMercenaryNpcSkillAction` outputs without executing live controller effects, or by adding an adapter DTO for future static NPC skill-list entries to create `PlayerSummonKnownObjectNpcSkillCandidate` objects before live AI mutation, XML loading, random target selection, effects, packets, and controller execution are available.
+8. Continue NPC skill readiness parity by adding a collection-level adapter that converts future static NPC skill-list entries into represented candidate lists plus queued/last-skill inputs for `PreviewMercenaryNextNpcSkillSelection`, or by wiring one existing C# mercenary known-object path to consume the represented selection/action previews without executing live controller effects. Keep live AI mutation, XML loading, Java `Rnd.chance`, random target selection, effects, packets, scheduler/date-time behavior, and controller execution explicit until supported.
