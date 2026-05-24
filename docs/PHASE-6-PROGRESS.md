@@ -21058,6 +21058,57 @@ Next recommended unit of work:
 
 ---
 
+### Session 745 (May 24, 2026)
+- Inspected Java `CM_SUMMON_CASTSPELL.runImpl`, `Summon.addSkillOrder`, `Summon.retrieveNextSkillOrder`, `SkillOrder`, and `SummonController.useSkill(SkillOrder)`.
+- Added `Player.RetrieveNextPetSkillOrder` to model Java's `ConcurrentLinkedQueue.poll()` behavior for represented pet skill orders.
+- Added `PlayerSummonCastSpellService` for the narrow represented pet-summon path from `CM_SUMMON_CASTSPELL`:
+  - rejects packets when no represented pet summon exists or the summon object id differs;
+  - consumes the next represented pet skill order;
+  - requires the queued order target object id to match the packet target object id;
+  - records a skill id/level mismatch but still returns the queued order for execution, matching Java's warning-then-use behavior.
+- Kept live target known-list lookup, mercenary handling, actual `SummonController.useSkill`, `SkillEngine`, release-on-success, and audit/logging behavior out of scope and documented.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|PlayerPetOrderSkillServiceTests|GamePacketTests"` passes with 98 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1340 tests.
+
+#### Migration Parity Table - Session 745
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL.runImpl` | `Aion.GameServer.Services.PlayerSummonCastSpellService` plus existing `CmSummonCastSpell` parser | Client Packet Handler / Service | Partial | Regression Tested | Needs Verification | C# models the represented pet summon order-consumption path after packet parsing. It does not yet run from `GameServerConnection`, resolve visible targets from known lists, handle mercenaries, send `STR_SKILL_NOT_NEED_PET`, audit wrong targets, or call a live summon controller. |
+| `com.aionemu.gameserver.model.gameobjects.Summon.retrieveNextSkillOrder` | `Aion.GameServer.Model.GameObjects.Player.RetrieveNextPetSkillOrder` | Summon Queue Projection | Partial | Regression Tested | Needs Verification | C# polls from a represented player-side list, matching consume-on-read behavior for this slice. It is not thread-safe like Java `ConcurrentLinkedQueue`, and it is not owned by a real `Summon` object. |
+| `com.aionemu.gameserver.model.gameobjects.Summon.addSkillOrder` / `SkillOrder` | `Player.AddPetSkillOrder` / `PlayerPetSkillOrder` | Summon Skill Order Projection | Partial | Regression Tested | Needs Verification | C# now has both add and retrieve for represented orders. Target equality is reduced to target object id equality; Java object identity/equality, creature references, and queue concurrency remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getSummonOrMercenary` | Represented `Player.HasPetSummon` and `Player.PetSummonObjectId` checks | Player/Summon Lookup Projection | Partial | Regression Tested | Needs Verification | C# only supports the represented pet-summon branch. Java's summon-or-mercenary lookup, non-pet summon rejection, mercenary path, object lifecycle, and NPC template type checks remain unsupported. |
+| `org.slf4j.Logger.warn` mismatch path in `CM_SUMMON_CASTSPELL` | `PlayerSummonCastSpellResult.SkillMismatch` | Logging/Audit Projection | Partial | Regression Tested | Needs Verification | C# records that the packet skill id/level differed from the queued order and still returns the queued order for execution. It does not emit a log entry or include player identity in the warning. |
+| `com.aionemu.gameserver.controllers.SummonController.useSkill(SkillOrder)` | Not yet implemented; represented by `PlayerSummonCastSpellResult.ExecutedOrder` | Controller / Skill Execution | Not Started | No Tests | Needs Verification | Newly adjacent dependency remains unported. Java validates `petHasSkill`, builds `SkillEngine` skill, sets hate, executes it, and releases the summon when requested. |
+| `com.aionemu.gameserver.dataholders.PetSkillData.petHasSkill` | Existing `PetSkillTable.PetHasSkill`, not consumed by this service yet | Static Data Lookup | Partial | Regression Tested in static data only | Needs Verification | Java `SummonController.useSkill` uses this as the execution guard. C# has the lookup but this unit intentionally stops before controller execution. |
+
+Tests added/updated:
+- `PlayerSummonCastSpellServiceTests.Handle_ConsumesMatchingQueuedPetOrderForRepresentedSummon`: validates represented `CM_SUMMON_CASTSPELL` consumes a matching queued pet order and records it as executed.
+- `PlayerSummonCastSpellServiceTests.Handle_UsesQueuedOrderWhenClientSkillDiffersAndMarksMismatch`: validates Java's mismatch-warning semantics by continuing with the queued order while marking mismatch.
+- `PlayerSummonCastSpellServiceTests.Handle_ConsumesQueuedOrderWithoutExecutionWhenTargetDoesNotMatch`: validates target mismatch consumes the queued order without execution, matching Java's poll-before-target-match branch.
+- `PlayerSummonCastSpellServiceTests.Handle_RequiresRepresentedPetSummonAndQueuedOrder`: validates missing represented summon, wrong summon object id, and empty order queue statuses.
+- Java comparison status: expectations are source-derived from Java `CM_SUMMON_CASTSPELL.runImpl`, `Summon.retrieveNextSkillOrder`, `SkillOrder`, and `SummonController.useSkill`. No Java runtime execution, Java-generated golden packets, live known-list target resolution, live summon object comparison, logging comparison, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- `PlayerSummonCastSpellService` is not yet wired into `GameServerConnection`; it is a focused represented service.
+- Target handling uses object ids only; Java resolves a visible object from the summon known list and requires a `Creature` object.
+- Queue behavior is not thread-safe and lives on `Player`, not `Summon`.
+- Mercenary handling, `PetSkillData.petHasSkill` execution guard, `SummonController.useSkill`, `SkillEngine`, release-on-success, and audit/log output are still missing.
+- No Java runtime, packet golden, encrypted frame, or live-client validation has been performed.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 represented summon-cast order-consumption service
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 7 GameServerConnection handler wiring, live known-list target resolution, live Summon model/queue ownership, mercenary branch, `SummonController.useSkill`, SkillEngine execution/release, and Java runtime/live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented pet order creation and consumption now exist, but real summon skill execution is still partial.
+
+Next recommended unit of work:
+- Wire the represented `PlayerSummonCastSpellService` into `GameServerConnection` for `CmSummonCastSpell` packets with a conservative packet-send seam for `STR_SKILL_NOT_NEED_PET`, or add the next execution-side bridge for `SummonController.useSkill(SkillOrder)` that validates `PetSkillTable.PetHasSkill` and records the would-be `SkillEngine` invocation. Keep the live known-list, mercenary, release, and audit/logging gaps explicit.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
