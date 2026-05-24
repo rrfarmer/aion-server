@@ -15509,6 +15509,66 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the offline-recipient audit for alliance ban/leave paths, or begin source-reading league command prerequisites if moving into deferred valid `CM_PLAYER_STATUS_INFO` commands. Keep league behavior out of production until a minimal league runtime bridge exists.
 
+### Session 635 (May 23, 2026)
+- Source-read Java `PlayerAllianceService.banPlayer`, `PlayerAllianceLeavedEvent`, `AllianceDisbandEvent`, base `PlayerLeavedEvent`, and `PacketSendUtility.sendPacket`.
+- Added focused parsed-command coverage for `ALLIANCE_BAN_MEMBER` when an online alliance leader bans an offline second member in a two-member non-auto alliance.
+- Reused the test registry unavailable-recipient simulation to model Java `PacketSendUtility.sendPacket` skipping offline recipients.
+- Verified the existing C# alliance ban/disband composition clears both memberships and removes the runtime alliance while delivering only the remaining online leader's ban fanout and disband replay; the offline banned player does not receive `STR_FORCE_BAN_ME` or base `SM_LEAVE_GROUP_MEMBER`.
+- No production code changed in this unit; this is regression coverage for an already-modeled source-derived path.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerAllianceRuntime|PlayerAllianceMemberInfo|BaseLeavePlanner"` passes with 87 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1101 tests.
+
+#### Migration Parity Table - Session 635
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.ClientPackets.CmPlayerStatusInfo` / `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Command id `16` now has explicit two-member alliance ban/disband coverage with an offline banned member. Valid league commands and full generic dispatch remain incomplete. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.ALLIANCE_BAN_MEMBER` | Command code `16` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Test covers leader banning an offline two-member-alliance peer. Java invalid-member exception and warning-log policy remain deferred. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.banPlayer` | `GameServerConnection.HandleAllianceBanMemberAsync` plus `PlayerAllianceRuntime.RemoveMemberWithLeaveWorkflow` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Existing C# flow removes the offline banned member, disbands the remaining online leader, and clears runtime state. Java static alliance registry and Vortex cleanup are not runtime-compared. |
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceLeavedEvent` | `PlayerAllianceRuntime.RemoveMemberWithLeaveWorkflow` / connection alliance ban sends | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | BAN fanout and DISBAND replay are covered when the banned player is offline. League broadcast, EventService, registered-team instance kick, and live socket ordering remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.events.AllianceDisbandEvent` | `PlayerAlliancePacketIntentKind.LeaveGroupMember` plus disband intents in `PlayerAllianceLeavedPlanner` | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | Disband replay is source-modeled for the remaining leader after banning an offline member. Java event queue/lock behavior is not compared. |
+| `com.aionemu.gameserver.model.team.common.events.PlayerLeavedEvent` | `Aion.GameServer.Services.PlayerBaseLeavePlanner` and `PlayerAlliancePacketIntentKind.LeaveGroupMember` | Base Event Dependency | Partial | Regression Tested | Needs Verification | Offline banned player receives no base `SM_LEAVE_GROUP_MEMBER`; online remaining leader receives disband replay base leave. Registered-team instance message/kick and EventService callback remain deferred. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.removeMember` | `PlayerAllianceRuntime.RemoveMemberWithLeaveWorkflow` | Base Team State | Partial | Regression Tested | Needs Verification | Runtime disband cleanup clears both memberships and removes alliance dictionaries. Java object-wrapper mutation and synchronization semantics are not compared. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.shouldDisband` | `PlayerAllianceRuntime.RemoveMemberWithLeaveWorkflow` disband predicate | Base Team State | Partial | Regression Tested | Needs Verification | Covers non-auto alliance plus one remaining member after banning the offline member. Runtime/threading comparison remains unverified. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Model.GameObjects.PlayerAllianceDescriptor` / `PlayerAllianceRuntime` member store | Team State | Partial | Regression Tested | Needs Verification | Runtime clears both players and removes alliance dictionaries after disband. Java static alliance registry, group internals, and synchronized event semantics are not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` through alliance ban sends | Server Packet | Partial | Regression Tested | Needs Verification | Delivered to the remaining online leader. Java golden bytes and live client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` through alliance ban sends | Server Packet | Partial | Regression Tested | Needs Verification | Delivered to the remaining online leader before disband replay. Java golden bytes, league rows, and live client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LEAVE_GROUP_MEMBER` | `Aion.GameServer.Network.Aion.ServerPackets.SmLeaveGroupMember` through alliance ban/disband sends | Server Packet | Partial | Regression Tested | Needs Verification | Delivered only to the remaining online leader during disband replay; skipped for the offline banned player. Java registered-team instance follow-up remains deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_BAN_HIM` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceBanHim` | Server Packet Factory | Partial | Regression Tested | Needs Verification | Delivered to the remaining online leader. Golden frame/client validation remains missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_ALLIANCE_DISPERSED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyAllianceDispersed` | Server Packet Factory | Partial | Regression Tested | Needs Verification | Delivered to the remaining online leader during disband replay. Golden frame/client validation remains missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_BAN_ME` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceBanMe` | Server Packet Factory | Partial | Regression Tested | Needs Verification | Skipped for the offline banned player, matching Java `PacketSendUtility.sendPacket` guard. Golden frame/client validation remains missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / test registry unavailable-recipient simulation | Runtime Dependency | Partial | Regression Tested | Needs Verification | Test registry models Java offline send skipping. Production behavior still depends on connection presence and needs live validation. |
+| `com.aionemu.gameserver.services.VortexService` | Deferred C# defence-team cleanup | Service Dependency | Not Started | No Tests | Unknown | Java calls `VortexService.removeDefenderPlayer` for defence alliances. C# has no live bridge in this handler yet. |
+| `com.aionemu.gameserver.model.team.league.League.broadcast` | Deferred alliance ban/disband league broadcast metadata | Service Dependency | Not Started | No Tests | Unknown | Java broadcasts/removes league alliance state around ban/disband. C# records no live league membership for this path yet. |
+| `com.aionemu.gameserver.services.event.EventService` | Deferred `PlayerBaseLeavePlanner` metadata | Service Dependency | Not Started | No Tests | Unknown | Java calls `EventService.onLeftTeam` after each base leave. C# records the boundary but has no live EventService bridge here. |
+| `com.aionemu.gameserver.services.instance.InstanceService` | Deferred `PlayerBaseLeavePlanner` instance-kick metadata | Service Dependency | Not Started | No Tests | Unknown | Java schedules instance exit movement for registered-team instances. C# does not execute that delayed side effect here. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_AllianceBanOfflineMemberSkipsBannedPlayerPacketsLikeJava`: validates parsed command id `16` on a two-member non-auto alliance where the online leader bans an offline member, the alliance disbands, both memberships clear, the leader receives ban/disband fanout, and the offline banned player receives no packets.
+- Java comparison status: expectations are source-derived from `PlayerAllianceService.banPlayer`, `PlayerAllianceLeavedEvent`, `AllianceDisbandEvent`, `PlayerLeavedEvent`, `GeneralTeam.removeMember`, `GeneralTeam.shouldDisband`, `PacketSendUtility.sendPacket`, `SM_ALLIANCE_MEMBER_INFO`, `SM_ALLIANCE_INFO`, `SM_LEAVE_GROUP_MEMBER`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live client packet capture, Java static alliance registry comparison, Java event queue/lock comparison, defence-team VortexService comparison, league broadcast/removal comparison, instance-kick comparison, EventService callback comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond C# packet object reachability/order, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Production offline-recipient behavior still depends on live connection lookup rather than direct `Player.IsOnline` checks.
+- Java defence-team `VortexService.removeDefenderPlayer` cleanup is not wired.
+- Java league broadcast/removal around alliance ban/disband remains deferred.
+- Java `EventService.onLeftTeam`, registered-team instance kick scheduling, and `STR_MSG_LEAVE_INSTANCE_NOT_PARTY` remain deferred.
+- Java invalid target/member exception policy, warning log for target outside alliance, and static alliance registry behavior remain approximated by runtime snapshots.
+- Java event queue, lock, object iteration order, offline-recipient handling, and threading behavior remain source-derived only.
+- Valid league commands remain incomplete in `CM_PLAYER_STATUS_INFO`.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to C# packet object reachability/order; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 20
+- Total artifacts ported: 0 new production artifacts; 1 deeper `CM_PLAYER_STATUS_INFO` alliance ban/disband offline-recipient path gained regression coverage
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 16
+- Total blocked artifacts: 9 production offline-recipient validation, defence-team VortexService cleanup, league broadcast/removal, EventService callback, instance kick scheduling, Java static alliance registry, Java event queue/lock comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; alliance ban/disband offline behavior is better covered, but production/live validation gaps remain.
+
+Next recommended unit of work:
+- Continue the offline-recipient audit for alliance leave paths, or begin source-reading league command prerequisites if moving into deferred valid `CM_PLAYER_STATUS_INFO` commands. Keep league behavior out of production until a minimal league runtime bridge exists.
+
 ---
 
 ## Next Steps
