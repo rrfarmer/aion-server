@@ -14668,6 +14668,60 @@ Summary metrics:
 Next recommended unit of work:
 - Deepen `GROUP_REMOVE_MEMBER` parity by adding focused leader-removal fallback and two-member disband cascade packet-order tests/implementation, or continue laterally to `GROUP_BAN_MEMBER` if self-ban/no-rights/auto-group failure messages can be kept narrow. Keep alliance leave/ban and league commands deferred unless existing planners can cover their cascading side effects.
 
+### Session 621 (May 23, 2026)
+- Source-read context from the prior unit remained focused on Java `PlayerGroupLeavedEvent`, `ChangeGroupLeaderEvent`, and `ChangeLeaderEvent.changeLeaderToNextAvailablePlayer`.
+- Added focused regression coverage for removing the current group leader through parsed `CM_PLAYER_STATUS_INFO` command code `6`.
+- Confirmed the C# bridge preserves the Java high-level order for the leader-removal path:
+  - remaining members receive `SM_GROUP_MEMBER_INFO(LEAVE)` and `STR_PARTY_HE_LEAVE_PARTY`;
+  - then the next online member becomes leader and receives `SM_GROUP_INFO` plus `STR_PARTY_YOU_BECOME_NEW_LEADER`;
+  - other remaining members receive `SM_GROUP_INFO` plus `STR_PARTY_HE_IS_NEW_LEADER`;
+  - finally the removed online leader receives base `SM_LEAVE_GROUP_MEMBER`.
+- No production code changes were required in this unit; the existing Session 620 implementation already satisfied this focused source-derived scenario.
+- Kept complete Java two-member disband cascade, mentor-stop side effects for leaved mentors, instance registered-team kick scheduling, `EventService.onLeftTeam`, full generic `PlayerTeamCommandService` dispatch, Java event queue/lock comparison, socket ordering comparison, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerGroupRuntime|BaseLeavePlanner"` passes with 55 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1085 tests.
+
+#### Migration Parity Table - Session 621
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | No production code changed, but command code `6` now has explicit leader-removal regression coverage. Group ban, alliance leave/ban, league commands, and full generic dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.GROUP_REMOVE_MEMBER` | Command code `6` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Added coverage for removing the current leader and selecting the next online member. Java invalid target member exception behavior remains deferred. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerGroupLeavedEvent` | `PlayerGroupRuntime.RemoveMemberWithLeavePlan` / connection group remove sends | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | Leader-removal packet order is now covered. Full disband cascade, mentor-stop side effect, and live socket ordering remain unverified. |
+| `com.aionemu.gameserver.model.team.group.events.ChangeGroupLeaderEvent` | `PlayerGroupRuntime.ChangeLeader` / `PlayerGroupLeavePlan.LeaderChangePlan` | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | Fallback leader selection after leader removal is covered for the next online member. Java event queue/lock behavior and all-offline fallback edge cases remain unverified. |
+| `com.aionemu.gameserver.model.team.common.events.ChangeLeaderEvent` | `PlayerGroupRuntime.RemoveMemberWithLeavePlan` fallback leader selection | Base Event Dependency | Partial | Regression Tested | Needs Verification | C# selects the first remaining online member, matching Java's high-level source behavior for the tested order. Java object iteration order and offline-only edge cases remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupInfo` through leader-removal fallback sends | Server Packet | Partial | Regression Tested | Needs Verification | Covered after group remove leader fallback. Java golden bytes, encrypted frames, and real-client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` through group remove sends | Server Packet | Partial | Regression Tested | Needs Verification | Covered before fallback leader packets. Java golden bytes, encrypted frames, and real-client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LEAVE_GROUP_MEMBER` | `Aion.GameServer.Network.Aion.ServerPackets.SmLeaveGroupMember` through base leave sends | Server Packet | Partial | Regression Tested | Needs Verification | Covered after fallback leader packets for an online removed leader. Java registered-team instance follow-up remains deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` group leave/leader messages | Server Packet Factory | Partial | Regression Tested | Needs Verification | Covered Java ids `1300168`, `1300155`, and `1300154` in leader-removal ordering. Java golden frames and client validation remain missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / direct fallback | Runtime Dependency | Partial | Regression Tested | Needs Verification | Ordered registry sends are covered for the source-derived leader-removal path. Java offline-recipient behavior and live socket ordering remain unverified. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_GroupRemoveLeaderSelectsNextOnlineLeaderAfterLeaveFanoutLikeJava`: validates parsed command id `6` removes the current leader, clears membership, selects the next online member as leader, sends leave fanout before fallback leader packets, and sends base `SmLeaveGroupMember` last.
+- Java comparison status: expectations are source-derived from `PlayerGroupLeavedEvent`, `ChangeGroupLeaderEvent`, `ChangeLeaderEvent`, `SM_GROUP_MEMBER_INFO`, `SM_GROUP_INFO`, `SM_LEAVE_GROUP_MEMBER`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live client packet capture, Java static group registry comparison, Java event queue/lock comparison, Java invalid-member exception comparison, disband cascade runtime comparison, mentor-stop side-effect comparison, instance-kick comparison, EventService callback comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond C# packet object type/order, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Full Java disband cascade for two-member groups is still not reproduced in packet fanout.
+- Java mentor stop side effects when a mentor leaves are flagged but not wired.
+- Java `EventService.onLeftTeam` and registered-team instance kick scheduling remain deferred.
+- Java invalid target member lookup can throw through `Objects.requireNonNull`; the C# packet handler currently no-ops missing targets until a broader packet exception policy is ported.
+- Java static group registry lookup is approximated by runtime snapshots attached to the caller.
+- Java event queue, lock, group stats recalculation, object iteration order, offline-only leader fallback, and threading behavior remain source-derived only.
+- Remaining `CM_PLAYER_STATUS_INFO` branches include group ban, alliance leave/ban, and league commands.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to C# packet object reachability/order; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 0 new production artifacts; 1 existing `CM_PLAYER_STATUS_INFO` group remove leader-fallback path gained regression coverage
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 10 disband cascade, mentor-stop side effect, EventService callback, instance kick scheduling, remaining team command branches, Java static service registry, Java event queue/lock comparison, Java runtime/threading comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; group remove leader fallback is better covered, but disband and other leave/ban branches remain incomplete.
+
+Next recommended unit of work:
+- Finish the two-member `GROUP_REMOVE_MEMBER` disband cascade if it can be modeled without broad side effects, then move laterally to `GROUP_BAN_MEMBER` self-ban/no-rights/auto-group/ban-success branches. Keep alliance leave/ban and league commands deferred unless existing planners can cover their cascading side effects.
+
 ---
 
 ## Next Steps
