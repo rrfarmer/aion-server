@@ -16803,6 +16803,45 @@ Summary metrics:
 Next recommended unit of work:
 - Source-read and document the final `LeagueService.canInvite` same-league/other-union branch. If it is unreachable because `invited.getPlayerAlliance().isInLeague()` returns first, add a regression documenting that ordering; otherwise add `STR_UNION_ALREADY_OTHER_UNION(invitedName)` and the final branch.
 
+### Session 662 (May 24, 2026)
+- Source-read the final `LeagueService.canInvite` branch:
+  - Java checks `invited.getPlayerAlliance().isInLeague()` and returns `STR_UNION_ALREADY_MY_UNION` before the later condition that also requires `inviter.getPlayerAlliance().isInLeague()`, `invited.getPlayerAlliance().isInLeague()`, and both alliances in the same league.
+  - Because the broader invited-in-league branch returns first, the later `STR_UNION_ALREADY_OTHER_UNION(invitedName)` branch appears shadowed for normal same-league states.
+- Added a regression documenting this ordering rather than adding an unproven reachable C# branch.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerLeagueInvitePlannerTests` passes with 9 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1144 tests.
+
+#### Migration Parity Table - Session 662
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.league.LeagueService.canInvite` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.CreateCanInviteAllianceChecksPlan` | Service / Validation Planner | Partial | Unit Tested | Needs Verification | Same-league state now documents Java ordering: invited-already-in-league fires before the later other-union branch. Full Java runtime comparison is still absent. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_UNION_ALREADY_MY_UNION` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.UnionAlreadyMyUnion` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Regression confirms same-league state emits `1400603` through the represented ordering. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_UNION_ALREADY_OTHER_UNION` | Not ported | Server Packet Factory | Not Started | No Tests | Unknown | Source branch appears shadowed by the earlier invited-in-league return. Not ported until a reachable Java state is proven. |
+| `com.aionemu.gameserver.model.team.league.League` | `Aion.GameServer.Services.PlayerLeagueRuntime` | Team State Dependency | Partial | Unit Tested | Needs Verification | Same-league setup uses C# league runtime state. Java static registry/object identity remain unverified. |
+
+Tests added:
+- `PlayerLeagueInvitePlannerTests.CreateCanInviteAllianceChecksPlan_SameLeagueHitsAlreadyInLeagueBeforeOtherUnionLikeJavaOrder`: validates same-league inviter/invited state returns `InvitedAlreadyInLeague` and message id `1400603`, documenting the source-order shadowing of the later branch.
+- Java comparison status: expectations are source-derived from `LeagueService.canInvite` branch order. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, request-response runtime comparison, socket send comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- The same-league/other-union branch is documented as apparently shadowed, but not runtime-proven against Java.
+- Full invite flow still lacks question-window transport, invite-to-leader redirection, create-league-on-accept, and live `PacketSendUtility` wiring.
+- C# alliance/league membership is inferred through snapshots and runtime dictionaries; Java live object identity and static registry are not runtime-compared.
+- Packet-field coverage remains C# emitted-object validation only; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- Threading/request-response ordering, reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 ordering regression for the final `canInvite` branch
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 6 Java runtime proof for shadowed branch, Java golden byte validation, request-response transport, invite-to-leader redirection, create-league-on-accept, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; invite validation is now better bounded, but transport and league creation branches remain open.
+
+Next recommended unit of work:
+- Move from validation into `LeagueService.inviteToLeague` request setup. Source-read `SM_QUESTION_WINDOW.STR_MSGBOX_UNION_INVITE_ME` and add a planner for successful invite request setup: optional invite-to-leader redirection message (`STR_UNION_INVITE_HIS_LEADER`), requester confirmation (`STR_UNION_INVITE_HIM`), and question-window metadata, without wiring live request-response storage yet.
+
 ---
 
 ## Next Steps
