@@ -19567,6 +19567,49 @@ Next recommended unit of work:
 
 ---
 
+### Session 714 (May 24, 2026)
+- Continued the Phase 6 charge/power-shard/idiani pivot with a focused power-shard parity correction.
+- Fixed `PowerShardDamageService.GetPowerShardDamage` so off-hand calculations do not treat a two-handed main weapon as a real off-hand weapon.
+- Added a Java-breadcrumbed guard matching `Equipment.getOffHandWeapon`, which returns `null` when `SUB_HAND` maps to the same item as `MAIN_HAND`.
+- Added `PowerShardDamageServiceTests.GetPowerShardDamage_SkipsOffHandWhenSubHandIsSameTwoHandWeapon`.
+- The new test proves the C# service does not apply or consume the left power shard during an off-hand power-shard calculation when the equipped weapon is the same two-handed main-hand item.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PowerShardDamageServiceTests|EquipmentServiceTests"` passes with 40 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1280 tests.
+
+#### Migration Parity Table - Session 714
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats.getPowerShardDamage` | `Aion.GameServer.Services.PowerShardDamageService.GetPowerShardDamage` | Service / Combat Stat Helper | Partial | Regression Tested | Needs Verification | C# now preserves Java's off-hand two-handed-weapon behavior by returning no off-hand shard damage/consumption when the sub-hand slot maps to the same two-handed main weapon. Main-hand, dual-wield, shield skip, and stack-consumption paths have focused C# tests. Full Java runtime comparison, random weapon damage integration, calculation-type ordering, packet fanout, threading, serialization, and live combat validation remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment.getOffHandWeapon` | `PowerShardDamageService.IsSameTwoHandMainWeapon` guard over `Aion.GameServer.Model.GameObjects.InventoryItem.Slot` | Equipment Accessor Dependency | Partial | Regression Tested indirectly | Needs Verification | Java returns `null` if `SUB_HAND` resolves to the same item as `MAIN_HAND`; C# now models that dependency for power-shard damage only. The broader equipment accessor API is still not a 1:1 object-map port, and bitmask/reflection differences remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment.getMainHandPowerShard` | `PowerShardDamageService.GetEquippedPowerShardBySlot` | Equipment Accessor Dependency | Partial | Regression Tested | Needs Verification | Existing tests continue to cover right-slot shard selection for main-hand and two-handed main weapon calculations. Persistence, packet update, and live equipment-map ordering are not Java-runtime verified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment.getOffHandPowerShard` | `PowerShardDamageService.GetEquippedPowerShardBySlot` | Equipment Accessor Dependency | Partial | Regression Tested | Needs Verification | Existing tests cover left-slot shard selection for true off-hand weapons and two-handed main-hand calculations. This unit adds the negative off-hand two-handed case. Packet fanout, exhausted-stack replacement, and live socket ordering remain unverified. |
+
+Tests added/updated:
+- `PowerShardDamageServiceTests.GetPowerShardDamage_SkipsOffHandWhenSubHandIsSameTwoHandWeapon`: validates that a two-handed weapon occupying `MAIN_HAND | SUB_HAND` does not receive off-hand shard damage or consume the left power shard when queried as off-hand.
+- Existing `PowerShardDamageServiceTests` and `EquipmentServiceTests` matched by the focused filter were rerun.
+- Java comparison status: expectations are source-derived from `PlayerGameStats.getPowerShardDamage`, `Equipment.getOffHandWeapon`, `Equipment.getMainHandPowerShard`, and `Equipment.getOffHandPowerShard`. No Java runtime execution, Java-generated golden combat vector, packet capture, encrypted-frame comparison, full combat calculation-type comparison, threading behavior, serialization behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Power-shard damage remains a service-level slice; production skill/combat observer callers still need full wiring and packet/persistence fanout coverage.
+- C# still models equipment lookup with inventory bitmasks rather than Java's equipment map; this unit narrows one known divergence but does not prove complete accessor parity.
+- Random weapon-damage integration, `CalculationType.APPLY_POWER_SHARD_DAMAGE` / `REMOVE_POWER_SHARD` sequencing, magical-staff/mace physical fallback behavior, and dual-wield calculation ordering remain unverified.
+- Exhausted shard deletion/replacement has service tests, but no encrypted socket, DB mutation, or live-client order comparison exists yet.
+- No reflection/JAXB/static-template load comparison was run for weapon boost data, item groups, two-handed flags, or shield subtype flags.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 off-hand two-handed power-shard guard slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 5 production combat caller wiring, Java runtime/golden combat comparison, encrypted socket/packet ordering comparison, DB persistence mutation comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; power-shard service behavior is incrementally closer, but production combat/equipment parity remains partial.
+
+Next recommended unit of work:
+- Continue the charge/power-shard/idiani area by wiring or testing the next nearest production boundary: `PowerShardDamageService` invocation from the C# skill/combat calculation path if a stable caller exists, `Equipment.usePowerShard` packet/persistence mutation fanout, `IdianPolishService` low-charge/exhaustion packet caller behavior, or `PolishChargeCondition` invocation from skill conditions.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
