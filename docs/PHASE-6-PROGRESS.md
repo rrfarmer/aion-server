@@ -22074,6 +22074,53 @@ Next recommended unit of work:
 
 ---
 
+### Session 765 (May 24, 2026)
+- Re-inspected Java `NpcGameStats.canUseNextSkill` and `setNextSkillDelay`:
+  - Java returns ready when `nextSkillDelay == 0`;
+  - otherwise Java checks `System.currentTimeMillis() >= lastSkillTime + nextSkillDelay`;
+  - Java's `setNextSkillDelay(-1)` resolves to a random `Rnd.get(3000, 9000)` delay before readiness checks.
+- Added `PlayerSummonKnownObjectNextSkillReadiness` / status enum.
+- Added `PlayerSummonSkillExecutionService.EvaluateMercenaryNextSkillReadiness` with explicit current-time and next-delay inputs.
+- Modeled ready, not-ready, and default last-skill-time `0` behavior.
+- Returned `RandomDelayUnsupported` for negative delay input instead of inventing the Java random delay path before NPC skill-template timing is represented.
+- Kept readiness as metadata only; it is not wired into AI skill choice, live controller execution, cooldown maps, effects, or packets.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 34 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1358 tests.
+
+#### Migration Parity Table - Session 765
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.canUseNextSkill` | `PlayerSummonSkillExecutionService.EvaluateMercenaryNextSkillReadiness` / `PlayerSummonKnownObjectNextSkillReadiness` | AI / Skill Scheduling Projection | Partial | Regression Tested | Needs Verification | C# now models zero-delay readiness and `now >= lastSkillTime + nextSkillDelay` with explicit millisecond inputs. It is not wired into live AI skill choice, controller execution, or production clocks. |
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.getLastSkillTime` | `PlayerSummonKnownObject.LastSkillTimeMilliseconds` consumed by readiness projection | DTO / Timestamp Projection | Partial | Regression Tested | Needs Verification | Null C# metadata is treated as Java default `0`. Live stat container access, threading, serialization, persistence, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.setNextSkillDelay` | Explicit `nextSkillDelayMilliseconds` input | Skill Scheduling Dependency | Partial | Regression Tested for non-negative values | Needs Verification | C# accepts already-resolved non-negative delay values. Java's `-1` random delay resolution is explicitly returned as `RandomDelayUnsupported` until NPC skill-template timing is represented. |
+| `com.aionemu.gameserver.utils.Rnd.get` used by `setNextSkillDelay(-1)` | `PlayerSummonKnownObjectNextSkillReadinessStatus.RandomDelayUnsupported` | Randomization Dependency | Not Started | Regression Tested as unsupported branch | Needs Verification | Random delay generation is intentionally not ported in this slice. Deterministic behavior, Java RNG comparison, threading, and live AI timing remain unverified. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager` use of `canUseNextSkill` | Not wired; documented dependency | AI Scheduling Caller | Not Started | No Tests | Needs Verification | C# readiness projection is standalone metadata. It does not drive AI skill selection, queued skill handling, chain timing, or NPC combat behavior. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.EvaluateMercenaryNextSkillReadiness_ProjectsJavaDelayCheck`: validates zero-delay ready behavior, not-ready before `lastSkillTime + delay`, ready exactly at `lastSkillTime + delay`, default last-skill-time `0`, and `RandomDelayUnsupported` for `-1`.
+- Java comparison status: expectations are source-derived from Java `NpcGameStats.canUseNextSkill`, `NpcGameStats.setNextSkillDelay`, and `Rnd.get`. No Java runtime execution, Java RNG comparison, live AI skill scheduling comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Readiness projection is standalone metadata and is not called by live AI or controller paths.
+- Java `setNextSkillDelay(-1)` random delay behavior is not implemented.
+- Production clock, NPC skill templates, queued skill selection, chain timing, cooldowns, effects, packets, and live NPC stats remain missing.
+- The timestamp is not persisted or serialized.
+- Reflection, threading, serialization, date/time runtime, precision/rounding, Java runtime, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented NPC next-skill readiness projection
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 9 live AI skill scheduling, NPC skill-template delay loading, Java random delay generation, production game clock, live `NpcGameStats`, controller execution, live skill runtime, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; next-skill readiness math is represented, but live AI skill scheduling parity remains partial.
+
+Next recommended unit of work:
+- Continue by representing Java `NpcGameStats.setNextSkillDelay` for concrete non-random NPC skill template delays, or start modeling a small `SkillAttackManager` caller preview that consumes `PlayerSummonKnownObjectNextSkillReadiness` without selecting real skills yet. Keep Java `Rnd.get(3000, 9000)`, live AI skill choice, controller execution, effects, packets, and live NPC state explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
