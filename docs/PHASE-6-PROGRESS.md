@@ -15406,6 +15406,57 @@ Summary metrics:
 Next recommended unit of work:
 - Move to a valid but deferred `CM_PLAYER_STATUS_INFO` branch only if it can be modeled without league runtime support, or continue source-reading league command prerequisites and document blockers. If staying non-league, audit group/alliance offline-recipient behavior now that invalid-command validation is aligned.
 
+### Session 633 (May 23, 2026)
+- Source-read Java `PlayerGroupLeavedEvent`, `GroupDisbandEvent` through the existing group disband replay notes, base `PlayerLeavedEvent`, and `PacketSendUtility.sendPacket`.
+- Added focused parsed-command coverage for `GROUP_REMOVE_MEMBER` when a two-member non-auto group disbands and the remaining member is offline.
+- Reused the test registry unavailable-recipient simulation to model Java `PacketSendUtility.sendPacket` skipping offline recipients.
+- Verified the existing C# group remove/disband composition clears both memberships and removes the runtime group while delivering only the online leaver's base `SM_LEAVE_GROUP_MEMBER`; initial leave fanout and disband replay packets for the offline remaining member are not delivered.
+- No production code changed in this unit; this is regression coverage for an already-modeled source-derived path.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerAllianceRuntime|PlayerAllianceMemberInfo|BaseLeavePlanner"` passes with 85 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1099 tests.
+
+#### Migration Parity Table - Session 633
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.ClientPackets.CmPlayerStatusInfo` / `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Command id `6` now has explicit two-member group disband coverage with an offline remaining member. Valid league commands and full generic dispatch remain incomplete. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.GROUP_REMOVE_MEMBER` | Command code `6` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Test covers self-removal from a two-member group with offline remaining recipient. Java invalid-member exception policy remains deferred. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.removePlayer` | `GameServerConnection.HandleGroupRemoveMemberAsync` plus `PlayerGroupRuntime.RemoveMemberWithLeavePlan` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Existing C# flow removes the online member, disbands the remaining offline member, and clears runtime state. Java static group registry behavior is not runtime-compared. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerGroupLeavedEvent` | `PlayerGroupRuntime.RemoveMemberWithLeavePlan` / connection group remove sends | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | LEAVE fanout and DISBAND replay are covered when the only remaining recipient is offline. EventService, registered-team instance kick, and live socket ordering remain missing. |
+| `com.aionemu.gameserver.model.team.group.events.GroupDisbandEvent` | `PlayerGroupRuntime.AppendGroupDisbandPacketIntents` | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | Disband replay is source-modeled and offline delivery is skipped by registry simulation. Java event queue/lock behavior is not compared. |
+| `com.aionemu.gameserver.model.team.common.events.PlayerLeavedEvent` | `Aion.GameServer.Services.PlayerBaseLeavePlanner` | Base Event Dependency | Partial | Regression Tested | Needs Verification | Online leaver receives base `SM_LEAVE_GROUP_MEMBER`; offline remaining member receives no base leave packet. Registered-team instance message/kick and EventService callback remain deferred. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.removeMember` | `PlayerGroupRuntime.RemoveMemberWithLeavePlan` | Base Team State | Partial | Regression Tested | Needs Verification | Runtime disband cleanup clears both memberships and removes group dictionaries. Java object-wrapper mutation and synchronization semantics are not compared. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.shouldDisband` | `PlayerGroupRuntime.RemoveMemberWithLeavePlan` disband predicate | Base Team State | Partial | Regression Tested | Needs Verification | Covers non-auto group plus one remaining member after removal. Runtime/threading comparison remains unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` through group remove sends | Server Packet | Partial | Regression Tested | Needs Verification | Planned for the offline remaining member but not delivered by registry simulation. Java golden bytes and live client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LEAVE_GROUP_MEMBER` | `Aion.GameServer.Network.Aion.ServerPackets.SmLeaveGroupMember` through group remove/disband sends | Server Packet | Partial | Regression Tested | Needs Verification | Delivered only to the online leaver in this regression. Java registered-team instance follow-up remains deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_HE_LEAVE_PARTY` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyHeLeaveParty` | Server Packet Factory | Partial | Regression Tested | Needs Verification | Planned for the offline remaining member but not delivered by registry simulation. Golden frame/client validation remains missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_IS_DISPERSED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyIsDispersed` | Server Packet Factory | Partial | Regression Tested | Needs Verification | Planned for the offline remaining member during disband replay but not delivered by registry simulation. Golden frame/client validation remains missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / test registry unavailable-recipient simulation | Runtime Dependency | Partial | Regression Tested | Needs Verification | Test registry models Java offline send skipping. Production behavior still depends on connection presence and needs live validation. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_GroupRemoveTwoMemberGroupSkipsOfflineRemainingDisbandPacketsLikeJava`: validates parsed command id `6` on a two-member non-auto group where the online member leaves, the remaining member is offline, the group disbands, both memberships clear, and only the online leaver receives `SmLeaveGroupMember`.
+- Java comparison status: expectations are source-derived from `PlayerGroupService.removePlayer`, `PlayerGroupLeavedEvent`, `GroupDisbandEvent`, `PlayerLeavedEvent`, `GeneralTeam.removeMember`, `GeneralTeam.shouldDisband`, `PacketSendUtility.sendPacket`, `SM_GROUP_MEMBER_INFO`, `SM_LEAVE_GROUP_MEMBER`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live client packet capture, Java static group registry comparison, Java event queue/lock comparison, instance-kick comparison, EventService callback comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond C# packet object reachability/order, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Production offline-recipient behavior still depends on live connection lookup rather than direct `Player.IsOnline` checks.
+- Java `EventService.onLeftTeam`, registered-team instance kick scheduling, and `STR_MSG_LEAVE_INSTANCE_NOT_PARTY` remain deferred.
+- Java invalid target/member exception policy and static group registry behavior remain approximated by runtime snapshots.
+- Java event queue, lock, object iteration order, offline-recipient handling, and threading behavior remain source-derived only.
+- Valid league commands remain incomplete in `CM_PLAYER_STATUS_INFO`.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to C# packet object reachability/order; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 13
+- Total artifacts ported: 0 new production artifacts; 1 deeper `CM_PLAYER_STATUS_INFO` group remove/disband offline-recipient path gained regression coverage
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 11
+- Total blocked artifacts: 7 production offline-recipient validation, EventService callback, instance kick scheduling, Java static group registry, Java event queue/lock comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; group remove/disband offline behavior is better covered, but production/live validation gaps remain.
+
+Next recommended unit of work:
+- Continue the offline-recipient audit for group ban or alliance ban/leave paths, or begin source-reading league command prerequisites if moving into deferred valid `CM_PLAYER_STATUS_INFO` commands. Keep league behavior out of production until a minimal league runtime bridge exists.
+
 ---
 
 ## Next Steps
