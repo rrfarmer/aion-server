@@ -23967,6 +23967,50 @@ Next recommended unit of work:
 
 ---
 
+### Session 804 (May 24, 2026)
+- Re-inspected represented C# `SkillTemplateTable` / `SkillTemplateSummary` loading and Java `SignetBurstEffect` XML attributes.
+- Added represented `SkillSignetBurstEffectSummary` for `signetburst` skill-template effects.
+- Extended `StaticData.LoadFromCacheAsync` to read `<signetburst signet="..." signetlvl="..."/>` under skill-template effects.
+- Extended `SkillTemplateSummary` with `SignetBurst` metadata.
+- Extended pruning-aware NPC skill candidate metadata projection to carry represented skill-template signet-burst stack names for surviving NPC skill entries.
+- Wired `ProjectMercenaryNpcSkillCandidate` to pass represented signet-burst stack names into carved-signet condition readiness, removing the need for carved-signet callers to supply those stacks manually when using the represented `SkillTemplateTable` adapter.
+- Kept full JAXB effect-template polymorphism, non-signet skill effects, live `SkillTemplate.getEffects`, live `EffectController`, signet damage/removal/sub-effects, packets, threading, serialization, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|StaticDataNpcSkillTests"` passes with 43 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1393 tests.
+
+#### Migration Parity Table - Session 804
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.SignetBurstEffect` | `Aion.GameServer.Dataholders.SkillSignetBurstEffectSummary` and `SkillTemplateSummary.SignetBurst` | Effect-template DTO | Partial | Regression Tested | Needs Verification | C# loads represented `signet` and `signetlvl` XML attributes. It does not model JAXB class polymorphism beyond this element, damage calculation, add-effect probability, sub-effects, signet removal, or runtime Java behavior. |
+| `com.aionemu.gameserver.skillengine.model.SkillTemplate.getEffects` | `SkillTemplateSummary.SignetBurst` | Skill-template Dependency | Partial | Regression Tested | Needs Verification | C# projects represented signet-burst effects from static XML for candidate readiness. It does not expose full effect-template ordering, all effect types, Java effect lists, reflection behavior, threading, or serialization parity. |
+| `com.aionemu.gameserver.dataholders.SkillData` | `Aion.GameServer.Dataholders.SkillTemplateTable.GetSkillTemplate` plus signet-burst metadata | Dataholder / Repository | Partial | Regression Tested | Needs Verification | C# uses represented skill-template lookup to prune NPC skills and now carry signet-burst stacks. Live `DataManager.SKILL_DATA`, cache lifecycle, JAXB schema validation, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.model.skill.NpcSkillList` | pruning-aware `ProjectMercenaryNpcSkillCandidateMetadata(NpcSkillTable?, SkillTemplateTable, int)` | Service Adapter | Partial | Regression Tested | Needs Verification | C# now attaches represented signet-burst stack names to surviving candidate metadata. Java list mutation, warning logs, live skill-template objects, and runtime entry construction remain unverified. |
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.hasCarvedSignet` | `ProjectMercenaryNpcSkillCandidate` passing candidate `SkillTemplateSignetBurstStacks` into readiness | Service | Partial | Regression Tested | Needs Verification | C# carved-signet readiness can now consume represented skill-template data through the candidate path. Live target effect-controller state, effect mutation/removal, packets, and runtime Java comparison remain missing. |
+
+Tests added/updated:
+- `StaticDataNpcSkillTests.LoadFromCacheAsync_ProjectsNpcSkillSpawnXmlDefaultsAndNpcIdIndex`: now also validates represented skill-template `<signetburst>` XML loading into `SkillTemplateSummary.SignetBurst`.
+- `PlayerSummonSkillExecutionServiceTests.ProjectMercenaryNpcSkillCandidateMetadata_PrunesMissingSkillTemplatesLikeJavaInitSkillList`: now validates signet-burst stack propagation from represented `SkillTemplateTable` into surviving NPC skill candidate metadata.
+- `PlayerSummonSkillExecutionServiceTests.EvaluateMercenaryNpcSkillConditionReadiness_ProjectsCarvedSignetThresholds`: now validates `ProjectMercenaryNpcSkillCandidate` passes candidate signet-burst stacks into carved-signet readiness.
+- Java comparison status: expectations are source-derived from Java `SignetBurstEffect`, `SkillTemplate.getEffects`, `NpcSkillList.initSkillList`, and `NpcSkillTemplateEntry.hasCarvedSignet`. No Java runtime JAXB execution, full effect-template polymorphism comparison, live `DataManager.SKILL_DATA` comparison, live `EffectController` comparison, effect mutation/removal comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, packet comparison, or live-client validation was run.
+
+Remaining risks:
+- Only represented `signetburst` effect metadata is loaded; the full Java effect-template hierarchy is still not ported.
+- Live skill-template objects, effect-controller state, signet removal/damage side effects, Java cache/JAXB lifecycle, target object identity, packets, persistence, threading, serialization, date/time behavior, precision/rounding, and live-client behavior remain missing or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented signet-burst skill-template metadata and candidate-projection slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 14 full JAXB effect-template polymorphism, live `SkillTemplate.getEffects`, non-signet effects, live `DataManager.SKILL_DATA`, Java cache lifecycle, live `EffectController`, effect mutation/removal, signet damage/sub-effects, target object identity, packets, threading/serialization, reflection behavior, precision/rounding, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented signet-burst metadata now reaches carved-signet readiness, but live skill/effect execution remains partial.
+
+Next recommended unit of work:
+- Continue NPC skill readiness parity by designing the next bridge from represented condition-target facts to future live target/effect state, especially how current target object identity, creature/death state, active signet levels, and abnormal states will be supplied from the live AI/known-object path. Keep live `EffectController`, object identity, packets, threading, serialization, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -23976,4 +24020,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by loading/projecting represented `SignetBurstEffect` stack names from `SkillTemplateTable` into the NPC skill candidate condition-readiness path, so carved-signet checks can consume represented skill-template data instead of caller-supplied stack lists. Keep JAXB effect-template polymorphism, live effect controllers, effect mutation/removal, packets, threading, serialization, and live-client validation explicit until supported.
+8. Continue NPC skill readiness parity by designing the next bridge from represented condition-target facts to future live target/effect state, especially how current target object identity, creature/death state, active signet levels, and abnormal states will be supplied from the live AI/known-object path. Keep live `EffectController`, object identity, packets, threading, serialization, and live-client validation explicit until supported.
