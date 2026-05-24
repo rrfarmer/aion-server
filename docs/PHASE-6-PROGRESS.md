@@ -23783,6 +23783,52 @@ Next recommended unit of work:
 
 ---
 
+### Session 800 (May 24, 2026)
+- Re-inspected Java `NpcSkillConditionTemplate`, `NpcSkillCondition`, and `NpcSkillTemplateEntry.conditionReady` condition names/defaults.
+- Added represented `NpcSkillConditionSummary`.
+- Extended `StaticData.LoadFromCacheAsync` to load `npc_skill` child `<cond>` attributes into represented NPC skill template summaries.
+- Extended `PlayerSummonSkillExecutionService.ProjectMercenaryNpcSkillTemplateMetadata(NpcSkillTemplateSummary)` to project represented condition summaries into existing C# `PlayerSummonKnownObjectNpcSkillConditionMetadata`.
+- Added `ResolveMercenaryNpcSkillCondition` for represented Java condition enum-name conversion.
+- Modeled:
+  - absent condition remains null, matching Java `NpcSkillTemplate.getConditionTemplate()`;
+  - present empty `<cond/>` uses Java JAXB defaults `NONE`, `hp_below=50`, `range=10`, `npc_id=0`, `delay=0`, `can_die=true`, `despawn_time=500`;
+  - explicit condition scalar overrides;
+  - condition projection into the already-supported C# readiness metadata path.
+- Kept runtime condition side effects, `HELP_FRIEND` target search/retargeting, `NPC_IS_ALIVE` world lookup, signet/effect inspection, unsupported condition execution, Java JAXB/schema enum failure behavior, Java RNG, live AI selection, controller/effect execution, spawn-engine execution, packets, scheduler/date-time behavior, threading, serialization, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|StaticDataNpcSkillTests"` passes with 40 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1390 tests.
+
+#### Migration Parity Table - Session 800
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillConditionTemplate` | `Aion.GameServer.Dataholders.NpcSkillConditionSummary` plus `StaticData.LoadFromCacheAsync` condition projection | DTO / XML Loader | Partial | Regression Tested | Needs Verification | C# loads represented `<cond>` scalar attributes and Java defaults. It does not run JAXB/schema validation, reflection behavior, runtime condition execution, or Java enum parse failure behavior. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillCondition` | `PlayerSummonSkillExecutionService.ResolveMercenaryNpcSkillCondition` and `PlayerSummonKnownObjectNpcSkillCondition` | Enum Adapter | Partial | Regression Tested | Needs Verification | C# maps Java enum names into the existing represented condition enum. Unknown values fall back to `None` until schema/runtime enum validation is wired; this differs from Java JAXB failure behavior and is documented as a temporary defensive placeholder. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillTemplate` | `NpcSkillTemplateSummary.Condition` to `PlayerSummonKnownObjectNpcSkillConditionMetadata` | DTO Adapter | Partial | Regression Tested | Needs Verification | C# distinguishes absent condition from present default condition and projects condition metadata for later readiness checks. Full Java `getConditionTemplate()` object identity, JAXB lifecycle, threading, and serialization remain unverified. |
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.conditionReady` | Existing `EvaluateMercenaryNpcSkillConditionReadiness` inputs fed by represented condition metadata | Service Dependency | Partial | Regression Tested | Needs Verification | C# now feeds represented condition metadata into existing readiness evaluation. `HELP_FRIEND`, `NPC_IS_ALIVE`, carved signet/effect checks, target retargeting, geo visibility, world lookup, and unsupported condition runtime behavior remain incomplete. |
+
+Tests added/updated:
+- `StaticDataNpcSkillTests.LoadFromCacheAsync_ProjectsNpcSkillSpawnXmlDefaultsAndNpcIdIndex`: now also validates empty `<cond/>` Java defaults and explicit condition overrides from XML.
+- `PlayerSummonSkillExecutionServiceTests.ProjectMercenaryNpcSkillCandidateList_AdaptsRepresentedNpcSkillTableEntries`: now validates represented condition summary projection into C# condition metadata, including condition type, hp threshold, range, npc id, delay, `can_die`, and despawn time.
+- Java comparison status: expectations are source-derived from Java `NpcSkillConditionTemplate`, `NpcSkillCondition`, `NpcSkillTemplate`, and `NpcSkillTemplateEntry.conditionReady`. No Java runtime JAXB execution, schema enum failure comparison, live `HELP_FRIEND` search/retargeting comparison, `NPC_IS_ALIVE` world lookup comparison, signet/effect comparison, geo comparison, scheduler/date-time comparison, reflection comparison, threading comparison, serialization comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Condition loading/projection is represented data only; several Java condition behaviors remain unsupported or only partially represented by existing readiness inputs.
+- Java JAXB/schema enum validation, runtime target searching, target mutation, world instance lookup, effect/signet inspection, geo visibility, live AI selection, controller/effect execution, packets, persistence, threading, serialization, date/time behavior, precision/rounding, and live-client behavior remain missing or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 represented NPC skill condition loading/projection slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 17 Java JAXB/schema enum failure behavior, reflection behavior, live `HELP_FRIEND` known-list search, target retargeting, `NPC_IS_ALIVE` world lookup, carved signet/effect inspection, geo visibility, live AI selection, Java RNG runtime comparison, scheduler/date-time execution, spawn-engine execution, controller/effect execution, packets, persistence, threading/serialization, precision/rounding, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented NPC skill conditions now load and project, but live condition execution remains partial.
+
+Next recommended unit of work:
+- Continue NPC skill readiness parity by deepening `EvaluateMercenaryNpcSkillConditionReadiness` for one unsupported represented condition family, preferably `NPC_IS_ALIVE` with a represented world-instance NPC presence input or `HELP_FRIEND` with explicit target-search/retarget metadata. Keep Java known-list search, geo visibility, world lookup, effect/signet state, live AI target mutation, Java RNG, scheduler/date-time behavior, threading, serialization, packets, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -23792,4 +23838,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by adding represented `NpcSkillConditionTemplate` XML loading/projection for the condition types currently supported by `EvaluateMercenaryNpcSkillConditionReadiness`, or by bridging the pruning-aware `NpcSkillTable` adapter into the first live mercenary known-object selection caller. Keep Java RNG, unsupported condition types, live AI selection, controller/effect execution, spawn-engine execution, packets, scheduler/date-time behavior, threading, serialization, mutable Java list side effects, and live-client validation explicit until supported.
+8. Continue NPC skill readiness parity by deepening `EvaluateMercenaryNpcSkillConditionReadiness` for one unsupported represented condition family, preferably `NPC_IS_ALIVE` with a represented world-instance NPC presence input or `HELP_FRIEND` with explicit target-search/retarget metadata. Keep Java known-list search, geo visibility, world lookup, effect/signet state, live AI target mutation, Java RNG, scheduler/date-time behavior, threading, serialization, packets, and live-client validation explicit until supported.
