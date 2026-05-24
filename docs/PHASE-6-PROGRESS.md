@@ -19895,6 +19895,58 @@ Next recommended unit of work:
 
 ---
 
+### Session 721 (May 24, 2026)
+- Added a reusable equipment observer burn workflow seam for future combat/effect callers.
+- Added `EquipmentObserverBurnWorkflowService.ApplyObserverBurnsAsync`, `EquipmentObserverBurnEvent`, and `EquipmentObserverBurnWorkflowResult`.
+- The workflow maps one represented observer event into both idian and charge observer burns, applies in-memory inventory updates, gathers low-charge/conditioning update packets, and optionally invokes persistence delegates.
+- The workflow intentionally applies idian burns before charge burns because Java `ItemEquipmentListener.onItemEquipment` registers `IdianStone.onEquip` before registering `ChargeInfo`.
+- Added `EquipmentObserverBurnWorkflowServiceTests.ApplyObserverBurnsAsync_AppliesIdianBeforeChargeAndRequestsBothPersistenceBoundaries`.
+- Added `EquipmentObserverBurnWorkflowServiceTests.ApplyObserverBurnsAsync_SkipsSkillAttackButAllowsDotAttacked`.
+- Added `EquipmentObserverBurnWorkflowServiceTests.ApplyObserverBurnsAsync_ReportsPersistenceFailureAfterApplyingPackets`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "EquipmentObserverBurnWorkflowServiceTests|IdianPolishServiceTests|IdianPolishBurnApplicationServiceTests|ItemChargeServiceTests|ItemChargeBurnApplicationServiceTests|PlayerEnterWorldServiceTests"` passes with 47 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1297 tests.
+
+#### Migration Parity Table - Session 721
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.stats.listeners.ItemEquipmentListener.onItemEquipment` | `Aion.GameServer.Services.EquipmentObserverBurnWorkflowService.ApplyObserverBurnsAsync` | Observer Workflow / Service | Partial | Regression Tested | Needs Verification | C# now has a reusable seam that sequences idian observer burns before conditioning charge burns, matching Java observer registration order in `onItemEquipment`. Actual `ObserveController` registration, live observer dispatch, stat recalculation, summon stat updates, item-set recalculation, enchant/tempering behavior, threading, and production combat/effect caller invocation remain unported or outside this unit. |
+| `com.aionemu.gameserver.model.items.IdianStone.onEquip` | `EquipmentObserverBurnWorkflowService.ApplyObserverBurnsAsync` via `IdianPolishService.BurnEquippedWeaponPolishChargeForObserverEvent` | Observer Dependency | Partial | Regression Tested | Needs Verification | Workflow invokes the represented idian observer burn path first and gathers `POLISH_CHARGE` or exhausted full update packets. Java `RandomBonusEffect.applyEffect/endEffect`, exact exhausted packet-before-clear serialization, DAO ordering, and live stat/effect fanout remain unverified. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.attack` | `EquipmentObserverBurnWorkflowService.ApplyObserverBurnsAsync` via `ItemChargeService.BurnEquippedChargePoints` | Observer Callback Dependency | Partial | Regression Tested | Needs Verification | C# workflow preserves the outgoing attack `skillId == 0` guard through the charge service and can request charge persistence. Real attack observer dispatch and packet ordering relative to combat status packets remain unverified. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.attacked` | `EquipmentObserverBurnWorkflowService.ApplyObserverBurnsAsync` via `ItemChargeService.BurnEquippedChargePoints` | Observer Callback Dependency | Partial | Regression Tested | Needs Verification | C# workflow maps incoming attacked events to defend burn data and can request charge persistence. Real incoming damage caller and threading behavior remain unverified. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.dotattacked` | `EquipmentObserverBurnWorkflowService.ApplyObserverBurnsAsync` via `ItemChargeService.BurnEquippedChargePoints` | Observer Callback Dependency | Partial | Regression Tested | Needs Verification | C# workflow maps dot-attacked events to defend burn data while allowing nonzero skill ids, matching the represented charge observer helper. Dot effect scheduling, lifecycle ordering, and live effect dispatch remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` | `EquipmentObserverBurnWorkflowResult.Packets` containing `SmInventoryUpdateItem` | Packet Fanout Dependency | Partial | Regression Tested with byte-level payload checks | Needs Verification | Tests verify idian compact polish packets are ordered before charge compact packets for the represented event. No Java golden observer-dispatch capture, encrypted-frame comparison, socket ordering comparison, or live-client validation was run. |
+| `com.aionemu.gameserver.dao.ItemStoneListDAO.storeIdianStones` | Optional `saveIdianPolishBurnAsync` delegate supplied to `EquipmentObserverBurnWorkflowService` | Persistence Dependency | Partial | Unit Tested with delegate capture | Needs Verification | Workflow can request exhausted-idian persistence through a delegate, but no live DAO, transaction/autocommit, rollback, or Java delete-order comparison was run. |
+| Java item charge persistence through item `PersistentState.UPDATE_REQUIRED` | Optional `saveItemChargeBurnAsync` delegate supplied to `EquipmentObserverBurnWorkflowService` | Persistence Dependency | Partial | Unit Tested with delegate capture | Needs Verification | Workflow can request charge persistence through a delegate. Java's persistent-state batching may differ from the direct C# persistence boundary; live DB comparison and production caller policy remain unresolved. |
+
+Tests added/updated:
+- `EquipmentObserverBurnWorkflowServiceTests.ApplyObserverBurnsAsync_AppliesIdianBeforeChargeAndRequestsBothPersistenceBoundaries`: validates idian burn is applied before charge burn, compact packet ordering, in-memory inventory updates, and delegate-based persistence requests for both plans.
+- `EquipmentObserverBurnWorkflowServiceTests.ApplyObserverBurnsAsync_SkipsSkillAttackButAllowsDotAttacked`: validates the shared workflow preserves Java's outgoing attack `skillId == 0` guard while allowing dot-attacked burns and producing both idian and charge packets when both thresholds are crossed.
+- `EquipmentObserverBurnWorkflowServiceTests.ApplyObserverBurnsAsync_ReportsPersistenceFailureAfterApplyingPackets`: validates the workflow reports delegate persistence failure without hiding generated packets.
+- Existing idian, charge, application, and enter-world persistence tests matched by the focused filter were rerun.
+- Java comparison status: expectations are source-derived from `ItemEquipmentListener.onItemEquipment`, `IdianStone.onEquip`, `ChargeInfo.attack/attacked/dotattacked`, `SM_INVENTORY_UPDATE_ITEM`, `ItemStoneListDAO.storeIdianStones`, and Java item persistent-state behavior. No Java runtime execution, live `ObserveController` dispatch, Java-generated golden packet, live socket ordering, live MySQL/DAO comparison, threading comparison, serialization comparison beyond local C# packet byte assertions, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- The workflow seam is not yet invoked from a production combat/effect caller.
+- Java observer registration/removal and dispatch ordering are represented from source, but not proven against live `ObserveController` behavior.
+- Packet ordering relative to `SM_ATTACK_STATUS`, damage/effect packets, stat updates, persistence, and observer callbacks remains unverified.
+- Exhausted-idian serialization may still differ because Java sends the full item update before clearing `item.setIdianStone(null)`.
+- Delegate persistence is a caller seam, not live DAO proof; transaction/autocommit/rollback behavior remains unverified.
+- No Java runtime, live database, or live-client comparison was run.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 shared equipment observer burn workflow slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 6 production combat/effect caller invocation, live ObserveController dispatch, combat packet ordering comparison, Java runtime/golden packet comparison, live DAO comparison, and synchronized/threading comparison
+- Estimated overall migration completion: Phase 6 remains about 65% complete; observer burn sequencing now has a reusable caller seam, but production combat/effect integration remains partial.
+
+Next recommended unit of work:
+- Invoke `EquipmentObserverBurnWorkflowService.ApplyObserverBurnsAsync` from the first stable represented combat/effect caller that can safely send returned packets and supply `PlayerEnterWorldService.SaveIdianPolishBurnMutationAsync` / `SaveItemChargeBurnMutationAsync` delegates. If that caller remains premature, add focused coverage for idian/charge packet ordering around an existing represented damage or dot-effect workflow without changing production routing.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
