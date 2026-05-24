@@ -21260,6 +21260,64 @@ Next recommended unit of work:
 
 ---
 
+### Session 749 (May 24, 2026)
+- Re-inspected Java `CM_SUMMON_CASTSPELL.runImpl` target resolution:
+  - self-target uses the summon directly;
+  - non-self target is resolved through `summonOrMercenary.getKnownList().getObject(targetObjId)`;
+  - target must be a `Creature`;
+  - null target returns silently as a lag/out-of-sight branch;
+  - non-creature visible object is audited and returns before polling the next skill order.
+- Added represented summon known-list state to `Player`:
+  - `Player.SetSummonKnownObject(objectId, kind)`;
+  - `Player.TryGetSummonKnownObjectKind`;
+  - `PlayerSummonKnownObjectKind.Creature` / `VisibleObject`.
+- Updated `PlayerSummonCastSpellService` so represented target validation happens before `RetrieveNextPetSkillOrder`, matching Java's target-first behavior.
+- Added statuses for represented unknown target and non-creature target. Both preserve the queued order instead of consuming it.
+- Kept audit logging for non-creature targets out of scope and documented; no live `KnownList`, `VisibleObject`, or `Creature` object model is introduced.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 24 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1348 tests.
+
+#### Migration Parity Table - Session 749
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL.runImpl` | `Aion.GameServer.Services.PlayerSummonCastSpellService` target validation | Client Packet Handler / Service | Partial | Regression Tested | Needs Verification | C# now validates represented summon target before polling the queued order. It supports self-target, represented known creature target, unknown/null target, and represented non-creature visible object target. Live known-list lookup, audit logging, mercenary branch, and real controller execution remain missing. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.getObject` as used by `summonOrMercenary.getKnownList().getObject(targetObjId)` | `Player.SetSummonKnownObject` / `TryGetSummonKnownObjectKind` | Known-List Projection | Partial | Regression Tested | Needs Verification | C# uses a represented map on `Player` instead of a live summon-owned known list. Threading/concurrency, visibility distance, map-region updates, lifecycle cleanup, and object references remain unsupported. |
+| `com.aionemu.gameserver.model.gameobjects.VisibleObject` | `PlayerSummonKnownObjectKind.VisibleObject` | Visible Object Projection | Partial | Regression Tested | Needs Verification | C# can represent a visible non-creature target only as a kind enum. It does not model object identity, type hierarchy, serialization, position, lifecycle, or audit string rendering. |
+| `com.aionemu.gameserver.model.gameobjects.Creature` | `PlayerSummonKnownObjectKind.Creature` plus `PlayerPetSkillOrder.TargetObjectId` | Creature Projection | Partial | Regression Tested | Needs Verification | C# can mark a known target id as creature and compare by object id. Java uses live `Creature` object references and `SkillOrder.getTarget().equals(target)`. Creature stats, target references, equality semantics, threading, and skill-engine integration remain unsupported. |
+| `com.aionemu.gameserver.model.gameobjects.Summon.retrieveNextSkillOrder` | `Player.RetrieveNextPetSkillOrder` after target validation | Summon Queue Projection | Partial | Regression Tested | Needs Verification | C# now preserves queued orders for unknown/non-creature targets and consumes only after a represented valid target. Queue remains player-owned and not Java's thread-safe summon queue. |
+| `com.aionemu.gameserver.utils.audit.AuditLogger.log` wrong-target branch | Not implemented; represented by `PlayerSummonCastSpellStatus.NonCreatureTarget` | Audit Dependency | Not Started | No Tests | Needs Verification | Newly documented dependency. Java logs non-null non-creature targets; C# returns a status but does not emit audit output or serialize the visible object. |
+
+Tests added/updated:
+- `PlayerSummonCastSpellServiceTests.Handle_ConsumesMatchingQueuedPetOrderForRepresentedSummon`: now validates known creature target setup before successful order consumption.
+- `PlayerSummonCastSpellServiceTests.Handle_UsesQueuedOrderWhenClientSkillDiffersAndMarksMismatch`: validates known creature target setup still preserves Java mismatch-warning semantics.
+- `PlayerSummonCastSpellServiceTests.Handle_ConsumesQueuedOrderWithoutExecutionWhenTargetDoesNotMatch`: validates represented known creature target can still fail queued-order target equality after target validation.
+- `PlayerSummonCastSpellServiceTests.Handle_AllowsSummonSelfTargetWithoutKnownListLookup`: validates Java's self-target shortcut.
+- `PlayerSummonCastSpellServiceTests.Handle_UnknownOrNonCreatureKnownTargetReturnsBeforeConsumingOrder`: validates unknown/null and non-creature visible object target branches preserve queued orders.
+- `GameServerConnectionCastSpellTests` represented summon-cast tests were updated to seed known creature targets before connection-level execution validation.
+- Java comparison status: expectations are source-derived from Java `CM_SUMMON_CASTSPELL.runImpl`, `KnownList.getObject`, `VisibleObject`, `Creature`, and `AuditLogger.log`. No Java runtime execution, live known-list comparison, object equality comparison, audit log comparison, threading comparison, serialization comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- Known-list state is represented on `Player`, not a live summon-owned `KnownList`.
+- `Creature` and `VisibleObject` are represented as enum values, not Java object references.
+- Non-creature target audit logging is not emitted.
+- Queue concurrency remains non-Java-equivalent.
+- Mercenary target handling, live summon type checks, real `SummonController`, real `SkillEngine`, release-on-success, and packet fanout remain missing.
+- Java runtime/live-client/golden validation was not performed.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 represented summon target-validation slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 8 live KnownList model, live Creature/VisibleObject references, audit logging, mercenary handling, real SummonController, SkillEngine execution, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented summon-cast target validation is closer to Java, but live object and skill execution remain partial.
+
+Next recommended unit of work:
+- Add a narrow audit/logging projection for `CM_SUMMON_CASTSPELL` non-creature targets, or move to the next live-model slice by representing `Player.getSummonOrMercenary` non-pet summon vs pet summon vs mercenary outcomes. Keep real `KnownList`, `Creature` references, mercenary controller execution, and `SkillEngine` gaps explicit.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
