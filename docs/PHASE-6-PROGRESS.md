@@ -21207,6 +21207,59 @@ Next recommended unit of work:
 
 ---
 
+### Session 748 (May 24, 2026)
+- Re-inspected Java `SummonController.useSkill(SkillOrder)` execution sequence:
+  - `DataManager.PET_SKILL_DATA.petHasSkill`;
+  - `SkillEngine.getInstance().getSkill(creature, order.getSkillId(), 1, order.getTarget())`;
+  - `skill.setHate(order.getHate())`;
+  - `skill.useSkill()`;
+  - conditional `SummonsService.release` when `order.isRelease()` and use succeeds.
+- Extended `PlayerSummonSkillExecutionService` with an explicit represented execution action plan after the pet-skill ownership guard:
+  - `GetSkill`;
+  - `SetHate`;
+  - `UseSkill`;
+  - optional `ReleaseOnSuccess`.
+- Kept the action plan as data only; no full `SkillEngine`, `Skill`, effect runtime, release lifecycle, packet fanout, or threading behavior is executed.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|GameServerConnectionCastSpellTests"` passes with 18 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1346 tests.
+
+#### Migration Parity Table - Session 748
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.SummonController.useSkill(SkillOrder)` | `Aion.GameServer.Services.PlayerSummonSkillExecutionService` / `PlayerSummonSkillExecutionAction` | Controller / Skill Execution Planner | Partial | Regression Tested | Needs Verification | C# now preserves the Java post-guard execution sequence as planned actions. It still does not create a live `Skill`, set hate on an object, call `useSkill`, observe success/failure, release the summon, or fan out packets. |
+| `com.aionemu.gameserver.skillengine.SkillEngine.getSkill` | `PlayerSummonSkillExecutionAction.GetSkill` | Skill Engine Dependency Projection | Not Started | Regression Tested as planned action only | Needs Verification | C# only records that the future executor should call `SkillEngine.getSkill` with represented order inputs. Creature target object, level override behavior, effects, precision/rounding, and threading remain unsupported. |
+| `com.aionemu.gameserver.skillengine.model.Skill.setHate` | `PlayerSummonSkillExecutionAction.SetHate` plus `PlayerPetSkillOrder.Hate` | Skill State Dependency Projection | Not Started | Regression Tested as planned action only | Needs Verification | Hate value is preserved in the represented order and planned for transfer. No live `Skill` object exists, and no hate serialization/broadcast comparison was run. |
+| `com.aionemu.gameserver.skillengine.model.Skill.useSkill` | `PlayerSummonSkillExecutionAction.UseSkill` | Skill Execution Dependency Projection | Not Started | Regression Tested as planned action only | Needs Verification | Planned action only. Timing, effects, cooldowns, animation checks, packet fanout, precision/rounding, and failure behavior remain unimplemented. |
+| `com.aionemu.gameserver.services.summons.SummonsService.release` release-on-success branch | `PlayerSummonSkillExecutionAction.ReleaseOnSuccess` when `PlayerPetSkillOrder.Release` is true | Summon Lifecycle Dependency Projection | Not Started | Regression Tested as planned action only | Needs Verification | C# conditionally includes release planning only when the order release flag is true. Java releases only after successful `skill.useSkill()`; no success/failure or lifecycle behavior is modeled. |
+| `com.aionemu.gameserver.model.summons.SkillOrder` | `Aion.GameServer.Model.GameObjects.PlayerPetSkillOrder` | DTO / Execution Input Projection | Partial | Regression Tested | Needs Verification | C# carries skill id, level, target object id, hate, and release through the planner. Java uses a `Creature` target object and a live summon controller. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_AllowsPetSkillBeforeRepresentedSkillEngineInvocation`: now also validates release orders plan `GetSkill`, `SetHate`, `UseSkill`, and `ReleaseOnSuccess`.
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_PlansNoReleaseWhenQueuedOrderDoesNotRelease`: validates non-release orders plan only `GetSkill`, `SetHate`, and `UseSkill`.
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_RejectsMissingSummonAndInvalidPetSkill`: now validates rejected branches do not produce planned actions.
+- Java comparison status: expectations are source-derived from Java `SummonController.useSkill(SkillOrder)`, `SkillEngine.getSkill`, `Skill.setHate`, `Skill.useSkill`, and `SummonsService.release`. No Java runtime execution, live SkillEngine comparison, live summon controller behavior, release lifecycle validation, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- Planned actions are metadata only and must not be mistaken for executed skill behavior.
+- Live `SkillEngine`, `Skill`, `Creature` target, summon controller ownership, cooldown/timing/effect behavior, release lifecycle, and packet fanout remain missing.
+- The planner still uses represented object ids and DTOs, not Java object references.
+- Release-on-success cannot be verified until `Skill.useSkill()` success/failure is represented.
+- Threading, serialization, precision/rounding, Java runtime, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 represented summon skill execution action planner
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 8 live SkillEngine execution, live Skill object state, Creature target references, summon controller ownership, release lifecycle, packet fanout, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented summon skill execution now has an explicit Java action plan, but no real skill execution is implemented.
+
+Next recommended unit of work:
+- Add represented known-list target validation for `CM_SUMMON_CASTSPELL` so queued pet orders can distinguish Java's valid `Creature` target, wrong visible object target, and lagged-out/null target branches before execution planning. Keep mercenary handling, live `Creature` references, audit logging, and real `SkillEngine` execution explicit if they remain unsupported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
