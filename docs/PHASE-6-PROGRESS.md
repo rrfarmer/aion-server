@@ -14544,6 +14544,60 @@ Summary metrics:
 Next recommended unit of work:
 - Continue `CM_PLAYER_STATUS_INFO` parity with `GROUP_REMOVE_MEMBER` or `GROUP_BAN_MEMBER` only if the leave/disband/leader-change side effects can be scoped safely. Otherwise, port `ALLIANCE_SET_CAPTAIN` through the existing alliance leader-change planner/runtime if it has fewer missing packet side effects. Keep league commands deferred.
 
+### Session 619 (May 23, 2026)
+- Source-read Java `TeamCommand.ALLIANCE_SET_CAPTAIN`, `PlayerTeamCommandService.executeCommand`, `PlayerAllianceService.changeLeader`, `ChangeAllianceLeaderEvent`, and the old-leader `AssignViceCaptainEvent.AssignType.DEMOTE_CAPTAIN_TO_VICECAPTAIN` follow-up.
+- Extended `PlayerAllianceRuntime` with `ChangeLeader` so runtime-owned alliance descriptors can update the leader object id, remove the new leader from vice-captain ids, refresh snapshots, and reuse the existing `PlayerAllianceLeaderChangePlanner`.
+- Extended `GameServerConnection.HandlePlayerStatusInfoAsync` with the Java `ALLIANCE_SET_CAPTAIN` branch:
+  - command code `17`;
+  - `selectedObjectId == 0` targets the caller like Java `findMember`;
+  - missing alliance or missing target member no-ops in the C# bridge, while Java invalid member lookup can throw through `Objects.requireNonNull`;
+  - sends the first `ChangeAllianceLeaderEvent` wave of `SM_ALLIANCE_INFO` packets and leader system messages;
+  - then applies the Java old-leader demotion follow-up through `AssignViceCaptainEvent.AssignType.DEMOTE_CAPTAIN_TO_VICECAPTAIN` and sends the second `SM_ALLIANCE_INFO` wave.
+- Kept Java league broadcast/league-captain timeout messages, full generic `PlayerTeamCommandService` dispatch, Java event queue/lock comparison, socket ordering comparison, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|LeaderChangePlanner|ViceCaptainAssignment"` passes with 19 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1083 tests.
+
+#### Migration Parity Table - Session 619
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | C# now handles group leader/LFG/mentoring, alliance leader/vice-captain/group-change/ready-check ids. Group ban/remove, alliance leave/ban, league commands, and full generic dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.ALLIANCE_SET_CAPTAIN` | Command code `17` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | C# source-models command id `17`, targets `selectedObjectId` or caller when zero, and dispatches to alliance runtime leader assignment plus old-leader vice-captain follow-up. Java invalid target member exception behavior remains deferred. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService` | Narrow alliance-leader branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Service Dependency | Partial | Regression Tested | Needs Verification | C# continues bypassing full generic team-command dispatch. Group ban/remove, alliance leave/ban, and league dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.changeLeader` | `Aion.GameServer.Services.PlayerAllianceRuntime.ChangeLeader` through connection handler | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | C# resolves the caller alliance snapshot and applies leader assignment through runtime state. Java static alliance registry and invalid target exception surface are not runtime-compared. |
+| `com.aionemu.gameserver.model.team.alliance.events.ChangeAllianceLeaderEvent` | `PlayerAllianceRuntime.ChangeLeader` / connection alliance leader sends | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | C# mutates leader id, removes new leader from vice-captains, sends `SM_ALLIANCE_INFO`, and sends leader system messages. Java event queue/lock ordering and live socket ordering remain unverified. |
+| `com.aionemu.gameserver.model.team.alliance.events.AssignViceCaptainEvent.AssignType.DEMOTE_CAPTAIN_TO_VICECAPTAIN` | `PlayerAllianceRuntime.AssignViceCaptain` follow-up from `HandleAllianceLeaderChangeAsync` | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | C# applies the Java old-leader demotion follow-up and sends the second alliance-info wave. Java league broadcast after this event remains missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Model.GameObjects.PlayerAllianceDescriptor` / `PlayerAllianceRuntime` descriptor and vice-captain stores | Team State | Partial | Regression Tested | Needs Verification | Runtime-owned descriptor leader id and vice-captain ids refresh after command id `17`. Java `CopyOnWriteArrayList`, `alliance.onEvent`, and threading semantics are not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` through alliance leader sends | Server Packet | Partial | Regression Tested | Needs Verification | Existing packet is now sent from parsed command id `17`, including the second old-leader demotion wave. Java golden bytes, encrypted frames, league variant rows, and real-client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_HE_IS_NEW_LEADER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceHeIsNewLeader` | Server Packet Factory | Partial | Regression Tested | Needs Verification | C# sends Java message id `1300998` to non-target alliance members. Java golden frame and client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_YOU_BECOME_NEW_LEADER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceYouBecomeNewLeader` | Server Packet Factory | Partial | Regression Tested | Needs Verification | C# sends Java message id `1300999` to the new alliance leader. Java golden frame and client validation remain missing. |
+| `com.aionemu.gameserver.model.team.league.League.broadcast` | Deferred C# league broadcast and league-captain timeout messages | Service Dependency | Not Started | No Tests | Unknown | Java suppresses non-league `SM_ALLIANCE_INFO`, broadcasts league state, and may send union timeout messages when the alliance is in a league. C# runtime currently records no live league membership for this path. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / direct fallback | Runtime Dependency | Partial | Regression Tested | Needs Verification | C# sends alliance-info and system-message packets through registry/direct fallback. Java `PacketSendUtility` ordering/offline-recipient behavior remains unverified beyond tested intent order. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_AllianceSetCaptainChangesLeaderAndDemotesOldLeaderToViceCaptain`: validates parsed command id `17` changes the runtime alliance leader, removes the new leader from vice-captains, demotes the old leader to vice-captain, sends Java leader system-message ids, and emits both `SmAllianceInfo` waves.
+- Java comparison status: expectations are source-derived from `TeamCommand`, `PlayerTeamCommandService`, `PlayerAllianceService.changeLeader`, `ChangeAllianceLeaderEvent`, `AssignViceCaptainEvent`, `SM_ALLIANCE_INFO`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live client packet capture, Java static alliance registry comparison, Java event queue/lock comparison, Java invalid-member exception comparison, league broadcast comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond C# packet object type/order, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Java league broadcast and union timeout messages for alliance-leader changes are not wired.
+- Java invalid target member lookup can throw through `Objects.requireNonNull`; the C# packet handler currently no-ops missing targets until the broader packet exception policy is ported.
+- Java static alliance registry lookup is approximated by runtime snapshots attached to the caller.
+- Java `CopyOnWriteArrayList`, event queue, lock, and threading behavior remains source-derived only.
+- Remaining `CM_PLAYER_STATUS_INFO` branches include group ban/remove, alliance leave/ban, and league commands.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to C# packet object reachability/order; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 12
+- Total artifacts ported: 1 `CM_PLAYER_STATUS_INFO` alliance leader branch
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 9 league broadcast/timeout messages, remaining team command branches, Java static service registry, Java event queue/lock comparison, Java invalid-member exception comparison, live socket ordering, Java runtime/threading comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; alliance leader packet command now reaches runtime assignment and old-leader demotion fanout, but league and remaining leave/ban branches are incomplete.
+
+Next recommended unit of work:
+- Continue `CM_PLAYER_STATUS_INFO` parity with `GROUP_REMOVE_MEMBER` if the existing group remove/runtime side effects can be scoped to member removal packets, system messages, and leader fallback. Otherwise, add `ALLIANCE_LEAVE` or `ALLIANCE_BAN_MEMBER` through the existing alliance leave planners if their disband/leader-change side effects can be kept source-derived and explicitly documented. Keep league commands deferred.
+
 ---
 
 ## Next Steps
