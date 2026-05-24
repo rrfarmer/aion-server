@@ -20521,6 +20521,56 @@ Next recommended unit of work:
 
 ---
 
+### Session 734 (May 24, 2026)
+- Inspected Java `SM_SYSTEM_MESSAGE` constants used by `CM_CASTSPELL.runImpl`.
+- Added C# helpers for exact Java skill-failure messages needed by the represented cast-spell early-exit seam:
+  - `SmSystemMessage.SkillNotReady()` -> `STR_SKILL_NOT_READY` / `1300021`
+  - `SmSystemMessage.SkillCannotCast(string)` -> `STR_SKILL_CANT_CAST(String)` / `1300026`
+  - `SmSystemMessage.SkillCannotCastDead()` -> `STR_SKILL_CANT_CAST(ChatUtil.l10n(1400059))`
+  - `SmSystemMessage.SkillNotNeedPet()` -> `STR_SKILL_NOT_NEED_PET` / `1402918`
+- Added packet tests for those helpers in the existing system-message coverage.
+- Runtime `CM_CASTSPELL` handling remains unwired; this unit only prepares exact packet helpers for the planner's callback points.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GamePacketTests` passes with 90 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1320 tests.
+
+#### Migration Parity Table - Session 734
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_NOT_READY` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.SkillNotReady` | Packet Helper | Partial | Unit Tested | Needs Verification | C# helper emits message id `1300021`, matching Java source. No live `CM_CASTSPELL` handler, Java golden packet, encrypted-frame comparison, or live-client validation was run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_CANT_CAST` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.SkillCannotCast` | Packet Helper | Partial | Unit Tested | Needs Verification | C# helper emits message id `1300026` with one parameter. Serialization uses existing C# system-message packet format; no Java-generated golden byte comparison was run. |
+| `com.aionemu.gameserver.utils.ChatUtil.l10n` dead-state parameter for `STR_MSG_ACT_STATE_DEAD` | `SmSystemMessage.SkillCannotCastDead` using `Aion.GameServer.Utils.ChatUtil.L10n(1400059)` | Utility / Packet Helper | Partial | Unit Tested | Needs Verification | C# helper matches Java `CM_CASTSPELL.runImpl` dead-player call shape: `STR_SKILL_CANT_CAST(ChatUtil.l10n(1400059))`. Live localized client rendering and Java byte comparison remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_NOT_NEED_PET` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.SkillNotNeedPet` | Packet Helper | Partial | Unit Tested | Needs Verification | C# helper emits message id `1402918`, matching Java source. Live pet-order skill route is not wired. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CASTSPELL.runImpl` | `PlayerCastSpellEarlyExitService` callback targets can now use exact `SmSystemMessage` helpers | Client Packet Handler Dependency | Partial | No new handler tests in this unit | Needs Verification | This unit prepares packet helpers only. Dead-player, pet-required, and skill-not-ready callbacks are still not connected to `GameServerConnection.SendPacketAsync`; full skill runtime remains missing. |
+
+Tests added/updated:
+- Updated `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages` to assert:
+  - `SmSystemMessage.SkillNotReady()` writes id `1300021`.
+  - `SmSystemMessage.SkillCannotCast("state")` writes id `1300026` with parameter `state`.
+  - `SmSystemMessage.SkillCannotCastDead()` writes id `1300026` with `ChatUtil.L10n(1400059)`.
+  - `SmSystemMessage.SkillNotNeedPet()` writes id `1402918`.
+- Java comparison status: expectations are source-derived from Java `SM_SYSTEM_MESSAGE.java`, `CM_CASTSPELL.java`, and `ChatUtil.l10n`. No Java runtime execution, Java-generated golden packet, live `GameServerConnection`, live `SkillEngine`, encrypted-frame comparison, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- Skill-failure packet helpers are not yet wired into `PlayerCastSpellEarlyExitService` callbacks or `GameServerConnection`.
+- Full Java skill runtime, player controller methods, pet-order checks, cooldown audit logging, system-message socket ordering, and effect/combat fanout remain missing.
+- Packet helper tests validate C# serialization shape and source-derived ids, but not Java-generated golden bytes or live client rendering.
+- Reflection differences remain because Java packet construction uses reflection and C# uses explicit constructors/factory lambdas elsewhere.
+- No date/time behavior was introduced in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 4 exact skill-failure system-message helper slices
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 4 live `CM_CASTSPELL` route invocation, Java golden packet comparison, live socket/client validation, and full SkillEngine/player-controller integration
+- Estimated overall migration completion: Phase 6 remains about 65% complete; cast-spell failure packet helpers are ready, but live skill handling remains partial.
+
+Next recommended unit of work:
+- Wire `PlayerCastSpellEarlyExitService` into a `GameServerConnection`-level cast-spell handling seam using the new `SmSystemMessage` helpers for dead-player, pet-required, and skill-not-ready outcomes. Keep use-skill dispatch as a callback/test seam until full `SkillEngine` is available, and document any remaining callback-only behavior explicitly.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
