@@ -24240,6 +24240,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 810 (May 24, 2026)
+- Re-inspected Java `SkillAttackManager.chooseNextSkill`, `getNpcSkillEntryIfNotTooFarAway`, `targetTooFar`, and `skillAction`.
+- Added `PreviewMercenaryNpcSkillActionWorkflow`.
+- Added represented `PlayerSummonKnownObjectNpcSkillActionWorkflowPreview` and `PlayerSummonKnownObjectNpcSkillActionWorkflowPreviewStatus`.
+- Modeled:
+  - selected-candidate composition from the existing represented `chooseNextSkill` preview;
+  - first-target range invalidation against represented current target facts before action preview;
+  - Java 5000 ms next-skill-delay storage when represented `targetTooFar` blocks the selected candidate;
+  - skill readiness re-evaluation using selected candidate timing/condition readiness plus represented `SkillTemplateSummary`;
+  - Java target-selection intent for first target self and NPC skill target attributes;
+  - action preview and AI side-effect action-result projection in one workflow result.
+- Kept live `NpcAI`, `NpcGameStats`, `DataManager.SKILL_DATA`, live skill `Properties`, live `owner.getTarget`, live `owner.canSee`, live `PositionUtil`, live known-list/aggro target resolution, `CreatureController.abortCast/useSkill`, `Creature.setTarget`, packet fanout, threading, serialization, date/time scheduling, reflection behavior, precision/rounding, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|StaticDataNpcSkillTests"` passes with 49 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1399 tests.
+
+#### Migration Parity Table - Session 810
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.chooseNextSkill` | `PlayerSummonSkillExecutionService.PreviewMercenaryNpcSkillActionWorkflow` via `PlayerSummonKnownObjectNpcSkillSelectionPreview` | Service | Partial | Regression Tested | Needs Verification | C# composes an already represented selected candidate into a workflow. It does not run live AI, queue mutation, Java random ordering, `NpcGameStats`, or runtime Java behavior. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.getNpcSkillEntryIfNotTooFarAway` | `PreviewMercenaryNpcSkillActionWorkflow` plus `ApplyMercenaryTargetRangeDelay` | Service | Partial | Regression Tested | Needs Verification | C# preserves the represented target-range veto and 5000 ms delay storage before action preview. It does not mutate live `NpcGameStats` or compare Java scheduler/date-time behavior. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.targetTooFar` | `EvaluateMercenaryTargetRange(PlayerSummonKnownObject, PlayerSummonKnownObjectSkillTargetMode, PlayerSummonKnownObject?, ...)` inside workflow | Service | Partial | Regression Tested | Needs Verification | C# evaluates represented current-target death/visibility/can-see/range facts and AREA bypass. Live skill `Properties`, `owner.getTarget`, `owner.canSee`, `PositionUtil.isInRange`, float precision, collision, and geo behavior remain unverified. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.isReady` | `EvaluateMercenarySkillReadiness` inside workflow | Service | Partial | Regression Tested | Needs Verification | C# threads selected candidate timing/condition readiness into abnormal/transform skill gates. Missing skill templates, live `DataManager.SKILL_DATA`, full effect-controller state, reflection behavior, threading, serialization, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.skillAction` | `PreviewMercenaryNpcSkillActionWorkflow`, `PreviewMercenaryNpcSkillAction`, and `ProjectMercenaryNpcSkillActionResult` | Service | Partial | Regression Tested | Needs Verification | C# now exposes one represented workflow result for selected candidate, readiness, target selection, action preview, and AI side-effect intent. It does not execute live AI/controller behavior, target mutation, packets, or effect application. |
+| `com.aionemu.gameserver.controllers.CreatureController` | workflow `ActionResult.ShouldAbortCast`, `ShouldInvokeUseSkill`, and `DidInvokeUseSkill` | Controller Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# records controller intent only. Live `abortCast`, `useSkill`, skill effects, cooldowns, packet fanout, threading, and serialization remain missing. |
+| `com.aionemu.gameserver.world.knownlist.KnownList` / `AggroList` target selection | `SelectMercenaryNpcSkillActionTarget` inside workflow | Known-list / Aggro Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# consumes booleans for represented friend/aggro/random target availability. Live known-list traversal, aggro ordering, Java map/concurrent mutation behavior, target identity, and packets remain missing. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.PreviewMercenaryNpcSkillActionWorkflow_ComposesJavaSelectionRangeAndActionSlices`: validates selected-candidate workflow projection, represented target-range readiness, no-delay ready path, 5000 ms target-range delay storage on out-of-range target, skill readiness re-evaluation, action target selection, action preview/result projection, blocked after-use behavior, and missing selection guard.
+- Java comparison status: expectations are source-derived from Java `SkillAttackManager.chooseNextSkill`, `getNpcSkillEntryIfNotTooFarAway`, `targetTooFar`, `isReady`, `skillAction`, and `afterUseSkill`. No Java runtime execution, live AI state comparison, live target lookup, live visibility/range comparison, known-list/aggro target comparison, controller abort/use comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, packet comparison, or live-client validation was run.
+
+Remaining risks:
+- The workflow is still a represented preview. It does not schedule or execute live AI, mutate live `NpcGameStats`, resolve live skill properties, perform live range/visibility/target lookups, call controller methods, set targets, apply effects, or send packets.
+- Live target identity, Java random/ordering behavior, known-list and aggro-list mutation under concurrency, date/time scheduling, reflection behavior, threading, serialization, precision/rounding, persistence, and live-client behavior remain missing or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 represented NPC skill-action workflow composition slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 18 live `SkillAttackManager`, live `NpcAI`, live `NpcGameStats`, live `DataManager.SKILL_DATA`, live skill `Properties`, live `owner.getTarget`, live `owner.canSee`, live `PositionUtil.isInRange`, live known-list/aggro target selection, Java random/ordering behavior, target mutation, `CreatureController.abortCast`, `CreatureController.useSkill`, effect application, packets, threading/serialization, precision/rounding, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented NPC skill-action workflow composition is modeled, but live AI/controller execution remains partial.
+
+Next recommended unit of work:
+- Continue NPC skill action parity by adding a capture boundary for the represented workflow result so `CaptureMercenaryNpcSkillPreview` can retain selection, action preview, post-spawn preview, and action workflow metadata together for later live AI/controller wiring. Keep live `NpcAI`, controller execution, target mutation, packets, threading, serialization, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -24249,4 +24297,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill action parity by composing selection preview, skill readiness, target selection, target invalidation, target-range delay, and action-result projection into one represented mercenary NPC skill action workflow result. Keep live AI/controller execution, target mutation, packets, threading, serialization, and live-client validation explicit until supported.
+8. Continue NPC skill action parity by adding a capture boundary for the represented workflow result so `CaptureMercenaryNpcSkillPreview` can retain selection, action preview, post-spawn preview, and action workflow metadata together for later live AI/controller wiring. Keep live `NpcAI`, controller execution, target mutation, packets, threading, serialization, and live-client validation explicit until supported.
