@@ -21000,6 +21000,64 @@ Next recommended unit of work:
 
 ---
 
+### Session 744 (May 24, 2026)
+- Inspected Java `PetOrderUseUltraSkillEffect`, `SM_SUMMON_USESKILL`, `SummonController.useSkill(SkillOrder)`, `CM_SUMMON_CASTSPELL`, and `PetSkillData.getPetOrderSkill`.
+- Confirmed Java order-skill remapping is applied by `PetOrderUseUltraSkillEffect.applyEffect`, not directly inside `CM_CASTSPELL`.
+- Added represented player pet summon identity:
+  - `Player.PetSummonObjectId`;
+  - `Player.PetSummonNpcId`;
+  - represented `PlayerPetSkillOrder` queue for Java `Summon.addSkillOrder`.
+- Added C# `SmSummonUseSkill` with opcode `162` and Java payload shape `D/H/C/D`.
+- Added `PlayerPetOrderSkillService` to model the narrow `PetOrderUseUltraSkillEffect` bridge:
+  - requires represented pet summon state and effected target id;
+  - maps order skill id plus pet npc id through `PetSkillTable.GetPetOrderSkill`;
+  - resolves the mapped pet skill template through `SkillTemplateTable`;
+  - applies Java hate threshold `effectHate > 1 ? effectHate : 0`;
+  - queues represented pet skill order and returns `SmSummonUseSkill`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerPetOrderSkillServiceTests|GamePacketTests"` passes with 94 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1336 tests.
+
+#### Migration Parity Table - Session 744
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.PetOrderUseUltraSkillEffect` | `Aion.GameServer.Services.PlayerPetOrderSkillService` | Effect Bridge / Service | Partial | Regression Tested | Needs Verification | C# models the order-skill-to-pet-skill lookup, skill-template level lookup, hate threshold, represented order queue, and `SM_SUMMON_USESKILL` packet creation. It does not run inside the full effect engine, does not call `super.calculate`, and does not model full `Effect`, `EffectTemplate`, reflection/JAXB attributes, or target object references. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SUMMON_USESKILL` | `Aion.GameServer.Network.Aion.ServerPackets.SmSummonUseSkill` | Server Packet | Complete | Regression Tested | Needs Verification | Payload shape matches Java source (`summonId`, `skillId`, `skillLvl`, `targetId`) with opcode `162`. Java golden bytes, encrypted live frames, and client rendering remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getSummon` / `com.aionemu.gameserver.model.gameobjects.Summon.getObjectId` / `getNpcId` | `Aion.GameServer.Model.GameObjects.Player.HasPetSummon`, `PetSummonObjectId`, `PetSummonNpcId` | Player/Summon Projection | Partial | Regression Tested through service | Needs Verification | C# stores a represented pet-summon identity without a live `Summon` object, NPC template, lifecycle, object visibility, controller, stats, or threading behavior. |
+| `com.aionemu.gameserver.model.gameobjects.Summon.addSkillOrder` / `com.aionemu.gameserver.model.summons.SkillOrder` | `Player.AddPetSkillOrder` / `PlayerPetSkillOrder` | Summon Skill Order Projection | Partial | Regression Tested | Needs Verification | C# queues represented skill id, level, target object id, hate, and release flag on `Player` until a real summon model/controller exists. It does not validate target identity, object equality, order retrieval, release-after-use, or `CM_SUMMON_CASTSPELL` consumption. |
+| `com.aionemu.gameserver.dataholders.PetSkillData.getPetOrderSkill` | `PetSkillTable.GetPetOrderSkill` consumed by `PlayerPetOrderSkillService` | Static Data Lookup | Partial | Regression Tested with loaded static data | Needs Verification | Loaded XML maps order skill `3835` and pet npc `833288` to pet skill `22107`. C# still returns `null` for missing mappings rather than Java's possible null-pointer behavior; this remains an intentional temporary difference until caller semantics require exact exception parity. |
+| `com.aionemu.gameserver.dataholders.DataManager.SKILL_DATA.getSkillTemplate` / `SkillTemplate.getLvl` | `SkillTemplateTable.GetSkillTemplate` / `SkillTemplateSummary.Level` consumed by `PlayerPetOrderSkillService` | Static Data Lookup / DTO Projection | Partial | Regression Tested with loaded static data | Needs Verification | C# uses loaded skill template `22107` to derive pet skill level `1`. Full Java skill-template fields, effect runtime, XML enum/default parsing, precision/rounding, reflection/serialization, and reload lifecycle remain unverified. |
+| `com.aionemu.gameserver.controllers.SummonController.useSkill(SkillOrder)` | Not yet implemented; represented by queued `PlayerPetSkillOrder` only | Controller / Skill Execution | Not Started | No Tests | Needs Verification | Newly documented dependency. Java validates `petHasSkill`, creates `SkillEngine` skill, sets hate, executes it, and releases the summon when requested. C# does not execute the order yet. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL` | Existing parser `Aion.GameServer.Network.Aion.ClientPackets.CmSummonCastSpell`; no handler bridge yet | Client Packet Handler | Partial | No new handler tests | Needs Verification | Newly documented dependency. C# parses the packet from earlier work, but target resolution, `retrieveNextSkillOrder`, mismatch logging, mercenary handling, `petHasSkill`, and summon-controller execution remain unimplemented. |
+
+Tests added/updated:
+- `PlayerPetOrderSkillServiceTests.ApplyUltraSkillOrder_MapsOrderSkillQueuesSummonOrderAndCreatesUseSkillPacket`: validates loaded Java XML maps order skill `3835` plus pet npc `833288` to pet skill `22107`, queues a represented order with skill level `1`, hate `5`, release flag, and creates `SmSummonUseSkill`.
+- `PlayerPetOrderSkillServiceTests.ApplyUltraSkillOrder_UsesJavaHateThreshold`: validates Java's `effectHate > 1 ? effectHate : 0` threshold for represented order hate.
+- `PlayerPetOrderSkillServiceTests.ApplyUltraSkillOrder_RequiresRepresentedSummonAndTemplateInputs`: validates missing represented summon, missing pet-skill mapping, and missing mapped skill-template guard statuses.
+- `GamePacketTests` existing packet-shape coverage now includes `SmSummonUseSkill` payload fields.
+- Java comparison status: expectations are source-derived from Java `PetOrderUseUltraSkillEffect.applyEffect`, `SM_SUMMON_USESKILL.writeImpl`, `PetSkillData.getPetOrderSkill`, `SkillTemplate.getLvl`, `Summon.addSkillOrder`, and static XML data. No Java runtime execution, Java-generated golden packet/data comparison, live `Effect` engine execution, live summon order consumption, reflection/JAXB comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- The new bridge is not invoked by a full C# `SkillEngine` effect pipeline yet.
+- `PlayerPetSkillOrder` is a represented queue on `Player`, not a real Java-equivalent `Summon` order queue with target object identity, equality checks, retrieval, or controller ownership.
+- `CM_SUMMON_CASTSPELL` still lacks handler parity for consuming queued orders, validating targets, warning on skill mismatch, mercenary skill checks, and invoking `SummonController`.
+- `SummonController.useSkill(SkillOrder)` remains unported: no `petHasSkill` execution guard, `SkillEngine.getSkill`, hate transfer, skill use, release-on-success, packet fanout, or audit logging.
+- Static-data behavior is tested through loaded C# XML; Java JAXB map construction and Java runtime/golden outputs remain unverified.
+- Packet test validates C# serialization from Java source-derived fields, not Java golden bytes or live-client behavior.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 represented pet-order ultra-skill bridge plus `SM_SUMMON_USESKILL` packet
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 7 full SkillEngine/effect invocation, live Summon model/order queue, `CM_SUMMON_CASTSPELL` handler, `SummonController.useSkill`, Java runtime/golden comparison, live-client validation, and reflection/threading/date-time comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; pet-order skill remapping is now represented and packet-shaped, but real summon skill execution remains partial.
+
+Next recommended unit of work:
+- Continue the summon order path by adding a narrow `CM_SUMMON_CASTSPELL` handler/service that consumes represented `PlayerPetSkillOrder` entries for a represented pet summon object id and target object id, validates skill id/level against the queued order, and records the would-be summon-controller execution. Keep target known-list lookup, mercenary skill handling, live `SummonController.useSkill`, `SkillEngine`, release-on-success, and audit logging documented if they remain unsupported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
