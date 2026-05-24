@@ -19084,6 +19084,56 @@ Next recommended unit of work:
 
 ---
 
+### Session 704 (May 24, 2026)
+- Continued storage expansion parity by adding production `CM_USE_ITEM` route coverage for Java `ExpandInventoryAction` warehouse tickets.
+- Extended the connection-level inventory expansion fixture with item `169640000` and `<expandinventory level="1" storage="WAREHOUSE" />`.
+- Added a connection-level test proving the production use-item branch:
+  - loads warehouse ticket action metadata,
+  - applies the `InventoryExpansionService` warehouse plan,
+  - consumes one source ticket from a stack,
+  - mutates `Player.WarehouseBonusExpands`,
+  - refreshes represented regular warehouse capacity to `32`,
+  - emits source item update, item usage animation, warehouse-size system message, and regular warehouse info refresh packets.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionInventoryExpansionUseItemTests|InventoryExpansionService_MatchesJavaTicketLevelAndQuestGuards|DataManager_LoadsRealJavaStaticDataManifestCounts"` passes with 4 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1270 tests.
+
+#### Migration Parity Table - Session 704
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.ExpandInventoryAction.canAct` | `InventoryExpansionService.CreatePlan` production caller | Item Action / Validation | Partial | Regression Tested | Needs Verification | Production connection route now covers both cube and warehouse ticket metadata branches. Java runtime comparison, all item-action ordering, failure-message byte comparison, and live-client behavior remain unverified. |
+| `com.aionemu.gameserver.model.templates.item.actions.ExpandInventoryAction.act` | `GameServerConnection.HandleInventoryExpansionUseItemAsync` | Item Action / Mutation Caller | Partial | Regression Tested | Needs Verification | Warehouse ticket branch now covers stack decrement, represented `WarehouseBonusExpands` mutation, item-use animation, warehouse-size message, and warehouse info packet fanout. Live repository transaction, rollback, Java observer ordering, and live MySQL write/readback remain unverified. |
+| `com.aionemu.gameserver.services.WarehouseService.expand(player, false)` | `InventoryExpansionService.CreatePlan` plus `HandleInventoryExpansionUseItemAsync` packet fanout | Service / Ticket Expansion Effect | Partial | Regression Tested | Needs Verification | Production caller now exercises represented warehouse ticket expansion from source template to packet fanout. Java `Storage.setLimit` object mutation, completed-quest offset behavior at production route, socket ordering against Java, and live warehouse UI remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.setWarehouseLimit` | `InventoryCapacity.GetWarehouseLimit` via production use-item route | Utility / Capacity Calculation | Partial | Regression Tested | Needs Verification | Warehouse ticket route now asserts represented capacity changes to `32` after `WarehouseBonusExpands = 1`. C# still computes on demand rather than mutating Java `Storage.limit`; storage dirty-state and runtime comparison remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_WAREHOUSE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmWarehouseInfo.CreateRegularWarehouseUpdatePackets` | Server Packet / Warehouse Refresh | Partial | Regression Tested indirectly | Needs Verification | Test asserts regular warehouse refresh packets are emitted after warehouse ticket expansion. Java golden bytes, split packet payload details, encrypted frames, and live client warehouse rendering remain unverified. |
+| `game-server/data/static_data/items/item_templates.xml` item `169640000` | Test fixture item template with `ItemExpandInventoryActionInfo(1, "WAREHOUSE")` | Static XML Source / Fixture | Partial | Regression Tested | Needs Verification | Fixture mirrors the Java warehouse expand-ticket action shape, but this unit does not reload the full real item template XML or compare Java JAXB runtime behavior. Existing static-data tests cover real action parsing for item `169640000`. |
+
+Tests added/updated:
+- `GameServerConnectionInventoryExpansionUseItemTests.HandleUseItemAsync_WarehouseExpansionTicketConsumesItemAndRefreshesWarehouseInfo`: validates the production use-item handler branch for a warehouse expansion ticket, source stack decrement, represented warehouse expansion mutation, capacity refresh, and warehouse packet fanout.
+- `GameServerConnectionInventoryExpansionUseItemTests` fixture now includes both Java-shaped cube ticket `169630000` and warehouse ticket `169640000`.
+- Existing `PlayerStateTests.InventoryExpansionService_MatchesJavaTicketLevelAndQuestGuards` and `StaticDataLoadingTests.DataManager_LoadsRealJavaStaticDataManifestCounts` were rerun with the new connection test.
+- Java comparison status: expectations are source-derived from `ExpandInventoryAction.canAct/act`, `WarehouseService.expand(player, false)`, `WarehouseService.canExpandByTicket`, `Player.setWarehouseLimit`, `StorageType.REGULAR_WAREHOUSE`, and item template `169640000`. No Java runtime execution, Java-generated golden vector, live repository transaction, Java `Storage.setLimit` mutation comparison, item restriction/cooldown observer comparison, quest item-use event comparison, encrypted-frame comparison, socket-order capture, threading behavior comparison, reflection behavior comparison, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- The test runs the connection handler directly rather than a full encrypted client socket frame through the processor.
+- Persistence rollback behavior if `SaveInventoryExpansionMutationAsync` fails remains untested at the connection boundary.
+- Completed warehouse quest offset behavior is covered at service-plan level but not in this production route test.
+- Java item restriction, quest item-use event, cooldown, and observe-controller ordering remain broader than represented C# action routing.
+- Java golden packet bytes, encrypted frames, socket order, and live client warehouse UI behavior remain unperformed.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 production warehouse-ticket use-item route coverage slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 6 encrypted socket processor comparison, live repository transaction/rollback comparison, Java `Storage.setLimit` object mutation comparison, completed-quest production-route coverage, golden/encrypted packet comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; warehouse-ticket production routing is now represented, but full Java item-use runtime parity remains partial.
+
+Next recommended unit of work:
+- Add connection-boundary failure/rollback coverage for `SaveInventoryExpansionMutationAsync` on cube and warehouse ticket use, or pivot back to another Phase 6 core gap such as kisk lifecycle cleanup, charge/power-shard/idiani burn hooks, or loot/drop handler-side quest/event paths. Keep Java `Storage` object dirty-state modeling and full encrypted socket comparison as larger future units.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
