@@ -16489,6 +16489,54 @@ Summary metrics:
 Next recommended unit of work:
 - Move from league command gates into the next smallest league lifecycle feature. Recommended: source-read `LeagueJoinEvent` and `LeagueInviteEvent` and begin with a state-only join/add-alliance packet-intent slice, or source-read `LeagueLootRulesChangeEvent` if loot-rule changes have fewer missing dependencies.
 
+### Session 655 (May 24, 2026)
+- Source-read Java `LeagueJoinEvent`, `LeagueInviteEvent`, `LeagueLootRulesChangeEvent`, `LeagueService`, `League`, `LootGroupRules`, and `SM_ALLIANCE_INFO`.
+- Chose the isolated `LeagueLootRulesChangeEvent` slice: Java only sets `League.lootGroupRules` and broadcasts `SM_ALLIANCE_INFO(alliance)` to every alliance in the league.
+- Added league-level loot-rule storage to `PlayerLeagueRuntime`, initialized by `CreateLeague` with Java's `LeagueService.createLeague` default: `FREEFORALL, 0, 0, 2, 2, 2, 2, 2`.
+- Added `PlayerLeagueRuntime.ChangeLootRules`, returning packet intents that preserve Java fanout shape and serialize changed league loot rules in the league-row block of `SM_ALLIANCE_INFO`.
+- Extended `PlayerAllianceSnapshot.CreateInfoPacketPlan` so league broadcasts can pass league loot rules independently from each alliance's own loot rules.
+- Updated existing league packet assertions to distinguish normal alliance loot defaults (`ROUNDROBIN`) from Java league loot defaults (`FREEFORALL`).
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionPlayerStatusInfoTests` passes with 60 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1133 tests.
+
+#### Migration Parity Table - Session 655
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.league.events.LeagueLootRulesChangeEvent` | `Aion.GameServer.Services.PlayerLeagueRuntime.ChangeLootRules` / `PlayerLeagueLootRulesChangedPlan` | Event Runtime Dependency | Partial | Regression Tested | Needs Verification | Source-derived event slice sets league loot rules and plans `SM_ALLIANCE_INFO` broadcasts. No Java runtime/golden-byte execution. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.changeGroupRules` | `Aion.GameServer.Services.PlayerLeagueRuntime.ChangeLootRules` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Direct runtime method exists; no packet-handler or service-command caller is wired yet. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.createLeague` | `Aion.GameServer.Services.PlayerLeagueRuntime.CreateLeague` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | League default loot rules now match Java `FREEFORALL` constructor call. Java ID factory/static registry/event dispatch remain unported. |
+| `com.aionemu.gameserver.model.team.league.League` | `Aion.GameServer.Services.PlayerLeagueRuntime` / `PlayerLeagueSnapshot` | Team State | Partial | Regression Tested | Needs Verification | Runtime now stores `League.lootGroupRules` equivalent and removes it on disband. Java locks/object identity/static registry remain unverified. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootGroupRules` | `Aion.GameServer.Model.GameObjects.PlayerGroupLootRules` | DTO / Rules Model | Partial | Regression Tested | Needs Verification | Packet-visible fields are modeled. Java roll/bid queues, `nrMisc`, `nrRoundRobin`, scheduled distribution, threading, and drop-item state remain unsupported. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootRuleType` | `Aion.GameServer.Model.GameObjects.PlayerGroupLootRuleType` | Enum | Complete | Regression Tested | Needs Verification | Existing enum values cover packet ids for `FREEFORALL`, `ROUNDROBIN`, and `LEADER`; no Java enum reflection/runtime comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` / `PlayerAllianceInfoPacketPlan` | Server Packet | Partial | Regression Tested | Needs Verification | Tests serialize changed league loot rules and Java default league loot rules. No Java golden-byte, encrypted-frame, or client validation. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Model.GameObjects.PlayerAllianceSnapshot` / `PlayerAllianceRuntime` | Team State Dependency | Partial | Regression Tested | Needs Verification | Snapshot packet plans now accept league loot rules separately from alliance loot rules. Live Java object identity and offline recipient behavior remain unverified. |
+
+Tests added or updated:
+- `GameServerConnectionPlayerStatusInfoTests.PlayerLeagueRuntime_ChangeLootRulesUpdatesLeagueAndBroadcastsAllianceInfoLikeJavaEvent`: validates league loot-rule state update, packet-intent fanout to both alliances, serialized changed league loot rules, and Java default alliance/league loot-rule separation.
+- `GameServerConnectionPlayerStatusInfoTests.PlayerLeagueRuntime_ChangeLootRulesReturnsNullForUnknownLeague`: validates unknown-league no-op behavior without mutating known league state.
+- Existing league packet assertions were updated to expect Java's `FREEFORALL` league default while keeping alliance loot defaults as `ROUNDROBIN`.
+- Java comparison status: expectations are source-derived from `LeagueLootRulesChangeEvent`, `LeagueService.createLeague`, `LeagueService.changeGroupRules`, `League.getLootGroupRules`, `LootGroupRules`, and `SM_ALLIANCE_INFO.writeImpl`. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, Java static league registry comparison, event queue/lock comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- `ChangeLootRules` is a runtime/service slice only; the future command or UI caller that creates `LootGroupRules` for league changes is not wired.
+- `LootGroupRules` runtime-only behaviors remain incomplete: roll/bid distribution queues, scheduled roll resolution, `nrMisc`, `nrRoundRobin`, and drop item tracking.
+- League invite/join/kinah workflows, direct disband iteration, offline recipients, Java static registry, event queue/locks, object identity, and packet processor exception/log behavior remain deferred.
+- Packet-field coverage remains C# emitted-object validation only; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- C# packet intent order is deterministic by sorted positions; Java `ConcurrentHashMap` membership iteration outside `getSortedMembers` remains unverified.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 league loot-rule change runtime/serialization slice plus Java default league loot-rule correction
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 7 Java golden byte validation, full `LeagueService`, Java static league registry, invite/join lifecycle, loot-rule command/UI caller, Java event queue/lock comparison, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; league loot-rule packet state is now better bounded, but invite/join and broader lifecycle parity remain open.
+
+Next recommended unit of work:
+- Return to `LeagueJoinEvent` / `LeagueInviteEvent`: add the smallest join/add-alliance packet-intent slice, including `LEAGUE_ALLIANCE_ENTERED` and `LEAGUE_JOINED_ALLIANCE` constants, state insertion at `league.size()`, duplicate-alliance no-op/guard behavior, and serialized league-row packet tests. Keep full invitation request-response and `canInvite` checks deferred unless the dependencies are already present.
+
 ---
 
 ## Next Steps
