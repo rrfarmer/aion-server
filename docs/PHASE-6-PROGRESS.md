@@ -18108,6 +18108,76 @@ Summary metrics:
 Next recommended unit of work:
 - Either continue duel parity by wiring a real caller for `LoseDuel` / draw timeout once combat/life-state hooks are identifiable, or return to compact `ResponseRequester` handlers with production packet reachability. Good next candidates remain craft-skill learn confirmation or experience recovery dialog because they should avoid the wider combat cleanup surface.
 
+---
+
+### Session 687 (May 24, 2026)
+- Continued the compact production-reachable `ResponseRequester` parity line with Java `DialogService` soul-healer XP recovery.
+- Added `CmDialogSelect.Recovery = 35` and routed `CM_DIALOG_SELECT` recovery action through `NpcDialogTargetingService` before registering the recovery question.
+- Added `SmQuestionWindow.AskRecoverExperience = 160011` and `QuestionResponseRequestKind.ExperienceRecovery`.
+- Added `PendingExperienceRecoveryRequest` and mutable `Player.RecoverableExp` so the C# player model can mirror Java `PlayerCommonData.resetRecoverableExp`.
+- Added `PlayerExperienceRecoveryService` with Java-shaped behavior:
+  - Java `DialogService` price formula,
+  - no-recoverable-XP message,
+  - duplicate-question busy message,
+  - pending `ResponseRequester` registration,
+  - deny response cleanup,
+  - accept response Kinah validation,
+  - recoverable XP transfer into current XP,
+  - recoverable XP reset,
+  - Kinah decrease,
+  - represented success packets.
+- Added system-message factories for Java ids `1300671`, `1300674`, `1300682`, and `1370002`.
+- Added logout/enter-world pending-question cleanup for experience recovery bridge metadata.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerExperienceRecoveryServiceTests` passes with 10 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1220 tests.
+
+#### Migration Parity Table - Session 687
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.DialogAction.RECOVERY` | `Aion.GameServer.Network.Aion.ClientPackets.CmDialogSelect.Recovery` / `GameServerConnection.HandleDialogSelectAsync` | Dialog Action / Handler | Partial | Regression Tested | Needs Verification | Action id `35` is production-routed after represented target/function validation. Java `NpcController.onDialogSelect` and full dialog engine ordering are not fully ported. |
+| `com.aionemu.gameserver.services.DialogService` recovery branch | `Aion.GameServer.Services.PlayerExperienceRecoveryService.RequestDialog` / `HandleResponse` | Service / Request Handler | Partial | Regression Tested | Needs Verification | Models Java fee formula, question registration, deny cleanup, Kinah check, XP restore, recoverable reset, and represented packets. Java `EffectController.removeByDispelSlotType(SPECIAL2)` and `setDeathCount(0)` are not represented because those runtime models are missing. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData.resetRecoverableExp` | `PlayerExperienceRecoveryService.HandleResponse` mutating `Player.Exp` / `Player.RecoverableExp` | Model Mutation | Partial | Regression Tested | Needs Verification | C# adds recoverable XP to current XP and clears recoverable XP. Java level recalculation and `PlayerController.onLevelChange` side effects are only approximated by optional `SM_STATUPDATE_EXP`; no level-change/event parity comparison was run. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest/respond/denyAll` | `QuestionResponseRegistry` with `QuestionResponseRequestKind.ExperienceRecovery` | Request Registry | Partial | Regression Tested | Needs Verification | Recovery requests use put-if-absent and response removal. Java anonymous `RequestResponseHandler<Npc>` callback identity, reflection/polymorphic behavior, and concurrent-map stress remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_ASK_RECOVER_EXPERIENCE` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow.AskRecoverExperience` | Server Packet / Question Id | Partial | Regression Tested | Needs Verification | Question id `160011` is registered and returned with price parameter. Java golden bytes/encrypted frames not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_CANNOT_ASK_RECOVER_EXPERIENCE_BY_OTHER_QUESTION` | `SmSystemMessage.CannotAskRecoverExperienceByOtherQuestion` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Java id `1300671` is used for duplicate recovery question. Packet-byte comparison not run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SUCCESS_RECOVER_EXPERIENCE` | `SmSystemMessage.SuccessRecoverExperience` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Java id `1300674` is emitted on represented successful recovery. Packet-byte comparison not run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_DONOT_HAVE_RECOVER_EXPERIENCE` | `SmSystemMessage.DoNotHaveRecoverExperience` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Java id `1300682` is emitted when recoverable XP is zero. Java also clears SPECIAL2/death count before this branch; C# lacks those models. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_GET_EXP2` | `SmSystemMessage.GetExp2` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Java id `1370002` is emitted with recovered XP on success. Packet-byte comparison not run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_NOT_ENOUGH_KINA` | `SmSystemMessage.NotEnoughKinah` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Existing C# factory is reused with Java id `901285` when Kinah is insufficient. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_EXP` | `Aion.GameServer.Network.Aion.ServerPackets.SmStatUpdateExp` | Server Packet / Stat Update | Partial | Regression Tested | Needs Verification | Recovery success can emit represented stat update when an experience table is available. Java level recalculation, repose max, and level-change side effects need deeper runtime comparison. |
+| `com.aionemu.gameserver.model.gameobjects.player.Inventory.decreaseKinah` | `PlayerExperienceRecoveryService` Kinah item mutation / `SmInventoryUpdateItem` | Inventory Mutation | Partial | Regression Tested | Needs Verification | Decreases represented cube Kinah item and emits inventory update when Kinah template is available. Java inventory persistence/update-type ordering and multi-storage Kinah semantics are not fully audited. |
+| `com.aionemu.gameserver.controllers.effect.EffectController.removeByDispelSlotType` | Not represented in this unit | Effect Runtime Dependency | Not Started | No Tests | Unknown | Java clears `DispelSlotType.SPECIAL2` during recovery and no-XP cleanup. C# has no dispel-slot effect runtime in this slice. |
+
+Tests added/updated:
+- `PlayerExperienceRecoveryServiceTests.CalculateRecoveryPrice_UsesJavaDialogServiceFormula`: validates Java source-derived fee formula below and above 1,000,000 recoverable XP.
+- `PlayerExperienceRecoveryServiceTests.RequestDialog_RegistersResponseRequesterAndQuestionWindow`: validates pending request registration, question id `160011`, and price parameter state.
+- `PlayerExperienceRecoveryServiceTests.RequestDialog_NoRecoverableExperienceSendsJavaMessage`: validates no recoverable XP sends Java message id path by packet type and does not register a request.
+- `PlayerExperienceRecoveryServiceTests.RequestDialog_DuplicateQuestionUsesBusyMessageAndLeavesOriginalPendingRequest`: validates put-if-absent duplicate semantics and preserves original pending metadata.
+- `PlayerExperienceRecoveryServiceTests.HandleResponse_DenyConsumesPendingRequestWithoutChangingExpOrKinah`: validates response `0` cleanup with no XP/Kinah mutation.
+- `PlayerExperienceRecoveryServiceTests.HandleResponse_NotEnoughKinahConsumesQuestionButKeepsRecoverableExp`: validates accepted response with insufficient Kinah sends failure and preserves XP/recoverable state.
+- `PlayerExperienceRecoveryServiceTests.HandleResponse_AcceptRestoresExpClearsRecoverableAndDecreasesKinah`: validates accepted response transfers recoverable XP to current XP, clears recoverable XP, decreases Kinah, and emits represented success/stat/inventory packets.
+- Java comparison status: expectations are source-derived from `DialogService`, `PlayerCommonData.resetRecoverableExp`, `SM_QUESTION_WINDOW`, and `SM_SYSTEM_MESSAGE` constants. No Java runtime execution, Java-generated golden vector, full dialog-engine ordering comparison, effect/death-count comparison, level-change callback comparison, live socket-order validation, encrypted frame comparison, reflection behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Java `EffectController.removeByDispelSlotType(DispelSlotType.SPECIAL2)` and `PlayerCommonData.setDeathCount(0)` remain unsupported because the C# port does not yet model those recovery-specific runtime fields.
+- Java `PlayerCommonData.setExp` recalculates level, calls `PlayerController.onLevelChange`, and sends `SM_STATUPDATE_EXP`; C# mutates represented XP/recoverable state and emits stat update only when the experience table is available, without full level-change side effects.
+- Java inventory Kinah is represented through the C# Kinah item in cube location `0`; broader Java Kinah storage semantics and persistence timing are not fully audited.
+- Dialog select routing validates target/function through represented world NPC data, but full Java `NpcController.onDialogSelect` ordering and talk-distance behavior are not compared.
+- Java anonymous `RequestResponseHandler<Npc>` callback identity and reflection/polymorphic behavior remain unported.
+- Packet sends are validated by C# packet type/message id or source constants only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 13
+- Total artifacts ported: 1 experience recovery dialog/request/response slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 12
+- Total blocked artifacts: 6 effect dispel-slot cleanup, death-count reset, full level-change side effects, complete inventory Kinah semantics, real socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; another `ResponseRequester` dialog path is production-reachable, but recovery-side effect and runtime validation gaps remain.
+
+Next recommended unit of work:
+- Continue compact production-reachable `ResponseRequester` parity with another small dialog/handler slice, such as exchange request response or direct portal/RV variants that are not fully covered yet. If staying near experience recovery, add the missing C# runtime fields for soul-sickness/death-count cleanup before deepening level-change side effects.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
