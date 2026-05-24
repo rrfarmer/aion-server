@@ -15175,6 +15175,67 @@ Summary metrics:
 Next recommended unit of work:
 - Model alliance leader-leave fallback only after carefully source-reading Java's pre-remove `ChangeAllianceLeaderEvent` and its packet order, or move laterally to the next non-league `CM_PLAYER_STATUS_INFO` gap with smaller missing side effects. Keep league commands deferred until a live league runtime bridge exists.
 
+### Session 629 (May 23, 2026)
+- Source-read Java `TeamCommand.ALLIANCE_LEAVE`, `PlayerAllianceService.removePlayer`, `PlayerAllianceLeavedEvent`, `ChangeAllianceLeaderEvent`, `ChangeLeaderEvent`, and the existing C# alliance leader-change planner/runtime surfaces.
+- Added `PlayerAllianceRuntime.SelectFallbackLeaderObjectId` to model Java leader-leave fallback selection:
+  - first online vice captain in vice-captain id order;
+  - otherwise first online non-leader member in alliance member order.
+- Updated `GameServerConnection.HandleAllianceLeaveAsync` so a leader using command id `14` now executes the source-derived non-league leader-change packet plan before the existing alliance leave workflow.
+- Added focused parsed-command coverage for a three-member non-auto alliance where the leader leaves and an online vice captain becomes the new leader before leave fanout.
+- Kept no-online-fallback leader leave, two-member leader-leave disband combination, league union leader-change messages, defence-team `VortexService.removeDefenderPlayer`, league broadcast/removal, `EventService.onLeftTeam`, registered-team instance kick scheduling, Java event queue/lock comparison, socket ordering comparison, Java golden packet vectors, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerAllianceRuntime|PlayerAllianceMemberInfo|BaseLeavePlanner"` passes with 81 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1095 tests.
+
+#### Migration Parity Table - Session 629
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.ClientPackets.CmPlayerStatusInfo` / `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Command id `14` now covers a non-disband leader-leave fallback path. No-online-fallback, two-member leader-leave disband, league commands, and full generic dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.ALLIANCE_LEAVE` | Command code `14` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Leader leave now composes a non-league leader-change wave before removal when an online fallback exists. League and no-fallback behavior remain deferred. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.removePlayer` | `GameServerConnection.HandleAllianceLeaveAsync` plus `PlayerAllianceRuntime.RemoveMemberWithLeaveWorkflow` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | The leader branch now models Java's pre-remove `ChangeAllianceLeaderEvent` for an online vice-captain fallback. Defence-team Vortex cleanup remains unmodeled. |
+| `com.aionemu.gameserver.model.team.alliance.events.ChangeAllianceLeaderEvent` | `PlayerAllianceRuntime.SelectFallbackLeaderObjectId`, `PlayerAllianceRuntime.ChangeLeader`, and `GameServerConnection.HandleAllianceLeaveAsync` | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | C# selects an online vice captain before the next online member and sends non-league alliance-info plus `STR_FORCE_YOU_BECOME_NEW_LEADER` before leave fanout. League union messages and Java event-lock ordering remain unverified. |
+| `com.aionemu.gameserver.model.team.common.events.ChangeLeaderEvent.changeLeaderToNextAvailablePlayer` | `PlayerAllianceRuntime.SelectFallbackLeaderObjectId` | Event Helper | Partial | Regression Tested | Needs Verification | Fallback scan is source-modeled for online vice-captain preference and next online non-leader fallback. Java `applyOnMembers` iteration and offline edge cases are not runtime-compared. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.changeLeader` | `PlayerAllianceRuntime.ChangeLeader` | Base Team State | Partial | Regression Tested | Needs Verification | Runtime updates alliance leader id and removes the new leader from vice-captain ids before leave removal. Java object-wrapper mutation and synchronization semantics are not compared. |
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceLeavedEvent` | `PlayerAllianceRuntime.RemoveMemberWithLeaveWorkflow` / connection alliance leave sends | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | Leader-change wave is now sent before LEAVE reason fanout for a three-member non-disband path. Disband combination, league broadcast, EventService, instance kick, and live socket ordering remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Model.GameObjects.PlayerAllianceDescriptor` / `PlayerAllianceRuntime` member store | Team State | Partial | Regression Tested | Needs Verification | Runtime leader id and vice-captain ids are updated before the old leader is removed. Java static alliance registry, group internals, and synchronized event semantics are not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` through leader-change and leave sends | Server Packet | Partial | Regression Tested | Needs Verification | Covered in the leader-change wave and subsequent leave fanout. Java golden bytes, encrypted frames, league rows, and real-client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` through alliance leave sends | Server Packet | Partial | Regression Tested | Needs Verification | Covered after the leader-change wave for each remaining member. Java golden bytes and live client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LEAVE_GROUP_MEMBER` | `Aion.GameServer.Network.Aion.ServerPackets.SmLeaveGroupMember` through alliance leave sends | Server Packet | Partial | Regression Tested | Needs Verification | Covered for the old leader's base leave after alliance fanout. Java registered-team instance follow-up remains deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_YOU_BECOME_NEW_LEADER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceYouBecomeNewLeader` | Server Packet Factory | Partial | Regression Tested | Needs Verification | Covered for fallback leader-change during leader leave. Java intentionally does not send `STR_FORCE_HE_IS_NEW_LEADER` when `eventPlayer == null`; C# mirrors that for this path. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_LEAVE_HIM` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceLeaveHim` | Server Packet Factory | Partial | Regression Tested | Needs Verification | Covered after the leader-change wave for remaining members. Golden frame/client validation remains missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / direct fallback | Runtime Dependency | Partial | Regression Tested | Needs Verification | Ordered registry sends are covered for the source-derived leader-leave fallback path. Java offline-recipient behavior and live socket ordering remain unverified. |
+| `com.aionemu.gameserver.services.VortexService` | Deferred C# defence-team cleanup | Service Dependency | Not Started | No Tests | Unknown | Java calls `VortexService.removeDefenderPlayer` for defence alliances. C# has no live bridge in this handler yet. |
+| `com.aionemu.gameserver.model.team.league.League.broadcast` | Deferred leader-change/leave league broadcast metadata | Service Dependency | Not Started | No Tests | Unknown | Java broadcasts league state during leader change and leave. C# still uses non-league planner paths here. |
+| `com.aionemu.gameserver.services.event.EventService` | Deferred `PlayerBaseLeavePlanner` metadata | Service Dependency | Not Started | No Tests | Unknown | Java calls `EventService.onLeftTeam` after base leave. C# records the boundary but has no live EventService bridge here. |
+| `com.aionemu.gameserver.services.instance.InstanceService` | Deferred `PlayerBaseLeavePlanner` instance-kick metadata | Service Dependency | Not Started | No Tests | Unknown | Java schedules instance exit movement for registered-team instances. C# does not execute that delayed side effect here. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_AllianceLeaveLeaderPromotesOnlineViceCaptainBeforeLeaveFanoutLikeJava`: validates parsed command id `14` on a three-member non-auto alliance promotes the online vice captain, removes that vice-captain role, sends leader-change alliance-info packets and `STR_FORCE_YOU_BECOME_NEW_LEADER`, then sends the leave fanout and old-leader base leave.
+- Java comparison status: expectations are source-derived from `ChangeAllianceLeaderEvent`, `ChangeLeaderEvent.changeLeaderToNextAvailablePlayer`, `PlayerAllianceService.removePlayer`, `PlayerAllianceLeavedEvent`, `PlayerLeavedEvent`, `SM_ALLIANCE_INFO`, `SM_ALLIANCE_MEMBER_INFO`, `SM_LEAVE_GROUP_MEMBER`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live client packet capture, Java static alliance registry comparison, Java event queue/lock comparison, no-online-fallback comparison, two-member leader-disband comparison, defence-team VortexService comparison, league broadcast/removal comparison, league union-message comparison, instance-kick comparison, EventService callback comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond C# packet object type/order, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Leader leave with no online fallback currently remains a no-op in the C# connection handler.
+- Two-member leader leave plus disband replay is not explicitly covered as a combined branch.
+- Java league leader-change union messages and league broadcast/removal around alliance leave remain deferred.
+- Java defence-team `VortexService.removeDefenderPlayer` cleanup is not wired.
+- Java `EventService.onLeftTeam`, registered-team instance kick scheduling, and `STR_MSG_LEAVE_INSTANCE_NOT_PARTY` remain deferred.
+- Java invalid target/member exception policy and static alliance registry behavior remain approximated by runtime snapshots.
+- Java event queue, lock, `CopyOnWriteArrayList`, alliance group internals, object iteration order, offline-recipient handling, and threading behavior remain source-derived only.
+- League commands remain incomplete in `CM_PLAYER_STATUS_INFO`.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to C# packet object reachability/order; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 18
+- Total artifacts ported: 1 deeper `CM_PLAYER_STATUS_INFO` alliance leader-leave fallback branch plus 1 runtime fallback-selector helper
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 14
+- Total blocked artifacts: 11 no-online-fallback leader leave, two-member leader-leave disband combination, defence-team VortexService cleanup, league broadcast/removal, league union messages, EventService callback, instance kick scheduling, league commands, Java static service registry, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; alliance leader leave is now partially modeled for the common non-league fallback case, but edge/league/live validation gaps remain.
+
+Next recommended unit of work:
+- Add a focused two-member leader-leave/disband regression only if the existing leader-change plus disband replay ordering can be documented accurately. Otherwise move laterally to the next non-league `CM_PLAYER_STATUS_INFO` branch or harden no-online-fallback behavior. Keep league commands deferred until a live league runtime bridge exists.
+
 ---
 
 ## Next Steps
