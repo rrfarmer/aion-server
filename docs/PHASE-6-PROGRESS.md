@@ -22024,6 +22024,56 @@ Next recommended unit of work:
 
 ---
 
+### Session 764 (May 24, 2026)
+- Re-inspected Java `NpcGameStats.renewLastSkillTime`, `getLastSkillTime`, and `canUseNextSkill`:
+  - Java stores `System.currentTimeMillis()` in `lastSkillTime`;
+  - later AI skill-delay checks compare current time with `lastSkillTime + nextSkillDelay`.
+- Added `Player.TryRenewSummonKnownObjectLastSkillTime` to mutate represented known-object last-skill-time metadata with an explicit timestamp.
+- Added `PlayerSummonKnownObjectLastSkillTimeRenewalResult` / status enum.
+- Added `PlayerSummonSkillExecutionService.RenewMercenaryLastSkillTime`:
+  - `MissingExecution` for null invocation previews;
+  - `NotRenewable` for non-mercenary or blocked previews;
+  - `MissingKnownObject` when the represented actor no longer exists;
+  - `Renewed` when represented known-object metadata is updated.
+- Kept the timestamp source injectable by caller/tests; no direct `DateTimeOffset.UtcNow` or live game-stat clock dependency was introduced.
+- Kept renewal as represented known-object metadata only; it does not yet feed AI scheduling, next-skill delay, cooldown expiry, controller execution, or effects.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 33 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1357 tests.
+
+#### Migration Parity Table - Session 764
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.renewLastSkillTime` | `Player.TryRenewSummonKnownObjectLastSkillTime` / `PlayerSummonSkillExecutionService.RenewMercenaryLastSkillTime` | Game Stats Timestamp Projection | Partial | Regression Tested | Needs Verification | C# can now mutate represented known-object last-skill-time metadata with a supplied millisecond timestamp. It does not mutate a live `NpcGameStats`, use `System.currentTimeMillis()` directly, or affect AI scheduling. |
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.getLastSkillTime` | `PlayerSummonKnownObject.LastSkillTimeMilliseconds` | DTO / Timestamp Projection | Partial | Regression Tested | Needs Verification | C# stores the represented timestamp on known-object metadata. Live stat container access, persistence, synchronization, serialization, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.canUseNextSkill` | Not implemented; documented dependency from last-skill-time mutation | AI / Skill Scheduling Dependency | Not Started | No Tests | Needs Verification | Newly documented dependency. C# does not yet model next-skill delay, random `-1` delay handling, AI skill choice, or date/time rounding/delta behavior. |
+| `com.aionemu.gameserver.controllers.NpcController.useSkill(int, int)` | `PlayerSummonKnownObjectLastSkillTimeRenewalResult` after allowed mercenary preview | NPC Controller Side-Effect Projection | Partial | Regression Tested | Needs Verification | C# now has a deterministic represented side effect for the Java last-skill-time renewal. It is not automatically invoked by live controller execution and does not call `CreatureController.useSkill`. |
+| `java.lang.System.currentTimeMillis` as used by `NpcGameStats` | Explicit `currentTimeMilliseconds` method parameter | Date/Time Source Projection | Intentional Difference | Regression Tested with injected timestamp | Needs Verification | C# intentionally injects the timestamp for deterministic tests until a shared game clock exists. Runtime date/time parity remains unverified. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.RenewMercenaryLastSkillTime_UpdatesRepresentedKnownObject`: validates missing execution, non-renewable summon execution, missing known object, and successful represented timestamp mutation with deterministic milliseconds.
+- Java comparison status: expectations are source-derived from Java `NpcGameStats.renewLastSkillTime`, `NpcGameStats.getLastSkillTime`, `NpcGameStats.canUseNextSkill`, and `NpcController.useSkill`. No Java runtime execution, live `NpcGameStats` comparison, AI skill-delay comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Last-skill-time mutation is represented metadata, not a live `NpcGameStats` object.
+- No production clock, AI skill-delay check, next-skill-delay randomization, or scheduling behavior is wired.
+- The timestamp is not persisted or serialized.
+- Controller execution, live target mutation, skill runtime, cooldown mutation/expiry, effects, packets, audit/log sinks, Java runtime, and live-client behavior remain unverified.
+- Reflection, threading, serialization, date/time runtime, and precision/rounding behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented NPC last-skill-time mutation slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 9 live `NpcGameStats`, production game clock, next-skill delay scheduling, AI skill choice, controller execution, live skill runtime, packet fanout, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented mercenary planning can now update last-skill-time metadata deterministically, but live NPC skill scheduling parity remains partial.
+
+Next recommended unit of work:
+- Continue from represented last-skill-time metadata by adding a small `canUseNextSkill` projection with explicit current time and next-skill-delay inputs, including Java's `nextSkillDelay == 0` readiness and documenting the random `-1` delay path as unsupported until NPC skill templates are represented. Keep live AI skill choice, cooldown expiry/removal, effects, observers, packets, and live NPC stats explicit until supporting systems exist.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
