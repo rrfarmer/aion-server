@@ -20467,6 +20467,60 @@ Next recommended unit of work:
 
 ---
 
+### Session 733 (May 24, 2026)
+- Added `PlayerCastSpellEarlyExitService` as a represented `CM_CASTSPELL.runImpl` early-exit planner.
+- Preserved Java decision order before full skill dispatch: dead-player rejection, spell id zero cancel-current-skill, pet-order/no-pet rejection, missing/passive template no-op, protection cancellation, item-use cancellation, cooldown audit/not-ready response, and final use-skill handoff.
+- Added a deterministic receive-time constructor path to `CmCastSpell` for cooldown/order tests while preserving production construction-time UTC milliseconds.
+- Added focused tests proving early-exit order and callback/action ordering without invoking the full C# `SkillEngine`.
+- Runtime `GameServerConnection` dispatch remains intentionally unwired because live skill-template lookup, pet skill data, player summon state, player controller `useSkill`, system-message packet fanout, and combat/effect scheduling are still partial.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerCastSpellEarlyExitServiceTests|GamePacketTests"` passes with 96 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1320 tests.
+
+#### Migration Parity Table - Session 733
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CASTSPELL.runImpl` | `Aion.GameServer.Services.PlayerCastSpellEarlyExitService` | Client Packet Handler Planner / Service | Partial | Regression Tested | Needs Verification | C# now represents Java's early-exit ordering through callbacks/actions but does not invoke live `GameServerConnection` or full `PlayerController.useSkill`. Missing methods include real system-message send, `cancelCurrentSkill`, `DataManager.PET_SKILL_DATA`, `DataManager.SKILL_DATA`, passive-template lookup, `cancelUseItem`, audit logging, and live use-skill dispatch. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CASTSPELL.receiveTime` | `Aion.GameServer.Network.Aion.ClientPackets.CmCastSpell.ReceiveTimeMilliseconds` | Packet Timing Field | Partial | Unit Tested | Needs Verification | Production still captures UTC milliseconds at packet construction; tests can inject deterministic receive time for cooldown audit ordering. Java uses `System.currentTimeMillis()`, so clock source/date-time parity remains unverified in live runtime. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.isDead` | `PlayerCastSpellEarlyExitService` checking `Player.LifeStats.CurrentHp <= 0` or `PlayerCreatureState.Dead` | Player Guard Dependency | Partial | Regression Tested | Needs Verification | Dead-player rejection is ordered before spell id, pet, or template checks. Java's exact `isDead` semantics, death workflow, threading, and live state transitions remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.isProtectionActive` / `PlayerController.stopProtectionActiveTask` | `Player.IsProtectionActive` / `Player.StopProtectionActive` invoked by `PlayerCastSpellEarlyExitService` | Player Guard Dependency | Partial | Regression Tested | Needs Verification | Test proves protection is stopped only after non-passive template acceptance and before item-use cancellation. Java task cancellation side effects and visible-state packet fanout are not modeled here. |
+| `com.aionemu.gameserver.controllers.PlayerController.cancelCurrentSkill` | `PlayerCastSpellEarlyExitOptions.CancelCurrentSkill` callback | Controller Dependency | Partial | Regression Tested with delegate capture | Needs Verification | Spell id zero invokes the callback and exits before pet/template checks. No real C# casting skill state or live controller cancellation is wired. |
+| `com.aionemu.gameserver.controllers.PlayerController.cancelUseItem` | `PlayerCastSpellEarlyExitOptions.CancelUseItem` callback | Controller Dependency | Partial | Regression Tested with delegate capture | Needs Verification | Callback is invoked after template acceptance and protection stop, before cooldown audit. Existing `Player.UsingItemObjectId` is not mutated by this planner; live item-use cancellation remains missing. |
+| `com.aionemu.gameserver.dataholders.DataManager.PET_SKILL_DATA` | `PlayerCastSpellEarlyExitOptions.IsPetOrderSkill` / `HasPetSummon` | Skill Data Dependency | Partial | Regression Tested with delegate capture | Needs Verification | Pet-order rejection ordering is represented, but C# has no live pet-skill table or summon/pet-state integration in this route. |
+| `com.aionemu.gameserver.skillengine.model.SkillTemplate` / `DataManager.SKILL_DATA` | `PlayerCastSpellEarlyExitOptions.GetSkillTemplate` / `PlayerCastSpellSkillTemplate` | Skill Data Dependency | Partial | Regression Tested with delegate capture | Needs Verification | Missing/passive template no-op is represented. The local template DTO only carries `SkillId` and `IsPassive`; full Java skill templates, levels, targets, effect lists, and XML behavior remain unported for this route. |
+| `com.aionemu.gameserver.utils.audit.AuditLogger` cooldown audit path | `PlayerCastSpellEarlyExitOptions.AuditCooldown` callback | Audit / Timing Dependency | Partial | Regression Tested with delegate capture | Needs Verification | Test proves audit runs after item-use cancellation when `nextSkillUse > receiveTime`, and not-ready exits when `nextSkillUse > currentTime`. Live logging, Java time source, and race/threading behavior remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` skill failure responses | `PlayerCastSpellEarlyExitOptions.SendSkillCannotCastDead`, `SendPetRequired`, `SendSkillNotReady` callbacks | Packet Dependency | Partial | Regression Tested with delegate capture | Needs Verification | Message send decision points are represented as callbacks. Actual C# `SmSystemMessage` helper methods for these exact Java messages and live socket send ordering are not wired in this unit. |
+
+Tests added/updated:
+- `PlayerCastSpellEarlyExitServiceTests.Evaluate_DeadPlayerSendsCannotCastBeforeOtherChecks`: validates dead-player rejection occurs before pet or cancel-current checks.
+- `PlayerCastSpellEarlyExitServiceTests.Evaluate_ZeroSpellIdCancelsCurrentSkillAfterDeadCheck`: validates spell id zero exits through cancel-current before pet checks.
+- `PlayerCastSpellEarlyExitServiceTests.Evaluate_PetOrderWithoutPetSendsPetRequiredBeforeTemplateLookup`: validates pet-order rejection precedes template lookup.
+- `PlayerCastSpellEarlyExitServiceTests.Evaluate_MissingOrPassiveTemplateStopsBeforeProtectionAndUseItemCancellation`: validates missing/passive templates exit before protection/item cancellation.
+- `PlayerCastSpellEarlyExitServiceTests.Evaluate_ReadySkillStopsProtectionCancelsUseItemAndDispatchesSkill`: validates accepted skill ordering and protection state mutation.
+- `PlayerCastSpellEarlyExitServiceTests.Evaluate_CooldownAuditCanRejectNotReadyAfterCancelUseItem`: validates cooldown audit and not-ready ordering using deterministic receive/current times.
+- Existing `GamePacketTests` were rerun with the focused filter to protect `CmCastSpell` parser behavior.
+- Java comparison status: expectations are source-derived from Java `CM_CASTSPELL.runImpl`. No Java runtime execution, Java-generated golden packet, live `GameServerConnection`, live `SkillEngine`, live system-message socket send, real player controller methods, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- The early-exit planner is not wired to `GameServerConnection`; live `CM_CASTSPELL` handling is still absent.
+- Full Java `SkillEngine`, skill-template XML behavior, pet-order skill table, player summon/pet state, player controller skill/cancel methods, system-message packet helpers, cooldown persistence, effect scheduling, observer dispatch, charge/power-shard/idian burns, PvP/death behavior, and packet fanout remain missing.
+- Date/time parity is represented but not verified: C# uses UTC milliseconds and deterministic test injection, while Java uses `System.currentTimeMillis()`.
+- Reflection differences remain because Java packet factory construction uses reflection and C# uses explicit factory lambdas.
+- No Java golden bytes, live encrypted frames, or client behavior were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 represented `CM_CASTSPELL` early-exit planner plus deterministic receive-time test hook
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 7 live `GameServerConnection` skill route invocation, full SkillEngine/player-controller integration, system-message packet wiring, pet skill/summon state integration, effect/combat fanout, Java runtime/golden/live-client comparison, and clock/threading comparison
+- Estimated overall migration completion: Phase 6 remains about 65% complete; skill packet decision ordering is better represented, but live skill execution remains partial.
+
+Next recommended unit of work:
+- Wire the represented `PlayerCastSpellEarlyExitService` one step closer to production by adding exact `SmSystemMessage` helpers for Java skill failure responses and a `GameServerConnection`-level test seam that captures dead-player, pet-required, and skill-not-ready packet intent without invoking full `SkillEngine`. If packet helpers are not identifiable yet, add a narrower callback-only `GameServerConnection` handler path for spell id zero and protection/item-use cancellation, keeping all unimplemented runtime dependencies explicit.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
