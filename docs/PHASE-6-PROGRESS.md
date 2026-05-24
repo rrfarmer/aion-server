@@ -17988,6 +17988,76 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the `ResponseRequester` parity line with the next small production-reachable handler, preferably Java `DuelService` request/response if the C# player state can represent duel start/cancel narrowly. Alternative candidates remain craft-skill learn confirmation or experience recovery dialog. If staying with team systems, deepen alliance invite side effects by adding `FindGroupService` callback placeholders and group leave/disband packet parity, but that is a wider runtime/team lifecycle slice.
 
+---
+
+### Session 685 (May 24, 2026)
+- Source-read Java `CM_DUEL_REQUEST`, `DuelService`, `DeniedStatus`, `SM_QUESTION_WINDOW`, `SM_CLOSE_QUESTION_WINDOW`, `SM_DUEL`, and related duel `SM_SYSTEM_MESSAGE` constants.
+- Added production `CM_DUEL_REQUEST` parsing/routing:
+  - `CmDuelRequest` reads Java opcode `114` payload target object id,
+  - `GameClientPacketFactory` registers opcode `114` for in-game state,
+  - `GameServerConnection` routes the parsed packet to `HandleDuelRequestAsync`.
+- Added represented duel request lifecycle:
+  - `PlayerDuelRequestService.SendDuelRequest` covers no target/self, already-dueling requester/target, target duel deny bit, dead requester/target, target busy, target accept question, target requested message, requester withdraw question, and requester challenged message,
+  - `PlayerDuelRequestService.HandleTargetResponse` covers target deny and target accept/start,
+  - `PlayerDuelRequestService.HandleWithdrawResponse` covers requester-confirmed withdrawal,
+  - `QuestionResponseRequestKind.DuelRequest` and `DuelWithdraw` bridge Java `ResponseRequester` handlers.
+- Added Java-shaped packet classes and ids:
+  - `SmQuestionWindow.DuelAcceptRequest = 50028`,
+  - `SmQuestionWindow.DuelWithdrawRequest = 50030`,
+  - `SmCloseQuestionWindow` opcode `53`,
+  - `SmDuel` opcode `185`,
+  - duel request/reject/withdraw/start system-message factories.
+- Added `PlayerSettings.DenyDuelRequests = 32` for Java `DeniedStatus.DUEL`.
+- Added `PlayerEnterWorldService` cleanup for pending duel request/withdraw metadata and represented deny side effect.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionDuelRequestTests` passes with 6 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1208 tests.
+
+#### Migration Parity Table - Session 685
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_DUEL_REQUEST` | `Aion.GameServer.Network.Aion.ClientPackets.CmDuelRequest` / `GameServerConnection.HandleDuelRequestAsync` | Client Packet / Handler | Partial | Regression Tested | Needs Verification | Opcode `114` parses target object id and routes to represented duel service. C# resolves via online registry instead of active-player known-list; known-list visibility parity remains missing. |
+| `com.aionemu.gameserver.services.DuelService.onDuelRequest` | `Aion.GameServer.Services.PlayerDuelRequestService.SendDuelRequest` | Service / Request Starter | Partial | Regression Tested | Needs Verification | Covers represented request guards, target accept prompt, requester withdraw prompt, and Java message ids. Instance-zone, duel-zone flags, enemy/same-race confirm suppression, and known-list restrictions remain partial. |
+| `com.aionemu.gameserver.services.DuelService.confirmDuelWith` | `PlayerDuelRequestService.SendDuelRequest` requester withdraw branch | Service Method | Partial | Regression Tested | Needs Verification | Registers requester withdraw question id `50030` and sends requester challenge message. Java `requester.isEnemy(target)` suppression is not represented. |
+| `com.aionemu.gameserver.services.DuelService.rejectDuelRequest` | `PlayerDuelRequestService.HandleTargetResponse` deny branch | Service Method | Partial | Regression Tested | Needs Verification | Deny sends `SM_CLOSE_QUESTION_WINDOW` id `1300097`, responder system message id `1301064`, and clears requester withdraw request. Java runtime callback object identity not ported. |
+| `com.aionemu.gameserver.services.DuelService.cancelDuelRequest` | `PlayerDuelRequestService.HandleWithdrawResponse` | Service Method | Partial | Regression Tested | Needs Verification | Requester-confirmed withdrawal sends close-question id `1300134`, system message id `1300135`, and clears target accept request. |
+| `com.aionemu.gameserver.services.DuelService.startDuel/registerDuel` | `PlayerDuelRequestService.HandleTargetResponse` accept branch | Service Method / Runtime State | Partial | Regression Tested | Needs Verification | Accept closes requester withdraw prompt, sends `SM_DUEL_STARTED` to both players, and stores bidirectional opponent ids. Java draw timer, hide cancellation, debuff cleanup, aggro cleanup, duel end/result, and threading behavior remain unported. |
+| `com.aionemu.gameserver.model.gameobjects.player.DeniedStatus` | `PlayerSettings.DenyDuelRequests` | Enum / Bitmask | Partial | Regression Tested | Needs Verification | Java `DUEL(32)` deny bit is modeled for request rejection. Persistence/load of deny mask existed already and was not expanded. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest/respond/remove/denyAll` | `QuestionResponseRegistry` with `DuelRequest` / `DuelWithdraw` | Request Registry | Partial | Regression Tested | Needs Verification | Duel request and withdraw use typed metadata and registry removal. Java generic anonymous `RequestResponseHandler` polymorphism and concurrent-map stress parity remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_DUEL_DO_YOU_ACCEPT_REQUEST` | `SmQuestionWindow.DuelAcceptRequest` | Server Packet / Question Id | Partial | Regression Tested | Needs Verification | Question id `50028` is sent to target. Java golden bytes/encrypted frames not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_DUEL_DO_YOU_WITHDRAW_REQUEST` | `SmQuestionWindow.DuelWithdrawRequest` | Server Packet / Question Id | Partial | Regression Tested | Needs Verification | Question id `50030` is sent to requester. Java enemy-race suppression not represented. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CLOSE_QUESTION_WINDOW` | `Aion.GameServer.Network.Aion.ServerPackets.SmCloseQuestionWindow` | Server Packet | Partial | Regression Tested | Needs Verification | Writes opcode `53`, message id, and three string slots for duel reject/withdraw/close. Only represented duel variants are tested; broader packet uses are not audited. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DUEL` | `Aion.GameServer.Network.Aion.ServerPackets.SmDuel` | Server Packet | Partial | Regression Tested | Needs Verification | Writes Java start payload type `0` and opponent object id. Result packet shape is scaffolded but duel-end caller/result behavior is not ported. |
+
+Tests added/updated:
+- `GameServerConnectionDuelRequestTests.ClientPacketFactory_ParsesDuelRequestPacket`: validates opcode `114`, target object id parsing, and in-game-only state.
+- `GameServerConnectionDuelRequestTests.HandleDuelRequestAsync_SendsTargetQuestionAndRequesterWithdrawQuestion`: validates target question `50028`, target requested message `1301065`, requester withdraw question `50030`, requester message `1300094`, and pending registry state.
+- `GameServerConnectionDuelRequestTests.HandleQuestionResponseAsync_DuelDenyClosesRequesterQuestionAndRejectsResponder`: validates deny response clears both pending requests and sends close-question id `1300097` plus responder message `1301064`.
+- `GameServerConnectionDuelRequestTests.HandleQuestionResponseAsync_DuelAcceptRegistersDuelAndSendsStartedPackets`: validates accept clears withdraw prompt, registers bidirectional duel state, and sends `SM_DUEL_STARTED` payloads to both players.
+- `GameServerConnectionDuelRequestTests.HandleQuestionResponseAsync_DuelWithdrawCancelsTargetPendingRequest`: validates requester-confirmed withdrawal clears target pending accept request and sends close-question id `1300134` plus requester message `1300135`.
+- `GameServerConnectionDuelRequestTests.HandleDuelRequestAsync_TargetDenySettingSendsJavaRejectedDuel`: validates Java `DeniedStatus.DUEL` bit `32` sends rejected duel message id `1390120`.
+- Java comparison status: expectations are source-derived from Java code and packet constants. No Java runtime execution, Java-generated golden vector, active-player known-list comparison, instance/zone restriction comparison, draw timer comparison, duel-end result comparison, live socket-order validation, encrypted frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- C# target lookup uses the online connection registry by object id; Java uses `activePlayer.getKnownList().getPlayer(objectId)`. Visibility/known-list parity is not implemented.
+- Java instance duel config and same-race/other-race duel zone options are not enforced in this unit.
+- Java `requester.isEnemy(target)` suppresses the requester withdraw confirmation for enemies; C# currently always registers the withdraw prompt after a successful represented request.
+- Java `DuelService` draw timer, thread-pool scheduling, duel-end result packets, hide cancellation, debuff cleanup, summoned-object attack cancellation, aggro cleanup, team visibility fix, and skill/target cancellation are not ported.
+- `SmDuel.Result` is only packet-shaped; no live duel-end caller uses it yet.
+- Java anonymous `RequestResponseHandler` callback identity and reflection/polymorphic behavior remain unported.
+- Packet sends are validated by C# packet type/message id/payload only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 12
+- Total artifacts ported: 1 duel request/response production packet lifecycle slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 12
+- Total blocked artifacts: 9 known-list target lookup parity, instance/zone duel restrictions, enemy confirm suppression, draw timer/threading, duel-end/result behavior, hide/debuff/aggro cleanup, generic anonymous handler callback execution, real socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; one more `ResponseRequester` path is production-reachable, but duel combat lifecycle parity remains a broad future slice.
+
+Next recommended unit of work:
+- Continue duel parity with the smallest next `DuelService` slice: model Java duel-end/result handling (`loseDuel`, draw timeout intent, bidirectional duel removal, and `SM_DUEL_RESULT`) at the service level without attempting full combat/effect cleanup yet. If staying on new `ResponseRequester` handlers instead, good compact candidates remain craft-skill learn confirmation or experience recovery dialog.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
