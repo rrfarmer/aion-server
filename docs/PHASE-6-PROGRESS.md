@@ -22980,6 +22980,51 @@ Next recommended unit of work:
 
 ---
 
+### Session 783 (May 24, 2026)
+- Re-inspected Java `SkillAttackManager.chooseNextSkill` and `NpcGameStats` timing inputs:
+  - ordinary selection gate uses strict `(System.currentTimeMillis() - fightStartingTime) > initialSkillDelay`;
+  - `NpcGameStats.canUseNextSkill()` uses `nextSkillDelay == 0 || now >= lastSkillTime + nextSkillDelay`;
+  - chain timing uses elapsed time since `lastSkillTime`;
+  - queued `nextSkillTime == 0` can bypass the ordinary delay/can-use gates.
+- Added `PlayerSummonKnownObjectNpcSkillSelectionPreview` to carry represented timing adapter results.
+- Added `PreviewMercenaryNextNpcSkillSelection` to derive `elapsedFightTime`, strict initial-delay readiness, represented next-skill readiness, and elapsed-since-last-skill from `PlayerSummonKnownObject` timing metadata before calling the composed `SelectMercenaryNextNpcSkillCandidate`.
+- Kept live `NpcGameStats`, `System.currentTimeMillis`, live `NpcAI`, queued skill ownership, skill-list ownership, XML loading, Java random delay generation, controller execution, effects, packets, threading, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 52 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1376 tests.
+
+#### Migration Parity Table - Session 783
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.chooseNextSkill` timing-to-selection bridge | `PlayerSummonSkillExecutionService.PreviewMercenaryNextNpcSkillSelection` | AI Skill Selection Adapter | Partial | Regression Tested | Needs Verification | C# derives represented timing gates and feeds composed selection. Live `NpcAI`, real queued skills, skill lists, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.getFightStartingTime` / `getInitialSkillDelay` | explicit fight-start/current/initial-delay inputs plus `InitialSkillDelayElapsed` | Fight Timing Projection | Partial | Regression Tested | Needs Verification | C# models strict `elapsed > initialDelay` with supplied timestamps. Production clock, live stat container, date/time runtime behavior, and threading remain unverified. |
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.canUseNextSkill` | `EvaluateMercenaryNextSkillReadiness` consumed by selection preview | Skill Scheduling Projection | Partial | Regression Tested | Needs Verification | C# consumes represented next-skill readiness before ordinary/chain selection. Live scheduler state and Java random delay behavior remain missing. |
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.getLastSkillTime` | `PlayerSummonKnownObject.LastSkillTimeMilliseconds` / `ElapsedSinceLastSkillMilliseconds` | Chain Timing Adapter | Partial | Regression Tested | Needs Verification | C# derives elapsed-since-last-skill for chain window checks. Live stat container access, synchronization, serialization, and Java runtime comparison remain missing. |
+| `java.lang.System.currentTimeMillis` used by `SkillAttackManager` / `NpcGameStats` | explicit `currentTimeMilliseconds` input | Date/Time Source Projection | Intentional Difference | Regression Tested with injected timestamp | Needs Verification | C# intentionally injects time for deterministic tests until a production game clock exists. Runtime clock parity remains unverified. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.PreviewMercenaryNextNpcSkillSelection_AdaptsNpcGameStatsTimingIntoSelection`: validates strict initial-delay gate, represented next-skill not-ready gate, ready ordinary selection after next-skill delay elapses, elapsed-since-last-skill derivation, and immediate queued selection bypassing delay gates.
+- Java comparison status: expectations are source-derived from Java `SkillAttackManager.chooseNextSkill`, `NpcGameStats.getFightStartingTime`, `getInitialSkillDelay`, `canUseNextSkill`, `getLastSkillTime`, and `System.currentTimeMillis`. No Java runtime execution, live `NpcGameStats` comparison, live queued-skill ownership comparison, live skill-list comparison, Java random delay comparison, reflection comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- The adapter is represented service logic and is not invoked by live AI.
+- Live `NpcGameStats`, live queued skills, live skill lists, XML/static skill loading, Java random delay generation, and controller execution remain unwired.
+- Production game clock and runtime date/time behavior remain unverified.
+- Threading, serialization, persistence, precision/rounding, Java runtime, scheduler, effects, packets, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented NPC game-stats timing adapter slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 12 live `NpcGameStats`, production game clock, live `NpcAI`, queued skill ownership, skill-list ownership, XML/static loading, Java random delay generation, controller execution, effects, packets, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented timing-to-selection adapter exists, but live AI/stat integration remains partial.
+
+Next recommended unit of work:
+- Continue by wiring one existing C# mercenary known-object path to consume the represented `PreviewMercenaryNextNpcSkillSelection` and `PreviewMercenaryNpcSkillAction` outputs without executing live controller effects, or add an adapter DTO for future static NPC skill-list entries to create `PlayerSummonKnownObjectNpcSkillCandidate` objects. Keep XML loading, Java random delay generation, Java geometry, controller execution, effects, packets, scheduler/date-time behavior, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -22989,4 +23034,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by adding a represented live-adapter boundary for `NpcGameStats`/skill-action inputs, or by wiring one existing C# mercenary known-object path to consume the composed choose-next-skill and skill-action previews before live AI mutation, XML loading, random target selection, effects, packets, and controller execution are available.
+8. Continue NPC skill readiness parity by wiring one existing C# mercenary known-object path to consume the represented `PreviewMercenaryNextNpcSkillSelection` and `PreviewMercenaryNpcSkillAction` outputs without executing live controller effects, or by adding an adapter DTO for future static NPC skill-list entries to create `PlayerSummonKnownObjectNpcSkillCandidate` objects before live AI mutation, XML loading, random target selection, effects, packets, and controller execution are available.
