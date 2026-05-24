@@ -22641,6 +22641,49 @@ Next recommended unit of work:
 
 ---
 
+### Session 776 (May 24, 2026)
+- Re-inspected Java `NpcSkillTemplateEntry.conditionReady` range usage:
+  - `TARGET_IS_IN_RANGE` delegates to `PositionUtil.isInRange(creature, curTarget, condTemp.getRange(), false)`;
+  - `HELP_FRIEND` also uses `condTemp.getRange()` after support/friend, HP threshold, visibility, death/about-to-die, and before geo-visibility/target mutation checks.
+- Added a condition-metadata overload for `EvaluateMercenaryNpcSkillConditionReadiness`, so represented `NpcSkillConditionTemplate.condType` can be consumed directly.
+- Added `ProjectMercenaryNpcSkillConditionTarget` to project represented target metadata and set `IsInRange` from `PlayerSummonKnownObjectNpcSkillConditionMetadata.RangeMeters` plus an explicit caller-supplied distance.
+- Kept Java `PositionUtil` geometry, object coordinates, target lookup, `HELP_FRIEND` known-list scan, target mutation, geo visibility, live effects, packets, and controller execution unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 45 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1369 tests.
+
+#### Migration Parity Table - Session 776
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.conditionReady` / `TARGET_IS_IN_RANGE` | `PlayerSummonSkillExecutionService.EvaluateMercenaryNpcSkillConditionReadiness(PlayerSummonKnownObjectNpcSkillConditionMetadata, ...)` | NPC Skill Condition Projection | Partial | Regression Tested | Needs Verification | C# can now consume represented condition metadata directly for simple conditions. Live target lookup, Java object typing, target mutation, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillConditionTemplate.getRange` | `PlayerSummonKnownObjectNpcSkillConditionMetadata.RangeMeters` via `ProjectMercenaryNpcSkillConditionTarget` | Condition Range Metadata | Partial | Regression Tested | Needs Verification | C# projects an explicit distance into the `IsInRange` flag using an inclusive threshold. Java `PositionUtil.isInRange` geometry, coordinate precision, z/heading/collision behavior, and live distance sourcing remain unverified. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillConditionTemplate.getCondType` | `PlayerSummonKnownObjectNpcSkillConditionMetadata.Condition` | Condition Type Metadata | Partial | Regression Tested | Needs Verification | C# metadata overload forwards condition type into the existing represented readiness evaluator. Unsupported Java branches still return unsupported through existing behavior. |
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.conditionReady` / `HELP_FRIEND` range use | `PlayerSummonKnownObjectNpcSkillConditionMetadata.RangeMeters` only | Known-List / Target Mutation Dependency | Not Started | No Tests | Needs Verification | Help-friend still requires support/friend relation checks, HP threshold, known-list scan, `GeoService.canSee`, and `creature.setTarget(validTarget)`. This unit only represents the range value. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.EvaluateMercenaryNpcSkillConditionReadiness_ConsumesConditionMetadataRange`: validates represented `RangeMeters` produces in-range, inclusive-boundary, and out-of-range target metadata, then feeds `TARGET_IS_IN_RANGE` through the condition-metadata overload.
+- Java comparison status: expectations are source-derived from Java `NpcSkillTemplateEntry.conditionReady`, `NpcSkillConditionTemplate.getRange`, and `PositionUtil.isInRange` call sites. No Java runtime execution, coordinate/geometry comparison, z-axis/collision comparison, live target object comparison, known-list comparison, target mutation comparison, reflection comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- The C# range projector accepts a caller-supplied distance; it does not compute Java `PositionUtil` distance.
+- No live target coordinates, map instance geometry, z/heading/collision correction, or visibility checks are wired.
+- `HELP_FRIEND` still does not scan known objects, check tribe/friend relation, compare HP threshold, check geo visibility, or mutate owner target.
+- Unsupported condition branches remain unsupported.
+- Reflection, threading, serialization, date/time runtime, precision/rounding, Java runtime, geometry, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 represented condition-range metadata slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 12 Java `PositionUtil` geometry, coordinate sourcing, z/collision correction, live target lookup, known-list scans, tribe relation checks, HP threshold source, geo visibility, owner target mutation, Java runtime comparison, controller execution, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented condition range metadata now feeds simple `TARGET_IS_IN_RANGE` readiness, but live geometry and help-friend parity remain partial.
+
+Next recommended unit of work:
+- Continue by adding a represented NPC skill selection unit that orders/project-filters candidate entries by Java `prio`, timing readiness, and condition readiness without live AI mutation, or begin modeling the `HELP_FRIEND` dependency bundle as explicit unsupported/partial metadata. Keep XML loading, random target selection, target mutation, carved signet effects, world-map NPC scans, Java geometry, effects, packets, and controller execution explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -22650,4 +22693,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by consuming represented `NpcSkillConditionTemplate.range` metadata in `TARGET_IS_IN_RANGE`, or by adding a represented NPC skill selection unit for Java `prio`, timing readiness, and condition readiness ordering before live AI mutation, XML loading, target mutation, effects, packets, and controller execution are available.
+8. Continue NPC skill readiness parity by adding a represented NPC skill selection unit for Java `prio`, timing readiness, and condition readiness ordering before live AI mutation, XML loading, random target selection, target mutation, effects, packets, and controller execution are available.
