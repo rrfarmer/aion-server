@@ -19748,6 +19748,55 @@ Next recommended unit of work:
 
 ---
 
+### Session 718 (May 24, 2026)
+- Continued the charge observer path by adding the packet/inventory application boundary for observer-driven charge burns.
+- Added `ItemChargeBurnApplicationService.ApplyBurnPlan` and `ItemChargeBurnApplicationResult`.
+- The helper updates `player.InventoryItems` from an `ItemChargeBurnPlan` and creates `SmInventoryUpdateItem` packets with update type `Charge` only for burns whose Java-style visual charge bar step changed.
+- Missing item templates skip packet creation while still applying the in-memory inventory update, keeping packet serialization safe until the production caller can decide whether to retry/log.
+- Added `ItemChargeBurnApplicationServiceTests.ApplyBurnPlan_UpdatesInventoryAndPacketsOnlyChangedChargeBars`.
+- Added `ItemChargeBurnApplicationServiceTests.ApplyBurnPlan_UpdatesInventoryButSkipsPacketWhenTemplateMissing`.
+- Added `ItemChargeBurnApplicationServiceTests.ApplyBurnPlan_NoOpsWhenPlanHasNoChanges`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "ItemChargeBurnApplicationServiceTests|ItemChargeServiceTests|PlayerEnterWorldServiceTests"` passes with 32 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1289 tests.
+
+#### Migration Parity Table - Session 718
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.items.ChargeInfo.sendItemUpdate` | `Aion.GameServer.Services.ItemChargeBurnApplicationService.ApplyBurnPlan` | Packet Caller Helper / Service | Partial | Regression Tested | Needs Verification | C# now creates `SM_INVENTORY_UPDATE_ITEM` charge packets only for burns that cross Java's visual charge bar step. Production observer invocation, exact attack-status ordering, live socket ordering, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.updateChargePoints` | `ItemChargeBurnApplicationService.ApplyBurnPlan` plus `ItemChargeUpdateResult.ChargeBarChanged` | Model Helper / Packet Dependency | Partial | Regression Tested | Needs Verification | The application helper consumes the earlier clamped charge updates and applies them to `Player.InventoryItems`. Java mutates the item directly under synchronization; C# applies immutable updates after a plan is produced, so threading and mutation timing remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryUpdateItem` | Server Packet | Partial | Regression Tested with byte-level payload check | Needs Verification | Test confirms the charge update packet body uses Java's compact conditioning blob shape for the applied burn packet. Encrypted frame handling, production send ordering, and live-client behavior remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.ItemUpdateType.CHARGE` | `SmInventoryUpdateItem.Charge` | Packet Update Type / Enum Equivalent | Partial | Regression Tested | Needs Verification | C# helper emits the `Charge` update type only when `ChargeBarChanged` is true. No Java golden packet capture from a live observer burn was used. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` inventory item list | `Aion.GameServer.Model.GameObjects.Player.InventoryItems` | Runtime Model | Partial | Unit Tested | Needs Verification | C# inventory list is updated in memory with burn item updates. Broader Java storage/equipment map mutation semantics, concurrency, and persistence flush timing remain partial. |
+| `com.aionemu.gameserver.dataholders.DataManager.ITEM_DATA` item-template lookup | `Aion.GameServer.Dataholders.ItemTemplateTable` | Data Lookup Dependency | Partial | Unit Tested | Needs Verification | Missing template causes packet omission while retaining in-memory update; this is a C# safety behavior for an incomplete caller seam, not verified Java behavior. JAXB/reflection/static-data parity and production logging/retry behavior remain unverified. |
+
+Tests added/updated:
+- `ItemChargeBurnApplicationServiceTests.ApplyBurnPlan_UpdatesInventoryAndPacketsOnlyChangedChargeBars`: validates inventory mutation, packet creation only for `ChargeBarChanged`, and byte-level compact charge blob payload.
+- `ItemChargeBurnApplicationServiceTests.ApplyBurnPlan_UpdatesInventoryButSkipsPacketWhenTemplateMissing`: validates missing templates do not block in-memory charge state updates but suppress packet creation.
+- `ItemChargeBurnApplicationServiceTests.ApplyBurnPlan_NoOpsWhenPlanHasNoChanges`: validates no inventory or packet mutation for an empty plan.
+- Existing `ItemChargeServiceTests` and `PlayerEnterWorldServiceTests` matched by the focused filter were rerun.
+- Java comparison status: expectations are source-derived from `ChargeInfo.sendItemUpdate`, `ChargeInfo.updateChargePoints`, `SM_INVENTORY_UPDATE_ITEM`, `ItemPacketService.ItemUpdateType.CHARGE`, and Java item-template lookup. No Java runtime execution, Java-generated golden observer-burn packet, encrypted-frame comparison, live socket ordering, threading comparison, serialization comparison beyond the C# packet byte assertion, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- The application helper is not yet invoked from a production combat/effect observer caller.
+- Packet ordering relative to `SM_ATTACK_STATUS`, observer notifications, persistence, and stat updates is still unknown without Java capture or a production caller test.
+- Missing-template packet omission is a defensive C# behavior and must be revisited when the production caller has logging/error policy.
+- Java synchronized mutation and persistent-state flush timing remain unverified.
+- No live-client or Java runtime packet comparison was run.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 charge burn packet/inventory application boundary slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 5 production combat/effect caller invocation, packet ordering comparison, Java runtime/golden packet comparison, synchronized/threading comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; observer charge packet/application behavior is closer, but production caller integration remains partial.
+
+Next recommended unit of work:
+- Wire the charge burn application/persistence pair into the first stable represented combat/effect observer caller, preserving Java's ordinary attack `skillId == 0` guard and dot-attacked exception; if that caller still lacks a safe packet send seam, mirror this application+packet helper for idian burn plans (`POLISH_CHARGE` low-charge and full item update on exhaustion).
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
