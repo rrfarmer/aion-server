@@ -23346,6 +23346,56 @@ Next recommended unit of work:
 
 ---
 
+### Session 791 (May 24, 2026)
+- Re-inspected Java `PositionUtil.convertHeadingToAngle`, `PositionUtil.normalizeAngle`, `NpcSkillTemplateEntry.spawnNpc`, and `SpawnEngine.newSingleTimeSpawn`.
+- Added `PlayerSummonKnownObjectNpcSkillSpawnLocationPreview` and status enum.
+- Added `PlayerSummonSkillExecutionService.PreviewMercenaryNpcSkillPostSpawnLocation` to project deterministic spawn coordinates from represented execution input.
+- Modeled:
+  - missing execution input;
+  - non-spawnable execution results;
+  - Java heading-to-angle conversion as `normalizeAngle(heading * 3f)`;
+  - no-offset spawns when Java `min_distance <= 0`;
+  - required injected random angle when Java `min_distance > 0`;
+  - required injected random distance when Java `max_distance > 0`;
+  - deterministic `Math.cos`/`Math.sin` offset projection with Java-style float casts;
+  - preservation of origin Z, heading, world id, and instance id for future `SpawnEngine.newSingleTimeSpawn`.
+- Kept Java RNG generation, random distribution comparison, live heading/geometry comparison, geo Z/collision correction, spawn-engine execution, packets, persistence, threading, serialization, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 58 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1382 tests.
+
+#### Migration Parity Table - Session 791
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.spawnNpc` offset path | `PlayerSummonSkillExecutionService.PreviewMercenaryNpcSkillPostSpawnLocation` | Spawn Location Projection | Partial | Regression Tested | Needs Verification | C# projects deterministic no-offset and random-offset coordinates when random inputs are supplied. It does not call Java RNG, create spawn templates, or spawn objects. |
+| `com.aionemu.gameserver.utils.PositionUtil.convertHeadingToAngle` | private C# heading conversion inside `PreviewMercenaryNpcSkillPostSpawnLocation` | Geometry Utility | Partial | Regression Tested | Needs Verification | C# mirrors `normalizeAngle(heading * 3f)` for byte heading inputs. Java runtime comparison and broader signed-byte edge cases remain unverified. |
+| `com.aionemu.gameserver.utils.PositionUtil.normalizeAngle` | private C# normalization path | Geometry Utility | Partial | Regression Tested | Needs Verification | Current C# path covers represented byte headings used by spawn origin. General negative and multi-turn normalization behavior is not fully ported. |
+| `com.aionemu.commons.utils.Rnd.nextFloat(360f)` | `randomAngleDegrees` injected parameter and `MissingRandomAngle` status | Randomization Dependency | Partial | Regression Tested | Needs Verification | C# requires an explicit angle input rather than generating Java RNG. Random distribution, bounds, seeding, and runtime comparison remain missing. |
+| `com.aionemu.commons.utils.Rnd.get(minDistance, maxDistance)` | `randomDistance` injected parameter and `MissingRandomDistance` status | Randomization Dependency | Partial | Regression Tested | Needs Verification | C# requires an explicit distance input when Java would call `Rnd.get`. Inclusive bounds, distribution, seeding, and runtime comparison remain missing. |
+| `com.aionemu.gameserver.spawnengine.SpawnEngine.newSingleTimeSpawn` coordinate parameters | `PlayerSummonKnownObjectNpcSkillSpawnLocationPreview` projected world/instance/X/Y/Z/heading metadata | Spawn Template Input Projection | Partial | Regression Tested | Needs Verification | C# prepares represented coordinates but does not create `SpawnTemplate`, carry creator/event template metadata, call `spawnObject`, emit packets, persist, or validate client visibility. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.PreviewMercenaryNpcSkillPostSpawnLocation_ProjectsJavaSpawnNpcOffsetsWithInjectedRandomInputs`: validates missing execution, not-spawnable execution, no-offset projection, heading angle conversion for heading 90 to 270 degrees, owner world/instance/heading preservation, missing random angle requirement, fixed-distance offset projection, missing random distance requirement, random-distance offset projection, and Java-style Z preservation.
+- Java comparison status: expectations are source-derived from Java `NpcSkillTemplateEntry.spawnNpc`, `PositionUtil.convertHeadingToAngle`, `PositionUtil.normalizeAngle`, `Rnd.nextFloat`, `Rnd.get`, and `SpawnEngine.newSingleTimeSpawn`. No Java runtime execution, RNG comparison, signed-byte edge comparison, broad normalization comparison, live geometry comparison, geo correction comparison, spawn-engine comparison, packet comparison, persistence comparison, XML/static-data comparison, reflection comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison beyond deterministic test floats, or live-client validation was run.
+
+Remaining risks:
+- Spawn location projection still does not execute Java RNG; random angle and distance are supplied by the caller.
+- Java `Rnd.nextFloat`, `Rnd.get`, inclusive bounds, seeding, random distributions, signed-byte heading edge cases, full normalization behavior, precision/rounding, geo Z/collision correction, `SpawnEngine.newSingleTimeSpawn`, `SpawnEngine.spawnObject`, owner/event-template metadata, packets, persistence, visibility, and live instance behavior remain missing.
+- XML/JAXB loading for `spawn_npc`, `DataManager.SKILL_DATA` pruning, reflection behavior, serialization behavior, threading, date/time runtime behavior, Java runtime, scheduler, geometry, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 represented NPC skill spawn location projection slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 17 Java `Rnd.nextFloat`, Java `Rnd.get`, RNG bounds/distribution/seeding, signed-byte heading edges, full angle normalization, precision/rounding, geo correction, `SpawnEngine.newSingleTimeSpawn`, `SpawnEngine.spawnObject`, owner/event-template metadata, instance id propagation, packets, persistence, Java runtime comparison, XML/static loading, scheduler callback execution, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; deterministic represented spawn coordinates can now be projected, but live RNG/spawn-engine/static-data integration remains partial.
+
+Next recommended unit of work:
+- Continue by starting a static-data loader adapter for represented `NpcSkillSpawn` XML fields or by modeling a spawn-template creation preview that carries creator id/event-template gaps explicitly before live `SpawnEngine` execution. Keep live XML loading, `DataManager.SKILL_DATA` pruning, Java RNG runtime comparison, Java geometry, spawn-engine execution, live AI mutation, controller execution, effects, packets, scheduler/date-time behavior, threading, serialization, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -23355,4 +23405,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by starting a static-data loader adapter for represented `NpcSkillSpawn` XML fields or by adding a deterministic Java-heading/offset calculation preview for `spawnNpc` that keeps Java `Rnd.get`/`Rnd.nextFloat` injectable and unverified until runtime comparison exists. Keep live AI mutation, XML loading, `DataManager.SKILL_DATA` pruning, Java `Rnd.chance`/`Rnd.get`, random target selection/spawns, effects, packets, spawn-engine execution, scheduler/date-time behavior, threading, serialization, and controller execution explicit until supported.
+8. Continue NPC skill readiness parity by starting a static-data loader adapter for represented `NpcSkillSpawn` XML fields or by modeling a spawn-template creation preview that carries creator id/event-template gaps explicitly before live `SpawnEngine` execution. Keep live AI mutation, XML loading, `DataManager.SKILL_DATA` pruning, Java `Rnd.chance`/`Rnd.get`, random target selection/spawns, effects, packets, spawn-engine execution, scheduler/date-time behavior, threading, serialization, and controller execution explicit until supported.
