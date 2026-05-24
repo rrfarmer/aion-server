@@ -20279,6 +20279,53 @@ Next recommended unit of work:
 
 ---
 
+### Session 729 (May 24, 2026)
+- Inspected Java combat client packet registration and current C# `GameClientPacketFactory`.
+- Confirmed Java opcode 32 maps to `CM_ATTACK` and opcode 33 maps to `CM_CASTSPELL`; C# had no registered skill/attack packet parser yet.
+- Added `CmAttack` as a source-shaped parser for Java `CM_ATTACK.readImpl`.
+- Registered opcode 32 in `GameClientPacketFactory` for `InGame` connections.
+- Added focused packet factory coverage for opcode 32 parsing and invalid-state rejection.
+- Runtime auto-attack dispatch remains intentionally unimplemented in this unit because the full C# player controller combat route, known-list lookup, and `attackTarget` equivalent are not ready.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GamePacketTests` passes with 84 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1308 tests.
+
+#### Migration Parity Table - Session 729
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_ATTACK` | `Aion.GameServer.Network.Aion.ClientPackets.CmAttack` | Client Packet | Partial | Unit Tested | Needs Verification | C# now parses Java field order: target object id (`readD`), attack number (`readUC`), time (`readUH`), and type (`readUC`). Runtime `runImpl` behavior is missing: dead-player short-circuit, protection cancellation, known-list target lookup, unsupported target warning, and `PlayerController.attackTarget((Creature) obj, time, false)`. No Java runtime packet capture or live client comparison was run. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode 32 registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode 32 registration | Packet Factory | Partial | Unit Tested | Needs Verification | C# factory now accepts opcode 32 only in `InGame`, matching Java registration. Java uses reflection constructor instantiation; C# uses explicit factory lambdas, an intentional C# implementation difference. Header/opcode decoding is covered by existing packet tests, but no live encrypted-frame comparison was run for `CM_ATTACK`. |
+| `com.aionemu.gameserver.controllers.PlayerController.attackTarget` | No complete C# equivalent wired to `CmAttack` yet | Combat Controller Dependency | Not Started | No Tests | Needs Verification | Newly discovered required runtime dependency for `CM_ATTACK.runImpl`. Missing methods include full auto-attack dispatch, attack timing validation, result-list handling, `AttackUtil`, observer firing, power-shard/charge/idian burn invocation, PvP/death handling, and packet fanout. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` combat guard behavior | C# `Player` plus no `CmAttack` infrastructure handler yet | Player Model Dependency | Partial | No Tests for this packet route | Needs Verification | Java checks `isDead`, `isProtectionActive`, and cancels protection before attacking. C# has player state modeled elsewhere, but this packet route does not yet invoke equivalent guard behavior. Threading differences remain because Java packet execution and controller state mutation are not compared to a live C# route. |
+| `com.aionemu.gameserver.model.gameobjects.KnownList.getObject` / `VisibleObject` / `Creature` target narrowing | C# world/visibility surfaces not wired to `CmAttack` | Target Lookup Dependency | Not Started | No Tests | Needs Verification | Java only attacks known targets that are `Creature`; unsupported visible objects are logged. C# target lookup and known-list parity for this route remain missing. Reflection is not involved; serialization is limited to the client packet parser in this unit. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CASTSPELL` | Not yet ported | Skill Client Packet Dependency | Not Started | No Tests | Needs Verification | Inspection identified opcode 33 as the next Java skill-use parser candidate. It has target-type-dependent object/point payloads plus receive-time, hit-time, level, pet-order, passive-skill, cooldown-audit, cancel-use-item, and `useSkill` behavior. Date/time behavior is explicitly unported because Java captures `System.currentTimeMillis()` at packet construction and compares it with skill readiness. |
+
+Tests added/updated:
+- `GamePacketTests.ClientPacketFactory_ParsesAttack`: validates opcode 32 creates `CmAttack` in `InGame`, reads the Java `CM_ATTACK.readImpl` field order, preserves unsigned byte/ushort values in C# properties, and rejects the packet in `Authed`.
+- Existing `GamePacketTests` were rerun as focused validation.
+- Java comparison status: expectations are source-derived from Java `AionClientPacketFactory` and `CM_ATTACK.readImpl`. No Java runtime execution, Java-generated golden packet, live `GameServerConnection`, known-list lookup, real player controller attack path, encrypted-frame comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- `CmAttack` is parsed and registered but not handled by `GameServerConnection`; auto-attack behavior is not live.
+- Full Java `PlayerController.attackTarget`, `AttackUtil`, result-list handling, PvP/death workflow, observer dispatch, charge/power-shard/idian burn integration, and combat packet fanout remain missing.
+- Target lookup/known-list behavior for unsupported objects is not modeled for this route.
+- Packet parity is source-derived only; no Java golden bytes, live encrypted frames, or client behavior were compared.
+- C# factory registration intentionally avoids Java reflection; constructor/instantiation reflection behavior is therefore not parity-tested.
+- No precision/rounding or date/time behavior was introduced in this parser unit; those risks move to `CM_CASTSPELL` and future combat timing work.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 2 parser/factory slices (`CM_ATTACK` payload parser and opcode 32 registration)
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 4 live auto-attack route invocation, full combat controller/AttackUtil integration, target known-list lookup parity, and Java runtime/golden/live-client comparison
+- Estimated overall migration completion: Phase 6 remains about 65% complete; the combat packet surface has started, but live combat route invocation remains partial.
+
+Next recommended unit of work:
+- Port the next smallest combat client parser, `CM_CASTSPELL` opcode 33, as a DTO/parser with source-derived tests for object-target and point-target payload variants. Keep runtime `useSkill` dispatch documented as partial unless the C# skill controller route is ready; then wire it carefully to represented skill damage or incoming damage observer fanout seams.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
