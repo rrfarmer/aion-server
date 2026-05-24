@@ -16537,6 +16537,55 @@ Summary metrics:
 Next recommended unit of work:
 - Return to `LeagueJoinEvent` / `LeagueInviteEvent`: add the smallest join/add-alliance packet-intent slice, including `LEAGUE_ALLIANCE_ENTERED` and `LEAGUE_JOINED_ALLIANCE` constants, state insertion at `league.size()`, duplicate-alliance no-op/guard behavior, and serialized league-row packet tests. Keep full invitation request-response and `canInvite` checks deferred unless the dependencies are already present.
 
+### Session 656 (May 24, 2026)
+- Continued from the Session 655 handoff into `LeagueJoinEvent`.
+- Added `LEAGUE_ALLIANCE_ENTERED` (`1400560`) and `LEAGUE_JOINED_ALLIANCE` (`1400561`) message constants to `PlayerAllianceInfoPacketPlan`.
+- Added `PlayerLeagueRuntime.JoinAlliance`, a Java-event-shaped add-alliance path that:
+  - checks duplicate membership like `LeagueJoinEvent.checkCondition`,
+  - adds the invited alliance at `league.size()`,
+  - returns no packet plan when the event would be skipped,
+  - emits `SM_ALLIANCE_INFO` packet intents for existing and invited alliances.
+- Preserved the older `AddAlliance` helper as state setup for existing tests while the event-shaped path carries the new packet fanout.
+- Added serialized packet coverage for entered-alliance and joined-alliance message payloads, including league rows and Java default league loot rules.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionPlayerStatusInfoTests` passes with 62 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1135 tests.
+
+#### Migration Parity Table - Session 656
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.league.events.LeagueJoinEvent` | `Aion.GameServer.Services.PlayerLeagueRuntime.JoinAlliance` / `PlayerLeagueJoinPlan` | Event Runtime Dependency | Partial | Regression Tested | Needs Verification | Successful join and duplicate skipped-event behavior are modeled. Java event queue/lock and runtime ordering are not compared. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.addAlliance` | `Aion.GameServer.Services.PlayerLeagueRuntime.JoinAlliance` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Event-shaped runtime bridge exists. Full `LeagueInviteEvent.acceptRequest` and `canInvite` flow remain deferred. |
+| `com.aionemu.gameserver.model.team.league.League` | `Aion.GameServer.Services.PlayerLeagueRuntime` / `PlayerLeagueSnapshot` | Team State | Partial | Regression Tested | Needs Verification | Adds invited alliance at `league.size()` and exposes sorted positions. Java static registry/object identity/concurrency remain unverified. |
+| `com.aionemu.gameserver.model.team.league.LeagueMember` | Internal `PlayerLeagueRuntime.PlayerLeagueMember` | Team Member | Partial | Regression Tested | Needs Verification | New members receive the current member count as league position. Java object reference semantics are approximated by alliance id. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` / `PlayerAllianceInfoPacketPlan` | Server Packet | Partial | Regression Tested | Needs Verification | Join tests serialize `LEAGUE_JOINED_ALLIANCE` and `LEAGUE_ALLIANCE_ENTERED` packet payloads. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Model.GameObjects.PlayerAllianceSnapshot` / `PlayerAllianceRuntime` | Team State Dependency | Partial | Regression Tested | Needs Verification | Supplies leader names, recipients, team type, alliance loot rules, and active map ids. Live offline-recipient behavior remains unverified. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueInviteEvent` | Not yet ported beyond runtime dependency | Request / Event Dependency | Not Started | No Tests | Unknown | Source-read only. Accept/deny request, question-window, `canInvite`, invite-to-leader redirection, and league creation-on-accept remain deferred. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.PlayerLeagueRuntime_JoinAllianceAddsAtLeagueSizeAndFansOutLikeJavaEvent`: validates state insertion at `league.size()`, serialized `LEAGUE_JOINED_ALLIANCE` for existing alliances, serialized `LEAGUE_ALLIANCE_ENTERED` for the invited alliance, league rows, and Java default league loot rules.
+- `GameServerConnectionPlayerStatusInfoTests.PlayerLeagueRuntime_JoinAllianceAlreadyInLeagueNoopsLikeJavaCheckCondition`: validates duplicate membership skips the event, preserves state, and returns no packet plan.
+- Java comparison status: expectations are source-derived from `LeagueJoinEvent`, `LeagueService.addAlliance`, `GeneralTeam.onEvent`, `League.getCaptains`, `LeagueMember.getLeaguePosition`, and `SM_ALLIANCE_INFO.writeImpl`. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, Java static league registry comparison, event queue/lock comparison, `ConcurrentHashMap` iteration comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Full `LeagueInviteEvent` is not ported: request-response handling, `LeagueService.canInvite`, invite redirection to alliance leader, deny system message, and create-league-on-accept remain open.
+- Join packet intent order is deterministic by sorted league positions; Java `league.forEach` on the underlying map is not runtime-compared.
+- Existing `AddAlliance` helper remains a state setup method with stricter duplicate/full checks than the new event-shaped `JoinAlliance`; callers should use `JoinAlliance` for event parity.
+- League kinah workflows, direct disband iteration, offline recipients, Java static registry, event queue/locks, object identity, and packet processor exception/log behavior remain deferred.
+- Packet-field coverage remains C# emitted-object validation only; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 league join event runtime/serialization slice plus 2 message constants
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 8 Java golden byte validation, full `LeagueInviteEvent`, `LeagueService.canInvite`, Java static league registry, Java event queue/lock comparison, Java map iteration comparison, packet processor exception/log comparison, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; league join state/fanout is started, but invite acceptance and broader lifecycle parity remain open.
+
+Next recommended unit of work:
+- Continue `LeagueInviteEvent` around the least-dependent branch: source-read `SM_SYSTEM_MESSAGE` invite/reject constants and add a small planner for deny-request and/or accept-request when the requester already has a league and the invited alliance is not in one. Defer question-window transport and full `canInvite` validation until the request-response support is present.
+
 ---
 
 ## Next Steps
