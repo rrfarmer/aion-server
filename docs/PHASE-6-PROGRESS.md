@@ -21756,6 +21756,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 759 (May 24, 2026)
+- Re-inspected Java `SummonController.useSkill(SkillOrder)`:
+  - the queued `SkillOrder` carries the live target;
+  - after the pet-skill guard, Java calls `SkillEngine.getInstance().getSkill(creature, order.getSkillId(), 1, order.getTarget())`;
+  - the same target reference participates in later hate/use/release behavior.
+- Updated `PlayerSummonSkillExecutionService.ValidateExecution` to accept the cast-phase `PlayerSummonCastSpellTarget`.
+- Updated `PlayerSummonSkillExecutionResult` to carry `ResolvedTarget` alongside the queued order and planned actions.
+- Updated `GameServerConnection.HandleSummonCastSpellAsync` to pass `castResult.ResolvedTarget` into summon execution validation.
+- Kept planned `GetSkill` / `SetHate` / `UseSkill` / `ReleaseOnSuccess` as metadata only; no live `SkillEngine` invocation is performed.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 29 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1353 tests.
+
+#### Migration Parity Table - Session 759
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.SummonController.useSkill(SkillOrder)` | `PlayerSummonSkillExecutionService.ValidateExecution` / `PlayerSummonSkillExecutionResult.ResolvedTarget` | Controller / Execution Projection | Partial | Regression Tested | Needs Verification | C# now carries resolved target metadata into summon execution planning. Java uses live `SkillOrder.getTarget()` and invokes `SkillEngine`. C# still records planned actions only. |
+| `com.aionemu.gameserver.skillengine.SkillEngine.getSkill` | `PlayerSummonSkillExecutionAction.GetSkill` plus `ResolvedTarget` metadata | Skill Engine Dependency Projection | Not Started | Regression Tested as planned action only | Needs Verification | Planned action now has target metadata available. No live `Skill`, effects, precision/rounding behavior, packet fanout, or threading behavior. |
+| `com.aionemu.gameserver.model.summons.SkillOrder` | `PlayerPetSkillOrder` plus `PlayerSummonCastSpellTarget` | DTO / Target Projection | Partial | Regression Tested | Needs Verification | C# carries target id in the order and resolved target metadata from cast resolution. Java carries a live `Creature` target reference. |
+| `com.aionemu.gameserver.skillengine.model.Skill.setHate` / `Skill.useSkill` / `SummonsService.release` | `PlayerSummonSkillExecutionAction.SetHate` / `UseSkill` / `ReleaseOnSuccess` | Skill Execution Dependency Projection | Not Started | Regression Tested as planned action only | Needs Verification | Existing planned actions now travel with target metadata. No real hate mutation, skill use success/failure, release lifecycle, packet fanout, serialization, or runtime comparison. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_AllowsPetSkillBeforeRepresentedSkillEngineInvocation`: validates valid summon execution planning carries resolved target metadata.
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_PlansNoReleaseWhenQueuedOrderDoesNotRelease`: validates non-release planning carries resolved target metadata.
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_RejectsMissingSummonAndInvalidPetSkill`: validates missing-summon and invalid-skill results retain resolved target metadata.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_ValidRepresentedPetOrderReachesExecutionGuard`: validates connection-level summon execution result carries resolved target metadata.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_InvalidRepresentedPetSkillStopsBeforeSkillEngine`: validates invalid pet-skill result carries resolved target metadata.
+- Java comparison status: expectations are source-derived from Java `SummonController.useSkill(SkillOrder)`, `SkillEngine.getSkill`, `Skill.setHate`, `Skill.useSkill`, and `SummonsService.release`. No Java runtime execution, live `SkillEngine` comparison, object identity comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Summon execution remains planned metadata only.
+- Resolved target remains object-id metadata, not live `Creature`.
+- Real `SkillEngine`, `Skill`, hate mutation, skill success/failure, release lifecycle, packet fanout, Java runtime, and live-client behavior remain unverified.
+- Queue ownership/concurrency, serialization, reflection, precision/rounding, and date/time behavior remain unverified for the broader path.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 represented summon execution resolved-target propagation slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 live `Creature` target references, live `SkillEngine`, live `Skill` state, hate mutation, release lifecycle, packet fanout, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; both summon and mercenary execution planners now preserve resolved target metadata, but live execution parity remains partial.
+
+Next recommended unit of work:
+- Start replacing planned action metadata with the first narrow live execution bridge, likely a small represented `SkillInvocationPlan` object shared by summon and mercenary paths that captures caster id, template id, skill id, skill level, target reference, hate, and release behavior before any real SkillEngine invocation. Keep actual `SkillEngine` execution and packet fanout explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
