@@ -15925,6 +15925,50 @@ Summary metrics:
 Next recommended unit of work:
 - Move to a minimal league runtime bridge plan now that the command `29`, `30`, `31`, and `32` prerequisite gates are bounded, or continue auditing remaining `CM_PLAYER_STATUS_INFO` alliance command edge cases for event ordering and no-send behavior before widening the league model.
 
+### Session 643 (May 24, 2026)
+- Re-read Java `CM_PLAYER_STATUS_INFO.runImpl` and corrected the earlier Session 639 assumption: `LEAGUE_ALLIANCE_MOVE` command `31` is handled directly by the packet class through `LeagueService.moveAlliance`, not by `PlayerTeamCommandService.executeCommand`.
+- Added a C# command `31` branch before ready-check fallback so the packet path now mirrors Java's direct dispatch boundary.
+- Added missing-alliance and missing-league prerequisite coverage for command `31`. C# now fails fast with explicit `InvalidOperationException` messages instead of silently no-oping; this is an intentional diagnostic difference because Java reaches null dereferences rather than `Objects.requireNonNull` on this direct path.
+- Corrected the existing command `31` regression to pass the Java packet's target alliance id through `allianceGroupId`, matching `CM_PLAYER_STATUS_INFO.readImpl` and `LeagueService.moveAlliance(activePlayer, selectedObjectId, allianceGroupId)`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerAllianceRuntime|PlayerAllianceMemberInfo|BaseLeavePlanner"` passes with 103 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1117 tests.
+
+#### Migration Parity Table - Session 643
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.ClientPackets.CmPlayerStatusInfo` / `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Command `31` now has an explicit direct packet branch like Java. No real league move mutation or packet fanout is ported yet. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.LEAGUE_ALLIANCE_MOVE` | Command code `31` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Corrected from prior no-op assumption. C# now treats missing alliance and missing league as fail-fast direct-path prerequisites. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.moveAlliance` | Command code `31` prerequisite branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Service / Runtime Bridge | Partial | Regression Tested | Intentional Difference | Java directly dereferences `player.getPlayerAlliance().getLeague()` and then checks the league leader before `LeagueMoveEvent`; C# throws explicit `InvalidOperationException` messages while the league runtime is absent. |
+| `com.aionemu.gameserver.model.team.league.League` | Deferred C# league runtime | Team State Dependency | Not Started | No Tests | Unknown | Required for actual leader-alliance checks, selected/target alliance lookup, position swaps, and league broadcast fanout. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueMoveEvent` | Deferred C# league move event workflow | Event Runtime Dependency | Not Started | No Tests | Unknown | Real position swap, `SM_ALLIANCE_INFO` broadcast, and force-number system messages remain unported. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Model.GameObjects.PlayerAllianceDescriptor` / `PlayerAllianceRuntime.Resolve` | Team State Dependency | Partial | Regression Tested | Needs Verification | C# can resolve current alliance for the command `31` prerequisite, but has no league pointer/state yet. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry` / no-send assertions | Runtime Dependency | Partial | Regression Tested | Needs Verification | Regressions confirm missing-alliance and missing-league command `31` failures send no packets. Java packet processor exception/log behavior remains unverified. |
+
+Tests added or updated:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_LeagueAllianceMoveWithoutAllianceThrowsLikeJavaDirectPath`: validates command `31` without an alliance throws `InvalidOperationException("Player alliance should not be null")` and sends no packets.
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_LeagueAllianceMoveWithoutLeagueThrowsLikeJavaDirectPath`: validates command `31` in an alliance without league state throws `InvalidOperationException("League should not be null")`, preserves alliance membership, and sends no packets.
+- Java comparison status: expectations are source-derived from `CM_PLAYER_STATUS_INFO.runImpl`, `TeamCommand.LEAGUE_ALLIANCE_MOVE`, and `LeagueService.moveAlliance`. No Java runtime execution, Java-generated golden vector, live client packet capture, null-dereference message comparison, real league runtime comparison, Java static league registry comparison, event queue/lock comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond handler reachability/state and no-send behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Command `31` still has no real league runtime implementation; it only models direct-path prerequisite failures while no league state exists.
+- Java null-dereference exception type and exact VM-generated message are not mirrored; C# uses explicit `InvalidOperationException` diagnostics.
+- Previous Session 639 documentation called command `31` undispatched by Java service logic; the packet-level source-read in this unit corrects that for future work.
+- Java `LeagueService.moveAlliance`, `LeagueMoveEvent`, leader-alliance permission check, selected/target position swaps, `SM_ALLIANCE_INFO` broadcast, and force-number system messages remain unported.
+- Java packet processor exception handling/logging, static league registry, event queue, lock, iteration ordering, threading behavior, encrypted frame validation, packet captures, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to command payload field mapping and no-send behavior.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 `CM_PLAYER_STATUS_INFO` / `LEAGUE_ALLIANCE_MOVE` direct prerequisite branch plus 2 regression tests
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 7 real league runtime, `LeagueService.moveAlliance`, `LeagueMoveEvent`, Java static league registry, packet processor exception/log comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; command `31` dispatch is corrected, but actual league movement is still a deferred subsystem.
+
+Next recommended unit of work:
+- Start the minimal C# league runtime bridge with just enough state to attach alliances to a league, preserve Java league positions, and expose command `31` leader/missing-target prerequisites before implementing packet fanout. Keep `LeagueMoveEvent` broadcast bytes and full league disband/leave behavior deferred until the state model is stable.
+
 ---
 
 ## Next Steps
