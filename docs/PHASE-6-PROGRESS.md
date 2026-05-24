@@ -24147,6 +24147,53 @@ Next recommended unit of work:
 
 ---
 
+### Session 808 (May 24, 2026)
+- Re-inspected Java `SkillAttackManager.skillAction`, `targetTooFar`, and `getNpcSkillEntryIfNotTooFarAway`.
+- Added a represented-current-target overload of `EvaluateMercenaryTargetRange`.
+- Modeled:
+  - target-range checks skipped for non-creature-target modes;
+  - missing current target and represented non-creature current target as missing creature target;
+  - represented dead current target as invalid;
+  - represented invisible target or failed `owner.canSee(target)` as cannot-see target;
+  - represented out-of-range target as target out of range;
+  - AREA target range bypass of the distance check;
+  - Java 5000 ms next-skill-delay metadata and storage through the existing delay application boundary.
+- Kept live `owner.getTarget`, `owner.canSee`, `PositionUtil.isInRange`, first-target properties, target identity, current target mutation, packets, threading, serialization, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|StaticDataNpcSkillTests"` passes with 47 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1397 tests.
+
+#### Migration Parity Table - Session 808
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.targetTooFar` | `PlayerSummonSkillExecutionService.EvaluateMercenaryTargetRange(PlayerSummonKnownObject, PlayerSummonKnownObjectSkillTargetMode, PlayerSummonKnownObject?, ...)` | Service | Partial | Regression Tested | Needs Verification | C# now evaluates represented current-target invalidation states and range outcomes. It does not call live `DataManager.SKILL_DATA`, `Properties`, `owner.getTarget`, `owner.canSee`, or `PositionUtil.isInRange`. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.getNpcSkillEntryIfNotTooFarAway` | `PlayerSummonKnownObjectTargetRangeReadiness.NextSkillDelayMilliseconds` plus `ApplyMercenaryTargetRangeDelay` | Service | Partial | Regression Tested | Needs Verification | C# preserves the represented 5000 ms next-skill-delay path and storage boundary. It does not mutate live `NpcGameStats` or compare runtime scheduler/date-time behavior. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.skillAction` | represented target invalidation feeding existing `PreviewMercenaryNpcSkillAction` / range delay helpers | Service | Partial | Regression Tested | Needs Verification | C# models target invalidation facts used around skill action, but live `AISubState`, `AIEventType`, cast abort, `CreatureController.useSkill`, and packets remain missing. |
+| `com.aionemu.gameserver.model.gameobjects.VisibleObject` / `Creature` | `PlayerSummonKnownObject` represented current target | DTO / World Object Dependency | Partial | Regression Tested | Needs Verification | C# consumes represented creature/death/visibility state. Live object identity, template identity, world coordinates, life stats, Java HP precision/rounding, threading, and serialization remain unverified. |
+| `com.aionemu.gameserver.utils.PositionUtil` | represented `isInRange` input | Utility Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# accepts caller-provided range result and models AREA bypass. Java coordinate math, first-target range zero/`Integer.MAX_VALUE` handling, float precision, collision, and geo effects remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.VisibleObject.canSee` / `Creature.canSee` | represented `canSeeTarget` and `IsVisible` facts | Visibility Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# consumes represented visibility/can-see facts. Live visibility, known-list membership, object concealment, polymorphic can-see rules, threading, and packets remain missing. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.EvaluateMercenaryTargetRange_ProjectsRepresentedCurrentTargetInvalidation`: validates non-creature-target bypass, missing/non-creature/dead/invisible/cannot-see/out-of-range current-target invalidation, AREA range bypass, 5000 ms delay metadata, and delay storage through `ApplyMercenaryTargetRangeDelay`.
+- Java comparison status: expectations are source-derived from Java `SkillAttackManager.targetTooFar`, `getNpcSkillEntryIfNotTooFarAway`, and `skillAction` target invalidation branches. No Java runtime execution, live current-target lookup, live visibility comparison, `PositionUtil` comparison, scheduler/date-time comparison, reflection comparison, threading comparison, serialization comparison, packet comparison, or live-client validation was run.
+
+Remaining risks:
+- Target invalidation still uses represented facts supplied by callers; it does not inspect live current targets, live skill properties, real range math, or live visibility.
+- Live AI substate/events, cast aborts, controller skill use, `NpcGameStats.setNextSkillDelay`, Java date/time scheduling, packets, persistence, threading, serialization, reflection behavior, precision/rounding, and live-client behavior remain missing or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 represented target invalidation/range-delay slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 17 live `SkillAttackManager`, live `owner.getTarget`, live `owner.canSee`, live `PositionUtil.isInRange`, live skill `Properties`, `NpcGameStats.setNextSkillDelay`, AI substate/events, cast abort, `CreatureController.useSkill`, packets, Java date/time scheduling, threading/serialization, reflection behavior, precision/rounding, persistence, live object identity, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented target invalidation and 5000 ms delay metadata are modeled, but live skill action remains partial.
+
+Next recommended unit of work:
+- Continue NPC skill action parity by modeling represented `skillAction` AI side effects for target give-up, target-too-far cast abort, blocked after-use, failed use, and successful target-setting/use-skill outcomes as a higher-level action-result object. Keep live `AISubState`, `AIEventType`, `CreatureController.abortCast/useSkill`, packets, threading, serialization, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -24156,4 +24203,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by modeling `SkillAttackManager.skillAction` target invalidation and next-skill-delay behavior around represented current target death/visibility/range outcomes, including Java's 5000 ms delay path. Keep live `owner.canSee`, `isTargetTooFar`, `setNextSkillDelay`, packets, threading, serialization, and live-client validation explicit until supported.
+8. Continue NPC skill action parity by modeling represented `skillAction` AI side effects for target give-up, target-too-far cast abort, blocked after-use, failed use, and successful target-setting/use-skill outcomes as a higher-level action-result object. Keep live `AISubState`, `AIEventType`, `CreatureController.abortCast/useSkill`, packets, threading, serialization, and live-client validation explicit until supported.
