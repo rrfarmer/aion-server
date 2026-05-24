@@ -23067,6 +23067,53 @@ Next recommended unit of work:
 
 ---
 
+### Session 785 (May 24, 2026)
+- Re-inspected Java `NpcSkillList`, `NpcSkillEntry`, and `NpcSkillTemplateEntry` collection behavior:
+  - static templates are wrapped as entries after missing `SkillData` pruning;
+  - distinct priorities are collected and sorted descending;
+  - post-spawn entries are filtered from the materialized skill list;
+  - queued and last-skill inputs remain owner/stat state outside `NpcSkillList`.
+- Added `PlayerSummonKnownObjectNpcSkillCandidateListProjection` to represent materialized candidates, descending distinct priorities, post-spawn candidates, and empty-list state.
+- Added `ProjectMercenaryNpcSkillCandidateList` to adapt candidate metadata collections into represented selector candidates while preserving Java list position ordering.
+- Added `PreviewMercenaryNextNpcSkillSelectionFromCandidateMetadata` to bridge future static-entry metadata collections plus optional queued metadata and last-skill template metadata into the existing represented selection preview.
+- Kept live `DataManager.NPC_SKILL_DATA`, `DataManager.SKILL_DATA` pruning, XML/JAXB loading, Java `Rnd.chance`, Java random delay generation, live `NpcSkillList`, live queued-skill ownership, live last-skill ownership, Java geometry, controller execution, effects, packets, threading, serialization, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 54 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1378 tests.
+
+#### Migration Parity Table - Session 785
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.skill.NpcSkillList` | `PlayerSummonSkillExecutionService.ProjectMercenaryNpcSkillCandidateList` / `PlayerSummonKnownObjectNpcSkillCandidateListProjection` | Skill List Adapter Projection | Partial | Regression Tested | Needs Verification | C# represents materialized candidate lists, descending distinct priorities, post-spawn filtering, and empty-list state. Live static-data lookup, missing skill pruning, mutation of Java template iterators, and runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.skill.NpcSkillList.getPriorities` | `PlayerSummonKnownObjectNpcSkillCandidateListProjection.Priorities` | Priority Projection | Partial | Regression Tested | Needs Verification | C# derives distinct priorities from projected candidates and sorts descending like Java. It does not yet consume Java-loaded XML lists or verify against runtime Java data. |
+| `com.aionemu.gameserver.model.skill.NpcSkillList.getPostSpawnSkills` | `PlayerSummonKnownObjectNpcSkillCandidateListProjection.PostSpawnCandidates` | Post-Spawn Filter Projection | Partial | Regression Tested | Needs Verification | C# filters represented candidates with `IsPostSpawn`. Spawn side effects, scheduler delays, random spawn counts/locations, and `fireOnEndCastEvents` remain missing. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.chooseNextSkill` metadata bridge | `PlayerSummonSkillExecutionService.PreviewMercenaryNextNpcSkillSelectionFromCandidateMetadata` | Selection Adapter Projection | Partial | Regression Tested | Needs Verification | C# converts represented static candidate metadata plus optional queued/last-skill metadata into the existing selection preview. Live `NpcAI`, live queued/last-skill ownership, scheduler state, Java RNG, and controller execution remain missing. |
+| `com.aionemu.gameserver.model.skill.NpcSkillEntry` | `PlayerSummonKnownObjectNpcSkillCandidateMetadata` / `PlayerSummonKnownObjectNpcSkillCandidate` | Skill Entry DTO / Projection | Partial | Regression Tested | Needs Verification | C# carries represented entry position, template, last-used timestamp, chance readiness, condition target, and target-range readiness. Missing methods include live `setLastTimeUsed`, `fireOnEndCastEvents`, owner-bound condition mutation, and Java runtime behavior. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ProjectMercenaryNpcSkillCandidateList_AdaptsStaticEntriesForSelectionPreview`: validates represented list materialization, Java-style descending distinct priorities, post-spawn filtering, immediate queued metadata bypassing delay gates, and last-skill metadata enabling chain selection through the existing selection preview.
+- Java comparison status: expectations are source-derived from Java `NpcSkillList`, `NpcSkillEntry`, `NpcSkillTemplateEntry`, and `SkillAttackManager.chooseNextSkill`. No Java runtime execution, XML/static-data load comparison, missing-skill pruning comparison, iterator mutation comparison, `Rnd.chance` comparison, live queued-skill comparison, live last-skill comparison, scheduler comparison, reflection comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, geometry comparison, or live-client validation was run.
+
+Remaining risks:
+- The collection adapter is represented service logic and is not wired to live `NpcSkillList` construction.
+- `DataManager.NPC_SKILL_DATA`, XML/JAXB loading, `DataManager.SKILL_DATA` missing-skill pruning, and mutation of Java source template lists remain missing.
+- Java `Rnd.chance`, random next-skill delay generation, post-spawn random spawn counts/positions, and random target selection remain unimplemented.
+- Live queued-skill ownership, last-skill ownership, fight stats, owner/target condition mutation, Java geometry, controller execution, effects, packets, AI scheduling, and scheduler/date-time behavior remain unwired.
+- Reflection, threading, serialization, precision/rounding, Java runtime, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented NPC skill-list collection adapter slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 16 live `NpcSkillList`, `DataManager.NPC_SKILL_DATA`, XML/static loading, `DataManager.SKILL_DATA` pruning, Java iterator mutation, Java `Rnd.chance`, Java random delay generation, post-spawn `fireOnEndCastEvents`, random spawn count/location, live queued-skill ownership, live last-skill ownership, live fight stats, Java geometry, controller execution, effects, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented NPC static-entry collections can now feed the selection preview, but live static-data/AI integration remains partial.
+
+Next recommended unit of work:
+- Continue by adding a represented live-consumer boundary on `PlayerSummonKnownObject` that stores the last NPC skill-list projection/selection/action preview without executing controller effects, or begin modeling Java `NpcSkillTemplateEntry.fireOnEndCastEvents` post-spawn preview metadata. Keep XML loading, `DataManager.SKILL_DATA` pruning, Java `Rnd.chance`, Java geometry, live AI mutation, controller execution, effects, packets, scheduler/date-time behavior, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -23076,4 +23123,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by adding a collection-level adapter that converts future static NPC skill-list entries into represented candidate lists plus queued/last-skill inputs for `PreviewMercenaryNextNpcSkillSelection`, or by wiring one existing C# mercenary known-object path to consume the represented selection/action previews without executing live controller effects. Keep live AI mutation, XML loading, Java `Rnd.chance`, random target selection, effects, packets, scheduler/date-time behavior, and controller execution explicit until supported.
+8. Continue NPC skill readiness parity by adding a represented live-consumer boundary on `PlayerSummonKnownObject` that stores the last NPC skill-list projection/selection/action preview without executing controller effects, or by modeling Java `NpcSkillTemplateEntry.fireOnEndCastEvents` post-spawn preview metadata. Keep live AI mutation, XML loading, `DataManager.SKILL_DATA` pruning, Java `Rnd.chance`, random target selection/spawns, effects, packets, scheduler/date-time behavior, and controller execution explicit until supported.
