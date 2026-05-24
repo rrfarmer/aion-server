@@ -15777,6 +15777,59 @@ Summary metrics:
 Next recommended unit of work:
 - Decide whether to start a minimal league runtime bridge now that command prerequisites are bounded, or move laterally to another non-league `CM_PLAYER_STATUS_INFO` gap such as invalid target/member exception policy for existing group/alliance commands. Keep real league mutations out until a focused league model and event fanout plan are in place.
 
+### Session 640 (May 23, 2026)
+- Source-read Java `PlayerTeamCommandService.findMember` and the group/alliance command dispatches that call it.
+- Aligned C# invalid target/member behavior for existing non-league `CM_PLAYER_STATUS_INFO` group/alliance commands that dispatch through Java `findMember`: group ban, group set leader, group remove, alliance ban, alliance set captain, alliance set vice captain, and alliance unset vice captain.
+- Added `CreateInvalidTeamMemberException` using the existing Java-shaped player formatter so C# throws the Java-derived message instead of silently no-oping when a selected member id is not in the active team.
+- Added parsed-command regression coverage for invalid member ids across group command ids `2`, `3`, and `6`, confirming no packets are sent and group membership remains unchanged.
+- Added parsed-command regression coverage for invalid member ids across alliance command ids `16`, `17`, `25`, and `26`, confirming no packets are sent and alliance membership remains unchanged.
+- Intentional C# difference: Java throws `NullPointerException` via `Objects.requireNonNull`; C# throws `InvalidOperationException` with the same Java-shaped message because the local packet-handler boundary uses C# exception idioms.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerAllianceRuntime|PlayerAllianceMemberInfo|BaseLeavePlanner"` passes with 99 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1113 tests.
+
+#### Migration Parity Table - Session 640
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.ClientPackets.CmPlayerStatusInfo` / `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Invalid selected member ids now throw for command ids `2`, `3`, `6`, `16`, `17`, `25`, and `26` instead of silently no-oping. Real packet processor exception/log behavior remains unverified. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService.findMember` | `GameServerConnection.CreateInvalidTeamMemberException` plus per-command membership checks | Service Helper | Partial | Regression Tested | Intentional Difference | Java throws `NullPointerException` from `Objects.requireNonNull`; C# throws `InvalidOperationException` with the same message. Selected id `0` still maps to the active player before lookup, matching Java. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService` | Existing `GameServerConnection.HandlePlayerStatusInfoAsync` branch dispatch | Service Dependency | Partial | Regression Tested | Needs Verification | C# still uses manual branch dispatch, but the currently ported `findMember` commands now share the Java invalid-member boundary. Full generic service dispatch remains unported. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.GROUP_BAN_MEMBER` | Command code `2` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Invalid target id now fails before ban self/leader/auto-group checks, matching Java `findMember` ordering. Functional ban behavior remains covered separately but not runtime-compared. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.GROUP_SET_LEADER` | Command code `3` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Invalid target id now throws Java-shaped message. Existing leader-change packet behavior remains source-derived. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.GROUP_REMOVE_MEMBER` | Command code `6` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Invalid target id now throws Java-shaped message. Remove/disband behavior remains covered separately but not runtime-compared. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.ALLIANCE_BAN_MEMBER` | Command code `16` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Invalid target id now fails before ban self/leader/auto-alliance checks, matching Java `findMember` ordering. Warning-log behavior for target outside alliance after lookup remains deferred. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.ALLIANCE_SET_CAPTAIN` | Command code `17` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Invalid target id now throws Java-shaped message. Real alliance leader-change behavior remains source-derived and not runtime-compared. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.ALLIANCE_SET_VICECAPTAIN` | Command code `25` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Invalid target id now throws Java-shaped message before vice-captain assignment logic. Full Java assignment event ordering remains unverified. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.ALLIANCE_UNSET_VICECAPTAIN` | Command code `26` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Invalid target id now throws Java-shaped message before vice-captain demotion logic. Full Java assignment event ordering remains unverified. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService` | `GameServerConnection` group command branches plus `PlayerGroupRuntime` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Invalid target ids now fail before service side effects. Java static group registry, event queue, lock, and exception propagation are not runtime-compared. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService` | `GameServerConnection` alliance command branches plus `PlayerAllianceRuntime` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Invalid target ids now fail before service side effects. Java static alliance registry, event queue, lock, Vortex cleanup, and league side effects are not runtime-compared. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.toString` | `GameServerConnection.FormatJavaPlayer` | Utility / Diagnostic Formatting | Partial | Regression Tested | Needs Verification | Existing formatter is reused for invalid member exception messages. Other Java `Player.toString` use sites are not audited. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry` / no-send assertions | Runtime Dependency | Partial | Regression Tested | Needs Verification | Regressions confirm invalid member failures send no packets. Live packet processor exception handling/logging remains unverified. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_GroupFindMemberCommandsInvalidTargetThrowLikeJava`: validates command ids `2`, `3`, and `6` with selected member id `1999` throw `InvalidOperationException("Player [id=1001, name=Leader] tried to execute team command on non-existent member with ID 1999")`, preserve group membership, and send no packets.
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_AllianceFindMemberCommandsInvalidTargetThrowLikeJava`: validates command ids `16`, `17`, `25`, and `26` with selected member id `1999` throw the same Java-shaped message, preserve alliance membership, and send no packets.
+- Java comparison status: expectations are source-derived from `PlayerTeamCommandService.executeCommand`, `findMember`, `TeamCommand`, `Player.toString`, and `Objects.requireNonNull`. No Java runtime execution, Java-generated golden vector, live client packet capture, Java static team registry comparison, packet processor exception/log comparison, event queue/lock comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond handler reachability, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- C# still uses manual branch dispatch rather than a full `PlayerTeamCommandService` equivalent.
+- Java exception type differs intentionally for invalid member ids; only the message and no-send/no-mutation behavior are mirrored.
+- Java packet processor exception handling/logging for these branches has not been runtime-compared.
+- Java static group/alliance registries, event queues, locks, object iteration ordering, offline-recipient behavior, Vortex cleanup, league side effects, EventService, and InstanceService callbacks remain source-derived or deferred.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to command payload reachability and handler behavior; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 14
+- Total artifacts ported: 1 shared invalid-member prerequisite boundary across 7 existing `CM_PLAYER_STATUS_INFO` command branches plus 2 regression test methods covering 7 command ids
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 11
+- Total blocked artifacts: 8 full generic team-command dispatch, Java packet processor exception/log comparison, Java static team registries, Java event queue/lock comparison, Vortex/league side effects, EventService/InstanceService callbacks, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; invalid target/member behavior is tighter for ported team commands, but real runtime parity remains source-derived.
+
+Next recommended unit of work:
+- Continue the non-league `CM_PLAYER_STATUS_INFO` audit by checking invalid-member and no-op boundaries for `ALLIANCE_CHANGE_GROUP` command `27`, whose C# path uses a dedicated group-change service rather than Java `findMember`, or begin planning a minimal league runtime bridge now that the league command prerequisite gates are bounded.
+
 ---
 
 ## Next Steps
