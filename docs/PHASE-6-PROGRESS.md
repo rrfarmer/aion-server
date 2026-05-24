@@ -19471,6 +19471,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 712 (May 24, 2026)
+- Continued kisk/revive parity by modeling Java `Player.unsetResPosState` for the production `CM_REVIVE` kisk revive caller.
+- Added represented resurrection-position state to `Player`:
+  - `IsInResurrectionPositionState`,
+  - `ResurrectionPositionX`,
+  - `ResurrectionPositionY`,
+  - `ResurrectionPositionZ`,
+  - `ClearResurrectionPositionState()`.
+- Updated `GameServerConnection.HandleReviveAsync` to clear resurrection-position state after Java-derived kisk restore/stat refresh and before teleporting to the kisk position.
+- Extended `GameServerConnectionKiskReviveWorkflowTests.HandleReviveAsync_KiskReviveConsumesChargeRestoresAndTeleports` to seed positional resurrection state and verify it is cleared by the production kisk revive path.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionKiskReviveWorkflowTests|PlayerReviveRestoreServiceTests|PlayerStateTests"` passes with 31 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1278 tests.
+
+#### Migration Parity Table - Session 712
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.Player` resurrection-position fields | `Aion.GameServer.Model.GameObjects.Player.IsInResurrectionPositionState` / `ResurrectionPositionX/Y/Z` | Runtime Model | Partial | Regression Tested indirectly | Needs Verification | C# now represents Java positional-resurrection state needed by `unsetResPosState`. Positional resurrection skill creation/caller paths, persistence, packet prompts, precision beyond single-precision floats, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.unsetResPosState` | `Aion.GameServer.Model.GameObjects.Player.ClearResurrectionPositionState` | Runtime Model Method | Partial | Regression Tested | Needs Verification | Method clears flag and X/Y/Z only when active, matching Java source shape. No direct Java runtime comparison or full positional resurrection workflow coverage was run. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_REVIVE` | `Aion.GameServer.Network.Aion.ClientPackets.CmRevive` / `GameServerConnection.HandleReviveAsync` | Client Packet / Handler | Partial | Regression Tested | Needs Verification | Production kisk revive route now clears represented resurrection-position state after restore/stat refresh and before kisk teleport. Other revive ids, encrypted parser-to-handler execution, invalid-id behavior, and live-client behavior remain outside this unit. |
+| `com.aionemu.gameserver.services.player.PlayerReviveService.kiskRevive` | `GameServerConnection.HandleReviveAsync` plus `PlayerReviveRestoreService.ApplyKiskReviveRestore` | Service / Revive Workflow | Partial | Regression Tested | Needs Verification | Source-derived kisk path now covers charge use, restore, stat packet intent, unset res-position state, teleport, depletion cleanup, fanout, and ID release across recent units. Prison/event branches, no-resurrect-penalty live effect detection, aggro/team cleanup, Java runtime comparison, and exact socket order remain unverified. |
+| `com.aionemu.gameserver.services.player.PlayerReviveService.revive` | `PlayerReviveRestoreService.ApplyReviveRestore` | Service / Resource Restore Dependency | Partial | Regression Tested | Needs Verification | This unit keeps positional cleanup at the caller level like Java instead of folding it into generic restore. Target cleanup, aggro cleanup, soul sickness, group/alliance movement fanout, and live effect detection remain broader than the helper. |
+
+Tests added/updated:
+- `GameServerConnectionKiskReviveWorkflowTests.HandleReviveAsync_KiskReviveConsumesChargeRestoresAndTeleports`: now also validates the production kisk revive caller clears represented positional resurrection state and coordinates.
+- Existing connection-level kisk workflow tests, `PlayerReviveRestoreServiceTests`, and `PlayerStateTests` matched by the focused filter were rerun.
+- Java comparison status: expectations are source-derived from `Player.unsetResPosState`, `PlayerReviveService.kiskRevive`, `PlayerReviveService.revive`, and `CM_REVIVE`. No Java runtime execution, Java-generated golden vector, positional resurrection skill caller comparison, persistence comparison, encrypted-frame comparison, full socket-order capture, reflection behavior, threading behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Positional resurrection creation/skill paths are still not modeled; this unit only clears represented state during kisk revive.
+- The exact Java ordering relative to stat visual packet fanout and teleport remains source-derived, not captured from Java runtime or a live client.
+- No encrypted socket processor or Java golden packet comparison was run.
+- No-resurrect-penalty live effect detection, prison/event kisk branches, aggro/team cleanup, target cleanup, other revive types, and live client behavior remain partial.
+- Float coordinate precision is represented with C# `float` to match Java `float`, but no serialization/persistence comparison exists for these fields yet.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 kisk revive positional-resurrection cleanup slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 5 positional resurrection skill caller coverage, encrypted socket processor comparison, Java runtime/golden comparison, broader revive effect/team cleanup support, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; kisk revive caller behavior is incrementally closer, but full revive and effect parity remains partial.
+
+Next recommended unit of work:
+- Continue kisk/revive parity with live no-resurrect-penalty effect detection into `HandleReviveAsync` if a represented effect-state seam exists or can be introduced narrowly; otherwise pivot to charge/power-shard/idiani burn hooks or loot/drop handler-side quest/event paths.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
