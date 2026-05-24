@@ -20910,6 +20910,53 @@ Next recommended unit of work:
 
 ---
 
+### Session 742 (May 24, 2026)
+- Inspected Java `PetSkillData`, `PetSkillTemplate`, pet skill XML, and the `CM_CASTSPELL` pet-order guard.
+- Added C# `PetSkillTable` and `PetSkillSummary`:
+  - indexes pet skills by `order_skill` and pet npc id;
+  - exposes `IsPetOrderSkill`, `GetPetOrderSkill`, and `PetHasSkill` equivalents for represented lookup.
+- Extended static-data loading to parse `pet_skill` rows and expose `StaticData.PetSkills`.
+- Wired `GameServerConnection.HandleCastSpellAsync` so `GameServerCastSpellHandlerHooks.IsPetOrderSkill` remains the first seam, with runtime static `PetSkills.IsPetOrderSkill` as the default fallback.
+- Added loaded static-data tests for order skill `3835`, pet npc id `833288`, and skill id `22107`.
+- Added a connection-level cast-spell test proving runtime static pet-order lookup rejects order skill `3835` without an injected `IsPetOrderSkill` hook when no pet summon is represented.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionCastSpellTests|PlayerCastSpellEarlyExitServiceTests|StaticDataLoadingTests"` passes with 31 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1331 tests.
+
+#### Migration Parity Table - Session 742
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CASTSPELL.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleCastSpellAsync` / `IsCastSpellPetOrderSkill` | Client Packet Handler Seam | Partial | Regression Tested | Needs Verification | Cast-spell now falls back to runtime static pet-order skill lookup before template lookup. Player summon/pet state remains hook-based, and full pet command/skill remapping is not wired. |
+| `com.aionemu.gameserver.dataholders.DataManager.PET_SKILL_DATA` | `GameServerRuntimeContext.DataManager.StaticData.PetSkills` | Static Data Dependency | Partial | Regression Tested with loaded static data | Needs Verification | C# exposes loaded pet-skill data through runtime context. Java static singleton lifecycle, JAXB `afterUnmarshal`, reload behavior, and full global DataManager parity remain unverified. |
+| `com.aionemu.gameserver.dataholders.PetSkillData` | `Aion.GameServer.Dataholders.PetSkillTable` | Static Data Table | Partial | Regression Tested | Needs Verification | C# indexes by order skill and pet id, matching the Java lookup shapes needed here. Java's exact null/exception behavior for missing pet ids differs intentionally for now: C# returns `null`/`false` rather than throwing. |
+| `com.aionemu.gameserver.model.templates.petskill.PetSkillTemplate` | `Aion.GameServer.Dataholders.PetSkillSummary` | DTO | Partial | Regression Tested | Needs Verification | C# captures `skill_id`, `pet_id`, and `order_skill`. JAXB default handling, transformed summon skills with missing `order_skill`, reflection/serialization behavior, and all pet model interactions remain unverified. |
+| `com.aionemu.gameserver.dataholders.PetSkillData.isPetOrderSkill` | `PetSkillTable.IsPetOrderSkill` and `GameServerConnection.IsCastSpellPetOrderSkill` | Lookup Helper | Partial | Regression Tested | Needs Verification | Loaded data proves order skill `3835` is recognized and triggers the Java pet-required failure path. Live summon ownership, `getPetOrderSkill`, and `petHasSkill` callers remain mostly unwired. |
+
+Tests added/updated:
+- `StaticDataLoadingTests.LoadStaticData_MergesAndIndexesJavaStaticData`: now validates `PetSkills.IsPetOrderSkill(3835)`, `GetPetOrderSkill(3835, 833288) == 22107`, and `PetHasSkill(833288, 22107)`.
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_UsesRuntimeStaticPetOrderSkillLookupWhenHookDoesNotMatch`: validates runtime static pet-order lookup sends `STR_SKILL_NOT_NEED_PET` for order skill `3835` without an injected pet-order hook.
+- Java comparison status: expectations are source-derived from Java `CM_CASTSPELL.runImpl`, `DataManager.PET_SKILL_DATA`, `PetSkillData`, `PetSkillTemplate`, and static pet-skill XML. No Java runtime execution, Java-generated golden data comparison beyond loaded XML assertions, live summon model, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- Player summon/pet state remains hook-based; C# has no live `player.getSummon() == null || !summon.isPet()` integration in this route.
+- `GetPetOrderSkill` and `PetHasSkill` are modeled but not wired to live summon controllers or pet skill execution.
+- C# intentionally returns nullable/false for missing pet lookups instead of Java's potential null-pointer behavior; this may need revision when callers require exact exception semantics.
+- Static data tests validate loaded XML facts, not Java JAXB golden maps or live runtime behavior.
+- Full `SkillEngine`, pet command dispatch, target/effect handling, and packet fanout remain missing.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 pet-skill static lookup slice plus cast-spell fallback
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 7 live summon/pet state integration, pet order skill remapping/execution, full SkillEngine/player-controller execution, Java runtime/JAXB map comparison, live client validation, reflection/serialization parity, and threading/date-time comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; pet-order skill detection now uses static data, but full pet skill execution and summon state remain partial.
+
+Next recommended unit of work:
+- Add a narrow represented summon/pet state to `Player` or `GameServerCastSpellHandlerHooks.HasPetSummon` fallback so `CM_CASTSPELL` can distinguish Java's `player.getSummon() == null || !player.getSummon().isPet()` without test-only hooks. Keep actual summon controller command execution and `PetSkillData.getPetOrderSkill` remapping as a later unit unless the needed summon model already exists.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
