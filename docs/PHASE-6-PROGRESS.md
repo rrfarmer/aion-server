@@ -21563,6 +21563,56 @@ Next recommended unit of work:
 
 ---
 
+### Session 755 (May 24, 2026)
+- Re-inspected Java `Player.getSummonOrMercenary` mercenary lookup:
+  - owned summon is checked first;
+  - player known-list object must be an `Npc`;
+  - `npc.getCreatorId()` must equal `player.getObjectId()`;
+  - `npc.getNpcTemplateType()` must be `NpcTemplateType.MERCENARY`.
+- Added represented known-object metadata:
+  - `PlayerSummonKnownObject`;
+  - `PlayerSummonKnownNpcTemplateType.None` / `Mercenary`;
+  - `Player.SetSummonKnownObject(PlayerSummonKnownObject)`;
+  - `Player.TryGetSummonKnownObject`.
+- Updated `Player.GetSummonOrMercenaryKind` to identify a represented creator-owned known mercenary before falling back to the older direct represented actor field.
+- Preserved existing kind-only known-object helpers for current summon target validation tests.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 29 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1353 tests.
+
+#### Migration Parity Table - Session 755
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getSummonOrMercenary` | `Aion.GameServer.Model.GameObjects.Player.GetSummonOrMercenaryKind` using `PlayerSummonKnownObject` | Player/Summon Lookup Projection | Partial | Regression Tested | Needs Verification | C# now recognizes represented known-list mercenaries by object id, creature kind, creator object id, and represented template type. Java returns live `Creature`/`Npc` references and checks `instanceof Npc`, creator id, and `NpcTemplateType.MERCENARY`. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.getObject` | `Player.SetSummonKnownObject(PlayerSummonKnownObject)` / `TryGetSummonKnownObject` | Known-List Projection | Partial | Regression Tested | Needs Verification | C# stores represented known-object metadata on `Player`. It does not model a live known-list owner, visibility lifecycle, map-region updates, synchronization, serialization, or live object references. |
+| `com.aionemu.gameserver.model.gameobjects.Npc.getCreatorId` | `PlayerSummonKnownObject.CreatorObjectId` | NPC Metadata Projection | Partial | Regression Tested | Needs Verification | Creator id is caller-seeded metadata. No live `Npc`, `SpawnTemplate`, creator lookup, lifecycle, or object identity exists. |
+| `com.aionemu.gameserver.model.gameobjects.Npc.getNpcTemplateType` / `com.aionemu.gameserver.model.templates.npc.NpcTemplateType.MERCENARY` | `PlayerSummonKnownNpcTemplateType.Mercenary` | NPC Template Type Projection | Partial | Regression Tested | Needs Verification | C# only models the mercenary template value needed by this branch. Other Java enum values, XML template loading, and template object behavior remain unsupported here. |
+| `com.aionemu.gameserver.model.gameobjects.Creature` / `Npc` type check | `PlayerSummonKnownObject.Kind == Creature` plus template metadata | Type Projection | Partial | Regression Tested | Needs Verification | C# uses enum metadata instead of Java type hierarchy and `instanceof`. Reflection/type behavior and live object equality remain unverified. |
+
+Tests added/updated:
+- `PlayerSummonCastSpellServiceTests.Handle_RecognizesCreatorOwnedKnownMercenaryMetadata`: validates represented known-object metadata with matching creator id and mercenary template routes to `MercenaryReady`, while wrong creator id returns `PetRequired`/`None`.
+- Java comparison status: expectations are source-derived from Java `Player.getSummonOrMercenary`, `KnownList.getObject`, `Npc.getCreatorId`, `Npc.getNpcTemplateType`, and `NpcTemplateType.MERCENARY`. No Java runtime execution, live known-list comparison, object identity comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Known-list objects are represented metadata, not live `VisibleObject`/`Npc`/`Creature` instances.
+- C# still cannot verify Java `instanceof Npc` beyond enum metadata.
+- Creator id and template type are caller-seeded and not loaded from live spawn/template objects.
+- Known-list lifecycle, visibility updates, synchronization, serialization, Java runtime behavior, and live-client behavior remain unverified.
+- Controller execution, `SkillEngine`, release-on-success, packet fanout, and live audit/log sinks remain partial or missing.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented known-object mercenary lookup metadata slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 9 live `KnownList`, live `Npc`/`Creature` references, Java type hierarchy/reflection, spawn/template metadata loading, known-list lifecycle, synchronization/threading, serialization, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented mercenary lookup is closer to Java, but live object ownership and controller execution remain partial.
+
+Next recommended unit of work:
+- Use the new `PlayerSummonKnownObject` metadata to reduce direct represented mercenary fields: derive represented mercenary npc/template id from known-object metadata where possible, or add represented object-id equality helpers that can later swap from ids to live `Creature` references. Keep full Java `KnownList`, `Npc`, template loading, and controller execution gaps explicit.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
