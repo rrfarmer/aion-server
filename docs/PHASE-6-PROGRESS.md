@@ -16444,6 +16444,51 @@ Summary metrics:
 Next recommended unit of work:
 - Add the remaining command `32` source-derived behavior that can be represented with current runtime models, especially non-league-leader caller behavior. Then consider moving from command gates into `LeagueJoinEvent`/invite or league loot-rule changes, whichever has fewer missing dependencies.
 
+### Session 654 (May 24, 2026)
+- Added the remaining representable command `32` non-league-leader caller behavior.
+- Source-derived finding: Java `LeagueService.setLeader`/`LeagueChangeLeaderEvent` does not check that the caller alliance is the current league leader alliance. A non-league-leader alliance leader can trigger the event, which sets the target alliance to league position `0`, moves the caller alliance into the target's previous position, and leaves the old league leader alliance at its existing position. This can create duplicate league positions.
+- Updated `PlayerLeagueRuntime` league-row generation for set-leader fanout so `SM_ALLIANCE_INFO` rows preserve actual `LeagueMember.getLeaguePosition()` values instead of assuming row index equals league position.
+- Added a regression for the duplicate-position case: caller alliance at position `1` sets target alliance at position `2` as leader, resulting in old leader position `0`, target position `0`, caller position `2`, serialized rows with duplicate `0` positions, and Java-derived system message fanout.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionPlayerStatusInfoTests` passes with 58 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1131 tests.
+
+#### Migration Parity Table - Session 654
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` command `32` path | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Command `32` now includes non-league-leader caller behavior. Java runtime/golden proof remains unavailable. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.LEAGUE_SET_LEADER` | Command code `32` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Test captures Java's permissive caller behavior, including duplicate positions. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.setLeader` | `Aion.GameServer.Services.PlayerLeagueRuntime.SetLeader` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | C# now permits non-league-leader caller behavior like Java source. This may be surprising but is source-derived. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueChangeLeaderEvent` | `PlayerLeagueRuntime.SetLeader` / `PlayerLeaguePacketIntent` | Event Runtime Dependency | Partial | Regression Tested | Needs Verification | Duplicate-position set-leader fanout is covered. Target-offline/no-op remains untested. |
+| `com.aionemu.gameserver.model.team.league.League` | `Aion.GameServer.Services.PlayerLeagueRuntime` / `PlayerLeagueSnapshot` | Team State | Partial | Regression Tested | Needs Verification | Actual league positions, including duplicates, are preserved for set-leader row serialization. Java map iteration order remains unverified. |
+| `com.aionemu.gameserver.model.team.league.LeagueMember` | Internal `PlayerLeagueRuntime.PlayerLeagueMember` / `PlayerAllianceInfoLeagueRow` | Team Member / DTO | Partial | Regression Tested | Needs Verification | `PlayerAllianceInfoLeagueRow.AlliancePosition` now uses actual league positions for set-leader rows. Other callers still use compact sorted-index positions where Java state is compact. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` / `PlayerAllianceInfoPacketPlan` | Server Packet | Partial | Regression Tested | Needs Verification | Set-leader edge test serializes rows with duplicate Java positions. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested | Needs Verification | Existing `STR_UNION_CHANGE_FORCE_NUMBER_HIM` and `STR_UNION_CHANGE_LEADER` fanout is tested for non-league-leader caller. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Model.GameObjects.PlayerAllianceDescriptor` / `PlayerAllianceRuntime` | Team State Dependency | Partial | Regression Tested | Needs Verification | Supplies caller/target leaders and snapshots for non-league-leader caller. Java live object identity remains absent. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry` / `GameServerConnection.SendLeaguePacketAsync` | Runtime Dependency | Partial | Regression Tested | Needs Verification | In-memory recipient order and payloads are tested. Live socket/offline-recipient behavior remains unverified. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_LeagueSetLeaderByNonLeagueLeaderMatchesJavaEvent`: validates Java's permissive non-league-leader caller behavior, duplicate league positions, serialized `SM_ALLIANCE_INFO` row positions, and system-message fanout.
+- Java comparison status: expectations are source-derived from `LeagueService.setLeader`, `LeagueChangeLeaderEvent.changeLeaderTo`, `LeagueMember.getLeaguePosition`, `SM_ALLIANCE_INFO` constructor/write order, and `SM_SYSTEM_MESSAGE.writeImpl`. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, Java static league registry comparison, event queue/lock comparison, `ConcurrentHashMap` iteration comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Command `32` target-offline/no-op remains untested; current runtime always resolves the target alliance leader from online test fixtures.
+- League invite/join/loot/kinah workflows, direct disband iteration, offline recipients, Java static registry, event queue/locks, object identity, and packet processor exception/log behavior remain deferred.
+- Packet-field coverage remains C# emitted-object validation only; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- C# packet intent order is deterministic by sorted positions with stable list ordering for duplicate positions; Java `ConcurrentHashMap` ordering for duplicate-position rows remains unverified.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 command `32` non-league-leader edge runtime/serialization slice plus 1 regression test
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 7 Java golden byte validation, full `LeagueService`, Java static league registry, target-offline command `32` behavior, Java event queue/lock comparison, packet processor exception/log comparison, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; command `32` source behavior is more accurately bounded, but wider league lifecycle parity remains open.
+
+Next recommended unit of work:
+- Move from league command gates into the next smallest league lifecycle feature. Recommended: source-read `LeagueJoinEvent` and `LeagueInviteEvent` and begin with a state-only join/add-alliance packet-intent slice, or source-read `LeagueLootRulesChangeEvent` if loot-rule changes have fewer missing dependencies.
+
 ---
 
 ## Next Steps
