@@ -23549,6 +23549,56 @@ Next recommended unit of work:
 
 ---
 
+### Session 795 (May 24, 2026)
+- Re-inspected Java `SpawnEngine.bringIntoWorld`, `World.storeObject`, `World.setPosition`, `World.createPosition`, and `World.spawn`.
+- Added `PlayerSummonKnownObjectNpcSkillWorldInsertionPreview` and status enum.
+- Added `PlayerSummonSkillExecutionService.PreviewMercenaryNpcSkillBringIntoWorld`.
+- Modeled:
+  - missing ordinary-NPC creation preview input;
+  - not-ready creation previews, including walker-formator already-brought-into-world cases;
+  - Java map lookup failure before position creation;
+  - Java instance lookup failure before position creation;
+  - Java region lookup failure before position creation;
+  - Java already-spawned failure before `World.spawn`;
+  - represented `World.storeObject`, duplicate-object check, `World.setPosition`, and `World.spawn` sequence;
+  - represented controller before/after spawn callbacks, map-region add, and known-list update requirements.
+- Kept live `World`, `WorldMap`, `WorldMapInstance`, `MapRegion`, `WorldPosition`, duplicate-object exception behavior, region/zone revalidation, controller callbacks, known-list updates, temporary-spawn registration, instance handler `onSpawn`, packets, persistence, threading, serialization, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 62 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1386 tests.
+
+#### Migration Parity Table - Session 795
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.spawnengine.SpawnEngine.bringIntoWorld(VisibleObject, SpawnTemplate, int)` | `PlayerSummonSkillExecutionService.PreviewMercenaryNpcSkillBringIntoWorld` | World Insertion Projection | Partial | Regression Tested | Needs Verification | C# represents the spawn-template overload as store/set-position/spawn metadata. It does not mutate live `World` or create live `VisibleObject` state. |
+| `com.aionemu.gameserver.world.World.storeObject` | `WouldStoreObject` / `RequiresDuplicateObjectCheck` metadata | World Repository Dependency | Partial | Regression Tested as explicit metadata | Needs Verification | C# records object storage and duplicate-object check requirements. It does not use `ConcurrentHashMap`, player/siege collections, or duplicate exception behavior. |
+| `com.aionemu.gameserver.world.World.setPosition` | `WouldSetPosition` plus invalid map/instance/region statuses | Positioning Dependency | Partial | Regression Tested | Needs Verification | C# models map, instance, and region failure gates and represented position assignment. Live `WorldPosition`, despawn-before-position, map-region lookup, exceptions, and coordinate/precision behavior remain unverified. |
+| `com.aionemu.gameserver.world.World.createPosition` | invalid map/instance/region statuses | Position Factory Dependency | Partial | Regression Tested | Needs Verification | C# records Java null/exception gates but does not allocate live `WorldPosition` or compare exception text/type at runtime. |
+| `com.aionemu.gameserver.world.World.spawn` | `WouldSpawn`, controller callback, map-region add, and known-list metadata | Spawn Visibility Dependency | Partial | Regression Tested | Needs Verification | C# records before/after spawn callbacks, spawned-state check, map-region add, and known-list update requirements. Live `AlreadySpawnedException`, region mutation, controller callbacks, visibility, packets, and threading remain missing. |
+| `com.aionemu.gameserver.world.MapRegion` / zone revalidation | `RequiresMapRegionAdd` metadata only | Region / Zone Dependency | Not Started | Manual Only as explicit gap | Needs Verification | C# records map-region add but does not update regions or zones. Zone revalidation, known-list deltas, packets, and live-client behavior remain missing. |
+| post-`spawnObject` temporary/instance callbacks in `SpawnEngine.spawnObject` | not yet ported; tracked as remaining risk after world insertion | Post Spawn Callback Dependency | Not Started | Manual Only as explicit gap | Needs Verification | `TemporarySpawnEngine.registerSpawned` and instance handler `onSpawn` happen after `getSpawnedObject` returns. This unit keeps them explicit for the next slice. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.PreviewMercenaryNpcSkillBringIntoWorld_ProjectsJavaWorldInsertionSteps`: validates missing creation, not-ready walker-brought-into-world branch, invalid map, invalid instance, invalid region, already-spawned, and successful would-insert metadata. It verifies world id, instance id, X/Y/Z, heading propagation, duplicate-object check, map/instance/region lookup requirements, controller before/after spawn requirement, map-region add requirement, known-list update requirement, and may-throw statuses.
+- Java comparison status: expectations are source-derived from Java `SpawnEngine.bringIntoWorld`, `World.storeObject`, `World.setPosition`, `World.createPosition`, and `World.spawn`. No Java runtime execution, live world mutation comparison, exception type/message comparison, concurrent collection behavior comparison, controller callback comparison, map-region mutation comparison, zone revalidation comparison, known-list comparison, packet comparison, persistence comparison, XML/static-data comparison, reflection comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- World insertion is represented metadata only; no live object is stored, positioned, or spawned.
+- Live `World`, `WorldMap`, `WorldMapInstance`, `MapRegion`, `WorldPosition`, duplicate object handling, player/siege object collections, controller callbacks, spawned-state mutation, region mutation, zone revalidation, known-list updates, `TemporarySpawnEngine`, instance handler `onSpawn`, packets, persistence, threading, serialization, XML/static-data loading, Java runtime behavior, scheduler callback execution, geometry, precision/rounding, and live-client behavior remain missing or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 represented world-insertion preview slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 22 live `World`, `WorldMap`, `WorldMapInstance`, `MapRegion`, `WorldPosition`, duplicate object handling, player/siege collections, controller callbacks, spawned-state mutation, region mutation, zone revalidation, known-list updates, temporary-spawn registration, instance handler `onSpawn`, packets, persistence, Java runtime comparison, XML/static loading, threading/serialization, reflection behavior, geometry/precision, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented world insertion is now modeled, but live world mutation/client visibility remains partial.
+
+Next recommended unit of work:
+- Continue by starting a static-data loader adapter for represented `NpcSkillSpawn` XML fields or by modeling the post-`SpawnEngine.spawnObject` callback preview for `TemporarySpawnEngine.registerSpawned`, `VisibleObject.isSpawned`, and instance handler `onSpawn` after a successful represented object spawn. Keep live XML loading, Java RNG runtime comparison, Java geometry, live spawn-engine execution, live AI mutation, controller execution, effects, packets, scheduler/date-time behavior, threading, serialization, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -23558,4 +23608,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by starting a static-data loader adapter for represented `NpcSkillSpawn` XML fields or by modeling `SpawnEngine.bringIntoWorld` world-insertion preview for `World.storeObject`, `World.setPosition`, `World.spawn`, region/zone update, temporary-spawn, and instance handler gaps. Keep live AI mutation, XML loading, `DataManager.SKILL_DATA` pruning, Java `Rnd.chance`/`Rnd.get`, random target selection/spawns, effects, packets, spawn-engine execution, scheduler/date-time behavior, threading, serialization, and controller execution explicit until supported.
+8. Continue NPC skill readiness parity by starting a static-data loader adapter for represented `NpcSkillSpawn` XML fields or by modeling the post-`SpawnEngine.spawnObject` callback preview for `TemporarySpawnEngine.registerSpawned`, `VisibleObject.isSpawned`, and instance handler `onSpawn` after a successful represented object spawn. Keep live AI mutation, XML loading, `DataManager.SKILL_DATA` pruning, Java `Rnd.chance`/`Rnd.get`, random target selection/spawns, effects, packets, spawn-engine execution, scheduler/date-time behavior, threading, serialization, and controller execution explicit until supported.
