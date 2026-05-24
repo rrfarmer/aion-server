@@ -17390,6 +17390,60 @@ Summary metrics:
 Next recommended unit of work:
 - Migrate charge-all question handling onto `Player.ResponseRequester`. Source-read Java `ItemChargeService.startChargingEquippedItems`, keep `PendingChargeAllRequest` as typed payload metadata, register `STR_ITEM_CHARGE_ALL_CONFIRM` / `STR_ITEM_CHARGE2_ALL_CONFIRM` by charge way, and ensure payment/item mutation tests still prove removal-before-handle and wrong-question behavior.
 
+### Session 674 (May 24, 2026)
+- Source-read Java `ItemChargeService.startChargingEquippedItems` and current C# charge-all setup/response handling.
+- Migrated charge-all question registration onto `Player.ResponseRequester`:
+  - `StartChargingEquippedItemsAsync` now registers `SmQuestionWindow.ItemChargeAllConfirm` or `SmQuestionWindow.ItemCharge2AllConfirm` with `QuestionResponseRequestKind.ChargeAll`,
+  - duplicate charge-all question ids now fail through Java-style duplicate-question semantics,
+  - `PendingChargeAllRequest` remains as typed payload metadata and a narrow adapter slot.
+- Migrated charge-all question responses onto `ResponseRequester.Respond`:
+  - `HandleChargeAllQuestionResponseAsync` now consumes the registry before payment/item mutation behavior,
+  - response `0` clears registry and typed pending state without mutation,
+  - mismatched charge question ids leave the pending request intact.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionChargeAllQuestionResponseTests|QuestionResponseRegistryTests"` passes with 6 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1173 tests.
+
+#### Migration Parity Table - Session 674
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemChargeService` | `Aion.GameServer.Services.ItemChargeService` / `GameServerConnection.StartChargingEquippedItemsAsync` | Service / Request Setup | Partial | Unit Tested | Needs Verification | Charge-all request setup now registers through `Player.ResponseRequester`. Full single-item charge behavior remains existing broader service work. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.startChargingEquippedItems` | `GameServerConnection.StartChargingEquippedItemsAsync` | Service / Runtime Routing | Partial | Unit Tested | Needs Verification | Registers charge-way-specific question ids before sending `SM_QUESTION_WINDOW`. C# duplicate failure is silent like Java's no-packet path; no explicit user packet is sent. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest` | `QuestionResponseRegistry.PutRequest` via charge-all registration | Request Registry Method | Partial | Unit Tested | Needs Verification | Duplicate `STR_ITEM_CHARGE_ALL_CONFIRM` / `STR_ITEM_CHARGE2_ALL_CONFIRM` question ids are rejected by registry state. C# uses lock-backed metadata, not Java `ConcurrentHashMap` handler objects. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.respond` | `QuestionResponseRegistry.Respond` via `HandleChargeAllQuestionResponseAsync` | Request Registry Method | Partial | Unit Tested | Needs Verification | Charge-all responses remove the registry entry before accept/deny behavior. Java callback invocation is represented by typed dispatch metadata. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler` | `QuestionResponseRequest` / `QuestionResponseDispatch` carrying `PendingChargeAllRequest` payload | Request Handler Metadata | Partial | Unit Tested | Needs Verification | Typed metadata replaces Java anonymous `RequestResponseHandler<Player>` subclass. Reflection/polymorphic callback behavior is not reproduced. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_ITEM_CHARGE_ALL_CONFIRM` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow.ItemChargeAllConfirm` | Packet Constant / Question Id | Complete | Unit Tested | Needs Verification | Used as the registry key for kinah charge-all confirmation. No Java golden-byte or encrypted-frame comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_ITEM_CHARGE2_ALL_CONFIRM` | `SmQuestionWindow.ItemCharge2AllConfirm` | Packet Constant / Question Id | Complete | Unit Tested | Needs Verification | Used as the registry key for AP charge-all confirmation. No Java golden-byte or encrypted-frame comparison. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.processPayment` | `HandleChargeAllQuestionResponseAsync` payment branch / `PlayerEnterWorldService.SaveItemChargeAllMutationAsync` | Payment / Persistence Boundary | Partial | Existing Unit Coverage | Needs Verification | Existing C# payment/mutation behavior is preserved. This unit added registry cleanup tests but did not revalidate Java payment rounding or DAO transaction parity. |
+| `com.aionemu.gameserver.model.items.ChargeInfo` | `Aion.GameServer.Services.ItemChargeService.Level1ChargePoints` / `Level2ChargePoints` | Constants / Calculation Dependency | Partial | Existing Unit Coverage | Needs Verification | Existing C# charge point constants and pricing tests remain in place. Precision/rounding parity for all item cases is not exhaustively compared to Java runtime. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `PlayerAbyssRank.AddAp` plus `ApplyAbyssRankChangedSideEffectsAsync` | AP Payment Dependency | Partial | Existing Unit Coverage | Needs Verification | AP payment branch is preserved but Java legion/siege/rank side effects remain broader work. |
+
+Tests added/updated:
+- `GameServerConnectionChargeAllQuestionResponseTests.HandleQuestionResponseAsync_ChargeAllDenyConsumesResponseRequester`: validates parsed `CM_QUESTION_RESPONSE` response `0` clears registry and typed pending state.
+- `GameServerConnectionChargeAllQuestionResponseTests.HandleQuestionResponseAsync_ChargeAllWrongChargeQuestionLeavesRegistryRequest`: validates mismatched charge question id leaves the pending request intact.
+- Existing charge-all plan and mutation tests remain coverage for charge plan/payment behavior, but this unit did not add a new accept-side mutation test.
+- Java comparison status: expectations are source-derived from `ItemChargeService.startChargingEquippedItems`, `CM_QUESTION_RESPONSE`, and `ResponseRequester`. No Java runtime execution, Java-generated golden vector, live anonymous-handler object comparison, exhaustive pricing/rounding comparison, DAO transaction comparison, AP side-effect comparison, real socket-order validation, encrypted frame comparison, reflection behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Charge-all accept-side payment/mutation parity still depends on existing partial C# tests and was not expanded in this registry unit.
+- Java pricing uses `Math.ceil`, `Math.round`, and `ChargeInfo` ratios; precision/rounding parity is not exhaustively runtime-compared.
+- Java AP payment calls `AbyssPointsService.addAp`; C# AP branch still has known broader abyss side-effect gaps.
+- C# stores typed metadata and an adapter slot instead of Java's anonymous `RequestResponseHandler<Player>` object.
+- Java `ConcurrentHashMap` semantics remain approximated by a C# lock without stress tests.
+- Packet sends are not validated against Java golden bytes, encrypted frames, production socket ordering, packet captures, or real-client behavior.
+- Date/time handling is not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 charge-all registry-adapter migration slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 7 exhaustive charge pricing/runtime comparison, Java AP side-effect parity, Java DAO transaction comparison, Java polymorphic callback parity, Java concurrent map stress parity, real socket-order validation, and runtime/client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; league, friend invite, kisk bind, rift portal, and charge-all question flows now use the reusable response registry, while soulbind and many broader request handlers remain specialized.
+
+Next recommended unit of work:
+- Migrate soulbind question handling onto `Player.ResponseRequester`. Source-read Java `Equipment.soulBindItem`, keep `PendingSoulBindRequest` as typed payload metadata, register `STR_SOUL_BOUND_ITEM_DO_YOU_WANT_SOUL_BOUND`, and preserve cancel/accept scheduled item-use behavior with focused cleanup tests.
+
 ---
 
 ## Next Steps
