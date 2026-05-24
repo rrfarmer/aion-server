@@ -17078,6 +17078,51 @@ Summary metrics:
 Next recommended unit of work:
 - Close one of the remaining Java `CM_QUESTION_RESPONSE` gaps now exposed by the league invite routing: either add the generic exchange-cancel side effect for accepting while trading if C# trade state has a home, or start extracting a reusable narrow request-response registry abstraction that can host league invite plus the already-open buddy/rift/kisk/soulbind question handlers without losing Java removal-before-handle semantics.
 
+### Session 668 (May 24, 2026)
+- Source-read Java `CM_QUESTION_RESPONSE.runImpl`, `ExchangeService.cancelExchange`, and current C# trade/exchange surfaces.
+- Confirmed C# currently has only `Player.IsTrading` as represented exchange state; no full `ExchangeService` map, partner exchange model, item-return flow, `SM_EXCHANGE_CONFIRMATION`, or exchange item id-release boundary exists yet.
+- Added a narrow `CM_QUESTION_RESPONSE` accept-while-trading cancellation boundary:
+  - when `packet.Response != 0` and `responder.IsTrading`, C# clears `Player.IsTrading` before request-specific handling,
+  - deny responses (`response == 0`) leave represented trade state intact, matching Java's guard,
+  - code comments document that full Java `ExchangeService.cancelExchange` behavior remains unsupported until exchange runtime is ported.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionLeagueInviteQuestionResponseTests` passes with 5 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1157 tests.
+
+#### Migration Parity Table - Session 668
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_QUESTION_RESPONSE` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleQuestionResponseAsync` | Client Packet / Runtime Routing | Partial | Unit Tested | Needs Verification | Accept responses now clear represented `Player.IsTrading` before request-specific handling. Full Java exchange cancellation remains unsupported. |
+| `com.aionemu.gameserver.services.ExchangeService.cancelExchange` | `Aion.GameServer.Network.Aion.GameServerConnection.CancelExchangeForQuestionAccept` | Service Boundary / Trade State | Partial | Unit Tested | Partial Parity | Only local `Player.IsTrading` state is cleared. Missing Java partner lookup, item return, `SM_EXCHANGE_CONFIRMATION(1)`, exchange map cleanup, and temporary item id release. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.isTrading` | `Aion.GameServer.Model.GameObjects.Player.IsTrading` | Model State | Partial | Unit Tested | Needs Verification | Used as the C# trade-state boundary for question-response cancellation. Java derives trading from full exchange service state. |
+| `com.aionemu.gameserver.model.trade.Exchange` | Not ported; deferred exchange runtime | Domain Model | Not Started | No Tests | Unknown | Newly highlighted dependency for full cancel parity: partner reference, locked state, kinah/items, fake split-item references, and item return behavior. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_EXCHANGE_CONFIRMATION` | Not ported | Server Packet | Not Started | No Tests | Unknown | Needed for partner cancellation notification (`action = 1`) once exchange runtime exists. |
+| `com.aionemu.gameserver.model.trade.ExchangeItem` | Not ported; deferred exchange runtime | Domain Model | Not Started | No Tests | Unknown | Needed for item return and split-stack id release during cancel. Serialization and persistence behavior remain unknown. |
+| `com.aionemu.gameserver.utils.idfactory.IDFactory.releaseId` | `Aion.GameServer.Utils.IdFactory.IDFactory.ReleaseId` | ID Allocation Dependency | Partial | No Tests in this unit | Needs Verification | Existing C# method exists, but exchange cancel does not call it because exchange items are not modeled yet. |
+
+Tests added:
+- `GameServerConnectionLeagueInviteQuestionResponseTests.HandleQuestionResponseAsync_AcceptWhileTradingClearsRepresentedTradeStateLikeJavaCancelExchange`: validates a nonzero question response clears `Player.IsTrading` before league invite handling.
+- `GameServerConnectionLeagueInviteQuestionResponseTests.HandleQuestionResponseAsync_DenyWhileTradingDoesNotCancelRepresentedTradeStateLikeJava`: validates response `0` preserves `Player.IsTrading`.
+- Java comparison status: expectations are source-derived from `CM_QUESTION_RESPONSE.runImpl` and `ExchangeService.cancelExchange`, but only the currently represented C# state boundary is tested. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, full exchange-map behavior, partner packet validation, item return validation, id-release validation, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Full Java exchange cancellation is not ported: no exchange registry, partner resolution, exchange items, kinah, item return packets, `SM_EXCHANGE_CONFIRMATION(1)`, cleanup, or split-item id release.
+- Clearing `Player.IsTrading` is intentionally partial and may not be sufficient once a real C# exchange runtime exists.
+- The question-response route still uses specialized request handlers rather than Java's generic `ResponseRequester` map.
+- Packet sends remain object-level tests, not Java golden bytes, encrypted frames, packet captures, or real-client validation.
+- Threading differs from Java's concurrent exchange/request maps. Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 narrow accept-while-trading question-response state boundary
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 5 full exchange runtime, `SM_EXCHANGE_CONFIRMATION`, exchange item return, exchange id release, and Java runtime/client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; question-response trading cancellation now has a represented state hook, but full exchange parity is still open.
+
+Next recommended unit of work:
+- Start the reusable request-response registry abstraction for C# players, preserving Java `putRequest`, `respond` removal-before-handle, duplicate rejection by question id, and deny/remove behavior. Migrate the league invite typed slot only after the abstraction can be tested without regressing the existing buddy/rift/kisk/soulbind specialized paths, or keep it as an adapter if a full migration is too broad for one unit.
+
 ---
 
 ## Next Steps
