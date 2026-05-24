@@ -17276,6 +17276,62 @@ Summary metrics:
 Next recommended unit of work:
 - Migrate the next specialized `CM_QUESTION_RESPONSE` path onto `Player.ResponseRequester`; likely kisk bind or rift portal because both already have narrow question ids and existing C# service boundaries. Source-read the Java requester/handler first, keep typed payload metadata as needed, and preserve removal-before-handle plus duplicate-question semantics.
 
+### Session 672 (May 24, 2026)
+- Source-read Java `AIActions.addRequest`, `KiskService.onBind`, and current C# kisk dialog/question-response handling.
+- Migrated kisk bind question registration onto `Player.ResponseRequester`:
+  - `PlayerKiskDialogService.RequestDialog` now registers `SmQuestionWindow.RegisterBindstone` with `QuestionResponseRequestKind.KiskBind`,
+  - `GameServerConnection.RequestOrBindPlayerToKiskAsync` uses the same registry-backed registration for live kisk dialog requests,
+  - duplicate bindstone questions now reject through Java-style duplicate-question semantics,
+  - `PendingKiskBindRequest` remains as typed payload metadata and a narrow adapter slot.
+- Migrated kisk bind question responses onto `ResponseRequester.Respond`:
+  - `HandleKiskBindQuestionResponseAsync` now consumes the registry before accept/deny behavior,
+  - response `0` clears registry and typed pending state without binding,
+  - unrelated question ids leave the kisk bind request intact.
+- Kept kisk despawn cleanup in sync with the registry:
+  - `PlayerKiskRemovalRuntimeCleanupService.ApplyAsync` now removes `RegisterBindstone` when clearing a pending kisk bind request for a despawned kisk.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerKiskDialogServiceTests|GameServerConnectionKiskBindQuestionResponseTests|WorldNpcDeathDropWorkflowServiceTests"` passes with 15 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1169 tests.
+
+#### Migration Parity Table - Session 672
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.AIActions.addRequest` | `Aion.GameServer.Services.PlayerKiskDialogService.RequestDialog` / `GameServerConnection.RequestOrBindPlayerToKiskAsync` | AI Request / Runtime Routing | Partial | Unit Tested | Needs Verification | Kisk bind request registration now uses `Player.ResponseRequester.PutRequest` before sending `SM_QUESTION_WINDOW`. Java `DialogObserver.tooFar` auto-deny is not modeled. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest` | `QuestionResponseRegistry.PutRequest` via kisk bind registration | Request Registry Method | Partial | Unit Tested | Needs Verification | Duplicate `RegisterBindstone` question ids are rejected by registry state. C# still uses lock-backed metadata rather than Java `ConcurrentHashMap` handler objects. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.respond` | `QuestionResponseRegistry.Respond` via `HandleKiskBindQuestionResponseAsync` | Request Registry Method | Partial | Unit Tested | Needs Verification | Kisk bind response now removes the registry entry before accept/deny behavior. Java handler callback invocation is represented by typed dispatch metadata. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler` | `QuestionResponseRequest` / `QuestionResponseDispatch` carrying `PendingKiskBindRequest` payload | Request Handler Metadata | Partial | Unit Tested | Needs Verification | Typed metadata replaces Java anonymous `RequestResponseHandler<Creature>` subclass. Reflection/polymorphic callback behavior is not reproduced. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_BINDSTONE_REGISTER` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow.RegisterBindstone` | Packet Constant / Question Id | Complete | Unit Tested | Needs Verification | Used as the registry key for kisk bind registration and response. No Java golden-byte or encrypted-frame comparison. |
+| `com.aionemu.gameserver.services.KiskService.onBind` | `GameServerConnection.BindPlayerToKiskAsync` / `PlayerKiskBindService.Bind` | Service / Bind Runtime | Partial | Existing Unit Coverage | Needs Verification | Accept branch still delegates to existing C# bind flow. This unit did not expand bind packet/fanout parity beyond registry consumption. |
+| `com.aionemu.gameserver.services.KiskService.removeKisk` | `PlayerKiskRemovalRuntimeCleanupService.ApplyAsync` | Cleanup Service | Partial | Regression Tested | Needs Verification | Pending kisk bind cleanup now removes the matching registry entry as well as the typed adapter slot. Full Java member/offline maps remain broader work. |
+| `com.aionemu.gameserver.controllers.observer.DialogObserver` | Not ported for kisk bind auto-deny | Observer / Range Guard | Not Started | No Tests | Unknown | Java auto-denies when the player moves out of range. C# currently relies on existing dialog/range checks before request creation and does not register observer callbacks. |
+
+Tests added/updated:
+- `PlayerKiskDialogServiceTests.RequestDialogStartsJavaBindstoneQuestionForAllowedKisk`: now validates registry count after request creation.
+- `PlayerKiskDialogServiceTests.RequestDialogRejectsDuplicateBindstoneQuestionThroughResponseRequester`: validates duplicate bindstone question rejection through `ResponseRequester`.
+- `GameServerConnectionKiskBindQuestionResponseTests.HandleQuestionResponseAsync_KiskBindDenyConsumesResponseRequester`: validates parsed `CM_QUESTION_RESPONSE` response `0` clears registry and typed pending state.
+- `GameServerConnectionKiskBindQuestionResponseTests.HandleQuestionResponseAsync_KiskBindWrongQuestionLeavesRegistryRequest`: validates unrelated question ids leave the kisk bind request intact.
+- `WorldNpcDeathDropWorkflowServiceTests.HandleDeathAsync_RemovesRuntimeKiskAndRunsMemberCleanup`: now validates kisk despawn cleanup removes the pending `RegisterBindstone` registry entry.
+- Java comparison status: expectations are source-derived from `AIActions.addRequest`, `CM_QUESTION_RESPONSE`, `ResponseRequester`, and `KiskService.onBind/removeKisk`. No Java runtime execution, Java-generated golden vector, live `DialogObserver` auto-deny comparison, real socket-order validation, encrypted frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Java `DialogObserver` out-of-range auto-deny is not ported for kisk bind requests.
+- Kisk accept behavior still relies on the existing partial C# bind runtime; this unit validates registry consumption but not full packet/fanout parity.
+- C# stores typed metadata and an adapter slot instead of Java's anonymous `RequestResponseHandler<Creature>` object.
+- Java requester object references differ from C# object-id payload metadata.
+- Java `ConcurrentHashMap` semantics remain approximated by a C# lock without stress tests.
+- Packet sends are not validated against Java golden bytes, encrypted frames, production socket ordering, packet captures, or real-client behavior.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 kisk bind registry-adapter migration slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 Java `DialogObserver` auto-deny, deeper kisk bind packet/fanout parity, Java polymorphic callback parity, Java concurrent map stress parity, real socket-order validation, and runtime/client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; league, friend invite, and kisk bind question flows now use the reusable response registry, while rift/charge/soulbind and many broader request handlers remain specialized.
+
+Next recommended unit of work:
+- Migrate rift portal question handling onto `Player.ResponseRequester`. Source-read Java `RVController`, preserve both direct and vortex question ids, keep `PendingRiftPortalRequest` as typed payload metadata, and ensure `RiftPortalInteractionService.RespondAsync` consumes a registry dispatch without losing its existing teleport/update tests.
+
 ---
 
 ## Next Steps
