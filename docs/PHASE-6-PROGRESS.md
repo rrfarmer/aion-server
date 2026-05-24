@@ -20862,6 +20862,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 741 (May 24, 2026)
+- Inspected Java `CM_CASTSPELL.runImpl`, `DataManager.SKILL_DATA.getSkillTemplate`, `SkillData.getSkillTemplate`, and `SkillTemplate.isPassive`.
+- Extended C# static skill template summaries with Java `activation` metadata and an `IsPassive` helper matching Java `activationAttribute == ActivationAttribute.PASSIVE`.
+- Updated static-data XML loading to preserve the `activation` attribute from `skill_template` rows.
+- Wired `GameServerConnection.HandleCastSpellAsync` so `GameServerCastSpellHandlerHooks.GetSkillTemplate` remains the first seam, but when hooks do not resolve a template the connection falls back to loaded runtime static data:
+  - missing template remains a no-op;
+  - passive template exits before protection/item-use cancellation;
+  - active template can reach the represented use-skill callback.
+- Added connection-level tests using loaded static data for active skill `539` and passive skill `40`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionCastSpellTests|PlayerCastSpellEarlyExitServiceTests|GamePacketTests|StaticDataLoadingTests"` passes with 120 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1330 tests.
+
+#### Migration Parity Table - Session 741
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CASTSPELL.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleCastSpellAsync` / `ResolveCastSpellSkillTemplate` | Client Packet Handler Seam | Partial | Regression Tested | Needs Verification | Cast-spell now falls back to loaded static skill data for template lookup when hooks do not provide a template. Full `PlayerController.useSkill`, target validation, effect execution, cooldown production, and combat fanout remain missing. |
+| `com.aionemu.gameserver.dataholders.DataManager.SKILL_DATA` | `GameServerRuntimeContext.DataManager.StaticData.SkillTemplates` | Static Data Dependency | Partial | Regression Tested with loaded static data | Needs Verification | C# uses loaded static XML data when a runtime context is available. Java static singleton lifecycle, validation, reload behavior, reflection differences, and full skill-data APIs remain unverified. |
+| `com.aionemu.gameserver.dataholders.SkillData.getSkillTemplate` | `Aion.GameServer.Dataholders.SkillTemplateTable.GetSkillTemplate` | Repository / Static Data Table | Partial | Regression Tested | Needs Verification | Lookup by skill id is wired for cast-spell early-exit decisions. Java collection behavior, duplicate handling, group/stack side effects, and all non-lookup APIs remain outside this unit. |
+| `com.aionemu.gameserver.skillengine.model.SkillTemplate` | `Aion.GameServer.Dataholders.SkillTemplateSummary` plus `PlayerCastSpellSkillTemplate` projection | DTO / Skill Template Projection | Partial | Regression Tested | Needs Verification | C# projects only `SkillId` and passive state into cast-spell handling. Full Java template fields, properties, effects, target rules, motion, charge behavior, serialization, precision/rounding, and XML default semantics remain unported for this path. |
+| `com.aionemu.gameserver.skillengine.model.SkillTemplate.isPassive` / `ActivationAttribute.PASSIVE` | `SkillTemplateSummary.Activation` / `SkillTemplateSummary.IsPassive` | DTO Helper / Enum Projection | Partial | Regression Tested | Needs Verification | C# preserves the XML `activation` string and treats `PASSIVE` as passive. Java enum parsing/default behavior and unsupported activation values such as toggle/provoked remain not fully modeled here. |
+
+Tests added/updated:
+- `StaticDataLoadingTests.LoadStaticData_MergesAndIndexesJavaStaticData`: now validates skill `40` has activation `PASSIVE`, `IsPassive == true`, and active stigma skill `539` is not passive.
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_UsesRuntimeStaticSkillTemplateLookupWhenHookDoesNotResolveTemplate`: validates loaded static data can drive active skill lookup to the represented use-skill callback.
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_RuntimeStaticPassiveSkillTemplateExitsBeforeUseSkill`: validates loaded passive skill data exits before use-skill callback or packet sends.
+- Java comparison status: expectations are source-derived from Java `CM_CASTSPELL.runImpl`, `DataManager.SKILL_DATA`, `SkillData.getSkillTemplate`, `SkillTemplate.isPassive`, and static XML `activation` attributes. No Java runtime execution, Java-generated golden data comparison beyond existing load-count/static-data tests, live client socket order, full `SkillEngine`, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- Runtime static lookup requires `GameServerRuntimeContext.DataManager` to be loaded; tests cover loaded data, but production mixed-mode behavior still needs live validation.
+- `PlayerCastSpellSkillTemplate` is still a narrow projection and does not expose Java skill target/effect/property/motion/charge data needed by real `useSkill`.
+- Pet-order skill lookup still remains hook-based; Java `DataManager.PET_SKILL_DATA.isPetOrderSkill` is not wired to runtime static data in this unit.
+- Hook-first fallback means custom hooks can still override static lookup; this is intentional for tests/future runtime seams, but differs from Java's direct singleton lookup and must be kept explicit.
+- Static activation handling stores strings rather than Java enums; unsupported activation enum behavior and XML default behavior need future verification.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 runtime static skill-template lookup slice plus activation/passive projection
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 7 full SkillEngine/player-controller execution, full skill-template projection, pet skill static lookup, Java runtime/golden data comparison, live client validation, reflection/enum parsing parity, and threading/date-time comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; cast-spell template lookup is closer to Java, but full skill execution remains partial.
+
+Next recommended unit of work:
+- Wire Java `DataManager.PET_SKILL_DATA.isPetOrderSkill` into the cast-spell early-exit seam if C# has a pet-skill static table. If not, add the narrow pet-skill static data loader/table for order-skill ids and use it as the default `IsPetOrderSkill` fallback, keeping summon/pet state itself hook-based until player summon models are available.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
