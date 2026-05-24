@@ -16622,6 +16622,43 @@ Summary metrics:
 Next recommended unit of work:
 - Add a tiny `LeagueInviteEvent` deny-request planner that sends `PartyAllianceHeRejectInvitation(responderName)` to the requester through the existing packet-intent style, then move to the accepted existing-league branch that reuses `PlayerLeagueRuntime.JoinAlliance`.
 
+### Session 658 (May 24, 2026)
+- Added a small `PlayerLeagueInvitePlanner` for the Java `LeagueInviteEvent.denyRequest` branch.
+- `CreateDenyPlan` now produces a requester-targeted `PlayerAllianceSystemMessageIntent` with `SmSystemMessage.PartyAllianceHeRejectInvitation(responderName)`.
+- Added argument guards for invalid requester object ids and blank responder names; these are C# boundary checks around a planner API, not observed Java runtime branches.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerLeagueInvitePlannerTests` passes with 2 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1137 tests.
+
+#### Migration Parity Table - Session 658
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.league.events.LeagueInviteEvent.denyRequest` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.CreateDenyPlan` | Request / Event Planner | Partial | Unit Tested | Needs Verification | Deny-request packet intent is modeled. Request-response handler invocation and socket send path are not wired. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_ALLIANCE_HE_REJECT_INVITATION` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyAllianceHeRejectInvitation` | Server Packet Factory | Complete | Regression Tested | Needs Verification | Reused prior packet factory; planner test serializes the payload again through the intent. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `Aion.GameServer.Services.PlayerAllianceSystemMessageIntent` | Runtime Dependency / Intent | Partial | Unit Tested | Needs Verification | C# returns an intent instead of sending immediately because request-response/socket wiring is still deferred. Live send behavior remains unverified. |
+
+Tests added:
+- `PlayerLeagueInvitePlannerTests.CreateDenyPlan_SendsRequesterRejectMessageLikeJavaLeagueInviteEvent`: validates requester recipient id, responder name, message id `1300190`, and serialized system-message payload.
+- `PlayerLeagueInvitePlannerTests.CreateDenyPlan_RejectsInvalidRequesterOrResponder`: validates C# planner API boundary guards; this is not a Java runtime comparison.
+- Java comparison status: expectations are source-derived from `LeagueInviteEvent.denyRequest`, Java `PacketSendUtility.sendPacket`, and `SM_SYSTEM_MESSAGE.STR_PARTY_ALLIANCE_HE_REJECT_INVITATION`. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, request-response runtime comparison, socket send comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- `LeagueInviteEvent` is still only partially modeled; accept-request, `LeagueService.canInvite`, requester-without-league creation, invite-to-leader redirection, question-window transport, and request registration remain open.
+- The deny branch returns an intent instead of sending through `PacketSendUtility`; live connection lookup/offline requester behavior is not represented.
+- Packet-field coverage remains C# emitted-object validation only; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- Threading/request-response ordering, reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 3
+- Total artifacts ported: 1 league invite deny-request planner slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 6 Java golden byte validation, full `LeagueInviteEvent`, request-response transport, `LeagueService.canInvite`, live `PacketSendUtility` wiring, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; invite-deny planning is represented, but invite accept/request-response parity remains open.
+
+Next recommended unit of work:
+- Implement the accepted existing-league branch of `LeagueInviteEvent.acceptRequest` as a planner/runtime slice: when `canInvite` is assumed true, the requester already has a league, and the invited alliance is not in a league, call `PlayerLeagueRuntime.JoinAlliance`. Keep `LeagueService.canInvite`, question-window request registration, and create-league-on-accept for requester-without-league as separate units.
+
 ---
 
 ## Next Steps
