@@ -18940,6 +18940,56 @@ Summary metrics:
 Next recommended unit of work:
 - Continue storage expansion parity by modeling Java `player.setCubeLimit()` / `setWarehouseLimit()` effects beyond outgoing packet fields if the C# storage model can support it, or pivot back to another Phase 6 core gap from `## Next Steps` such as kisk lifecycle cleanup, charge/power-shard/idiani burn hooks, or loot/drop handler-side quest/event paths.
 
+---
+
+### Session 701 (May 24, 2026)
+- Continued storage expansion parity by adding represented Java regular-warehouse capacity calculation.
+- Extended `InventoryCapacity` with:
+  - `GetWarehouseLimit(Player)`,
+  - `GetUsedWarehouseSlots(Player)`,
+  - `GetFreeWarehouseSlots(Player)`.
+- The C# formula now mirrors Java `Player.setWarehouseLimit()`:
+  - base `StorageType.REGULAR_WAREHOUSE` limit `24`,
+  - row length `8`,
+  - expansion count `WarehouseNpcExpands + WarehouseBonusExpands`.
+- Added regression coverage proving regular warehouse slot usage ignores Kinah rows and non-warehouse rows.
+- Extended accepted warehouse NPC expansion coverage to assert the computed warehouse limit changes to `32` after the first NPC warehouse expansion.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "InventoryCapacity_MatchesJava|StorageExpansionNpcServiceTests"` passes with 11 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1268 tests.
+
+#### Migration Parity Table - Session 701
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.Player.setWarehouseLimit` | `Aion.GameServer.Services.InventoryCapacity.GetWarehouseLimit` | Utility / Capacity Calculation | Partial | Regression Tested | Needs Verification | Represents Java formula `StorageType.REGULAR_WAREHOUSE.getLimit() + getWarehouseExpansions() * rowLength` using base `24` and row length `8`. C# still computes on demand rather than mutating a Java `Storage.limit` object; full storage-object state and live client behavior remain unverified. |
+| `com.aionemu.gameserver.model.items.storage.StorageType.REGULAR_WAREHOUSE` | `InventoryCapacity` regular warehouse constants | Enum Dependency | Partial | Regression Tested | Needs Verification | C# constants now cover Java regular warehouse base limit and row length. The full `StorageType` enum, pet bags, house warehouse storage, account/legion warehouse limits, and reflection/enum identity behavior are not ported here. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getWarehouseExpansions` | `Player.WarehouseNpcExpands + Player.WarehouseBonusExpands` | Runtime Model / Derived Value | Partial | Regression Tested | Needs Verification | Warehouse capacity now uses the Java expansion sum. Thread-safety, observer side effects, serialization beyond packet fields, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.services.WarehouseService.expand` | `StorageExpansionNpcService.HandleResponse` plus `InventoryCapacity.GetWarehouseLimit` | Service / Mutation Effect | Partial | Regression Tested | Needs Verification | Accepted warehouse NPC expansion now has coverage that the represented capacity formula moves from base `24` to `32`. Java `Storage.setLimit` mutation, persistent dirty-state behavior, and live warehouse UI validation remain unverified. |
+| `com.aionemu.gameserver.model.items.storage.Storage.getItems` / Kinah handling | `InventoryCapacity.GetUsedWarehouseSlots` | Utility / Slot Counting | Partial | Regression Tested | Needs Verification | Counts represented regular warehouse rows and ignores Kinah/non-warehouse rows. Java `Storage.getItems()` behavior, warehouse special cases, concurrency, and live database-loaded item ordering remain unverified. |
+
+Tests added/updated:
+- `GamePacketTests.InventoryCapacity_MatchesJavaRegularWarehouseLimitAndIgnoresKinahRows`: validates Java regular-warehouse base limit/row-length formula, used/free slot calculation, Kinah exclusion, and non-warehouse row exclusion.
+- `StorageExpansionNpcServiceTests.HandleResponse_AcceptWarehouseDecreasesKinahAndExpandsNpcWarehouseRows`: now also validates accepted warehouse NPC expansion produces represented warehouse limit `32`.
+- Java comparison status: expectations are source-derived from `Player.setWarehouseLimit`, `Player.getWarehouseExpansions`, `WarehouseService.expand`, and `StorageType.REGULAR_WAREHOUSE`. No Java runtime execution, Java-generated golden vector, live MySQL item load comparison, Java `Storage.setLimit` object mutation comparison, encrypted-frame comparison, socket-order validation, threading behavior comparison, reflection behavior comparison, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- C# still computes warehouse capacity on demand rather than mutating a Java-like `Storage.limit` object.
+- Account, legion, pet-bag, and house-warehouse storage capacity parity remain outside this unit.
+- Java `Storage.getItems()` and dirty-state behavior remain broader than represented row counting.
+- Live MySQL item loading/writeback and real client warehouse UI behavior remain unverified.
+- Java golden packet bytes and encrypted frames remain unperformed.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented regular-warehouse capacity calculation slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 5 Java `Storage.setLimit` object mutation comparison, full `StorageType` enum parity, live MySQL item comparison, golden/encrypted packet comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; regular warehouse capacity is now represented, but full storage object/runtime parity remains partial.
+
+Next recommended unit of work:
+- Either add a source-driven cube/warehouse capacity service test around accepted cube expansion and item expansion ticket paths, or pivot back to a non-storage Phase 6 core gap such as kisk lifecycle cleanup, charge/power-shard/idiani burn hooks, or loot/drop handler-side quest/event paths. Keep Java `Storage` object dirty-state modeling as a larger future storage unit.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
