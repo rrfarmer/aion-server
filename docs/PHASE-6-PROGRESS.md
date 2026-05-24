@@ -24753,6 +24753,49 @@ Next recommended unit of work:
 
 ---
 
+### Session 822 (May 24, 2026)
+- Re-inspected Java `SkillAttackManager.performAttack` / `skillAction` branch outcomes and the represented result contract added in Session 821.
+- Added `PlayerSummonKnownObjectNpcSkillAttackCycleOutcomeBranch`.
+- Extended `PlayerSummonKnownObjectNpcSkillAttackCycleResultContract` with `ExpectedJavaOutcomeBranches` and `HasOutcomeBranch`.
+- Split the represented result contract into branch labels for missing invocation, readiness-blocked invocation, pre-action target-too-far, unchanged/entered cast substate, scheduled/immediate skill action, pending scheduler callback, no-action, resume-fight, target-give-up, skill-action target-too-far, blocked skill after-use, successful `useSkill`, failed `useSkill`, and immediate/scheduled post-spawn.
+- Updated the result-contract regression to assert represented branch labels for missing, blocked, scheduled skill action, successful use-skill, and scheduled post-spawn outcomes.
+- Kept live `NpcAI`, `ThreadPoolManager.schedule`, scheduler cancellation, controller execution, target mutation, effects, packets, persistence, threading, serialization, date/time behavior, reflection behavior, precision/rounding, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|StaticDataNpcSkillTests"` passes with 56 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1406 tests.
+
+#### Migration Parity Table - Session 822
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.chooseNextSkill` | `PlayerSummonKnownObjectNpcSkillAttackCycleOutcomeBranch` readiness-blocked branches | Service State | Partial | Regression Tested | Needs Verification | C# branch labels preserve readiness-blocked invocation outcomes over represented selection/list metadata. It does not run Java random/priority selection live, mutate queued skills, compare Java runtime behavior, or validate live timing. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.performAttack` | `ExpectedJavaOutcomeBranches` for pre-action target-too-far, cast-substate, immediate/scheduled action, and scheduler-pending branches | Service | Partial | Regression Tested | Needs Verification | C# labels represented `performAttack` branches for future live wiring. It does not run live `performAttack`, mutate `NpcAI` substate, schedule work, cancel tasks, abort casts, or compare runtime Java behavior. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.skillAction` | `ExpectedJavaOutcomeBranches` for no-action, resume-fight, target-give-up, target-too-far, blocked skill, successful `useSkill`, and failed `useSkill` branches | Service State | Partial | Regression Tested | Needs Verification | C# labels represented `skillAction` result branches. It does not execute live `skillAction`, controller behavior, target mutation, effects, AI events, or packets. |
+| `com.aionemu.gameserver.model.skill.NpcSkillEntry.fireOnEndCastEvents` | `PostSpawnImmediate` / `PostSpawnScheduled` outcome branches | Service State | Partial | Regression Tested as metadata only | Needs Verification | C# labels represented post-spawn branches. It does not execute summon/spawn handlers, delayed spawns, serialization, owner-alive rechecks, random count/distance/angle, or Java runtime event ordering. |
+| `com.aionemu.gameserver.model.gameobjects.Npc` | represented branch contract over `PlayerSummonKnownObject` snapshot data | World Object DTO / Storage | Partial | Regression Tested | Needs Verification | C# consumes immutable represented known-object snapshot metadata. Live `Npc`, `NpcGameStats`, object identity, synchronization/threading, serialization, persistence, and packet-visible behavior remain unverified. |
+| `com.aionemu.gameserver.ai.NpcAI` | represented branch labels for AI substate/event outcomes | AI Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# labels AI side-effect branches only. Live AI state, substate transitions, event ordering, reflection behavior, threading, serialization, and packets remain missing. |
+| `com.aionemu.gameserver.utils.ThreadPoolManager.schedule` | represented branch labels for scheduled action and pending callback outcomes | Scheduler Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# labels represented scheduler branches only. It does not enqueue work, cancel tasks, compare Java scheduler timing, validate date/time precision, or execute callbacks. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ProjectMercenaryNpcSkillAttackCycleResultContract_EnumeratesFutureLiveSideEffects`: now also validates missing-invocation, readiness-blocked, scheduled skill action, successful use-skill, and scheduled post-spawn outcome branches.
+- Java comparison status: expectations are source-derived from Java `SkillAttackManager.performAttack`, `skillAction`, represented post-spawn hooks, and the C# represented invocation/result-contract boundary. No Java runtime execution, live scheduler comparison, cancellation comparison, live `NpcAI` mutation comparison, controller comparison, reflection comparison, threading comparison, serialization comparison, date/time precision comparison, packet comparison, persistence comparison, or live-client validation was run.
+
+Remaining risks:
+- The branch contract is metadata only; it does not schedule, execute, cancel, mutate AI, call controllers, set targets, apply effects, persist state, or send packets.
+- Java scheduler timing/cancellation, callback thread ordering, AI state/event ordering, object identity, synchronization/threading behavior, serialization, persistence, reflection behavior, precision/rounding, packet order, and live-client behavior remain missing or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 represented live-invocation outcome-branch contract slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 16 live `SkillAttackManager.performAttack`, live `SkillAttackManager.skillAction`, live `SkillAttackManager.chooseNextSkill`, live `ThreadPoolManager.schedule`, scheduler cancellation, live `Npc`, live `NpcAI`, controller execution, target mutation, post-spawn execution, effect application, packet fanout, persistence, threading/serialization, date/time precision, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented live-invocation branches exist, but live NPC skill scheduling/execution remains intentionally unwired.
+
+Next recommended unit of work:
+- Continue NPC skill action parity by adding focused branch-contract coverage for target-too-far, target-give-up, blocked-skill after-use, and failed `useSkill` represented cycles so the branch labels are covered beyond the successful scheduled-skill path. Keep live `NpcAI`, `ThreadPoolManager`, cancellation, controller execution, packets, threading, serialization, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -24762,4 +24805,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill action parity by splitting the represented result contract into more precise Java outcome branches for target-too-far, target-give-up, blocked skill, use-skill failure, successful use-skill, and post-spawn scheduling so future live invocation can map each branch to concrete `NpcAI`, controller, packet, and scheduler calls. Keep live `NpcAI`, `ThreadPoolManager`, cancellation, controller execution, packets, threading, serialization, and live-client validation explicit until supported.
+8. Continue NPC skill action parity by adding focused branch-contract coverage for target-too-far, target-give-up, blocked-skill after-use, and failed `useSkill` represented cycles so the branch labels are covered beyond the successful scheduled-skill path. Keep live `NpcAI`, `ThreadPoolManager`, cancellation, controller execution, packets, threading, serialization, and live-client validation explicit until supported.
