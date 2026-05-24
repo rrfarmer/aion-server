@@ -19998,6 +19998,52 @@ Next recommended unit of work:
 
 ---
 
+### Session 723 (May 24, 2026)
+- Wired the represented NPC skill-damage observer-burn hook to production bootstrap dependencies.
+- Added a lazy item-template resolver to `WorldNpcSkillDamageService` so production calls can resolve `GameServerRuntimeContext.DataManager.StaticData.ItemTemplates` after Java-style static-data bootstrap completes.
+- Updated `Program.cs` to construct `WorldNpcSkillDamageService` with lazy static-data access and `PlayerEnterWorldService.SaveIdianPolishBurnMutationAsync` / `SaveItemChargeBurnMutationAsync` delegates.
+- Kept pre-bootstrap behavior conservative: if static item templates are not loaded yet, observer burns are skipped rather than throwing or applying incomplete item mutations.
+- Added `WorldNpcDamageServiceTests.ApplyDamageEffectAsync_UsesLazyItemTemplatesForEquipmentObserverBurns`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "WorldNpcDamageServiceTests|EquipmentObserverBurnWorkflowServiceTests|PlayerEnterWorldServiceTests"` passes with 58 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1300 tests.
+
+#### Migration Parity Table - Session 723
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.GameServer.main` / Java bootstrap static-data initialization | `Aion.GameServer.Program` registration for `WorldNpcSkillDamageService` plus `GameServerRuntimeContext.DataManager` lazy access | Bootstrap / DI Wiring | Partial | Regression Tested | Needs Verification | C# production registration now supplies post-bootstrap item-template access for observer burns. This is source-derived from Java's static `DataManager` availability after bootstrap, but no production host startup with this specific service resolution path, live static data, or live combat invocation was run. |
+| `com.aionemu.gameserver.skillengine.effect.DamageEffect.applyEffect` | `Aion.GameServer.Services.WorldNpcSkillDamageService.ApplyDamageEffectAsync` | Skill Effect Caller | Partial | Regression Tested | Needs Verification | C# can now reach observer burns from represented ordinary skill damage using templates resolved lazily from production bootstrap state. Full Java `SkillEngine`, `AttackUtil`, result-list integration, and live packet order remain partial. Missing methods include the broader Java effect runtime and real caller fanout. |
+| `com.aionemu.gameserver.skillengine.effect.AbstractOverTimeEffect.onPeriodicAction` / periodic damage effects | `WorldNpcSkillDamageService.ApplyDamageEffectAsync` through dot-attacked mappings | Skill Effect Caller / Dot Callback | Partial | Regression Tested | Needs Verification | Lazy template access also supports represented dot-attacked observer burns after static data loads. Actual scheduled effect lifecycle, Java `Effect` identity/order, and live dot dispatch remain unverified. Date/time handling for scheduling is outside this unit. |
+| `com.aionemu.gameserver.dataholders.DataManager` static item-template access | `Aion.GameServer.Services.GameServerRuntimeContext.DataManager.StaticData.ItemTemplates` resolved by `WorldNpcSkillDamageService` | Static Data Dependency | Partial | Unit Tested with lazy resolver | Needs Verification | C# uses a delegate instead of Java static access because the port stores loaded static data in runtime context. This is an intentional C# DI difference. Pre-bootstrap null data skips observer burns; Java static-data availability assumptions need production startup validation. |
+| `com.aionemu.gameserver.services.player.PlayerEnterWorldService` persistence-side item mutation helpers | `Aion.GameServer.Services.PlayerEnterWorldService.SaveIdianPolishBurnMutationAsync` / `SaveItemChargeBurnMutationAsync` delegates supplied from `Program.cs` | Persistence Dependency | Partial | Regression Tested through existing delegate capture tests | Needs Verification | Production registration now supplies the persistence delegates used by the skill-damage observer-burn workflow. Live DAO transaction/autocommit/rollback behavior, Java persistent-state flush cadence, and database comparison remain unverified. |
+| `com.aionemu.gameserver.model.items.IdianStone.decreasePolishCharge` | `WorldNpcSkillDamageService` lazy-template observer burn path via `EquipmentObserverBurnWorkflowService` | Model Helper Dependency | Partial | Regression Tested | Needs Verification | New lazy-resolver test proves represented idian burn state mutation still occurs without direct constructor templates. Java synchronization, exhausted-idian packet-before-clear serialization, `RandomBonusEffect` stat refresh, and DAO delete timing remain unresolved. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.updateChargePoints` | `WorldNpcSkillDamageService` lazy-template observer burn path via `EquipmentObserverBurnWorkflowService` | Model Helper Dependency | Partial | Regression Tested | Needs Verification | New lazy-resolver test proves represented charge burn state mutation still occurs without direct constructor templates. Java synchronized mutation, `PersistentState.UPDATE_REQUIRED` batching, and live persistence timing remain unresolved. |
+
+Tests added/updated:
+- `WorldNpcDamageServiceTests.ApplyDamageEffectAsync_UsesLazyItemTemplatesForEquipmentObserverBurns`: validates a lazy item-template resolver is invoked once for represented ordinary attack observer burns, then idian and charge state are mutated through the existing workflow.
+- Existing `WorldNpcDamageServiceTests`, `EquipmentObserverBurnWorkflowServiceTests`, and `PlayerEnterWorldServiceTests` matched by the focused filter were rerun.
+- Java comparison status: expectations are source-derived from Java bootstrap/static-data access, `DamageEffect.applyEffect`, periodic damage observer callbacks, `DataManager`, `PlayerEnterWorldService` persistence responsibilities, `IdianStone.decreasePolishCharge`, and `ChargeInfo.updateChargePoints`. No Java runtime execution, production host startup with live combat, Java-generated golden packet, live socket ordering, live MySQL/DAO comparison, reflection comparison, threading comparison, serialization comparison beyond existing C# packet assertions, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- `WorldNpcSkillDamageService` still returns observer-burn packets but does not send them through `GameServerConnection`; production packet ordering relative to `SM_ATTACK_STATUS` remains unresolved.
+- Production bootstrap wiring is covered by compile/full-suite validation and unit-level lazy-resolver behavior, but not by a live server combat path.
+- Pre-bootstrap missing static data intentionally skips observer burns; this is a C# lifecycle guard and not a proven Java behavior.
+- Delegate persistence is wired from production registration, but live DAO transaction/autocommit/rollback behavior and Java flush cadence remain unverified.
+- Java observer dispatch order, synchronization, exhausted-idian serialization, stat/effect refresh fanout, and live client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 production bootstrap wiring slice for represented skill-damage observer burns
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 production packet-send ordering, live combat caller invocation, full SkillEngine/AttackUtil integration, Java runtime/golden packet comparison, live DAO comparison, and synchronized/threading comparison
+- Estimated overall migration completion: Phase 6 remains about 65% complete; production dependency wiring is stronger, but packet fanout and broader combat integration remain partial.
+
+Next recommended unit of work:
+- Add a focused `WorldNpcSkillDamageResult` packet fanout/caller seam that proves observer-burn packets are sent after the `SM_ATTACK_STATUS` broadcast and in idian-before-charge order. If a safe production `GameServerConnection` skill-damage call path exists, wire that seam there; otherwise keep it as a caller-level service/test until the real skill/effect runtime has a stable home.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
