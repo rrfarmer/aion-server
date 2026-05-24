@@ -19847,6 +19847,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 720 (May 24, 2026)
+- Added the idian polish observer-event burn bridge for Java `IdianStone.onEquip`.
+- Added `IdianPolishObserverEvent` and `IdianPolishService.BurnEquippedWeaponPolishChargeForObserverEvent`.
+- The new observer bridge burns only equipped main-hand weapon idians, matching Java's `onEquip` observer registration guard.
+- The bridge preserves Java's outgoing ordinary attack `skillId == 0` guard, burns defend charge for attacked and dot-attacked observer events, and keeps the existing `PolishChargeCondition` skill-value helper separate.
+- Added `IdianPolishServiceTests.BurnEquippedWeaponPolishChargeForObserverEvent_BurnsOnlyMainHandObserverIdian`.
+- Added `IdianPolishServiceTests.BurnEquippedWeaponPolishChargeForObserverEvent_SkipsSkillAttackButAllowsDotAttacked`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "IdianPolishServiceTests|IdianPolishBurnApplicationServiceTests|PlayerEnterWorldServiceTests"` passes with 34 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1294 tests.
+
+#### Migration Parity Table - Session 720
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.items.IdianStone.onEquip` | `Aion.GameServer.Services.IdianPolishService.BurnEquippedWeaponPolishChargeForObserverEvent` | Observer Bridge / Model Helper | Partial | Regression Tested | Needs Verification | C# now models the idian observer burn selection for equipped main-hand weapon idians. Actual observer registration with `ObserveController`, lifecycle removal, `RandomBonusEffect.applyEffect`, stat recalculation, packet fanout, and production combat/effect caller invocation are still not wired. |
+| `com.aionemu.gameserver.controllers.observer.ActionObserver.attack` in `IdianStone.onEquip` | `IdianPolishObserverEvent.Attack` consumed by `BurnEquippedWeaponPolishChargeForObserverEvent` | Observer Callback | Partial | Unit Tested | Needs Verification | C# preserves Java's outgoing attack `skillId == 0` guard and uses attack burn data. Real skill/attack observer dispatch and socket ordering remain unverified. |
+| `com.aionemu.gameserver.controllers.observer.ActionObserver.attacked` in `IdianStone.onEquip` | `IdianPolishObserverEvent.Attacked` consumed by `BurnEquippedWeaponPolishChargeForObserverEvent` | Observer Callback | Partial | Unit Tested | Needs Verification | C# uses defend burn data for incoming attacked events and does not apply the outgoing attack skill-id guard. Real attacked observer dispatch, threading, and packet/persistence ordering remain unverified. |
+| `com.aionemu.gameserver.controllers.observer.ActionObserver.dotattacked` in `IdianStone.onEquip` | `IdianPolishObserverEvent.DotAttacked` consumed by `BurnEquippedWeaponPolishChargeForObserverEvent` | Observer Callback | Partial | Unit Tested | Needs Verification | C# uses defend burn data for dot-attacked events. Dot effect lifecycle, observer ordering, and live effect dispatch remain unverified. |
+| `com.aionemu.gameserver.model.items.ItemSlot.MAIN_HAND` | `IdianPolishService` main-hand mask guard | Equipment Slot Dependency | Partial | Unit Tested | Needs Verification | C# main-hand observer bridge uses the Java `MAIN_HAND` slot mask and deliberately differs from the separate `PolishChargeCondition` skill-value helper, which can burn broader non-offhand weapon slots. Broader equipment-slot modeling and dual-weapon/offhand runtime behavior need live validation. |
+| `com.aionemu.gameserver.skillengine.condition.PolishChargeCondition` | `IdianPolishService.BurnEquippedWeaponPolishCharge` | Skill Condition Helper | Partial | Regression Tested | Needs Verification | Existing C# skill-condition burn helper remains separate and continues to skip main/sub offhand weapons while honoring explicit skill-value burns. This session did not wire the Java `SkillEngine` caller or compare live skill runtime behavior. |
+| `com.aionemu.gameserver.model.items.IdianStone.decreasePolishCharge` | `IdianPolishService.DecreasePolishCharge` / observer burn bridge | Model Helper | Partial | Regression Tested | Needs Verification | Observer bridge reuses the source-derived clamp, low-charge, and exhaustion update kinds. Java synchronization, `PersistentState`, `ItemStoneListDAO`, exact exhausted-item serialization ordering, and live-client behavior remain unresolved. |
+
+Tests added/updated:
+- `IdianPolishServiceTests.BurnEquippedWeaponPolishChargeForObserverEvent_BurnsOnlyMainHandObserverIdian`: validates the observer bridge burns only equipped main-hand weapon idians, skips sub-hand/offhand/non-weapon/unequipped items, and uses attack versus defend burn amounts.
+- `IdianPolishServiceTests.BurnEquippedWeaponPolishChargeForObserverEvent_SkipsSkillAttackButAllowsDotAttacked`: validates Java's outgoing attack `skillId == 0` guard and dot-attacked defend burn behavior.
+- Existing `IdianPolishServiceTests`, `IdianPolishBurnApplicationServiceTests`, and `PlayerEnterWorldServiceTests` matched by the focused filter were rerun.
+- Java comparison status: expectations are source-derived from `IdianStone.onEquip`, Java `ActionObserver.attack/attacked/dotattacked` overrides, `ItemSlot.MAIN_HAND`, `PolishChargeCondition`, and `IdianStone.decreasePolishCharge`. No Java runtime execution, live observer dispatch, Java-generated golden packet, packet ordering comparison, threading comparison, serialization comparison, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- The observer bridge is still not invoked from a production combat/effect observer caller.
+- Actual Java `ObserveController` registration/removal, `RandomBonusEffect` stat application/removal, and `IdianStone.onUnEquip` side effects remain partial.
+- Java synchronization, exhausted-idian packet-before-clear ordering, DAO delete timing, and persistence ordering remain unverified.
+- Main-hand/offhand behavior is source-derived but not live validated against dual-wield runtime equipment states.
+- No Java runtime, live database, or live-client comparison was run.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 idian main-hand observer burn bridge slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 production combat/effect caller invocation, real ObserveController lifecycle, RandomBonusEffect/stat fanout, exhausted-idian packet/DAO ordering comparison, synchronized/threading comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; idian observer modeling is closer, but production combat/effect observer integration remains partial.
+
+Next recommended unit of work:
+- Combine the represented charge and idian observer burn paths behind a first production-style combat/effect caller seam if one is stable enough: plan burns, apply packets/in-memory updates, persist charge updates and exhausted idian deletes, and document packet ordering. If the caller seam remains premature, continue the idian lifecycle by modeling the `IdianStone.onUnEquip` stat/effect removal boundary and remaining `RandomBonusEffect` fanout assumptions.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
