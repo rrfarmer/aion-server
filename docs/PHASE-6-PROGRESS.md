@@ -19429,6 +19429,48 @@ Next recommended unit of work:
 
 ---
 
+### Session 711 (May 24, 2026)
+- Continued kisk lifecycle parity by closing the documented ID-release gap in the combined production `CM_REVIVE` depleted-kisk workflow.
+- Added `GameServerConnectionKiskReviveWorkflowTests.HandleReviveAsync_DepletedKiskReleasesObjectId`.
+- Extended the kisk revive workflow fixture to accept an `IDFactory` so handler-level revive cleanup can verify the same release seam as lower-level lifetime cleanup.
+- The new test proves that when Java `Kisk.resurrectionUsed` semantics delete a kisk after the final revive charge, the C# production handler path releases the removed kisk object id back to `IDFactory`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionKiskReviveWorkflowTests|PlayerKiskLifetimeServiceTests|IDFactoryTests"` passes with 15 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1278 tests.
+
+#### Migration Parity Table - Session 711
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_REVIVE` | `Aion.GameServer.Network.Aion.ClientPackets.CmRevive` / `GameServerConnection.HandleReviveAsync` | Client Packet / Handler | Partial | Regression Tested | Needs Verification | Production last-charge kisk revive route now proves object-id release through the combined handler workflow. Other revive ids, invalid-id behavior, encrypted parser-to-handler execution, and live-client behavior remain outside this unit. |
+| `com.aionemu.gameserver.model.gameobjects.Kisk.resurrectionUsed` | `PlayerKiskResurrectionService.UseResurrection` / `PlayerKiskReviveService.TryUseKiskRevive` | Runtime Model / Kisk State | Partial | Regression Tested | Needs Verification | Final-charge deletion intent now has handler-level evidence for registry removal, world removal, fanout, and ID release. Java live `Kisk` mutation/broadcast and controller timing remain source-derived but not Java-runtime compared. |
+| `com.aionemu.gameserver.controllers.KiskController.delete` | `GameServerConnection.RemoveRuntimeKiskAsync` / `PlayerKiskLifetimeService.DespawnExpiredKisk` | Controller / Runtime Cleanup | Partial | Regression Tested | Needs Verification | Combined `CM_REVIVE` depleted branch now verifies object-id release through `IDFactory.NextId()` after removal. Java controller AI/death hooks, task cancellation, threading, and exact event ordering remain partial. |
+| `com.aionemu.gameserver.services.KiskService.removeKisk` | `PlayerKiskRemovalRuntimeCleanupService.ApplyAsync` plus `PlayerKiskLifetimeService.DespawnExpiredKisk` | Service / Cleanup | Partial | Regression Tested indirectly | Needs Verification | This unit closes the ID-release assertion gap noted after registry fanout coverage. Offline bind cleanup, live known-list fanout, exact Java iteration order, and live client behavior remain unverified. |
+| `com.aionemu.gameserver.utils.idfactory.IDFactory.releaseId` | `Aion.GameServer.Utils.IdFactory.IDFactory.ReleaseId` | Utility | Complete | Regression Tested | Needs Verification | Handler-level test proves the released kisk id becomes the next reusable id when lower ids are locked. Java bit-mask invalid-id behavior is separately unit-tested, but no Java runtime comparison was run for this workflow. |
+
+Tests added/updated:
+- `GameServerConnectionKiskReviveWorkflowTests.HandleReviveAsync_DepletedKiskReleasesObjectId`: validates that the production `CM_REVIVE` final-charge kisk cleanup releases the removed kisk object id through `IDFactory`.
+- Existing connection-level kisk revive workflow tests, `PlayerKiskLifetimeServiceTests`, and `IDFactoryTests` were rerun with the focused filter.
+- Java comparison status: expectations are source-derived from `CM_REVIVE`, `PlayerReviveService.kiskRevive`, `Kisk.resurrectionUsed`, `KiskController.delete`, `KiskService.removeKisk`, and `IDFactory.releaseId`. No Java runtime execution, Java-generated golden vector, encrypted-frame comparison, full socket-order capture, thread/task comparison, Java controller/AI hook comparison, reflection behavior, date/time behavior beyond bounded kisk lifetime, or live-client validation was run.
+
+Remaining risks:
+- This ID-release test uses a direct handler call and test `IDFactory`, not encrypted client frames through the real socket registry.
+- ID release is verified by next-id reuse under locked lower ids, not by inspecting Java runtime internals.
+- Java `KiskController.delete` AI/death hooks and exact event order remain unmodeled.
+- Other revive types, invalid revive ids, prison/event kisk branches, no-resurrect-penalty live effect detection, unset res-position state, exact serialization, and live client behavior remain partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 combined depleted kisk ID-release coverage slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 5 encrypted socket processor comparison, Java runtime/golden comparison, Java controller/AI side-effect comparison, other revive-type routing, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; depleted kisk cleanup is now covered for registry/world/fanout/ID release, but full live kisk/revive parity remains partial.
+
+Next recommended unit of work:
+- Continue kisk/revive parity with live no-resurrect-penalty effect detection into `HandleReviveAsync` or unset res-position state after kisk revive, then pivot to charge/power-shard/idiani burn hooks or loot/drop handler-side quest/event paths if the remaining revive gaps require broader effect/runtime support.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
