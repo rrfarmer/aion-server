@@ -20422,6 +20422,51 @@ Next recommended unit of work:
 
 ---
 
+### Session 732 (May 24, 2026)
+- Inspected Java `CM_USE_CHARGE_SKILL` and current C# casting/skill surfaces.
+- Confirmed C# has NPC casting-interrupt state but no player `getCastingSkill`, charge-skill template, cast-start-time, or `useChargeSkill` runtime route ready for honest handler parity.
+- Added `CmUseChargeSkill` as the C# no-payload parser for Java `CM_USE_CHARGE_SKILL.readImpl`.
+- Registered opcode 234 in `GameClientPacketFactory` for `InGame` connections.
+- Added focused packet factory coverage proving opcode 234 parses in `InGame` and rejects `Authed`.
+- Runtime charge-skill dispatch remains intentionally unimplemented because the player casting-skill model, charge-template check, charge-time calculation, and controller `useChargeSkill` behavior are not yet ported.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GamePacketTests` passes with 90 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1314 tests.
+
+#### Migration Parity Table - Session 732
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_USE_CHARGE_SKILL` | `Aion.GameServer.Network.Aion.ClientPackets.CmUseChargeSkill` | Client Packet | Partial | Unit Tested | Needs Verification | C# now models the empty Java `readImpl` and opcode creation. Runtime `runImpl` remains missing: active-player lookup, `player.getCastingSkill`, charge-template guard, charge elapsed-time calculation, and `PlayerController.useChargeSkill`. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode 234 registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode 234 registration | Packet Factory | Partial | Unit Tested | Needs Verification | C# factory now accepts opcode 234 only in `InGame`, matching Java registration. Java reflection construction differs intentionally from C# explicit factory lambdas. No live encrypted-frame or Java runtime comparison was run. |
+| `com.aionemu.gameserver.skillengine.model.Skill` / `SkillTemplate.isCharge` | No C# player charge-casting route wired to `CmUseChargeSkill` yet | Skill Runtime Dependency | Not Started | No Tests | Needs Verification | Java checks the active player's current casting skill and requires a charge skill template. C# has no equivalent player casting skill/charge template route for this packet yet. |
+| `com.aionemu.gameserver.controllers.PlayerController.useChargeSkill` | No C# controller equivalent wired to `CmUseChargeSkill` yet | Skill Controller Dependency | Not Started | No Tests | Needs Verification | Java computes elapsed charge time from `System.currentTimeMillis() - chargeCastingSkill.getCastStartTime()` before controller dispatch. C# date/time and charge-duration behavior remain unimplemented and unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getCastingSkill` | No C# player casting-skill state wired to client packet handling yet | Player Model Dependency | Not Started | Manual Only | Needs Verification | Inspection found represented NPC casting interrupt state but not a live player casting skill route. Threading behavior for player casting state is therefore unverified. |
+
+Tests added/updated:
+- `GamePacketTests.ClientPacketFactory_ParsesUseChargeSkill`: validates opcode 234 creates `CmUseChargeSkill` in `InGame`, consumes the empty payload, and rejects `Authed`.
+- Existing `GamePacketTests` were rerun as focused validation.
+- Java comparison status: expectations are source-derived from Java `AionClientPacketFactory` and `CM_USE_CHARGE_SKILL.readImpl`. No Java runtime execution, Java-generated golden packet, live `GameServerConnection`, player casting-skill state, controller charge dispatch, encrypted-frame comparison, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- `CmUseChargeSkill` is parsed and registered but not handled by `GameServerConnection`; charge skill firing is not live.
+- Full Java player casting-skill state, charge-template validation, charge elapsed-time calculation, controller dispatch, skill/effect runtime, observer dispatch, and combat packet fanout remain missing.
+- Date/time behavior is a known runtime gap because Java uses `System.currentTimeMillis()` at dispatch time to calculate charge duration.
+- C# packet factory construction intentionally does not use Java reflection; constructor reflection behavior is not parity-tested.
+- No Java golden bytes, live encrypted frames, or client behavior were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 2 parser/factory slices (`CM_USE_CHARGE_SKILL` no-payload parser and opcode 234 registration)
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 4 live charge-skill route invocation, player casting-skill state, charge-template/controller integration, and Java runtime/golden/live-client comparison
+- Estimated overall migration completion: Phase 6 remains about 65% complete; combat packet parsing is broader, but live skill/charge behavior remains partial.
+
+Next recommended unit of work:
+- Move from parser coverage into a represented combat packet handling seam. Prefer `CmCastSpell` early-exit handling as a delegate-backed service so Java ordering can be tested without full `SkillEngine`: dead-player rejection, spell id zero cancel-current-skill hook, missing pet-order rejection, missing/passive template no-op, protection/use-item cancellation hooks, and cooldown not-ready response. Keep charge-skill runtime for later unless player casting-skill state and charge templates are introduced first.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
