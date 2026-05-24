@@ -16018,6 +16018,53 @@ Summary metrics:
 Next recommended unit of work:
 - Continue command `31` by adding the smallest `LeagueMoveEvent` fanout planner: produce per-alliance `SM_ALLIANCE_INFO` and `STR_UNION_CHANGE_FORCE_NUMBER_ME/HIM` intents in Java order, still using packet type/order assertions before attempting byte-golden or live-client validation.
 
+### Session 645 (May 24, 2026)
+- Source-read Java `LeagueMoveEvent.handleEvent`, `SM_ALLIANCE_INFO`, and `SM_SYSTEM_MESSAGE.STR_UNION_CHANGE_FORCE_NUMBER_ME/HIM`.
+- Added command `31` league move packet intents to `PlayerLeagueRuntime`: after a successful position swap, each alliance member receives an `SM_ALLIANCE_INFO` packet followed by the selected-alliance force-number message and the target-alliance force-number message.
+- Added C# `SmSystemMessage.UnionChangeForceNumberMe` and `UnionChangeForceNumberHim` factories with Java message ids `1400589` and `1400590`.
+- Wired `GameServerConnection` command `31` to send the generated league packet intents through the connection registry or active connection fallback.
+- Updated the command `31` move regression to assert packet recipient order and packet type/message-id order. League `SM_ALLIANCE_INFO` object creation is covered, but byte serialization remains blocked because `SmAllianceInfo` still rejects league rows until the packet payload is fully ported.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerAllianceRuntime|PlayerAllianceMemberInfo|BaseLeavePlanner|PlayerLeagueRuntime"` passes with 106 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1120 tests.
+
+#### Migration Parity Table - Session 645
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.ClientPackets.CmPlayerStatusInfo` / `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Command `31` now sends source-derived league move packet intents after a successful move. Packet byte parity and live-client behavior are still unverified. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.LEAGUE_ALLIANCE_MOVE` | Command code `31` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Successful moves now swap positions and fan out `SM_ALLIANCE_INFO` plus force-number system messages. Global alliance iteration order is deterministic by C# league position and has not been Java-runtime compared against `ConcurrentHashMap.values()`. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.moveAlliance` | `Aion.GameServer.Services.PlayerLeagueRuntime.MoveAlliance` plus command `31` branch | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Leader gate, position swap, and packet intent fanout are modeled. Java static registry, packet processor behavior, and real runtime exception behavior are not compared. |
+| `com.aionemu.gameserver.model.team.league.League` | `Aion.GameServer.Services.PlayerLeagueRuntime` / `PlayerLeagueSnapshot` | Team State | Partial | Regression Tested | Needs Verification | Minimal league state now drives move fanout. Full league lifecycle, loot rules, disband/leave/join/invite/change-leader/kinah behavior, and Java object identity remain unported. |
+| `com.aionemu.gameserver.model.team.league.LeagueMember` | Internal `PlayerLeagueRuntime.PlayerLeagueMember` | Team Member | Partial | Regression Tested | Needs Verification | Tracks alliance id and position for move/fanout only. Java name/object access is approximated through `PlayerAllianceRuntime` lookups. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueMoveEvent` | `PlayerLeagueRuntime.MoveAlliance` / `PlayerLeaguePacketIntent` | Event Runtime Dependency | Partial | Regression Tested | Needs Verification | C# now models the event's position swap and per-alliance packet sequence. Java lock/event queue, `ConcurrentHashMap` iteration, and packet bytes remain unverified. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `PlayerAllianceRuntime.Resolve` / `GetDescriptor` / `GetSnapshot` / `GetMemberObjectIds` | Team State Dependency | Partial | Regression Tested | Needs Verification | Supplies caller alliance, leader names, recipients, and `SM_ALLIANCE_INFO` plans for league move fanout. No live Java league pointer exists in C#. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` / `PlayerAllianceInfoPacketPlan` | Server Packet | Partial | Regression Tested | Partial Parity | Packet objects are created in Java order with a non-zero league id, but byte serialization for league rows still throws `NotSupportedException`; no golden bytes or client proof exist. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested | Needs Verification | Added source-derived factories for `STR_UNION_CHANGE_FORCE_NUMBER_ME` (`1400589`) and `STR_UNION_CHANGE_FORCE_NUMBER_HIM` (`1400590`). Parameter payload bytes are not Java-golden compared. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry` / `GameServerConnection.SendLeaguePacketAsync` | Runtime Dependency | Partial | Regression Tested | Needs Verification | Tests verify packet recipient/type/message-id order through the in-memory registry. Live socket ordering, offline recipients, and Java packet processor exception/log behavior remain unverified. |
+
+Tests updated:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_LeagueAllianceMoveSwapsPositionsAndFansOutJavaPacketOrder`: validates command `31` from the league leader swaps selected/target positions and sends, for each affected alliance in deterministic C# order, `SmAllianceInfo`, `SmSystemMessage(1400589/1400590)`, and `SmSystemMessage(1400590/1400589)` matching Java's per-alliance packet sequence.
+- Java comparison status: expectations are source-derived from `LeagueMoveEvent.handleEvent`, `SM_ALLIANCE_INFO`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live client packet capture, league row serialization comparison, Java static league registry comparison, event queue/lock comparison, `ConcurrentHashMap` iteration comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- `SmAllianceInfo` still cannot serialize league rows; this unit verifies object fanout order only, not byte-level packet parity.
+- C# uses deterministic sorted league positions for fanout order; Java `LeagueMoveEvent` iterates `ConcurrentHashMap.values()` through `league.forEach`, so global alliance order is not verified.
+- `PlayerLeagueRuntime` remains a narrow bridge, not a full Java `League`/`LeagueService` port.
+- Java static `LeagueService.leagues`, league leave/disband/join/invite/change-leader/loot/kinah workflows, event queue, locks, object identity, iteration ordering, and threading behavior remain source-derived or deferred.
+- Java packet bytes, encrypted opcode/frame validation, packet capture comparison, packet processor exception/log comparison, offline-recipient behavior, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is explicitly partial because league `SM_ALLIANCE_INFO` rows are not encoded yet.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 command `31` `LeagueMoveEvent` packet-intent fanout slice plus 2 system-message factories and 1 updated regression test
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 8 league `SM_ALLIANCE_INFO` row serialization, full `LeagueService`, Java static league registry, league leave/disband/join/change-leader workflows, Java event queue/lock comparison, packet processor exception/log comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; command `31` is materially closer, but league packet serialization and lifecycle parity remain open.
+
+Next recommended unit of work:
+- Port the league-row portion of `SM_ALLIANCE_INFO` into `PlayerAllianceInfoPacketPlan`/`SmAllianceInfo` so command `31` fanout can be serialized and covered by packet-field tests before any byte-golden or live-client validation.
+
 ---
 
 ## Next Steps
