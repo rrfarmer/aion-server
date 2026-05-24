@@ -17498,6 +17498,52 @@ Summary metrics:
 Next recommended unit of work:
 - Wire `QuestionResponseRegistry.DenyAll` into player leave/disconnect cleanup to mirror Java `PlayerLeaveWorldService.leaveWorld`, then clean up typed adapter slots for league/friend/kisk/rift/charge/soulbind on logout. Source-read Java `PlayerLeaveWorldService`, current C# disconnect/leave-world flow, and add tests that `DenyAll` removes active registry entries without claiming Java handler callback parity.
 
+### Session 676 (May 24, 2026)
+- Source-read Java `PlayerLeaveWorldService.leaveWorld`, especially the `player.getResponseRequester().denyAll()` logout cleanup call.
+- Wired migrated C# question-response cleanup into `PlayerEnterWorldService.LeaveWorldAsync`:
+  - logout now calls `Player.ResponseRequester.DenyAll()`,
+  - typed adapter slots for friend, charge-all, soulbind, rift portal, kisk bind, and league invite are cleared with the registry,
+  - cleanup runs before logout persistence so saved player state cannot retain migrated pending question metadata.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerEnterWorldServiceTests|QuestionResponseRegistryTests"` passes with 23 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1175 tests.
+
+#### Migration Parity Table - Session 676
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerLeaveWorldService` | `Aion.GameServer.Services.PlayerEnterWorldService` | Service / Logout Lifecycle | Partial | Regression Tested | Needs Verification | Logout now clears migrated response registry state before persistence. Java leave-world has many additional logout side effects not covered by this unit. |
+| `com.aionemu.gameserver.services.player.PlayerLeaveWorldService.leaveWorld` | `PlayerEnterWorldService.LeaveWorldAsync` | Logout Method | Partial | Regression Tested | Needs Verification | Mirrors the `player.getResponseRequester().denyAll()` cleanup boundary and clears C# adapter slots. Delayed disconnect scheduling and many Java services remain broader work. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.denyAll` | `QuestionResponseRegistry.DenyAll` via `PlayerEnterWorldService.ClearPendingQuestionResponses` | Request Registry Method | Partial | Unit Tested / Regression Tested | Needs Verification | Clears active registry entries on logout. Java invokes each handler's deny callback; C# currently discards dispatch metadata and does not execute handler-specific denial side effects. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler.denyRequest` | Not directly executed by logout cleanup | Request Handler Callback | Blocked | No Tests | Unknown | Newly documented gap: Java `denyAll` invokes request-specific denial callbacks. C# metadata dispatch cannot fully reproduce that without generic callback execution or per-kind deny cleanup. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getResponseRequester` | `Aion.GameServer.Model.GameObjects.Player.ResponseRequester` | Player Model Dependency | Partial | Regression Tested | Needs Verification | Leave-world now clears the registry for migrated question flows. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW` migrated question ids | `PendingFriendRequest` / `PendingChargeAllRequest` / `PendingSoulBindRequest` / `PendingRiftPortalRequest` / `PendingKiskBindRequest` / `PendingLeagueInviteRequest` | Adapter State | Refactored | Regression Tested | Needs Verification | C# typed adapter slots are cleared on logout alongside the registry. Java has no equivalent typed slots. |
+| `com.aionemu.gameserver.services.ExchangeService.cancelExchange` | Existing `GameServerConnection.CancelExchangeForQuestionAccept` only | Logout Dependency | Partial | No Tests in this unit | Needs Verification | Java leave-world also cancels exchange; C# logout exchange cleanup remains a known separate gap. |
+| `com.aionemu.gameserver.services.KiskService.onLogout` | Existing kisk logout handling not expanded in this unit | Logout Dependency | Partial | No Tests in this unit | Needs Verification | Java stores offline kisk binding on logout. This unit only handles pending kisk bind question adapter cleanup. |
+| `com.aionemu.gameserver.taskmanager.tasks.ExpireTimerTask.unregisterExpirables` | `Aion.GameServer.Services.ExpirableTaskService` | Logout Dependency | Partial | No Tests in this unit | Needs Verification | Existing expirable cleanup is separate; this unit does not alter it. |
+
+Tests added/updated:
+- `PlayerEnterWorldServiceTests.LeaveWorld_RemovesPlayerFromWorldAndPersistsLogoutState`: now seeds all migrated pending question registry entries and typed adapter slots, then validates logout clears registry count and all adapter slots before/with persistence.
+- Java comparison status: expectations are source-derived from `PlayerLeaveWorldService.leaveWorld` and `ResponseRequester.denyAll`. No Java runtime execution, Java-generated golden vector, Java handler-denial callback comparison, logout packet fanout comparison, exchange logout cleanup validation, kisk logout persistence comparison, real socket-order validation, encrypted frame comparison, reflection behavior, precision/rounding behavior, date/time comparison of logout timestamps, or client validation was run.
+
+Remaining risks:
+- Java `ResponseRequester.denyAll` invokes each handler's `denyRequest`; C# currently clears metadata and adapter slots without executing per-kind denial side effects.
+- C# logout still only partially represents Java `PlayerLeaveWorldService.leaveWorld`; exchange cleanup, kisk offline binding, group/alliance logout fanout, summon/pet/postman cleanup, effect persistence, and many DAO writes remain broader work.
+- C# adapter slots are an intentional bridge and have no Java equivalent.
+- Java `ConcurrentHashMap` semantics remain approximated by a C# lock without stress tests.
+- Packet sends are not validated against Java golden bytes, encrypted frames, production socket ordering, packet captures, or real-client behavior.
+- Date/time handling of `LastOnline` remains C# `DateTime.Now` based and was not runtime-compared to Java `System.currentTimeMillis`.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 logout response-registry cleanup slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 8 Java deny callback execution, full Java leave-world side effects, exchange logout cleanup, kisk offline binding, group/alliance logout fanout, Java concurrent map stress parity, real socket-order validation, and runtime/client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; migrated question-response registry state is now cleared on logout, but Java `denyAll` callback parity and broader logout behavior remain partial.
+
+Next recommended unit of work:
+- Decide the next `ResponseRequester` parity slice: either model per-kind `denyAll` denial side effects for migrated handlers, or start porting another Java `ResponseRequester` user such as duel, group/alliance invite, legion invite, warehouse/cube expand, NPC faction join, recall summon, or dialog recovery. Prefer a narrow handler with existing C# domain state/tests, and do not claim generic callback parity until Java-style handler execution is objectively represented.
+
 ---
 
 ## Next Steps
