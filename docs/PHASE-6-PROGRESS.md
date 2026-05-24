@@ -21518,6 +21518,51 @@ Next recommended unit of work:
 
 ---
 
+### Session 754 (May 24, 2026)
+- Re-inspected Java `CM_SUMMON_CASTSPELL.runImpl` queued-order target equality branch:
+  - target validation resolves a `Creature` target first;
+  - `summon.retrieveNextSkillOrder()` consumes the next queued order;
+  - Java invokes `summon.getController().useSkill(order)` only when `order.getTarget().equals(target)`;
+  - when the target differs, Java silently skips controller execution after consuming the order.
+- Added `PlayerSummonCastSpellSkippedExecution` and `PlayerSummonCastSpellSkippedExecutionKind.TargetMismatch`.
+- Updated `PlayerSummonCastSpellResult.TargetMismatch` to carry queued target object id and packet/resolved target object id as explicit skipped-execution metadata.
+- Kept the existing `TargetMismatch` status and consumed order behavior intact.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 28 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1352 tests.
+
+#### Migration Parity Table - Session 754
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL.runImpl` target mismatch branch | `Aion.GameServer.Services.PlayerSummonCastSpellResult.TargetMismatch` / `PlayerSummonCastSpellSkippedExecution` | Client Packet Handler / Execution Projection | Partial | Regression Tested | Needs Verification | C# now records that the queued order was consumed but controller execution was skipped because queued target id differed from packet/resolved target id. Java compares live `Creature` references via `SkillOrder.getTarget().equals(target)`. |
+| `com.aionemu.gameserver.model.summons.SkillOrder.getTarget` | `PlayerPetSkillOrder.TargetObjectId` / `PlayerSummonCastSpellSkippedExecution.QueuedTargetObjectId` | DTO / Target Projection | Partial | Regression Tested | Needs Verification | C# uses object ids instead of live `Creature` references. Missing methods include live object equality, object lifecycle, serialization, threading behavior, and target reference identity. |
+| `com.aionemu.gameserver.model.gameobjects.Summon.retrieveNextSkillOrder` | `Player.RetrieveNextPetSkillOrder` consumed before skipped-execution result | Summon Queue Projection | Partial | Regression Tested | Needs Verification | C# preserves consume-before-target-mismatch outcome. Queue remains player-owned and not Java's live summon queue or thread-safe behavior. |
+| `com.aionemu.gameserver.controllers.SummonController.useSkill(SkillOrder)` skipped branch | `PlayerSummonCastSpellSkippedExecutionKind.TargetMismatch` | Controller Invocation Guard Projection | Partial | Regression Tested | Needs Verification | C# explicitly records that controller use is skipped. It does not invoke or suppress a live controller; no real `SkillEngine`, release-on-success, packet fanout, or timing behavior exists. |
+
+Tests added/updated:
+- `PlayerSummonCastSpellServiceTests.Handle_ConsumesQueuedOrderWithoutExecutionWhenTargetDoesNotMatch`: now validates skipped-execution metadata with queued target `7001`, packet/resolved target `7002`, no warning metadata, and queue consumption.
+- Java comparison status: expectations are source-derived from Java `CM_SUMMON_CASTSPELL.runImpl`, `SkillOrder.getTarget`, `Summon.retrieveNextSkillOrder`, and `SummonController.useSkill(SkillOrder)`. No Java runtime execution, live `Creature.equals` comparison, object identity comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- C# target mismatch still compares represented object ids, not live `Creature` references.
+- Skipped execution is metadata only around represented service flow.
+- The live summon-owned queue and Java concurrency semantics remain unsupported.
+- Real `SummonController`, `SkillEngine`, release-on-success, packet fanout, live audit/log sinks, Java runtime, and live-client behavior remain unverified.
+- Reflection, serialization, precision/rounding, and date/time behavior are not involved in this narrow slice but remain unverified for the broader path.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 represented skipped-execution target-mismatch projection
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 live `Creature` references/equality, live summon queue, Java concurrency, real `SummonController`, `SkillEngine` execution, release/packet fanout, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented summon-cast now documents the consumed-but-not-executed target mismatch branch, but live object/controller parity remains partial.
+
+Next recommended unit of work:
+- Start the live object bridge for represented summon/mercenary known-list ownership and target identity, beginning with a small owned-known-object record that can carry object id, kind, creator id, and template type for future `Player.getSummonOrMercenary` and `CM_SUMMON_CASTSPELL` parity. Keep real `Creature`/`Npc` objects, Java object equality, and controller execution explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
