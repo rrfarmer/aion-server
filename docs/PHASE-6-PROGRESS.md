@@ -16659,6 +16659,52 @@ Summary metrics:
 Next recommended unit of work:
 - Implement the accepted existing-league branch of `LeagueInviteEvent.acceptRequest` as a planner/runtime slice: when `canInvite` is assumed true, the requester already has a league, and the invited alliance is not in a league, call `PlayerLeagueRuntime.JoinAlliance`. Keep `LeagueService.canInvite`, question-window request registration, and create-league-on-accept for requester-without-league as separate units.
 
+### Session 659 (May 24, 2026)
+- Added the accepted existing-league planner branch for Java `LeagueInviteEvent.acceptRequest`.
+- `PlayerLeagueInvitePlanner.CreateAcceptExistingLeaguePlan` now:
+  - resolves the requester's current league,
+  - reports `RequesterLeagueMissing` for the deferred create-league-on-accept branch,
+  - reports `InvitedAlreadyInLeague` when Java would skip `LeagueService.addAlliance`,
+  - calls `PlayerLeagueRuntime.JoinAlliance` when the requester already has a league and the invited alliance is not in one.
+- Reused the previously ported `LeagueJoinEvent` fanout for successful accepted invites.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerLeagueInvitePlannerTests` passes with 4 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1139 tests.
+
+#### Migration Parity Table - Session 659
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.league.events.LeagueInviteEvent.acceptRequest` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.CreateAcceptExistingLeaguePlan` | Request / Event Planner | Partial | Unit Tested | Needs Verification | Existing-requester-league success branch and invited-already-in-league no-op are modeled. `canInvite`, request-response transport, and create-league-on-accept remain deferred. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.addAlliance` | `Aion.GameServer.Services.PlayerLeagueRuntime.JoinAlliance` | Service / Runtime Bridge | Partial | Unit Tested | Needs Verification | Successful accepted invite reuses the event-shaped join path. Java runtime event queue/lock and map iteration remain unverified. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueJoinEvent` | `Aion.GameServer.Services.PlayerLeagueRuntime.JoinAlliance` / `PlayerLeagueJoinPlan` | Event Runtime Dependency | Partial | Unit Tested | Needs Verification | This unit exercises join through the invite planner. Packet serialization was covered in Session 656; no Java golden-byte comparison. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.createLeague` | Deferred branch represented by `RequesterLeagueMissing` status | Service Dependency | Not Started | Unit Tested | Unknown | Java creates a league when requester has none; C# reports the branch but does not create a new league in this unit. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.canInvite` | Deferred precondition outside `CreateAcceptExistingLeaguePlan` | Service Dependency | Not Started | No Tests | Unknown | Planner assumes `canInvite` has already passed. All failure messages/check ordering remain unported. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Services.PlayerAllianceRuntime` | Team State Dependency | Partial | Unit Tested | Needs Verification | Supplies requester/invited alliance state for league lookup and join fanout. Live Java alliance pointer semantics remain unverified. |
+
+Tests added:
+- `PlayerLeagueInvitePlannerTests.CreateAcceptExistingLeaguePlan_JoinsInvitedAllianceLikeJavaAcceptRequest`: validates existing requester league, invited alliance join, joined position, league state, and join fanout message ids/messages.
+- `PlayerLeagueInvitePlannerTests.CreateAcceptExistingLeaguePlan_ReportsDeferredOrNoopBranches`: validates the requester-without-league deferred status and invited-already-in-league no-op status.
+- Java comparison status: expectations are source-derived from `LeagueInviteEvent.acceptRequest`, `LeagueService.addAlliance`, and `LeagueJoinEvent`. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, request-response runtime comparison, Java static registry comparison, event queue/lock comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- `LeagueService.canInvite` is not ported; failure ordering and system-message fanout are still open.
+- Request-response question-window registration and invocation are not wired.
+- Requester-without-league create-on-accept is represented as a deferred status, not implemented.
+- Invite-to-leader redirection in `LeagueService.inviteToLeague` remains open.
+- Packet-field coverage for the reused join fanout remains C# emitted-object validation only; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- Threading/request-response ordering, Java static registry/object identity, reflection, precision/rounding, and date/time handling remain unverified or not involved.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 accepted existing-league invite planner slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 7 Java golden byte validation, full `LeagueInviteEvent`, `LeagueService.canInvite`, create-league-on-accept, request-response transport, Java static league registry, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; accepted invite can now reuse join fanout for existing leagues, but invitation validation and request-response parity remain open.
+
+Next recommended unit of work:
+- Start `LeagueService.canInvite` as a source-derived validation planner. Add the first failure branches in Java order: inviter dead (`STR_UNION_CANT_INVITE_WHEN_DEAD`), invited offline (`STR_UNION_OFFLINE_MEMBER`), and invited without alliance (`STR_UNION_CANT_INVITE_WHEN_HE_IS_ASKED_QUESTION`). Keep question-window transport and create-league-on-accept separate.
+
 ---
 
 ## Next Steps
