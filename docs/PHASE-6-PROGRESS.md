@@ -17332,6 +17332,64 @@ Summary metrics:
 Next recommended unit of work:
 - Migrate rift portal question handling onto `Player.ResponseRequester`. Source-read Java `RVController`, preserve both direct and vortex question ids, keep `PendingRiftPortalRequest` as typed payload metadata, and ensure `RiftPortalInteractionService.RespondAsync` consumes a registry dispatch without losing its existing teleport/update tests.
 
+### Session 673 (May 24, 2026)
+- Source-read Java `RVController.onRequest`, direct/vortex `RequestResponseHandler` branches, and current C# `RiftPortalInteractionService`.
+- Migrated rift portal question registration onto `Player.ResponseRequester`:
+  - `RiftPortalInteractionService.RequestDialog` now registers the direct portal (`SmQuestionWindow.DirectPortalPassConfirm`) or vortex (`SmQuestionWindow.VortexPortalPassConfirm`) question id with `QuestionResponseRequestKind.RiftPortal`,
+  - duplicate portal questions now fail through Java-style duplicate-question semantics and return `RiftPortalDialogStatus.PendingRequest`,
+  - `PendingRiftPortalRequest` remains as typed payload metadata and a narrow adapter slot.
+- Migrated rift portal question responses onto `ResponseRequester.Respond`:
+  - `RespondAsync` now consumes the registry before accept/deny behavior,
+  - decline responses clear registry and typed pending state without teleporting,
+  - accepted direct and vortex responses preserve the existing teleport, entry-count refresh, team-removal, and vortex notice behavior,
+  - unrelated question ids leave the rift portal request intact.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "RiftPortalInteractionServiceTests|QuestionResponseRegistryTests"` passes with 12 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1171 tests.
+
+#### Migration Parity Table - Session 673
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.RVController` | `Aion.GameServer.Services.RiftPortalInteractionService` | Controller / Service | Partial | Unit Tested | Needs Verification | Direct and vortex rift portal requests now register through `Player.ResponseRequester`. Java controller fields such as volatile/invasion state, `passedPlayers`, and despawn timing remain broader rift work. |
+| `com.aionemu.gameserver.controllers.RVController.onRequest` | `RiftPortalInteractionService.RequestDialog` | Dialog Request / Runtime Routing | Partial | Unit Tested | Needs Verification | Registers direct (`STR_ASK_PASS_BY_DIRECT_PORTAL`) and vortex (`904304`) question ids before returning `SM_QUESTION_WINDOW`. C# returns `PendingRequest` status on duplicate instead of silently sending no packet. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest` | `QuestionResponseRegistry.PutRequest` via rift portal request registration | Request Registry Method | Partial | Unit Tested | Needs Verification | Duplicate direct/vortex question ids are rejected by registry state. C# uses lock-backed metadata, not Java `ConcurrentHashMap` handler objects. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.respond` | `QuestionResponseRegistry.Respond` via `RiftPortalInteractionService.RespondAsync` | Request Registry Method | Partial | Unit Tested | Needs Verification | Rift portal response now removes the registry entry before accept/deny behavior. Java callback invocation is represented by typed dispatch metadata. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler` | `QuestionResponseRequest` / `QuestionResponseDispatch` carrying `PendingRiftPortalRequest` payload | Request Handler Metadata | Partial | Unit Tested | Needs Verification | Typed metadata replaces Java anonymous `RequestResponseHandler<Npc>` subclasses. Reflection/polymorphic callback behavior is not reproduced. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_ASK_PASS_BY_DIRECT_PORTAL` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow.DirectPortalPassConfirm` | Packet Constant / Question Id | Complete | Unit Tested | Needs Verification | Used as the registry key for ordinary direct portal requests. No Java golden-byte or encrypted-frame comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW` literal `904304` | `SmQuestionWindow.VortexPortalPassConfirm` | Packet Constant / Question Id | Complete | Unit Tested | Needs Verification | Used as the registry key for vortex portal requests. No Java golden-byte or encrypted-frame comparison. |
+| `com.aionemu.gameserver.services.teleport.TeleportService` | `RiftPortalUseService.AcceptPortal` through `RiftPortalInteractionService.RespondAsync` | Teleport Service Boundary | Partial | Unit Tested | Needs Verification | Accept branch still delegates to existing C# teleport/update behavior. Real Java teleport task, map-instance side effects, and socket order remain unverified. |
+| `com.aionemu.gameserver.services.VortexService` | `VortexLocationService` / `RiftPortalInteractionService.ResolveVortexDestination` | Vortex Service Boundary | Partial | Unit Tested | Needs Verification | Existing vortex destination resolution and team-removal/notice behavior are preserved. Java service duration/schedule state and live location lookup are not fully compared. |
+| `com.aionemu.gameserver.utils.audit.AuditLogger` | Not ported for rift level-restriction rejection | Audit Dependency | Not Started | No Tests | Unknown | Java logs out-of-level rift use attempts in `onAccept`. C# rejects through `RiftPortalUseService` without audit logging. |
+
+Tests added/updated:
+- `RiftPortalInteractionServiceTests.RequestDialog_ForShowDialogTarget_SetsPendingPortalQuestion`: now validates registry count after direct portal request creation.
+- `RiftPortalInteractionServiceTests.RequestDialog_DuplicatePortalQuestionIsRejectedThroughResponseRequester`: validates duplicate direct portal question rejection through `ResponseRequester`.
+- `RiftPortalInteractionServiceTests.RespondAsync_ForAcceptedPortalQuestion_TeleportsAndRefreshesEntryUpdates`: now validates registry cleanup after accepted direct portal response.
+- `RiftPortalInteractionServiceTests.RespondAsync_ForAcceptedVortexQuestion_UsesVortexLocationStartPoint`: now validates registry cleanup after accepted vortex response.
+- `RiftPortalInteractionServiceTests.RespondAsync_ForDeclinedPortalQuestion_ClearsPendingWithoutTeleport`: now validates registry cleanup after decline.
+- `RiftPortalInteractionServiceTests.RespondAsync_WrongQuestionLeavesPortalRequestRegistered`: validates unrelated question ids leave the rift portal request intact.
+- Java comparison status: expectations are source-derived from `RVController`, `CM_QUESTION_RESPONSE`, `ResponseRequester`, and existing C# rift portal tests. No Java runtime execution, Java-generated golden vector, live anonymous-handler object comparison, real teleport task comparison, audit log comparison, real socket-order validation, encrypted frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Java `AuditLogger.log` behavior for out-of-level rift attempts is not ported.
+- C# rift accept behavior relies on existing partial `RiftPortalUseService`; this unit validates registry consumption but not full Java teleport scheduling/map-instance side effects.
+- C# stores typed metadata and an adapter slot instead of Java's anonymous `RequestResponseHandler<Npc>` object.
+- Java requester object references differ from C# object-id payload metadata.
+- Java `ConcurrentHashMap` semantics remain approximated by a C# lock without stress tests.
+- Packet sends are not validated against Java golden bytes, encrypted frames, production socket ordering, packet captures, or real-client behavior.
+- Precision/rounding of destination coordinates and date/time handling of rift durations/despawn state were not revalidated in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 rift portal registry-adapter migration slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 7 Java audit logging, deeper teleport/map-instance parity, Java polymorphic callback parity, Java concurrent map stress parity, Java rift schedule/despawn runtime comparison, real socket-order validation, and runtime/client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; league, friend invite, kisk bind, and rift portal question flows now use the reusable response registry, while charge/soulbind and many broader request handlers remain specialized.
+
+Next recommended unit of work:
+- Migrate charge-all question handling onto `Player.ResponseRequester`. Source-read Java `ItemChargeService.startChargingEquippedItems`, keep `PendingChargeAllRequest` as typed payload metadata, register `STR_ITEM_CHARGE_ALL_CONFIRM` / `STR_ITEM_CHARGE2_ALL_CONFIRM` by charge way, and ensure payment/item mutation tests still prove removal-before-handle and wrong-question behavior.
+
 ---
 
 ## Next Steps
