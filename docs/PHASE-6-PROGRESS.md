@@ -20326,6 +20326,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 730 (May 24, 2026)
+- Added `CmCastSpell` as the C# parser for Java `CM_CASTSPELL.readImpl`.
+- Registered opcode 33 in `GameClientPacketFactory` for `InGame` connections.
+- Preserved Java payload branches for object targets (`targetType` 0/3/4), point targets (`targetType` 1), and extended point targets (`targetType` 2 with eight additional float reads before `hitTime`).
+- Added focused packet factory coverage for object-target, point-target, extended-point-target, receive-time capture, and invalid-state rejection.
+- Runtime skill dispatch remains intentionally unimplemented in this unit because full C# `SkillEngine`, skill-template lookup, pet-order checks, passive-skill checks, cooldown audit behavior, cancel-use-item behavior, and player controller `useSkill` are not ready.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GamePacketTests` passes with 87 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1311 tests.
+
+#### Migration Parity Table - Session 730
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CASTSPELL` | `Aion.GameServer.Network.Aion.ClientPackets.CmCastSpell` | Client Packet | Partial | Unit Tested | Needs Verification | C# now parses spell id, level, target type, target object id or coordinates, extended target-type-2 floats, hit time, and unknown int in Java field order. Runtime `runImpl` remains missing: dead-player message, skill cancel on spell id zero, pet-order validation, skill-template lookup, passive-skill rejection, protection cancellation, item-use cancellation, cooldown audit, not-ready response, and `PlayerController.useSkill`. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode 33 registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode 33 registration | Packet Factory | Partial | Unit Tested | Needs Verification | C# factory now accepts opcode 33 only in `InGame`, matching Java registration. Java reflection constructor creation differs intentionally from C# explicit factory lambdas. No live encrypted-frame or Java runtime comparison was run. |
+| `com.aionemu.gameserver.skillengine.model.SkillTemplate` / `DataManager.SKILL_DATA` | No complete C# skill-template route wired to `CmCastSpell` yet | Skill Data Dependency | Not Started | No Tests | Needs Verification | Required dependency discovered for live skill use. Missing behavior includes template lookup, passive-skill filtering, skill level validation, and dispatch into the full skill/effect engine. Serialization is limited to packet parsing in this unit. |
+| `com.aionemu.gameserver.dataholders.DataManager.PET_SKILL_DATA` | No C# pet-order skill validation wired to `CmCastSpell` yet | Skill Data Dependency | Not Started | No Tests | Needs Verification | Java rejects pet-order skills when no pet summon exists. C# pet skill data and summon checks are not connected to this packet route. |
+| `com.aionemu.gameserver.controllers.PlayerController.useSkill` / `cancelCurrentSkill` / `cancelUseItem` | No complete C# controller equivalent wired to `CmCastSpell` yet | Skill Controller Dependency | Not Started | No Tests | Needs Verification | Live skill dispatch, cancel behavior, target/result-list handling, skill damage, effects, observer firing, charge/power-shard/idian burn hooks, and packet fanout remain missing. |
+| `com.aionemu.gameserver.utils.audit.AuditLogger` cooldown audit path | No C# cooldown audit wired to `CmCastSpell` yet | Audit / Timing Dependency | Not Started | No Tests | Needs Verification | C# captures `ReceiveTimeMilliseconds` at packet construction like Java's `System.currentTimeMillis()`, but cooldown comparison and not-ready behavior are not implemented. Date/time behavior remains unverified against Java clock semantics. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` skill failure responses | Existing C# system-message packet helpers, not wired to `CmCastSpell` | Packet Dependency | Partial | No Tests for this route | Needs Verification | Java sends skill-cannot-cast, pet-required, and skill-not-ready messages in `runImpl`. This unit does not wire those responses to a live packet handler. |
+
+Tests added/updated:
+- `GamePacketTests.ClientPacketFactory_ParsesCastSpellObjectTarget`: validates opcode 33 object-target parsing for target type 3, receive-time capture window, hit time, unknown int, and invalid-state rejection.
+- `GamePacketTests.ClientPacketFactory_ParsesCastSpellPointTarget`: validates target type 1 coordinate parsing and trailing fields.
+- `GamePacketTests.ClientPacketFactory_ParsesCastSpellExtendedPointTarget`: validates target type 2 coordinate parsing plus eight extra float reads before hit time.
+- Existing `GamePacketTests` were rerun as focused validation.
+- Java comparison status: expectations are source-derived from Java `AionClientPacketFactory` and `CM_CASTSPELL.readImpl`. No Java runtime execution, Java-generated golden packet, live `GameServerConnection`, live `SkillEngine`, live player controller `useSkill`, encrypted-frame comparison, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- `CmCastSpell` is parsed and registered but not handled by `GameServerConnection`; real skill use is not live.
+- Full Java `SkillEngine`, skill-template lookup, pet-order validation, passive-skill rejection, cooldown auditing, item-use cancellation, target/result-list handling, PvP/death behavior, effect scheduling, observer dispatch, charge/power-shard/idian burns, and packet fanout remain missing.
+- Java receive-time behavior is only represented as a construction-time UTC millisecond value; no runtime cooldown comparison or clock-semantics validation was performed.
+- Extended target-type-2 float values are retained for diagnostics in C#, while Java discards them after reading. This is an intentional non-behavioral parser DTO difference; runtime behavior must not depend on those values unless Java support is proven.
+- No Java golden bytes, live encrypted frames, or client behavior were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 2 parser/factory slices (`CM_CASTSPELL` payload parser and opcode 33 registration)
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 5 live skill-use route invocation, full SkillEngine/player-controller integration, pet/order/template validation, cooldown/date-time audit parity, and Java runtime/golden/live-client comparison
+- Estimated overall migration completion: Phase 6 remains about 65% complete; combat packet parsing is broader, but live combat and skill behavior remain partial.
+
+Next recommended unit of work:
+- Add a represented `CmCastSpell` infrastructure handling seam that validates the Java early-exit order without invoking the full skill engine: dead-player rejection, spell id zero cancel-current-skill hook, missing pet-order rejection, missing/passive template no-op, protection/use-item cancellation hooks, and cooldown not-ready response as delegates or a narrow service. If that is too broad, continue parser coverage with summon combat packets (`CM_SUMMON_ATTACK` / `CM_SUMMON_CASTSPELL`) while keeping runtime gaps explicit.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
