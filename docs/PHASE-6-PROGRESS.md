@@ -14598,6 +14598,76 @@ Summary metrics:
 Next recommended unit of work:
 - Continue `CM_PLAYER_STATUS_INFO` parity with `GROUP_REMOVE_MEMBER` if the existing group remove/runtime side effects can be scoped to member removal packets, system messages, and leader fallback. Otherwise, add `ALLIANCE_LEAVE` or `ALLIANCE_BAN_MEMBER` through the existing alliance leave planners if their disband/leader-change side effects can be kept source-derived and explicitly documented. Keep league commands deferred.
 
+### Session 620 (May 23, 2026)
+- Source-read Java `TeamCommand.GROUP_REMOVE_MEMBER`, `PlayerTeamCommandService.executeCommand`, `PlayerGroupService.removePlayer`, `PlayerGroupLeavedEvent`, base `PlayerLeavedEvent`, `GroupDisbandEvent`, `PlayerGroup`, `GeneralTeam.shouldDisband`, and `SM_GROUP_MEMBER_INFO`.
+- Added Java group-leave system-message factories for:
+  - `STR_PARTY_IS_DISPERSED` (`1300167`);
+  - `STR_PARTY_HE_LEAVE_PARTY` (`1300168`);
+  - `STR_PARTY_HE_BECOME_OFFLINE_TIMEOUT` (`1300176`);
+  - `STR_PARTY_HE_IS_BANISHED` (`1300177`).
+- Added ordered C# group leave packet intents and `PlayerGroupRuntime.RemoveMemberWithLeavePlan`.
+- Extended `GameServerConnection.HandlePlayerStatusInfoAsync` with the Java `GROUP_REMOVE_MEMBER` branch:
+  - command code `6`;
+  - `selectedObjectId == 0` targets the caller like Java `findMember`;
+  - missing group or missing target member no-ops in the C# bridge, while Java invalid member lookup can throw through `Objects.requireNonNull`;
+  - clears the removed player's group membership through the runtime;
+  - sends `SM_GROUP_MEMBER_INFO(LEAVE)` followed by `STR_PARTY_HE_LEAVE_PARTY` to remaining group members;
+  - sends base `SM_LEAVE_GROUP_MEMBER` to the removed online player;
+  - preserves the Java high-level order of leave fanout before base leave packets.
+- Kept complete Java disband cascade packet fanout, instance registered-team kick scheduling, `EventService.onLeftTeam`, mentor stop side effects for leaved mentors, full generic `PlayerTeamCommandService` dispatch, Java event queue/lock comparison, socket ordering comparison, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerGroupRuntime|BaseLeavePlanner"` passes with 54 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1084 tests.
+
+#### Migration Parity Table - Session 620
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | C# now handles group remove/leader/LFG/mentoring, alliance leader/vice-captain/group-change/ready-check ids. Group ban, alliance leave/ban, league commands, and full generic dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.GROUP_REMOVE_MEMBER` | Command code `6` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | C# source-models command id `6`, targets `selectedObjectId` or caller when zero, and dispatches to runtime group leave planning. Java invalid target member exception behavior remains deferred. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService` | Narrow group-remove branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Service Dependency | Partial | Regression Tested | Needs Verification | C# continues bypassing full generic team-command dispatch. Group ban, alliance leave/ban, league commands, and Java exception policy remain incomplete. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.removePlayer` | `Aion.GameServer.Services.PlayerGroupRuntime.RemoveMemberWithLeavePlan` through connection handler | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | C# resolves caller group state, removes the selected member, clears membership, and emits packet intents. Java static group registry and event wrapper are not runtime-compared. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerGroupLeavedEvent` | `PlayerGroupRuntime.RemoveMemberWithLeavePlan` / connection group remove sends | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | C# covers the common leave fanout: remaining members receive `SM_GROUP_MEMBER_INFO(LEAVE)` and `STR_PARTY_HE_LEAVE_PARTY`; removed player receives `SM_LEAVE_GROUP_MEMBER`. Full disband cascade, mentor-stop side effect, and leader-fallback ordering need more tests. |
+| `com.aionemu.gameserver.model.team.common.events.PlayerLeavedEvent` | `Aion.GameServer.Services.PlayerBaseLeavePlanner` through group remove handler | Base Event Dependency | Partial | Regression Tested | Needs Verification | C# sends base leave packet to online removed players and records instance-kick/EventService intent metadata through existing planner. Registered-team instance comparison and actual delayed kick remain deferred. |
+| `com.aionemu.gameserver.model.team.group.events.GroupDisbandEvent` | `PlayerGroupLeavePlan.WouldDisband` metadata / runtime cleanup boundary | Event Dependency | Partial | No Direct Tests | Needs Verification | Runtime can mark would-disband and clear remaining runtime state, but Java's full per-member disband packet cascade is not implemented in the connection handler. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup` | `Aion.GameServer.Model.GameObjects.PlayerGroupDescriptor` / `PlayerGroupRuntime` member store | Team State | Partial | Regression Tested | Needs Verification | Runtime removes the member and refreshes remaining snapshots. Java `PlayerGroupStats.onRemovePlayer`, synchronized/team event semantics, and stats min/max recalculation are not runtime-compared. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.shouldDisband` | `PlayerGroupRuntime.RemoveMemberWithLeavePlan` disband predicate | Base Team State | Partial | No Direct Tests | Needs Verification | C# source-models non-auto-group disband when one member remains, but full Java disband event fanout remains incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` through group remove sends | Server Packet | Partial | Regression Tested | Needs Verification | Existing packet is now sent from parsed command id `6` with `PlayerGroupEvent.Leave`. Java golden bytes, encrypted frames, and real-client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LEAVE_GROUP_MEMBER` | `Aion.GameServer.Network.Aion.ServerPackets.SmLeaveGroupMember` through base leave sends | Server Packet | Partial | Regression Tested | Needs Verification | Removed online player receives the base leave packet. Java instance-registered-team follow-up message and delayed kick are not live-wired. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_HE_LEAVE_PARTY` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyHeLeaveParty` | Server Packet Factory | Partial | Regression Tested | Needs Verification | C# sends Java message id `1300168` to remaining group members. Java golden frame and client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_IS_DISPERSED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyIsDispersed` | Server Packet Factory | Partial | No Direct Tests | Needs Verification | Factory exists for future disband fanout, but command handler does not yet fully reproduce Java disband cascade. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_HE_BECOME_OFFLINE_TIMEOUT` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyHeBecomeOfflineTimeout` | Server Packet Factory | Partial | No Direct Tests | Needs Verification | Factory exists for future timeout leave reasons; command id `6` does not trigger timeout. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_HE_IS_BANISHED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyHeIsBanished` | Server Packet Factory | Partial | No Direct Tests | Needs Verification | Factory exists for future group-ban branch; command id `6` does not trigger ban. |
+| `com.aionemu.gameserver.services.event.EventService` | Deferred `PlayerGroupLeavePlan.WouldInvokeEventServiceOnLeftTeam` metadata | Service Dependency | Not Started | No Tests | Unknown | Java calls `EventService.onLeftTeam` after base leave. C# does not yet have a live EventService bridge for this packet handler. |
+| `com.aionemu.gameserver.services.instance.InstanceService` | Deferred `PlayerBaseLeavePlanner` instance-kick metadata | Service Dependency | Not Started | No Tests | Unknown | Java schedules an instance kick when the player leaves a registered team instance. C# records the boundary but does not execute the delayed kick here. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / direct fallback | Runtime Dependency | Partial | Regression Tested | Needs Verification | C# sends group leave packets through registry/direct fallback. Java offline-recipient behavior and live socket ordering remain unverified beyond tested intent order. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_GroupRemoveMemberClearsMembershipAndSendsLeavePacketsLikeJava`: validates parsed command id `6` clears the removed player's group membership, leaves remaining runtime members, sends `SmGroupMemberInfo` and Java system-message id `1300168` to remaining members in per-member order, and sends `SmLeaveGroupMember` to the removed player.
+- Java comparison status: expectations are source-derived from `TeamCommand`, `PlayerTeamCommandService`, `PlayerGroupService.removePlayer`, `PlayerGroupLeavedEvent`, `PlayerLeavedEvent`, `GroupDisbandEvent`, `GeneralTeam.shouldDisband`, `SM_GROUP_MEMBER_INFO`, `SM_LEAVE_GROUP_MEMBER`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live client packet capture, Java static group registry comparison, Java event queue/lock comparison, Java invalid-member exception comparison, disband cascade runtime comparison, mentor-stop side-effect comparison, instance-kick comparison, EventService callback comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond C# packet object type/order, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Full Java disband cascade for two-member groups is not reproduced in packet fanout yet.
+- Java leader fallback after removing the current group leader is modeled as runtime metadata but needs focused packet-order tests.
+- Java mentor stop side effects when a mentor leaves are flagged but not wired.
+- Java `EventService.onLeftTeam` and registered-team instance kick scheduling remain deferred.
+- Java invalid target member lookup can throw through `Objects.requireNonNull`; the C# packet handler currently no-ops missing targets until a broader packet exception policy is ported.
+- Java static group registry lookup is approximated by runtime snapshots attached to the caller.
+- Java event queue, lock, group stats recalculation, and threading behavior remain source-derived only.
+- Remaining `CM_PLAYER_STATUS_INFO` branches include group ban, alliance leave/ban, and league commands.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to C# packet object reachability/order; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 18
+- Total artifacts ported: 1 `CM_PLAYER_STATUS_INFO` group remove branch
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 15
+- Total blocked artifacts: 11 disband cascade, leader-fallback packet ordering, mentor-stop side effect, EventService callback, instance kick scheduling, remaining team command branches, Java static service registry, Java event queue/lock comparison, Java runtime/threading comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; group remove now covers the common member-leave packet path, but disband/leader/instance side effects still need deeper parity work.
+
+Next recommended unit of work:
+- Deepen `GROUP_REMOVE_MEMBER` parity by adding focused leader-removal fallback and two-member disband cascade packet-order tests/implementation, or continue laterally to `GROUP_BAN_MEMBER` if self-ban/no-rights/auto-group failure messages can be kept narrow. Keep alliance leave/ban and league commands deferred unless existing planners can cover their cascading side effects.
+
 ---
 
 ## Next Steps
