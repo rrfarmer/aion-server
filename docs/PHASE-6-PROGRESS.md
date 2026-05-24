@@ -15048,6 +15048,70 @@ Summary metrics:
 Next recommended unit of work:
 - Add focused two-member `ALLIANCE_BAN_MEMBER` disband coverage if the existing alliance leave workflow can be extended to replay `AllianceDisbandEvent` accurately. Otherwise deepen `ALLIANCE_LEAVE` leader/disband behavior or defer to the next non-league `CM_PLAYER_STATUS_INFO` branch with fewer missing side effects.
 
+### Session 627 (May 23, 2026)
+- Source-read Java `PlayerAllianceLeavedEvent`, `AllianceDisbandEvent`, base `PlayerLeavedEvent`, and the alliance ban/disband packet order.
+- Extended alliance packet intents with `LeaveGroupMember` so the C# alliance leave workflow can represent Java's disband replay base leave packet for the last remaining member.
+- Updated `PlayerAllianceLeavedPlanner` so a real one-member remaining disband boundary appends:
+  - `STR_PARTY_ALLIANCE_DISPERSED` to the remaining member;
+  - `SM_LEAVE_GROUP_MEMBER` to the remaining online member;
+  - then the original BAN self-message remains after the disband replay.
+- Updated `PlayerAllianceRuntime.RemoveMemberWithLeaveWorkflow` so `WouldDisband` clears the remaining runtime alliance members and removes the runtime alliance dictionaries after packet planning.
+- Added focused parsed-command coverage for `ALLIANCE_BAN_MEMBER` when banning from a two-member non-auto alliance.
+- Kept Java defence-team `VortexService.removeDefenderPlayer`, warning log for target outside alliance, league broadcast, leader-leave cascade, `EventService.onLeftTeam`, registered-team instance kick scheduling, Java event queue/lock comparison, socket ordering comparison, Java golden packet vectors, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerAllianceRuntime|PlayerAllianceMemberInfo|BaseLeavePlanner"` passes with 79 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1093 tests.
+
+#### Migration Parity Table - Session 627
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.ClientPackets.CmPlayerStatusInfo` / `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Command id `16` now has explicit two-member alliance ban/disband packet-order coverage. Leader leave/disband, league commands, and full generic dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.ALLIANCE_BAN_MEMBER` | Command code `16` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Two-member non-auto alliance ban/disband ordering is now covered. Java invalid-member exception behavior remains deferred. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.banPlayer` | `GameServerConnection.HandleAllianceBanMemberAsync` plus `PlayerAllianceRuntime.RemoveMemberWithLeaveWorkflow` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Existing success path now has regression coverage when the ban causes Java `shouldDisband`. Defence-team Vortex cleanup and warning log for missing target remain unmodeled. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.disband` | `PlayerAllianceLeavedPlanner` disband replay intents plus `PlayerAllianceRuntime.RemoveMemberWithLeaveWorkflow` cleanup | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | C# models the two-member disband cascade for a ban path. Explicit disband entry points, recruitment removal, and league-before/after behavior remain deferred. |
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceLeavedEvent` | `PlayerAllianceRuntime.RemoveMemberWithLeaveWorkflow` / connection alliance ban sends | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | BAN reason fanout and DISBAND replay order are covered together. Leader-change, league broadcast, EventService, instance kick, and live socket ordering remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.events.AllianceDisbandEvent` | `PlayerAlliancePacketIntentKind.LeaveGroupMember` plus disband intents in `PlayerAllianceLeavedPlanner` | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | Java replay of `PlayerAllianceLeavedEvent(DISBAND)` is source-modeled for the last remaining alliance member. Multi-member explicit disband and Java event queue behavior are not compared. |
+| `com.aionemu.gameserver.model.team.common.events.PlayerLeavedEvent` | `Aion.GameServer.Services.PlayerBaseLeavePlanner` and `PlayerAlliancePacketIntentKind.LeaveGroupMember` | Base Event Dependency | Partial | Regression Tested | Needs Verification | Base leave packets are covered for both the disbanded remaining member and the banned player. Registered-team instance message/kick and EventService callback remain deferred. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.shouldDisband` | `PlayerAllianceRuntime.RemoveMemberWithLeaveWorkflow` disband predicate | Base Team State | Partial | Regression Tested | Needs Verification | Ban path now explicitly covers non-auto alliance plus one remaining member. Runtime/threading comparison and unusual offline cases remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` through alliance ban sends | Server Packet | Partial | Regression Tested | Needs Verification | Covered before ban and disband messages. Java golden bytes, encrypted frames, and real-client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` through alliance ban sends | Server Packet | Partial | Regression Tested | Needs Verification | Covered before disband replay. Java golden bytes, league rows, encrypted frames, and real-client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LEAVE_GROUP_MEMBER` | `Aion.GameServer.Network.Aion.ServerPackets.SmLeaveGroupMember` through alliance ban/disband sends | Server Packet | Partial | Regression Tested | Needs Verification | Covered for the remaining member during disband and for the banned player after `STR_FORCE_BAN_ME`. Java registered-team instance follow-up remains deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_BAN_HIM` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceBanHim` | Server Packet Factory | Partial | Regression Tested | Needs Verification | Covered before disband replay in the two-member alliance ban path. Golden frame/client validation remains missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_ALLIANCE_DISPERSED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyAllianceDispersed` | Server Packet Factory | Partial | Regression Tested | Needs Verification | Covered during disband replay before remaining member base leave. Golden frame/client validation remains missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_BAN_ME` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceBanMe` | Server Packet Factory | Partial | Regression Tested | Needs Verification | Covered after disband replay and before banned-player base leave. Golden frame/client validation remains missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / direct fallback | Runtime Dependency | Partial | Regression Tested | Needs Verification | Ordered registry sends are covered for the source-derived two-member alliance ban/disband path. Java offline-recipient behavior and live socket ordering remain unverified. |
+| `com.aionemu.gameserver.services.VortexService` | Deferred C# defence-team cleanup | Service Dependency | Not Started | No Tests | Unknown | Java calls `VortexService.removeDefenderPlayer` for defence alliances. C# has no live bridge in this handler yet. |
+| `com.aionemu.gameserver.model.team.league.League.broadcast` | Deferred `PlayerAllianceLeavedPlan.WouldBroadcastLeague` metadata | Service Dependency | Not Started | No Tests | Unknown | Java broadcasts/removes league alliance state around disband. C# records no live league membership for this path yet. |
+| `com.aionemu.gameserver.services.event.EventService` | Deferred `PlayerBaseLeavePlanner` metadata | Service Dependency | Not Started | No Tests | Unknown | Java calls `EventService.onLeftTeam` after each base leave. C# records the boundary but has no live EventService bridge here. |
+| `com.aionemu.gameserver.services.instance.InstanceService` | Deferred `PlayerBaseLeavePlanner` instance-kick metadata | Service Dependency | Not Started | No Tests | Unknown | Java schedules instance exit movement for registered-team instances. C# does not execute that delayed side effect here. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_AllianceBanTwoMemberAllianceDisbandsBeforeBannedBaseLeaveLikeJava`: validates parsed command id `16` on a two-member non-auto alliance clears both memberships, removes the runtime alliance, sends `STR_FORCE_BAN_HIM`, `SmAllianceMemberInfo`, `SmAllianceInfo`, alliance-dispersed id `1300201`, remaining member `SmLeaveGroupMember`, banned-player `STR_FORCE_BAN_ME`, and banned-player `SmLeaveGroupMember` in source-derived order.
+- Java comparison status: expectations are source-derived from `PlayerAllianceService.banPlayer`, `PlayerAllianceService.disband`, `PlayerAllianceLeavedEvent`, `AllianceDisbandEvent`, `PlayerLeavedEvent`, `GeneralTeam.shouldDisband`, `SM_ALLIANCE_MEMBER_INFO`, `SM_ALLIANCE_INFO`, `SM_LEAVE_GROUP_MEMBER`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live client packet capture, Java static alliance registry comparison, Java event queue/lock comparison, invalid-member/log warning comparison, defence-team VortexService comparison, league broadcast/removal comparison, instance-kick comparison, EventService callback comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond C# packet object type/order, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Alliance leader leave/disband behavior remains incomplete.
+- Java defence-team `VortexService.removeDefenderPlayer` cleanup is not wired.
+- Java warning log for banning a player outside the alliance is not modeled.
+- Java league broadcast/removal around alliance ban disband remains deferred.
+- Java `EventService.onLeftTeam`, registered-team instance kick scheduling, and `STR_MSG_LEAVE_INSTANCE_NOT_PARTY` remain deferred.
+- Java invalid target/member exception policy and static alliance registry behavior remain approximated by runtime snapshots.
+- Java event queue, lock, `CopyOnWriteArrayList`, alliance group internals, object iteration order, offline-recipient handling, and threading behavior remain source-derived only.
+- League commands remain incomplete in `CM_PLAYER_STATUS_INFO`.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to C# packet object reachability/order; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 19
+- Total artifacts ported: 1 deeper `CM_PLAYER_STATUS_INFO` alliance ban/disband branch
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 15
+- Total blocked artifacts: 10 alliance leader leave/disband, defence-team VortexService cleanup, missing-target warning log, league broadcast/removal, EventService callback, instance kick scheduling, league commands, Java static service registry, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; alliance ban disband order is better covered, but leader/league/live validation gaps remain.
+
+Next recommended unit of work:
+- Deepen `ALLIANCE_LEAVE` with two-member disband coverage if the same alliance disband replay path can be reused safely, then consider leader-leave fallback only after carefully modeling Java's pre-remove `ChangeAllianceLeaderEvent`. Keep league commands deferred.
+
 ---
 
 ## Next Steps
