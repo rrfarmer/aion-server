@@ -22283,6 +22283,59 @@ Next recommended unit of work:
 
 ---
 
+### Session 769 (May 24, 2026)
+- Re-inspected Java `SkillAttackManager.targetTooFar` and `getNpcSkillEntryIfNotTooFarAway`:
+  - self, none, and most-hated target modes skip the explicit creature/range rejection branch;
+  - non-creature targets are treated as too far;
+  - dead targets are too far;
+  - targets the owner cannot see are too far;
+  - non-area skills require `PositionUtil.isInRange(owner, target, firstTargetRange, false)`;
+  - area target-range skills skip the ordinary first-target range check;
+  - too-far outcomes set `owner.getGameStats().setNextSkillDelay(5000)` and return no skill.
+- Added `PlayerSummonKnownObjectTargetRangeReadiness` / status enum.
+- Added `PlayerSummonSkillExecutionService.EvaluateMercenaryTargetRange` for represented target/range readiness.
+- Added `PlayerSummonKnownObjectTargetRangeDelayResult` / status enum.
+- Added `PlayerSummonSkillExecutionService.ApplyMercenaryTargetRangeDelay` to store Java's represented 5000ms too-far delay on the known object.
+- Kept first-target attributes, NPC skill target attributes, live target object type, dead state, visibility, area target type, and geometry/range as explicit caller-provided metadata until live skill templates and positions are wired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 38 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1362 tests.
+
+#### Migration Parity Table - Session 769
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.targetTooFar` | `PlayerSummonSkillExecutionService.EvaluateMercenaryTargetRange` / `PlayerSummonKnownObjectTargetRangeReadiness` | AI Target Range Projection | Partial | Regression Tested | Needs Verification | C# models the too-far branch outcomes from explicit metadata. It does not resolve real skill properties, target attributes, positions, visibility, or geometry. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.getNpcSkillEntryIfNotTooFarAway` | `PlayerSummonSkillExecutionService.ApplyMercenaryTargetRangeDelay` / `PlayerSummonKnownObjectTargetRangeDelayResult` | AI Delay Side-Effect Projection | Partial | Regression Tested | Needs Verification | C# stores the represented 5000ms delay for too-far outcomes. It does not return or suppress real `NpcSkillEntry` instances. |
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.setNextSkillDelay(5000)` | `Player.TrySetSummonKnownObjectNextSkillDelay` via target-range delay result | Game Stats Delay Projection | Partial | Regression Tested | Needs Verification | Reuses represented known-object delay storage. Live `NpcGameStats`, production clocks, AI scheduling, threading, and serialization remain missing. |
+| `com.aionemu.gameserver.skillengine.model.Properties.getFirstTarget` / `getTargetType` / `getFirstTargetRange` | `requiresCreatureTargetCheck`, `isAreaTarget`, `isInRange` inputs | Skill Property Dependency | Not Started | Manual Only as input branches | Needs Verification | C# does not load or interpret full skill properties for this path yet. Target attribute, range precision, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillTemplate.getTarget` | `requiresCreatureTargetCheck` input | NPC Skill Target Dependency | Not Started | Manual Only as input branch | Needs Verification | C# does not yet represent `NONE`, `MOST_HATED`, `ME`, or other NPC skill target attributes as a typed model. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.isDead` / `Npc.canSee` | `targetIsDead` / `canSeeTarget` inputs | Target State / Visibility Dependency | Not Started | Manual Only as input branches | Needs Verification | Live life state and visibility checks remain unported for represented mercenary skill selection. |
+| `com.aionemu.gameserver.utils.PositionUtil.isInRange` | `isInRange` input | Geometry Dependency | Not Started | Manual Only as input branch | Needs Verification | No distance math, Z handling, collision/line-of-sight, float precision, or Java geometry comparison is implemented in this slice. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ApplyMercenaryTargetRangeDelay_ProjectsJavaTargetTooFarDelay`: validates target-check-not-required, area target range bypass, missing creature target, dead target, unseen target, out-of-range target, missing range evaluation, no-delay range result, missing known object, and represented 5000ms delay storage.
+- Java comparison status: expectations are source-derived from Java `SkillAttackManager.targetTooFar`, `getNpcSkillEntryIfNotTooFarAway`, `NpcGameStats.setNextSkillDelay`, skill `Properties`, `NpcSkillTemplate.getTarget`, `Creature.isDead`, `Npc.canSee`, and `PositionUtil.isInRange`. No Java runtime execution, live target resolution, geometry/range precision comparison, visibility comparison, threading comparison, serialization comparison, date/time runtime comparison, or live-client validation was run.
+
+Remaining risks:
+- Target range readiness is represented metadata only and is not invoked by real skill selection.
+- Skill properties, NPC skill target attributes, target object type checks, dead state, visibility, and range math are caller-supplied booleans.
+- The 5000ms delay is stored on represented known-object metadata, not live `NpcGameStats`.
+- No real `NpcSkillEntry` is returned/suppressed, and queued/chain/priority selection remains missing.
+- Reflection, threading, serialization, date/time runtime, precision/rounding, Java runtime, geometry, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 represented `SkillAttackManager.targetTooFar` delay slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 12 live AI skill scheduling, skill properties, NPC skill target attributes, target object resolution, visibility checks, life-state checks, Java range geometry, live `NpcGameStats`, real `NpcSkillEntry` return/suppression, controller execution, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented skill selection now includes too-far delay metadata, but live NPC skill selection parity remains partial.
+
+Next recommended unit of work:
+- Continue by modeling a small `NpcSkillEntry.isReady` timing metadata projection for HP percentage and elapsed fight time, or introduce a typed represented target-mode enum for the `targetTooFar` branch (`ME`, `NONE`, `MOST_HATED`, ordinary target) so the caller no longer passes a raw `requiresCreatureTargetCheck` boolean. Keep real skill properties, Java range geometry, target resolution, effects, packets, live AI state, and controller execution explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
