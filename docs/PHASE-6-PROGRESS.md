@@ -22545,6 +22545,50 @@ Next recommended unit of work:
 
 ---
 
+### Session 774 (May 24, 2026)
+- Re-inspected Java `SkillAttackManager.isReady` order after `NpcSkillEntry.isReady`:
+  - `entry.conditionReady(owner)` blocks before `SkillTemplate` resolution and abnormal/transform gates;
+  - condition readiness is separate from timing readiness and can fail even when timing is ready.
+- Added a typed `EvaluateMercenarySkillReadiness` overload that accepts `PlayerSummonKnownObjectNpcSkillConditionReadiness`.
+- Extended `PlayerSummonKnownObjectSkillReadiness` to carry `EntryConditionReadiness` alongside `EntryTimingReadiness`.
+- Updated higher-level skill readiness so non-ready typed condition results produce `EntryConditionNotReady` before template/abnormal/transform checks.
+- Preserved the existing boolean condition overload as a compatibility shim for callers without represented condition metadata.
+- Kept live condition template mapping, target mutation, known-list/world scans, carved signet effects, and real AI selection unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 42 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1366 tests.
+
+#### Migration Parity Table - Session 774
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.isReady` | typed `PlayerSummonSkillExecutionService.EvaluateMercenarySkillReadiness` overload with condition readiness | AI Skill Readiness Projection | Partial | Regression Tested | Needs Verification | C# now consumes typed condition readiness after typed timing readiness and before template/abnormal gates. It remains a represented projection, not live AI execution. |
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.conditionReady` | `PlayerSummonKnownObjectNpcSkillConditionReadiness` carried by `PlayerSummonKnownObjectSkillReadiness.EntryConditionReadiness` | NPC Skill Condition Dependency | Partial | Regression Tested | Needs Verification | Typed simple condition results can now block higher-level readiness. Full condition template behavior, target mutation, and live object access remain missing. |
+| `com.aionemu.gameserver.model.skill.NpcSkillEntry.isReady` | `PlayerSummonKnownObjectNpcSkillEntryReadiness` before condition readiness | NPC Skill Timing Dependency | Partial | Regression Tested | Needs Verification | Existing typed timing result still runs before condition readiness. Live HP/fight-time inputs, RNG chance, and XML mapping remain unverified. |
+| `com.aionemu.gameserver.skillengine.model.SkillTemplate.getType` / abnormal/transform gates | existing `SkillTemplateSummary.SkillType` and represented state after typed condition readiness | Skill Template / Effect Gate Projection | Partial | Regression Tested | Needs Verification | Existing represented abnormal/transform gates now occur after typed condition readiness. Live template resolution and effect-controller state remain missing. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.EvaluateMercenarySkillReadiness_ConsumesTypedNpcSkillConditionReadiness`: validates a non-ready typed condition result blocks higher-level skill readiness, a ready typed condition result allows readiness after typed timing readiness, and both typed timing and typed condition readiness objects are preserved on returned readiness objects.
+- Java comparison status: expectations are source-derived from Java `SkillAttackManager.isReady`, `NpcSkillEntry.isReady`, and `NpcSkillTemplateEntry.conditionReady`. No Java runtime execution, live condition-template comparison, live target object comparison, target mutation comparison, reflection comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Typed condition integration is still a service projection and is not called by live AI selection.
+- Full condition templates, help-friend target mutation, carved signet effects, world-map NPC scans, and Java geometry remain unsupported.
+- HP percentage source, elapsed fight-time source, RNG chance, XML NPC skill template mapping, and live `SkillTemplate` resolution remain unwired.
+- Reflection, threading, serialization, date/time runtime, precision/rounding, Java runtime, RNG, geometry, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 represented integration slice between `SkillAttackManager.isReady` and `NpcSkillTemplateEntry.conditionReady`
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 12 live AI skill scheduling, live condition-template mapping, live target objects, help-friend target mutation, carved signet/effect lookup, world-map NPC scans, Java range geometry, live HP/fight-time sources, RNG chance parity, controller execution, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; typed condition readiness now feeds represented skill readiness, but live NPC skill selection parity remains partial.
+
+Next recommended unit of work:
+- Continue by mapping static NPC skill template fields into `PlayerSummonKnownObjectNpcSkillEntryTiming` and represented condition metadata, or broaden condition metadata for `NpcSkillConditionTemplate.range` / `TARGET_IS_IN_RANGE`. Keep help-friend target mutation, carved signet effects, world-map NPC scans, Java geometry, live AI state, effects, packets, and controller execution explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
