@@ -22932,6 +22932,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 782 (May 24, 2026)
+- Re-inspected Java `SkillAttackManager.skillAction` pre-use ordering:
+  - return when AI substate is no longer `CAST`, with optional `think()` when interrupted back to `NONE` during `FIGHT`;
+  - target give-up when current target is not a live `Creature` or last skill is missing;
+  - melee NPC aggro-range abort before template/abnormal gates;
+  - abnormal/transform skill-use blocks call `afterUseSkill`;
+  - target-selection mutation runs before `owner.getController().useSkill`;
+  - failed `useSkill` also calls `afterUseSkill`.
+- Added `PlayerSummonKnownObjectNpcSkillActionPreview`, status enum, and derived flags for represented side effects (`ShouldSetSubStateNone`, `ShouldAbortCast`, `ShouldSetOwnerTarget`, `ShouldUseSkill`).
+- Added `PreviewMercenaryNpcSkillAction` to compose represented target validity, aggro-range abort, skill-readiness/abnormal gates, target-selection metadata, and controller-use result into Java source-order outcomes.
+- Kept live AI state mutation, `npcAI.think`, `npcAI.onGeneralEvent`, `owner.getController().abortCast`, `owner.setTarget`, `owner.getController().useSkill`, effects, packets, Java geometry, and scheduler/date-time behavior unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 51 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1375 tests.
+
+#### Migration Parity Table - Session 782
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.skillAction` | `PlayerSummonSkillExecutionService.PreviewMercenaryNpcSkillAction` | AI Skill Action Projection | Partial | Regression Tested | Needs Verification | C# represents Java pre-use branch ordering and side-effect intents. It does not mutate live AI, controller, target, effects, or packets. |
+| `com.aionemu.gameserver.ai.AISubState` / `AIState.FIGHT` interrupted-cast branch | `NotInCastSubState` / `ResumeFightAfterInterruptedCast` preview statuses | AI State Gate Projection | Partial | Regression Tested | Needs Verification | C# represents return/think intent but does not call `npcAI.think` or mutate substate. Threading and live AI state remain unwired. |
+| `com.aionemu.gameserver.ai.event.AIEventType.TARGET_GIVEUP` / `TARGET_TOOFAR` | `TargetGiveUp` / `TargetTooFar` preview statuses | AI Event Projection | Partial | Regression Tested | Needs Verification | C# records event intent and abort-cast flag, but does not emit events or call `abortCast`. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.afterUseSkill` | `AfterUseSkillBlocked` / `AfterUseSkillUseFailed` preview statuses plus `ShouldSetSubStateNone` | AI Completion Projection | Partial | Regression Tested | Needs Verification | C# records after-use intent for abnormal/transform blocks and failed controller use. It does not call `afterUseSkill` or emit `ATTACK_COMPLETE`. |
+| `com.aionemu.gameserver.controllers.NpcController.useSkill` | `controllerUseSkillSucceeded` explicit input | Controller Execution Dependency | Not Started | Manual Only as input branch | Needs Verification | Actual controller invocation, skill effects, packets, threading, and failure causes remain unported in this slice. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.PreviewMercenaryNpcSkillAction_ComposesJavaSkillActionPreUseOutcomes`: validates not-in-cast return, interrupted-cast fight resume intent, target give-up for missing/dead/missing-skill cases, melee aggro-range abort, abnormal skill-use block after-use, target mutation before use, plain use without mutation, and failed controller use after-use.
+- Java comparison status: expectations are source-derived from Java `SkillAttackManager.skillAction`, `afterUseSkill`, `AISubState`, `AIState.FIGHT`, `AIEventType`, target validation, aggro-range check, abnormal/transform gates, target selection, and controller `useSkill`. No Java runtime execution, live AI event comparison, live controller comparison, target mutation comparison, packet/effect comparison, Java geometry comparison, reflection comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- The preview is represented service logic and is not invoked by live AI.
+- Live AI substate mutation, event dispatch, `npcAI.think`, abort-cast, owner target mutation, controller `useSkill`, effects, and packets remain unwired.
+- Java geometry for melee aggro range remains caller-supplied.
+- Live `SkillTemplate.Properties`, target type, first-target range, random target selection, and `DataManager.SKILL_DATA` remain outside this slice.
+- Reflection, threading, serialization, date/time runtime, precision/rounding, Java runtime, geometry, scheduler, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented NPC skill action pre-use projection slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 13 live AI scheduling/state mutation, AI event dispatch, `npcAI.think`, abort-cast, live target mutation, controller `useSkill`, skill effects, packets, Java geometry, `SkillTemplate.Properties` binding, Java runtime comparison, threading, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented NPC skill selection/action previews are broader, but live AI/controller execution remains partial.
+
+Next recommended unit of work:
+- Continue by adding a represented live-adapter boundary for `NpcGameStats`/skill-action inputs, or begin wiring one existing C# mercenary known-object path to consume the composed choose-next-skill and skill-action previews without executing live controller effects. Keep XML loading, Java geometry, controller execution, effects, packets, scheduler/date-time behavior, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -22941,4 +22989,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by adding a represented `skillAction` pre-use projection that composes target validity, aggro-range abort, abnormal/transform skill-use blocks, target-selection metadata, and controller use-skill result into Java source-order outcomes before live AI mutation, XML loading, random target selection, effects, packets, and controller execution are available.
+8. Continue NPC skill readiness parity by adding a represented live-adapter boundary for `NpcGameStats`/skill-action inputs, or by wiring one existing C# mercenary known-object path to consume the composed choose-next-skill and skill-action previews before live AI mutation, XML loading, random target selection, effects, packets, and controller execution are available.
