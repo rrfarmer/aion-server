@@ -22121,6 +22121,55 @@ Next recommended unit of work:
 
 ---
 
+### Session 766 (May 24, 2026)
+- Re-inspected Java `NpcGameStats.setNextSkillDelay`:
+  - concrete non-negative delays are stored directly;
+  - `-1` means XML skills without specific template times and resolves through `Rnd.get(3000, 9000)`.
+- Extended `PlayerSummonKnownObject` with represented `NextSkillDelayMilliseconds` metadata.
+- Added `Player.TrySetSummonKnownObjectNextSkillDelay` for represented known-object delay updates.
+- Added `PlayerSummonKnownObjectNextSkillDelayResult` / status enum.
+- Added `PlayerSummonSkillExecutionService.SetMercenaryNextSkillDelay`:
+  - stores zero and positive concrete delays;
+  - reports `MissingKnownObject` for absent represented actors;
+  - reports `RandomDelayUnsupported` for negative/random sentinel values.
+- Kept random delay generation, NPC skill template timing, AI caller wiring, and live stats mutation unsupported.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 35 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1359 tests.
+
+#### Migration Parity Table - Session 766
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.setNextSkillDelay` | `PlayerSummonSkillExecutionService.SetMercenaryNextSkillDelay` / `Player.TrySetSummonKnownObjectNextSkillDelay` | AI / Skill Scheduling Projection | Partial | Regression Tested | Needs Verification | C# now stores represented non-negative next-skill delays. It does not mutate live `NpcGameStats`, load NPC skill-template timing, or wire AI callers. |
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.nextSkillDelay` | `PlayerSummonKnownObject.NextSkillDelayMilliseconds` | DTO / Scheduling Metadata | Partial | Regression Tested | Needs Verification | Stored metadata only. No persistence, serialization, synchronization, live stat container, or Java runtime comparison. |
+| `com.aionemu.gameserver.utils.Rnd.get(3000, 9000)` used by `setNextSkillDelay(-1)` | `PlayerSummonKnownObjectNextSkillDelayStatus.RandomDelayUnsupported` | Randomization Dependency | Not Started | Regression Tested as unsupported branch | Needs Verification | Java random delay generation remains unported; C# refuses negative sentinel values in this slice. |
+| `com.aionemu.gameserver.model.skill.NpcSkillEntry.getNextSkillTime` / `NpcSkillTemplateEntry.getNextSkillTime` | Explicit concrete delay input to `SetMercenaryNextSkillDelay` | NPC Skill Template Dependency | Not Started | No Tests | Needs Verification | C# does not yet read next-skill timing from NPC skill templates or queued skill entries. Newly documented dependency remains blocked. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager` caller of `setNextSkillDelay` | Not wired; documented dependency | AI Scheduling Caller | Not Started | No Tests | Needs Verification | C# delay metadata is not consumed by live AI skill selection, queued skill handling, or combat behavior. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.SetMercenaryNextSkillDelay_StoresConcreteDelayAndRejectsRandomSentinel`: validates missing known-object behavior, `-1` random sentinel rejection, zero-delay storage, concrete delay storage, and represented known-object metadata update.
+- Java comparison status: expectations are source-derived from Java `NpcGameStats.setNextSkillDelay`, `NpcSkillEntry.getNextSkillTime`, and `Rnd.get(3000, 9000)`. No Java runtime execution, RNG comparison, NPC skill-template load comparison, live AI caller comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Delay storage is represented metadata only and is not used by live AI callers.
+- Java random delay generation for `-1` remains unsupported.
+- NPC skill template timing and queued skill entry selection are not represented.
+- No production clock, live `NpcGameStats`, controller execution, cooldowns, effects, packets, persistence, or serialization is wired.
+- Reflection, threading, serialization, date/time runtime, precision/rounding, Java runtime, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented NPC next-skill delay storage slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 9 live AI skill scheduling, NPC skill-template delay loading, Java random delay generation, production game clock, live `NpcGameStats`, controller execution, live skill runtime, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; concrete next-skill delay storage is represented, but live AI skill scheduling parity remains partial.
+
+Next recommended unit of work:
+- Continue by modeling a small `SkillAttackManager` caller preview that consumes represented next-skill readiness/delay metadata without selecting real skills yet, or begin representing `NpcSkillEntry.getNextSkillTime` from static NPC skill template metadata if a C# table already exists. Keep Java `Rnd.get(3000, 9000)`, live AI skill choice, controller execution, effects, packets, and live NPC state explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
