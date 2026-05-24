@@ -16252,6 +16252,54 @@ Summary metrics:
 Next recommended unit of work:
 - Start command `30` `LEAGUE_EXPEL`: source-read the permission checks in `LeagueService.expelAlliance` and `PlayerTeamCommandService.findLeagueAlliance`, then reuse the leave-event machinery with EXPEL message ids (`LEAGUE_EXPEL` / `LEAGUE_EXPELLED`) for the first leader-expels-nonleader test.
 
+### Session 650 (May 24, 2026)
+- Source-read Java `PlayerTeamCommandService.findLeagueAlliance` and `LeagueService.expelAlliance` permission ordering for command `30` `LEAGUE_EXPEL`.
+- Added command `30` routing through `PlayerLeagueRuntime.ExpelAlliance`.
+- Reused the leave-event machinery for the first EXPEL branch: the league leader alliance can expel a non-leader alliance, remaining alliances receive `SM_ALLIANCE_INFO.LEAGUE_EXPEL`, the expelled alliance receives `SM_ALLIANCE_INFO.LEAGUE_EXPELLED`, and remaining league rows are compacted in Java position order.
+- Added `LEAGUE_EXPEL` (`1400574`) and `LEAGUE_EXPELLED` (`1400576`) message constants to `PlayerAllianceInfoPacketPlan`.
+- Preserved Java-source permission boundaries in the runtime: target alliance lookup, caller alliance leader check, and league-leader-alliance check are explicit, though only the successful expel branch is covered in this unit.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionPlayerStatusInfoTests` passes with 50 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1123 tests.
+
+#### Migration Parity Table - Session 650
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` command `30` path | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Command `30` now reaches C# expel runtime for active leagues. Missing-league behavior remains covered by earlier tests. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.LEAGUE_EXPEL` | Command code `30` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | First successful leader-expels-nonleader branch is modeled. Permission failure branches need dedicated tests. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService` | Manual command branches in `GameServerConnection.HandlePlayerStatusInfoAsync` | Service / Dispatcher | Partial | Regression Tested | Needs Verification | Java uses `findLeagueAlliance` before `LeagueService.expelAlliance`; C# mirrors the lookup/check ordering in `PlayerLeagueRuntime.ExpelAlliance` but still uses manual packet-handler branches. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.expelAlliance` | `Aion.GameServer.Services.PlayerLeagueRuntime.ExpelAlliance` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Successful expel removes target alliance, compacts positions, and emits EXPEL/EXPELLED packet intents. Caller permission failures are implemented but not yet regression-tested. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.removeAlliance` | Shared `PlayerLeagueRuntime.RemoveAllianceCore` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Normal leave and expel now share removal/reorganize/disband mechanics. Java static registry and event queue/lock behavior remain unverified. |
+| `com.aionemu.gameserver.model.team.league.League` | `Aion.GameServer.Services.PlayerLeagueRuntime` / `PlayerLeagueSnapshot` | Team State | Partial | Regression Tested | Needs Verification | Expel test covers compacting a three-alliance league after target removal. Java object identity/concurrency remain source-derived. |
+| `com.aionemu.gameserver.model.team.league.LeagueMember` | Internal `PlayerLeagueRuntime.PlayerLeagueMember` | Team Member | Partial | Regression Tested | Needs Verification | Target alliance lookup and position compaction are modeled by alliance id. Java object references are approximated. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueLeftEvent` | `PlayerLeagueRuntime.ExpelAlliance` / `PlayerLeaguePacketIntent` | Event Runtime Dependency | Partial | Regression Tested | Needs Verification | EXPEL reason is modeled for remaining-alliance and expelled-alliance messages. EXPEL with disband and leader-expel edge cases remain untested. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` / `PlayerAllianceInfoPacketPlan` | Server Packet | Partial | Regression Tested | Needs Verification | Expel test serializes emitted `LEAGUE_EXPEL` and `LEAGUE_EXPELLED` packets with compacted league rows. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Model.GameObjects.PlayerAllianceDescriptor` / `PlayerAllianceRuntime` | Team State Dependency | Partial | Regression Tested | Needs Verification | Supplies caller leader check, target leader name, league leader name, snapshots, recipients, and active map ids. No Java live object identity. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry` / `GameServerConnection.SendLeaguePacketAsync` | Runtime Dependency | Partial | Regression Tested | Needs Verification | In-memory registry verifies recipient order and packet payloads. Live socket/offline-recipient behavior remains unverified. |
+
+Tests added or updated:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_LeagueExpelByLeaderRemovesTargetLikeJava`: validates command `30` for a three-alliance league where the league leader expels a non-leader alliance. It verifies remaining positions, removed target lookup, recipient order, serialized `LEAGUE_EXPEL` rows for remaining alliances, and serialized `LEAGUE_EXPELLED` for the removed alliance.
+- Java comparison status: expectations are source-derived from `PlayerTeamCommandService.findLeagueAlliance`, `LeagueService.expelAlliance`, `LeagueLeftEvent`, `League.reorganize`, and `SM_ALLIANCE_INFO.writeImpl`. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, Java static league registry comparison, event queue/lock comparison, `ConcurrentHashMap` iteration comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Command `30` permission failure branches are implemented but not yet tested: non-alliance-leader caller, non-league-leader alliance caller, and invalid target alliance.
+- EXPEL disband behavior and expelling the last non-leader alliance need coverage.
+- `LEAGUE_SET_LEADER` command `32`, invite/join/loot/kinah workflows, direct disband iteration, offline recipients, Java static registry, event queue/locks, object identity, and packet processor exception/log behavior remain deferred.
+- Packet-field coverage remains C# emitted-object validation only; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- C# packet intent order is deterministic by sorted positions; Java `ConcurrentHashMap` ordering remains unverified.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 11
+- Total artifacts ported: 1 command `30` successful expel runtime slice plus 1 regression test
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 8 Java golden byte validation, full `LeagueService`, Java static league registry, command `30` failure branches, `LEAGUE_SET_LEADER`, Java event queue/lock comparison, packet processor exception/log comparison, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; league expel has started, but permission/error branches and wider lifecycle parity remain open.
+
+Next recommended unit of work:
+- Add command `30` permission and edge coverage: invalid target alliance, caller not their alliance leader, caller alliance not the league leader alliance, and two-alliance expel that triggers disband. Keep each as source-derived packet/state tests before moving to command `32`.
+
 ---
 
 ## Next Steps
