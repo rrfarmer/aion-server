@@ -22882,6 +22882,56 @@ Next recommended unit of work:
 
 ---
 
+### Session 781 (May 24, 2026)
+- Re-inspected Java `SkillAttackManager.skillAction` target-selection mutation:
+  - skill `Properties.getFirstTarget() == ME` forces `owner.setTarget(owner)` before the NPC skill target switch;
+  - `NpcSkillTargetAttribute.FRIEND` scans known visible friendly NPCs in range and visible through geo;
+  - `ME` selects owner;
+  - hated-order and random attributes read `AggroList`;
+  - `NONE` leaves `newTarget` null and does not mutate target;
+  - `owner.setTarget(newTarget)` only runs when a non-null target is found.
+- Added represented target-selection DTOs:
+  - `PlayerSummonKnownObjectNpcSkillActionTargetSelection`;
+  - `PlayerSummonKnownObjectNpcSkillActionTargetSelectionStatus`;
+  - `PlayerSummonKnownObjectNpcSkillActionTargetSource`.
+- Added `SelectMercenaryNpcSkillActionTarget` to project first-target self override and all Java `NpcSkillTargetAttribute` branches into selected, missing-target, or not-required metadata.
+- Kept actual `owner.setTarget`, known-list scanning, aggro-list lookup, random target selection, `PositionUtil` range, `GeoService.canSee`, controller execution, effects, and packets unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 50 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1374 tests.
+
+#### Migration Parity Table - Session 781
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.skillAction` target selection block | `PlayerSummonSkillExecutionService.SelectMercenaryNpcSkillActionTarget` | AI Skill Target Projection | Partial | Regression Tested | Needs Verification | C# represents target-selection outcomes and first-target self override. It does not mutate live owner target or call controller/use-skill paths. |
+| `com.aionemu.gameserver.skillengine.properties.FirstTargetAttribute.ME` | `skillFirstTargetIsSelf` input / `ActionTargetSource.Owner` | Skill Property Gate Projection | Partial | Regression Tested | Needs Verification | C# models Java override where skill first-target `ME` selects owner before NPC target attribute logic. Live `SkillTemplate.Properties` binding remains unwired. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillTargetAttribute` | `PlayerSummonKnownObjectNpcSkillTargetAttribute` plus action target selection sources | Enum / Target Projection | Partial | Regression Tested | Needs Verification | All Java enum branches are represented as source metadata. Live known-list, aggro-list, and random target lookup remain missing. |
+| `com.aionemu.gameserver.controllers.attack.AggroTarget` used by `AggroList.getTarget` | explicit target-availability booleans for hated/random sources | Aggro Target Dependency | Not Started | Manual Only as input branches | Needs Verification | C# does not query live aggro lists or random target ranges; it only records whether a represented target is available. |
+| `com.aionemu.gameserver.world.geo.GeoService` / `PositionUtil` in `FRIEND` target lookup | explicit `hasFriendTarget` input | Known-List / Geometry Dependency | Not Started | Manual Only as input branch | Needs Verification | Friend target selection still lacks visible NPC scan, support/friend predicate, range geometry, geo visibility, threading, and live target mutation. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.SelectMercenaryNpcSkillActionTarget_ProjectsJavaSkillActionTargetMutation`: validates first-target self override, NPC target `ME`, friend selected/missing, most/second/third hated, random, random-except-current, and `NONE` not-required behavior, including whether represented metadata would set owner target.
+- Java comparison status: expectations are source-derived from Java `SkillAttackManager.skillAction`, `FirstTargetAttribute.ME`, `NpcSkillTargetAttribute`, `AggroTarget`, known-list friend scan, `PositionUtil`, and `GeoService`. No Java runtime execution, live target mutation comparison, known-list scan comparison, aggro-list comparison, random selection comparison, geometry comparison, geo-visibility comparison, reflection comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Target selection is represented metadata and does not mutate a live owner target.
+- Known-list friend selection, aggro-list selection, random target selection, range geometry, and geo visibility remain caller-supplied/missing.
+- Live `SkillTemplate.Properties`, first-target range, target type, controller execution, effects, and packets remain unwired.
+- Java RNG/shuffle, reflection, threading, serialization, date/time runtime, precision/rounding, Java runtime, geometry, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented NPC skill action target-selection slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 12 live owner target mutation, live `SkillTemplate.Properties` binding, known-list friend scans, support/friend predicate, aggro-list lookup, random target selection, Java geometry, geo visibility, controller execution, Java runtime comparison, threading, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented NPC skill action target selection exists, but live mutation and controller execution remain partial.
+
+Next recommended unit of work:
+- Continue by adding a represented `skillAction` pre-use projection that composes target validity, aggro-range abort, abnormal/transform skill-use blocks, target-selection metadata, and controller use-skill result into Java source-order outcomes. Keep live owner target mutation, controller execution, effects, packets, Java geometry, RNG, scheduler/date-time behavior, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -22891,4 +22941,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by adding a live-adapter boundary that can build represented NPC skill candidates from future C# NPC skill-list/static data and `NpcGameStats` state, or model target-selection mutation in `SkillAttackManager.skillAction` for `NpcSkillTargetAttribute` values before live AI mutation, XML loading, random target selection, effects, packets, and controller execution are available.
+8. Continue NPC skill readiness parity by adding a represented `skillAction` pre-use projection that composes target validity, aggro-range abort, abnormal/transform skill-use blocks, target-selection metadata, and controller use-skill result into Java source-order outcomes before live AI mutation, XML loading, random target selection, effects, packets, and controller execution are available.
