@@ -24011,6 +24011,53 @@ Next recommended unit of work:
 
 ---
 
+### Session 805 (May 24, 2026)
+- Re-inspected represented `PlayerSummonKnownObject`, `ProjectMercenaryNpcSkillConditionTarget`, `HELP_FRIEND` candidate metadata, and carved-signet readiness inputs against Java `NpcSkillTemplateEntry.conditionReady`.
+- Extended represented `PlayerSummonKnownObject` with target facts needed by Java condition readiness: visibility, creature-ness, dead/about-to-die state, HP percentage, flying state, physical-class flag, and active carved-signet effect states.
+- Added a known-object overload of `ProjectMercenaryNpcSkillConditionTarget` that converts represented known-object target facts into the existing condition-target shape.
+- Added `ProjectMercenaryNpcSkillHelpFriendCandidate` to convert represented known-object target facts into the existing `HELP_FRIEND` candidate shape.
+- Modeled:
+  - current target object id projection;
+  - represented Creature versus non-creature target kind;
+  - abnormal state projection for simple `EffectController.isInAnyAbnormalState` conditions;
+  - HP/range/visibility/death/relation/geo facts used by `HELP_FRIEND`;
+  - active carved-signet levels used by carved-signet readiness.
+- Kept live current-target lookup, live `KnownObject`/`VisibleObject` identity, live `Creature` and `LifeStats`, live `EffectController`, real player class lookup, live `TribeRelationService`, live `GeoService`, target mutation, packets, threading, serialization, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|StaticDataNpcSkillTests"` passes with 44 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1394 tests.
+
+#### Migration Parity Table - Session 805
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.conditionReady` | `PlayerSummonSkillExecutionService.ProjectMercenaryNpcSkillConditionTarget(PlayerSummonKnownObject, ...)` and `EvaluateMercenaryNpcSkillConditionReadiness` | Service | Partial | Regression Tested | Needs Verification | C# now has a represented bridge from known-object target facts into condition readiness. It does not read live `creature.getTarget()`, live object identity, or runtime Java behavior. |
+| `com.aionemu.gameserver.model.gameobjects.VisibleObject` | `Aion.GameServer.Model.GameObjects.PlayerSummonKnownObject` target-fact fields | World Object DTO | Partial | Regression Tested | Needs Verification | C# carries represented object id and visibility. Live `VisibleObject`, template identity, world/instance coordinates, visibility recalculation, reflection, threading, and serialization remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.Creature` | `PlayerSummonKnownObject.IsCreature`, `IsDead`, `IsAboutToDie`, `HpPercentage`, `IsFlying`, `IsPhysicalClass` | Creature DTO | Partial | Regression Tested | Needs Verification | C# carries represented creature/life/class/flying facts for readiness projections. Live `Creature`, `LifeStats`, Java HP rounding/precision, player-class lookup, object identity, threading, and packets remain unverified. |
+| `com.aionemu.gameserver.controllers.effect.EffectController` | `PlayerSummonKnownObject.AbnormalState` and `CarvedSignets` | Effect Controller DTO | Partial | Regression Tested as metadata only | Needs Verification | C# carries represented abnormal bitmasks and carved-signet states. It does not inspect locked effect maps, live `Effect` instances, effect lifecycle, mutation/removal, reflection, threading, serialization, or packet fanout. |
+| `com.aionemu.gameserver.world.knownlist.KnownObject` | `ProjectMercenaryNpcSkillHelpFriendCandidate(PlayerSummonKnownObject, ...)` | Known-list Adapter | Partial | Regression Tested | Needs Verification | C# converts represented known-object facts into `HELP_FRIEND` candidate metadata. Live known-list traversal, concurrent mutation, Java map ordering, relation lookup, geo lookup, and target mutation remain unverified. |
+| `com.aionemu.gameserver.services.TribeRelationService` / `GeoService` | represented `isSupport`, `isFriend`, and `geoCanSee` inputs | Service Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# still consumes precomputed booleans. Tribe data, Panesterra rules, line-of-sight maps, z offsets, instance ids, threading, and live-client behavior remain missing. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ProjectMercenaryNpcSkillConditionTarget_AdaptsRepresentedKnownObjectFacts`: validates represented known-object projection into condition-target metadata, `HELP_FRIEND` candidate metadata, simple abnormal/flying/class/death/HP/range facts, carved-signet target state handoff, and non-creature visible-object mapping.
+- Java comparison status: expectations are source-derived from Java `NpcSkillTemplateEntry.conditionReady`, `KnownObject`, `VisibleObject`, `Creature`, `LifeStats`, and `EffectController` call sites. No Java runtime execution, live current-target lookup, live effect-controller map comparison, live relation/geo comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, packet comparison, or live-client validation was run.
+
+Remaining risks:
+- The bridge consumes represented facts only; it still does not query live current targets, known lists, life stats, player classes, tribe relations, geo visibility, or effect controllers.
+- Live object identity, mutable target state, Java HP precision/rounding, effect lifecycle/removal, packets, persistence, threading, serialization, date/time behavior, reflection behavior, and live-client behavior remain missing or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 represented condition-target/effect-state bridge slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 16 live `creature.getTarget`, live `KnownObject`/`VisibleObject`, live `Creature`, live `LifeStats`, Java HP precision/rounding, player-class lookup, live `EffectController`, effect lifecycle/removal, live `TribeRelationService`, live `GeoService`, Java map ordering/concurrent mutation, target mutation, packets, threading/serialization, reflection behavior, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented condition-target facts can now feed readiness, but live AI/effect-state integration remains partial.
+
+Next recommended unit of work:
+- Continue NPC skill readiness parity by wiring represented current-target facts into one higher-level mercenary NPC skill selection preview path, so static candidate metadata plus represented current target/effect facts can produce condition readiness without per-candidate manual target injection. Keep live `creature.getTarget`, real known-list/target identity, relation/geo services, effect controllers, packets, threading, serialization, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -24020,4 +24067,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by designing the next bridge from represented condition-target facts to future live target/effect state, especially how current target object identity, creature/death state, active signet levels, and abnormal states will be supplied from the live AI/known-object path. Keep live `EffectController`, object identity, packets, threading, serialization, and live-client validation explicit until supported.
+8. Continue NPC skill readiness parity by wiring represented current-target facts into one higher-level mercenary NPC skill selection preview path, so static candidate metadata plus represented current target/effect facts can produce condition readiness without per-candidate manual target injection. Keep live `creature.getTarget`, real known-list/target identity, relation/geo services, effect controllers, packets, threading, serialization, and live-client validation explicit until supported.
