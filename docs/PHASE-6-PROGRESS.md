@@ -18674,6 +18674,63 @@ Summary metrics:
 Next recommended unit of work:
 - Load Java storage-expander XML into C# `StaticData` as `CubeExpansionTemplates` and `WarehouseExpansionTemplates`, then wire `CM_DIALOG_SELECT` actions `47` and `48` through `StorageExpansionNpcService.Request*Expansion` with targeting/function validation. Keep DAO persistence and min/max NPC-specific messages as explicit follow-up work unless they fit cleanly after the loader is in place.
 
+---
+
+### Session 696 (May 24, 2026)
+- Continued storage expansion parity by loading Java storage-expander XML into C# static data and wiring dialog request routing.
+- Extended `StaticData` with:
+  - `CubeExpansionTemplates`,
+  - `WarehouseExpansionTemplates`.
+- Parsed Java `cube_expander` and `warehouse_expander` `expansion_npc` entries from merged static-data XML:
+  - whitespace-separated NPC id lists,
+  - nested `expand` level/price rows,
+  - flattened NPC-id lookup shape matching Java `afterUnmarshal`.
+- Routed production `CM_DIALOG_SELECT` action ids:
+  - `47` / `EXTEND_INVENTORY`,
+  - `48` / `EXTEND_CHAR_WAREHOUSE`.
+- Request routing now validates the targeted NPC/function and delegates to `StorageExpansionNpcService.RequestCubeExpansion` or `RequestWarehouseExpansion` with loaded templates.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "StorageExpansionNpcServiceTests|StaticData_LoadsStorageExpansionTemplatesByNpcId"` passes with 8 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1261 tests.
+
+#### Migration Parity Table - Session 696
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dataholders.CubeExpandData` | `Aion.GameServer.Dataholders.StaticData.CubeExpansionTemplates` / `StorageExpansionTemplateTable` | Dataholder | Partial | Regression Tested | Needs Verification | Loads represented `cube_expander` entries into flattened NPC-id lookup table. Focused XML snippet covers multi-NPC ids and per-level price lookup. Full real XML count parity, duplicate-id overwrite behavior, schema validation, and Java JAXB runtime comparison remain unverified. |
+| `com.aionemu.gameserver.dataholders.WarehouseExpandData` | `Aion.GameServer.Dataholders.StaticData.WarehouseExpansionTemplates` / `StorageExpansionTemplateTable` | Dataholder | Partial | Regression Tested | Needs Verification | Loads represented `warehouse_expander` entries into flattened NPC-id lookup table. Focused XML snippet covers multi-NPC ids and multi-level price lookup. Full real XML count parity, duplicate-id overwrite behavior, schema validation, and Java JAXB runtime comparison remain unverified. |
+| `com.aionemu.gameserver.model.templates.StorageExpansionTemplate` | `Aion.GameServer.Dataholders.StorageExpansionTemplateSummary` | DTO / Static Data Template | Partial | Regression Tested | Needs Verification | Static loader now populates NPC ids and nested level/price rows from XML. Java JAXB field defaults, malformed XML behavior, duplicate level behavior, and runtime comparison remain unverified. |
+| `com.aionemu.gameserver.model.templates.expand.Expand` | `Aion.GameServer.Dataholders.StorageExpansionPrice` | DTO | Partial | Regression Tested | Needs Verification | Static loader now populates integer `level` and `price` attributes. Precision/rounding differences are not expected for int values, but malformed/overflow XML handling and Java JAXB comparison remain unverified. |
+| `com.aionemu.gameserver.services.DialogService` `EXTEND_INVENTORY` branch | `GameServerConnection.HandleDialogSelectAsync` action `CmDialogSelect.ExtendInventory` | Dialog Handler | Partial | Regression Tested indirectly | Needs Verification | Production dialog routing now validates target/function and requests cube expansion using loaded templates and configured limits. End-to-end dialog request tests, Java min/max NPC-specific failure messages, persistence, and live socket ordering remain missing. |
+| `com.aionemu.gameserver.services.DialogService` `EXTEND_CHAR_WAREHOUSE` branch | `GameServerConnection.HandleDialogSelectAsync` action `CmDialogSelect.ExtendCharWarehouse` | Dialog Handler | Partial | Regression Tested indirectly | Needs Verification | Production dialog routing now validates target/function and requests warehouse expansion using loaded templates. End-to-end dialog request tests, Java min/max NPC-specific failure messages, persistence, and live socket ordering remain missing. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_DIALOG_SELECT` expand actions | `Aion.GameServer.Network.Aion.ClientPackets.CmDialogSelect.ExtendInventory` / `ExtendCharWarehouse` | Client Packet / Constants | Partial | Regression Tested indirectly | Needs Verification | Constants `47` and `48` are now consumed by production request routing. Full packet parser/dialog flow and live client behavior were not compared. |
+| `com.aionemu.gameserver.services.CubeExpandService.expandCube` | `StorageExpansionNpcService.RequestCubeExpansion` production caller | Service Integration | Partial | Regression Tested | Needs Verification | Request path now has loaded template input. Still missing NPC min/max failure system-message factories, DAO persistence, common-data save, cube-limit storage object recalculation, and golden/live validation. |
+| `com.aionemu.gameserver.services.WarehouseService.expandWarehouse` | `StorageExpansionNpcService.RequestWarehouseExpansion` production caller | Service Integration | Partial | Regression Tested | Needs Verification | Request path now has loaded template input. Still missing NPC min/max failure system-message factories, DAO persistence, common-data save, warehouse-limit storage object recalculation, and golden/live validation. |
+| `com.aionemu.gameserver.configs.main.CustomConfig.CUBE_EXPANSION_LIMIT` / `NPC_CUBE_EXPANDS_SIZE_LIMIT` | `GameServerOptions.Custom.CubeExpansionLimit` / `NpcCubeExpandsSizeLimit` | Config Dependency | Partial | Existing Config Tested | Needs Verification | Existing C# options are now passed into cube NPC expansion routing. This unit did not revalidate property override loading, Java static config initialization timing, or live config parity. |
+
+Tests added/updated:
+- `StaticDataLoadingTests.StaticData_LoadsStorageExpansionTemplatesByNpcId`: validates XML parsing for cube/warehouse expansion NPC ids, min/max expansion levels, price lookup, and missing NPC lookup.
+- Existing `StorageExpansionNpcServiceTests` were rerun to validate the loaded DTO/table shape still feeds request/response planning.
+- Java comparison status: expectations are source-derived from `CubeExpandData`, `WarehouseExpandData`, `StorageExpansionTemplate`, `Expand`, `DialogService`, `CubeExpandService`, and `WarehouseService`. No Java runtime execution, Java-generated golden vector, full real XML count comparison, duplicate-id comparison, production dialog end-to-end test, DAO persistence comparison, live socket-order validation, encrypted frame comparison, reflection behavior, threading behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Full real `storage_expander` XML count parity is not asserted yet.
+- Duplicate NPC id overwrite behavior is source-inferred from dictionary construction but not tested against Java runtime.
+- Java min/max NPC-specific expansion failure messages are still not represented.
+- NPC expansion persistence to `players.npc_expands` and `players.wh_npc_expands` is still missing.
+- Storage object cube/warehouse limit recalculation remains represented by fields and outgoing packets only.
+- End-to-end production dialog tests and live client validation remain unperformed.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 storage-expander static-data/routing slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 7 real XML count parity, duplicate-id runtime comparison, min/max NPC failure messages, NPC expansion persistence, storage limit recalculation, socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; storage expansion request/answer flow is closer to production, but persistence and edge-message parity remain partial.
+
+Next recommended unit of work:
+- Add the Java min/max NPC-specific failure system messages for cube/warehouse expansion and cover request-side failure planning, or add persistence support for NPC expansion mutations (`npc_expands`, `wh_npc_expands`) so accepted NPC expansion survives logout. Keep live-client/golden packet validation as a later readiness pass.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
