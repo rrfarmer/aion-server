@@ -18058,6 +18058,56 @@ Summary metrics:
 Next recommended unit of work:
 - Continue duel parity with the smallest next `DuelService` slice: model Java duel-end/result handling (`loseDuel`, draw timeout intent, bidirectional duel removal, and `SM_DUEL_RESULT`) at the service level without attempting full combat/effect cleanup yet. If staying on new `ResponseRequester` handlers instead, good compact candidates remain craft-skill learn confirmation or experience recovery dialog.
 
+---
+
+### Session 686 (May 24, 2026)
+- Continued Java `DuelService` parity from the request/start slice into result planning.
+- Corrected `SmDuel` result ids to match Java `DuelResult`:
+  - `DUEL_LOST` result id `0`, message id `1300099`,
+  - `DUEL_DRAW` result id `1`, message id `1300100`,
+  - `DUEL_WON` result id `2`, message id `1300098`.
+- Added service-level duel end planners:
+  - `PlayerDuelRequestService.LoseDuel` sends Java-shaped lost/won `SM_DUEL_RESULT` packet intents and removes both duel map directions,
+  - `PlayerDuelRequestService.DrawDuel` sends Java-shaped draw result packet intents and removes both duel map directions,
+  - missing/offline opponent resolution falls back to object-id text for the result player name until a C# `PlayerService.getPlayerName` equivalent exists.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionDuelRequestTests` passes with 8 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1210 tests.
+
+#### Migration Parity Table - Session 686
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.DuelResult` | `Aion.GameServer.Network.Aion.ServerPackets.DuelResultKind` | Enum | Partial | Regression Tested | Needs Verification | Result ids now match Java `DUEL_LOST(0)`, `DUEL_DRAW(1)`, and `DUEL_WON(2)`. No Java golden-byte packet comparison was run. |
+| `com.aionemu.gameserver.services.DuelService.loseDuel` | `PlayerDuelRequestService.LoseDuel` | Service Method | Partial | Regression Tested | Needs Verification | Sends lost result to loser, won result to online winner, and removes duel state. Java `onDuelEnd` combat cleanup is intentionally not modeled in this unit. |
+| `com.aionemu.gameserver.services.DuelService.createTask` draw callback | `PlayerDuelRequestService.DrawDuel` | Scheduled Callback / Service Method | Partial | Regression Tested | Needs Verification | Models draw packet intents and duel removal, but not the Java 5-minute `ThreadPoolManager` scheduling or `Future` cancellation. |
+| `com.aionemu.gameserver.services.DuelService.onDuelEnd` | `PlayerDuelRequestService.LoseDuel` / `DrawDuel` result packet creation | Service Method | Partial | Regression Tested | Needs Verification | Only `SM_DUEL_RESULT` packet intent behavior is represented. Target skill cancellation, debuff cleanup, summoned-object cancellation, and aggro cleanup remain unsupported. |
+| `com.aionemu.gameserver.services.DuelService.removeDuel` | `PlayerDuelRequestService.RemoveDuel` | Runtime State Method | Partial | Regression Tested | Needs Verification | Removes both object-id directions from the C# duel map. Java draw-task cancellation is not represented because draw scheduling is not ported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DUEL.SM_DUEL_RESULT` | `SmDuel.Result` | Server Packet | Partial | Regression Tested | Needs Verification | Tests assert type `1`, result ids, message ids, and player-name payloads for lost/won/draw. Encrypted-frame and Java golden-byte comparison not run. |
+| `com.aionemu.gameserver.services.player.PlayerService.getPlayerName` | `Func<int, Player?>` resolver with object-id fallback | Service Dependency | Partial | Regression Tested | Needs Verification | Online names are resolved from supplied C# player references. Offline/name-cache lookup is not ported; fallback is an intentional temporary approximation and is documented as a risk. |
+
+Tests added/updated:
+- `GameServerConnectionDuelRequestTests.PlayerDuelRequestService_LoseDuelSendsLostWonResultsAndRemovesDuel`: validates loser result id `0`/message `1300099`, winner result id `2`/message `1300098`, names, and bidirectional duel-state removal.
+- `GameServerConnectionDuelRequestTests.PlayerDuelRequestService_DrawDuelSendsDrawResultsAndRemovesDuel`: validates draw result id `1`/message `1300100` to both players, names, and bidirectional duel-state removal.
+- Java comparison status: expectations are source-derived from `DuelResult`, `DuelService.loseDuel`, the draw callback in `createTask`, `removeDuel`, and `SM_DUEL.writeImpl`. No Java runtime execution, Java-generated golden vector, real scheduled timeout comparison, `PlayerService.getPlayerName` offline behavior comparison, live socket-order validation, encrypted frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Java `DuelService.onDuelEnd` side effects remain mostly unsupported: target skill cancellation, debuff cleanup by opponent, summoned-object attack cancellation, aggro cleanup, and chain-of-suffering ordering.
+- Java 5-minute draw scheduling via `ThreadPoolManager` and `Future` cancellation is not ported; C# only exposes a draw result planner.
+- Offline opponent names should come from Java `PlayerService.getPlayerName`; C# currently uses an online resolver and object-id fallback.
+- `fixTeamVisibility`, `SM_DELETE` resend behavior, hide cancellation on start, and full combat integration remain future duel slices.
+- Packet sends are validated by C# packet payload only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 duel result/removal service-level slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 7 combat cleanup side effects, draw timer/threading, offline player-name lookup, team visibility fix, hide cancellation, real socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; duel result packets and state removal are represented, but full combat lifecycle integration remains partial.
+
+Next recommended unit of work:
+- Either continue duel parity by wiring a real caller for `LoseDuel` / draw timeout once combat/life-state hooks are identifiable, or return to compact `ResponseRequester` handlers with production packet reachability. Good next candidates remain craft-skill learn confirmation or experience recovery dialog because they should avoid the wider combat cleanup surface.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
