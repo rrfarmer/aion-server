@@ -21859,6 +21859,66 @@ Next recommended unit of work:
 
 ---
 
+### Session 761 (May 24, 2026)
+- Re-inspected Java skill lookup and use behavior:
+  - `SkillEngine.getSkill(Creature, skillId, skillLevel, firstTarget)` returns null when `DataManager.SKILL_DATA.getSkillTemplate(skillId)` is missing;
+  - summon execution calls `Skill.setHate(order.getHate())`, then `Skill.useSkill()`, then releases only when use succeeds and the order requests release;
+  - `CreatureController.useSkill(skillId, skillLevel)` resolves a `Skill` against the creature target and only calls `useSkill()` if lookup succeeds;
+  - `NpcController.useSkill` adds disabled-skill timing checks that are not represented yet.
+- Added `PlayerSummonSkillInvocationExecutionResult`, `PlayerSummonSkillInvocationExecutionStatus`, and `PlayerSummonSkillInvocationExecutionAction`.
+- Added `PlayerSummonSkillExecutionService.PlanInvocationExecution` to consume a shared invocation plan and static `SkillTemplateTable`:
+  - `MissingPlan` for rejected/missing branches;
+  - `MissingSkillTemplate` when the C# static skill table lacks the requested skill template;
+  - `WouldUseSkill` with Java-shaped action ordering when template lookup succeeds.
+- Wired `GameServerConnection.HandleSummonCastSpellAsync` to attach invocation execution previews to both summon and mercenary execution results when runtime static skill templates are available.
+- Kept the preview metadata-only; no live skill object, target mutation, cooldown, effects, packets, audit/log sink, or release lifecycle runs.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 29 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1353 tests.
+
+#### Migration Parity Table - Session 761
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.SkillEngine.getSkill(Creature, int, int, VisibleObject)` | `PlayerSummonSkillExecutionService.PlanInvocationExecution` / `PlayerSummonSkillInvocationExecutionResult` | Skill Engine Lookup Projection | Partial | Regression Tested | Needs Verification | C# now models template lookup success/failure from `SkillTemplateTable` and returns `MissingSkillTemplate` instead of a live null `Skill`. It does not instantiate `Skill`, resolve properties, effects, target validation, cooldowns, or packets. |
+| `com.aionemu.gameserver.controllers.SummonController.useSkill(SkillOrder)` | `PlayerSummonSkillInvocationExecutionAction.ResolveSkillTemplate` / `SetHate` / `UseSkill` / `ReleaseOnSuccessfulUse` | Controller Execution Preview | Partial | Regression Tested | Needs Verification | C# action preview preserves post-lookup summon ordering and release gating intent. It does not call `Skill.useSkill`, observe success/failure, mutate hate, or release a live summon. |
+| `com.aionemu.gameserver.skillengine.model.Skill.setHate` | `PlayerSummonSkillInvocationExecutionAction.SetHate` | Skill Mutation Preview | Not Started | Regression Tested as preview metadata | Needs Verification | Hate mutation remains planned metadata only; no live `Skill` state, precision/rounding, serialization, or threading behavior is represented. |
+| `com.aionemu.gameserver.skillengine.model.Skill.useSkill` | `PlayerSummonSkillInvocationExecutionAction.UseSkill` | Skill Use Preview | Not Started | Regression Tested as preview metadata | Needs Verification | Skill use remains planned metadata only. Effects, cast timing, observers, cooldowns, packet fanout, target validation, and failure behavior are unsupported. |
+| `com.aionemu.gameserver.services.summons.SummonsService.release` | `PlayerSummonSkillInvocationExecutionAction.ReleaseOnSuccessfulUse` | Lifecycle Preview | Not Started | Regression Tested as preview metadata | Needs Verification | Release action is included only when Java would check release after successful skill use. Actual success/failure gating and summon lifecycle mutation remain missing. |
+| `com.aionemu.gameserver.controllers.CreatureController.useSkill(int, int)` | `PlayerSummonSkillInvocationExecutionAction.ResolveSkillTemplate` / `UseSkill` for mercenary plans | Controller Execution Preview | Partial | Regression Tested | Needs Verification | C# previews mercenary skill lookup/use after the existing target action. It does not catch Java controller exceptions, mutate cooldowns, invoke `SkillEngine`, or apply effects. |
+| `com.aionemu.gameserver.controllers.NpcController.useSkill(int, int)` | No C# disabled-skill check; documented blocker from preview bridge | NPC Controller Dependency | Not Started | No Tests | Needs Verification | Newly documented dependency. Java checks `isSkillDisabled(skillTemplate)` and renews last-skill time before `CreatureController.useSkill`; C# does not model disabled skills, game stat timing, or null-template behavior there. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.setTarget` | `PlayerSummonSkillInvocationExecutionAction.SetTarget` for mercenary plans | Target Mutation Preview | Partial | Regression Tested as preview metadata | Needs Verification | Target assignment remains preview metadata only; no live `Creature` target mutation, object identity, synchronization, serialization, or visibility lifecycle exists. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_AllowsPetSkillBeforeRepresentedSkillEngineInvocation`: validates valid summon plans produce `WouldUseSkill`, template id `22107`, and summon action order including release-on-success.
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_PlansNoReleaseWhenQueuedOrderDoesNotRelease`: validates non-release summon plans omit release action and missing static skill templates produce `MissingSkillTemplate`.
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_RejectsMissingSummonAndInvalidPetSkill`: validates rejected summon branches produce `MissingPlan`.
+- `PlayerSummonSkillExecutionServiceTests.ValidateMercenaryExecution_PlansControllerUseAndAuditsInvalidSkill`: validates valid mercenary plans produce `SetTarget`, `ResolveSkillTemplate`, `UseSkill` preview ordering.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_ValidRepresentedPetOrderReachesExecutionGuard`: validates connection-level summon invocation execution preview is attached.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_InvalidRepresentedPetSkillStopsBeforeSkillEngine`: validates invalid summon branch attaches `MissingPlan`.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_ValidRepresentedMercenarySkillPlansControllerUse`: validates connection-level mercenary invocation execution preview is attached.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_InvalidRepresentedMercenarySkillRecordsAuditProjection`: validates invalid mercenary branch attaches `MissingPlan`.
+- Java comparison status: expectations are source-derived from Java `SkillEngine.getSkill`, `SummonController.useSkill`, `Skill.setHate`, `Skill.useSkill`, `SummonsService.release`, `CreatureController.useSkill`, and `NpcController.useSkill`. No Java runtime execution, live `Skill` construction comparison, disabled-skill timing comparison, target mutation comparison, object identity comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Invocation execution remains a preview; no live skill object, target mutation, hate mutation, cooldown, effect, packet fanout, observer, audit/log, exception, or release lifecycle behavior runs.
+- `NpcController.useSkill` disabled-skill and last-skill-time behavior is documented but not modeled.
+- Java null-template behavior in the NPC controller path may differ from C#'s explicit `MissingSkillTemplate` status.
+- Resolved targets remain object-id metadata, not live `Creature` references.
+- Java runtime, golden data comparison, live-client validation, reflection, threading, serialization, date/time, and precision/rounding behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 represented invocation execution preview slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 11 live `SkillEngine`, live `Skill` construction, disabled-skill timing, controller execution, target mutation, hate mutation, release lifecycle, packet fanout, audit/log sinks, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; execution planning can now distinguish missing plans, missing skill templates, and would-use-skill previews, but live execution parity remains partial.
+
+Next recommended unit of work:
+- Continue from the invocation execution preview by modeling one live-precondition gap at a time, likely `NpcController.useSkill` disabled-skill/last-skill-time metadata for mercenary plans or a represented `Skill.useSkill` success/failure result that gates release-on-success without applying effects. Keep real effects, cooldowns, packet fanout, and live target mutation explicit until their supporting systems exist.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
