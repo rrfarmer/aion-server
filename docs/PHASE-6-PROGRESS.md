@@ -17827,6 +17827,60 @@ Summary metrics:
 Next recommended unit of work:
 - Continue `CM_INVITE_TO_GROUP` parity by wiring invite type `28` to the existing league invite planner or invite type `12` to an alliance invite service if the C# alliance runtime is ready. If those fanouts are too broad, pick the next narrow `ResponseRequester` handler with production packet reachability, such as duel request, craft-skill learn confirmation, or experience recovery dialog.
 
+---
+
+### Session 682 (May 24, 2026)
+- Source-read Java `LeagueService.inviteToLeague` and compared it against the existing C# `PlayerLeagueInvitePlanner`.
+- Extended production `CM_INVITE_TO_GROUP` packet routing for invite type `28`:
+  - `GameServerConnection.HandleInviteToGroupAsync` now dispatches invite type `28` to `HandleInviteToLeagueAsync`,
+  - represented Java can-invite failures now send the planner's source-derived system message,
+  - successful requests create the league invite setup plan, register the pending request on the redirected alliance leader, send requester system messages, and send `SM_QUESTION_WINDOW.STR_MSGBOX_UNION_INVITE_ME` to the leader,
+  - selected non-leader invitations now redirect to the alliance leader like Java.
+- Invite type `12` (alliance invite) remains deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionGroupInviteTests` passes with 7 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1197 tests.
+
+#### Migration Parity Table - Session 682
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_INVITE_TO_GROUP` | `GameServerConnection.HandleInviteToGroupAsync` invite type `28` branch | Client Packet / Handler | Partial | Regression Tested | Needs Verification | Invite type `28` now reaches league invite setup. Invite type `12` alliance remains deferred; live socket/client validation not run. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.inviteToLeague` | `GameServerConnection.HandleInviteToLeagueAsync` + `PlayerLeagueInvitePlanner` | Service / Request Starter | Partial | Unit Tested / Regression Tested | Needs Verification | C# now runs represented can-invite checks, redirects selected members to alliance leader, registers pending league invite, and sends requester/question packets. Java static league map and full event graph remain broader work. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.canInvite` | `PlayerLeagueInvitePlanner.CreateCanInviteFirstChecksPlan` / `CreateCanInviteAllianceChecksPlan` via packet path | Restriction Planner | Partial | Regression Tested | Needs Verification | Packet path covers no-alliance rejection in this unit and reuses existing represented checks. Full Java restriction parity, league equality, and all edge cases remain not runtime-compared. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueInviteEvent` | `PendingLeagueInviteRequest` registered by `PlayerLeagueInvitePlanner.TryPutPendingRequest` | Request Handler / Adapter Payload | Partial | Regression Tested | Needs Verification | Pending request is registered on the redirected alliance leader and handled by existing `CM_QUESTION_RESPONSE` path. Java anonymous handler object identity remains unported. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest` | `QuestionResponseRegistry.PutRequest` via `TryPutPendingRequest` | Request Registry Method | Partial | Regression Tested | Needs Verification | Packet path now invokes put-if-absent for league invite type `28`. Java concurrent-map stress parity remains unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_MSGBOX_UNION_INVITE_ME` | `SmQuestionWindow.UnionInviteMe` | Server Packet / Question Id | Partial | Regression Tested | Needs Verification | Question id `902249` is sent to redirected alliance leader. Java golden bytes and encrypted frames remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_UNION_INVITE_HIM` | `SmSystemMessage.UnionInviteHim` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Test asserts requester message id `1400558` with leader name and alliance size through packet payload decoding. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_UNION_INVITE_HIS_LEADER` | `SmSystemMessage.UnionInviteHisLeader` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Test asserts non-leader selection sends message id `1400559` before targeting the leader. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_UNION_CANT_INVITE_WHEN_HE_IS_ASKED_QUESTION` | `SmSystemMessage.UnionCantInviteWhenHeIsAskedQuestion` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Test asserts no-alliance invited target sends message id `1400567`. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Services.PlayerAllianceRuntime` | Runtime Dependency | Partial | Regression Tested | Needs Verification | Used to find selected player's alliance and leader. Full Java alliance service behavior remains partial. |
+| `com.aionemu.gameserver.model.team.league.League` / static league map | `Aion.GameServer.Services.PlayerLeagueRuntime` | Runtime Dependency | Partial | Existing Regression Coverage | Needs Verification | Existing runtime is reused for can-invite and later accept response; static Java registry semantics are not fully reproduced. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.inviteToAlliance` | Deferred from `CmInviteToGroup.InviteType == 12` | Service Dependency | Not Started | No Tests | Unknown | Remaining packet-level invite branch from Java `CM_INVITE_TO_GROUP`. |
+
+Tests added/updated:
+- `GameServerConnectionGroupInviteTests.HandleInviteToGroupAsync_LeagueInviteTypeTargetsAllianceLeaderAndRegistersQuestion`: validates invite type `28` redirects selected alliance member to leader, registers pending request on the leader, sends requester messages `1400559` and `1400558`, and sends question id `902249`.
+- `GameServerConnectionGroupInviteTests.HandleInviteToGroupAsync_LeagueInviteTypeRejectsPlayerWithoutAlliance`: validates represented Java no-alliance failure sends message id `1400567` and does not register a request.
+- Java comparison status: expectations are source-derived from `CM_INVITE_TO_GROUP`, `LeagueService.inviteToLeague`, `LeagueService.canInvite`, `PlayerLeagueInvitePlanner`, and system-message ids. No Java runtime execution, Java-generated golden vector, full alliance/league event comparison, invite type `12` comparison, live socket-order validation, encrypted frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Invite type `12` alliance invite remains deferred from `CM_INVITE_TO_GROUP`.
+- League invite request setup is now packet-reachable, but full Java `LeagueService.canInvite` parity and every failure branch are not exhaustively tested in this unit.
+- Existing C# league runtime is not a full Java static `LeagueService` map replacement.
+- Java's non-leader redirect message ordering before `putRequest` is approximated by the planner's successful-registration packet flow; duplicate-request ordering remains unverified.
+- Java anonymous `LeagueInviteEvent` handler object identity and reflection/polymorphic callback behavior remain unported.
+- Packet sends are validated by C# packet type/message id only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 12
+- Total artifacts ported: 1 league invite type `28` production packet wiring slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 12
+- Total blocked artifacts: 8 invite type `12` alliance wiring, full `LeagueService.canInvite` parity, Java static league map parity, duplicate-request ordering, generic anonymous handler callback execution, full alliance/league event comparison, real socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; league invite setup is now reachable from `CM_INVITE_TO_GROUP`, but alliance invite and deeper league runtime parity remain partial.
+
+Next recommended unit of work:
+- Finish the remaining `CM_INVITE_TO_GROUP` branch by modeling invite type `12` (`PlayerAllianceService.inviteToAlliance`) if the C# alliance runtime can support the request/response flow. Otherwise move to another production-reachable `ResponseRequester` handler with a small surface, such as duel request, craft-skill learn confirmation, or experience recovery dialog.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
