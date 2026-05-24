@@ -23209,6 +23209,48 @@ Next recommended unit of work:
 
 ---
 
+### Session 788 (May 24, 2026)
+- Re-inspected the represented known-object preview capture boundary and the Java post-cast spawn path from `NpcSkillTemplateEntry.fireOnEndCastEvents`.
+- Added `LastNpcSkillPostSpawnPreview` to `PlayerSummonKnownObject`.
+- Extended `Player.TryStoreSummonKnownObjectNpcSkillPreview` to persist the represented post-spawn preview beside list, selection, and action previews.
+- Extended `PlayerSummonSkillExecutionService.CaptureMercenaryNpcSkillPreview` with an optional post-spawn preview parameter.
+- Kept live `ThreadPoolManager.schedule`, delayed owner-alive recheck execution, `SpawnEngine`, Java RNG, Java geometry/heading math, live AI mutation, controller execution, effects, packets, threading, serialization, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 56 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1380 tests.
+
+#### Migration Parity Table - Session 788
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.fireOnEndCastEvents` represented output | `PlayerSummonKnownObject.LastNpcSkillPostSpawnPreview` / `PlayerSummonSkillExecutionService.CaptureMercenaryNpcSkillPreview` | Post-Cast Spawn Consumer Boundary | Partial | Regression Tested | Needs Verification | C# can now retain represented post-spawn preview metadata on the known object. It does not schedule delayed work, recheck owner state at execution time, or call spawn engine. |
+| `com.aionemu.gameserver.model.gameobjects.Npc` post-cast skill state owner | `PlayerSummonKnownObject` preview fields | Known Object State Projection | Partial | Regression Tested | Needs Verification | C# stores list, selection, action, and post-spawn previews together. Live `Npc`, `NpcSkillList`, queued/last-skill state, spawn state, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` known-list access to owner-created mercenary NPCs | `Player.TryStoreSummonKnownObjectNpcSkillPreview` | Player Known-Object Repository Boundary | Partial | Regression Tested | Needs Verification | C# updates represented known-object preview state by object id and returns explicit missing-object status. Live known-list visibility, synchronization, threading, and serialization remain unverified. |
+| `com.aionemu.gameserver.utils.ThreadPoolManager` delayed spawn scheduling | stored `PlayerSummonKnownObjectNpcSkillPostSpawnPreview.ShouldScheduleSpawn` metadata | Scheduler Dependency | Not Started | Regression Tested as stored metadata only | Needs Verification | Stored preview can identify delayed spawn intent and owner recheck requirement, but no task scheduling, cancellation, date/time runtime, or threading parity exists. |
+| `com.aionemu.gameserver.spawnengine.SpawnEngine` | stored `PlayerSummonKnownObjectNpcSkillPostSpawnPreview` metadata only | Spawn Engine Dependency | Not Started | Manual Only as explicit gap | Needs Verification | Live `newSingleTimeSpawn`, instance id handling, owner reference, spawn execution, packets, persistence, and client visibility remain missing. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.CaptureMercenaryNpcSkillPreview_StoresRepresentedSelectionAndActionState`: updated to store and verify a delayed post-spawn preview alongside list, selection, and action previews, while preserving explicit missing-known-object behavior.
+- Java comparison status: expectations are source-derived from Java `NpcSkillTemplateEntry.fireOnEndCastEvents`, represented `SkillAttackManager.chooseNextSkill`, represented `SkillAttackManager.skillAction`, `Player` known-list access, `ThreadPoolManager`, and `SpawnEngine`. No Java runtime execution, live scheduler execution comparison, spawn-engine comparison, delayed owner recheck comparison, random number comparison, geometry/heading comparison, XML/static-data comparison, reflection comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, packet comparison, persistence comparison, or live-client validation was run.
+
+Remaining risks:
+- The post-spawn preview is stored as represented metadata only and is not consumed by a scheduler or spawn engine.
+- Java delayed owner-alive recheck, `ThreadPoolManager.schedule`, `Rnd.get`, heading conversion, distance offsets, `SpawnEngine.newSingleTimeSpawn`, `SpawnEngine.spawnObject`, packets, persistence, and visibility remain missing.
+- Live `Npc`, `NpcSkillList`, queued/last-skill ownership, AI event flow, controller execution, effects, and target mutation remain represented/unwired.
+- XML/JAXB loading, reflection behavior, serialization behavior, threading, date/time runtime behavior, precision/rounding, Java runtime, scheduler, geometry, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented NPC skill post-spawn preview capture slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 15 live `ThreadPoolManager` scheduling, delayed owner recheck execution, Java `Rnd.get`, heading conversion, distance offset math, `SpawnEngine.newSingleTimeSpawn`, `SpawnEngine.spawnObject`, instance id propagation, owner references, XML/static loading, Java geometry, packets, persistence, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; post-spawn preview state can now be retained, but live scheduler/spawn-engine/static-data integration remains partial.
+
+Next recommended unit of work:
+- Continue by modeling the delayed spawn scheduler boundary as represented metadata/results without executing `SpawnEngine`, or start a static-data loader adapter for represented `NpcSkillSpawn` XML fields. Keep XML loading, `DataManager.SKILL_DATA` pruning, Java `Rnd.get`, Java geometry, live AI mutation, controller execution, effects, packets, spawn-engine execution, scheduler/date-time behavior, threading, serialization, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -23218,4 +23260,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by adding a represented post-spawn capture field on `PlayerSummonKnownObject` or a service capture method that stores the latest post-spawn preview beside selection/action previews, or by modeling the delayed spawn scheduler boundary without executing `SpawnEngine`. Keep live AI mutation, XML loading, `DataManager.SKILL_DATA` pruning, Java `Rnd.chance`/`Rnd.get`, random target selection/spawns, effects, packets, spawn-engine execution, scheduler/date-time behavior, threading, and controller execution explicit until supported.
+8. Continue NPC skill readiness parity by modeling the delayed spawn scheduler boundary as represented metadata/results without executing `SpawnEngine`, or by starting a static-data loader adapter for represented `NpcSkillSpawn` XML fields. Keep live AI mutation, XML loading, `DataManager.SKILL_DATA` pruning, Java `Rnd.chance`/`Rnd.get`, random target selection/spawns, effects, packets, spawn-engine execution, scheduler/date-time behavior, threading, serialization, and controller execution explicit until supported.
