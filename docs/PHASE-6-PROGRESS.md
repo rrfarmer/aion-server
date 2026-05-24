@@ -21109,6 +21109,52 @@ Next recommended unit of work:
 
 ---
 
+### Session 746 (May 24, 2026)
+- Inspected Java `SummonController.useSkill(SkillOrder)` and its `DataManager.PET_SKILL_DATA.petHasSkill` guard before `SkillEngine.getSkill`.
+- Added `PlayerSummonSkillExecutionService` as a represented execution-side bridge:
+  - requires represented player pet summon npc id;
+  - validates the queued `PlayerPetSkillOrder.SkillId` against loaded `PetSkillTable.PetHasSkill`;
+  - returns a `WouldInvokeSkillEngine` result carrying hate and release metadata for future execution wiring.
+- Kept actual `SkillEngine.getSkill`, `Skill.setHate`, `Skill.useSkill`, release-on-success, packet fanout, controller ownership, and audit/log output out of scope and documented.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|PlayerSummonCastSpellServiceTests|PlayerPetOrderSkillServiceTests|GamePacketTests"` passes with 100 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1342 tests.
+
+#### Migration Parity Table - Session 746
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.SummonController.useSkill(SkillOrder)` | `Aion.GameServer.Services.PlayerSummonSkillExecutionService` | Controller / Skill Execution Bridge | Partial | Regression Tested | Needs Verification | C# models the pre-execution `petHasSkill` guard and records the would-be `SkillEngine` invocation. It does not create a real `Skill`, set hate on a `Skill` object, call `useSkill`, release the summon, or fan out packets. |
+| `com.aionemu.gameserver.dataholders.PetSkillData.petHasSkill` | `Aion.GameServer.Dataholders.PetSkillTable.PetHasSkill` consumed by `PlayerSummonSkillExecutionService` | Static Data Lookup | Partial | Regression Tested with loaded static data | Needs Verification | C# validates pet npc `833288` has pet skill `22107` and rejects `9999`. Missing-map behavior remains intentionally safer than Java's possible null-pointer behavior. |
+| `com.aionemu.gameserver.model.summons.SkillOrder` | `Aion.GameServer.Model.GameObjects.PlayerPetSkillOrder` | DTO / Summon Skill Order Projection | Partial | Regression Tested | Needs Verification | C# carries skill id, level, target object id, hate, and release into the would-be execution result. Java uses a `Creature` target and passes hate into a real `Skill`; C# remains object-id/result based. |
+| `com.aionemu.gameserver.model.gameobjects.Summon.getObjectTemplate().getTemplateId` | `Player.PetSummonNpcId` consumed by execution validation | Summon Template Projection | Partial | Regression Tested | Needs Verification | C# uses represented pet npc id, not a live summon template. NPC template type, summon lifecycle, and controller ownership remain missing. |
+| `com.aionemu.gameserver.skillengine.SkillEngine.getSkill` / `Skill.setHate` / `Skill.useSkill` | Not yet implemented; represented by `PlayerSummonSkillExecutionStatus.WouldInvokeSkillEngine` | Skill Engine Dependency | Not Started | No Tests | Needs Verification | Newly documented dependency. The result preserves the inputs future code needs, but no real skill execution, timing, effects, precision/rounding, threading, or packet side effects are implemented. |
+| `com.aionemu.gameserver.services.summons.SummonsService.release` release-on-success branch | Not yet implemented; represented by `PlayerPetSkillOrder.Release` | Summon Lifecycle Dependency | Not Started | No Tests | Needs Verification | Release flag is preserved, but Java only releases after successful `skill.useSkill()`. C# has no success/failure or release lifecycle behavior yet. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_AllowsPetSkillBeforeRepresentedSkillEngineInvocation`: validates loaded static data accepts pet npc `833288` using skill `22107`, preserving hate `5` and release flag.
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_RejectsMissingSummonAndInvalidPetSkill`: validates missing represented summon and invalid pet skill `9999` branches.
+- Java comparison status: expectations are source-derived from Java `SummonController.useSkill(SkillOrder)`, `PetSkillData.petHasSkill`, `SkillOrder`, and static XML data. No Java runtime execution, Java-generated golden data comparison, live `SkillEngine`, live summon controller, release lifecycle, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- This service is not wired to `PlayerSummonCastSpellService` or `GameServerConnection` yet.
+- It validates only the pre-execution pet-skill ownership guard; all real `SkillEngine` behavior remains missing.
+- It uses represented pet npc id and order DTOs rather than live `Summon`, `NpcTemplate`, `Creature`, and `Skill` objects.
+- Java release-on-success semantics are not modeled beyond preserving the release flag.
+- Static-data checks are C# XML-derived, not Java JAXB map or runtime comparisons.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 represented summon skill execution guard
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 7 service/connection wiring, live Summon model/controller ownership, SkillEngine execution, hate transfer into real Skill objects, release-on-success, Java runtime/golden comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented summon order remap, consumption, and pet-skill validation now exist, but real summon skill execution is not ported.
+
+Next recommended unit of work:
+- Wire `PlayerSummonCastSpellService` and `PlayerSummonSkillExecutionService` together behind a `GameServerConnection.HandleSummonCastSpellAsync` path for represented pet summons, sending `STR_SKILL_NOT_NEED_PET` on the represented pet-required branch and recording/dispatching the would-be execution result. Keep live known-list target lookup, mercenary handling, real `SkillEngine`, release-on-success, audit logging, and visible packet fanout explicit if they remain unsupported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
