@@ -18411,6 +18411,66 @@ Summary metrics:
 Next recommended unit of work:
 - Stop deepening exchange packets until a real C# `Exchange` basket model is scoped, or start that model as a dedicated multi-step effort beginning with Java `Exchange` / `ExchangeItem` data shape only. For a smaller next unit, return to compact `ResponseRequester` handlers such as cube/warehouse expansion warning, craft skill rank-up confirmation, or summon/recall acceptance.
 
+---
+
+### Session 692 (May 24, 2026)
+- Continued compact `ResponseRequester` parity with Java `RecallInstantEffect`.
+- Added recall/summon question id `SmQuestionWindow.SummonPartyAcceptRequest = 901721`.
+- Added Java recall denial system-message factories:
+  - `SmSystemMessage.RecallRejectEffect` for id `1400099`,
+  - `SmSystemMessage.RecallRejectedEffect` for id `1400100`.
+- Added `PendingRecallInstantRequest` and `QuestionResponseRequestKind.RecallInstant`.
+- Added `PlayerRecallInstantRequestService` with Java-shaped behavior:
+  - registers the effected player's response request before sending the summon question,
+  - preserves put-if-absent duplicate semantics,
+  - deny response sends the Java source-derived rejection messages to both effector and effected when the effector is online,
+  - accept response teleports the effected player to the captured destination,
+  - missing effector consumes the response but does not teleport.
+- Routed `CM_QUESTION_RESPONSE` for the recall question id through `GameServerConnection`.
+- Added logout/enter-world pending-question cleanup and deny side effect for pending recall requests.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerRecallInstantRequestServiceTests` passes with 5 tests.
+- Packet/service validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerRecallInstantRequestServiceTests|GamePacketTests"` passes with 87 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1243 tests.
+
+#### Migration Parity Table - Session 692
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.RecallInstantEffect` | `Aion.GameServer.Services.PlayerRecallInstantRequestService` / `GameServerConnection.HandleRecallInstantQuestionResponseAsync` | Skill Effect / Request Handler | Partial | Regression Tested | Needs Verification | Models question registration, deny fanout, and accept teleport destination. Full Java `calculate` gating, `Effect` integration, combat rejection, same-world/enemy checks, skill target-position capture, and production SkillEngine invocation are not wired. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest/respond/denyAll` | `QuestionResponseRegistry` with `QuestionResponseRequestKind.RecallInstant` | Request Registry | Partial | Regression Tested | Needs Verification | Recall uses put-if-absent, response removal, and logout deny side effect. Java anonymous `RequestResponseHandler<Creature>` callback identity, reflection/polymorphic behavior, and concurrent-map stress remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_SUMMON_PARTY_DO_YOU_ACCEPT_REQUEST` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow.SummonPartyAcceptRequest` | Server Packet / Question Id | Partial | Regression Tested | Needs Verification | Question id `901721` is registered and packet payload parameters are asserted in C# tests. Java golden bytes/encrypted frames not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_Recall_Reject_EFFECT` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.RecallRejectEffect` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Java id `1400099` emitted to the effected player on deny when effector is online. Packet-byte comparison not run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_Recall_Rejected_EFFECT` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.RecallRejectedEffect` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Java id `1400100` emitted to the effector on deny and during logout-deny cleanup. Packet-byte comparison not run. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.teleportTo` | `Aion.GameServer.Services.PlayerTeleportService.TeleportWithinSameInstance` | Teleport Service Dependency | Partial | Regression Tested | Needs Verification | C# moves the represented player to the captured destination and resets movement. Java revive-if-dead, lose-duel side effect, `sendLoc` task/animation behavior, instance registration, map-change fanout, and live socket ordering are not represented in this unit. |
+| `com.aionemu.gameserver.skillengine.model.Effect` | `PendingRecallInstantRequest` destination snapshot | Runtime Model Dependency | Partial | Regression Tested | Needs Verification | C# stores only the captured destination/participants needed for response handling. Java `Effect` object, `Skill` target-position state, effect calculation lifecycle, XML/JAXB effect instantiation, and threading behavior remain outside this slice. |
+
+Tests added/updated:
+- `PlayerRecallInstantRequestServiceTests.SendRecallRequest_RegistersQuestionAndSendsSummonWindow`: validates response-request registration, pending metadata, question id `901721`, and target question packet intent.
+- `PlayerRecallInstantRequestServiceTests.SendRecallRequest_DuplicateQuestionKeepsOriginalPendingRequest`: validates Java put-if-absent duplicate behavior.
+- `PlayerRecallInstantRequestServiceTests.HandleResponse_DenyClearsPendingAndNotifiesBothPlayers`: validates response `0` cleanup and Java-shaped denial packet fanout.
+- `PlayerRecallInstantRequestServiceTests.HandleResponse_AcceptTeleportsEffectedPlayerToCapturedDestination`: validates nonzero response consumes the request and teleports to the captured destination.
+- `PlayerRecallInstantRequestServiceTests.HandleResponse_EffectorMissingConsumesRequestWithoutTeleport`: validates missing/offline effector behavior without teleport.
+- `GamePacketTests` system-message and question-window assertions validate ids `1400099`, `1400100`, and question payload id `901721`.
+- Java comparison status: expectations are source-derived from `RecallInstantEffect`, `SM_QUESTION_WINDOW`, `SM_SYSTEM_MESSAGE`, and `TeleportService.teleportTo`. No Java runtime execution, Java-generated golden vector, SkillEngine invocation comparison, full `Effect.calculate` comparison, combat/dead/duel side-effect comparison, live socket-order validation, encrypted frame comparison, reflection behavior, threading behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Recall is not invoked by the C# SkillEngine/effect runtime yet; this unit provides the response-handler bridge only.
+- Java `RecallInstantEffect.calculate` checks affected type, combat state, same world, non-instance source, and enemy relation before applying. C# tests assume the caller has already captured a valid destination.
+- Java teleport side effects are incomplete: dead-player revive, duel loss, map/instance registration, `sendLoc` animation/task behavior, and visibility fanout remain future teleport work.
+- Java `RequestResponseHandler<Creature>` callback identity and reflection/polymorphic behavior remain unported.
+- Packet sends are validated by C# packet type/message id or source constants only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 recall instant request/response slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 7 SkillEngine caller integration, `Effect.calculate` gating, full teleport side effects, map/instance fanout, RequestResponseHandler reflection semantics, socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; another compact ResponseRequester path is represented, but full skill/effect and teleport runtime parity remain partial.
+
+Next recommended unit of work:
+- Continue compact `ResponseRequester` parity with craft skill rank-up confirmation or cube/warehouse expansion warning if their dependencies stay small. If returning to recall, wire the future SkillEngine caller only after the C# effect runtime can represent Java `RecallInstantEffect.calculate` gates and destination capture.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
