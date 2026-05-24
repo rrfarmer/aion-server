@@ -23497,6 +23497,58 @@ Next recommended unit of work:
 
 ---
 
+### Session 794 (May 24, 2026)
+- Re-inspected Java `VisibleObjectSpawner.spawnNpc`, `Npc`, `WalkerFormator.processClusteredNpc`, `FlagKnownList`, `NpcKnownList`, and `EffectController` usage.
+- Added `PlayerSummonKnownObjectNpcSkillNpcCreationPreview`, creation status enum, and known-list-kind enum.
+- Added `PlayerSummonSkillExecutionService.PreviewMercenaryNpcSkillOrdinaryNpcCreation`.
+- Modeled:
+  - missing spawn dispatch input;
+  - non-ordinary-NPC dispatch branches;
+  - `DataManager.NPC_DATA.getNpcTemplate(npcId)` missing-template null return;
+  - represented `NpcController` and `Npc` construction requirement;
+  - Java creator-id copy from `spawn.getCreatorId()`;
+  - Java `npc.isFlag() ? FlagKnownList : NpcKnownList` selection;
+  - represented `EffectController` setup;
+  - represented `WalkerFormator.processClusteredNpc` gate;
+  - represented `SpawnEngine.bringIntoWorld` requirement only when walker formator did not already bring the NPC into the world;
+  - represented controller delete requirement on `bringIntoWorld` failure.
+- Kept live `Npc`, `NpcController`, `NpcSkillList`, `NpcGameStats`, `NpcLifeStats`, `NpcMoveController`, `DataManager.NPC_DATA`, `IDFactory`, live known lists, live `EffectController`, `WalkerFormator`, `SpawnEngine.bringIntoWorld`, world insertion, packets, persistence, threading, serialization, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 61 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1385 tests.
+
+#### Migration Parity Table - Session 794
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.spawnengine.VisibleObjectSpawner.spawnNpc` | `PlayerSummonSkillExecutionService.PreviewMercenaryNpcSkillOrdinaryNpcCreation` | Ordinary NPC Spawn Projection | Partial | Regression Tested | Needs Verification | C# represents template lookup, NPC creation prerequisites, creator copy, known-list selection, effect-controller setup, walker gate, bring-into-world requirement, and delete-on-failure metadata. It does not create live NPCs or insert them into world. |
+| `com.aionemu.gameserver.dataholders.DataManager.NPC_DATA` | `npcTemplateExists` input and `MissingNpcTemplate` status | Static Data Dependency | Not Started | Regression Tested as explicit branch input | Needs Verification | C# models the missing-template null-return branch but does not load or query live NPC templates, compare XML/static-data behavior, or validate template identity. |
+| `com.aionemu.gameserver.model.gameobjects.Npc` | `PlayerSummonKnownObjectNpcSkillNpcCreationPreview` | NPC Object Dependency | Partial | Regression Tested as creation metadata only | Needs Verification | C# records that Java would construct `Npc(new NpcController(), spawn, npcTemplate)` and copy creator id. Live `Npc`, ID allocation, move controller, skill list, stat containers, AI, threading, and serialization remain missing. |
+| `com.aionemu.gameserver.world.knownlist.FlagKnownList` / `NpcKnownList` | `PlayerSummonKnownObjectNpcSkillNpcKnownListKind` | Known List Dependency | Partial | Regression Tested | Needs Verification | C# models flag-vs-ordinary known-list selection from represented template type. Live known-list objects, visibility, synchronization, packet fanout, and serialization remain missing. |
+| `com.aionemu.gameserver.controllers.effect.EffectController` | `RequiresEffectController` metadata | Effect Controller Dependency | Not Started | Regression Tested as explicit gap | Needs Verification | C# records effect-controller setup but does not instantiate live controller, abnormal/effect state, packet updates, threading, or serialization. |
+| `com.aionemu.gameserver.spawnengine.WalkerFormator.processClusteredNpc` | `WalkerFormatorBroughtIntoWorld` input and related preview flags | Walker Spawn Dependency | Partial | Regression Tested as explicit branch input | Needs Verification | C# models the branch where walker processing avoids direct `bringIntoWorld`, but does not inspect walker ids, walker templates, clustered groups, cache behavior, synchronization, Java RNG, or live movement state. |
+| `com.aionemu.gameserver.spawnengine.SpawnEngine.bringIntoWorld` | `RequiresBringIntoWorld` / `RequiresControllerDeleteOnBringIntoWorldFailure` metadata | World Insertion Dependency | Not Started | Regression Tested as explicit gap | Needs Verification | C# records direct world insertion and failure cleanup requirements. Live `World.storeObject`, `World.setPosition`, `World.spawn`, region/zone updates, packets, persistence, and client visibility remain missing. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.PreviewMercenaryNpcSkillOrdinaryNpcCreation_ProjectsJavaVisibleObjectSpawnerSpawnNpc`: validates missing dispatch, non-ordinary dispatch, missing NPC template null-return metadata, ordinary NPC creation metadata, `NpcController`/NPC/creator-copy/known-list/effect-controller/walker requirements, bring-into-world requirement, delete-on-failure requirement, creator id propagation, NPC id and instance id propagation, flag known-list selection, and walker-formator already-brought-into-world behavior.
+- Java comparison status: expectations are source-derived from Java `VisibleObjectSpawner.spawnNpc`, `Npc`, `WalkerFormator.processClusteredNpc`, `FlagKnownList`, `NpcKnownList`, `EffectController`, and `SpawnEngine.bringIntoWorld`. No Java runtime execution, live NPC template lookup, ID allocation comparison, controller comparison, skill-list/stat initialization comparison, known-list behavior comparison, effect-controller comparison, walker-formator comparison, world insertion comparison, packet comparison, persistence comparison, XML/static-data comparison, reflection comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Ordinary NPC creation is represented metadata only; no live `Npc`, controller, known list, effect controller, walker state, or world object is created.
+- Live `DataManager.NPC_DATA`, XML/static-data loading, `IDFactory`, `NpcSkillList`, `NpcGameStats`, `NpcLifeStats`, `NpcMoveController`, AI, known-list visibility, effect controller state, `WalkerFormator`, `World.storeObject`, `World.setPosition`, `World.spawn`, region/zone updates, packets, persistence, threading, serialization, Java runtime behavior, scheduler callback execution, geometry, precision/rounding, and live-client behavior remain missing or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 represented ordinary NPC spawn creation preview slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 22 live `DataManager.NPC_DATA`, XML/static loading, `IDFactory`, live `Npc`, `NpcController`, `NpcSkillList`, stat containers, move controller, AI, live known lists, effect controller, `WalkerFormator`, world insertion, region/zone updates, packets, persistence, Java runtime comparison, threading/serialization, reflection behavior, scheduler callback execution, geometry/precision, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented ordinary NPC creation is now modeled, but live object/world insertion/client visibility remains partial.
+
+Next recommended unit of work:
+- Continue by starting a static-data loader adapter for represented `NpcSkillSpawn` XML fields or by modeling `SpawnEngine.bringIntoWorld` world-insertion preview for `World.storeObject`, `World.setPosition`, `World.spawn`, region/zone update, temporary-spawn, and instance handler gaps. Keep live XML loading, Java RNG runtime comparison, Java geometry, live spawn-engine execution, live AI mutation, controller execution, effects, packets, scheduler/date-time behavior, threading, serialization, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -23506,4 +23558,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by starting a static-data loader adapter for represented `NpcSkillSpawn` XML fields or by modeling the ordinary `VisibleObjectSpawner.spawnNpc` creation preview for `DataManager.NPC_DATA`, creator id, known-list kind, effect-controller, `WalkerFormator`, and `bringIntoWorld` gaps. Keep live AI mutation, XML loading, `DataManager.SKILL_DATA` pruning, Java `Rnd.chance`/`Rnd.get`, random target selection/spawns, effects, packets, spawn-engine execution, scheduler/date-time behavior, threading, serialization, and controller execution explicit until supported.
+8. Continue NPC skill readiness parity by starting a static-data loader adapter for represented `NpcSkillSpawn` XML fields or by modeling `SpawnEngine.bringIntoWorld` world-insertion preview for `World.storeObject`, `World.setPosition`, `World.spawn`, region/zone update, temporary-spawn, and instance handler gaps. Keep live AI mutation, XML loading, `DataManager.SKILL_DATA` pruning, Java `Rnd.chance`/`Rnd.get`, random target selection/spawns, effects, packets, spawn-engine execution, scheduler/date-time behavior, threading, serialization, and controller execution explicit until supported.
