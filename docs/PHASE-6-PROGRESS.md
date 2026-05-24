@@ -24102,6 +24102,51 @@ Next recommended unit of work:
 
 ---
 
+### Session 807 (May 24, 2026)
+- Re-inspected represented `HELP_FRIEND` readiness, `ProjectMercenaryNpcSkillHelpFriendCandidate`, and `PreviewMercenaryNextNpcSkillSelectionFromRepresentedCurrentTarget`.
+- Extended `PlayerSummonKnownObjectNpcSkillCandidateMetadata` with optional represented `HELP_FRIEND` candidate facts.
+- Wired `ProjectMercenaryNpcSkillCandidate` to pass represented help-friend candidates into `EvaluateMercenaryNpcSkillConditionReadiness`.
+- Extended the represented current-target high-level preview path to accept caller-supplied represented known-list candidate facts and inject them into `HELP_FRIEND` candidates.
+- Modeled:
+  - high-level selection where `HELP_FRIEND` can win from represented known-list facts;
+  - fallback behavior when represented known-list facts are absent and `HELP_FRIEND` remains unsupported;
+  - first valid support/friend candidate selection through existing readiness logic;
+  - preservation of non-`HELP_FRIEND` condition-target behavior.
+- Kept live `KnownList.findObject`, Java map iteration under mutation, live `KnownObject`/`VisibleObject` identity, real `TribeRelationService`, real `GeoService`, `creature.setTarget`, AI state mutation, packets, threading, serialization, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|StaticDataNpcSkillTests"` passes with 46 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1396 tests.
+
+#### Migration Parity Table - Session 807
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.conditionReady` `HELP_FRIEND` branch | `EvaluateMercenaryNpcSkillConditionReadiness` via candidate `HelpFriendCandidates` | Service | Partial | Regression Tested | Needs Verification | C# can now evaluate represented `HELP_FRIEND` facts through the candidate and preview pipeline. It does not call live `KnownList.findObject`, relation/geo services, or mutate the owner target. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.chooseNextSkill` | `PreviewMercenaryNextNpcSkillSelectionFromRepresentedCurrentTarget` with `helpFriendCandidates` | Service | Partial | Regression Tested | Needs Verification | C# high-level represented selection can choose a `HELP_FRIEND` skill when supplied known-list facts satisfy Java predicates. Live AI state, queued skill mutation, real target setting, and runtime Java behavior remain unverified. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.findObject` | `IEnumerable<PlayerSummonKnownObjectNpcSkillHelpFriendCandidate>` preview input | Known-list Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# consumes supplied candidate facts in order. Live map-backed iteration, object identity, visibility refresh, concurrent mutation, and Java map ordering remain missing. |
+| `com.aionemu.gameserver.world.knownlist.KnownObject` / `VisibleObject` / `Creature` | `PlayerSummonKnownObjectNpcSkillHelpFriendCandidate` | World Object DTO | Partial | Regression Tested | Needs Verification | C# represents visibility, creature/death state, HP percentage, distance, relation flags, and geo visibility. Live objects, life stats, Java HP precision/rounding, coordinates, threading, and serialization remain unverified. |
+| `com.aionemu.gameserver.services.TribeRelationService` / `GeoService` | represented `IsSupport`, `IsFriend`, and `GeoCanSee` candidate flags | Service Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# still requires precomputed booleans. Tribe/base-tribe data, Panesterra rules, geo maps, z offsets, instance ids, line-of-sight precision, packets, and live-client validation remain missing. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.PreviewMercenaryNextNpcSkillSelectionFromRepresentedCurrentTarget_AppliesHelpFriendKnownListFacts`: validates high-level represented selection fallback without known-list facts, `HELP_FRIEND` selection with supplied represented known-list facts, first valid support/friend target metadata, and target-retarget intent.
+- Java comparison status: expectations are source-derived from Java `NpcSkillTemplateEntry.conditionReady` `HELP_FRIEND` branch and `SkillAttackManager.chooseNextSkill`. No Java runtime execution, live known-list traversal comparison, tribe relation comparison, geo comparison, target mutation comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, packet comparison, or live-client validation was run.
+
+Remaining risks:
+- The high-level preview still consumes represented known-list facts from callers; it does not discover them from live known lists.
+- Real relation and geo behavior, target mutation, Java map ordering/concurrent mutation, live object identity, life stats, HP precision/rounding, packets, persistence, threading, serialization, reflection behavior, date/time behavior, and live-client behavior remain missing or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented high-level `HELP_FRIEND` known-list injection slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 15 live `KnownList.findObject`, live `KnownObject`/`VisibleObject`, live `Creature`/`LifeStats`, Java HP precision/rounding, real `TribeRelationService`, real `GeoService`, Java map ordering/concurrent mutation, `creature.setTarget`, live AI state mutation, packets, persistence, threading/serialization, reflection behavior, date/time behavior, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented high-level `HELP_FRIEND` preview is modeled, but live known-list/relation/geo execution remains partial.
+
+Next recommended unit of work:
+- Continue NPC skill readiness parity by modeling `SkillAttackManager.skillAction` target invalidation and next-skill-delay behavior around represented current target death/visibility/range outcomes, including Java's 5000 ms delay path. Keep live `owner.canSee`, `isTargetTooFar`, `setNextSkillDelay`, packets, threading, serialization, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -24111,4 +24156,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by adding represented `HELP_FRIEND` known-list candidate injection to a higher-level preview path, so caller-supplied represented known-list facts can evaluate support/friend target search without manually preparing each candidate. Keep live `KnownList.findObject`, tribe relation service, geo service, target mutation, threading, serialization, packets, and live-client validation explicit until supported.
+8. Continue NPC skill readiness parity by modeling `SkillAttackManager.skillAction` target invalidation and next-skill-delay behavior around represented current target death/visibility/range outcomes, including Java's 5000 ms delay path. Keep live `owner.canSee`, `isTargetTooFar`, `setNextSkillDelay`, packets, threading, serialization, and live-client validation explicit until supported.
