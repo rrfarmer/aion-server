@@ -18832,6 +18832,61 @@ Summary metrics:
 Next recommended unit of work:
 - Add an end-to-end production dialog test for `CM_DIALOG_SELECT` actions `47` and `48` using loaded storage-expander templates and targeted NPC validation, or add a real-XML count comparison for cube/warehouse expansion template loading. Keep live MySQL write/readback and storage-limit recalculation as follow-up work.
 
+---
+
+### Session 699 (May 24, 2026)
+- Continued storage expansion parity by adding connection-level production dialog route tests for Java `CM_DIALOG_SELECT` storage expansion actions.
+- Made `GameServerConnection.HandleDialogSelectAsync` internal for test coverage, matching the existing pattern used by other migrated connection handlers under `InternalsVisibleTo`.
+- Added a minimal Java-shaped static-data fixture for:
+  - `cube_expander/expansion_npc ids="798008"` with price `1000`,
+  - `warehouse_expander/expansion_npc ids="203199"` with price `1200`.
+- Added connection-level tests proving action ids `47` and `48`:
+  - require a targeted NPC with the matching function dialog id,
+  - use loaded `StaticData.CubeExpansionTemplates` / `WarehouseExpansionTemplates`,
+  - register `PendingStorageExpansionRequest`,
+  - enqueue shared Java question id `900686`,
+  - reject unsupported NPC dialog functions without request or packet side effects.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionStorageExpansionDialogTests|StorageExpansionNpcServiceTests|NpcDialogTargetingServiceTests"` passes with 16 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1267 tests.
+
+#### Migration Parity Table - Session 699
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_DIALOG_SELECT` | `Aion.GameServer.Network.Aion.ClientPackets.CmDialogSelect` / `GameServerConnection.HandleDialogSelectAsync` | Client Packet / Handler | Partial | Regression Tested | Needs Verification | Connection-level tests now cover Java action ids `47` and `48` through the production dialog route. Full parser-to-handler socket loop, encrypted client frame processing, and live client behavior remain unverified. |
+| `com.aionemu.gameserver.services.DialogService` `EXTEND_INVENTORY` branch | `GameServerConnection.HandleDialogSelectAsync` action `CmDialogSelect.ExtendInventory` | Dialog Handler | Partial | Regression Tested | Needs Verification | Targeted NPC/function validation, loaded cube-expander template lookup, pending request registration, and `SM_QUESTION_WINDOW` emission are covered. Java controller dispatch stack, live known-list rules, and client socket ordering remain unverified. |
+| `com.aionemu.gameserver.services.DialogService` `EXTEND_CHAR_WAREHOUSE` branch | `GameServerConnection.HandleDialogSelectAsync` action `CmDialogSelect.ExtendCharWarehouse` | Dialog Handler | Partial | Regression Tested | Needs Verification | Targeted NPC/function validation, loaded warehouse-expander template lookup, pending request registration, and `SM_QUESTION_WINDOW` emission are covered. Java controller dispatch stack, live known-list rules, and client socket ordering remain unverified. |
+| `com.aionemu.gameserver.services.CubeExpandService.expandCube` | `StorageExpansionNpcService.RequestCubeExpansion` production caller | Service Integration | Partial | Regression Tested | Needs Verification | Production dialog route now feeds loaded cube templates into the service and registers the Java shared warning question. Accept response, persistence handoff, and NPC min/max messages are covered elsewhere; storage limit recalculation, Java runtime comparison, and live validation remain missing. |
+| `com.aionemu.gameserver.services.WarehouseService.expandWarehouse` | `StorageExpansionNpcService.RequestWarehouseExpansion` production caller | Service Integration | Partial | Regression Tested | Needs Verification | Production dialog route now feeds loaded warehouse templates into the service and registers the Java shared warning question. Accept response, persistence handoff, and NPC min/max messages are covered elsewhere; storage limit recalculation, Java runtime comparison, and live validation remain missing. |
+| `com.aionemu.gameserver.dataholders.CubeExpandData` | `Aion.GameServer.Dataholders.StaticData.CubeExpansionTemplates` / `StorageExpansionTemplateTable` | Dataholder Dependency | Partial | Regression Tested | Needs Verification | Minimal XML fixture validates production route lookup by NPC id. Full real XML count parity, duplicate-id overwrite behavior, JAXB default behavior, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.dataholders.WarehouseExpandData` | `Aion.GameServer.Dataholders.StaticData.WarehouseExpansionTemplates` / `StorageExpansionTemplateTable` | Dataholder Dependency | Partial | Regression Tested | Needs Verification | Minimal XML fixture validates production route lookup by NPC id. Full real XML count parity, duplicate-id overwrite behavior, JAXB default behavior, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.controllers.NpcController.onDialogSelect` / `NpcTemplate.supportsAction` | `NpcDialogTargetingService.ValidateTargetingNpcWithFunction` | Targeting / NPC Function Dependency | Partial | Regression Tested | Needs Verification | Dialog route test proves unsupported function ids reject without side effects. C# currently validates targeted world object/function id; full Java visible-object/known-list/controller stack and distance/race nuances remain incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_WAREHOUSE_EXPAND_WARNING` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow.WarehouseExpandWarning` | Server Packet / Question Id | Partial | Regression Tested | Needs Verification | Connection-level observer sees the shared Java question id `900686` emitted for both cube and warehouse dialog actions. Java golden bytes, encrypted frames, and real-client rendering were not compared. |
+
+Tests added/updated:
+- `GameServerConnectionStorageExpansionDialogTests.HandleDialogSelectAsync_StorageExpansionActionsRegisterJavaWarningQuestion`: validates `EXTEND_INVENTORY` and `EXTEND_CHAR_WAREHOUSE` route through production dialog handling, loaded static templates, request registry, and Java shared question id.
+- `GameServerConnectionStorageExpansionDialogTests.HandleDialogSelectAsync_StorageExpansionRejectsUnsupportedNpcAction`: validates unsupported NPC function ids are rejected without registering a pending request or emitting packets.
+- Existing `StorageExpansionNpcServiceTests` and `NpcDialogTargetingServiceTests` were rerun with the connection-level tests.
+- Java comparison status: expectations are source-derived from `CM_DIALOG_SELECT`, `DialogService`, `NpcController`, `NpcTemplate.supportsAction`, `CubeExpandService`, `WarehouseService`, `CubeExpandData`, `WarehouseExpandData`, and `SM_QUESTION_WINDOW`. No Java runtime execution, Java-generated golden vector, encrypted client-frame parser-to-handler loop, real full-XML comparison, threading behavior comparison, reflection behavior comparison, date/time behavior, socket-order capture, or live-client validation was run.
+
+Remaining risks:
+- Full real `storage_expander` XML count parity and duplicate NPC id overwrite behavior remain unverified.
+- Java controller/known-list dispatch is represented only by targeted world NPC/function validation.
+- Java golden packet bytes, encrypted frames, localized client rendering, and live client validation remain unperformed.
+- Storage object cube/warehouse limit recalculation remains represented only by fields and outgoing packets.
+- Live MySQL write/readback for accepted NPC expansions remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 storage-expansion production dialog route coverage slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 5 full real-data comparison, complete controller/known-list dispatch, golden/encrypted packet comparison, storage limit recalculation, and live-client/MySQL validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; storage expansion request routing is now covered at the connection level, but real runtime/client parity remains partial.
+
+Next recommended unit of work:
+- Add a real static-data count/lookup comparison for cube and warehouse expansion templates loaded from the repository XML, including representative NPC ids and min/max prices, or continue to storage-limit recalculation by modeling Java `player.setCubeLimit()` / `setWarehouseLimit()` effects beyond outgoing packets.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
