@@ -20044,6 +20044,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 724 (May 24, 2026)
+- Added a production-registered skill-damage packet fanout seam for represented observer-burn packets.
+- Added `WorldNpcSkillDamageFanoutService.ApplyDamageEffectAndSendObserverPacketsAsync`, which awaits represented skill damage first, then sends returned observer-burn inventory packets to the effector.
+- Registered `WorldNpcSkillDamageFanoutService` in `Program.cs`.
+- Added packet-order capture to the local world NPC damage test registry.
+- Added `WorldNpcDamageServiceTests.ApplyDamageEffectAndSendObserverPacketsAsync_SendsObserverPacketsAfterAttackStatusBroadcast`.
+- The test proves the C# caller seam preserves the represented order `SM_ATTACK_STATUS` broadcast, idian `SM_INVENTORY_UPDATE_ITEM`, then charge `SM_INVENTORY_UPDATE_ITEM`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "WorldNpcDamageServiceTests|EquipmentObserverBurnWorkflowServiceTests|PlayerEnterWorldServiceTests"` passes with 59 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1301 tests.
+
+#### Migration Parity Table - Session 724
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.DamageEffect.applyEffect` | `Aion.GameServer.Services.WorldNpcSkillDamageFanoutService.ApplyDamageEffectAndSendObserverPacketsAsync` | Caller Fanout / Service | Partial | Regression Tested | Needs Verification | C# now has a production-registered seam that awaits represented skill damage, then sends observer-burn packets. This does not yet mean the full Java `SkillEngine` or `GameServerConnection` routes invoke it. Missing methods include complete effect runtime, target/result-list handling, and concrete client-packet callers. |
+| `com.aionemu.gameserver.model.stats.container.CreatureLifeStats.reduceHp` packet send side effect | `WorldNpcDamageService.ApplyDamageAsync` observed before `WorldNpcSkillDamageFanoutService` sends burn packets | Damage Packet Ordering Dependency | Partial | Regression Tested | Needs Verification | Test proves local C# order is attack-status broadcast before observer-burn inventory sends. Java source ordering is inferred; no Java runtime/golden socket capture or encrypted frame comparison was run. |
+| `com.aionemu.gameserver.controllers.observer.ActionObserver.attack` | `WorldNpcSkillDamageFanoutService` sending `WorldNpcSkillDamageResult.EquipmentObserverBurns.Packets` | Observer Packet Fanout | Partial | Regression Tested | Needs Verification | Ordinary attack observer packets are sent to the effector after represented damage returns, preserving idian-before-charge workflow order. Real `ObserveController` dispatch, player-vs-player, auto-attack, and broader caller coverage remain partial. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ATTACK_STATUS` | `Aion.GameServer.Network.Aion.ServerPackets.SmAttackStatus` ordered before observer-burn packets | Packet | Partial | Regression Tested | Needs Verification | C# packet object order is asserted through the test registry. No Java golden bytes, live socket ordering, encryption framing, or live-client validation was run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` | `SmInventoryUpdateItem` packets sent by `WorldNpcSkillDamageFanoutService` | Packet | Partial | Regression Tested with byte-level payload checks | Needs Verification | Test reuses local packet payload assertions for polish-charge and charge updates and proves idian-before-charge order after attack status. Exhausted-idian full-update serialization remains a known unverified gap. |
+| `com.aionemu.gameserver.PacketSendUtility.sendPacket` / broadcast utilities | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / `BroadcastToVisiblePlayersAsync` in the fanout test seam | Socket Fanout Dependency | Partial | Unit Tested with capture registry | Needs Verification | C# direct-send observer packets go to `request.Effector.ObjectId`; Java recipient behavior is source-derived from owner equipment updates and needs live validation. Broadcast visibility, include-source behavior, and connection-level ordering remain unverified. |
+| `com.aionemu.gameserver.GameServer.main` service availability | `Aion.GameServer.Program` registration for `WorldNpcSkillDamageFanoutService` | Bootstrap / DI Wiring | Partial | Regression Tested | Needs Verification | The fanout seam is now available to production DI. No live host combat path resolves and invokes it yet, so production reachability remains partial. |
+
+Tests added/updated:
+- `WorldNpcDamageServiceTests.ApplyDamageEffectAndSendObserverPacketsAsync_SendsObserverPacketsAfterAttackStatusBroadcast`: validates the fanout seam sends observer-burn packets to the effector after the attack-status broadcast and preserves idian polish packet before charge packet.
+- Updated the local `CapturingConnectionRegistry` in `WorldNpcDamageServiceTests` to record direct sends and total packet order.
+- Existing `WorldNpcDamageServiceTests`, `EquipmentObserverBurnWorkflowServiceTests`, and `PlayerEnterWorldServiceTests` matched by the focused filter were rerun.
+- Java comparison status: expectations are source-derived from Java `DamageEffect.applyEffect`, `CreatureLifeStats.reduceHp`, observer packet side effects, `SM_ATTACK_STATUS`, `SM_INVENTORY_UPDATE_ITEM`, and packet-send utilities. No Java runtime execution, Java-generated golden packet, live `GameServerConnection`, live socket order, encrypted-frame comparison, live MySQL/DAO comparison, reflection comparison, threading comparison, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- The new fanout seam is production-registered but still not invoked from a real `GameServerConnection` skill/effect client-packet path.
+- Packet ordering is proven only in the represented caller seam and capture registry; live socket writes and broader combat routes remain unverified.
+- Recipient selection currently sends observer-burn inventory updates to the C# request effector; Java owner/attacker/defender behavior needs validation once full player-vs-player and incoming-attacked routes exist.
+- Exhausted-idian full-update serialization and stat/effect refresh fanout remain unresolved.
+- Java synchronization, observer dispatch, DAO flush cadence, transaction behavior, and live client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 packet fanout/order seam for represented skill-damage observer burns
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 live `GameServerConnection` invocation, full SkillEngine/AttackUtil integration, player-vs-player/auto-attack observer coverage, Java runtime/golden packet comparison, live DAO comparison, and synchronized/threading comparison
+- Estimated overall migration completion: Phase 6 remains about 65% complete; represented packet ordering is stronger, but live route invocation and broader combat coverage remain partial.
+
+Next recommended unit of work:
+- Inspect `GameServerConnection` and current client-packet skill/combat surfaces for a safe place to invoke `WorldNpcSkillDamageFanoutService`. If no real route is ready, add the next represented caller seam for incoming attacked observer burns so defender-owned idian/charge packets and recipient selection can be tested separately from outgoing effector attack burns.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
