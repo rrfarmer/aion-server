@@ -20374,6 +20374,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 731 (May 24, 2026)
+- Added `CmSummonAttack` as the C# parser for Java `CM_SUMMON_ATTACK.readImpl`.
+- Added `CmSummonCastSpell` as the C# parser for Java `CM_SUMMON_CASTSPELL.readImpl`.
+- Registered opcodes 203 and 205 in `GameClientPacketFactory` for `InGame` connections.
+- Added focused packet factory coverage for summon attack and summon cast-spell payload parsing plus invalid-state rejection.
+- Runtime summon/mercenary attack and skill dispatch remain intentionally unimplemented because summon ownership lookup, summon-vs-mercenary target behavior, skill-order retrieval, pet skill validation, controller dispatch, audit logging, and system-message fanout are not ready.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GamePacketTests` passes with 89 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1313 tests.
+
+#### Migration Parity Table - Session 731
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_ATTACK` | `Aion.GameServer.Network.Aion.ClientPackets.CmSummonAttack` | Client Packet | Partial | Unit Tested | Needs Verification | C# now parses summon object id, target object id, unknown byte, time, and trailing unknown byte in Java field order. Runtime `runImpl` remains missing: active-player lookup, summon/mercenary lookup, known-list target lookup, creature narrowing, attack dispatch, and wrong-target audit logging. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL` | `Aion.GameServer.Network.Aion.ClientPackets.CmSummonCastSpell` | Client Packet | Partial | Unit Tested | Needs Verification | C# now parses summon object id, skill id, skill level, target object id, and unknown int in Java field order. Runtime `runImpl` remains missing: pet-required message, summon self-target behavior, known-list lookup, summon skill-order validation, mercenary skill validation, controller `useSkill`, and audit logging. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcodes 203 and 205 registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcodes 203 and 205 registration | Packet Factory | Partial | Unit Tested | Needs Verification | C# factory now accepts summon combat opcodes only in `InGame`, matching Java registration. Java reflection construction differs intentionally from C# explicit factory lambdas. No live encrypted-frame or Java runtime comparison was run. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getSummonOrMercenary` | No C# summon/mercenary packet route wired yet | Summon Ownership Dependency | Not Started | No Tests | Needs Verification | Required dependency discovered for both summon attack and summon cast-spell runtime behavior. C# parser work does not model ownership, dead/despawn lag cases, or summon/mercenary lookup semantics. |
+| `com.aionemu.gameserver.model.gameobjects.KnownList.getObject` / `VisibleObject` / `Creature` target narrowing | C# world/visibility surfaces not wired to summon combat packets | Target Lookup Dependency | Not Started | No Tests | Needs Verification | Java uses the summon or mercenary known list for target lookup and ignores lagged null targets. Unsupported visible-object audit logging is not implemented for this route. |
+| `com.aionemu.gameserver.model.gameobjects.Summon` / `com.aionemu.gameserver.model.summons.SkillOrder` | No C# summon skill-order route wired yet | Summon Skill Dependency | Not Started | No Tests | Needs Verification | Java retrieves a queued `SkillOrder`, verifies target equality, warns on skill mismatch, and invokes `summon.getController().useSkill(order)`. C# has no equivalent handler in this unit. |
+| `com.aionemu.gameserver.dataholders.DataManager.PET_SKILL_DATA` | No C# pet-skill validation wired to summon cast-spell yet | Skill Data Dependency | Not Started | No Tests | Needs Verification | Java validates mercenary skill availability through pet skill data before controller dispatch. This route remains unimplemented in C#. |
+| `com.aionemu.gameserver.utils.audit.AuditLogger` and `SM_SYSTEM_MESSAGE.STR_SKILL_NOT_NEED_PET` | Existing C# logging/system-message surfaces, not wired to summon combat packets | Audit / Packet Dependency | Partial | No Tests for this route | Needs Verification | Java audits wrong target/invalid mercenary skill and sends pet-required messages for missing/invalid summon cases. C# parser work does not produce those side effects. |
+
+Tests added/updated:
+- `GamePacketTests.ClientPacketFactory_ParsesSummonAttack`: validates opcode 203 creates `CmSummonAttack` in `InGame`, parses Java field order, preserves unsigned byte/ushort values, and rejects `Authed`.
+- `GamePacketTests.ClientPacketFactory_ParsesSummonCastSpell`: validates opcode 205 creates `CmSummonCastSpell` in `InGame`, parses Java field order, and rejects `Authed`.
+- Existing `GamePacketTests` were rerun as focused validation.
+- Java comparison status: expectations are source-derived from Java `AionClientPacketFactory`, `CM_SUMMON_ATTACK.readImpl`, and `CM_SUMMON_CASTSPELL.readImpl`. No Java runtime execution, Java-generated golden packet, live `GameServerConnection`, live summon/mercenary controller, encrypted-frame comparison, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- `CmSummonAttack` and `CmSummonCastSpell` are parsed and registered but not handled by `GameServerConnection`; summon combat behavior is not live.
+- Full Java summon/mercenary lookup, known-list target lookup, summon skill-order retrieval, mercenary skill validation, controller attack/skill dispatch, audit logging, pet-required system messages, observer dispatch, and combat packet fanout remain missing.
+- Java lag-tolerance behavior for missing summon/target objects is source-discovered but not modeled.
+- No Java golden bytes, live encrypted frames, or client behavior were compared.
+- No precision/rounding or date/time behavior was introduced in this parser unit; threading and controller ordering remain future risks.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 4 parser/factory slices (`CM_SUMMON_ATTACK`, `CM_SUMMON_CASTSPELL`, and their opcode registrations)
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 5 live summon combat route invocation, summon/mercenary ownership lookup, known-list target parity, summon skill-order/pet-skill controller integration, and Java runtime/golden/live-client comparison
+- Estimated overall migration completion: Phase 6 remains about 65% complete; combat packet parsing is broader, but live summon/skill combat remains partial.
+
+Next recommended unit of work:
+- Move from parser coverage into a narrow represented combat packet handling seam. Prefer `CmCastSpell` early-exit handling as a delegate-backed service so Java ordering can be tested without full `SkillEngine`: dead-player rejection, spell id zero cancel-current-skill hook, missing pet-order rejection, missing/passive template no-op, protection/use-item cancellation hooks, and cooldown not-ready response. If model support is still too thin, add the simpler `CM_USE_CHARGE_SKILL` opcode 234 no-payload parser and document its missing casting-skill/charge-time runtime behavior.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
