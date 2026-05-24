@@ -16934,6 +16934,53 @@ Summary metrics:
 Next recommended unit of work:
 - Add a narrow league invite response planner for `RequestResponseHandler.handle`: response `0` should call the existing deny planner, and nonzero response should call the existing accept-existing-league planner when requester/invited state is sufficient. Keep generic `CM_QUESTION_RESPONSE` packet routing and create-league-on-accept as separate units.
 
+### Session 665 (May 24, 2026)
+- Source-read Java `RequestResponseHandler.handle`, `ResponseRequester.respond`, `CM_QUESTION_RESPONSE.runImpl`, and `LeagueInviteEvent.acceptRequest`/`denyRequest`.
+- Added `PlayerLeagueInvitePlanner.CreatePendingRequestResponsePlan`, a narrow league invite response planner:
+  - preserves pending state when the question id does not match,
+  - clears the pending request before handling a matched response, matching Java `ResponseRequester.respond` removal-before-handle ordering,
+  - sends the existing deny plan for response `0`,
+  - re-runs represented `canInvite` checks for nonzero accept responses,
+  - joins the invited alliance into the requester's existing league through the existing accept-existing-league planner.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerLeagueInvitePlannerTests` passes with 15 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1150 tests.
+
+#### Migration Parity Table - Session 665
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.respond` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.CreatePendingRequestResponsePlan` | Request Registry / Planner | Partial | Unit Tested | Needs Verification | Narrow league invite response handling checks question id, clears matched pending state before handler logic, and preserves state on misses. Generic request map and concurrent removal semantics remain unported. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler.handle` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.CreatePendingRequestResponsePlan` | Request Handler / Planner | Partial | Unit Tested | Needs Verification | Response `0` maps to deny and nonzero maps to accept for league invites. Polymorphic handler dispatch for other request types remains unported. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueInviteEvent.denyRequest` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.CreateDenyPlan` via `CreatePendingRequestResponsePlan` | Event / System Message Planner | Partial | Unit Tested | Needs Verification | Deny response sends `STR_PARTY_ALLIANCE_HE_REJECT_INVITATION(responderName)` and clears pending state. Live socket send remains deferred. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueInviteEvent.acceptRequest` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.CreatePendingRequestResponsePlan` / `CreateAcceptExistingLeaguePlan` | Event / Join Planner | Partial | Unit Tested | Needs Verification | Existing requester-league accept path is wired through response handling and re-runs represented `canInvite` checks. Java create-league-on-accept branch remains deferred. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_QUESTION_RESPONSE` | `Aion.GameServer.Network.Aion.ClientPackets.CmQuestionResponse` / planner-only bridge | Client Packet / Runtime Dependency | Partial | Unit Tested | Needs Verification | Packet read path exists elsewhere; this unit does not wire live packet routing to league invite pending state or exchange-cancel behavior. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Aion.GameServer.Model.GameObjects.Player.PendingLeagueInviteRequest` | Model Dependency | Partial | Unit Tested | Needs Verification | Pending league invite slot is cleared on matched response and preserved on mismatched question id. Java supports a generic concurrent request map. |
+
+Tests added:
+- `PlayerLeagueInvitePlannerTests.CreatePendingRequestResponsePlan_DenyClearsRequestAndSendsRejectLikeJavaHandle`: validates response `0` clears pending request and emits the Java reject system message through the existing deny planner.
+- `PlayerLeagueInvitePlannerTests.CreatePendingRequestResponsePlan_AcceptJoinsExistingLeagueAndClearsRequestLikeJavaHandle`: validates nonzero response clears pending request, reuses represented `canInvite` checks, and joins the invited alliance into the requester's existing league.
+- `PlayerLeagueInvitePlannerTests.CreatePendingRequestResponsePlan_WrongQuestionLeavesPendingRequestLikeJavaRespondMiss`: validates a nonmatching question id does not clear or handle the pending invite.
+- Java comparison status: expectations are source-derived from `CM_QUESTION_RESPONSE.runImpl`, `ResponseRequester.respond`, `RequestResponseHandler.handle`, and `LeagueInviteEvent`. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, generic concurrent request-map comparison, live `CM_QUESTION_RESPONSE` routing, socket send comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Java create-league-on-accept remains deferred: `LeagueInviteEvent.acceptRequest` creates a new league when the requester alliance has no league.
+- Live `CM_QUESTION_RESPONSE` dispatch is not wired to `PendingLeagueInviteRequest`.
+- C# still uses a single typed pending league invite slot, not Java's generic `ConcurrentHashMap<Integer, RequestResponseHandler<?>>`.
+- The accept path re-runs only represented C# `canInvite` checks; Java live alliance object identity, static registries, and full request lifecycle are not runtime-compared.
+- Packet-field coverage remains C# emitted-object validation only; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- Threading differs from Java's concurrent map removal and handler dispatch. Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 narrow pending league invite response planner slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 7 create-league-on-accept, live `CM_QUESTION_RESPONSE` routing, generic `ResponseRequester`, Java concurrency comparison, live packet sending, Java runtime/golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; existing-league accept/deny response behavior is represented, but create-league-on-accept and live packet routing remain open.
+
+Next recommended unit of work:
+- Add the requester-without-league accept branch from `LeagueInviteEvent.acceptRequest`: after represented `canInvite` passes and the requester alliance has no league, create a league for the requester alliance before adding the invited alliance. Keep live `CM_QUESTION_RESPONSE` routing as a later unit unless this branch needs a small planner status hook.
+
 ---
 
 ## Next Steps
