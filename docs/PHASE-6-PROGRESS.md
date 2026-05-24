@@ -15830,6 +15830,52 @@ Summary metrics:
 Next recommended unit of work:
 - Continue the non-league `CM_PLAYER_STATUS_INFO` audit by checking invalid-member and no-op boundaries for `ALLIANCE_CHANGE_GROUP` command `27`, whose C# path uses a dedicated group-change service rather than Java `findMember`, or begin planning a minimal league runtime bridge now that the league command prerequisite gates are bounded.
 
+### Session 641 (May 23, 2026)
+- Source-read Java `PlayerAllianceService.changeMemberGroup`, `ChangeMemberGroupEvent`, `PlayerAlliance.getAllianceGroup`, and the C# alliance group-change planner/runtime path.
+- Added parsed-command regression coverage for `ALLIANCE_CHANGE_GROUP` command `27` when the first selected member is missing, matching Java `ChangeMemberGroupEvent.handleEvent` returning without packet fanout or group mutation.
+- Added parsed-command regression coverage for command `27` when the second selected member in a swap is missing, matching Java returning before either member is moved.
+- No production code changed in this unit; this is regression coverage for an already-modeled source-derived no-op path.
+- Deferred invalid target-group id alignment because Java removes the first member from its old group before `PlayerAlliance.getAllianceGroup` throws `No such alliance group X`; that side-effectful exception path needs a more careful production design and possibly Java runtime confirmation.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerAllianceRuntime|PlayerAllianceMemberInfo|BaseLeavePlanner"` passes with 101 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1115 tests.
+
+#### Migration Parity Table - Session 641
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.ClientPackets.CmPlayerStatusInfo` / `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Command id `27` now has explicit missing-first-member and missing-second-member no-op coverage. Invalid target-group id side effects remain deferred. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.ALLIANCE_CHANGE_GROUP` | Command code `27` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Missing selected/swap members leave alliance group state unchanged and send no packets. Valid move behavior remains source-derived and not runtime-compared. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.changeMemberGroup` | `Aion.GameServer.Services.PlayerAllianceGroupChangeServicePlanner.CreateChangeMemberGroupPlan` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Service-level not-alliance and not-authorized message branches were covered earlier; this unit covers event skip behavior after service authorization. Java static alliance registry and event queue behavior are not runtime-compared. |
+| `com.aionemu.gameserver.model.team.alliance.events.ChangeMemberGroupEvent` | `Aion.GameServer.Services.PlayerAllianceRuntime.ChangeMemberGroup` / `PlayerAllianceMemberGroupChangePlanner` | Event Runtime / Planner | Partial | Regression Tested | Needs Verification | C# returns null/no fanout when first or second member is absent, matching Java's early return comments. Invalid target-group exception path differs and is deferred. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Model.GameObjects.PlayerAllianceDescriptor` / `PlayerAllianceRuntime` group storage | Team State | Partial | Regression Tested | Needs Verification | Group membership remains unchanged for missing first/second member paths. Java `getAllianceGroup` invalid id behavior is not yet ported exactly. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceGroup` | `Aion.GameServer.Model.GameObjects.PlayerAllianceMember.AllianceGroupId` / runtime group membership projections | Team State | Partial | Regression Tested | Needs Verification | C# tracks group id per alliance member rather than a separate group object. Missing-member no-op behavior is covered; Java group object removal/add ordering remains source-derived. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceMember` | `Aion.GameServer.Model.GameObjects.PlayerAllianceMember` | Team Member | Partial | Regression Tested | Needs Verification | Missing-member paths preserve existing member group ids. Serialization, Java object-wrapper identity, and group reference behavior remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` | Server Packet | Partial | Regression Tested | Needs Verification | Tests assert no member-info packets are sent for missing first/second member paths. Valid packet bytes are not Java-golden compared. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry` / no-send assertions | Runtime Dependency | Partial | Regression Tested | Needs Verification | Regressions confirm event-skip paths send no packets. Live socket behavior remains unverified. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_AllianceChangeGroupMissingFirstMemberNoopsLikeJava`: validates command `27` with selected member id `1999` leaves current group membership unchanged and sends no packets.
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_AllianceChangeGroupMissingSecondMemberNoopsLikeJava`: validates command `27` swap with second member id `1999` leaves current group membership unchanged and sends no packets.
+- Java comparison status: expectations are source-derived from `PlayerAllianceService.changeMemberGroup`, `ChangeMemberGroupEvent.handleEvent`, `PlayerAlliance.getAllianceGroup`, `SM_ALLIANCE_MEMBER_INFO`, and `PacketSendUtility`. No Java runtime execution, Java-generated golden vector, live client packet capture, invalid target group runtime comparison, Java static alliance registry comparison, event queue/lock comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond handler reachability/state and no-send behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Invalid target alliance-group id remains deferred because Java's throw occurs after removing the first member from its old group; C# currently pre-checks and throws a different message without that side effect.
+- C# still uses manual branch dispatch and a dedicated group-change service rather than a full `PlayerTeamCommandService` equivalent.
+- Java static alliance registry, event queue, lock, group object identity, group removal/add ordering, object iteration ordering, and threading behavior remain source-derived only.
+- Java packet bytes, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to handler reachability/state and no-send behavior; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 0 new production artifacts; 1 deeper `CM_PLAYER_STATUS_INFO` / `ALLIANCE_CHANGE_GROUP` missing-member no-op path gained regression coverage
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 7 invalid target-group side-effectful exception path, full generic team-command dispatch, Java static alliance registry, Java event queue/lock comparison, encoded opcode/frame golden validation, packet capture comparison, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; alliance group-change no-op behavior is better covered, but production/live validation gaps remain.
+
+Next recommended unit of work:
+- Either source-read and decide how to model the side-effectful invalid alliance-group id path for command `27`, or move laterally to a different Phase 6 core gap such as beginning a minimal league runtime bridge now that league command prerequisites are bounded.
+
 ---
 
 ## Next Steps
