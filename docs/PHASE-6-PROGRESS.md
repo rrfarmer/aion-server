@@ -16399,6 +16399,51 @@ Summary metrics:
 Next recommended unit of work:
 - Add command `32` edge coverage: invalid target alliance, selecting the current league leader, selecting a non-leader/alliance member if the runtime can expose it, and non-league-leader caller behavior. Keep state/no-send assertions source-derived before moving to league invite/join or loot-rule changes.
 
+### Session 653 (May 24, 2026)
+- Added command `32` `LEAGUE_SET_LEADER` edge coverage for two Java-derived failure paths.
+- Verified invalid target alliance behavior from `PlayerTeamCommandService.findLeagueAlliance`: command `32` throws the Java-shaped invalid alliance message, preserves league state, and sends no packets.
+- Verified selecting the current league leader behavior from `GeneralTeam.changeLeader`: command `32` throws an explicit same-leader diagnostic, preserves league state, and sends no packets.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionPlayerStatusInfoTests` passes with 57 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1130 tests.
+
+#### Migration Parity Table - Session 653
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` command `32` path | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Command `32` now covers success, invalid target, and current-leader failure paths. Java runtime/golden proof remains unavailable. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.LEAGUE_SET_LEADER` | Command code `32` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Failure tests validate no-send and state preservation for invalid target and current leader. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService` | Manual command branches in `GameServerConnection.HandlePlayerStatusInfoAsync` | Service / Dispatcher | Partial | Regression Tested | Needs Verification | C# mirrors `findLeagueAlliance` invalid-target behavior for command `32`, but still lacks a generic team-command dispatcher. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.setLeader` | `Aion.GameServer.Services.PlayerLeagueRuntime.SetLeader` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Success and two failure branches are covered. Java event queue/static registry behavior remains unverified. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueChangeLeaderEvent` | `PlayerLeagueRuntime.SetLeader` / `PlayerLeaguePacketIntent` | Event Runtime Dependency | Partial | Regression Tested | Needs Verification | Success path is modeled; invalid target and same-leader failure are tested. Target-offline/no-op and non-league-leader caller behavior remain untested. |
+| `com.aionemu.gameserver.model.team.GeneralTeam` | `PlayerLeagueRuntime.SetLeader` same-leader guard | Team State Dependency | Partial | Regression Tested | Needs Verification | Same-leader throw is approximated with an explicit message because Java's object `toString()` text is not modeled. |
+| `com.aionemu.gameserver.model.team.league.League` | `Aion.GameServer.Services.PlayerLeagueRuntime` / `PlayerLeagueSnapshot` | Team State | Partial | Regression Tested | Needs Verification | State preservation is tested for failure paths. Java locking/object identity remains source-derived. |
+| `com.aionemu.gameserver.model.team.league.LeagueMember` | Internal `PlayerLeagueRuntime.PlayerLeagueMember` | Team Member | Partial | Regression Tested | Needs Verification | Invalid target lookup and current leader detection are by alliance id. Java object references are approximated. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` | Server Packet | Partial | Regression Tested | Needs Verification | Failure tests assert no alliance-info packets are emitted. Success path serialization was covered in Session 652. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry` / no-send assertions | Runtime Dependency | Partial | Regression Tested | Needs Verification | No-send behavior is tested for command `32` failures. Live packet processor exception/log behavior remains unverified. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_LeagueSetLeaderInvalidTargetThrowsLikeJavaFindLeagueAlliance`: validates invalid target lookup, unchanged positions/leader, and no packets.
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_LeagueSetLeaderCurrentLeaderThrowsLikeJavaChangeLeader`: validates current-leader failure, unchanged positions/leader, and no packets.
+- Java comparison status: expectations are source-derived from `PlayerTeamCommandService.findLeagueAlliance`, `GeneralTeam.changeLeader`, and `LeagueChangeLeaderEvent`. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, Java static league registry comparison, event queue/lock comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Command `32` target-offline/no-op and non-league-leader caller behavior still need dedicated source-derived tests. Selecting a non-leader member is not directly expressible through the current alliance-id command path.
+- League invite/join/loot/kinah workflows, direct disband iteration, offline recipients, Java static registry, event queue/locks, object identity, and packet processor exception/log behavior remain deferred.
+- Packet-field coverage remains C# emitted-object validation only; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- C# packet intent order is deterministic by sorted positions; Java `ConcurrentHashMap` ordering remains unverified.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 command `32` edge-coverage regression slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 7 Java golden byte validation, full `LeagueService`, Java static league registry, remaining command `32` edge branches, Java event queue/lock comparison, packet processor exception/log comparison, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; command `32` is better bounded, but league lifecycle and runtime proof remain open.
+
+Next recommended unit of work:
+- Add the remaining command `32` source-derived behavior that can be represented with current runtime models, especially non-league-leader caller behavior. Then consider moving from command gates into `LeagueJoinEvent`/invite or league loot-rule changes, whichever has fewer missing dependencies.
+
 ---
 
 ## Next Steps
