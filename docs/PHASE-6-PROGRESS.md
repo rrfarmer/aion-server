@@ -22387,6 +22387,60 @@ Next recommended unit of work:
 
 ---
 
+### Session 771 (May 24, 2026)
+- Re-inspected Java `NpcSkillEntry`, `NpcSkillTemplateEntry.isReady`, `hpReady`, `timeReady`, `hasCooldown`, and `ConjunctionType`:
+  - cooldown blocks before chance;
+  - chance uses `Rnd.chance() < template.getProbability()`;
+  - default HP range `0..100` means the entry is not HP-gated and is HP-ready;
+  - time defaults `0..0` mean the entry is not time-gated and is time-ready;
+  - min-only time is ready when `minTime <= elapsedFightTime`;
+  - bounded time is ready when `minTime <= elapsedFightTime <= maxTime`;
+  - conjunction combines HP/time readiness with `AND`, `OR`, or `XOR`.
+- Added `PlayerSummonKnownObjectNpcSkillEntryTiming` to represent NPC skill entry timing metadata.
+- Added `PlayerSummonKnownObjectNpcSkillConjunction` to represent Java `ConjunctionType`.
+- Added `PlayerSummonKnownObjectNpcSkillEntryReadiness` / status enum.
+- Added `PlayerSummonSkillExecutionService.EvaluateMercenaryNpcSkillEntryReadiness`.
+- Kept Java random chance as an explicit `chanceReady` input because deterministic RNG parity is not yet represented.
+- Kept the projection standalone; it is not wired into `EvaluateMercenarySkillReadiness`, queued/chain/priority selection, live AI, skill properties, or controller execution.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 39 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1363 tests.
+
+#### Migration Parity Table - Session 771
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.skill.NpcSkillEntry` | `PlayerSummonKnownObjectNpcSkillEntryTiming` / `PlayerSummonKnownObjectNpcSkillEntryReadiness` | Abstract Skill Entry Projection | Partial | Regression Tested | Needs Verification | C# represents readiness metadata and results only. It does not model inheritance, volatile `skillLevel`, `lastTimeUsed` mutation, condition templates, chains, priority, or end-cast events. |
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.isReady` | `PlayerSummonSkillExecutionService.EvaluateMercenaryNpcSkillEntryReadiness` | NPC Skill Timing Service | Partial | Regression Tested | Needs Verification | C# models cooldown-before-chance and HP/time conjunction results from explicit metadata. It is not wired into live AI selection. |
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.hasCooldown` | `CooldownMilliseconds` / `LastTimeUsedMilliseconds` / `currentTimeMilliseconds` inputs | Cooldown Projection | Partial | Regression Tested | Needs Verification | C# mirrors `cooldown > now - lastTimeUsed` with supplied milliseconds. Live `System.currentTimeMillis`, `lastTimeUsed` mutation, threading, and date/time runtime behavior remain unverified. |
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.chanceReady` / `com.aionemu.commons.utils.Rnd.chance` | explicit `chanceReady` input | Random Chance Dependency | Not Started | Manual Only as input branch | Needs Verification | Java random probability is not ported in this slice. RNG distribution, threading, seeding, and runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.hpReady` | `MinHpPercentage` / `MaxHpPercentage` readiness calculation | HP Gate Projection | Partial | Regression Tested | Needs Verification | C# models Java default `0..100` and inclusive HP range checks. Live HP source, integer rounding of HP percentage, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.timeReady` | `MinTimeMilliseconds` / `MaxTimeMilliseconds` readiness calculation | Time Gate Projection | Partial | Regression Tested | Needs Verification | C# models no-time, min-only, and bounded inclusive time checks. Production fight-time source, date/time runtime behavior, and Java comparison remain unverified. |
+| `com.aionemu.gameserver.model.templates.npcskill.ConjunctionType` | `PlayerSummonKnownObjectNpcSkillConjunction` | Enum Projection | Partial | Regression Tested | Needs Verification | C# represents `AND`, `OR`, and `XOR` logic. XML enum loading/mapping remains unwired. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.EvaluateMercenaryNpcSkillEntryReadiness_ProjectsJavaHpTimeCooldownAndConjunctions`: validates default HP/time readiness, cooldown blocking before readiness, explicit chance failure, bounded AND readiness, HP out-of-range failure, min-only time readiness, OR readiness, XOR readiness, and XOR not-ready when both HP and time are ready.
+- Java comparison status: expectations are source-derived from Java `NpcSkillTemplateEntry.isReady`, `hasCooldown`, `chanceReady`, `hpReady`, `timeReady`, and `ConjunctionType`. No Java runtime execution, RNG comparison, live HP percentage comparison, XML mapping comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- This is a standalone metadata projection and is not yet consumed by `SkillAttackManager.isReady` or live AI skill selection.
+- Java `Rnd.chance()` and probability thresholds are not implemented; chance readiness remains caller-supplied.
+- `lastTimeUsed` mutation, volatile `skillLevel`, condition templates, chain fields, priority, post-spawn behavior, and end-cast spawn events remain missing.
+- HP percentage source and fight-time source are not wired; integer rounding and date/time behavior remain unverified.
+- Reflection, threading, serialization, date/time runtime, precision/rounding, Java runtime, RNG, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 represented `NpcSkillTemplateEntry.isReady` timing/conjunction slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 12 live AI skill scheduling, RNG chance parity, XML NPC skill template mapping, HP percentage source, fight-time source, `lastTimeUsed` mutation, condition templates, chains, priority selection, end-cast events, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; NPC skill-entry timing readiness is represented, but live NPC skill selection parity remains partial.
+
+Next recommended unit of work:
+- Continue by wiring `EvaluateMercenaryNpcSkillEntryReadiness` into `EvaluateMercenarySkillReadiness` as a typed timing-readiness input, or begin mapping static NPC skill template fields into `PlayerSummonKnownObjectNpcSkillEntryTiming`. Keep Java random chance, live HP/fight-time sources, condition templates, chain/priority selection, effects, packets, live AI state, and controller execution explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
