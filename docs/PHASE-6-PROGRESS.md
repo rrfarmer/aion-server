@@ -20670,6 +20670,52 @@ Next recommended unit of work:
 
 ---
 
+### Session 737 (May 24, 2026)
+- Inspected Java `Creature.setCasting`, `Player.setCasting`, and `PlayerController.cancelCurrentSkill`.
+- Added the smallest player-side casting state needed by the `CM_CASTSPELL` spell id `0` cancellation path:
+  - `Player.CastingSkillId` represents Java `Creature.castingSkill` by id until full `Skill` objects are ported;
+  - `Player.LastCastingSkillId` represents Java `Player.lastSkill` id when a non-null cast is cleared;
+  - `Player.SetCastingSkill` and `Player.ClearCastingSkill` carry Java breadcrumbs for the represented state transition.
+- Wired `GameServerConnection.HandleCastSpellAsync` zero-spell cancellation to clear represented casting state before invoking the remaining `CancelCurrentSkill` hook.
+- Added a connection-level regression proving zero spell id clears current casting state, records last casting skill id, avoids pet/template fallthrough, and sends no failure packet.
+- Kept full Java cancellation fanout explicit as remaining work: `Skill.cancelCast`, hit-time boost reset/retail animation boost, `SM_SKILL_CANCEL`, `STR_SKILL_CANCELED`, item-skill cancellation packets/cooldown removal, and last-attacker notification are not yet modeled.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionCastSpellTests|PlayerCastSpellEarlyExitServiceTests"` passes with 12 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1326 tests.
+
+#### Migration Parity Table - Session 737
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CASTSPELL.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleCastSpellAsync` | Client Packet Handler Seam | Partial | Regression Tested | Needs Verification | Spell id `0` now clears represented player casting state and exits before pet/template checks. Full Java skill execution and complete cancellation packet fanout remain missing. |
+| `com.aionemu.gameserver.controllers.PlayerController.cancelCurrentSkill` | `GameServerConnection.CancelCurrentSkillForCastSpell` plus `GameServerCastSpellHandlerHooks.CancelCurrentSkill` | Controller Side Effect / Hook | Partial | Regression Tested | Needs Verification | C# clears represented casting state before invoking the hook. Missing Java behavior includes `Skill.cancelCast`, hit-time boost reset/boost, `SM_SKILL_CANCEL`, `STR_SKILL_CANCELED`, item-skill cancel message/cooldown removal, item animation cancel, and last-attacker notification. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.castingSkill` / `setCasting` | `Aion.GameServer.Model.GameObjects.Player.CastingSkillId` / `SetCastingSkill` / `ClearCastingSkill` | Player State | Partial | Regression Tested through connection seam | Needs Verification | C# stores only the skill id rather than Java's full `Skill` object. Skill method, template, target, item template, cancel rate, cast task, reflection, serialization, and threading behavior remain unavailable. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.lastSkill` | `Aion.GameServer.Model.GameObjects.Player.LastCastingSkillId` | Player State | Partial | Regression Tested through connection seam | Needs Verification | C# records the last casting skill id when a represented cast is cleared. Java stores a `SkillTemplate`; downstream template-dependent behavior remains unported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SKILL_CANCEL` and `SM_SYSTEM_MESSAGE.STR_SKILL_CANCELED` | No C# cast-spell cancel packet emission from `CancelCurrentSkillForCastSpell` | Packet Side Effect | Not Started for this caller | No Tests | Needs Verification | Newly documented dependency. Java broadcasts skill cancel and may send cancel system message for `SkillMethod.CAST`; C# zero-spell seam currently only mutates represented state. |
+
+Tests added/updated:
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_ZeroSpellIdClearsCastingSkillBeforeCancelHook`: validates spell id `0` clears `CastingSkillId`, records `LastCastingSkillId`, invokes the hook after the clear, avoids pet/template lookup, and sends no failure packets.
+- Existing cast-spell connection and planner tests were rerun in the focused filter.
+- Java comparison status: expectations are source-derived from Java `CM_CASTSPELL.runImpl`, `Creature.setCasting`, `Player.setCasting`, and `PlayerController.cancelCurrentSkill`. No Java runtime execution, Java-generated golden packets, live client socket order, full `Skill` object comparison, `Skill.cancelCast` behavior, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- `CancelCurrentSkillForCastSpell` does not yet emit Java's `SM_SKILL_CANCEL` / `STR_SKILL_CANCELED` fanout or item-skill cancel packet/cooldown behavior.
+- Representing casting state by skill id is intentionally narrower than Java's full `Skill` object and cannot yet preserve target, method, template, item, cancel-rate, or effect/cast-task behavior.
+- Full Java `SkillEngine`, target validation, result-list handling, real template lookup, pet skill table, summon state, cooldown persistence, audit logging, effect scheduling, observer dispatch, charge/power-shard/idian burns, PvP/death behavior, and packet fanout remain missing.
+- No Java golden-byte, live client, or deterministic threading/date-time comparison was run.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 narrow represented casting-state cancellation slice for the cast-spell seam
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 7 full `Skill` object model, skill-cancel packet fanout, item-skill cancel side effects, hit-time boost behavior, full SkillEngine/player-controller execution, Java runtime/golden packet comparison, and threading comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; cast-spell cancellation now mutates represented current/last casting state, but full skill cancel behavior and full skill execution remain partial.
+
+Next recommended unit of work:
+- Add the smallest packet-side slice for spell-id-zero cancellation: source-check Java `SM_SKILL_CANCEL` and `STR_SKILL_CANCELED`, then add C# packet helper coverage or a connection-level callback/packet seam for `SkillMethod.CAST` cancellation if enough represented casting metadata exists. If full packet shape needs more `Skill` metadata, instead add the pending item-use cancel animation packet for `CancelUseItemForCastSpell`, which already has represented item ids/templates in `_pendingItemUse`.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
