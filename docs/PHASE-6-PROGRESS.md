@@ -20624,6 +20624,52 @@ Next recommended unit of work:
 
 ---
 
+### Session 736 (May 24, 2026)
+- Inspected Java `PlayerController.cancelUseItem`, which clears `Player.usingItem`, cancels `TaskId.ITEM_USE`, and broadcasts `SM_ITEM_USAGE_ANIMATION` cancel state when a task exists.
+- Wired the connection-level `CM_CASTSPELL` early-exit seam to perform a real C# item-use state mutation before invoking the remaining callback hook:
+  - accepted cast-spell paths now clear `Player.UsingItemObjectId`;
+  - pending delayed item-use state is cancelled/cleared through the existing `PendingItemUse` cleanup path when present;
+  - missing/passive skill-template exits still leave item-use state untouched, matching Java ordering because `cancelUseItem` is reached only after template acceptance.
+- Kept full Java cancel broadcast/message parity explicit as a remaining gap: this narrow sync cast-spell seam does not yet send `SM_ITEM_USAGE_ANIMATION` cancel packets for pending item-use tasks.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionCastSpellTests|PlayerCastSpellEarlyExitServiceTests"` passes with 11 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1325 tests.
+
+#### Migration Parity Table - Session 736
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CASTSPELL.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleCastSpellAsync` | Client Packet Handler Seam | Partial | Regression Tested | Needs Verification | Accepted cast-spell paths now invoke a real item-use cancellation state mutation before cooldown audit or use-skill callback. Full Java `PlayerController.useSkill`, real templates, target/result handling, and effects remain missing. |
+| `com.aionemu.gameserver.controllers.PlayerController.cancelUseItem` | `GameServerConnection.CancelUseItemForCastSpell` plus `GameServerCastSpellHandlerHooks.CancelUseItem` | Controller Side Effect / Hook | Partial | Regression Tested | Needs Verification | C# clears `Player.UsingItemObjectId` and cancels/cleans `_pendingItemUse` when present. It does not yet broadcast Java's `SM_ITEM_USAGE_ANIMATION(..., 0, 3, 0)` cancel packet from this cast-spell path, and full observer/task side effects remain incomplete. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.usingItem` | `Aion.GameServer.Model.GameObjects.Player.UsingItemObjectId` | Player State | Partial | Regression Tested | Needs Verification | Tests prove accepted ready and not-ready cast-spell paths clear the represented item id, while missing-template exits preserve it. Java stores an `Item` reference; C# currently stores an object id, so template/object reference behavior and serialization details remain unverified. |
+| `com.aionemu.gameserver.controllers.CreatureController` `TaskId.ITEM_USE` cancellation | `GameServerConnection._pendingItemUse` / `CleanupPendingItemUse` | Scheduled Task State | Partial | No direct pending-task test in this unit | Needs Verification | Cast-spell cancellation now attempts to cancel and clear the existing pending item-use task path if present. No deterministic scheduled-task regression or threading comparison was added in this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` cancel broadcast from `PlayerController.cancelUseItem` | Existing C# `SmItemUsageAnimation` pending-use cancellation helpers, not invoked by `CancelUseItemForCastSpell` | Packet Side Effect | Not Started for this caller | No Tests | Needs Verification | Newly documented dependency. Java broadcasts cancel animation when an item-use task existed. C# cast-spell sync seam currently only clears state; live packet fanout and socket-order parity remain missing. |
+
+Tests added/updated:
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_MissingTemplateLeavesUsingItemUntouched`: validates Java ordering where missing/passive template exits before `cancelUseItem`, preserving `UsingItemObjectId`.
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_CooldownNotReadySendsNotReadyAfterCancelUseItemAndAudit`: now also validates accepted not-ready path clears `UsingItemObjectId` before sending `STR_SKILL_NOT_READY`.
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_ReadySkillStopsProtectionCancelsUseItemAndCallsUseSkillWithoutPackets`: now also validates accepted ready path clears `UsingItemObjectId` before use-skill callback.
+- Java comparison status: expectations are source-derived from Java `CM_CASTSPELL.runImpl` and `PlayerController.cancelUseItem`. No Java runtime execution, Java-generated golden packets, live client socket order, deterministic pending-task scheduling comparison, full `SkillEngine`, real player controller methods, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- `CancelUseItemForCastSpell` does not yet send Java's `SM_ITEM_USAGE_ANIMATION` cancel broadcast for pending item-use tasks; this is intentionally documented rather than claimed complete.
+- Full Java `SkillEngine`, target validation, result-list handling, real template lookup, pet skill table, summon state, cooldown persistence, audit logging, effect scheduling, observer dispatch, charge/power-shard/idian burns, PvP/death behavior, and packet fanout remain missing.
+- Pending item-use cancellation now touches scheduler state, but no dedicated concurrency/threading regression was added for race timing.
+- C# represents Java `Player.usingItem` as an object id, not an `Item` reference; template lookup for cancel packets and serialization details remain incomplete.
+- Date/time behavior remains hook-based and unverified against Java `System.currentTimeMillis()`.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 narrow `PlayerController.cancelUseItem` state-mutation slice for the cast-spell seam
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 6 full SkillEngine/player-controller execution, `SM_ITEM_USAGE_ANIMATION` cancel broadcast from cast-spell cancellation, real template/item reference lookup, live cooldown/audit timing, Java runtime/golden packet comparison, and threading comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; cast-spell item-use cancellation now mutates represented state, but full skill execution and cancel packet fanout remain partial.
+
+Next recommended unit of work:
+- Add a connection-level spell id zero regression for Java `player.getController().cancelCurrentSkill(null)` ordering, then model the smallest represented casting-skill state needed to clear it through `GameServerConnection` without pretending full `Skill` execution exists. If that state proves too broad, add the missing pending item-use cancel animation packet for `CancelUseItemForCastSpell` using the existing `SmItemUsageAnimation` helpers and document socket-order limits.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
