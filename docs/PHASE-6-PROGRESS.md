@@ -14493,6 +14493,57 @@ Summary metrics:
 Next recommended unit of work:
 - Continue `CM_PLAYER_STATUS_INFO` parity with one remaining low-to-medium risk branch: group leader/remove/ban if existing group runtime support is sufficient, or alliance leader/ban/leave if existing alliance planners can be safely wired through the packet handler. Keep league commands deferred unless a live league runtime bridge is first added.
 
+### Session 618 (May 23, 2026)
+- Source-read Java `TeamCommand.GROUP_SET_LEADER`, `PlayerTeamCommandService.executeCommand`, `PlayerGroupService.changeLeader`, and `ChangeGroupLeaderEvent`.
+- Added Java group-leader system-message factories for `STR_PARTY_HE_IS_NEW_LEADER` and `STR_PARTY_YOU_BECOME_NEW_LEADER`.
+- Extended `PlayerGroupRuntime` with `ChangeLeader` so runtime-owned group descriptors can update the leader object id and emit per-member packet intents.
+- Extended `GameServerConnection.HandlePlayerStatusInfoAsync` with the Java `GROUP_SET_LEADER` branch:
+  - command code `3`;
+  - `selectedObjectId == 0` targets the caller like Java `findMember`;
+  - missing group or missing target member no-ops in the C# bridge, while Java invalid member lookup can throw through `Objects.requireNonNull`;
+  - sends `SM_GROUP_INFO` followed by the matching leader system message for each group member, preserving Java per-member packet ordering.
+- Kept Java invalid-member exception parity, full generic `PlayerTeamCommandService` dispatch, Java event queue/lock comparison, socket ordering comparison, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerGroupRuntime"` passes with 50 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1082 tests.
+
+#### Migration Parity Table - Session 618
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | C# now handles group leader, LFG, mentoring start/end, alliance ready checks, alliance vice-captain, and alliance group change ids. Group ban/remove, alliance leave/ban/leader, league commands, and full generic dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.GROUP_SET_LEADER` | Command code `3` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | C# source-models command id `3`, targets `selectedObjectId` or caller when zero, and dispatches to group runtime leader assignment. Java invalid target member exception behavior remains deferred. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService` | Narrow group-leader branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Service Dependency | Partial | Regression Tested | Needs Verification | C# continues bypassing the full generic team-command service and ports one additional group branch directly. Group ban/remove, alliance leave/ban/leader, and league dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.changeLeader` | `Aion.GameServer.Services.PlayerGroupRuntime.ChangeLeader` through connection handler | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | C# resolves the caller group snapshot and applies leader assignment through the runtime. Java static group registry and invalid target exception surface are not runtime-compared. |
+| `com.aionemu.gameserver.model.team.group.events.ChangeGroupLeaderEvent` | `PlayerGroupRuntime.ChangeLeader` / connection group leader sends | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | C# mutates the group leader id and sends `SM_GROUP_INFO` plus group-leader system messages to every member. Java event queue/lock ordering and live socket ordering remain unverified. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup` | `Aion.GameServer.Model.GameObjects.PlayerGroupDescriptor` / `PlayerGroupRuntime` descriptor store | Team State | Partial | Regression Tested | Needs Verification | Runtime-owned descriptor leader id now refreshes after command id `3`. Java synchronized/team event semantics are not compared; C# uses lock-protected runtime state. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupInfo` through group leader sends | Server Packet | Partial | Regression Tested | Needs Verification | Existing packet is now sent from parsed command id `3`. Java golden bytes, encrypted frames, and real-client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_HE_IS_NEW_LEADER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyHeIsNewLeader` | Server Packet Factory | Partial | Regression Tested | Needs Verification | C# sends Java message id `1300154` to non-target group members. Java golden frame and client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_YOU_BECOME_NEW_LEADER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyYouBecomeNewLeader` | Server Packet Factory | Partial | Regression Tested | Needs Verification | C# sends Java message id `1300155` to the new leader. Java golden frame and client validation remain missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / direct fallback | Runtime Dependency | Partial | Regression Tested | Needs Verification | C# sends group-info and system-message packets through registry/direct fallback. Java `PacketSendUtility` ordering/offline-recipient behavior remains unverified beyond per-member intent order in tests. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_GroupSetLeaderChangesLeaderAndSendsGroupInfoThenMessages`: validates parsed command id `3` changes the runtime group leader and sends `SmGroupInfo` followed by Java system-message ids `1300154`/`1300155` for each member.
+- Java comparison status: expectations are source-derived from `TeamCommand`, `PlayerTeamCommandService`, `PlayerGroupService.changeLeader`, `ChangeGroupLeaderEvent`, `SM_GROUP_INFO`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live client packet capture, Java static group registry comparison, Java event queue/lock comparison, Java invalid-member exception comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond C# packet object type, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Java invalid target member lookup can throw through `Objects.requireNonNull`; the C# packet handler currently no-ops missing targets until the broader packet exception policy is ported.
+- Java static group registry lookup is approximated by runtime snapshots attached to the caller.
+- Java event queue, lock, and threading behavior remains source-derived only.
+- Several `CM_PLAYER_STATUS_INFO` command branches remain unimplemented, including group ban/remove, alliance leave/ban/leader, and league commands.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to C# packet object reachability/order; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 `CM_PLAYER_STATUS_INFO` group leader branch
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 8 remaining team command branches, Java static service registry, Java event queue/lock comparison, Java invalid-member exception comparison, live socket ordering, Java runtime/threading comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; group leader packet command now reaches runtime assignment and per-member socket fanout, but group remove/ban and alliance leader/leave/ban remain incomplete.
+
+Next recommended unit of work:
+- Continue `CM_PLAYER_STATUS_INFO` parity with `GROUP_REMOVE_MEMBER` or `GROUP_BAN_MEMBER` only if the leave/disband/leader-change side effects can be scoped safely. Otherwise, port `ALLIANCE_SET_CAPTAIN` through the existing alliance leader-change planner/runtime if it has fewer missing packet side effects. Keep league commands deferred.
+
 ---
 
 ## Next Steps
