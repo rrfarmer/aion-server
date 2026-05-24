@@ -16892,6 +16892,48 @@ Summary metrics:
 Next recommended unit of work:
 - Add a pending league invite request model on `Player` or a narrow planner state object to represent Java `ResponseRequester.putRequest(SM_QUESTION_WINDOW.STR_MSGBOX_UNION_INVITE_ME, invite)` success/failure. Keep actual client response packet handling and create-league-on-accept as later units.
 
+### Session 664 (May 24, 2026)
+- Source-read Java `ResponseRequester.putRequest` and `RequestResponseHandler`.
+- Added `PendingLeagueInviteRequest` and a `Player.PendingLeagueInviteRequest` slot to model the league invite question id and handler metadata.
+- Added `PlayerLeagueInvitePlanner.TryPutPendingRequest`, mirroring Java `putIfAbsent` behavior for the invite question id:
+  - first registration stores pending request metadata and returns `Registered = true`,
+  - duplicate registration returns `Registered = false` with the existing pending request.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerLeagueInvitePlannerTests` passes with 12 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1147 tests.
+
+#### Migration Parity Table - Session 664
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.TryPutPendingRequest` | Request Registry / Planner | Partial | Unit Tested | Needs Verification | Narrow league-invite `putIfAbsent` behavior is modeled. Generic request map, removal, respond, and deny-all are not ported. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler` | `Aion.GameServer.Model.GameObjects.PendingLeagueInviteRequest` | Request Handler Metadata | Partial | Unit Tested | Needs Verification | Stores metadata needed for future accept/deny handling. Polymorphic handler invocation is not implemented. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Aion.GameServer.Model.GameObjects.Player.PendingLeagueInviteRequest` | Model Dependency | Partial | Unit Tested | Needs Verification | Adds one pending league invite slot. Java supports a concurrent map of multiple question ids; C# model is intentionally narrow for this branch. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_MSGBOX_UNION_INVITE_ME` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow.UnionInviteMe` | Packet Constant | Complete | Unit Tested | Needs Verification | Used as pending request question id. No Java runtime comparison. |
+
+Tests added:
+- `PlayerLeagueInvitePlannerTests.TryPutPendingRequest_RegistersOnceLikeJavaResponseRequesterPutRequest`: validates first registration stores `PendingLeagueInviteRequest`, duplicate registration fails and preserves the original request, and stored metadata matches the setup plan.
+- Java comparison status: expectations are source-derived from `ResponseRequester.putRequest` and `LeagueService.inviteToLeague` request registration. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, concurrent request-map comparison, request-response runtime comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Generic `ResponseRequester` behavior remains unported: multiple question ids, `respond`, `remove`, `denyAll`, and polymorphic `RequestResponseHandler.handle`.
+- C# pending league invite storage is a single typed slot, not Java's `ConcurrentHashMap<Integer, RequestResponseHandler<?>>`.
+- Live `CM_QUESTION_RESPONSE` handling and LeagueInviteEvent accept/deny invocation remain open.
+- Create-league-on-accept and live `PacketSendUtility` sends remain open.
+- Threading behavior differs: Java uses `ConcurrentHashMap.putIfAbsent`; C# currently stores on the player object without explicit concurrency controls.
+- Packet-field coverage remains C# emitted-object validation only; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 narrow pending league invite request registration slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 7 generic `ResponseRequester`, `CM_QUESTION_RESPONSE`, `RequestResponseHandler.handle`, create-league-on-accept, live packet sending, Java concurrency comparison, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; league invite request registration is represented narrowly, but live response handling remains open.
+
+Next recommended unit of work:
+- Add a narrow league invite response planner for `RequestResponseHandler.handle`: response `0` should call the existing deny planner, and nonzero response should call the existing accept-existing-league planner when requester/invited state is sufficient. Keep generic `CM_QUESTION_RESPONSE` packet routing and create-league-on-accept as separate units.
+
 ---
 
 ## Next Steps
