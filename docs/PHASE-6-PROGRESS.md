@@ -20189,6 +20189,52 @@ Next recommended unit of work:
 
 ---
 
+### Session 727 (May 24, 2026)
+- Added a represented dot-attacked player incoming HP damage plus equipment observer burn ordering seam.
+- Added `PlayerIncomingDamageObserverFanoutService.ApplyIncomingDotHpDamageAndObserverBurnsAsync`.
+- Refactored the existing incoming HP damage seam internally so direct attacked and dot-attacked variants share the damage-first ordering path while preserving distinct Java observer events.
+- Added focused coverage proving dot-attacked incoming player damage with a nonzero skill id still burns both idian polish and charge after damage/status packets.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "WorldNpcResourceStatsServiceTests|EquipmentObserverBurnWorkflowServiceTests|PlayerEnterWorldServiceTests"` passes with 60 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1306 tests.
+
+#### Migration Parity Table - Session 727
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.AbstractOverTimeEffect.onPeriodicAction` / periodic player damage callbacks | `Aion.GameServer.Services.PlayerIncomingDamageObserverFanoutService.ApplyIncomingDotHpDamageAndObserverBurnsAsync` | Periodic Damage Caller Seam | Partial | Regression Tested | Needs Verification | C# now has a represented dot-attacked player HP damage seam that orders attack-status/HP stat update before equipment observer packets. Full Java scheduled effect lifecycle, `Effect` identity, abnormal state ticking, and real combat route invocation remain missing. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats` / inherited `CreatureLifeStats.reduceHp` side effects | `PlayerIncomingDamageObserverFanoutService` shared incoming damage path via `WorldNpcResourceStatsService.IncreasePlayerHpAsync` negative damage path | Player Damage Dependency | Partial | Regression Tested | Needs Verification | Direct attacked and dot-attacked seams now share the same damage-first ordering path. Java death workflow, PvP logic, attack-result lists, and full damage controller behavior remain partial. |
+| `com.aionemu.gameserver.controllers.observer.ActionObserver.dotattacked` | `PlayerIncomingDamageObserverFanoutService.ApplyIncomingDotHpDamageAndObserverBurnsAsync` invoking `EquipmentObserverBurnFanoutService` with `EquipmentObserverBurnEvent.DotAttacked` | Observer Callback Integration | Partial | Regression Tested | Needs Verification | Test validates dot-attacked observer burns run after represented player damage and allow nonzero skill ids. Real `ObserveController` dot dispatch, effect object propagation, and observer lifecycle remain unverified. |
+| `com.aionemu.gameserver.model.items.IdianStone.decreasePolishCharge` | `EquipmentObserverBurnFanoutService` invoked through dot-attacked player incoming damage | Model Helper Dependency | Partial | Regression Tested | Needs Verification | Test validates defend polish burn and packet fanout for dot-attacked nonzero skill damage. Java synchronized mutation, exhausted-idian serialization, DAO timing, and `RandomBonusEffect` refresh remain unresolved. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.dotattacked` | `EquipmentObserverBurnFanoutService` invoked through dot-attacked player incoming damage | Model Helper Dependency | Partial | Regression Tested | Needs Verification | Test validates dot-attacked charge burn occurs with nonzero skill id, unlike `ChargeInfo.attacked`. Java synchronized mutation, `PersistentState.UPDATE_REQUIRED`, and live player lookup remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ATTACK_STATUS` | `SmAttackStatus` from `WorldNpcResourceStatsService` ordered before dot-attacked observer packets | Packet | Partial | Regression Tested | Needs Verification | Packet object order is asserted locally. No Java golden bytes, live socket ordering, encrypted-frame comparison, or live-client validation was run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_STATUPDATE_HP` | `SmStatUpdateHp` from `WorldNpcResourceStatsService` ordered before dot-attacked observer packets | Packet | Partial | Regression Tested | Needs Verification | HP stat update order is asserted locally before idian/charge packets. Java runtime order relative to dot observer callbacks remains unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` | `SmInventoryUpdateItem` packets sent after dot-attacked player incoming damage | Packet | Partial | Regression Tested with byte-level payload checks | Needs Verification | Tests assert idian-before-charge inventory update payloads for dot-attacked damage. Exhausted-idian full update, Java golden packet comparison, and live client behavior remain unverified. |
+
+Tests added/updated:
+- `WorldNpcResourceStatsServiceTests.ApplyIncomingDotHpDamageAndObserverBurnsAsync_AllowsNonzeroSkillChargeAndIdianBurnsAfterDamage`: validates represented dot-attacked player damage with a nonzero skill id mutates HP, broadcasts attack status, sends HP stat update, then sends idian and charge defender packets in that order.
+- Existing world NPC resource stats, equipment observer workflow, and enter-world persistence tests matched by the focused filter were rerun.
+- Java comparison status: expectations are source-derived from Java periodic damage callbacks, `PlayerLifeStats`/`CreatureLifeStats.reduceHp`, `ActionObserver.dotattacked`, `IdianStone.decreasePolishCharge`, `ChargeInfo.dotattacked`, `SM_ATTACK_STATUS`, `SM_STATUPDATE_HP`, and `SM_INVENTORY_UPDATE_ITEM`. No Java runtime execution, Java-generated golden packet, live `Effect` object dispatch, live `ObserveController`, live `GameServerConnection`, encrypted-frame comparison, live MySQL/DAO comparison, reflection comparison, threading comparison, date/time scheduling comparison, or live-client validation was run.
+
+Remaining risks:
+- The represented dot-attacked seam is production-registered through `PlayerIncomingDamageObserverFanoutService`, but not invoked from a real periodic effect or skill route.
+- Full Java scheduled effect lifecycle, `Effect` identity propagation, abnormal state handling, PvP/duel logic, death workflow, and `AttackUtil` remain missing.
+- Java observer dispatch order and stat/effect refresh lifecycle remain source-derived and not live verified.
+- Exhausted-idian serialization, DAO flush cadence, transaction behavior, synchronized mutation, and live socket ordering remain unresolved.
+- Date/time scheduling is named but not implemented in this unit; no scheduler/runtime comparison was run.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 represented dot-attacked player incoming damage plus equipment observer ordering seam
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 6 live periodic effect route invocation, full SkillEngine/AttackUtil integration, real ObserveController/Effect lifecycle, Java runtime/golden packet comparison, live DAO comparison, and synchronized/threading comparison
+- Estimated overall migration completion: Phase 6 remains about 65% complete; dot-attacked player observer ordering is better represented, but live effect/combat route invocation remains partial.
+
+Next recommended unit of work:
+- Inspect Java combat client packets and current C# `GameClientPacketFactory` for the smallest missing skill/attack packet parser that can safely feed represented combat services. If still too broad, continue player incoming observer parity by adding persistence delegate wiring/tests for `PlayerIncomingDamageObserverFanoutService` so live DAO boundaries are ready when a real caller arrives.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
