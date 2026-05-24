@@ -18598,6 +18598,82 @@ Summary metrics:
 Next recommended unit of work:
 - Continue compact `ResponseRequester` parity with cube/warehouse expansion warning, or wire the craft cap helper into the future `CraftingRewards`/quest path only if the surrounding quest reward validation surface is already represented. Larger exchange `performTrade` and craft/inventory persistence should remain deferred until their state models are scoped.
 
+---
+
+### Session 695 (May 24, 2026)
+- Continued compact `ResponseRequester` parity with Java `CubeExpandService.expandCube` and `WarehouseService.expandWarehouse` answer handling.
+- Added dialog constants `CmDialogSelect.ExtendInventory = 47` and `CmDialogSelect.ExtendCharWarehouse = 48`.
+- Added shared expansion question id `SmQuestionWindow.WarehouseExpandWarning = 900686`.
+- Added `SmInventoryUpdateItem.DecreaseKinahCube = 0x5A`.
+- Added `SmSystemMessage.WarehouseExpandNotEnoughMoney` for Java id `1300831`.
+- Added `PendingStorageExpansionRequest` and `QuestionResponseRequestKind.StorageExpansion`.
+- Added represented storage-expansion template DTO/table types:
+  - `StorageExpansionTemplateTable`,
+  - `StorageExpansionTemplateSummary`,
+  - `StorageExpansionPrice`.
+- Added `StorageExpansionNpcService` with Java-shaped response-request behavior:
+  - creates cube or warehouse expansion warning questions from a provided Java-shaped template,
+  - preserves shared question id and put-if-absent duplicate semantics,
+  - denies without mutation,
+  - accepts cube expansion by decreasing represented Kinah, incrementing represented `NpcExpands`, and sending inventory/system/cube-size packets,
+  - accepts warehouse expansion by decreasing represented Kinah, incrementing represented `WarehouseNpcExpands`, and sending inventory/system/warehouse-info packets,
+  - sends Java not-enough-Kinah expansion message without mutating represented expansion state.
+- Routed `CM_QUESTION_RESPONSE` for `900686` through `GameServerConnection`.
+- Added enter-world/login cleanup for pending storage expansion requests.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter StorageExpansionNpcServiceTests` passes with 7 tests.
+- Packet/service validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "StorageExpansionNpcServiceTests|GamePacketTests"` passes with 89 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1260 tests.
+
+#### Migration Parity Table - Session 695
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.CubeExpandService.expandCube` | `Aion.GameServer.Services.StorageExpansionNpcService.RequestCubeExpansion` / `HandleResponse` | Service / Request Handler | Partial | Regression Tested | Needs Verification | Models template-gated warning question, response removal, not-enough-Kinah handling, represented `NpcExpands` mutation, Kinah decrement update type `0x5A`, cube-size packet, and success message. Static `DataManager.CUBEEXPANDER_DATA` loading, production dialog request routing, min/max NPC messages, DAO persistence, cube-limit recalculation side effects, logging, and live socket ordering are not complete. |
+| `com.aionemu.gameserver.services.WarehouseService.expandWarehouse` | `Aion.GameServer.Services.StorageExpansionNpcService.RequestWarehouseExpansion` / `HandleResponse` | Service / Request Handler | Partial | Regression Tested | Needs Verification | Models template-gated warning question, response removal, not-enough-Kinah handling, represented `WarehouseNpcExpands` mutation, default Kinah decrement update type, warehouse-info refresh packets, and success message. Static `DataManager.WAREHOUSEEXPANDER_DATA` loading, production dialog request routing, min/max NPC messages, DAO persistence, warehouse-limit recalculation, and live socket ordering are not complete. |
+| `com.aionemu.gameserver.dataholders.CubeExpandData` | `Aion.GameServer.Dataholders.StorageExpansionTemplateTable` | Dataholder Dependency | Partial | Unit Tested indirectly | Needs Verification | Provides represented NPC-id lookup shape for expansion templates. XML/static-data loading from `storage_expander/cube_expander.xml`, JAXB `afterUnmarshal` duplicate behavior, count parity, and DataManager wiring are not implemented in this unit. |
+| `com.aionemu.gameserver.dataholders.WarehouseExpandData` | `Aion.GameServer.Dataholders.StorageExpansionTemplateTable` | Dataholder Dependency | Partial | Unit Tested indirectly | Needs Verification | Provides represented NPC-id lookup shape for expansion templates. XML/static-data loading from `storage_expander/warehouse_expander.xml`, JAXB `afterUnmarshal` duplicate behavior, count parity, and DataManager wiring are not implemented in this unit. |
+| `com.aionemu.gameserver.model.templates.StorageExpansionTemplate` | `Aion.GameServer.Dataholders.StorageExpansionTemplateSummary` | DTO / Static Data Template | Partial | Regression Tested | Needs Verification | Represents NPC ids, min/max expansion levels, and per-level price lookup. XML parsing, schema validation, duplicate level behavior, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.model.templates.expand.Expand` | `Aion.GameServer.Dataholders.StorageExpansionPrice` | DTO | Partial | Regression Tested | Needs Verification | Represents `level` and `price` values. Precision/rounding is straightforward integer handling, but XML load and Java JAXB comparison were not run. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest/respond/denyAll` | `QuestionResponseRegistry` with `QuestionResponseRequestKind.StorageExpansion` | Request Registry | Partial | Regression Tested | Needs Verification | Uses put-if-absent duplicate protection and response removal for shared question id `900686`. Java anonymous `RequestResponseHandler<Npc>` callback identity, generic/reflection behavior, logout `denyAll` callback behavior, and concurrent-map stress remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_WAREHOUSE_EXPAND_WARNING` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow.WarehouseExpandWarning` | Server Packet / Question Id | Partial | Regression Tested | Needs Verification | Question id `900686` and price payload are asserted in C# packet tests. Java golden bytes, encrypted frames, and client rendering were not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_WAREHOUSE_EXPAND_NOT_ENOUGH_MONEY` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.WarehouseExpandNotEnoughMoney` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Java id `1300831` is emitted for insufficient Kinah during cube/warehouse expansion. Packet id asserted in C#; Java golden bytes/encrypted frames not compared. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.ItemUpdateType.DEC_KINAH_CUBE` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryUpdateItem.DecreaseKinahCube` | Packet Update Type | Partial | Regression Tested | Needs Verification | Java update type `0x5A` is used for cube NPC expansion Kinah decrement and asserted from serialized C# inventory-update payload. Java packet bytes and persistence side effects were not compared. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.ItemUpdateType.DEC_KINAH_BUY` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryUpdateItem.DecreaseKinahBuy` | Packet Update Type | Partial | Regression Tested | Needs Verification | Existing update type `0x1D` is used for warehouse NPC expansion default Kinah decrement. Java packet bytes and persistence side effects were not compared. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_DIALOG_SELECT` expand actions | `Aion.GameServer.Network.Aion.ClientPackets.CmDialogSelect.ExtendInventory` / `ExtendCharWarehouse` | Client Packet / Handler Dependency | Partial | No new production route tests | Needs Verification | Dialog action constants `47` and `48` are represented, but production dialog request routing is deferred until storage-expander static data is loaded. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_QUESTION_RESPONSE` | `GameServerConnection.HandleStorageExpansionQuestionResponseAsync` | Client Packet / Handler | Partial | Regression Tested indirectly | Needs Verification | Response id `900686` now dispatches to the storage-expansion response service when a pending request exists. No end-to-end production dialog test exists because request creation/static-data loading are still missing. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData.setNpcExpands/setWhNpcExpands` | `Player.NpcExpands` / `Player.WarehouseNpcExpands` setters | Runtime Model Dependency | Partial | Regression Tested | Needs Verification | C# now allows represented NPC expansion fields to mutate in memory. Java common-data persistence, cube/warehouse limit recalculation, serialization differences, and threading behavior remain unverified. |
+
+Tests added/updated:
+- `StorageExpansionNpcServiceTests.RequestCubeExpansion_RegistersJavaSharedQuestion`: validates cube template request registration, shared question id `900686`, price, target NPC expansion, and put-if-absent storage.
+- `StorageExpansionNpcServiceTests.RequestWarehouseExpansion_DuplicateQuestionKeepsOriginalPendingRequest`: validates duplicate shared-question behavior preserves the original pending request.
+- `StorageExpansionNpcServiceTests.RequestExpansion_CannotExpandEmitsJavaCapMessages`: validates cube and warehouse cap guards return source-derived system-message packets.
+- `StorageExpansionNpcServiceTests.HandleResponse_DenyConsumesPendingRequestWithoutMutation`: validates response `0` consumes the request without Kinah or expansion mutation.
+- `StorageExpansionNpcServiceTests.HandleResponse_AcceptCubeDecreasesKinahAndExpandsNpcCubeRows`: validates accept decreases represented Kinah, uses update type `0x5A`, increments `NpcExpands`, and emits system/cube packets.
+- `StorageExpansionNpcServiceTests.HandleResponse_AcceptWarehouseDecreasesKinahAndExpandsNpcWarehouseRows`: validates accept decreases represented Kinah, uses update type `0x1D`, increments `WarehouseNpcExpands`, and emits system/warehouse packets.
+- `StorageExpansionNpcServiceTests.HandleResponse_NotEnoughKinahConsumesPendingRequestWithoutExpansion`: validates insufficient Kinah sends Java message id `1300831`, consumes the request, and preserves represented state.
+- `GamePacketTests` system-message and question-window assertions validate ids `1300831` and `900686`.
+- Java comparison status: expectations are source-derived from `CubeExpandService`, `WarehouseService`, `StorageExpansionTemplate`, `Expand`, `SM_QUESTION_WINDOW`, `SM_SYSTEM_MESSAGE`, `ItemPacketService.ItemUpdateType`, and `CM_QUESTION_RESPONSE`. No Java runtime execution, Java-generated golden vector, static XML loader comparison, production dialog request comparison, DAO persistence comparison, live socket-order validation, encrypted frame comparison, reflection behavior, threading behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- `storage_expander/cube_expander.xml` and `storage_expander/warehouse_expander.xml` are not loaded into C# `StaticData` yet.
+- Production `CM_DIALOG_SELECT` request routing for action ids `47` and `48` is not wired because template lookup is not available.
+- NPC expansion persistence to `players.npc_expands` and `players.wh_npc_expands` is not implemented in this unit.
+- Java min/max NPC-specific failure messages are not represented yet.
+- Java cube/warehouse limit recalculation is represented only by mutable fields and outgoing packets; deeper storage object limit state is missing.
+- Java `RequestResponseHandler<Npc>` callback identity and generic/reflection behavior remain unported.
+- Packet sends are validated by C# packet type/message id/update type only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 14
+- Total artifacts ported: 1 storage expansion warning/response slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 14
+- Total blocked artifacts: 9 static storage-expander XML loading, production dialog request routing, NPC expansion persistence, min/max NPC failure messages, storage limit recalculation, RequestResponseHandler callback identity, socket-order validation, encrypted-frame comparison, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; storage expansion answer handling is now represented, but request-side static data/routing and persistence remain partial.
+
+Next recommended unit of work:
+- Load Java storage-expander XML into C# `StaticData` as `CubeExpansionTemplates` and `WarehouseExpansionTemplates`, then wire `CM_DIALOG_SELECT` actions `47` and `48` through `StorageExpansionNpcService.Request*Expansion` with targeting/function validation. Keep DAO persistence and min/max NPC-specific messages as explicit follow-up work unless they fit cleanly after the loader is in place.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
