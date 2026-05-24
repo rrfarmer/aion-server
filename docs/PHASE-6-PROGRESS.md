@@ -22221,6 +22221,68 @@ Next recommended unit of work:
 
 ---
 
+### Session 768 (May 24, 2026)
+- Re-inspected Java `SkillAttackManager.isReady`:
+  - `NpcSkillEntry.isReady(hpPercent, elapsedFightTime)` must pass first;
+  - `NpcSkillEntry.conditionReady(owner)` must pass second;
+  - Java resolves `SkillTemplate` from `DataManager.SKILL_DATA`;
+  - magical skills are blocked by `AbnormalState.SILENCE`;
+  - physical skills are blocked by `AbnormalState.BIND`;
+  - any `AbnormalState.CANT_ATTACK_STATE` blocks skill readiness;
+  - transformed NPCs with `TransformModel.getBanUseSkills() == 1` are blocked.
+- Extended `PlayerSummonKnownObject` with represented abnormal-state and transform-ban metadata.
+- Added represented `EffectController.isAbnormalSet` / `isInAnyAbnormalState` helpers on known objects using the existing Java bit-mask projection.
+- Added `PlayerSummonKnownObjectSkillReadiness` / status enum.
+- Added `PlayerSummonSkillExecutionService.EvaluateMercenarySkillReadiness`:
+  - `EntryTimingNotReady`;
+  - `EntryConditionNotReady`;
+  - `MissingSkillTemplate`;
+  - `BlockedBySilence`;
+  - `BlockedByBind`;
+  - `BlockedByCantAttackState`;
+  - `BlockedByTransformSkillBan`;
+  - `Ready`.
+- Kept HP/time readiness and `conditionReady` as explicit booleans because full `NpcSkillEntry` timing/conditions are not ported.
+- Kept readiness as metadata only; it is not wired into queued skill selection, chain/priority skill choice, range checks, live AI, controller execution, effects, or packets.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 37 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1361 tests.
+
+#### Migration Parity Table - Session 768
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.isReady` | `PlayerSummonSkillExecutionService.EvaluateMercenarySkillReadiness` / `PlayerSummonKnownObjectSkillReadiness` | AI Skill Readiness Projection | Partial | Regression Tested | Needs Verification | C# models the gate ordering and abnormal/transform blocks as represented metadata. It does not execute real `NpcSkillEntry`, live AI, or controller paths. |
+| `com.aionemu.gameserver.model.skill.NpcSkillEntry.isReady(int, long)` | `entryTimingReady` input to `EvaluateMercenarySkillReadiness` | NPC Skill Timing Dependency | Not Started | Manual Only as input branch | Needs Verification | HP percentage, elapsed-fight-time readiness, min/max delay semantics, random timing, and Java runtime comparison remain unported. |
+| `com.aionemu.gameserver.model.skill.NpcSkillEntry.conditionReady(Npc)` | `entryConditionReady` input to `EvaluateMercenarySkillReadiness` | NPC Skill Condition Dependency | Not Started | Manual Only as input branch | Needs Verification | Real NPC skill conditions, reflection/object lookups, target-dependent predicates, and live condition evaluation remain missing. |
+| `com.aionemu.gameserver.skillengine.model.SkillTemplate.getType` / `SkillType.MAGICAL` / `SkillType.PHYSICAL` | `SkillTemplateSummary.SkillType` string comparisons | Skill Template Metadata | Partial | Regression Tested | Needs Verification | C# consumes uppercase XML-derived skill-type strings. Enum mapping, missing template behavior, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.controllers.effect.EffectController.isAbnormalSet` | `PlayerSummonKnownObject.IsAbnormalSet` with `PlayerAbnormalState.Silence` / `Bind` | Abnormal-State Projection | Partial | Regression Tested | Needs Verification | Reuses existing Java bit-mask projection for represented known objects. Live effect controller state, threading, serialization, and packet/effect fanout remain missing. |
+| `com.aionemu.gameserver.controllers.effect.EffectController.isInAnyAbnormalState(AbnormalState.CANT_ATTACK_STATE)` | `PlayerSummonKnownObject.IsInAnyAbnormalState(PlayerAbnormalState.CantAttackState)` | Compound Abnormal-State Projection | Partial | Regression Tested | Needs Verification | C# tests compound mask blocking using `Stun`. Full state population from effects and live-client behavior remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.Npc.isTransformed` / `TransformModel.getBanUseSkills` | `PlayerSummonKnownObject.IsTransformed` / `TransformBansSkillUse` | Transform Metadata Projection | Partial | Regression Tested | Needs Verification | C# represents the Java ban-use-skills gate as two booleans. Transform model loading, serialization, effect lifecycle, and live object mutation remain missing. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.EvaluateMercenarySkillReadiness_ProjectsJavaAbnormalAndTransformGates`: validates timing-not-ready, condition-not-ready, missing template, magical skill blocked by silence, physical skill blocked by bind, compound cant-attack blocking, transform skill-ban blocking, and ready status.
+- Java comparison status: expectations are source-derived from Java `SkillAttackManager.isReady`, `NpcSkillEntry.isReady`, `NpcSkillEntry.conditionReady`, `SkillTemplate.getType`, `EffectController.isAbnormalSet`, `EffectController.isInAnyAbnormalState`, `Npc.isTransformed`, and `TransformModel.getBanUseSkills`. No Java runtime execution, live AI state comparison, live effect-controller comparison, transform lifecycle comparison, reflection comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Skill readiness is represented metadata only and is not consumed by real queued/chain/priority selection.
+- `NpcSkillEntry.isReady` and `conditionReady` are not ported; they are explicit caller-supplied inputs.
+- Missing skill template handling is an explicit C# status, while Java would dereference the returned template in this path; runtime behavior needs validation once template resolution is fully wired.
+- Live effect controller state, transform model state, AI substate, NPC skill templates, target range, delay-on-too-far, controller execution, effects, packets, persistence, and serialization remain missing.
+- Reflection, threading, serialization, date/time runtime, precision/rounding, Java runtime, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 represented `SkillAttackManager.isReady` abnormal/transform readiness slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 11 live AI skill scheduling, `NpcSkillEntry.isReady`, `conditionReady`, NPC skill list/chain/priority selection, target range checks, delay-on-too-far, live effect controller, transform lifecycle, controller execution, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented skill readiness now includes abnormal/transform gates, but live NPC skill selection parity remains partial.
+
+Next recommended unit of work:
+- Continue by representing the `SkillAttackManager.targetTooFar` branch that sets next-skill delay to 5000ms when a selected skill is out of range, or start modeling a small `NpcSkillEntry.isReady` timing metadata projection. Keep real skill selection, target geometry, conditions, effects, packets, live AI state, and controller execution explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
