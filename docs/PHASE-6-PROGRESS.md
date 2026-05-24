@@ -16112,6 +16112,51 @@ Summary metrics:
 Next recommended unit of work:
 - Add command `31` end-to-end packet-field coverage by serializing one of the actual `SmAllianceInfo` packets emitted through `GameServerConnection` and verifying league row fields alongside the surrounding force-number message order, then begin planning the next league command slice (`LEAGUE_LEAVE` or `LEAGUE_EXPEL`) against the now-available league runtime.
 
+### Session 647 (May 24, 2026)
+- Extended the command `31` GameServerConnection regression so it serializes the actual `SmAllianceInfo` packets emitted through `IGameClientConnectionRegistry` after a league move.
+- Verified the emitted alliance-info payload fields for both affected alliances: alliance id, leader object id, active player map id, league id, base loot rules, placeholder rows, message id/string, league row count, row positions, row alliance ids, row member counts, captain names, and captain world ids.
+- Decoded the actual emitted `SmSystemMessage` payloads for `STR_UNION_CHANGE_FORCE_NUMBER_ME/HIM`, verifying message ids and string parameters in Java's per-alliance force-number order after the move.
+- Kept the test source-derived and explicit: this is packet-field coverage of the C# emitted objects, not Java golden-byte or live-client validation.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionPlayerStatusInfoTests` passes with 47 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1120 tests.
+
+#### Migration Parity Table - Session 647
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` command `31` path | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Actual emitted command `31` packets are now serialized and field-checked through the connection registry path. Java runtime/golden bytes and live-client behavior remain unverified. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.LEAGUE_ALLIANCE_MOVE` | Command code `31` branch plus `PlayerLeagueRuntime.MoveAlliance` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Test verifies selected/target position swap plus emitted packet order and payload fields. Java global `ConcurrentHashMap` iteration order is still not runtime-compared. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.moveAlliance` | `Aion.GameServer.Services.PlayerLeagueRuntime.MoveAlliance` plus command `31` branch | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Leader gate, position swap, fanout, and emitted packet fields are covered. Full Java service registry/lifecycle and exception/log behavior remain deferred. |
+| `com.aionemu.gameserver.model.team.league.League` | `Aion.GameServer.Services.PlayerLeagueRuntime` / `PlayerLeagueSnapshot` | Team State | Partial | Regression Tested | Needs Verification | Provides sorted positions and league rows for emitted packet verification. Full leave/disband/join/invite/change-leader/loot/kinah behavior remains unported. |
+| `com.aionemu.gameserver.model.team.league.LeagueMember` | Internal `PlayerLeagueRuntime.PlayerLeagueMember` / `PlayerAllianceInfoLeagueRow` | Team Member / DTO | Partial | Regression Tested | Needs Verification | Position and captain row fields are verified in emitted packets. Java object identity and live `PlayerAlliance` references are approximated by ids/lookups. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueMoveEvent` | `PlayerLeagueRuntime.MoveAlliance` / `PlayerLeaguePacketIntent` | Event Runtime Dependency | Partial | Regression Tested | Needs Verification | Emitted packet sequence and serialized payload fields are now covered. Java event queue/lock/threading and map iteration remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` | Server Packet | Partial | Regression Tested | Needs Verification | Actual command `31` emitted packets now serialize and verify league row fields. No Java golden vector, encrypted-frame comparison, or client validation. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested | Needs Verification | Actual command `31` force-number messages are decoded for ids and string parameters: `1400589` with force number and `1400590` with player name plus force number. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootGroupRules` | `Aion.GameServer.Model.GameObjects.PlayerGroupLootRules` | DTO / Rules | Partial | Regression Tested | Needs Verification | Default base and league loot-rule fields are verified in emitted packets. Runtime league loot-rule mutation remains unported. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry` / `GameServerConnection.SendLeaguePacketAsync` | Runtime Dependency | Partial | Regression Tested | Needs Verification | In-memory registry path verifies recipient order and payload fields. Live socket ordering, offline recipients, packet processor exception/log behavior, and client behavior remain unverified. |
+
+Tests updated:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_LeagueAllianceMoveSwapsPositionsAndFansOutJavaPacketOrder`: now serializes actual emitted `SmAllianceInfo` packets and decodes actual emitted `SmSystemMessage` packets. It validates league rows and force-number parameters through the `GameServerConnection` fanout path.
+- Java comparison status: expectations are source-derived from `CM_PLAYER_STATUS_INFO`, `LeagueService.moveAlliance`, `LeagueMoveEvent.handleEvent`, `SM_ALLIANCE_INFO.writeImpl`, and `SM_SYSTEM_MESSAGE.writeImpl`. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, Java static league registry comparison, event queue/lock comparison, `ConcurrentHashMap` iteration comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Packet-field coverage is still C# emitted-object validation; there is no Java golden-byte vector or live-client proof.
+- Fanout order is deterministic by C# sorted league positions. Java's `league.forEach` over `ConcurrentHashMap.values()` remains source-read but not runtime-compared.
+- `PlayerLeagueRuntime` is still a narrow bridge; full Java `LeagueService`, static league registry, leave/disband/join/invite/change-leader/loot/kinah workflows, event queue, locks, object identity, threading, offline-recipient behavior, and packet processor exception/log behavior remain deferred.
+- Runtime custom league loot-rule mutation is not ported; emitted packets currently verify default rules.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 command `31` emitted-packet verification slice plus 1 strengthened regression test
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 7 Java golden byte validation, full `LeagueService`, Java static league registry, league leave/disband/join/change-leader workflows, Java event queue/lock comparison, packet processor exception/log comparison, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; command `31` now has strong C# packet-field coverage, but Java/runtime proof and broader league lifecycle parity remain open.
+
+Next recommended unit of work:
+- Begin the next league command slice, preferably `LEAGUE_LEAVE` (`TeamCommand` command `29`) because prerequisite tests already exist. Source-read Java `LeagueService`/league leave events, model the smallest leave/disband state transition in `PlayerLeagueRuntime`, and keep packet fanout scoped with source-derived tests before touching broader invite/change-leader/loot behavior.
+
 ---
 
 ## Next Steps
