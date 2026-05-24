@@ -21366,6 +21366,56 @@ Next recommended unit of work:
 
 ---
 
+### Session 751 (May 24, 2026)
+- Re-inspected Java `Player.getSummonOrMercenary` as consumed by `CM_SUMMON_CASTSPELL.runImpl`:
+  - owned summon object id is checked first;
+  - creator-owned known-list `Npc` with `NpcTemplateType.MERCENARY` is accepted as the mercenary branch;
+  - missing objects return null;
+  - non-pet `Summon` objects are rejected with `STR_SKILL_NOT_NEED_PET`.
+- Added `PlayerSummonOrMercenaryKind` with `None`, `PetSummon`, `NonPetSummon`, and `Mercenary`.
+- Added represented `Player.GetSummonOrMercenaryKind` plus `RepresentedSummonOrMercenaryObjectId` / `RepresentedSummonOrMercenaryKind` fields so the C# cast path can distinguish lookup outcomes before the existing pet-only execution path.
+- Updated `PlayerSummonCastSpellResult` to carry the represented actor kind.
+- Added `PlayerSummonCastSpellStatus.MercenaryUnsupported` so mercenary packets no longer fall through the pet-required packet branch while the real mercenary controller path remains unported.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 26 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1350 tests.
+
+#### Migration Parity Table - Session 751
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getSummonOrMercenary` | `Aion.GameServer.Model.GameObjects.Player.GetSummonOrMercenaryKind` plus represented fields | Player/Summon Lookup Projection | Partial | Regression Tested | Needs Verification | C# distinguishes missing, pet summon, non-pet summon, and mercenary outcomes by enum. Java returns live `Creature` references from owned summon or known-list mercenary NPC lookup. C# does not model known-list NPC creator id, NPC template type lookup, lifecycle, or object identity. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL.runImpl` summon-or-mercenary precheck | `Aion.GameServer.Services.PlayerSummonCastSpellService` actor-kind routing | Client Packet Handler / Service | Partial | Regression Tested | Needs Verification | Missing and non-pet summon outcomes still map to `PetRequired`; represented pet summons continue through the existing queued-order path; represented mercenaries return `MercenaryUnsupported` without sending pet-required. Mercenary target/skill execution remains missing. |
+| `com.aionemu.gameserver.model.gameobjects.Summon.isPet` | `PlayerSummonOrMercenaryKind.PetSummon` / `NonPetSummon` | Summon Type Projection | Partial | Regression Tested | Needs Verification | C# represents pet vs non-pet as enum metadata. It does not model live `Summon`, summon controller ownership, object template, threading, or despawn lifecycle. |
+| `com.aionemu.gameserver.model.gameobjects.Npc` mercenary branch | `PlayerSummonOrMercenaryKind.Mercenary` / `PlayerSummonCastSpellStatus.MercenaryUnsupported` | Mercenary Projection | Partial | Regression Tested | Needs Verification | C# can identify represented mercenary actor kind and avoid the pet-required packet. It does not validate creator id, `NpcTemplateType.MERCENARY`, static pet skills for mercenaries, target assignment, invalid mercenary audit, or controller `useSkill(skillId, skillLvl)`. |
+| `com.aionemu.gameserver.model.templates.npc.NpcTemplateType.MERCENARY` | represented enum outcome only | Template Type Dependency | Not Started | Regression Tested as represented outcome only | Needs Verification | No C# template lookup exists in this path. The represented mercenary kind must be seeded by tests/callers until live NPC/template models are available. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_NOT_NEED_PET` | `GameServerConnection.HandleSummonCastSpellAsync` pet-required send branch | Packet Side Effect | Partial | Regression Tested | Needs Verification | Connection tests validate missing represented actor and non-pet summon style `PetRequired` behavior indirectly while represented mercenary no longer sends this packet. No encrypted packet/live-client comparison was run. |
+
+Tests added/updated:
+- `PlayerSummonCastSpellServiceTests.Handle_RequiresRepresentedPetSummonAndQueuedOrder`: now asserts actor kind for missing/wrong summon and pet-summon no-order results.
+- `PlayerSummonCastSpellServiceTests.Handle_DistinguishesRepresentedNonPetSummonAndMercenary`: validates non-pet represented summon returns `PetRequired` without consuming queued orders, and represented mercenary returns `MercenaryUnsupported`.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_RepresentedMercenaryDoesNotSendPetRequiredPacket`: validates represented mercenary stops without `STR_SKILL_NOT_NEED_PET` while the real mercenary path remains unimplemented.
+- Java comparison status: expectations are source-derived from Java `Player.getSummonOrMercenary`, `CM_SUMMON_CASTSPELL.runImpl`, `Summon.isPet`, `NpcTemplateType.MERCENARY`, and `SM_SYSTEM_MESSAGE.STR_SKILL_NOT_NEED_PET`. No Java runtime execution, known-list NPC lookup comparison, object identity comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Represented actor kind is enum metadata and not a live `Creature`, `Summon`, or `Npc`.
+- The mercenary branch still stops before target resolution, `setTarget`, `PetSkillData.petHasSkill`, controller `useSkill`, and invalid-skill audit behavior.
+- Non-pet summon rejection is represented by caller-seeded metadata, not `Summon.isPet()` on a live object.
+- Known-list NPC creator id and `NpcTemplateType.MERCENARY` checks are not implemented.
+- Threading/concurrency, serialization, reflection, precision/rounding, date/time, Java runtime, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 represented summon-or-mercenary actor-kind projection
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 9 live `Creature`/`Summon`/`Npc` models, known-list NPC creator lookup, NPC template type lookup, mercenary target assignment, mercenary pet-skill guard, mercenary controller execution, invalid mercenary audit, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented summon-cast actor routing is sharper, but mercenary and live object parity remain partial.
+
+Next recommended unit of work:
+- Continue the represented mercenary branch of `CM_SUMMON_CASTSPELL`: reuse/extend represented known-list target validation for mercenary, carry a `SetTarget`/`UseSkill` action plan for valid mercenary pet skills, and add invalid mercenary skill audit metadata. Keep live `Npc`, creator id, `NpcTemplateType.MERCENARY`, and controller execution gaps explicit.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
