@@ -23647,6 +23647,50 @@ Next recommended unit of work:
 
 ---
 
+### Session 797 (May 24, 2026)
+- Re-inspected Java `NpcSkillData`, `NpcSkillTemplates`, `NpcSkillTemplate`, and `NpcSkillSpawn`.
+- Added represented C# `NpcSkillTable`, `NpcSkillListSummary`, `NpcSkillTemplateSummary`, and `NpcSkillSpawnSummary` dataholder types.
+- Extended `StaticData.LoadFromCacheAsync` to project `npc_skill_templates` / `npc_skills` / `npc_skill` / `spawn_npc` XML into the represented table.
+- Modeled:
+  - JAXB `@XmlList` `npc_ids` parsing with general XML whitespace, including tabs;
+  - Java `NpcSkillData.afterUnmarshal` first-list-wins duplicate NPC-id indexing;
+  - Java `NpcSkillTemplate` scalar defaults for HP, timing, conjunction, cooldown, priority, chain, and target fields;
+  - Java `NpcSkillSpawn` defaults for `delay`, `min_distance`, `max_distance`, `min_count=1`, and `max_count=0`.
+- Kept live Java JAXB unmarshalling, duplicate warning logging, `DataManager.SKILL_DATA` pruning/lookup, condition templates, full NPC AI skill selection, scheduler/date-time execution, random behavior, effects, packets, threading, serialization, and live-client validation unwired.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "StaticDataNpcSkillTests|PlayerSummonSkillExecutionServiceTests"` passes with 38 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1388 tests.
+
+#### Migration Parity Table - Session 797
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dataholders.NpcSkillData` | `Aion.GameServer.Dataholders.NpcSkillTable` plus `StaticData.NpcSkills` | Dataholder / Repository | Partial | Regression Tested | Needs Verification | C# indexes represented NPC skill lists by NPC id and preserves Java first-list-wins duplicate behavior. It does not run JAXB, duplicate warning logging, `setNpcSkillTemplates`, `DataManager.SKILL_DATA` pruning, or live Java data-manager integration. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillTemplates` | `Aion.GameServer.Dataholders.NpcSkillListSummary` | DTO | Partial | Regression Tested | Needs Verification | C# carries `npc_ids` and skill summaries. XML whitespace parsing is tested, including tabs. Shared object identity is represented for indexed duplicate checks, but Java collection mutation/JAXB lifecycle behavior is not ported. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillTemplate` | `Aion.GameServer.Dataholders.NpcSkillTemplateSummary` | DTO | Partial | Regression Tested | Needs Verification | C# projects represented scalar fields/defaults used by current NPC skill readiness work. Condition templates, `getSkillTemplate()` live lookup, full target enum semantics, XML enum validation, and runtime AI behavior remain unverified. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillSpawn` | `Aion.GameServer.Dataholders.NpcSkillSpawnSummary` | DTO | Complete for represented scalar fields | Regression Tested | Needs Verification | C# projects `npc_id`, `delay`, `min_distance`, `max_distance`, `min_count`, and `max_count`, including Java defaults. Runtime Java JAXB comparison, serialization behavior, and spawn-engine consumption remain unverified. |
+| `javax.xml.bind.annotation.XmlList` / Java JAXB whitespace handling | `StaticData.ReadXmlIntListAttribute` | XML Loading Utility | Partial | Regression Tested | Needs Verification | C# adds a dedicated whitespace-list parser for `npc_ids`. It is not a general JAXB replacement and does not validate schema or enum conversion behavior. |
+
+Tests added/updated:
+- `StaticDataNpcSkillTests.LoadFromCacheAsync_ProjectsNpcSkillSpawnXmlDefaultsAndNpcIdIndex`: validates represented `npc_skill_templates` loading, whitespace-list `npc_ids`, first-list-wins duplicate NPC indexing, Java `NpcSkillTemplate` defaults, explicit scalar overrides, and `NpcSkillSpawn` defaults/overrides.
+- Java comparison status: expectations are source-derived from Java `NpcSkillData`, `NpcSkillTemplates`, `NpcSkillTemplate`, `NpcSkillSpawn`, and JAXB annotation defaults. No Java runtime JAXB execution, duplicate warning log comparison, schema validation comparison, XML enum conversion comparison, `DataManager.SKILL_DATA` lookup/pruning comparison, live AI selection comparison, scheduler/date-time comparison, reflection comparison, threading comparison, serialization comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Static NPC-skill loading is represented data only; it is not yet wired into live NPC AI skill execution.
+- Live Java JAXB behavior, schema validation, duplicate warning logs, mutable `setNpcSkillTemplates`, condition templates, target enum validation, `DataManager.SKILL_DATA.getSkillTemplate`, skill pruning, probability/random selection, spawn scheduling, spawn-engine execution, AI mutation, controller/effect execution, packets, persistence, threading, serialization, date/time behavior, and live-client behavior remain missing or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented NPC skill static-data loader/table slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 18 live JAXB runtime comparison, schema validation, duplicate warning logging, mutable `setNpcSkillTemplates`, condition templates, target enum validation, `DataManager.SKILL_DATA` lookup/pruning, skill-template live lookup, AI selection, Java RNG runtime comparison, scheduler/date-time execution, spawn-engine execution, live AI mutation, controller/effect execution, packets, threading/serialization, reflection behavior, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented NPC skill static data is now loaded, but live NPC AI skill execution remains partial.
+
+Next recommended unit of work:
+- Continue NPC skill readiness parity by adding an adapter from represented `NpcSkillTable` / `NpcSkillTemplateSummary` into `PlayerSummonSkillExecutionService` candidate projection, including `spawn_npc` metadata and `is_post_spawn` filtering. Keep condition-template evaluation, live `DataManager.SKILL_DATA` pruning, Java `Rnd.chance`/`Rnd.get`, random target selection/spawns, effects, packets, spawn-engine execution, scheduler/date-time behavior, threading, serialization, and controller execution explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -23656,4 +23700,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill readiness parity by starting a static-data loader adapter for represented `NpcSkillSpawn` XML fields or by adding a represented `NpcSkillSpawn` XML adapter test around `npc_id`, `delay`, `min_distance`, `max_distance`, `min_count`, and `max_count` defaults. Keep live AI mutation, XML loading, `DataManager.SKILL_DATA` pruning, Java `Rnd.chance`/`Rnd.get`, random target selection/spawns, effects, packets, spawn-engine execution, scheduler/date-time behavior, threading, serialization, and controller execution explicit until supported.
+8. Continue NPC skill readiness parity by adding an adapter from represented `NpcSkillTable` / `NpcSkillTemplateSummary` into `PlayerSummonSkillExecutionService` candidate projection, including `spawn_npc` metadata and `is_post_spawn` filtering. Keep condition-template evaluation, live `DataManager.SKILL_DATA` pruning, Java `Rnd.chance`/`Rnd.get`, random target selection/spawns, effects, packets, spawn-engine execution, scheduler/date-time behavior, threading, serialization, and controller execution explicit until supported.
