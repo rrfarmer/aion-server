@@ -19134,6 +19134,56 @@ Next recommended unit of work:
 
 ---
 
+### Session 705 (May 24, 2026)
+- Continued storage expansion parity by adding connection-boundary persistence-failure coverage for Java `ExpandInventoryAction` ticket use.
+- Added test coverage for cube and warehouse expansion tickets when `SaveInventoryExpansionMutationAsync` rejects the mutation.
+- Extended the empty enter-world repository seam with:
+  - `SaveInventoryExpansionMutationResult`,
+  - `SaveInventoryExpansionMutationCalls`.
+- The production `CM_USE_ITEM` inventory-expansion branch now has regression coverage proving failed persistence does not:
+  - decrement the source ticket stack,
+  - mutate `Player.ItemExpands`,
+  - mutate `Player.WarehouseBonusExpands`,
+  - emit item update, animation, system-message, cube update, or warehouse info packets.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionInventoryExpansionUseItemTests|InventoryExpansionService_MatchesJavaTicketLevelAndQuestGuards"` passes with 5 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1272 tests.
+
+#### Migration Parity Table - Session 705
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.ExpandInventoryAction.act` | `GameServerConnection.HandleInventoryExpansionUseItemAsync` | Item Action / Mutation Caller | Partial | Regression Tested | Needs Verification | C# now covers persistence-failure rollback at the connection boundary before source item/runtime expansion mutation fanout. Java performs the inventory decrease first through `Storage.decreaseByObjectId`; C# persists the combined source/expansion mutation before changing runtime state. This is an intentional C# transaction-boundary difference for repository-backed mutation safety, but Java runtime/autocommit comparison remains unverified. |
+| `com.aionemu.gameserver.services.CubeExpandService.itemExpand` | `InventoryExpansionService.CreatePlan` plus `HandleInventoryExpansionUseItemAsync` failure branch | Service / Ticket Expansion Effect | Partial | Regression Tested | Needs Verification | Cube ticket persistence failure now leaves `ItemExpands`, source item count, and outgoing packets unchanged. Java `Storage.setLimit` object mutation, Java failure behavior under DAO/database exceptions, and runtime comparison remain unverified. |
+| `com.aionemu.gameserver.services.WarehouseService.expand(player, false)` | `InventoryExpansionService.CreatePlan` plus `HandleInventoryExpansionUseItemAsync` failure branch | Service / Ticket Expansion Effect | Partial | Regression Tested | Needs Verification | Warehouse ticket persistence failure now leaves `WarehouseBonusExpands`, source item count, and outgoing packets unchanged. Java `Storage.setLimit` object mutation, completed-quest production-route failure behavior, and runtime comparison remain unverified. |
+| `com.aionemu.gameserver.dao.InventoryDAO` / item persistence side effects | `Aion.GameServer.Data.IPlayerEnterWorldRepository.SaveInventoryExpansionMutationAsync` / `EmptyPlayerEnterWorldRepository` | Repository / DAO Boundary | Partial | Regression Tested | Needs Verification | Test seam can now force inventory-expansion persistence failure and count attempted saves. Live MySQL transaction behavior, Java autocommit/delete/update ordering, rollback behavior against a real database, and SQL parameter compatibility remain unverified. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseByObjectId` | `InventoryItem` source update/deletion planning in `HandleInventoryExpansionUseItemAsync` | Storage / Item Mutation | Partial | Regression Tested | Needs Verification | Failure coverage proves planned source mutation is not applied to C# runtime inventory when persistence fails. Java in-memory mutation ordering differs because Java decreases the item before calling expansion services; exact failure semantics under storage/DAO exceptions need runtime verification. |
+
+Tests added/updated:
+- `GameServerConnectionInventoryExpansionUseItemTests.HandleUseItemAsync_InventoryExpansionPersistenceFailureDoesNotMutateRuntimeState`: validates both cube ticket `169630000` and warehouse ticket `169640000` attempt persistence once, then leave runtime item count, expansion counters, and packets unchanged when the repository rejects the mutation.
+- `EmptyPlayerEnterWorldRepository` now exposes `SaveInventoryExpansionMutationResult` and `SaveInventoryExpansionMutationCalls` for connection-boundary failure tests.
+- Existing successful cube/warehouse ticket route tests and `PlayerStateTests.InventoryExpansionService_MatchesJavaTicketLevelAndQuestGuards` were rerun with the new failure coverage.
+- Java comparison status: expectations are source-derived from `ExpandInventoryAction.act`, `CubeExpandService.itemExpand`, `WarehouseService.expand(player, false)`, Java storage mutation intent, and the C# repository transaction boundary. No Java runtime execution, Java-generated golden vector, live MySQL transaction comparison, Java autocommit behavior comparison, encrypted-frame comparison, socket-order capture, threading behavior comparison, reflection behavior comparison, precision/rounding issue, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Java and C# mutation ordering differ intentionally around persistence: C# gates runtime mutation on repository success, while Java mutates storage/service state directly.
+- Live MySQL rollback and SQL update/delete ordering for inventory expansion tickets remain unverified.
+- Full encrypted client socket processor coverage is still missing for item-use expansion tickets.
+- Completed warehouse quest offset behavior remains covered at service-plan level only, not in production route failure tests.
+- Java golden packet bytes, encrypted frames, socket order, and live client cube/warehouse UI behavior remain unperformed.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 inventory-expansion ticket persistence-failure boundary coverage slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 5 Java runtime persistence-failure comparison, live MySQL transaction/rollback comparison, encrypted socket processor comparison, completed-quest production-route coverage, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; inventory expansion ticket routing has stronger success/failure coverage, but Java runtime/database/client parity remains partial.
+
+Next recommended unit of work:
+- Either add production-route coverage for completed warehouse quest offset behavior during warehouse ticket use, or pivot back to another Phase 6 core gap such as kisk lifecycle cleanup, charge/power-shard/idiani burn hooks, or loot/drop handler-side quest/event paths. Keep Java `Storage` object dirty-state modeling, live MySQL transaction comparison, and encrypted socket comparison as larger future units.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
