@@ -16705,6 +16705,54 @@ Summary metrics:
 Next recommended unit of work:
 - Start `LeagueService.canInvite` as a source-derived validation planner. Add the first failure branches in Java order: inviter dead (`STR_UNION_CANT_INVITE_WHEN_DEAD`), invited offline (`STR_UNION_OFFLINE_MEMBER`), and invited without alliance (`STR_UNION_CANT_INVITE_WHEN_HE_IS_ASKED_QUESTION`). Keep question-window transport and create-league-on-accept separate.
 
+### Session 660 (May 24, 2026)
+- Started `LeagueService.canInvite` as a source-derived validation planner.
+- Added `SmSystemMessage` factories for the first three Java failure branches:
+  - `STR_UNION_CANT_INVITE_WHEN_HE_IS_ASKED_QUESTION` (`1400567`),
+  - `STR_UNION_OFFLINE_MEMBER` (`1400569`),
+  - `STR_UNION_CANT_INVITE_WHEN_DEAD` (`1400570`).
+- Added `PlayerLeagueInvitePlanner.CreateCanInviteFirstChecksPlan`, preserving Java check order:
+  - inviter dead,
+  - invited offline,
+  - invited without alliance.
+- The planner returns requester-targeted system-message intents for failures and `PassedRepresentedChecks` only after the represented checks pass.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerLeagueInvitePlannerTests` passes with 6 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1141 tests.
+
+#### Migration Parity Table - Session 660
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.league.LeagueService.canInvite` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.CreateCanInviteFirstChecksPlan` | Service / Validation Planner | Partial | Unit Tested | Needs Verification | First three failure branches are modeled in Java order. Remaining `canInvite` branches are not ported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_UNION_CANT_INVITE_WHEN_DEAD` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.UnionCantInviteWhenDead` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Message id `1400570` is serialized by planner tests. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_UNION_OFFLINE_MEMBER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.UnionOfflineMember` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Message id `1400569` is serialized by planner tests. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_UNION_CANT_INVITE_WHEN_HE_IS_ASKED_QUESTION` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.UnionCantInviteWhenHeIsAskedQuestion` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Message id `1400567` and invited-name parameter are serialized by planner tests. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Aion.GameServer.Model.GameObjects.Player` | Model Dependency | Partial | Unit Tested | Needs Verification | Uses `IsInState(PlayerCreatureState.Dead)`, `IsOnline`, and alliance snapshot presence to approximate Java `isDead`, `isOnline`, and `getPlayerAlliance`. Java live object semantics remain unverified. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `Aion.GameServer.Services.PlayerAllianceSystemMessageIntent` | Runtime Dependency / Intent | Partial | Unit Tested | Needs Verification | C# returns intents instead of sending immediately. Live connection/offline behavior remains unverified. |
+
+Tests added:
+- `PlayerLeagueInvitePlannerTests.CreateCanInviteFirstChecksPlan_FollowsJavaFailureOrder`: validates Java ordering for dead inviter before offline invited before invited-without-alliance, including system-message ids and serialized parameters.
+- `PlayerLeagueInvitePlannerTests.CreateCanInviteFirstChecksPlan_PassesWhenRepresentedChecksPass`: validates the represented checks pass only when inviter is alive, invited is online, and invited has an alliance snapshot.
+- Java comparison status: expectations are source-derived from `LeagueService.canInvite` and Java `SM_SYSTEM_MESSAGE` factories. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, request-response runtime comparison, socket send comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Remaining `canInvite` branches are not ported: own-alliance invite, invited already in league, league full, same-league/other-union check, and any Java null-assumption behavior around inviter alliance.
+- Question-window transport, invite-to-leader redirection, accept request, create-league-on-accept, and live `PacketSendUtility` wiring remain open.
+- C# alliance membership is inferred through snapshots; Java live `PlayerAlliance` references and object identity are not runtime-compared.
+- Packet-field coverage remains C# emitted-object validation only; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- Threading/request-response ordering, reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 partial `canInvite` validation slice plus 3 system-message factories
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 7 Java golden byte validation, full `LeagueService.canInvite`, request-response transport, invite-to-leader redirection, create-league-on-accept, live `PacketSendUtility` wiring, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; the first invite validation failures are represented, but the full invite matrix remains open.
+
+Next recommended unit of work:
+- Continue `LeagueService.canInvite` in Java order: add own-alliance/self invite (`STR_UNION_CANT_INVITE_SELF`), invited already in league (`STR_UNION_ALREADY_MY_UNION`), and league full (`STR_UNION_CANT_ADD_NEW_MEMBER`) branches with requester-targeted system-message intents.
+
 ---
 
 ## Next Steps
