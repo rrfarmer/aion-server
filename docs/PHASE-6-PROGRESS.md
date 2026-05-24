@@ -20092,6 +20092,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 725 (May 24, 2026)
+- Inspected current C# `GameServerConnection` and registered client packets for a stable skill/effect invocation route.
+- Confirmed there is not yet a real skill-use or combat client-packet surface ready to invoke `WorldNpcSkillDamageFanoutService`; current registered packets include item use, movement, target selection, and related gameplay surfaces, but not a complete Java `SkillEngine`/attack route.
+- Added `EquipmentObserverBurnFanoutService.ApplyObserverBurnsAndSendPacketsAsync` as the next represented caller seam for owner/defender equipment observer burns.
+- Registered `EquipmentObserverBurnFanoutService` in `Program.cs`.
+- Added focused coverage proving incoming attacked observer burns send packets to the defender/equipment owner.
+- Added focused coverage for Java's asymmetric nonzero skill-id behavior: `IdianStone.attacked` still burns defend polish, while `ChargeInfo.attacked` does not burn charge for nonzero skill ids.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "EquipmentObserverBurnWorkflowServiceTests|IdianPolishServiceTests|ItemChargeServiceTests|PlayerEnterWorldServiceTests"` passes with 43 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1303 tests.
+
+#### Migration Parity Table - Session 725
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.items.IdianStone.onEquip` / `ActionObserver.attacked` override | `Aion.GameServer.Services.EquipmentObserverBurnFanoutService.ApplyObserverBurnsAndSendPacketsAsync` via `EquipmentObserverBurnEvent.Attacked` | Observer Callback Fanout | Partial | Regression Tested | Needs Verification | C# now has a represented owner/defender fanout seam that applies idian attacked burns and sends resulting packets to the equipment owner. Java `ObserveController` registration/removal, live dispatch, `RandomBonusEffect` stat refresh, and real incoming combat route invocation remain missing. |
+| `com.aionemu.gameserver.model.items.IdianStone.decreasePolishCharge` | `EquipmentObserverBurnFanoutService` via `EquipmentObserverBurnWorkflowService` and `IdianPolishService` | Model Helper Dependency | Partial | Regression Tested | Needs Verification | Tests cover defend polish burn for incoming attacked events, including nonzero skill ids. Java synchronized mutation, exhausted-idian full-update before clear, DAO timing, and live stat/effect refresh remain unverified. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.attacked` | `EquipmentObserverBurnFanoutService` via `EquipmentObserverBurnWorkflowService` and `ItemChargeService` | Observer Callback Fanout | Partial | Regression Tested | Needs Verification | Tests cover Java's `skillId == 0` guard for incoming charge burns: zero skill burns charge, nonzero skill does not. Java synchronized mutation, `PersistentState.UPDATE_REQUIRED` batching, and live player lookup through `World.getInstance().getPlayer` remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` | `SmInventoryUpdateItem` packets sent by `EquipmentObserverBurnFanoutService` | Packet | Partial | Regression Tested with byte-level payload checks | Needs Verification | Tests assert owner-directed polish-charge and charge packet payloads for represented incoming attacked burns. No Java golden packet, encrypted-frame comparison, exhausted-idian full-update comparison, live socket ordering, or live-client validation was run. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync(owner.ObjectId, packet)` | Socket Fanout Dependency | Partial | Unit Tested with capture registry | Needs Verification | C# sends observer-burn packets to the equipment owner/defender. This is source-derived from Java `PacketSendUtility.sendPacket(player, ...)`; real connection lookup, disconnect behavior, send-lock ordering, and live socket writes remain unverified. |
+| `com.aionemu.gameserver.controllers.ObserveController` | `EquipmentObserverBurnFanoutService` caller seam only | Observer Dispatcher Dependency | Not Started | No Tests | Needs Verification | No real C# observer controller dispatch is implemented here; the seam models the callback outcome so future combat callers can invoke it. Reflection differences are not involved in this unit. Threading differences remain because Java callbacks and synchronized item mutation are not modeled with a live observer dispatcher. |
+| `com.aionemu.gameserver.network.aion.GameConnection` skill/combat packet handling | Current C# `GameServerConnection` / `GameClientPacketFactory` inspection | Connection Caller Dependency | Not Started | Manual Only | Needs Verification | Inspection found no stable C# skill-use/combat packet route to wire yet. Missing methods include full skill client packet parsing, Java `SkillEngine`, attack route invocation, target/result-list handling, and player-vs-player/auto-attack coverage. Date/time scheduling for effects remains outside this unit. |
+
+Tests added/updated:
+- `EquipmentObserverBurnWorkflowServiceTests.ApplyObserverBurnsAndSendPacketsAsync_SendsIncomingAttackedPacketsToDefender`: validates incoming attacked observer burns mutate defender-owned idian/charge state, send idian-before-charge packets to the defender object id, and preserve Java defend burn amounts.
+- `EquipmentObserverBurnWorkflowServiceTests.ApplyObserverBurnsAndSendPacketsAsync_SendsOnlyIdianForNonzeroIncomingSkillAttacked`: validates Java's asymmetric nonzero skill-id behavior for attacked callbacks: idian defend polish burns and sends a polish packet, while charge points remain unchanged and no charge packet is sent.
+- Existing equipment observer workflow, idian, charge, and enter-world persistence tests matched by the focused filter were rerun.
+- Java comparison status: expectations are source-derived from `IdianStone.onEquip`, `IdianStone.decreasePolishCharge`, `ChargeInfo.attacked`, `SM_INVENTORY_UPDATE_ITEM`, `PacketSendUtility.sendPacket`, and C# inspection of `GameServerConnection` / `GameClientPacketFactory`. No Java runtime execution, Java-generated golden packet, live `ObserveController`, live `GameServerConnection`, encrypted-frame comparison, live MySQL/DAO comparison, reflection comparison, threading comparison, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- The new incoming-attacked fanout seam is production-registered but still not invoked from a real incoming combat or skill route.
+- No C# `GameServerConnection` skill-use/combat packet path is ready yet; full Java `SkillEngine`, `AttackUtil`, player-vs-player, auto-attack, and result-list behavior remain missing.
+- Java observer dispatch order and lifecycle remain represented from source, not proven through a live observer controller.
+- Exhausted-idian serialization and stat/effect refresh fanout remain unresolved.
+- Java synchronized mutation, DAO flush cadence, transaction behavior, live connection send ordering, and live client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 owner/defender incoming-attacked observer packet fanout seam
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 live incoming combat route invocation, full SkillEngine/AttackUtil integration, real ObserveController lifecycle, Java runtime/golden packet comparison, live DAO comparison, and synchronized/threading comparison
+- Estimated overall migration completion: Phase 6 remains about 65% complete; owner/defender recipient selection is better represented, but live combat route invocation and full observer lifecycle remain partial.
+
+Next recommended unit of work:
+- Continue the defender-side combat bridge by adding a represented player incoming damage/equipment-observer caller seam that can order damage/status packet intent before `EquipmentObserverBurnFanoutService` packets. If a real skill/combat `GameServerConnection` packet becomes available first, wire `WorldNpcSkillDamageFanoutService` or `EquipmentObserverBurnFanoutService` there and add socket-order tests.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
