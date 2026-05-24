@@ -17940,6 +17940,54 @@ Summary metrics:
 Next recommended unit of work:
 - Continue alliance invite parity by modeling the Java group-merge accept branch from `PlayerAllianceInvite.acceptRequest`: collect requester group members, collect invited group members, remove both groups through the represented group runtime, then create/add alliance members with ordered packet fanout. If that surface proves too broad, move to the next production-reachable `ResponseRequester` handler with a smaller domain, such as duel request, craft-skill learn confirmation, or experience recovery dialog.
 
+---
+
+### Session 684 (May 24, 2026)
+- Continued Java `PlayerAllianceInvite.acceptRequest` parity beyond the solo accept branch.
+- Extended `PlayerAllianceInviteRequestService.HandleResponse` so nonzero alliance invite responses now:
+  - collect requester group members except the requester when the requester has no alliance,
+  - collect the full invited group when the responder is in a group,
+  - remove collected players from the represented `PlayerGroupRuntime`,
+  - create the requester alliance when needed,
+  - add each collected player to the represented `PlayerAllianceRuntime`,
+  - return all created `PlayerAllianceEnteredPlan` packet fanouts for production send ordering.
+- Updated `GameServerConnection.HandleAllianceInviteQuestionResponseAsync` to send every entered-plan packet intent created during multi-member alliance invite accept.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionGroupInviteTests` passes with 12 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1202 tests.
+
+#### Migration Parity Table - Session 684
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceInvite.acceptRequest` | `PlayerAllianceInviteRequestService.HandleResponse` | Request Handler | Partial | Regression Tested | Needs Verification | Nonzero response now collects requester/invited group members, clears represented group state, creates an alliance when needed, and adds collected members. Java runtime execution and full event ordering not compared. |
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceInvite.collectPlayersToAdd` | `PlayerAllianceInviteRequestService.CollectPlayersToAdd` | Helper / Team Collection | Partial | Regression Tested | Needs Verification | Mirrors requester group without requester and full invited group collection by object id. Missing Java live object identity comparison and exact exception path when requester has both group and alliance. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.removePlayer` | `PlayerGroupRuntime.RemoveMember` from alliance invite accept | Runtime Service Dependency | Partial | Regression Tested | Needs Verification | Collected group members are removed from C# group runtime before alliance add. Java leave packets, disband side effects, mentor updates, and `FindGroupService` callbacks are not fully modeled in this path. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.createAlliance` | `PlayerAllianceRuntime.CreateAlliance` from alliance invite accept | Runtime Service | Partial | Regression Tested | Needs Verification | Creates represented alliance for requester-without-alliance before adding collected members. Java static map/offline-check scheduling and exact `TeamType.ALLIANCE` event graph remain partial. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.addPlayer` | `PlayerAllianceRuntime.AddMember` / `CreateEnteredPlan` from alliance invite accept | Runtime Service | Partial | Regression Tested | Needs Verification | Adds each collected player and emits represented entered-plan packet intents. Java `PlayerAllianceEnteredEvent`, `FindGroupService.onJoinedTeam`, brand/abyss/league side effects, and full packet ordering need deeper comparison. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_QUESTION_RESPONSE` | `GameServerConnection.HandleAllianceInviteQuestionResponseAsync` | Client Packet Handler | Partial | Regression Tested | Needs Verification | Sends all entered-plan packet intents for multi-member alliance invite accept. Live client/socket ordering not validated. |
+
+Tests added/updated:
+- `GameServerConnectionGroupInviteTests.HandleQuestionResponseAsync_AllianceInviteAcceptMergesRequesterAndInvitedGroupsLikeJavaCollectPlayersToAdd`: validates requester group and invited group members are removed from group runtime, share the new alliance snapshot, preserve collection order `[requester, requesterMember, invitedLeader, selected]`, and emit alliance info/member packet types.
+- Java comparison status: expectations are source-derived from `PlayerAllianceInvite.acceptRequest`, `collectPlayersToAdd`, `PlayerGroupService.removePlayer`, and `PlayerAllianceService.createAlliance/addPlayer`. No Java runtime execution, Java-generated golden vector, full group leave/disband event comparison, exact `FindGroupService` callbacks, packet-byte comparison, encrypted frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Java group removal is represented only as state cleanup through `PlayerGroupRuntime.RemoveMember`; full Java leave packets, disband rules, mentor cleanup, group brands, and `FindGroupService.removeRecruitment/onJoinedTeam` side effects are still partial.
+- Java `PlayerAllianceEnteredEvent` packet ordering is approximated by existing C# entered plans but not compared against runtime Java packet captures.
+- `PlayerRestrictions.canInviteToAlliance` remains partial for prison/custom state/auto-instance/race config/target-dead/defence-force/vortex branches.
+- Java static alliance registry, offline checker scheduling, team instance callbacks, and broad alliance event graph are not complete.
+- Packet sends are validated by C# packet type/message id only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 alliance invite group-merge accept slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 7 full group leave/disband side effects, full `PlayerRestrictions.canInviteToAlliance`, Java static alliance map/offline checker, `FindGroupService` callbacks, full alliance entered event graph comparison, real socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; alliance invite accept behavior is broader, but team lifecycle and restriction parity remain partial.
+
+Next recommended unit of work:
+- Continue the `ResponseRequester` parity line with the next small production-reachable handler, preferably Java `DuelService` request/response if the C# player state can represent duel start/cancel narrowly. Alternative candidates remain craft-skill learn confirmation or experience recovery dialog. If staying with team systems, deepen alliance invite side effects by adding `FindGroupService` callback placeholders and group leave/disband packet parity, but that is a wider runtime/team lifecycle slice.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
