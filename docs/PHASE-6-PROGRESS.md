@@ -16842,6 +16842,56 @@ Summary metrics:
 Next recommended unit of work:
 - Move from validation into `LeagueService.inviteToLeague` request setup. Source-read `SM_QUESTION_WINDOW.STR_MSGBOX_UNION_INVITE_ME` and add a planner for successful invite request setup: optional invite-to-leader redirection message (`STR_UNION_INVITE_HIS_LEADER`), requester confirmation (`STR_UNION_INVITE_HIM`), and question-window metadata, without wiring live request-response storage yet.
 
+### Session 663 (May 24, 2026)
+- Source-read Java `LeagueService.inviteToLeague`, `SM_QUESTION_WINDOW`, and the invite system-message factories.
+- Added `SmQuestionWindow.UnionInviteMe` for Java `SM_QUESTION_WINDOW.STR_MSGBOX_UNION_INVITE_ME` (`902249`).
+- Added `SmSystemMessage.UnionInviteHim` (`1400558`) and `SmSystemMessage.UnionInviteHisLeader` (`1400559`).
+- Added `PlayerLeagueInvitePlanner.CreateRequestSetupPlan`, modeling successful invite request setup after `canInvite` passes:
+  - redirects request target to the invited alliance leader,
+  - emits `STR_UNION_INVITE_HIS_LEADER` when the selected player is not that leader,
+  - emits requester confirmation `STR_UNION_INVITE_HIM`,
+  - creates question-window metadata/packet for the invited alliance leader.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerLeagueInvitePlannerTests` passes with 11 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1146 tests.
+
+#### Migration Parity Table - Session 663
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.league.LeagueService.inviteToLeague` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.CreateRequestSetupPlan` | Service / Request Planner | Partial | Unit Tested | Needs Verification | Successful request setup is modeled after `canInvite`; live `ResponseRequester.putRequest`, socket sends, and failure path integration remain deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow` | Server Packet | Partial | Unit Tested | Needs Verification | Existing packet writer is reused; `UnionInviteMe` constant added and serialized in planner tests. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_MSGBOX_UNION_INVITE_ME` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow.UnionInviteMe` | Packet Constant | Complete | Unit Tested | Needs Verification | Constant `902249` added. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_UNION_INVITE_HIM` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.UnionInviteHim` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Message id `1400558` and alliance size parameter are serialized by planner tests. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_UNION_INVITE_HIS_LEADER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.UnionInviteHisLeader` | Server Packet Factory | Complete | Unit Tested | Needs Verification | Message id `1400559` and selected/leader name parameters are serialized by planner tests. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Services.PlayerAllianceRuntime` / `PlayerAllianceSnapshot` | Team State Dependency | Partial | Unit Tested | Needs Verification | Planner resolves invited alliance leader and size from C# runtime/snapshot. Java live object identity remains unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler` | Deferred; represented by `PlayerLeagueInviteRequestSetupPlan.QuestionCode` | Request Dependency | Not Started | No Tests | Unknown | C# does not register or invoke a live request-response handler yet. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester` | Deferred; represented by `PlayerLeagueInviteRequestSetupPlan` | Request Dependency | Not Started | No Tests | Unknown | Java `putRequest` success/failure is not modeled yet. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `PlayerAllianceSystemMessageIntent` / `PlayerLeagueQuestionWindowIntent` | Runtime Dependency / Intent | Partial | Unit Tested | Needs Verification | C# returns intents/metadata instead of sending live packets. |
+
+Tests added:
+- `PlayerLeagueInvitePlannerTests.CreateRequestSetupPlan_TargetsLeaderAndSendsInviteMessagesLikeJavaService`: validates invite-to-leader redirection, `STR_UNION_INVITE_HIS_LEADER`, `STR_UNION_INVITE_HIM`, question-window recipient, code, sender id, cooldown/range, and inviter-name parameter.
+- `PlayerLeagueInvitePlannerTests.CreateRequestSetupPlan_SkipsLeaderRedirectionMessageWhenSelectedPlayerIsLeader`: validates direct leader invite skips redirection message but still sends requester confirmation and question-window packet.
+- Java comparison status: expectations are source-derived from `LeagueService.inviteToLeague`, `SM_QUESTION_WINDOW.writeImpl`, and Java `SM_SYSTEM_MESSAGE` factories. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, request-response runtime comparison, socket send comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Java `ResponseRequester.putRequest` success/failure and live request storage are not modeled.
+- `LeagueInviteEvent` live accept/deny invocation through question-window response is not wired.
+- Requester-without-league create-on-accept remains deferred.
+- C# alliance/league membership is inferred through snapshots and runtime dictionaries; Java live object identity and static registry are not runtime-compared.
+- Packet-field coverage remains C# emitted-object validation only; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- Threading/request-response ordering, reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 invite request setup planner slice plus 1 question-window constant and 2 system-message factories
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 7 Java golden byte validation, live `ResponseRequester.putRequest`, question-window response handling, create-league-on-accept, live `PacketSendUtility` wiring, Java object identity/static registry, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; invite request setup is represented, but live request/response behavior remains open.
+
+Next recommended unit of work:
+- Add a pending league invite request model on `Player` or a narrow planner state object to represent Java `ResponseRequester.putRequest(SM_QUESTION_WINDOW.STR_MSGBOX_UNION_INVITE_ME, invite)` success/failure. Keep actual client response packet handling and create-league-on-accept as later units.
+
 ---
 
 ## Next Steps
