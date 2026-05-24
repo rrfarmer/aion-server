@@ -17597,6 +17597,51 @@ Next recommended unit of work:
 
 ---
 
+### Session 678 (May 24, 2026)
+- Source-read Java `Equipment.soulBindItem`, especially its `RequestResponseHandler.denyRequest` implementation.
+- Modeled the soulbind-specific Java `denyAll` denial side effect during C# logout:
+  - logout `DenyAll()` dispatches for `QuestionResponseRequestKind.SoulBind` now send `SmSystemMessage.SoulBoundItemCanceled(request.ItemName)` to the responder before adapter-slot cleanup,
+  - friend and league denial side effects from Session 677 remain intact,
+  - charge-all, rift portal, and kisk bind remain cleanup-only on logout pending further source proof of denial packet behavior.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerEnterWorldServiceTests|GameServerConnectionSoulBindQuestionResponseTests|QuestionResponseRegistryTests"` passes with 25 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1175 tests.
+
+#### Migration Parity Table - Session 678
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment.soulBindItem` | `Aion.GameServer.Network.Aion.GameServerConnection.StartSoulBindRequestAsync` / `PlayerEnterWorldService.SendPendingQuestionDenySideEffectAsync` | Request Handler / Logout Denial | Partial | Regression Tested | Needs Verification | Logout `denyAll` now routes the soulbind cancel message to the responder. Accept-side scheduled item-use behavior remains covered elsewhere and not expanded in this unit. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler.denyRequest` soulbind anonymous handler | `PlayerEnterWorldService.SendPendingQuestionDenySideEffectAsync` soulbind case | Request Handler Callback | Partial | Regression Tested | Needs Verification | C# implements the source-derived soulbind denial packet, but still does not execute Java anonymous handler objects or reflection/polymorphic dispatch. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.denyAll` | `QuestionResponseRegistry.DenyAll` plus soulbind denial dispatch | Request Registry Method | Partial | Unit Tested / Regression Tested | Needs Verification | C# now consumes deny-all dispatch metadata for friend, league, and soulbind. Generic callback parity remains partial. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SOUL_BOUND_ITEM_CANCELED` | `SmSystemMessage.SoulBoundItemCanceled` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Test asserts routed message id `1300487` to the responder. Java golden bytes, parameter serialization, encrypted frames, and live client display are not runtime-compared in this unit. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getResponseRequester` | `Aion.GameServer.Model.GameObjects.Player.ResponseRequester` | Player Model Dependency | Partial | Regression Tested | Needs Verification | Logout cleanup still clears all migrated registry entries and adapter slots after modeled denial side effects. |
+| `com.aionemu.gameserver.services.item.ItemChargeService` / charge-all handler | `PendingChargeAllRequest` logout cleanup only | Request Handler Dependency | Partial | Regression Tested | Needs Verification | Newly reviewed dependency remains cleanup-only because Java charge-all handler has no source-proven `denyRequest` override. |
+| `com.aionemu.gameserver.controllers.RVController` / rift portal handlers | `PendingRiftPortalRequest` logout cleanup only | Request Handler Dependency | Partial | Regression Tested | Needs Verification | Rift portal pending requests still clear on logout; direct/vortex denial side effects remain unmodeled. |
+| `com.aionemu.gameserver.ai.AIActions.addRequest` / kisk bind handler | `PendingKiskBindRequest` logout cleanup only | Request Handler Dependency | Partial | Regression Tested | Needs Verification | Kisk bind pending requests still clear on logout; Java `DialogObserver` auto-deny and handler callback parity remain separate gaps. |
+
+Tests added/updated:
+- `PlayerEnterWorldServiceTests.LeaveWorld_RemovesPlayerFromWorldAndPersistsLogoutState`: now also validates logout `denyAll` sends soulbind cancel system message id `1300487` to the responder while preserving friend/league denial notifications and clearing all migrated pending state.
+- Java comparison status: expectations are source-derived from `Equipment.soulBindItem`, `ResponseRequester.denyAll`, and current C# explicit soulbind deny handling. No Java runtime execution, Java-generated golden vector, anonymous handler object execution, scheduler/movement observer comparison, packet capture, encrypted frame comparison, reflection behavior, precision/rounding behavior, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- Generic Java `RequestResponseHandler` polymorphic callback execution is still not ported; C# now implements only friend, league, and soulbind logout-denial side effects.
+- Charge-all, rift portal, and kisk bind logout denial behavior remains registry/adapter cleanup-only pending source-derived side-effect modeling.
+- Soulbind accept-side scheduling, movement observer cancellation, DAO transaction behavior, and packet ordering remain outside this unit.
+- C# adapter slots remain an intentional bridge with no Java equivalent.
+- Java `ConcurrentHashMap` semantics remain approximated by a C# lock without stress tests.
+- Packet sends are validated by C# packet type/message id only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 soulbind logout-denial side-effect slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 7 generic Java handler callback execution, remaining per-kind logout denial side effects, soulbind scheduler/movement observer comparison, Java concurrent map stress parity, Java DAO transaction comparison, real socket-order validation, and runtime/client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; logout `denyAll` now models three migrated denial callbacks, but the broader `ResponseRequester` ecosystem remains partial.
+
+Next recommended unit of work:
+- Continue `ResponseRequester` parity with a new Java user rather than more logout denial cleanup unless a clear missing denial side effect is found. Good narrow candidates are teleport request (`TeleportService.sendTeleportRequest`, question `905097`) or warehouse/cube expand (`STR_WAREHOUSE_EXPAND_WARNING`) if persistence and static expander data can be scoped safely. Keep charge/rift/kisk denial marked cleanup-only until their Java denial callbacks are proven.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
