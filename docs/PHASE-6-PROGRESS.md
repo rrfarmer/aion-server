@@ -20716,6 +20716,48 @@ Next recommended unit of work:
 
 ---
 
+### Session 738 (May 24, 2026)
+- Inspected Java `SM_SKILL_CANCEL.writeImpl`, `ServerPacketsOpcodes`, and `SM_SYSTEM_MESSAGE.STR_SKILL_CANCELED`.
+- Added C# `SmSkillCancel` with Java opcode `42` and payload shape `writeD(creatureObjectId)`, `writeH(skillId)`.
+- Added `SmSystemMessage.SkillCanceled()` for Java message id `1300023`.
+- Added packet serialization tests for both helpers.
+- Did not wire `SmSkillCancel` into `CancelCurrentSkillForCastSpell` yet because Java only emits it for `SkillMethod.CAST`, and the current C# represented casting state stores only a skill id, not the Java `Skill` method/template object.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GamePacketTests` passes with 90 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1326 tests.
+
+#### Migration Parity Table - Session 738
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SKILL_CANCEL` | `Aion.GameServer.Network.Aion.ServerPackets.SmSkillCancel` | Packet | Complete for represented payload | Unit Tested | Needs Verification | C# helper uses opcode `42` and writes object id then skill id in Java source order. No Java-generated golden bytes, live encrypted-frame comparison, or live-client validation was run. |
+| `com.aionemu.gameserver.network.aion.ServerPacketsOpcodes` registration for `SM_SKILL_CANCEL` | `SmSkillCancel.PacketOpCode = 42` | Packet Opcode | Complete for this helper | Unit Tested | Needs Verification | Opcode is source-derived from Java `ServerPacketsOpcodes.addPacketOpcode(42, SM_SKILL_CANCEL.class)`. Runtime packet registry differences remain possible because C# packets carry constants directly. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_CANCELED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.SkillCanceled` | Packet Helper | Complete for represented message id | Unit Tested | Needs Verification | C# helper emits message id `1300023`. Serialization shape is tested through the C# packet writer only; Java golden bytes and localized live-client rendering were not compared. |
+| `com.aionemu.gameserver.controllers.PlayerController.cancelCurrentSkill` | `GameServerConnection.CancelCurrentSkillForCastSpell` plus newly available `SmSkillCancel` / `SkillCanceled` helpers | Controller Caller Dependency | Partial | Existing connection tests plus packet unit tests | Needs Verification | Packet helpers now exist, but the cancel-current-skill caller is not wired to emit them because C# lacks represented `SkillMethod.CAST` vs `SkillMethod.ITEM` metadata and full `Skill.cancelCast` behavior. |
+
+Tests added/updated:
+- `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages`: now asserts `SmSystemMessage.SkillCanceled()` writes id `1300023`.
+- `GamePacketTests.SmPackets_WriteExpectedPayloads`: now asserts `SmSkillCancel(7001, 1234)` serializes object id `7001`, skill id `1234`, and no trailing bytes.
+- Java comparison status: expectations are source-derived from Java `SM_SKILL_CANCEL.java`, `ServerPacketsOpcodes.java`, and `SM_SYSTEM_MESSAGE.java`. No Java runtime execution, Java-generated golden packet, live client socket order, encrypted-frame comparison, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- `SmSkillCancel` and `SkillCanceled` are not yet emitted by `CancelCurrentSkillForCastSpell`.
+- C# still cannot distinguish represented casting `SkillMethod.CAST` from `SkillMethod.ITEM`, so Java's branch-specific cancel fanout is not safe to claim.
+- Full Java `Skill` object behavior, `Skill.cancelCast`, hit-time boost reset/boost, item-skill cancellation messages/cooldown removal, last-attacker notification, and broadcast recipient selection remain missing.
+- Packet tests validate C# serialization shape from source-derived constants, not Java golden bytes or live-client rendering.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 2 packet/helper slices (`SM_SKILL_CANCEL`, `STR_SKILL_CANCELED`)
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 5 live cancel-current-skill packet emission, represented skill method metadata, full `Skill` object model, Java runtime/golden packet comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; skill-cancel packet primitives are available, but caller wiring still needs represented skill-method state.
+
+Next recommended unit of work:
+- Add represented casting-skill method metadata (`Cast` vs `Item`) beside `Player.CastingSkillId`, then wire only the Java `SkillMethod.CAST` zero-spell cancel branch to emit `SmSkillCancel` and `SmSystemMessage.SkillCanceled` from `GameServerConnection` with connection-level tests. Keep item-skill cancellation, hit-time boost, `Skill.cancelCast`, and last-attacker notification documented as gaps.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
