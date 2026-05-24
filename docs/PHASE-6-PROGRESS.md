@@ -24668,6 +24668,48 @@ Next recommended unit of work:
 
 ---
 
+### Session 820 (May 24, 2026)
+- Re-inspected the represented cycle readiness result and Java live `SkillAttackManager.performAttack` / `skillAction` invocation gaps.
+- Added `ProjectMercenaryNpcSkillAttackCycleLiveInvocation`.
+- Added `PlayerSummonKnownObjectNpcSkillAttackCycleLiveInvocation` and `PlayerSummonKnownObjectNpcSkillAttackCycleLiveInvocationStatus`.
+- Modeled an explicit future live-AI adapter invocation boundary that consumes a cycle snapshot, preserves the readiness result, distinguishes missing cycle, missing known object, missing required metadata, and ready-but-live-not-wired states, and lists unsupported Java behaviors.
+- Kept even ready represented cycles non-executing with `WouldInvokeLiveAi == false` until live `NpcAI`, scheduler, controller, target mutation, effects, packets, persistence, threading, serialization, date/time runtime behavior, and live-client validation exist.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|StaticDataNpcSkillTests"` passes with 55 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1405 tests.
+
+#### Migration Parity Table - Session 820
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.chooseNextSkill` | `PlayerSummonKnownObjectNpcSkillAttackCycleLiveInvocation.Readiness` over selection/list metadata | Service State | Partial | Regression Tested | Needs Verification | C# invocation placeholder preserves readiness over represented candidate-list and selection metadata. It does not run Java random/priority selection live, mutate queued skills, compare Java runtime behavior, or validate live timing. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.performAttack` | `ProjectMercenaryNpcSkillAttackCycleLiveInvocation` | Service | Partial | Regression Tested | Needs Verification | C# exposes a future invocation boundary but returns explicit `LiveAiNotWired` for ready represented cycles. It does not run live `performAttack`, mutate `NpcAI` substate, schedule work, cancel tasks, abort casts, or compare runtime Java behavior. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.skillAction` | `PlayerSummonKnownObjectNpcSkillAttackCycleLiveInvocation` / unsupported behavior list | Service State | Partial | Regression Tested | Needs Verification | C# lists live `skillAction` dependencies as unsupported. It does not execute controller behavior, target mutation, effects, AI events, or packets. |
+| `com.aionemu.gameserver.model.skill.NpcSkillEntry.fireOnEndCastEvents` | invocation placeholder unsupported post-spawn behavior | Service State | Partial | Regression Tested as metadata only | Needs Verification | C# preserves post-spawn readiness metadata but does not execute summon/spawn handlers, delayed spawns, serialization, or Java runtime event ordering. |
+| `com.aionemu.gameserver.model.gameobjects.Npc` | represented invocation boundary over `PlayerSummonKnownObject` snapshot data | World Object DTO / Storage | Partial | Regression Tested | Needs Verification | C# consumes immutable represented known-object snapshot metadata. Live `Npc`, `NpcGameStats`, object identity, synchronization/threading, serialization, persistence, and packet-visible behavior remain unverified. |
+| `com.aionemu.gameserver.ai.NpcAI` | `PlayerSummonKnownObjectNpcSkillAttackCycleLiveInvocationStatus.LiveAiNotWired` | AI Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# explicitly blocks live AI invocation. Live AI state, substate transitions, event ordering, reflection behavior, threading, serialization, and packets remain missing. |
+| `com.aionemu.gameserver.utils.ThreadPoolManager.schedule` | invocation placeholder unsupported scheduler behavior | Scheduler Dependency | Not Started | Regression Tested as metadata only | Needs Verification | C# lists scheduler scheduling/cancellation as unsupported. It does not enqueue work, cancel tasks, compare Java scheduler timing, validate date/time precision, or execute callbacks. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ProjectMercenaryNpcSkillAttackCycleLiveInvocation_ReturnsExplicitUnsupportedOutcome`: validates missing cycle, missing known object, missing metadata, and ready represented cycle outcomes; confirms ready cycles return `LiveAiNotWired`, never set `WouldInvokeLiveAi`, preserve the readiness/cycle references, and list unsupported `NpcAI`, scheduler, controller, and packet behaviors.
+- Java comparison status: expectations are source-derived from Java `SkillAttackManager.chooseNextSkill`, `performAttack`, `skillAction`, represented post-spawn hooks, and the C# represented readiness boundary. No Java runtime execution, live scheduler comparison, cancellation comparison, live `NpcAI` mutation comparison, controller comparison, reflection comparison, threading comparison, serialization comparison, date/time precision comparison, packet comparison, persistence comparison, or live-client validation was run.
+
+Remaining risks:
+- The invocation boundary is an explicit placeholder only; it does not schedule, execute, cancel, mutate AI, call controllers, set targets, apply effects, persist state, or send packets.
+- Java scheduler timing/cancellation, callback thread ordering, AI state/event ordering, object identity, synchronization/threading behavior, serialization, persistence, reflection behavior, precision/rounding, packet order, and live-client behavior remain missing or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 represented live-AI adapter invocation placeholder slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 16 live `SkillAttackManager.performAttack`, live `SkillAttackManager.skillAction`, live `SkillAttackManager.chooseNextSkill`, live `ThreadPoolManager.schedule`, scheduler cancellation, live `Npc`, live `NpcAI`, controller execution, target mutation, post-spawn execution, effect application, packet fanout, persistence, threading/serialization, date/time precision, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented live-AI invocation boundary exists but intentionally does not execute live NPC skill scheduling/execution.
+
+Next recommended unit of work:
+- Continue NPC skill action parity by adding a represented result contract for future live invocation side effects that enumerates expected Java outputs (`NpcAI` substate changes, controller `useSkill`, target mutation, effects, post-spawn actions, packets, and scheduler/cancellation effects) without executing them yet. Keep live `NpcAI`, `ThreadPoolManager`, cancellation, controller execution, packets, threading, serialization, and live-client validation explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -24677,4 +24719,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC skill action parity by adding a represented live-AI adapter invocation placeholder that consumes a ready cycle and returns an explicit unsupported/live-not-wired outcome while preserving the grouped metadata and readiness result for future implementation. Keep live `NpcAI`, `ThreadPoolManager`, cancellation, controller execution, packets, threading, serialization, and live-client validation explicit until supported.
+8. Continue NPC skill action parity by adding a represented result contract for future live invocation side effects that enumerates expected Java outputs (`NpcAI` substate changes, controller `useSkill`, target mutation, effects, post-spawn actions, packets, and scheduler/cancellation effects) without executing them yet. Keep live `NpcAI`, `ThreadPoolManager`, cancellation, controller execution, packets, threading, serialization, and live-client validation explicit until supported.
