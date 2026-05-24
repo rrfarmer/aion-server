@@ -22336,6 +22336,57 @@ Next recommended unit of work:
 
 ---
 
+### Session 770 (May 24, 2026)
+- Re-inspected the target-mode gate in Java `SkillAttackManager.targetTooFar`:
+  - `Properties.getFirstTarget() == FirstTargetAttribute.ME` skips the explicit target/range rejection branch;
+  - `NpcSkillTemplate.getTarget() == NONE`, `MOST_HATED`, or `ME` also skips the branch;
+  - other target modes require a creature target and can fail dead/visibility/range checks.
+- Added `PlayerSummonKnownObjectSkillTargetMode` to represent the Java target-mode split:
+  - `SkipRangeCheck`;
+  - `None`;
+  - `MostHated`;
+  - `Self`;
+  - `CreatureTarget`.
+- Added a typed `EvaluateMercenaryTargetRange` overload consuming the target-mode enum.
+- Kept the previous boolean overload as a compatibility shim that maps to `SkipRangeCheck` or `CreatureTarget`.
+- Updated target-range delay tests to cover `None`, `MostHated`, `Self`, and `CreatureTarget` explicitly.
+- Kept full skill property parsing and Java target enum mapping unimplemented until a broader NPC skill-template representation exists.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 38 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1362 tests.
+
+#### Migration Parity Table - Session 770
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.targetTooFar` | typed `PlayerSummonSkillExecutionService.EvaluateMercenaryTargetRange` overload | AI Target Mode Projection | Partial | Regression Tested | Needs Verification | C# now represents the Java skip-vs-creature-target branch with an enum instead of only a raw boolean. Live skill property resolution and target resolution remain missing. |
+| `com.aionemu.gameserver.skillengine.model.Properties.getFirstTarget` / `FirstTargetAttribute.ME` | `PlayerSummonKnownObjectSkillTargetMode.Self` / `SkipRangeCheck` | Skill Property Target Mode | Partial | Regression Tested | Needs Verification | Represented mode only. C# does not yet map real `Properties` XML/runtime data into this enum. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillTemplate.getTarget` / `NpcSkillTargetAttribute.NONE` | `PlayerSummonKnownObjectSkillTargetMode.None` | NPC Skill Target Mode | Partial | Regression Tested | Needs Verification | C# can represent the skip branch, but static NPC skill target attributes are not loaded into this path. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillTemplate.getTarget` / `NpcSkillTargetAttribute.MOST_HATED` | `PlayerSummonKnownObjectSkillTargetMode.MostHated` | NPC Skill Target Mode | Partial | Regression Tested | Needs Verification | C# can represent the skip branch, but live hated-target resolution remains unimplemented. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillTemplate.getTarget` / ordinary target modes | `PlayerSummonKnownObjectSkillTargetMode.CreatureTarget` | NPC Skill Target Mode | Partial | Regression Tested | Needs Verification | C# routes ordinary target modes into the represented creature-target/range check. Exact Java enum coverage remains incomplete. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ApplyMercenaryTargetRangeDelay_ProjectsJavaTargetTooFarDelay`: updated to validate represented `None`, `MostHated`, and `Self` target modes skip the range branch, while `CreatureTarget` continues to evaluate target/dead/visibility/range outcomes.
+- Java comparison status: expectations are source-derived from Java `SkillAttackManager.targetTooFar`, `Properties.getFirstTarget`, `FirstTargetAttribute.ME`, `NpcSkillTemplate.getTarget`, and `NpcSkillTargetAttribute.NONE` / `MOST_HATED` / `ME`. No Java runtime execution, XML-to-enum mapping comparison, live target resolution, reflection comparison, threading comparison, serialization comparison, geometry comparison, or live-client validation was run.
+
+Remaining risks:
+- The enum is represented metadata only; real skill properties and NPC skill target attributes are not yet mapped into it.
+- The compatibility boolean overload still exists for older callers and should be removed once the typed path is wired everywhere.
+- `MOST_HATED` target selection, ordinary target resolution, dead state, visibility, and geometry remain caller-supplied or missing.
+- Reflection, threading, serialization, date/time runtime, precision/rounding, Java runtime, geometry, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented target-mode enum slice for `targetTooFar`
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 10 skill property mapping, NPC skill target mapping, hated-target resolution, target object resolution, live visibility/dead-state checks, Java range geometry, live AI scheduling, controller execution, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; target-range metadata is more explicit, but live NPC skill selection parity remains partial.
+
+Next recommended unit of work:
+- Continue by modeling a small `NpcSkillEntry.isReady` timing metadata projection for HP percentage and elapsed fight time, or begin mapping static NPC skill target/property data into `PlayerSummonKnownObjectSkillTargetMode`. Keep real target resolution, Java range geometry, effects, packets, live AI state, and controller execution explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
