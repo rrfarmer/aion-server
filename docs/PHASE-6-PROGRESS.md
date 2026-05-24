@@ -18178,6 +18178,72 @@ Summary metrics:
 Next recommended unit of work:
 - Continue compact production-reachable `ResponseRequester` parity with another small dialog/handler slice, such as exchange request response or direct portal/RV variants that are not fully covered yet. If staying near experience recovery, add the missing C# runtime fields for soul-sickness/death-count cleanup before deepening level-change side effects.
 
+---
+
+### Session 688 (May 24, 2026)
+- Continued compact production-reachable `ResponseRequester` parity with Java `CM_EXCHANGE_REQUEST`.
+- Added `CmExchangeRequest` parsing and registered in-game opcode `63`.
+- Added exchange question id `SmQuestionWindow.ExchangeAcceptRequest = 90001`, typed `PendingExchangeRequest`, and `QuestionResponseRequestKind.ExchangeRequest`.
+- Added `SmExchangeRequest` opcode `74` for represented exchange start packets.
+- Added Java exchange system-message factories for no target, too far, asked target, target rejected, target busy with another question, invisible requester/target, and deny-trade rejection.
+- Added `PlayerSettings.DenyTradeRequests = 2` for Java `DeniedStatus.TRADE`.
+- Added `PlayerExchangeRequestService` and production connection routing for:
+  - no target/self rejection,
+  - represented 5m range rejection,
+  - invisible requester/target rejection,
+  - race-mismatch silent rejection,
+  - target deny-trade setting rejection,
+  - duplicate target question rejection,
+  - question registration and requester/target packet intents,
+  - deny response notifying requester,
+  - accept response setting represented `IsTrading` on both players and sending `SM_EXCHANGE_REQUEST` packets to both.
+- Added logout/enter-world pending-question cleanup and deny side effect for pending exchange requests.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerExchangeRequestServiceTests` passes with 7 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1227 tests.
+
+#### Migration Parity Table - Session 688
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_EXCHANGE_REQUEST` | `Aion.GameServer.Network.Aion.ClientPackets.CmExchangeRequest` / `GameServerConnection.HandleExchangeRequestAsync` | Client Packet / Handler | Partial | Regression Tested | Needs Verification | Opcode `63` parses target object id and routes to represented exchange request service. Java resolves target through `World.getPlayer`; C# uses online registry scan. |
+| `com.aionemu.gameserver.services.ExchangeService.registerExchange` | `PlayerExchangeRequestService.HandleResponse` accept branch | Service Method / Runtime State | Partial | Regression Tested | Needs Verification | Accept sets represented `IsTrading` on both players and emits `SM_EXCHANGE_REQUEST` packets. Full Java exchange map, baskets, lock/OK flow, item/Kinah transfers, restrictions, temporary trade predicates, and persistence are not ported. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest/respond/denyAll` | `QuestionResponseRegistry` with `QuestionResponseRequestKind.ExchangeRequest` | Request Registry | Partial | Regression Tested | Needs Verification | Exchange uses put-if-absent, response removal, and logout deny side effect. Java anonymous `RequestResponseHandler<Player>` identity/reflection behavior and concurrent-map stress remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_EXCHANGE_DO_YOU_ACCEPT_EXCHANGE` | `SmQuestionWindow.ExchangeAcceptRequest` | Server Packet / Question Id | Partial | Regression Tested | Needs Verification | Question id `90001` is registered and sent with requester name parameter. Java golden bytes/encrypted frames not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_EXCHANGE_REQUEST` | `Aion.GameServer.Network.Aion.ServerPackets.SmExchangeRequest` | Server Packet | Partial | Regression Tested | Needs Verification | Opcode `74` writes partner name for exchange-start packets. Packet-byte comparison and live client behavior not validated. |
+| `com.aionemu.gameserver.model.gameobjects.player.DeniedStatus.TRADE` | `PlayerSettings.DenyTradeRequests` / `DeniesTradeRequests` | Enum / Bitmask | Partial | Regression Tested | Needs Verification | Java trade deny bit `2` is represented for request rejection. Persistence already carries deny mask but was not separately audited here. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` exchange request constants | `SmSystemMessage` exchange request factories | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Adds source-derived ids for represented request/deny guard messages. Existing tests assert packet types, not Java golden bytes. |
+| `com.aionemu.gameserver.utils.PositionUtil.isInRange` | `PlayerExchangeRequestService.IsInRange` | Utility / Guard | Partial | Regression Tested | Needs Verification | Uses squared 3D distance <= 5m in same world/instance. Java object radii/known-list visibility/geo details are not modeled. |
+| `com.aionemu.gameserver.restrictions.PlayerRestrictions.canTrade` | Not represented beyond guard scaffolding | Restriction Utility | Not Started | No Tests | Unknown | Java `ExchangeService.registerExchange` validates both participants with `PlayerRestrictions.canTrade`; C# accept branch does not yet model full trade restrictions. |
+
+Tests added/updated:
+- `PlayerExchangeRequestServiceTests.ClientPacketFactory_ParsesExchangeRequestPacket`: validates opcode `63` parsing and in-game state restriction.
+- `PlayerExchangeRequestServiceTests.SendExchangeRequest_RegistersQuestionAndSendsRequesterAndTargetPackets`: validates question registration, pending metadata, requester message, and target question packet.
+- `PlayerExchangeRequestServiceTests.SendExchangeRequest_DuplicateQuestionReportsBusyAndKeepsOriginalPendingRequest`: validates Java put-if-absent duplicate behavior.
+- `PlayerExchangeRequestServiceTests.SendExchangeRequest_TargetDenyTradeUsesJavaDeniedStatusBit`: validates Java `DeniedStatus.TRADE` bit `2` rejection.
+- `PlayerExchangeRequestServiceTests.SendExchangeRequest_RejectsFarOrHiddenTargetsBeforeQuestionRegistration`: validates represented range and hidden-target guards.
+- `PlayerExchangeRequestServiceTests.HandleResponse_DenyClearsPendingAndNotifiesRequester`: validates response `0` clears pending state and sends requester rejection.
+- `PlayerExchangeRequestServiceTests.HandleResponse_AcceptStartsRepresentedExchangeForBothPlayers`: validates response nonzero starts represented trading state and emits `SM_EXCHANGE_REQUEST` packets.
+- Java comparison status: expectations are source-derived from `CM_EXCHANGE_REQUEST`, `ExchangeService.registerExchange`, `DeniedStatus`, `SM_QUESTION_WINDOW`, `SM_EXCHANGE_REQUEST`, and `SM_SYSTEM_MESSAGE` constants. No Java runtime execution, Java-generated golden vector, full exchange subsystem comparison, item/Kinah transfer comparison, restriction comparison, live socket-order validation, encrypted frame comparison, reflection behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Full Java `ExchangeService` remains mostly unported: exchange map lifecycle, add item/Kinah, lock, OK, cancel, inventory transfer, temporary trade window, audit/admin checks, persistence, and full packet fanout are future slices.
+- C# uses represented `IsTrading` as the exchange runtime state; it does not yet store a full partner exchange object or basket state.
+- Java `PlayerRestrictions.canTrade` is not modeled on accept beyond earlier request guards.
+- Java target resolution and visibility use world/known-list behavior; C# resolves through the online connection registry.
+- Range behavior does not include Java object radii or geo nuances.
+- Packet sends are validated by C# packet type/message id or source constants only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 exchange request/question/represented-start slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 8 full exchange map/basket lifecycle, add item/Kinah, lock/OK/cancel, full trade restrictions, temporary trade predicates, inventory persistence, real socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; another client packet and `ResponseRequester` flow is production-reachable, but full exchange subsystem parity remains a large future area.
+
+Next recommended unit of work:
+- Either continue exchange parity with the next narrow packet (`CM_EXCHANGE_CANCEL` and cleanup of represented `IsTrading` state is likely the smallest) or move to another compact `ResponseRequester` handler such as cube/warehouse expansion warning, craft skill rank-up confirmation, or summon/recall acceptance if their dependencies are small enough.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
