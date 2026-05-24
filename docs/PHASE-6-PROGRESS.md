@@ -18887,6 +18887,59 @@ Summary metrics:
 Next recommended unit of work:
 - Add a real static-data count/lookup comparison for cube and warehouse expansion templates loaded from the repository XML, including representative NPC ids and min/max prices, or continue to storage-limit recalculation by modeling Java `player.setCubeLimit()` / `setWarehouseLimit()` effects beyond outgoing packets.
 
+---
+
+### Session 700 (May 24, 2026)
+- Continued storage expansion parity by adding real repository XML count and lookup coverage for Java storage-expander static data.
+- Extended `StaticDataLoadingTests.DataManager_LoadsRealJavaStaticDataManifestCounts` with source-derived assertions from:
+  - `game-server/data/static_data/storage_expander/cube_expander.xml`,
+  - `game-server/data/static_data/storage_expander/warehouse_expander.xml`.
+- Added real-data assertions for:
+  - total merged `expansion_npc` element count `6`,
+  - cube template group count `3`,
+  - cube flattened NPC-id count `7`,
+  - warehouse template group count `3`,
+  - warehouse flattened NPC-id count `254`.
+- Added representative lookup checks for cube NPC ids `798008`, `798011`, and `279022`, including min/max expansion levels and prices.
+- Added representative lookup checks for warehouse NPC ids `203199`, `203221`, and `810015`, including min/max expansion levels and prices.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "DataManager_LoadsRealJavaStaticDataManifestCounts|StaticData_LoadsStorageExpansionTemplatesByNpcId"` passes with 2 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1267 tests.
+
+#### Migration Parity Table - Session 700
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dataholders.CubeExpandData` | `Aion.GameServer.Dataholders.StaticData.CubeExpansionTemplates` / `StorageExpansionTemplateTable` | Dataholder | Partial | Regression Tested | Needs Verification | Real repository XML load now asserts 3 cube template groups and 7 flattened NPC ids, plus representative NPC-id lookups and min/max/price values. Java JAXB runtime execution, duplicate-id overwrite behavior, schema validation, and Java-generated golden count output remain unverified. |
+| `com.aionemu.gameserver.dataholders.WarehouseExpandData` | `Aion.GameServer.Dataholders.StaticData.WarehouseExpansionTemplates` / `StorageExpansionTemplateTable` | Dataholder | Partial | Regression Tested | Needs Verification | Real repository XML load now asserts 3 warehouse template groups and 254 flattened NPC ids, plus representative NPC-id lookups and min/max/price values. Java JAXB runtime execution, duplicate-id overwrite behavior, schema validation, and Java-generated golden count output remain unverified. |
+| `com.aionemu.gameserver.model.templates.StorageExpansionTemplate` | `Aion.GameServer.Dataholders.StorageExpansionTemplateSummary` | DTO / Static Data Template | Partial | Regression Tested | Needs Verification | Real XML assertions cover NPC id flattening, min/max expansion levels, and price lookup for representative templates. Malformed XML behavior, duplicate level behavior, serialization differences, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.model.templates.expand.Expand` | `Aion.GameServer.Dataholders.StorageExpansionPrice` | DTO | Partial | Regression Tested | Needs Verification | Real XML assertions cover integer `level` and `price` values for representative cube and warehouse rows. Precision/rounding issues are not expected for int values, but overflow/malformed XML behavior and JAXB comparison remain unverified. |
+| `com.aionemu.gameserver.dataholders.DataManager` | `Aion.GameServer.Dataholders.DataManager` / `StaticData.LoadFromCacheAsync` | Static Data Loader | Partial | Regression Tested | Needs Verification | The merged repository static-data load now includes storage-expander count/lookup coverage. Java DataManager startup order, JAXB `afterUnmarshal`, schema validation timing, background validation, threading behavior, and reflection behavior remain unverified for this specific dataholder. |
+| `game-server/data/static_data/storage_expander/cube_expander.xml` | `StaticDataLoadingTests.DataManager_LoadsRealJavaStaticDataManifestCounts` assertions | Static XML Source | Partial | Regression Tested | Needs Verification | Source file values are pinned in C# tests. Changes to Java XML will intentionally require C# parity-test updates. No Java runtime load or client behavior was compared. |
+| `game-server/data/static_data/storage_expander/warehouse_expander.xml` | `StaticDataLoadingTests.DataManager_LoadsRealJavaStaticDataManifestCounts` assertions | Static XML Source | Partial | Regression Tested | Needs Verification | Source file values are pinned in C# tests. Changes to Java XML will intentionally require C# parity-test updates. No Java runtime load or client behavior was compared. |
+
+Tests added/updated:
+- `StaticDataLoadingTests.DataManager_LoadsRealJavaStaticDataManifestCounts`: now validates real storage-expander merged element count, template-group counts, flattened NPC-id lookup counts, representative NPC-id lookups, min/max expansion levels, and prices from repository XML.
+- Existing `StaticDataLoadingTests.StaticData_LoadsStorageExpansionTemplatesByNpcId` was rerun to keep the small fixture parser behavior covered.
+- Java comparison status: expectations are source-derived from the Java XML files and Java dataholder behavior (`CubeExpandData`, `WarehouseExpandData`, `StorageExpansionTemplate`, `Expand`, and `DataManager`). No Java runtime execution, Java-generated golden vector, JAXB runtime comparison, schema validation comparison, duplicate-id runtime comparison, reflection behavior comparison, threading behavior comparison, date/time behavior, encrypted-frame comparison, socket-order validation, or live-client validation was run.
+
+Remaining risks:
+- Duplicate NPC id overwrite behavior remains source-inferred but not exercised against Java runtime.
+- Java JAXB runtime behavior, schema-validation timing, and DataManager startup ordering remain unverified for storage expander data.
+- Storage object cube/warehouse limit recalculation remains represented only by fields and outgoing packets.
+- Java golden packet bytes, encrypted frames, localized client rendering, and live client validation remain unperformed.
+- Live MySQL write/readback for accepted NPC expansions remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 real storage-expander static-data coverage slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 5 Java JAXB/runtime comparison, duplicate-id runtime comparison, storage limit recalculation, golden/encrypted packet comparison, and live-client/MySQL validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; storage-expander static-data coverage is stronger, but runtime/client parity remains partial.
+
+Next recommended unit of work:
+- Continue storage expansion parity by modeling Java `player.setCubeLimit()` / `setWarehouseLimit()` effects beyond outgoing packet fields if the C# storage model can support it, or pivot back to another Phase 6 core gap from `## Next Steps` such as kisk lifecycle cleanup, charge/power-shard/idiani burn hooks, or loot/drop handler-side quest/event paths.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
