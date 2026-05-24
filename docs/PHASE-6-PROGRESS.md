@@ -19610,6 +19610,52 @@ Next recommended unit of work:
 
 ---
 
+### Session 715 (May 24, 2026)
+- Continued the Phase 6 charge/power-shard/idiani area with a focused `ChargeInfo` burn helper.
+- Added `ItemChargeService.DecreaseChargePoints` and `UpdateChargePoints` as service-level boundaries for Java `ChargeInfo` attack/defend observer charge reduction.
+- Added Java-breadcrumbed charge clamping and visual charge-bar step detection using Java's 50,000-point bar step rule.
+- Added `ItemChargeServiceTests.DecreaseChargePoints_UsesJavaAttackAndDefendBurnAmounts`.
+- Added `ItemChargeServiceTests.UpdateChargePoints_ClampsAndReportsJavaChargeBarStepChanges`.
+- The new tests prove attack burn uses `Improvement.BurnAttack`, defend/dot-attacked burn uses `Improvement.BurnDefend`, charge updates are returned as immutable item updates, charge points clamp to `0..1,000,000`, and packet-worthy visual update detection only trips when the Java charge bar step changes.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "ItemChargeServiceTests|GameServerConnectionChargeAllQuestionResponseTests"` passes with 7 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1282 tests.
+
+#### Migration Parity Table - Session 715
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.items.ChargeInfo` | `Aion.GameServer.Services.ItemChargeService.UpdateChargePoints` / `ItemChargeUpdateResult` | Model Helper / Observer Boundary | Partial | Regression Tested | Needs Verification | C# now models charge-point clamping and Java's 50,000-point visual charge-bar step detection as an immutable update result. It does not yet model Java's synchronized method lock, `ActionObserver` registration, `World.getPlayer`, persistent-state mutation, packet sending, or live observer invocation. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.attack` | `Aion.GameServer.Services.ItemChargeService.DecreaseChargePoints(..., isAttacked: false)` | Observer Callback | Partial | Unit Tested | Needs Verification | C# uses `ItemImprovement.BurnAttack` for outgoing non-skill attack burn. The actual combat observer path and Java `skillId == 0` guard are not wired yet. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.attacked` | `Aion.GameServer.Services.ItemChargeService.DecreaseChargePoints(..., isAttacked: true)` | Observer Callback | Partial | Unit Tested | Needs Verification | C# uses `ItemImprovement.BurnDefend` for incoming non-skill attack burn. The actual observer callback, packet send, persistent-state update, and combat event source are still missing. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.dotattacked` | `Aion.GameServer.Services.ItemChargeService.DecreaseChargePoints(..., isAttacked: true)` | Observer Callback | Partial | Unit Tested | Needs Verification | Defend burn is represented for future dot-attacked callers, but dot effect observer wiring and effect lifecycle parity are not implemented. |
+| `com.aionemu.gameserver.model.templates.item.Improvement` | `Aion.GameServer.Dataholders.ItemImprovement` | Data Template / DTO | Partial | Regression Tested indirectly | Needs Verification | Existing static data tests cover burn field loading; this unit consumes `BurnAttack` and `BurnDefend`. JAXB/reflection load parity, template completeness, and live data comparison remain unverified. |
+
+Tests added/updated:
+- `ItemChargeServiceTests.DecreaseChargePoints_UsesJavaAttackAndDefendBurnAmounts`: validates attack burn, defend burn, immutable item update behavior, and the returned point deltas.
+- `ItemChargeServiceTests.UpdateChargePoints_ClampsAndReportsJavaChargeBarStepChanges`: validates Java-style clamping and visual bar-step change detection.
+- Existing `ItemChargeServiceTests` and charge-all question response tests matched by the focused filter were rerun.
+- Java comparison status: expectations are source-derived from `ChargeInfo.updateChargePoints`, `ChargeInfo.attack`, `ChargeInfo.attacked`, `ChargeInfo.dotattacked`, and `Improvement`. No Java runtime execution, Java-generated golden vectors, live observer sequencing, synchronized/threading comparison, persistent-state comparison, packet capture, serialization comparison, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Charge burn is still not wired into C# combat/effect observer callbacks; this unit only establishes the parity-shaped service boundary.
+- Java `ChargeInfo.updateChargePoints` is synchronized and mutates item/equipment persistent state; the C# helper returns immutable updates and leaves locking/persistence to future callers.
+- Packet sending for `SM_INVENTORY_UPDATE_ITEM` charge updates is not triggered from burn observers yet.
+- Java only burns charge from attack/attacked callbacks when `skillId == 0`; future caller wiring must preserve that guard.
+- Static template burn values are source-loaded in C#, but no Java JAXB/reflection or live-data comparison has been run.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 charge burn/update helper slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 5 combat/effect observer wiring, synchronized/threading comparison, persistent-state mutation comparison, packet ordering comparison, and Java runtime/live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; charge helper parity improved, but production observer integration remains partial.
+
+Next recommended unit of work:
+- Continue charge/power-shard/idiani production wiring: invoke the new charge burn helper from the first stable C# combat/effect observer seam, add `SM_INVENTORY_UPDATE_ITEM` charge packet caller coverage, or move to idian low-charge/exhaustion packet caller behavior if that seam is closer.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
