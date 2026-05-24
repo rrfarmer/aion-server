@@ -20957,6 +20957,49 @@ Next recommended unit of work:
 
 ---
 
+### Session 743 (May 24, 2026)
+- Inspected Java `Player.getSummon`, `Player.setSummon`, `Summon.isPet`, and the `CM_CASTSPELL` pet-order guard.
+- Added represented C# player pet-summon state:
+  - `Player.HasPetSummon`, with Java breadcrumb for `player.getSummon() != null && summon.isPet()`.
+- Wired `GameServerConnection.HandleCastSpellAsync` so `GameServerCastSpellHandlerHooks.HasPetSummon` remains the first seam, with `Player.HasPetSummon` as the default fallback.
+- Added a connection-level regression proving runtime static pet-order skill `3835` no longer sends `STR_SKILL_NOT_NEED_PET` when represented player pet-summon state is present, and instead reaches the represented use-skill seam.
+- Kept full Java summon object/controller behavior explicit as remaining work: no live `Summon`, `NpcTemplateType.SUMMON_PET`, summon controller, `PetSkillData.getPetOrderSkill` remapping, or pet command execution is implemented in this unit.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionCastSpellTests|PlayerCastSpellEarlyExitServiceTests"` passes with 18 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1332 tests.
+
+#### Migration Parity Table - Session 743
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CASTSPELL.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleCastSpellAsync` / `HasCastSpellPetSummon` | Client Packet Handler Seam | Partial | Regression Tested | Needs Verification | Pet-order skill guard can now use represented player pet-summon state instead of only injected hooks. Full pet command execution and skill remapping remain missing. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getSummon` / `setSummon` | `Aion.GameServer.Model.GameObjects.Player.HasPetSummon` | Player State | Partial | Regression Tested through connection seam | Needs Verification | C# represents only whether the current summon is a pet. It does not model a `Summon` object, summon object id, lifecycle, master relation, controller, stats, persistence, or threading behavior. |
+| `com.aionemu.gameserver.model.gameobjects.Summon.isPet` | `Player.HasPetSummon` fallback consumed by `HasCastSpellPetSummon` | Summon State Projection | Partial | Regression Tested | Needs Verification | Java checks `NpcTemplateType.SUMMON_PET`; C# stores a boolean projection. Template-type lookup and live summon/NPC template behavior remain unsupported. |
+| `com.aionemu.gameserver.dataholders.PetSkillData.isPetOrderSkill` plus summon guard | `PetSkillTable.IsPetOrderSkill` plus `Player.HasPetSummon` | Guard Composition | Partial | Regression Tested | Needs Verification | Test validates static order skill `3835` proceeds past pet-required rejection when represented pet summon state exists. Java `getPetOrderSkill` remapping and summon controller validation are still not wired. |
+
+Tests added/updated:
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_PlayerPetSummonAllowsRuntimeStaticPetOrderSkillPastPetGuard`: validates static pet-order skill `3835` reaches the use-skill callback when `Player.HasPetSummon` is true.
+- Existing cast-spell planner tests were rerun in the focused filter.
+- Java comparison status: expectations are source-derived from Java `CM_CASTSPELL.runImpl`, `Player.getSummon`, `Summon.isPet`, and `NpcTemplateType.SUMMON_PET`. No Java runtime execution, live summon object comparison, Java-generated golden packet/data comparison, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- `Player.HasPetSummon` is a boolean projection and can drift from future live summon lifecycle unless real summon models update it.
+- `PetSkillData.getPetOrderSkill` and `SummonController` command execution remain unwired, so pet-order skills are only allowed past the early guard.
+- Full Java summon lifecycle, object id, NPC template type, stats, movement/controller behavior, despawn behavior, and persistence remain missing.
+- The hook-first fallback still allows tests/future runtime code to override represented state, which differs from Java's direct `Player.getSummon()` check but keeps seams explicit until full models land.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 represented pet-summon guard slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 6 live summon model/lifecycle, NPC template type integration, pet order skill remapping/execution, full SkillEngine/player-controller execution, Java runtime/live-client validation, and threading/date-time comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; pet-order guard state is represented, but live pet skill execution remains partial.
+
+Next recommended unit of work:
+- Add the next narrow pet-order execution bridge: use `PetSkillTable.GetPetOrderSkill(orderSkill, petNpcId)` once represented player pet summon npc id exists, or add `Player.PetSummonNpcId` as a projection next to `HasPetSummon` and test Java's order-skill-to-pet-skill remapping without invoking full `SummonController`.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
