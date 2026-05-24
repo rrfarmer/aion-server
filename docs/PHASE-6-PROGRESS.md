@@ -16207,6 +16207,51 @@ Summary metrics:
 Next recommended unit of work:
 - Continue command `29` with a three-alliance non-leader leave case so reorganization without disband and remaining league rows are covered, then move to command `30` `LEAGUE_EXPEL` using the same leave-event machinery once normal leave state/order is better bounded.
 
+### Session 649 (May 24, 2026)
+- Added the next command `29` regression from the Session 648 handoff: a three-alliance league where a non-leader alliance leaves.
+- Verified Java-style reorganization without disband: the leader alliance remains at position `0`, the later alliance compacts from position `2` to `1`, the leaving alliance is removed from league lookup, and the league remains active for the other two alliances.
+- Verified command `29` packet fanout for the non-disband path: remaining alliances receive `SM_ALLIANCE_INFO.LEAGUE_LEFT_HIM` with compacted league rows, the leaving alliance receives `SM_ALLIANCE_INFO.LEAGUE_LEFT_ME` with no league rows, and no `STR_UNION_CHANGE_LEADER_TIMEOUT` or `LEAGUE_DISPERSED` packet is emitted.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionPlayerStatusInfoTests` passes with 49 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1122 tests.
+
+#### Migration Parity Table - Session 649
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` command `29` path | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Command `29` now has coverage for both two-alliance leader-leave/disband and three-alliance non-leader leave/no-disband paths. Java runtime/golden proof remains unavailable. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.LEAGUE_LEAVE` | Command code `29` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Non-leader leave now verifies compacted positions and absence of disband/leader-timeout packets. Broader online/offline recipient behavior is unverified. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.removeAlliance` | `Aion.GameServer.Services.PlayerLeagueRuntime.RemoveAlliance` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Existing implementation now has tests for normal leave with and without disband. Full static registry, event queue, locks, and Java exception behavior remain unverified. |
+| `com.aionemu.gameserver.model.team.league.League` | `Aion.GameServer.Services.PlayerLeagueRuntime` / `PlayerLeagueSnapshot` | Team State | Partial | Regression Tested | Needs Verification | Tests now cover `reorganize` compaction when position zero remains occupied and when it is vacated. Java object identity and concurrency remain source-derived only. |
+| `com.aionemu.gameserver.model.team.league.LeagueMember` | Internal `PlayerLeagueRuntime.PlayerLeagueMember` | Team Member | Partial | Regression Tested | Needs Verification | League position removal/compaction is tested for a middle alliance leaving. Java object references are approximated by ids. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueLeftEvent` | `PlayerLeagueRuntime.RemoveAlliance` / `PlayerLeaguePacketIntent` | Event Runtime Dependency | Partial | Regression Tested | Needs Verification | Normal LEAVE path now covers disband and non-disband branches. EXPEL-specific behavior and direct DISBAND iteration remain unported. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueDisbandEvent` | `PlayerLeagueRuntime.RemoveAlliance` disband branch | Event Runtime Dependency | Partial | Regression Tested | Needs Verification | Absence of disband in the three-alliance leave path is now tested; direct disband remains unported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` / `PlayerAllianceInfoPacketPlan` | Server Packet | Partial | Regression Tested | Needs Verification | Non-disband leave test serializes `LEAGUE_LEFT_HIM` rows for the two remaining alliances and `LEAGUE_LEFT_ME` for the leaving alliance. No Java golden-byte comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested | Needs Verification | Test verifies no `STR_UNION_CHANGE_LEADER_TIMEOUT` is emitted when the league leader remains. Existing 1400588 factory is covered by Session 648. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Model.GameObjects.PlayerAllianceDescriptor` / `PlayerAllianceRuntime` | Team State Dependency | Partial | Regression Tested | Needs Verification | Supplies three alliance snapshots, leaders, map ids, and recipient ids for the no-disband leave path. Java live league pointer/object identity remains absent. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry` / `GameServerConnection.SendLeaguePacketAsync` | Runtime Dependency | Partial | Regression Tested | Needs Verification | In-memory registry verifies recipient order and absence of extra packets. Live socket/offline-recipient behavior remains unverified. |
+
+Tests added or updated:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_LeagueLeaveNonLeaderCompactsWithoutDisbandLikeJava`: validates command `29` for a three-alliance league where the middle/non-leader alliance leaves. It verifies remaining positions, active league lookup, removed leaving-alliance lookup, recipient order, serialized remaining league rows, and absence of disband or leader-timeout packets.
+- Java comparison status: expectations are source-derived from `LeagueLeftEvent.handleEvent`, `League.reorganize`, `League.shouldDisband`, and `SM_ALLIANCE_INFO.writeImpl`. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, Java static league registry comparison, event queue/lock comparison, `ConcurrentHashMap` iteration comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- `LEAGUE_EXPEL` command `30` is still not ported beyond missing-league prerequisite behavior.
+- `LEAGUE_SET_LEADER` command `32`, invite/join/loot/kinah workflows, direct disband iteration, offline recipients, Java static registry, event queue/locks, object identity, and packet processor exception/log behavior remain deferred.
+- Packet-field coverage remains C# emitted-object validation; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- C# packet intent order is deterministic by sorted positions; Java `ConcurrentHashMap` ordering remains unverified.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 11
+- Total artifacts ported: 1 command `29` non-disband regression slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 8 Java golden byte validation, full `LeagueService`, Java static league registry, `LEAGUE_EXPEL`, `LEAGUE_SET_LEADER`, Java event queue/lock comparison, packet processor exception/log comparison, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; command `29` is better bounded, but expel and broader league lifecycle parity remain open.
+
+Next recommended unit of work:
+- Start command `30` `LEAGUE_EXPEL`: source-read the permission checks in `LeagueService.expelAlliance` and `PlayerTeamCommandService.findLeagueAlliance`, then reuse the leave-event machinery with EXPEL message ids (`LEAGUE_EXPEL` / `LEAGUE_EXPELLED`) for the first leader-expels-nonleader test.
+
 ---
 
 ## Next Steps
