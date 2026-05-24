@@ -18244,6 +18244,61 @@ Summary metrics:
 Next recommended unit of work:
 - Either continue exchange parity with the next narrow packet (`CM_EXCHANGE_CANCEL` and cleanup of represented `IsTrading` state is likely the smallest) or move to another compact `ResponseRequester` handler such as cube/warehouse expansion warning, craft skill rank-up confirmation, or summon/recall acceptance if their dependencies are small enough.
 
+---
+
+### Session 689 (May 24, 2026)
+- Continued the exchange parity line with Java `CM_EXCHANGE_CANCEL`.
+- Added `CmExchangeCancel` parsing and registered in-game opcode `69`.
+- Added represented exchange partner tracking through `Player.CurrentExchangePartnerObjectId` so the C# exchange start slice can clean up both participants.
+- Added `SmExchangeConfirmation` opcode `78` and Java cancel action `1`.
+- Extended `PlayerExchangeRequestService`:
+  - accept response now records bidirectional represented exchange partner ids,
+  - `CancelExchange` clears active player state,
+  - clears online partner state when present,
+  - sends represented `SM_EXCHANGE_CONFIRMATION(1)` to the partner,
+  - handles missing partner cleanup without packet fanout.
+- Extended production `GameServerConnection` routing for `CM_EXCHANGE_CANCEL`.
+- Tightened represented exchange cleanup on question-accept cancellation and logout cleanup by clearing partner ids.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerExchangeRequestServiceTests` passes with 10 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1230 tests.
+
+#### Migration Parity Table - Session 689
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_EXCHANGE_CANCEL` | `Aion.GameServer.Network.Aion.ClientPackets.CmExchangeCancel` / `GameServerConnection.HandleExchangeCancelAsync` | Client Packet / Handler | Partial | Regression Tested | Needs Verification | Opcode `69` reads zero payload bytes and routes to represented exchange cancellation. Java runtime/client packet stream not compared. |
+| `com.aionemu.gameserver.services.ExchangeService.cancelExchange` | `PlayerExchangeRequestService.CancelExchange` | Service Method / Runtime Cleanup | Partial | Regression Tested | Needs Verification | Clears represented active/partner `IsTrading` state and sends partner cancel confirmation. Java item return, cube updates, exchange-map removal, temporary id release, and full basket cleanup are not represented. |
+| `com.aionemu.gameserver.services.ExchangeService.cleanUpExchanges` | `PlayerExchangeRequestService.CancelExchange` / `Player.CurrentExchangePartnerObjectId` | Runtime State Method | Partial | Regression Tested | Needs Verification | Bidirectional partner ids allow represented cleanup. Java concurrent exchange map semantics and IDFactory release behavior remain unsupported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_EXCHANGE_CONFIRMATION` | `Aion.GameServer.Network.Aion.ServerPackets.SmExchangeConfirmation` | Server Packet | Partial | Regression Tested | Needs Verification | Opcode `78` writes one action byte; cancel action `1` is used. Golden-byte/encrypted-frame comparison not run. |
+| `com.aionemu.gameserver.model.trade.Exchange` | `Player.IsTrading` / `Player.CurrentExchangePartnerObjectId` | Runtime Model Dependency | Partial | Regression Tested | Needs Verification | C# still uses represented flags rather than full Java `Exchange` objects with items, Kinah, locks, confirmations, and partner exchange lookups. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store` | Not represented in cancel slice | Repository Dependency | Not Started | No Tests | Unknown | Java cancel can return items but does not persist final trade like success; full inventory state and persistence remain outside this unit. |
+| `com.aionemu.gameserver.utils.idfactory.IDFactory.releaseId` | Not represented in cancel slice | Utility Dependency | Not Started | No Tests | Unknown | Java cleanup releases temporary split-stack item ids. C# has no exchange basket item clone/id allocation in this slice. |
+
+Tests added/updated:
+- `PlayerExchangeRequestServiceTests.ClientPacketFactory_ParsesExchangeCancelPacketWithNoPayload`: validates opcode `69`, zero-payload parsing, and in-game state restriction.
+- `PlayerExchangeRequestServiceTests.HandleResponse_AcceptStartsRepresentedExchangeForBothPlayers`: extended to validate bidirectional represented partner ids.
+- `PlayerExchangeRequestServiceTests.CancelExchange_ClearsRepresentedTradeStateAndNotifiesPartner`: validates active and partner state cleanup plus `SmExchangeConfirmation` packet intent to the partner.
+- `PlayerExchangeRequestServiceTests.CancelExchange_MissingPartnerStillClearsActivePlayerState`: validates missing/offline partner cleanup with no packet fanout.
+- Java comparison status: expectations are source-derived from `CM_EXCHANGE_CANCEL`, `ExchangeService.cancelExchange`, `cleanUpExchanges`, and `SM_EXCHANGE_CONFIRMATION`. No Java runtime execution, Java-generated golden vector, full item-return comparison, temporary item-id release comparison, live socket-order validation, encrypted frame comparison, reflection behavior, threading/concurrent-map behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Java cancel item-return behavior is not represented: C# has no exchange basket items, split-stack temporary ids, item return packets, cube update packets, or temporary id release in this slice.
+- Java `ExchangeService` concurrent map semantics remain unsupported; C# only tracks represented partner ids on `Player`.
+- Java full exchange lock/OK/confirm lifecycle is still unported.
+- `CM_QUESTION_RESPONSE` accept while already trading still clears only local represented state; a future full exchange runtime should cancel both participants and send Java-shaped cancel packets.
+- Packet sends are validated by C# packet type/action only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 exchange cancel/represented cleanup slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 6 full exchange basket item return, split-stack temporary ID release, cube update fanout, concurrent exchange map parity, lock/OK lifecycle, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; exchange cancellation now has represented production routing, but full exchange inventory lifecycle remains partial.
+
+Next recommended unit of work:
+- Continue exchange parity only if taking another small packet (`CM_EXCHANGE_LOCK` or `CM_EXCHANGE_OK`) with represented state is useful; otherwise return to compact `ResponseRequester` handlers such as cube/warehouse expansion warning, craft skill rank-up confirmation, or summon/recall acceptance. Avoid full item/Kinah exchange transfer until a proper `Exchange` basket model and persistence strategy are scoped.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
