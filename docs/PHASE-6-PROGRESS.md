@@ -15673,6 +15673,55 @@ Summary metrics:
 Next recommended unit of work:
 - Continue source-reading deferred league commands in `CM_PLAYER_STATUS_INFO`: `LEAGUE_EXPEL` and `LEAGUE_SET_LEADER` have prerequisite branches that can be bounded before a full league runtime exists, while `LEAGUE_ALLIANCE_MOVE` appears recognized by `TeamCommand` but not dispatched by `PlayerTeamCommandService`. Keep production league mutations out until a minimal league runtime bridge exists.
 
+### Session 638 (May 23, 2026)
+- Source-read Java `PlayerTeamCommandService.findLeagueAlliance`, `TeamCommand.LEAGUE_EXPEL`, `League`, `LeagueMember`, and `Player.toString`.
+- Added the Java-derived `LEAGUE_EXPEL` prerequisite boundary in `GameServerConnection.HandlePlayerStatusInfoAsync`: no current alliance remains a no-op, but an alliance with no league now fails before resolving the target league alliance.
+- Added `FormatJavaPlayer` for Java-shaped `Player.toString` output used by the league prerequisite exception message.
+- Added parsed-command regression coverage for command id `30` on a player in an alliance without a league, confirming no packets are sent and alliance membership is unchanged.
+- Intentional C# difference: Java throws `NullPointerException` via `Objects.requireNonNull`; C# throws `InvalidOperationException` with the same message because the local packet-handler boundary uses C# exception idioms.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerAllianceRuntime|PlayerAllianceMemberInfo|BaseLeavePlanner"` passes with 90 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1104 tests.
+
+#### Migration Parity Table - Session 638
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.ClientPackets.CmPlayerStatusInfo` / `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Command id `30` now preserves the Java no-team no-op and alliance-without-league fail-fast boundary. Actual league expel is still not ported. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.LEAGUE_EXPEL` | Command code `30` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Recognized valid command now has one Java prerequisite branch covered. Target league-alliance lookup, leader permission checks, league mutation, fanout, and disband remain deferred. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService.findLeagueAlliance` | Command code `30` precondition branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Service Helper | Partial | Regression Tested | Intentional Difference | Java throws `NullPointerException` when the current alliance has no league; C# throws `InvalidOperationException` with the same Java-shaped message. Invalid target alliance lookup remains deferred until a league runtime exists. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService` | Existing `GameServerConnection.HandlePlayerStatusInfoAsync` branch dispatch | Service Dependency | Partial | Regression Tested | Needs Verification | C# still uses manual branch dispatch, but now mirrors the Java `LEAGUE_EXPEL -> findLeagueAlliance` no-active-league boundary. Full generic service dispatch remains unported. |
+| `com.aionemu.gameserver.model.team.league.LeagueService.expelAlliance` | Deferred C# league expel workflow | Service / Runtime Bridge | Not Started | No Tests | Unknown | Real expel behavior is not implemented, including leader checks and `LeagueLeftEvent` dispatch. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | `Aion.GameServer.Model.GameObjects.PlayerAllianceDescriptor` / `PlayerAllianceRuntime.Resolve` | Team State Dependency | Partial | Regression Tested | Needs Verification | C# resolves current alliance state to decide whether Java would enter league lookup. Java static alliance registry and league pointer behavior are not runtime-compared. |
+| `com.aionemu.gameserver.model.team.league.League` | Deferred C# league runtime | Team State Dependency | Not Started | No Tests | Unknown | No C# league model exists yet. This unit documents and tests only the null-league prerequisite. |
+| `com.aionemu.gameserver.model.team.league.LeagueMember` | Deferred C# league member runtime | Team State Dependency | Not Started | No Tests | Unknown | Java `league.getMember(leagueAllianceId)` invalid-target behavior remains deferred until league membership state exists. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.toString` | `GameServerConnection.FormatJavaPlayer` | Utility / Diagnostic Formatting | Partial | Regression Tested | Needs Verification | C# formats the Java message as `Player [id=..., name=...]` for this exception path. Other Java `Player.toString` use sites are not audited. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry` / no-send assertion | Runtime Dependency | Partial | Regression Tested | Needs Verification | Regression confirms the no-active-league failure sends no packets. Live packet processor exception handling/logging remains unverified. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_LeagueExpelWithoutLeagueThrowsLikeJava`: validates parsed command id `30` on a player in an alliance without a league throws `InvalidOperationException("Player [id=1001, name=Leader] tried to execute league command without an active league alliance")`, leaves alliance members unchanged, and sends no packets.
+- Java comparison status: expectations are source-derived from `PlayerTeamCommandService.executeCommand`, `findLeagueAlliance`, `TeamCommand.LEAGUE_EXPEL`, `League.getMember`, `Player.toString`, and `Objects.requireNonNull`. No Java runtime execution, Java-generated golden vector, live client packet capture, real league runtime comparison, invalid target league-alliance comparison, Java static league registry comparison, event queue/lock comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond handler reachability, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Actual C# league runtime is still absent; `LEAGUE_LEAVE`, `LEAGUE_EXPEL`, and `LEAGUE_SET_LEADER` remain only partially bounded or no-op outside non-league prerequisite behavior.
+- Java `LeagueService.expelAlliance`, `LeagueLeftEvent`, leader permission checks, invalid target league-alliance lookup, league broadcast, league disband, and static `LeagueService.leagues` registry behavior remain unported.
+- Java exception type differs intentionally for the no-active-league branch; only the message and no-send/no-mutation behavior are mirrored.
+- `FormatJavaPlayer` is local to this handler and is not a full audit of Java `Player.toString` usage.
+- Java packet processor exception handling/logging for this branch has not been runtime-compared.
+- Java alliance/league event queue, lock, iteration ordering, offline-recipient behavior, and threading behavior remain source-derived only.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to command payload reachability and handler behavior; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 `CM_PLAYER_STATUS_INFO` / `LEAGUE_EXPEL` no-active-league prerequisite branch plus 1 Java player diagnostic formatter and 1 regression test
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 8 real league runtime, `LeagueService.expelAlliance`, `LeagueLeftEvent`, invalid target league-alliance lookup, Java static league registry, packet processor exception/log comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; another league prerequisite boundary is aligned, but real league behavior remains deferred.
+
+Next recommended unit of work:
+- Continue `CM_PLAYER_STATUS_INFO` league prerequisite work: source-read `LEAGUE_SET_LEADER` and preserve its no-league no-op behavior, then document or regression-cover `LEAGUE_ALLIANCE_MOVE` as recognized by `TeamCommand` but not dispatched by `PlayerTeamCommandService` in the current Java source. Keep production league mutations out until a minimal league runtime bridge exists.
+
 ---
 
 ## Next Steps
