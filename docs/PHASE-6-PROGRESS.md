@@ -21470,6 +21470,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 753 (May 24, 2026)
+- Re-inspected Java `CM_SUMMON_CASTSPELL.runImpl` summon-order mismatch warning:
+  - warning happens only after target validation succeeds;
+  - warning happens only after `summon.retrieveNextSkillOrder()` returns an order whose target equals the resolved target;
+  - mismatched packet skill id or skill level logs through SLF4J `Logger.warn`;
+  - Java still invokes `summon.getController().useSkill(order)` with the queued order.
+- Added `PlayerSummonCastSpellWarning` and `PlayerSummonCastSpellWarningKind.SkillMismatch`.
+- Updated `PlayerSummonCastSpellResult.Executed` to attach warning metadata only when packet skill id/level differ from the queued `PlayerPetSkillOrder`.
+- Preserved existing `SkillMismatch` boolean for compatibility while adding the structured packet-vs-queued values needed to mirror Java's warning parameters.
+- Kept actual logger emission and player identity string rendering out of scope.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 28 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1352 tests.
+
+#### Migration Parity Table - Session 753
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL.runImpl` skill mismatch branch | `Aion.GameServer.Services.PlayerSummonCastSpellResult` / `PlayerSummonCastSpellWarning` | Client Packet Handler / Logging Projection | Partial | Regression Tested | Needs Verification | C# now records structured mismatch warning metadata when packet skill id/level differ from the queued order after target/order validation. Java emits SLF4J warning text and still invokes the queued order. C# does not emit a log entry or include player string identity. |
+| `org.slf4j.Logger.warn` as used by `CM_SUMMON_CASTSPELL` | `PlayerSummonCastSpellWarningKind.SkillMismatch` | Logging Dependency Projection | Partial | Regression Tested | Needs Verification | C# captures warning intent and packet/queued values only. No logging provider call, formatting comparison, player identity rendering, reflection behavior, threading behavior, serialization behavior, precision/rounding behavior, date/time behavior, or live-client validation. |
+| `com.aionemu.gameserver.model.summons.SkillOrder` | `PlayerPetSkillOrder` plus `PlayerSummonCastSpellWarning` queued values | DTO / Summon Order Projection | Partial | Regression Tested | Needs Verification | C# preserves queued skill id/level/target/hate/release and now exposes queued skill id/level in warning metadata. Java uses live `SkillOrder` with `Creature` target and object equality. |
+| `com.aionemu.gameserver.model.gameobjects.Summon.retrieveNextSkillOrder` | `Player.RetrieveNextPetSkillOrder` consumed by `PlayerSummonCastSpellService` | Summon Queue Projection | Partial | Regression Tested | Needs Verification | Warning is only produced after a queued order is consumed and target ids match. Queue remains player-owned and not Java's live summon queue or thread-safe behavior. |
+
+Tests added/updated:
+- `PlayerSummonCastSpellServiceTests.Handle_ConsumesMatchingQueuedPetOrderForRepresentedSummon`: validates exact packet/order match has no warning metadata.
+- `PlayerSummonCastSpellServiceTests.Handle_UsesQueuedOrderWhenClientSkillDiffersAndMarksMismatch`: validates warning metadata includes packet skill id/level `9999`/`3` and queued skill id/level `22107`/`1`.
+- `PlayerSummonCastSpellServiceTests.Handle_ConsumesQueuedOrderWithoutExecutionWhenTargetDoesNotMatch`: validates target mismatch consumes the order but does not produce a skill-mismatch warning.
+- Java comparison status: expectations are source-derived from Java `CM_SUMMON_CASTSPELL.runImpl`, SLF4J `Logger.warn`, `Summon.retrieveNextSkillOrder`, and `SkillOrder`. No Java runtime execution, log text comparison, object identity comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Warning behavior is metadata only and not emitted through a Java-equivalent logger.
+- Player identity and exact Java warning string formatting are not represented.
+- The queued order target remains an object id, not a live `Creature` reference.
+- Queue ownership/concurrency still differ from Java's live `Summon` queue.
+- Real `SummonController`, `SkillEngine`, release-on-success, packet fanout, live audit/log sinks, Java runtime, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 represented summon skill-mismatch warning projection
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 live SLF4J/log sink comparison, player identity rendering, live `SkillOrder`/`Creature` references, live summon queue, real `SummonController`, `SkillEngine` execution, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented summon-cast logging metadata is closer to Java, but live execution and logging parity remain partial.
+
+Next recommended unit of work:
+- Begin a narrow live-object bridge for summon/mercenary known-list ownership and target identity, or continue represented summon-cast parity by adding explicit result metadata for consumed-but-not-executed queued orders when target equality fails. Keep real `Creature` references, Java object equality, controller execution, and live log/audit sinks explicit until those systems exist.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
