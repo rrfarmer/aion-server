@@ -17174,6 +17174,54 @@ Summary metrics:
 Next recommended unit of work:
 - Adapt league invite pending request registration/response onto `Player.ResponseRequester` as the first live user of the reusable registry. Keep the existing typed `PendingLeagueInviteRequest` as payload metadata if useful, and preserve the already-tested question-response behavior while removing duplicate single-slot checks from the planner where possible.
 
+### Session 670 (May 24, 2026)
+- Adapted league invite pending request registration to the reusable `Player.ResponseRequester` registry:
+  - `PlayerLeagueInvitePlanner.TryPutPendingRequest` now calls `ResponseRequester.PutRequest(SmQuestionWindow.UnionInviteMe, ...)`,
+  - the typed `PendingLeagueInviteRequest` remains as payload metadata and a narrow adapter slot,
+  - duplicate league invite registration is rejected by registry question id instead of only by the typed slot.
+- Adapted live league invite question-response routing to consume the registry:
+  - `HandleLeagueInviteQuestionResponseAsync` calls `ResponseRequester.Respond(...)` before invoking planner behavior,
+  - registry removal-before-handle semantics are now part of the live league invite path,
+  - missing or wrong-kind dispatches clear the typed adapter slot defensively.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerLeagueInvitePlannerTests|GameServerConnectionLeagueInviteQuestionResponseTests|QuestionResponseRegistryTests"` passes with 26 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1161 tests.
+
+#### Migration Parity Table - Session 670
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.league.LeagueService.inviteToLeague` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.TryPutPendingRequest` | Service / Request Registration | Partial | Unit Tested | Needs Verification | League invite registration now uses `Player.ResponseRequester.PutRequest` with typed payload metadata. Live Java `PacketSendUtility` ordering remains broader work. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest` | `Aion.GameServer.Model.GameObjects.QuestionResponseRegistry.PutRequest` via league invite planner | Request Registry Method | Partial | Unit Tested | Needs Verification | Duplicate rejection by question id is now used by the live league invite registration slice. C# still uses typed metadata rather than Java handler objects. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.respond` | `QuestionResponseRegistry.Respond` via `GameServerConnection.HandleLeagueInviteQuestionResponseAsync` | Request Registry Method | Partial | Unit Tested | Needs Verification | Live league invite response now consumes the registry before planner behavior, preserving removal-before-handle. Generic handlers are not migrated. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler` | `QuestionResponseRequest` / `QuestionResponseDispatch` carrying `PendingLeagueInviteRequest` payload | Request Handler Metadata | Partial | Unit Tested | Needs Verification | League invite uses typed payload metadata instead of Java polymorphic callback object. Accept/deny behavior still lives in planner. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueInviteEvent` | `PendingLeagueInviteRequest` payload plus `PlayerLeagueInvitePlanner.CreatePendingRequestResponsePlan` | Event / Adapter Payload | Partial | Unit Tested | Needs Verification | Payload bridges requester/target/selected/alliance ids into planner behavior. Java live object references and inheritance are not reproduced. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getResponseRequester` | `Aion.GameServer.Model.GameObjects.Player.ResponseRequester` | Player Model Dependency | Partial | Unit Tested | Needs Verification | League invite is now the first live user. Other specialized slots remain unmigrated. |
+
+Tests updated:
+- `PlayerLeagueInvitePlannerTests.TryPutPendingRequest_RegistersOnceLikeJavaResponseRequesterPutRequest`: now also validates registry count remains one after duplicate registration.
+- `GameServerConnectionLeagueInviteQuestionResponseTests.HandleQuestionResponseAsync_LeagueInviteDenyClearsPendingAndSendsRejectToRequester`: now validates registry count is cleared after denial.
+- `GameServerConnectionLeagueInviteQuestionResponseTests.HandleQuestionResponseAsync_LeagueInviteAcceptCreatesLeagueAndFansOutAllianceInfo`: now validates registry count is cleared after accept.
+- `GameServerConnectionLeagueInviteQuestionResponseTests.HandleQuestionResponseAsync_LeagueInviteWrongQuestionLeavesPendingRequest`: now validates unrelated question id leaves the registry entry intact.
+- Java comparison status: expectations are source-derived from `LeagueService.inviteToLeague`, `ResponseRequester`, `RequestResponseHandler`, and `LeagueInviteEvent`. No Java runtime execution, Java-generated golden vector, live handler callback comparison, generic request-map migration, concurrent map stress comparison, real socket-order validation, encrypted frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Only league invite uses `Player.ResponseRequester`; buddy, rift, kisk, charge, and soulbind still use specialized pending slots.
+- C# still keeps `PendingLeagueInviteRequest` as an adapter slot alongside registry payload metadata.
+- Registry dispatch metadata does not execute Java-style polymorphic callbacks directly.
+- Java `ConcurrentHashMap` semantics remain approximated by a C# lock without stress tests.
+- Packet sends and live client behavior remain unverified against Java golden bytes, encrypted frames, packet captures, or real-client validation.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 league invite registry-adapter migration slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 5 migration of remaining specialized handlers, Java polymorphic callback parity, Java concurrent map stress parity, real socket-order validation, and runtime/client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; league invite now uses the reusable response registry, but the broader question-response system still needs migration.
+
+Next recommended unit of work:
+- Migrate the next simplest specialized question-response path to `Player.ResponseRequester`; likely buddy-list invite because it already has narrow requester metadata and a single accept/deny branch. Preserve existing friend tests and document repository side effects, online lookup differences, and Java handler callback differences.
+
 ---
 
 ## Next Steps
