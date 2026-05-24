@@ -17222,6 +17222,60 @@ Summary metrics:
 Next recommended unit of work:
 - Migrate the next simplest specialized question-response path to `Player.ResponseRequester`; likely buddy-list invite because it already has narrow requester metadata and a single accept/deny branch. Preserve existing friend tests and document repository side effects, online lookup differences, and Java handler callback differences.
 
+### Session 671 (May 24, 2026)
+- Source-read Java `CM_FRIEND_ADD.runImpl` and current C# friend-add/question-response handling.
+- Migrated buddy-list friend invite registration onto `Player.ResponseRequester`:
+  - `HandleFriendAddAsync` now registers `SmQuestionWindow.BuddyListAddBuddyRequest` with `QuestionResponseRequestKind.FriendInvite`,
+  - duplicate invite rejection now follows Java `ResponseRequester.putRequest` busy semantics by question id,
+  - `PendingFriendRequest` remains as typed payload metadata and a narrow adapter slot,
+  - send failure removes the registry entry and clears the typed adapter slot.
+- Migrated buddy-list friend invite responses onto `ResponseRequester.Respond`:
+  - registry removal-before-handle semantics are now live for friend invite accept/deny,
+  - deny responses notify the requester with `SM_FRIEND_RESPONSE.TARGET_DENIED`,
+  - accept responses preserve the existing social repository persistence path and friend-list snapshot updates.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionFriendInviteQuestionResponseTests|QuestionResponseRegistryTests"` passes with 9 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1166 tests.
+
+#### Migration Parity Table - Session 671
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_FRIEND_ADD` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleFriendAddAsync` / `CmFriendAdd` | Client Packet / Runtime Routing | Partial | Unit Tested | Needs Verification | Registration now uses `Player.ResponseRequester.PutRequest` before sending the buddy question window. C# target lookup uses `IGameClientConnectionRegistry`; Java uses `World.getPlayer(Util.convertName(...))`. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest` | `Aion.GameServer.Model.GameObjects.QuestionResponseRegistry.PutRequest` via friend invite registration | Request Registry Method | Partial | Unit Tested | Needs Verification | Duplicate buddy-list question ids reject like Java `putIfAbsent` and send `STR_BUDDYLIST_BUSY`. C# uses lock-backed metadata rather than Java `ConcurrentHashMap` handler objects. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.respond` | `QuestionResponseRegistry.Respond` via `GameServerConnection.HandleQuestionResponseAsync` | Request Registry Method | Partial | Unit Tested | Needs Verification | Friend invite responses now remove the registry entry before accept/deny behavior. Java callback invocation is modeled through typed dispatch metadata. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler` | `QuestionResponseRequest` / `QuestionResponseDispatch` carrying `PendingFriendRequest` payload | Request Handler Metadata | Partial | Unit Tested | Needs Verification | Typed metadata replaces Java anonymous `RequestResponseHandler<Player>` subclass. Reflection and polymorphic override behavior are not reproduced. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_BUDDYLIST_ADD_BUDDY_REQUEST` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow.BuddyListAddBuddyRequest` | Packet Constant / Question Id | Complete | Unit Tested | Needs Verification | Used as registry key for friend invite registration and response. Packet payload object is asserted; no Java golden-byte or encrypted-frame comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_FRIEND_RESPONSE` | `Aion.GameServer.Network.Aion.ServerPackets.SmFriendResponse` | Server Packet | Partial | Unit Tested | Needs Verification | Deny response payload is checked for code/name. Full friend packet matrix and Java byte parity are not revalidated in this unit. |
+| `com.aionemu.gameserver.services.SocialService.makeFriends` | `GameServerConnection.AcceptFriendRequestAsync` / `ISocialRepository.AddFriendsAsync` | Service / Repository Boundary | Partial | Unit Tested | Needs Verification | Accept branch persists through repository and updates both players' friend snapshots. Java service side effects, DAO transaction behavior, live online fanout order, and real socket bytes remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getResponseRequester` | `Aion.GameServer.Model.GameObjects.Player.ResponseRequester` | Player Model Dependency | Partial | Unit Tested | Needs Verification | Friend invite is now the second live user after league invite. Rift, kisk, charge, and soulbind paths still use specialized pending slots/services. |
+
+Tests added:
+- `GameServerConnectionFriendInviteQuestionResponseTests.HandleFriendAddAsync_RegistersFriendInviteThroughResponseRequesterBeforeQuestionWindow`: validates parsed `CM_FRIEND_ADD` registers one friend invite request and sends `SM_QUESTION_WINDOW` to the target.
+- `GameServerConnectionFriendInviteQuestionResponseTests.HandleFriendAddAsync_DuplicateFriendInviteUsesJavaBusyResponseRequesterSemantics`: validates duplicate registration leaves the original request intact and sends busy system message id `900847`.
+- `GameServerConnectionFriendInviteQuestionResponseTests.HandleQuestionResponseAsync_FriendInviteDenyConsumesRegistryAndNotifiesRequester`: validates parsed `CM_QUESTION_RESPONSE` response `0` clears typed/registry state and sends `TARGET_DENIED` to requester.
+- `GameServerConnectionFriendInviteQuestionResponseTests.HandleQuestionResponseAsync_FriendInviteAcceptConsumesRegistryAndPersistsFriendship`: validates nonzero response clears typed/registry state, calls `ISocialRepository.AddFriendsAsync`, and updates both players' friend snapshots.
+- `GameServerConnectionFriendInviteQuestionResponseTests.HandleQuestionResponseAsync_FriendInviteWrongQuestionLeavesRegistryRequest`: validates unrelated question ids do not consume the friend invite.
+- Java comparison status: expectations are source-derived from `CM_FRIEND_ADD`, `ResponseRequester`, `RequestResponseHandler`, and existing C# social handling. No Java runtime execution, Java-generated golden vector, live anonymous-handler object comparison, Java DAO transaction comparison, real socket-order validation, encrypted frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Friend invite accept behavior still relies on existing C# `AcceptFriendRequestAsync`, which is only a partial representation of Java `SocialService.makeFriends`.
+- C# stores typed metadata and an adapter slot rather than Java's anonymous `RequestResponseHandler<Player>` object reference.
+- Requester resolution during response uses the online-player registry by requester name from payload metadata; Java stores the live requester object in the handler.
+- Java `ConcurrentHashMap` semantics remain approximated by a C# lock without stress tests.
+- Packet sends are validated at C# object/payload level only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+- Reflection differences are relevant because Java uses anonymous handler subclasses; C# uses explicit metadata dispatch. Threading differences remain. Precision/rounding and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 buddy-list friend invite registry-adapter migration slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 6 migration of remaining specialized handlers, Java polymorphic callback parity, Java concurrent map stress parity, Java social DAO/runtime comparison, real socket-order validation, and runtime/client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; league and friend invite question flows now use the reusable response registry, but the broader question-response system still has specialized paths.
+
+Next recommended unit of work:
+- Migrate the next specialized `CM_QUESTION_RESPONSE` path onto `Player.ResponseRequester`; likely kisk bind or rift portal because both already have narrow question ids and existing C# service boundaries. Source-read the Java requester/handler first, keep typed payload metadata as needed, and preserve removal-before-handle plus duplicate-question semantics.
+
 ---
 
 ## Next Steps
