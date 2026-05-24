@@ -21919,6 +21919,57 @@ Next recommended unit of work:
 
 ---
 
+### Session 762 (May 24, 2026)
+- Re-inspected Java `SummonController.useSkill(SkillOrder)` release gate:
+  - Java calls `skill.setHate(order.getHate())`;
+  - Java calls `skill.useSkill()`;
+  - Java releases the summon only when `skill.useSkill()` returns true and `order.isRelease()` is true.
+- Re-inspected Java `Skill.useSkill()` as the boolean skill-use entry point; the deeper cast/property/effect behavior remains unported.
+- Added `PlayerSummonSkillInvocationUseResult` / `PlayerSummonSkillInvocationUseStatus` as a represented outcome gate over the invocation execution preview.
+- Added `PlayerSummonSkillExecutionService.PreviewInvocationUse`:
+  - `MissingExecution` for null execution previews;
+  - `NotReadyToUseSkill` for missing-plan or missing-template previews;
+  - `SkillUseFailed` when an injected future `Skill.useSkill()` result is false;
+  - `WouldReleaseSummon` only for successful summon use with `ReleaseOnSuccess`;
+  - `WouldCompleteWithoutRelease` for successful summon no-release or mercenary use outcomes.
+- Kept the use result as explicit injected metadata because no live `Skill.useSkill()` implementation exists yet.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 30 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1354 tests.
+
+#### Migration Parity Table - Session 762
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.model.Skill.useSkill()` | `PlayerSummonSkillExecutionService.PreviewInvocationUse` / `PlayerSummonSkillInvocationUseResult` | Skill Use Outcome Projection | Partial | Regression Tested | Needs Verification | C# now represents the boolean outcome consumed by summon release gating, but the boolean is injected by tests/future callers. No live cast checks, property checks, effects, observers, cooldowns, packets, or runtime comparison are implemented. |
+| `com.aionemu.gameserver.controllers.SummonController.useSkill(SkillOrder)` release branch | `PlayerSummonSkillInvocationUseStatus.WouldReleaseSummon` | Controller Lifecycle Gate Projection | Partial | Regression Tested | Needs Verification | C# only marks release as possible after a successful represented use and a summon plan with `ReleaseOnSuccess`. It does not release a live summon or observe real skill success. |
+| `com.aionemu.gameserver.services.summons.SummonsService.release` | `PlayerSummonSkillInvocationUseResult.ShouldReleaseSummon` | Lifecycle Projection | Not Started | Regression Tested as outcome metadata | Needs Verification | Release remains metadata. Unsummon type, controller/despawn side effects, packet fanout, effects cleanup, threading, and persistence are unimplemented. |
+| `com.aionemu.gameserver.skillengine.model.Skill.useSkill(boolean, boolean)` | No C# deeper skill-use implementation; documented blocker from outcome gate | Skill Runtime Dependency | Not Started | No Tests | Needs Verification | Java performs can-use checks, cast duration/speed updates, observers, casting state, packets, NPC AI state, and additional effects. C# does not model these internals in this unit. |
+| `com.aionemu.gameserver.controllers.CreatureController.useSkill(int, int)` mercenary success path | `PlayerSummonSkillInvocationUseStatus.WouldCompleteWithoutRelease` for mercenary plans | Controller Outcome Projection | Partial | Regression Tested | Needs Verification | C# can represent a successful mercenary use outcome with no summon release. It does not mutate target, cooldowns, NPC stats, effects, or packets. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.PreviewInvocationUse_GatesReleaseOnSuccessfulSkillUse`: validates null execution maps to `MissingExecution`, missing template maps to `NotReadyToUseSkill`, failed skill use does not release, successful release summon plans set `ShouldReleaseSummon`, successful non-release summon plans do not release, and successful mercenary plans do not release.
+- Java comparison status: expectations are source-derived from Java `SummonController.useSkill(SkillOrder)`, `Skill.useSkill()`, and `SummonsService.release`. No Java runtime execution, live `Skill.useSkill` comparison, cast/property/effect behavior, object identity comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- `Skill.useSkill()` is still represented by an injected boolean, not a live C# implementation.
+- Release-on-success remains metadata only; no summon despawn/release lifecycle or packet fanout exists.
+- Deeper Java skill runtime behavior remains missing: can-use checks, target validation, cast timing, observers, casting state, NPC AI state, cooldowns, effects, packets, and exceptions.
+- Mercenary success outcome does not run `CreatureController` or `NpcController` behavior.
+- Java runtime, golden data comparison, live-client validation, reflection, threading, serialization, date/time, and precision/rounding behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented skill-use outcome gate
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 11 live `Skill.useSkill`, can-use/property checks, cast timing, observers, cooldowns, effects, release/despawn lifecycle, packet fanout, controller execution, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; summon release gating is now represented separately from execution planning, but live skill runtime parity remains partial.
+
+Next recommended unit of work:
+- Continue from the outcome gate by modeling one concrete Java `Skill.useSkill` precondition without effects, likely a represented can-use failure/success reason feeding `SkillUseFailed`, or return to `NpcController.useSkill` disabled-skill/last-skill-time metadata for mercenary plans. Keep real effects, cooldowns, observers, casting packets, and live lifecycle mutation explicit until their supporting systems exist.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
