@@ -18990,6 +18990,50 @@ Summary metrics:
 Next recommended unit of work:
 - Either add a source-driven cube/warehouse capacity service test around accepted cube expansion and item expansion ticket paths, or pivot back to a non-storage Phase 6 core gap such as kisk lifecycle cleanup, charge/power-shard/idiani burn hooks, or loot/drop handler-side quest/event paths. Keep Java `Storage` object dirty-state modeling as a larger future storage unit.
 
+### Session 702 (May 24, 2026)
+- Continued storage expansion parity by tightening represented cube capacity coverage after both Java expansion sources currently modeled in C#:
+  - accepted NPC cube expansion,
+  - item-ticket cube expansion planning.
+- Extended accepted NPC cube expansion coverage to assert the represented cube capacity changes from Java base `27` to `36` after `NpcExpands` increases to `1`.
+- Extended item-ticket expansion coverage to apply the planned `ItemExpands` mutation and assert the represented Java cube formula yields `54` slots for `NpcExpands = 1`, `QuestExpands = 1`, and `ItemExpands = 1`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "InventoryCapacity_MatchesJava|StorageExpansionNpcServiceTests|InventoryExpansionService_MatchesJavaTicketLevelAndQuestGuards"` passes with 12 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1268 tests.
+
+#### Migration Parity Table - Session 702
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.Player.setCubeLimit` | `Aion.GameServer.Services.InventoryCapacity.GetCubeLimit` | Utility / Capacity Calculation | Partial | Regression Tested | Needs Verification | Existing C# formula is now exercised through accepted NPC cube expansion and item-ticket expansion planning. C# still computes on demand rather than mutating a Java `Storage.limit` object; Java runtime comparison, live client cube UI behavior, and storage dirty-state behavior remain unverified. |
+| `com.aionemu.gameserver.model.items.storage.StorageType.CUBE` | `InventoryCapacity` cube constants | Enum Dependency | Partial | Regression Tested | Needs Verification | Tests assert Java base cube slots `27` and row length `9` effects for represented expansion sources. Full `StorageType` enum identity, reflection behavior, special cube, pet bags, account/legion storage, and Java enum serialization semantics remain outside this unit. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getNpcExpands/getQuestExpands/getItemExpands` | `Player.NpcExpands` / `QuestExpands` / `ItemExpands` feeding `InventoryCapacity.GetCubeLimit` | Runtime Model / Derived Value | Partial | Regression Tested | Needs Verification | Coverage now proves represented NPC and item expansion fields feed the cube-capacity sum. Java common-data observer side effects, thread-safety, persistence timing, and serialization beyond represented packets remain unverified. |
+| `com.aionemu.gameserver.services.CubeExpandService.npcExpand` / `expand(type = 1)` | `StorageExpansionNpcService.HandleResponse` plus `InventoryCapacity.GetCubeLimit` | Service / Mutation Effect | Partial | Regression Tested | Needs Verification | Accepted NPC cube expansion now asserts the represented limit becomes `36` after `NpcExpands = 1`. Java `player.setCubeLimit()` object mutation, `Storage.setLimit`, live socket order, encrypted frames, and client UI validation remain unverified. |
+| `com.aionemu.gameserver.services.CubeExpandService.itemExpand` / `canExpandByTicket` | `InventoryExpansionService.CreatePlan` plus `InventoryCapacity.GetCubeLimit` | Service / Ticket Expansion Plan | Partial | Regression Tested | Needs Verification | Item-ticket plan now has a source-derived assertion that applying `NewItemExpands` updates represented cube capacity to `54`. The C# service still returns a plan rather than performing Java packet fanout, item consumption, persistence, or `SM_CUBE_UPDATE`; those caller-side behaviors remain future work. |
+
+Tests added/updated:
+- `StorageExpansionNpcServiceTests.HandleResponse_AcceptCubeDecreasesKinahAndExpandsNpcCubeRows`: now validates accepted NPC cube expansion produces represented cube limit `36`.
+- `PlayerStateTests.InventoryExpansionService_MatchesJavaTicketLevelAndQuestGuards`: now validates applying the item-ticket expansion plan gives represented cube limit `54`.
+- Java comparison status: expectations are source-derived from `CubeExpandService.expand`, `CubeExpandService.itemExpand`, `CubeExpandService.canExpandByTicket`, `Player.setCubeLimit`, and `StorageType.CUBE`. No Java runtime execution, Java-generated golden vector, Java `Storage.setLimit` mutation comparison, item-use caller integration, item-consumption persistence, encrypted-frame comparison, socket-order validation, threading behavior comparison, reflection behavior comparison, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- C# still computes cube capacity on demand instead of mutating a Java-like `Storage.limit` object.
+- Item-ticket expansion is currently represented as a plan; packet fanout, item consumption, persistence, and production caller wiring remain broader future work.
+- Quest cube expansion and Java `questExpand` packet fanout are not newly covered in this unit.
+- Java `Storage.getItems()` / dirty-state behavior and live MySQL item writeback remain unverified.
+- Java golden packet bytes, encrypted frames, socket order, and live client cube UI behavior remain unperformed.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented cube-capacity effect coverage slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 5 Java `Storage.setLimit` object mutation comparison, item-use caller integration, live MySQL item persistence comparison, golden/encrypted packet comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; represented cube capacity is better covered, but full storage runtime/client parity remains partial.
+
+Next recommended unit of work:
+- Continue storage expansion parity by wiring item-ticket cube expansion into the production item-use caller path if an existing C# item action executor can host the Java `CubeExpandService.itemExpand` packet/item-consumption flow, or pivot to another Phase 6 core gap such as kisk lifecycle cleanup, charge/power-shard/idiani burn hooks, or loot/drop handler-side quest/event paths. Keep Java `Storage` object dirty-state modeling as a larger future storage unit.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
