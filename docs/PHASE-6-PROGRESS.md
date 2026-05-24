@@ -20571,6 +20571,59 @@ Next recommended unit of work:
 
 ---
 
+### Session 735 (May 24, 2026)
+- Wired `CmCastSpell` into `GameServerConnection.HandleInfrastructurePacketAsync`.
+- Added `GameServerConnection.HandleCastSpellAsync`, which runs `PlayerCastSpellEarlyExitService`, maps Java failure outcomes to real `SmSystemMessage` packets, and exposes callback hooks for still-missing skill runtime side effects.
+- Added `GameServerCastSpellHandlerHooks` so tests and future runtime wiring can supply pet-order detection, template lookup, cooldown state, cancel-current-skill, cancel-use-item, audit, and use-skill behavior without pretending full `SkillEngine` exists.
+- Added connection-level tests for dead-player, pet-required, cooldown-not-ready, and ready-skill callback ordering.
+- Runtime full skill dispatch remains callback-only; production defaults still no-op template lookup and use-skill behavior until Java `SkillEngine` parity exists.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionCastSpellTests|PlayerCastSpellEarlyExitServiceTests|GamePacketTests"` passes with 100 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1324 tests.
+
+#### Migration Parity Table - Session 735
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CASTSPELL.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleCastSpellAsync` plus `PlayerCastSpellEarlyExitService` | Client Packet Handler Seam | Partial | Regression Tested | Needs Verification | C# now routes parsed `CmCastSpell` packets through a connection-level early-exit seam and sends represented failure packets. Full Java `PlayerController.useSkill`, real skill templates, target/result handling, and effect execution remain missing. |
+| `com.aionemu.gameserver.network.aion.GameConnection` packet dispatch for `CM_CASTSPELL` | `GameServerConnection.HandleInfrastructurePacketAsync` case `CmCastSpell` | Connection Dispatch | Partial | Regression Tested | Needs Verification | The C# infrastructure switch now recognizes `CmCastSpell` when an active player exists. No live socket/client or encrypted-frame behavioral comparison was run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_CANT_CAST` | `SmSystemMessage.SkillCannotCastDead` sent by `HandleCastSpellAsync` | Packet Side Effect | Partial | Regression Tested | Needs Verification | Dead-player route sends the C# helper for Java `STR_SKILL_CANT_CAST(ChatUtil.l10n(1400059))`. Test validates packet id/parameter through C# serialization, not Java golden bytes. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_NOT_NEED_PET` | `SmSystemMessage.SkillNotNeedPet` sent by `HandleCastSpellAsync` | Packet Side Effect | Partial | Regression Tested | Needs Verification | Pet-order/no-pet route sends message id `1402918`. Live pet-order data and summon state are provided only by callback hooks in this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_NOT_READY` | `SmSystemMessage.SkillNotReady` sent by `HandleCastSpellAsync` | Packet Side Effect | Partial | Regression Tested | Needs Verification | Cooldown not-ready route sends message id `1300021` after cancel-use-item and audit callbacks. Java runtime timing and logging behavior remain unverified. |
+| `com.aionemu.gameserver.dataholders.DataManager.PET_SKILL_DATA` | `Aion.GameServer.Services.GameServerCastSpellHandlerHooks.IsPetOrderSkill` / `HasPetSummon` | Skill Data Hook | Partial | Regression Tested with injected hooks | Needs Verification | Hook shape allows Java ordering tests but does not load real pet skill data or player summon state. Missing behavior remains explicitly callback-only. |
+| `com.aionemu.gameserver.skillengine.model.SkillTemplate` / `DataManager.SKILL_DATA` | `GameServerCastSpellHandlerHooks.GetSkillTemplate` returning `PlayerCastSpellSkillTemplate` | Skill Data Hook | Partial | Regression Tested with injected hooks | Needs Verification | Hook shape supports missing/passive/ready decisions. Full Java skill templates, XML target/effect behavior, and passive detection are not wired. |
+| `com.aionemu.gameserver.controllers.PlayerController.cancelCurrentSkill` | `GameServerCastSpellHandlerHooks.CancelCurrentSkill` | Controller Hook | Partial | Existing service tests only | Needs Verification | Hook exists for spell id zero but this connection unit did not add a dedicated connection-level spell-zero test. No real player casting-skill state is mutated. |
+| `com.aionemu.gameserver.controllers.PlayerController.cancelUseItem` | `GameServerCastSpellHandlerHooks.CancelUseItem` | Controller Hook | Partial | Regression Tested with injected hooks | Needs Verification | Connection-level tests validate callback order. Existing `Player.UsingItemObjectId` is not mutated; live item-use cancellation remains missing. |
+| `com.aionemu.gameserver.utils.audit.AuditLogger` cooldown path | `GameServerCastSpellHandlerHooks.AuditCooldown` | Audit Hook | Partial | Regression Tested with injected hooks | Needs Verification | Connection-level test validates audit callback arguments/order. Real C# logging policy, Java log text, and threading/race behavior remain unverified. |
+| `com.aionemu.gameserver.controllers.PlayerController.useSkill` | `GameServerCastSpellHandlerHooks.UseSkill` | Skill Controller Hook | Partial | Regression Tested with injected hooks | Needs Verification | Ready-skill route can call a hook, but production full skill execution is not implemented. Missing full SkillEngine, effect scheduling, observer dispatch, power-shard/charge/idian triggers, PvP/death behavior, and packet fanout. |
+
+Tests added/updated:
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_DeadPlayerSendsCannotCastDeadPacket`: validates connection-level dead-player failure packet id and dead-state l10n parameter.
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_PetOrderWithoutPetSendsPetRequiredPacket`: validates pet-required packet emission through injected pet-order hooks.
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_CooldownNotReadySendsNotReadyAfterCancelUseItemAndAudit`: validates cancel-use-item and audit callback ordering before not-ready packet.
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_ReadySkillStopsProtectionCancelsUseItemAndCallsUseSkillWithoutPackets`: validates ready-skill callback order and protection-state mutation without sending failure packets.
+- Existing `PlayerCastSpellEarlyExitServiceTests` and `GamePacketTests` were rerun in the focused filter.
+- Java comparison status: expectations are source-derived from Java `CM_CASTSPELL.runImpl`, `SM_SYSTEM_MESSAGE.java`, and `AionClientPacketFactory`. No Java runtime execution, Java-generated golden packet, live client socket order, full `SkillEngine`, real player controller methods, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- Production `GameServerConnection` still cannot execute real skills because default hooks do not resolve real templates or call real `PlayerController.useSkill`.
+- Full Java `SkillEngine`, target validation, result-list handling, pet skill table, summon state, cooldown persistence, audit logging, effect scheduling, observer dispatch, charge/power-shard/idian burns, PvP/death behavior, and packet fanout remain missing.
+- System-message packets are C# serialized from source-derived ids; no Java golden-byte or live-client rendering comparison was run.
+- Date/time behavior remains hook-based and unverified against Java `System.currentTimeMillis()` semantics.
+- Java reflection construction differs intentionally from C# explicit constructors/factory lambdas.
+
+Summary metrics:
+- Total Java artifacts discovered: 11
+- Total artifacts ported: 1 connection-level `CM_CASTSPELL` early-exit seam plus callback hook surface
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 11
+- Total blocked artifacts: 7 full SkillEngine/player-controller execution, real pet/template data integration, live cooldown/audit timing, effect/combat fanout, Java runtime/golden packet comparison, live client validation, and threading comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; live cast-spell failure routing is closer, but full skill execution remains partial.
+
+Next recommended unit of work:
+- Replace one callback-only cast-spell hook with a real narrow C# state mutation. Prefer spell id zero: add represented player casting-skill state and wire `CancelCurrentSkill` so `CmCastSpell` spell id `0` clears it through `GameServerConnection`, with tests proving Java's cancel-current-skill route. If casting-skill state is still too broad, wire `CancelUseItem` to clear `Player.UsingItemObjectId` for accepted skills and document the remaining full item-use cancellation gap.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
