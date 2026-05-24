@@ -14438,6 +14438,61 @@ Summary metrics:
 Next recommended unit of work:
 - Continue `CM_PLAYER_STATUS_INFO` parity with alliance vice-captain promote/demote (`ALLIANCE_SET_VICECAPTAIN`/`ALLIANCE_UNSET_VICECAPTAIN`) if the existing assignment planner can be safely wired through the packet handler, including system-message and alliance-info sends. Otherwise, add the mentor abyss-rank visible broadcast through an existing visible-player registry helper if one can preserve Java recipient semantics.
 
+### Session 617 (May 23, 2026)
+- Source-read Java `TeamCommand`, `PlayerTeamCommandService.executeCommand`, `PlayerAllianceService.changeViceCaptain`, and `AssignViceCaptainEvent`.
+- Extended `PlayerAllianceRuntime` with `AssignViceCaptain` so runtime-owned alliance snapshots can apply existing `PlayerAllianceViceCaptainAssignmentPlanner` results and refresh player snapshots.
+- Extended `GameServerConnection.HandlePlayerStatusInfoAsync` with Java alliance vice-captain commands:
+  - command code `25` promotes the selected alliance member through `AssignViceCaptainEvent.AssignType.PROMOTE`;
+  - command code `26` demotes the selected alliance member through `AssignViceCaptainEvent.AssignType.DEMOTE`;
+  - `selectedObjectId == 0` targets the caller like Java `findMember`;
+  - missing caller alliance or missing target member no-ops in the C# bridge, while Java invalid member lookup can throw through `Objects.requireNonNull`;
+  - planned `SM_ALLIANCE_INFO` packets are sent to alliance members through the registry/direct-send path;
+  - Java promote-limit failure sends `STR_FORCE_CANNOT_PROMOTE_MANAGER` to the alliance leader.
+- Kept Java league broadcast after assignment, full generic `PlayerTeamCommandService` dispatch, invalid-member exception parity, Java event queue/lock comparison, socket ordering comparison, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|ViceCaptainAssignment"` passes with 14 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1081 tests.
+
+#### Migration Parity Table - Session 617
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | C# now handles group LFG, group mentoring start/end, alliance ready checks, alliance group change, and alliance vice-captain promote/demote ids. Alliance leave/ban/leader, group remove/leader/ban, league commands, and full generic dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.ALLIANCE_SET_VICECAPTAIN` | Command code `25` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | C# source-models command id `25`, targets `selectedObjectId` or caller when zero, and dispatches to alliance runtime assignment. Java invalid target member exception behavior remains deferred. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.ALLIANCE_UNSET_VICECAPTAIN` | Command code `26` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | C# source-models command id `26`, targets `selectedObjectId` or caller when zero, and dispatches to alliance runtime assignment. Java invalid target member exception behavior remains deferred. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService` | Narrow vice-captain branches in `GameServerConnection.HandlePlayerStatusInfoAsync` | Service Dependency | Partial | Regression Tested | Needs Verification | C# still bypasses full generic team-command service and ports two additional alliance branches directly. Group ban/leader/remove, alliance leave/ban/leader, and league command dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.changeViceCaptain` | `Aion.GameServer.Services.PlayerAllianceRuntime.AssignViceCaptain` through connection handler | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | C# resolves the caller alliance snapshot and applies assignment through the runtime. Java static alliance registry, `alliance.onEvent`, and invalid target exception surface are not runtime-compared. |
+| `com.aionemu.gameserver.model.team.alliance.events.AssignViceCaptainEvent` | `Aion.GameServer.Services.PlayerAllianceViceCaptainAssignmentPlanner` / `PlayerAllianceRuntime.AssignViceCaptain` | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | C# mutates vice-captain ids, skips missing/offline event players, sends leader promote-limit message, and broadcasts alliance-info packets. Java event queue/lock ordering and league broadcast remain missing. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance.getViceCaptainIds` | `PlayerAllianceRuntime` vice-captain id store and refreshed `PlayerAllianceSnapshot.ViceCaptainObjectIds` | Team State | Partial | Regression Tested | Needs Verification | Runtime-owned snapshots now refresh after assignment. Java `CopyOnWriteArrayList` mutation/threading semantics are not compared; C# uses lock-protected lists. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceInfo` through vice-captain assignment sends | Server Packet | Partial | Regression Tested | Needs Verification | Existing packet is now sent from parsed command ids `25` and `26`. Java golden bytes, encrypted frames, league variant rows, and real-client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_CANNOT_PROMOTE_MANAGER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ForceCannotPromoteManager` through connection sends | Server Packet Factory | Partial | Regression Tested | Needs Verification | Promote-at-four failure sends Java message id `1301061` to the alliance leader. Java golden frame and client validation remain missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / direct fallback | Runtime Dependency | Partial | Regression Tested | Needs Verification | C# sends vice-captain system/alliance-info packets through registry/direct fallback. Java `PacketSendUtility` ordering/offline-recipient behavior remains unverified. |
+| `com.aionemu.gameserver.model.team.league.League.broadcast` | Deferred C# league broadcast side effect | Service Dependency | Not Started | No Tests | Unknown | Java broadcasts league updates after successful vice-captain assignment when the alliance is in a league. C# runtime currently records no live league membership for this path. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_AllianceViceCaptainCommandsMutateRolesAndBroadcastInfo`: validates parsed command ids `25` and `26` mutate the runtime vice-captain list and send `SmAllianceInfo` packets to alliance members.
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_AllianceViceCaptainPromoteLimitSendsJavaLeaderMessage`: validates promote-at-four leaves the target unpromoted and sends Java system-message id `1301061` to the alliance leader.
+- Java comparison status: expectations are source-derived from `TeamCommand`, `PlayerTeamCommandService`, `PlayerAllianceService.changeViceCaptain`, `AssignViceCaptainEvent`, `SM_ALLIANCE_INFO`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live client packet capture, Java static alliance registry comparison, Java event queue/lock comparison, Java invalid-member exception comparison, league broadcast comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond C# packet object type, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Java league broadcast after successful vice-captain assignment is not wired.
+- Java invalid target member lookup can throw through `Objects.requireNonNull`; the C# packet handler currently no-ops missing targets to keep the live connection bridge conservative until exception policy is ported.
+- Java static alliance registry lookup is approximated by runtime snapshots attached to the caller.
+- Java `CopyOnWriteArrayList`, event queue, lock, and threading behavior remains source-derived only.
+- Several `CM_PLAYER_STATUS_INFO` command branches remain unimplemented, including group ban/leader/remove, alliance leave/ban/leader, and league commands.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to C# packet object reachability; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 11
+- Total artifacts ported: 1 `CM_PLAYER_STATUS_INFO` alliance vice-captain promote/demote branch pair
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 9 league broadcast, remaining team command branches, Java static service registry, Java event queue/lock comparison, Java invalid-member exception comparison, live socket ordering, Java runtime/threading comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; alliance vice-captain packet commands now reach runtime assignment and socket fanout, but league and broader team-command parity remain incomplete.
+
+Next recommended unit of work:
+- Continue `CM_PLAYER_STATUS_INFO` parity with one remaining low-to-medium risk branch: group leader/remove/ban if existing group runtime support is sufficient, or alliance leader/ban/leave if existing alliance planners can be safely wired through the packet handler. Keep league commands deferred unless a live league runtime bridge is first added.
+
 ---
 
 ## Next Steps
