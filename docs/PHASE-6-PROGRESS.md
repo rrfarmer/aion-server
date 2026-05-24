@@ -17506,6 +17506,7 @@ Next recommended unit of work:
   - cleanup runs before logout persistence so saved player state cannot retain migrated pending question metadata.
 - Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerEnterWorldServiceTests|QuestionResponseRegistryTests"` passes with 23 tests.
 - Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1175 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1175 tests.
 
 #### Migration Parity Table - Session 676
 
@@ -17543,6 +17544,56 @@ Summary metrics:
 
 Next recommended unit of work:
 - Decide the next `ResponseRequester` parity slice: either model per-kind `denyAll` denial side effects for migrated handlers, or start porting another Java `ResponseRequester` user such as duel, group/alliance invite, legion invite, warehouse/cube expand, NPC faction join, recall summon, or dialog recovery. Prefer a narrow handler with existing C# domain state/tests, and do not claim generic callback parity until Java-style handler execution is objectively represented.
+
+### Session 677 (May 24, 2026)
+- Source-read Java `PlayerLeaveWorldService.leaveWorld`, `ResponseRequester.denyAll`, migrated friend invite denial handling, and league invite denial planning.
+- Modeled the first per-kind Java `denyAll` denial side effects during C# logout:
+  - `PlayerEnterWorldService.LeaveWorldAsync` now awaits registry cleanup so denial side-effect packets can be sent before persistence,
+  - `QuestionResponseRegistry.DenyAll()` dispatches for migrated friend invites send `SmFriendResponse.TargetDenied` to the requester,
+  - migrated league invite dispatches send `SmSystemMessage.PartyAllianceHeRejectInvitation(responder.Name)` to the requester,
+  - charge-all, soulbind, rift portal, and kisk bind continue to clear registry and adapter state without extra logout-side packets because this unit did not prove additional Java denial side effects for those handlers.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerEnterWorldServiceTests|QuestionResponseRegistryTests"` passes with 23 tests.
+
+#### Migration Parity Table - Session 677
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerLeaveWorldService.leaveWorld` | `Aion.GameServer.Services.PlayerEnterWorldService.LeaveWorldAsync` | Logout Method | Partial | Regression Tested | Needs Verification | Logout now awaits migrated `denyAll` denial side-effect dispatch for friend and league invites before clearing adapter slots and persisting logout state. Broader Java leave-world behavior remains partial. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.denyAll` | `QuestionResponseRegistry.DenyAll` plus `PlayerEnterWorldService.SendPendingQuestionDenySideEffectAsync` | Request Registry Method | Partial | Unit Tested / Regression Tested | Needs Verification | C# now consumes returned dispatch metadata for friend/league denial notifications. It still does not execute arbitrary Java anonymous handler callbacks. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler.denyRequest` | `PlayerEnterWorldService.SendPendingQuestionDenySideEffectAsync` | Request Handler Callback | Partial | Regression Tested | Needs Verification | Per-kind metadata dispatch covers migrated friend and league invite denial notifications only. Reflection/polymorphic callback behavior is not reproduced. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_FRIEND_ADD` / friend invite handler | `PendingFriendRequest` / `SmFriendResponse.TargetDenied` via logout `denyAll` | Client Packet / Denial Side Effect | Partial | Regression Tested | Needs Verification | Logout denial now notifies the requester with the same C# packet used by explicit friend-invite deny. Java runtime packet ordering and requester live-object behavior remain unverified. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueInviteEvent.denyRequest` | `PendingLeagueInviteRequest` / `SmSystemMessage.PartyAllianceHeRejectInvitation` via logout `denyAll` | Team Invite Denial | Partial | Regression Tested | Needs Verification | Logout denial now sends the represented league rejection system message to the requester. Full Java league/team callback graph remains partial. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getResponseRequester` | `Aion.GameServer.Model.GameObjects.Player.ResponseRequester` | Player Model Dependency | Partial | Regression Tested | Needs Verification | The registry remains the C# bridge for migrated question handlers; typed adapter slots are still cleared after denial side effects. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_FRIEND_RESPONSE` | `Aion.GameServer.Network.Aion.ServerPackets.SmFriendResponse` | Server Packet | Partial | Regression Tested | Needs Verification | Test asserts packet type and requester routing, but not Java golden bytes or encrypted frames in this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_ALLIANCE_HE_REJECT_INVITATION` | `SmSystemMessage.PartyAllianceHeRejectInvitation` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Test asserts routed message id `1300190`. Parameter serialization and live client display are not runtime-compared to Java. |
+| `com.aionemu.gameserver.services.item.ItemChargeService` / `RequestResponseHandler.denyRequest` | `PendingChargeAllRequest` logout cleanup only | Request Handler Dependency | Partial | Regression Tested | Needs Verification | Newly reviewed dependency: migrated charge-all entries still clear on logout, but this unit did not add a denial packet because Java charge denial has no proven logout-side packet beyond handler callback semantics. |
+| `com.aionemu.gameserver.controllers.RVController` / rift request handlers | `PendingRiftPortalRequest` logout cleanup only | Request Handler Dependency | Partial | Regression Tested | Needs Verification | Rift portal pending requests still clear on logout; no direct/vortex denial side-effect packet was implemented in this unit. |
+| `com.aionemu.gameserver.ai.AIActions.addRequest` / kisk bind handler | `PendingKiskBindRequest` logout cleanup only | Request Handler Dependency | Partial | Regression Tested | Needs Verification | Kisk bind pending requests still clear on logout; Java `DialogObserver` auto-deny and handler callback parity remain separate gaps. |
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment.soulBindItem` | `PendingSoulBindRequest` logout cleanup only | Request Handler Dependency | Partial | Regression Tested | Needs Verification | Soulbind pending requests still clear on logout; scheduled item-use and movement observer timing parity remain separate gaps. |
+
+Tests added/updated:
+- `PlayerEnterWorldServiceTests.LeaveWorld_RemovesPlayerFromWorldAndPersistsLogoutState`: now validates logout `denyAll` sends friend requester denial (`SmFriendResponse`) and league requester denial (`SmSystemMessage` id `1300190`) while still clearing all migrated registry entries and adapter slots.
+- Java comparison status: expectations are source-derived from `PlayerLeaveWorldService.leaveWorld`, `ResponseRequester.denyAll`, `CM_FRIEND_ADD` denial behavior, and `LeagueInviteEvent.denyRequest`. No Java runtime execution, Java-generated golden vector, Java anonymous-handler callback execution, full socket-order validation, encrypted frame comparison, reflection behavior, precision/rounding behavior, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- Generic Java `RequestResponseHandler` polymorphic callback execution is still not ported; C# now implements only friend and league invite logout-denial side effects.
+- Charge-all, soulbind, rift portal, and kisk bind logout denial behavior remains limited to registry/adapter cleanup until source-derived side effects are proven and modeled.
+- `PlayerEnterWorldService` now has optional connection-registry packet routing for logout denial, but live disconnect ordering against Java remains unverified.
+- C# adapter slots remain an intentional bridge with no Java equivalent.
+- Java `ConcurrentHashMap` semantics remain approximated by a C# lock without stress tests.
+- Packet sends are validated by C# packet type/message id only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+- Date/time handling of `LastOnline` remains C# `DateTime.Now` based and was not runtime-compared to Java `System.currentTimeMillis`.
+
+Summary metrics:
+- Total Java artifacts discovered: 12
+- Total artifacts ported: 1 logout per-kind denial side-effect slice for migrated friend and league invite handlers
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 12
+- Total blocked artifacts: 8 generic Java handler callback execution, remaining per-kind logout denial side effects, full Java leave-world side effects, exchange logout cleanup, kisk offline binding, Java concurrent map stress parity, real socket-order validation, and runtime/client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; logout cleanup now models two migrated Java denial callbacks, but the broader `ResponseRequester` ecosystem and full leave-world lifecycle remain partial.
+
+Next recommended unit of work:
+- Continue the `ResponseRequester` parity line by either modeling another proven per-kind `denyAll` side effect or porting a new narrow Java `ResponseRequester` user. Good next candidates remain warehouse/cube expand if persistence can be scoped, teleport request if the pending teleport surface is sufficient, craft-skill learn if profession data can be represented narrowly, or duel/group/alliance invite once their runtime surfaces are ready. Prefer one handler with existing C# domain state/tests and keep Java handler callback parity marked partial until objectively validated.
 
 ---
 
