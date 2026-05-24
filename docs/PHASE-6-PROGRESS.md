@@ -21416,6 +21416,60 @@ Next recommended unit of work:
 
 ---
 
+### Session 752 (May 24, 2026)
+- Re-inspected the Java `CM_SUMMON_CASTSPELL.runImpl` mercenary branch:
+  - target resolution happens before the summon/mercenary branch;
+  - mercenary target is assigned with `summonOrMercenary.setTarget(target)`;
+  - `DataManager.PET_SKILL_DATA.petHasSkill(templateId, skillId)` gates controller execution;
+  - valid skills call `summonOrMercenary.getController().useSkill(skillId, skillLvl)`;
+  - invalid skills call `AuditLogger.log(player, "tried to use invalid mercenary skill " + skillId)`.
+- Advanced represented mercenary handling from `MercenaryUnsupported` to `MercenaryReady` after represented target validation.
+- Added `RepresentedSummonOrMercenaryNpcId` so the mercenary branch can validate represented pet-skill ownership.
+- Added `PlayerSummonSkillExecutionService.ValidateMercenaryExecution`, `PlayerMercenarySkillExecutionResult`, planned mercenary actions, and invalid-skill audit metadata.
+- Wired `GameServerConnection.HandleSummonCastSpellAsync` to plan represented mercenary `SetTarget` / `UseSkill` actions when runtime pet-skill data is available.
+- Kept real `Npc`, creator-id and `NpcTemplateType.MERCENARY` lookup, live target assignment, controller execution, and audit emission out of scope.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 28 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1352 tests.
+
+#### Migration Parity Table - Session 752
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL.runImpl` mercenary branch | `GameServerConnection.HandleSummonCastSpellAsync` plus `PlayerSummonSkillExecutionService.ValidateMercenaryExecution` | Client Packet Handler / Service | Partial | Regression Tested | Needs Verification | C# now validates represented mercenary target readiness, checks represented pet-skill ownership, and records planned `SetTarget` / `UseSkill` actions. It still does not mutate a live target, call a controller, or emit audit logs. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.setTarget` | `PlayerMercenarySkillExecutionAction.SetTarget` | Controller Action Projection | Not Started | Regression Tested as planned action only | Needs Verification | Planned action only. No live `Creature` target object, no state mutation, no packet fanout, and no concurrency behavior. |
+| `com.aionemu.gameserver.controllers.CreatureController.useSkill(int, int)` as invoked for mercenaries | `PlayerMercenarySkillExecutionAction.UseSkill` | Controller Action Projection | Not Started | Regression Tested as planned action only | Needs Verification | Planned action only. Real controller invocation, skill timing, cooldowns, effects, precision/rounding, packet fanout, and failure behavior remain unimplemented. |
+| `com.aionemu.gameserver.dataholders.PetSkillData.petHasSkill` | `PetSkillTable.PetHasSkill` consumed by `ValidateMercenaryExecution` | Static Data Lookup | Partial | Regression Tested with loaded static data | Needs Verification | C# validates represented mercenary npc `833288` accepts skill `22107` and rejects `9999`. Missing-map behavior and Java singleton assumptions remain unverified. |
+| `com.aionemu.gameserver.utils.audit.AuditLogger.log` invalid mercenary skill branch | `PlayerMercenarySkillExecutionAudit` / `InvalidMercenarySkill` | Audit Projection | Partial | Regression Tested | Needs Verification | C# records invalid mercenary skill audit metadata. It does not emit Java audit text, include player identity, call audit sinks, or compare Java log output. |
+| `com.aionemu.gameserver.model.gameobjects.Npc.getObjectTemplate().getTemplateId` | `Player.RepresentedSummonOrMercenaryNpcId` | NPC Template Id Projection | Partial | Regression Tested | Needs Verification | C# uses caller-seeded represented npc id. It does not model live `Npc`, object templates, creator id, `NpcTemplateType.MERCENARY`, serialization, or lifecycle. |
+
+Tests added/updated:
+- `PlayerSummonCastSpellServiceTests.Handle_DistinguishesRepresentedNonPetSummonAndMercenary`: now validates represented mercenary self-target returns `MercenaryReady`.
+- `PlayerSummonSkillExecutionServiceTests.ValidateMercenaryExecution_PlansControllerUseAndAuditsInvalidSkill`: validates valid represented mercenary skills plan `SetTarget` then `UseSkill`, and invalid skills carry audit metadata with no actions.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_ValidRepresentedMercenarySkillPlansControllerUse`: validates connection-level mercenary planning and no pet-required packet.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_InvalidRepresentedMercenarySkillRecordsAuditProjection`: validates invalid represented mercenary skill audit projection.
+- Java comparison status: expectations are source-derived from Java `CM_SUMMON_CASTSPELL.runImpl`, `Creature.setTarget`, `CreatureController.useSkill`, `PetSkillData.petHasSkill`, and `AuditLogger.log`. No Java runtime execution, live controller comparison, live audit sink comparison, object identity comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Mercenary execution remains a planned-action projection only.
+- Target assignment does not mutate live `Creature` state.
+- Controller `useSkill(skillId, skillLvl)` is not invoked, so cooldowns, effects, timing, packet fanout, and failure behavior are missing.
+- Invalid mercenary skill audit is metadata only and does not emit Java audit logs.
+- Mercenary npc id is caller-seeded; live `Npc`, creator id, object template id, and `NpcTemplateType.MERCENARY` checks remain unsupported.
+- Threading/concurrency, serialization, reflection, precision/rounding, date/time, Java runtime, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 represented mercenary execution-planning slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 9 live `Npc`/`Creature` objects, creator-id lookup, `NpcTemplateType.MERCENARY`, live target mutation, controller execution, skill effects/cooldowns, audit sink fanout, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented mercenary cast handling now has a validation/action plan, but live execution parity remains partial.
+
+Next recommended unit of work:
+- Continue reducing `CM_SUMMON_CASTSPELL` gaps by adding represented warning/audit log projections for the pet-summon skill mismatch branch, or begin a live object bridge for summon/mercenary known-list ownership and target identity. Keep real controller execution and live audit sinks explicit until those systems exist.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
