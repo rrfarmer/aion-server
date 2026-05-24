@@ -21709,6 +21709,53 @@ Next recommended unit of work:
 
 ---
 
+### Session 758 (May 24, 2026)
+- Re-inspected Java `CM_SUMMON_CASTSPELL.runImpl` mercenary execution sequence:
+  - target is resolved before the mercenary branch;
+  - Java calls `summonOrMercenary.setTarget(target)`;
+  - valid mercenary skills then call controller `useSkill(skillId, skillLvl)`.
+- Updated `PlayerSummonSkillExecutionService.ValidateMercenaryExecution` to accept the cast-phase `PlayerSummonCastSpellTarget`.
+- Updated `PlayerMercenarySkillExecutionResult` to carry `ResolvedTarget` alongside target object id and planned actions.
+- Updated `GameServerConnection.HandleSummonCastSpellAsync` to pass `castResult.ResolvedTarget` into mercenary execution validation.
+- Kept planned `SetTarget` as metadata only; no live `Creature.setTarget` mutation is performed.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 29 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1353 tests.
+
+#### Migration Parity Table - Session 758
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL.runImpl` mercenary `setTarget` / `useSkill` branch | `GameServerConnection.HandleSummonCastSpellAsync` plus `PlayerMercenarySkillExecutionResult.ResolvedTarget` | Client Packet Handler / Execution Projection | Partial | Regression Tested | Needs Verification | C# now propagates resolved target metadata into mercenary execution planning. Java mutates live target and invokes controller. C# still records planned actions only. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.setTarget` | `PlayerMercenarySkillExecutionAction.SetTarget` plus `ResolvedTarget` | Controller Action Projection | Partial | Regression Tested as planned action only | Needs Verification | Planned action now carries target metadata. No live target state mutation, object reference, packet fanout, threading, or serialization behavior. |
+| `com.aionemu.gameserver.controllers.CreatureController.useSkill(int, int)` | `PlayerMercenarySkillExecutionAction.UseSkill` with resolved target metadata | Controller Action Projection | Not Started | Regression Tested as planned action only | Needs Verification | C# does not call controller or SkillEngine; cooldowns, effects, timing, precision/rounding, and packets remain unsupported. |
+| `com.aionemu.gameserver.model.gameobjects.Creature` target reference | `PlayerSummonCastSpellTarget` carried into `PlayerMercenarySkillExecutionResult` | Creature Target Projection | Partial | Regression Tested | Needs Verification | Target is still represented by object id/kind/self flag. Java live `Creature` reference and equality are not modeled. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ValidateMercenaryExecution_PlansControllerUseAndAuditsInvalidSkill`: validates valid and invalid mercenary execution results carry resolved target metadata.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_ValidRepresentedMercenarySkillPlansControllerUse`: validates connection-level mercenary planning includes resolved target metadata.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_InvalidRepresentedMercenarySkillRecordsAuditProjection`: validates invalid-skill audit projection retains resolved target metadata.
+- Java comparison status: expectations are source-derived from Java `CM_SUMMON_CASTSPELL.runImpl`, `Creature.setTarget`, `CreatureController.useSkill`, and the previously represented target resolution branch. No Java runtime execution, live target mutation comparison, object identity comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Mercenary `SetTarget` remains planned metadata only.
+- Controller `useSkill(skillId, skillLvl)` is still not executed.
+- Resolved target remains object-id metadata instead of a live `Creature`.
+- Skill effects, cooldowns, packet fanout, audit/log sinks, Java runtime, and live-client behavior remain unverified.
+- Threading, serialization, reflection, precision/rounding, and date/time behavior remain unverified for the broader execution path.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 represented mercenary resolved-target propagation slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 live `Creature.setTarget`, controller execution, SkillEngine/effects, packet fanout, live object identity, Java runtime comparison, live-client validation, and threading/serialization verification
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented mercenary execution planning now preserves resolved target identity, but live controller parity remains partial.
+
+Next recommended unit of work:
+- Carry `ResolvedTarget` into summon queued-order execution planning as well, so both summon and mercenary branches preserve the same target-reference metadata before future live `Creature` execution. Keep `SummonController.useSkill`, `SkillEngine`, and release-on-success gaps explicit.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
