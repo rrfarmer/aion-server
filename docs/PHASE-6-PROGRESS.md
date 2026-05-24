@@ -14854,6 +14854,64 @@ Summary metrics:
 Next recommended unit of work:
 - Add a focused two-member `GROUP_BAN_MEMBER` disband regression to prove the combined BAN plus disband order, then move laterally to `ALLIANCE_LEAVE` or `ALLIANCE_BAN_MEMBER` only if existing alliance planners can cover disband/leader side effects accurately. Keep league commands deferred.
 
+### Session 624 (May 23, 2026)
+- Added focused regression coverage for the combined Java two-member `GROUP_BAN_MEMBER` plus group-disband cascade.
+- Confirmed the existing C# `GROUP_BAN_MEMBER` implementation and Session 622 disband intent support preserve the source-derived order:
+  - remaining member receives `SM_GROUP_MEMBER_INFO(LEAVE)`;
+  - remaining member receives `STR_PARTY_HE_IS_BANISHED`;
+  - remaining member receives `STR_PARTY_IS_DISPERSED`;
+  - remaining online member receives `SM_LEAVE_GROUP_MEMBER`;
+  - banned online player receives `STR_PARTY_YOU_ARE_BANISHED`;
+  - banned online player receives base `SM_LEAVE_GROUP_MEMBER`.
+- No production code changes were required in this unit; this hardens the packet-order behavior introduced across Sessions 622-623.
+- Kept Java invalid-member exception/logging policy, mentor-stop side effects, `EventService.onLeftTeam`, registered-team instance kick scheduling, Java event queue/lock comparison, socket ordering comparison, Java golden packet vectors, and client validation deferred.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerGroupRuntime|BaseLeavePlanner"` passes with 59 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1089 tests.
+
+#### Migration Parity Table - Session 624
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.ClientPackets.CmPlayerStatusInfo` / `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | No production change, but command id `2` now has explicit two-member ban/disband packet-order coverage. Alliance leave/ban, league commands, and full generic dispatch remain missing. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.GROUP_BAN_MEMBER` | Command code `2` branch in `GameServerConnection.HandlePlayerStatusInfoAsync` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | Two-member non-auto group ban/disband ordering is now covered. Java invalid-member exception behavior remains deferred. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.banPlayer` | `GameServerConnection.HandleGroupBanMemberAsync` plus `PlayerGroupRuntime.RemoveMemberWithLeavePlan` | Service / Runtime Bridge | Partial | Regression Tested | Needs Verification | Existing success path now has regression coverage when the ban causes Java `shouldDisband`. Java warning log for missing target remains unmodeled. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerGroupLeavedEvent` | `PlayerGroupRuntime.RemoveMemberWithLeavePlan` / connection group ban sends | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | BAN reason fanout and DISBAND replay order are covered together. Mentor-stop, EventService, instance kick, and live socket ordering remain missing. |
+| `com.aionemu.gameserver.model.team.group.events.GroupDisbandEvent` | `PlayerGroupLeavePacketIntentKind.LeaveGroupMember` plus disband intents in `PlayerGroupRuntime` | Event Runtime/Socket Bridge | Partial | Regression Tested | Needs Verification | Java replay of `PlayerGroupLeavedEvent(DISBAND)` is covered after a ban leaves one member. Multi-member explicit disband and Java event queue behavior are not compared. |
+| `com.aionemu.gameserver.model.team.common.events.PlayerLeavedEvent` | `Aion.GameServer.Services.PlayerBaseLeavePlanner` and `PlayerGroupLeavePacketIntentKind.LeaveGroupMember` | Base Event Dependency | Partial | Regression Tested | Needs Verification | Base leave packets are covered for both the disbanded remaining member and the banned player. Registered-team instance message/kick and EventService callback remain deferred. |
+| `com.aionemu.gameserver.model.team.GeneralTeam.shouldDisband` | `PlayerGroupRuntime.RemoveMemberWithLeavePlan` disband predicate | Base Team State | Partial | Regression Tested | Needs Verification | Ban path now explicitly covers non-auto group plus one remaining member. Runtime/threading comparison and unusual offline cases remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` through group ban sends | Server Packet | Partial | Regression Tested | Needs Verification | Covered before ban and disband messages. Java golden bytes, encrypted frames, and real-client validation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LEAVE_GROUP_MEMBER` | `Aion.GameServer.Network.Aion.ServerPackets.SmLeaveGroupMember` through group ban/disband sends | Server Packet | Partial | Regression Tested | Needs Verification | Covered for the remaining member during disband and for the banned player after `STR_PARTY_YOU_ARE_BANISHED`. Java registered-team instance follow-up remains deferred. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_HE_IS_BANISHED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyHeIsBanished` | Server Packet Factory | Partial | Regression Tested | Needs Verification | Covered before disband replay in the two-member ban path. Golden frame/client validation remains missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_IS_DISPERSED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyIsDispersed` | Server Packet Factory | Partial | Regression Tested | Needs Verification | Covered after ban fanout and before remaining member leave packet. Golden frame/client validation remains missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_YOU_ARE_BANISHED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.PartyYouAreBanished` | Server Packet Factory | Partial | Regression Tested | Needs Verification | Covered after the disband replay and before banned-player base leave. Golden frame/client validation remains missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / direct fallback | Runtime Dependency | Partial | Regression Tested | Needs Verification | Ordered registry sends are covered for the source-derived two-member ban/disband path. Java offline-recipient behavior and live socket ordering remain unverified. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_GroupBanTwoMemberGroupDisbandsBeforeBanishedMessageLikeJava`: validates parsed command id `2` on a two-member non-auto group clears both memberships, removes the runtime group, sends `SmGroupMemberInfo`, Java id `1300177`, Java disband id `1300167`, remaining member `SmLeaveGroupMember`, Java id `1300166`, and banned-player `SmLeaveGroupMember` in source-derived order.
+- Java comparison status: expectations are source-derived from `PlayerGroupService.banPlayer`, `PlayerGroupLeavedEvent`, `GroupDisbandEvent`, `PlayerLeavedEvent`, `GeneralTeam.shouldDisband`, `SM_GROUP_MEMBER_INFO`, `SM_LEAVE_GROUP_MEMBER`, and `SM_SYSTEM_MESSAGE`. No Java runtime execution, Java-generated golden vector, live client packet capture, Java static group registry comparison, Java event queue/lock comparison, Java invalid-member exception/log warning comparison, mentor-stop side-effect comparison, instance-kick comparison, EventService callback comparison, live socket ordering comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond C# packet object type/order, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Java invalid target member lookup can throw through `Objects.requireNonNull`; C# still no-ops missing targets.
+- Java warning log for attempting to ban a player outside the group is not modeled.
+- Java mentor stop side effects when a banned mentor leaves are flagged but not wired.
+- Java `EventService.onLeftTeam`, registered-team instance kick scheduling, and `STR_MSG_LEAVE_INSTANCE_NOT_PARTY` remain deferred.
+- Java static group registry lookup is approximated by runtime snapshots attached to players.
+- Java event queue, lock, group stats recalculation, object iteration order, offline-recipient handling, and threading behavior remain source-derived only.
+- Alliance leave/ban and league commands remain incomplete in `CM_PLAYER_STATUS_INFO`.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to C# packet object reachability/order; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 13
+- Total artifacts ported: 0 new production artifacts; 1 existing `CM_PLAYER_STATUS_INFO` group ban/disband path gained regression coverage
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 12
+- Total blocked artifacts: 9 Java invalid-member exception/logging policy, mentor-stop side effect, EventService callback, instance kick scheduling, alliance leave/ban, league commands, Java static service registry, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; group ban is better covered, but broader team leave/ban and live validation work remain incomplete.
+
+Next recommended unit of work:
+- Move laterally to `ALLIANCE_LEAVE` or `ALLIANCE_BAN_MEMBER` only if existing alliance planners can cover leave/disband/leader side effects accurately. Otherwise, harden remaining group-ban edge behavior such as missing target exception/log parity or offline banned-player packet suppression. Keep league commands deferred.
+
 ---
 
 ## Next Steps
