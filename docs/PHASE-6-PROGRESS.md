@@ -17123,6 +17123,57 @@ Summary metrics:
 Next recommended unit of work:
 - Start the reusable request-response registry abstraction for C# players, preserving Java `putRequest`, `respond` removal-before-handle, duplicate rejection by question id, and deny/remove behavior. Migrate the league invite typed slot only after the abstraction can be tested without regressing the existing buddy/rift/kisk/soulbind specialized paths, or keep it as an adapter if a full migration is too broad for one unit.
 
+### Session 669 (May 24, 2026)
+- Source-read Java `ResponseRequester` and `RequestResponseHandler` again before adding the reusable C# surface.
+- Added `QuestionResponseRegistry` as a reusable C# request-response registry:
+  - `PutRequest` rejects null request metadata and duplicate question ids,
+  - `Respond` removes the registered request before returning dispatch metadata,
+  - dispatch metadata preserves the Java response split (`0` deny, nonzero accept),
+  - `Remove` drops a registered request by question id,
+  - `DenyAll` returns deny dispatches and clears all active registrations.
+- Added `Player.ResponseRequester` as the future C# home for Java `Player.getResponseRequester()`.
+- Kept existing specialized pending request slots in place; league invite, buddy, rift, kisk, charge, and soulbind handlers are not migrated onto the registry in this unit.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter QuestionResponseRegistryTests` passes with 4 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1161 tests.
+
+#### Migration Parity Table - Session 669
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester` | `Aion.GameServer.Model.GameObjects.QuestionResponseRegistry` | Request Registry | Partial | Unit Tested | Needs Verification | Models `putRequest`, `respond`, `remove`, and `denyAll` as metadata dispatch. Does not store Java polymorphic handler objects or invoke request-specific callbacks directly. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest` | `QuestionResponseRegistry.PutRequest` | Request Registry Method | Partial | Unit Tested | Needs Verification | Null request metadata is rejected and duplicate question ids fail like Java `putIfAbsent`. Threading uses C# `Lock`, not Java `ConcurrentHashMap`. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.respond` | `QuestionResponseRegistry.Respond` | Request Registry Method | Partial | Unit Tested | Needs Verification | Removes the request before returning dispatch metadata. Does not directly call a handler callback yet. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.remove` | `QuestionResponseRegistry.Remove` | Request Registry Method | Partial | Unit Tested | Needs Verification | Removes by question id and reports success/failure. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.denyAll` | `QuestionResponseRegistry.DenyAll` | Request Registry Method | Partial | Unit Tested | Needs Verification | Returns deny dispatch metadata for all active requests and clears the registry. Java handler execution during iteration is not directly reproduced. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler` | `Aion.GameServer.Model.GameObjects.QuestionResponseDispatch` / `QuestionResponseRequest` | Request Handler Metadata | Partial | Unit Tested | Needs Verification | Captures request kind/payload and accept/deny split. Does not implement Java generic `Creature` requester, inheritance, or override-based callback dispatch. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getResponseRequester` | `Aion.GameServer.Model.GameObjects.Player.ResponseRequester` | Player Model Dependency | Partial | Unit Tested | Needs Verification | Adds a reusable registry property while preserving existing specialized pending slots. Existing live handlers are not migrated yet. |
+
+Tests added:
+- `QuestionResponseRegistryTests.PutRequest_RejectsNullAndDuplicateQuestionIdLikeJavaPutIfAbsent`: validates null rejection, duplicate rejection, and active count.
+- `QuestionResponseRegistryTests.Respond_RemovesBeforeDispatchAndMapsZeroToDenyNonzeroToAcceptLikeJavaHandle`: validates removal-before-dispatch and response `0`/nonzero accept split.
+- `QuestionResponseRegistryTests.Remove_DropsRegisteredQuestionLikeJavaRemove`: validates remove success/failure and no later response dispatch.
+- `QuestionResponseRegistryTests.DenyAll_ReturnsDenyDispatchesAndClearsLikeJavaDenyAll`: validates deny dispatch metadata and clearing all active registrations.
+- Java comparison status: expectations are source-derived from `ResponseRequester` and `RequestResponseHandler`. No Java runtime execution, Java-generated golden vector, live handler callback comparison, generic `Creature` requester comparison, concurrent map stress comparison, socket/client behavior, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Existing live question-response paths still use specialized pending slots and do not yet route through `QuestionResponseRegistry`.
+- C# registry returns dispatch metadata rather than executing Java-style polymorphic handler callbacks.
+- Java `ConcurrentHashMap` semantics are approximated with a C# lock; no concurrency stress tests were added.
+- `denyAll` ordering is dictionary iteration order and should not be considered packet-order parity.
+- Request-specific payloads are `object?` metadata and need typed adapters before broad live use.
+- Packet sends and client behavior are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 reusable request-response registry surface
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 5 live migration of specialized handlers, Java polymorphic handler callbacks, Java concurrent map stress parity, typed adapter design, and runtime/client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; a reusable request-response registry now exists, but live handlers still need careful migration.
+
+Next recommended unit of work:
+- Adapt league invite pending request registration/response onto `Player.ResponseRequester` as the first live user of the reusable registry. Keep the existing typed `PendingLeagueInviteRequest` as payload metadata if useful, and preserve the already-tested question-response behavior while removing duplicate single-slot checks from the planner where possible.
+
 ---
 
 ## Next Steps
