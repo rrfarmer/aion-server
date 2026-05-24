@@ -17642,6 +17642,66 @@ Summary metrics:
 Next recommended unit of work:
 - Continue `ResponseRequester` parity with a new Java user rather than more logout denial cleanup unless a clear missing denial side effect is found. Good narrow candidates are teleport request (`TeleportService.sendTeleportRequest`, question `905097`) or warehouse/cube expand (`STR_WAREHOUSE_EXPAND_WARNING`) if persistence and static expander data can be scoped safely. Keep charge/rift/kisk denial marked cleanup-only until their Java denial callbacks are proven.
 
+---
+
+### Session 679 (May 24, 2026)
+- Source-read Java `TeleportService.sendTeleportRequest`, `TeleportService.teleportToNpc`, `SpawnsData.getFirstSpawnByNpcId`, and `PositionUtil.convertHeadingToAngle`.
+- Added a focused C# teleport-to-NPC `ResponseRequester` slice:
+  - `SmQuestionWindow.TeleportToNpcConfirm` now represents Java question id `905097`.
+  - `QuestionResponseRequestKind.TeleportToNpc` tracks the pending request in the reusable registry.
+  - `NpcSpawnTable.GetFirstSpawnByNpcId` mirrors Java's preferred-current-world lookup followed by fallback to another world containing the NPC.
+  - `PlayerTeleportToNpcRequestService.SendTeleportRequest` registers the question with the NPC display name.
+  - `PlayerTeleportToNpcRequestService.HandleResponse` consumes deny/accept responses; accept resolves the spawn lazily, computes the Java-derived destination, and applies the Java `TeleportAnimation.NONE` same-instance teleport completion path.
+  - `GameServerConnection.HandleQuestionResponseAsync` now dispatches `905097` responses to the new service and completion fanout.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerTeleportToNpcRequestServiceTests` passes with 7 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1182 tests.
+
+#### Migration Parity Table - Session 679
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.teleport.TeleportService.sendTeleportRequest` | `Aion.GameServer.Services.PlayerTeleportToNpcRequestService.SendTeleportRequest` | Service / Request Handler | Partial | Unit Tested | Needs Verification | Registers question id `905097` with the C# response registry and returns `SmQuestionWindow`. Java sends immediately via `PacketSendUtility`; C# exposes the packet for callers because WebReward is not ported yet. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.teleportToNpc` | `PlayerTeleportToNpcRequestService.CreateDestination` / `HandleResponse` | Teleport Service | Partial | Unit Tested | Needs Verification | Destination x/y, fallback z `spot.Z + 0.5`, look-at-NPC heading, and `TeleportAnimation.NONE` path are source-derived. C# now resolves the spawn on accept like Java, but still has no `GeoService.getZ` or full instance-service equivalent here. |
+| `com.aionemu.gameserver.dataholders.SpawnsData.getFirstSpawnByNpcId` | `Aion.GameServer.Dataholders.NpcSpawnTable.GetFirstSpawnByNpcId` | Dataholder Lookup | Partial | Unit Tested | Needs Verification | Searches caller world first, then first matching spawn in another world. C# uses flattened imported spawn order, not Java spawn-group object identity, world-map iteration, pooled spawn-group behavior, or event-spawn mutation. |
+| `com.aionemu.gameserver.utils.PositionUtil.convertHeadingToAngle` | `PlayerTeleportToNpcRequestService.ConvertHeadingToAngle` | Utility Math | Partial | Unit Tested | Needs Verification | Mirrors `heading * 3f` normalization for tested headings. Broader heading normalization and Java float rounding were not runtime-compared. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester` | `Aion.GameServer.Model.GameObjects.QuestionResponseRegistry` | Request Registry | Partial | Unit Tested / Regression Tested | Needs Verification | Adds the teleport-to-NPC request kind and consumes accept/deny responses. Still metadata-based; Java anonymous handler object execution is not reproduced. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_QUESTION_RESPONSE` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleQuestionResponseAsync` | Client Packet Dispatch | Partial | Regression Tested by full suite | Needs Verification | Dispatches `905097` to the new handler. Focused tests exercise the service directly, not socket parsing or encrypted frame ordering. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow` | Server Packet | Partial | Regression Tested by packet suite / Unit Tested by service | Needs Verification | Constant for `905097` added. Existing packet serialization tests cover generic layout, but this unit did not add Java golden-byte validation for the teleport prompt or NPC l10n parameter. |
+| `com.aionemu.gameserver.services.reward.WebRewardService` | Not yet ported | Service Dependency | Not Started | No Tests | Unknown | Newly documented caller dependency: Java WebReward invokes `sendTeleportRequest` for quest/daevanion NPCs. C# still defers WebReward from `CM_PLAYER_LISTENER`. |
+| `com.aionemu.gameserver.geoEngine.GeoService` | Not ported for this flow | Geo Dependency | Not Started | No Tests | Unknown | Java attempts collision-aware z lookup and falls back to `spot.Z + 0.5`; C# implements only the fallback. |
+| `com.aionemu.gameserver.instance.InstanceService` / `WorldMapInstance` selection | `WorldPosition.InstanceId` plus `PlayerTeleportService.TeleportWithinSameInstance` | Instance Dependency | Partial | Unit Tested | Needs Verification | Same-world requests preserve the player's instance id. Cross-world instance/open-world selection is simplified and needs a future world-map runtime integration pass. |
+
+Tests added/updated:
+- `PlayerTeleportToNpcRequestServiceTests.GetFirstSpawnByNpcId_SearchesPlayerWorldBeforeOtherWorlds`: validates Java-style preferred-world lookup and fallback lookup order from flattened spawn data.
+- `PlayerTeleportToNpcRequestServiceTests.SendTeleportRequest_RegistersQuestionWindowAndAcceptComputesJavaDestination`: validates question id `905097`, registry insertion, NPC name payload, and accept-time radius, x/y math, fallback z, heading, and instance preservation.
+- `PlayerTeleportToNpcRequestServiceTests.SendTeleportRequest_DuplicateQuestionLeavesOriginalRequest`: validates Java `putIfAbsent` duplicate behavior leaves the first pending request active.
+- `PlayerTeleportToNpcRequestServiceTests.HandleResponse_DenyConsumesRequestAndDoesNotMovePlayer`: validates deny consumes the registry entry without moving the player.
+- `PlayerTeleportToNpcRequestServiceTests.HandleResponse_AcceptConsumesRequestAndTeleportsWithNoneArrival`: validates accept consumes the registry entry, mutates position, sets `TeleportAnimation.NONE` landing behavior, and resets movement target.
+- `PlayerTeleportToNpcRequestServiceTests.HandleResponse_WrongQuestionLeavesRegisteredRequest`: validates unrelated question ids do not consume the teleport request.
+- `PlayerTeleportToNpcRequestServiceTests.HandleResponse_NoSpawnConsumesRequestAndDoesNotMovePlayer`: validates missing spawn on accept consumes the pending question and does not move the player, matching Java's no-spawn return after response handling.
+- Java comparison status: expectations are source-derived from `TeleportService`, `SpawnsData`, `PositionUtil`, and `ResponseRequester`. No Java runtime execution, Java-generated golden vector, live WebReward caller validation, Java spawn-group mutation comparison, GeoService z comparison, instance-service comparison, packet capture, encrypted frame comparison, reflection behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- C# resolves the teleport destination on accept like Java, but Java spawn-group/event-spawn mutations and world-map iteration order are not runtime-compared.
+- `GeoService.getZ` is not represented; C# always uses Java's fallback `spot.Z + 0.5`.
+- Cross-world and instance-map routing is simplified; Java's `InstanceService.getOrRegisterInstance` and main-world instance selection need deeper world-runtime integration.
+- WebReward is still not ported, so the new request service has no production caller for the Java reward paths yet.
+- C# uses flattened spawn order and does not reproduce Java spawn groups, event-spawn removal, or pooled group identity for this lookup.
+- Generic Java `RequestResponseHandler` polymorphic callback execution remains partial; C# continues to use typed metadata in `QuestionResponseRegistry`.
+- Packet sends are validated by C# packet type/question id and existing serialization coverage only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+- Precision/rounding is source-derived but not Java-runtime compared; date/time handling is not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 teleport-to-NPC request/response slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 8 WebReward caller integration, Java runtime comparison, GeoService z lookup, full instance-service routing, Java spawn-group/event-spawn parity, generic anonymous handler callback execution, real socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; one more `ResponseRequester` user is represented, but WebReward and deeper teleport world/geo infrastructure remain partial.
+
+Next recommended unit of work:
+- Continue with another narrow `ResponseRequester` user now that teleport-to-NPC is represented. The best next candidate is warehouse/cube expansion if static expander data and persistence can be scoped, otherwise source-read duel/group/legion invite handlers and pick the smallest one with existing C# runtime state. Do not mark teleport-to-NPC as verified until Java runtime/golden packet or live behavior comparison exists.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
