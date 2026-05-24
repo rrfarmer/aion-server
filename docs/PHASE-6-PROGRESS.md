@@ -15363,6 +15363,49 @@ Summary metrics:
 Next recommended unit of work:
 - Move laterally to the next non-league `CM_PLAYER_STATUS_INFO` gap with smaller missing side effects, or source-read whether multi-member no-online-fallback leader leave can be represented without corrupting C# leader state. Keep league commands deferred until a live league runtime bridge exists.
 
+### Session 632 (May 23, 2026)
+- Source-read Java `CM_PLAYER_STATUS_INFO.runImpl` and `TeamCommand.getCommand`.
+- Added a C# command-id validation gate at the start of `GameServerConnection.HandlePlayerStatusInfoAsync` so unknown command ids fail before dispatch, matching Java's `TeamCommand.getCommand(commandCode)` behavior.
+- Kept the full Java enum id set, including deferred league ids, as recognized command ids so currently deferred valid commands can still follow their existing branch behavior.
+- Added a regression test for an invalid command id (`255`) that asserts the C# handler throws with the Java-derived message and does not send packets.
+- Intentional C# difference: Java throws `NullPointerException` via `Objects.requireNonNull`; C# throws `InvalidOperationException` with the same message because that is the local idiom for invalid handler state.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerStatusInfo|PlayerAllianceRuntime|PlayerAllianceMemberInfo|BaseLeavePlanner"` passes with 84 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1098 tests.
+
+#### Migration Parity Table - Session 632
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PLAYER_STATUS_INFO` | `Aion.GameServer.Network.Aion.ClientPackets.CmPlayerStatusInfo` / `Aion.GameServer.Network.Aion.GameServerConnection.HandlePlayerStatusInfoAsync` | Client Packet / Handler Boundary | Partial | Regression Tested | Needs Verification | Unknown command ids now fail before dispatch like Java. Valid but deferred league commands are still recognized and remain incomplete. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand` | `GameServerConnection.IsKnownPlayerStatusTeamCommand` | Enum / Command Mapping | Partial | Regression Tested | Needs Verification | C# now carries the Java command id set for validation. This is not a full enum port and must be kept in sync if Java command ids change. |
+| `com.aionemu.gameserver.model.team.common.events.TeamCommand.getCommand` | `GameServerConnection.IsKnownPlayerStatusTeamCommand` plus invalid-command throw | Utility / Decoder | Partial | Regression Tested | Intentional Difference | Java throws `NullPointerException` via `Objects.requireNonNull`; C# throws `InvalidOperationException` with the same message. No Java runtime comparison was run. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamCommandService` | Existing `GameServerConnection.HandlePlayerStatusInfoAsync` branch dispatch | Service Dependency | Partial | Regression Tested | Needs Verification | This unit only hardened pre-dispatch command validation. Generic service dispatch remains manually branched in C#, and league command behavior is still deferred. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` / direct fallback | Runtime Dependency | Partial | Regression Tested | Needs Verification | Invalid command test confirms no packets are sent after validation fails. Live socket exception propagation and logging remain unverified. |
+
+Tests added:
+- `GameServerConnectionPlayerStatusInfoTests.HandlePlayerStatusInfoAsync_InvalidTeamCommandThrowsLikeJava`: validates parsed command id `255` throws `InvalidOperationException` with message `Invalid team command code 255` and sends no packets.
+- Java comparison status: expectations are source-derived from `CM_PLAYER_STATUS_INFO.runImpl`, `TeamCommand.getCommand`, and `Objects.requireNonNull`. No Java runtime execution, Java-generated golden vector, live client packet capture, packet processor exception propagation comparison, logging comparison, threading comparison, reflection behavior, encrypted frame comparison, serialization comparison beyond handler reachability, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Valid but currently deferred league commands (`29`, `30`, `31`, `32`) are recognized but not functionally ported.
+- C# still uses manual branch dispatch rather than a full `PlayerTeamCommandService` equivalent.
+- Java exception type is intentionally different; only the message and fail-before-dispatch behavior are mirrored.
+- Java packet processor exception handling/logging for invalid commands has not been runtime-compared.
+- Java static team/alliance/league registries, event queue, locks, and threading behavior remain source-derived only.
+- Java golden byte vectors, encrypted opcode/frame validation, packet capture comparison, and real-client validation remain unavailable.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit. Serialization parity is limited to command payload reachability and handler behavior; no Java golden bytes were compared.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 `CM_PLAYER_STATUS_INFO` invalid-command validation branch plus 1 command-id validation helper
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 5 league command behavior, full generic team-command dispatch, Java packet processor exception/log comparison, encoded opcode/frame golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; command validation parity is tighter, but functional gameplay gaps are unchanged.
+
+Next recommended unit of work:
+- Move to a valid but deferred `CM_PLAYER_STATUS_INFO` branch only if it can be modeled without league runtime support, or continue source-reading league command prerequisites and document blockers. If staying non-league, audit group/alliance offline-recipient behavior now that invalid-command validation is aligned.
+
 ---
 
 ## Next Steps
