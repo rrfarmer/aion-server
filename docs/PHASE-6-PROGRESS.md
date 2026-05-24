@@ -22486,6 +22486,65 @@ Next recommended unit of work:
 
 ---
 
+### Session 773 (May 24, 2026)
+- Re-inspected Java `NpcSkillTemplateEntry.conditionReady` and `NpcSkillCondition`:
+  - owner null/dead/about-to-die blocks all conditions;
+  - `NONE` is ready;
+  - several target-state conditions check current target type, abnormal state, flying state, class type, gate type, or range;
+  - `HELP_FRIEND` scans the known list and mutates the owner target;
+  - carved-signet conditions inspect skill effects and target abnormal effects;
+  - `NPC_IS_ALIVE` scans world-map NPCs by template id.
+- Added `PlayerSummonKnownObjectNpcSkillCondition`, mirroring Java condition names as represented metadata.
+- Added `PlayerSummonKnownObjectNpcSkillConditionTarget` and target-kind enum for simple target-state predicates.
+- Added `PlayerSummonKnownObjectNpcSkillConditionReadiness` / status enum.
+- Added `PlayerSummonSkillExecutionService.EvaluateMercenaryNpcSkillConditionReadiness`.
+- Modeled simple non-mutating condition branches:
+  - `NONE`;
+  - target abnormal checks for aether hold/open aerial, stunned, any stun, stumble, sleeping, poisoned, and bleeding;
+  - target flying;
+  - target gate/player/NPC;
+  - target magical/physical player class;
+  - target in range.
+- Returned `Unsupported` for branches needing known-list scans, target mutation, signet/effect inspection, or world-map NPC scans.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 41 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1365 tests.
+
+#### Migration Parity Table - Session 773
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.skill.NpcSkillTemplateEntry.conditionReady` | `PlayerSummonSkillExecutionService.EvaluateMercenaryNpcSkillConditionReadiness` | NPC Skill Condition Projection | Partial | Regression Tested | Needs Verification | C# models simple non-mutating target-state predicates. Known-list scans, owner target mutation, carved signet effects, and world-map NPC scans remain unsupported. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillCondition` | `PlayerSummonKnownObjectNpcSkillCondition` | Enum Projection | Partial | Regression Tested | Needs Verification | C# represents the Java condition names. XML mapping from actual NPC skill templates remains unwired. |
+| `com.aionemu.gameserver.model.templates.npcskill.NpcSkillConditionTemplate` | `PlayerSummonKnownObjectNpcSkillConditionTarget` plus explicit condition inputs | DTO / Condition Metadata | Partial | Regression Tested | Needs Verification | C# does not yet represent `hp_below`, `range`, `npc_id`, delay, can-die, or despawn-time as a full template. Range is a precomputed boolean in this slice. |
+| `com.aionemu.gameserver.controllers.effect.EffectController.isInAnyAbnormalState` target condition calls | `PlayerSummonKnownObjectNpcSkillConditionTarget.IsInAnyAbnormalState` | Abnormal-State Projection | Partial | Regression Tested | Needs Verification | Reuses represented `PlayerAbnormalState` flags for target-state predicates. Live effect-controller state, serialization, packet/effect fanout, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.services.TribeRelationService` / `KnownList.findObject` / `GeoService.canSee` in `HELP_FRIEND` | `PlayerSummonKnownObjectNpcSkillConditionReadinessStatus.Unsupported` | Known-List / Target Mutation Dependency | Not Started | Regression Tested as unsupported branch | Needs Verification | Help-friend behavior remains missing because it requires support/friend relation checks, HP threshold, range/geo visibility, known-list scan, and `creature.setTarget(validTarget)`. |
+| `com.aionemu.gameserver.skillengine.effect.SignetBurstEffect` / target abnormal effect lookup | `PlayerSummonKnownObjectNpcSkillConditionReadinessStatus.Unsupported` for carved-signet conditions | Effect Dependency | Not Started | No Tests | Needs Verification | Carved signet condition branches are represented as enum values but not executed; skill effect inspection and target abnormal effect lookup remain missing. |
+| `com.aionemu.gameserver.world.WorldMapInstance.getNpcs` used by `NPC_IS_ALIVE` | `PlayerSummonKnownObjectNpcSkillConditionReadinessStatus.Unsupported` for `NpcIsAlive` | World Scan Dependency | Not Started | No Tests | Needs Verification | World-map NPC lookup by template id is not represented in this slice. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.EvaluateMercenaryNpcSkillConditionReadiness_ProjectsSimpleJavaConditionBranches`: validates owner-not-ready, `NONE`, missing target, target stunned, target sleeping, target bleeding not-ready, target flying, target player/NPC/gate, magical vs physical class predicates, in-range/out-of-range predicates, and unsupported `HELP_FRIEND`.
+- Java comparison status: expectations are source-derived from Java `NpcSkillTemplateEntry.conditionReady`, `NpcSkillCondition`, `NpcSkillConditionTemplate`, target abnormal state calls, target type checks, and range predicate calls. No Java runtime execution, live target object comparison, known-list scan comparison, target mutation comparison, signet/effect comparison, world-map scan comparison, reflection comparison, threading comparison, serialization comparison, geometry comparison, or live-client validation was run.
+
+Remaining risks:
+- Condition readiness is still standalone metadata and is not yet consumed by `EvaluateMercenarySkillReadiness`.
+- Supported branches rely on caller-supplied target metadata rather than live objects.
+- `HELP_FRIEND`, carved signet conditions, `NPC_IS_ALIVE`, full range math, and owner target mutation remain unsupported.
+- XML condition-template mapping is not wired.
+- Reflection, threading, serialization, date/time runtime, precision/rounding, Java runtime, geometry, effect state, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 represented simple `conditionReady` target-state slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 12 live condition-template mapping, live target objects, known-list scans, tribe relation checks, geo visibility, owner target mutation, carved signet/effect lookup, world-map NPC scans, Java range geometry, live AI scheduling, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; simple NPC skill condition metadata is represented, but live condition evaluation parity remains partial.
+
+Next recommended unit of work:
+- Continue by wiring `EvaluateMercenaryNpcSkillConditionReadiness` into `EvaluateMercenarySkillReadiness` as the typed replacement for the remaining `entryConditionReady` boolean, or broaden condition metadata for `NpcSkillConditionTemplate.range` and `TARGET_IS_IN_RANGE`. Keep help-friend target mutation, carved signet effects, world-map NPC scans, Java geometry, live AI state, effects, packets, and controller execution explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
