@@ -18731,6 +18731,60 @@ Summary metrics:
 Next recommended unit of work:
 - Add the Java min/max NPC-specific failure system messages for cube/warehouse expansion and cover request-side failure planning, or add persistence support for NPC expansion mutations (`npc_expands`, `wh_npc_expands`) so accepted NPC expansion survives logout. Keep live-client/golden packet validation as a later readiness pass.
 
+---
+
+### Session 697 (May 24, 2026)
+- Continued storage expansion parity by adding Java NPC-specific min/max failure system messages for cube and warehouse expansion.
+- Added `SmSystemMessage` factories for Java ids:
+  - `1300436` / `STR_EXTEND_INVENTORY_CANT_EXTEND_DUE_TO_MINIMUM_EXTEND_LEVEL_BY_THIS_NPC`,
+  - `1300437` / `STR_EXTEND_INVENTORY_CANT_EXTEND_MORE_DUE_TO_MAXIMUM_EXTEND_LEVEL_BY_THIS_NPC`,
+  - `1300438` / `STR_EXTEND_CHAR_WAREHOUSE_CANT_EXTEND_DUE_TO_MINIMUM_EXTEND_LEVEL_BY_THIS_NPC`,
+  - `1300439` / `STR_EXTEND_CHAR_WAREHOUSE_CANT_EXTEND_MORE_DUE_TO_MAXIMUM_EXTEND_LEVEL_BY_THIS_NPC`.
+- Updated `StorageExpansionNpcService` request planning so template min/max failures are handled by sending Java-visible system-message packets instead of silently returning not-handled.
+- Source-derived NPC name parameter now follows Java `npc.getObjectTemplate().getL10n()` behavior by using `ChatUtil.L10n(template.NameId)` when available, with a plain-name fallback for represented templates without a `name_id`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "StorageExpansionNpcServiceTests|GamePacketTests"` passes with 91 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1263 tests.
+
+#### Migration Parity Table - Session 697
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.CubeExpandService.expandCube` | `Aion.GameServer.Services.StorageExpansionNpcService.RequestCubeExpansion` | Service / Request Planner | Partial | Regression Tested | Needs Verification | Request-side NPC min/max branches now emit represented Java system messages. Still missing DAO persistence, common-data save, deeper cube-limit storage object recalculation, Java runtime/golden comparison, and live socket-order validation. |
+| `com.aionemu.gameserver.services.WarehouseService.expandWarehouse` | `Aion.GameServer.Services.StorageExpansionNpcService.RequestWarehouseExpansion` | Service / Request Planner | Partial | Regression Tested | Needs Verification | Request-side NPC min/max branches now emit represented Java system messages. Still missing DAO persistence, common-data save, warehouse-limit storage object recalculation, Java runtime/golden comparison, and live socket-order validation. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_EXTEND_INVENTORY_CANT_EXTEND_DUE_TO_MINIMUM_EXTEND_LEVEL_BY_THIS_NPC` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.InventoryCantExtendBelowNpcMinimum` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | C# serialized packet id `1300436` and parameter order are asserted. The level parameter uses Java's `minExpansionLevel - 1`. Java golden bytes, encrypted frames, localized client rendering, and runtime comparison were not performed. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_EXTEND_INVENTORY_CANT_EXTEND_MORE_DUE_TO_MAXIMUM_EXTEND_LEVEL_BY_THIS_NPC` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.InventoryCantExtendAboveNpcMaximum` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | C# serialized packet id `1300437` and parameter order are asserted. Cube maximum uses `Math.Min(template.MaxExpansionLevel, NPC_CUBE_EXPANDS_SIZE_LIMIT)` per Java. Java golden bytes, encrypted frames, localized client rendering, and runtime comparison were not performed. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_EXTEND_CHAR_WAREHOUSE_CANT_EXTEND_DUE_TO_MINIMUM_EXTEND_LEVEL_BY_THIS_NPC` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.WarehouseCantExtendBelowNpcMinimum` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | C# serialized packet id `1300438` and parameter order are asserted. The level parameter uses Java's `minExpansionLevel - 1`. Java golden bytes, encrypted frames, localized client rendering, and runtime comparison were not performed. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_EXTEND_CHAR_WAREHOUSE_CANT_EXTEND_MORE_DUE_TO_MAXIMUM_EXTEND_LEVEL_BY_THIS_NPC` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.WarehouseCantExtendAboveNpcMaximum` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | C# serialized packet id `1300439` and parameter order are asserted. Warehouse maximum uses template max level per Java. Java golden bytes, encrypted frames, localized client rendering, and runtime comparison were not performed. |
+| `com.aionemu.gameserver.model.templates.L10n.getL10n` / `NpcTemplate.getL10nId` | `Aion.GameServer.Utils.ChatUtil.L10n` / `NpcTemplateSummary.NameId` | Localization Dependency | Partial | Regression Tested indirectly | Needs Verification | Storage expansion NPC-name parameters now use represented client l10n tokens when `NameId > 0`. Fallback to raw template name is a C# defensive difference for incomplete test/static summaries; real Java NPC templates require `name_id`. |
+| `com.aionemu.gameserver.model.templates.StorageExpansionTemplate.getMinExpansionLevel/getMaxExpansionLevel/getPrice` | `StorageExpansionTemplateSummary.MinExpansionLevel` / `MaxExpansionLevel` / `GetPrice` | DTO Dependency | Partial | Regression Tested | Needs Verification | Existing min/max/price shape now drives handled failure packets. Duplicate level behavior, malformed XML behavior, Java JAXB comparison, and full real-data parity remain unverified. |
+| `com.aionemu.gameserver.configs.main.CustomConfig.NPC_CUBE_EXPANDS_SIZE_LIMIT` | `GameServerOptions.Custom.NpcCubeExpandsSizeLimit` argument to `RequestCubeExpansion` | Config Dependency | Partial | Regression Tested indirectly | Needs Verification | Cube NPC max failure uses the configured NPC cube cap in the request planner. Property-file override loading and Java config initialization timing were not revalidated in this unit. |
+
+Tests added/updated:
+- `GamePacketTests` system-message assertions now validate ids `1300436`, `1300437`, `1300438`, and `1300439`, including NPC l10n token and level parameter ordering.
+- `StorageExpansionNpcServiceTests.RequestExpansion_BelowNpcMinimumEmitsJavaNpcSpecificMessages`: validates cube and warehouse below-minimum request planning sends Java-derived NPC-specific system messages and does not open a question.
+- `StorageExpansionNpcServiceTests.RequestExpansion_AboveNpcMaximumEmitsJavaNpcSpecificMessages`: validates cube and warehouse above-maximum request planning sends Java-derived NPC-specific system messages and does not open a question.
+- Existing storage expansion request/response tests were rerun to ensure warning question, duplicate request, denial, acceptance, and not-enough-Kinah behavior still pass.
+- Java comparison status: expectations are source-derived from `CubeExpandService`, `WarehouseService`, `SM_SYSTEM_MESSAGE`, `L10n`, `NpcTemplate`, `StorageExpansionTemplate`, and `CustomConfig`. No Java runtime execution, Java-generated golden vector, encrypted-frame comparison, live-client localization/rendering check, threading behavior test, reflection behavior comparison, serialization comparison beyond C# packet payload checks, date/time behavior, or production socket-order validation was run.
+
+Remaining risks:
+- NPC expansion persistence to `players.npc_expands` and `players.wh_npc_expands` is still missing.
+- Storage object cube/warehouse limit recalculation remains represented by fields and outgoing packets only.
+- Full real `storage_expander` XML count parity and duplicate NPC id overwrite behavior remain unverified.
+- End-to-end production dialog tests for action ids `47` and `48` remain missing.
+- Java golden packet bytes, encrypted frames, localized client rendering, and live client validation remain unperformed.
+- The C# fallback from missing `NameId` to raw NPC name is intentionally defensive for incomplete represented templates; real static-data parity depends on NPC templates retaining Java `name_id` values.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 storage-expansion NPC min/max failure-message slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 6 NPC expansion persistence, storage limit recalculation, full real-data comparison, end-to-end dialog tests, golden/encrypted packet comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; storage expansion request/answer edge messaging is closer, but persistence and runtime parity checks remain partial.
+
+Next recommended unit of work:
+- Add persistence support for accepted NPC expansion mutations (`npc_expands`, `wh_npc_expands`) so cube/warehouse NPC expansion survives logout, then cover the repository boundary with source-derived tests. Keep full real XML count comparison and end-to-end dialog/socket validation as follow-up readiness work.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
