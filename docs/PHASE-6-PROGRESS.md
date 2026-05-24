@@ -20758,6 +20758,58 @@ Next recommended unit of work:
 
 ---
 
+### Session 739 (May 24, 2026)
+- Added represented casting skill method metadata beside the existing represented skill id:
+  - `PlayerCastingSkillMethod.None`
+  - `PlayerCastingSkillMethod.Cast`
+  - `PlayerCastingSkillMethod.Item`
+  - `PlayerCastingSkillSnapshot`
+- Extended `Player.SetCastingSkill` / `ClearCastingSkill` so Java's `SkillMethod` branch can be preserved long enough for cancellation decisions.
+- Wired `GameServerConnection.CancelCurrentSkillForCastSpell` so the spell id `0` route emits `SmSkillCancel` and `SmSystemMessage.SkillCanceled()` only for represented `SkillMethod.CAST`.
+- Added connection-level regressions proving:
+  - represented cast-method cancellation clears state, records last skill id, emits `SmSkillCancel` then `STR_SKILL_CANCELED`, and still exits before pet/template checks;
+  - represented item-method cancellation clears state but does not emit cast-cancel packets.
+- Kept full Java fanout gaps explicit: visible-player broadcast scope, `Skill.cancelCast`, hit-time boost reset/boost, item-skill cancel message/cooldown/animation, and last-attacker notification remain incomplete.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionCastSpellTests|PlayerCastSpellEarlyExitServiceTests|GamePacketTests"` passes with 103 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1327 tests.
+
+#### Migration Parity Table - Session 739
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CASTSPELL.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleCastSpellAsync` | Client Packet Handler Seam | Partial | Regression Tested | Needs Verification | Spell id `0` now performs represented current-skill cancellation and emits cast-method cancel packets for the active client. Full skill runtime and visible-player fanout remain incomplete. |
+| `com.aionemu.gameserver.skillengine.model.Skill.SkillMethod` | `Aion.GameServer.Model.GameObjects.PlayerCastingSkillMethod` | Enum / Skill State Metadata | Partial | Regression Tested through connection seam | Needs Verification | C# represents only `Cast` and `Item` branches needed by `PlayerController.cancelCurrentSkill`. Java enum behavior on full `Skill` objects, serialization, reflection, and downstream item-skill behavior remain unported. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.castingSkill` / `Player.setCasting` | `Player.CastingSkillId`, `Player.CastingSkillMethod`, `PlayerCastingSkillSnapshot`, `ClearCastingSkill` | Player State | Partial | Regression Tested through connection seam | Needs Verification | C# preserves skill id and method while clearing current casting state and recording last skill id. It still lacks the full Java `Skill` object, skill template, first target, item template, cast task, and cancel-rate behavior. |
+| `com.aionemu.gameserver.controllers.PlayerController.cancelCurrentSkill` `SkillMethod.CAST` branch | `GameServerConnection.CancelCurrentSkillForCastSpell` plus `SmSkillCancel` / `SmSystemMessage.SkillCanceled` emission | Controller Side Effect / Packet Caller | Partial | Regression Tested | Needs Verification | C# emits `SmSkillCancel` and `SkillCanceled` for represented cast-method cancellation. Java broadcasts `SM_SKILL_CANCEL` to visible players including self; C# test observes active-client sends only, so broadcast scope and socket ordering remain incomplete. |
+| `com.aionemu.gameserver.controllers.PlayerController.cancelCurrentSkill` `SkillMethod.ITEM` branch | `PlayerCastingSkillMethod.Item` guard in `HandleCastSpellAsync` | Controller Branch Guard | Partial | Regression Tested | Needs Verification | C# avoids incorrectly sending cast-cancel packets for item-method skills. Java item branch sends `STR_ITEM_CANCELED`, removes item cooldown, and broadcasts item-use cancel animation; those side effects remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SKILL_CANCEL` | `Aion.GameServer.Network.Aion.ServerPackets.SmSkillCancel` emitted by the cast-spell zero branch | Packet Side Effect | Partial | Regression Tested | Needs Verification | Packet helper is now called from the represented cast branch, but only active-client send capture is tested. No Java golden bytes, visible-player broadcast comparison, encrypted live-frame comparison, or live-client validation was run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_CANCELED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.SkillCanceled` emitted by the cast-spell zero branch | Packet Side Effect | Partial | Regression Tested | Needs Verification | Message id `1300023` is emitted after `SmSkillCancel` for represented cast-method cancellation. Java golden bytes and localized live-client rendering remain unverified. |
+
+Tests added/updated:
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_ZeroSpellIdClearsCastSkillAndSendsCancelPackets`: validates represented cast-method zero-spell cancellation clears state, records last skill id, avoids pet/template lookup, and emits `SmSkillCancel` then `SkillCanceled`.
+- `GameServerConnectionCastSpellTests.HandleCastSpellAsync_ZeroSpellIdWithItemSkillClearsCastingSkillWithoutCastCancelPackets`: validates represented item-method cancellation clears state without emitting cast-cancel packets.
+- Existing cast-spell planner and packet tests were rerun in the focused filter.
+- Java comparison status: expectations are source-derived from Java `CM_CASTSPELL.runImpl`, `PlayerController.cancelCurrentSkill`, `Skill.SkillMethod`, `SM_SKILL_CANCEL.java`, and `SM_SYSTEM_MESSAGE.java`. No Java runtime execution, Java-generated golden packets, live visible-player broadcast comparison, encrypted-frame comparison, full `Skill.cancelCast` behavior, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- `SmSkillCancel` emission is currently active-client send coverage, not Java's full visible-player `broadcastPacket(..., true)` fanout.
+- Full Java `Skill` object behavior, `Skill.cancelCast`, hit-time boost reset/boost, item-skill cancellation messages/cooldown removal, item animation cancel, last-attacker notification, and broadcast recipient selection remain missing.
+- Represented method metadata is manual/test-fed until full skill casting state is produced by future `SkillEngine` execution.
+- Packet tests validate C# serialization shape from source-derived constants, not Java golden bytes or live-client rendering.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 represented cast-method cancel packet emission slice plus skill-method metadata
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 visible-player broadcast fanout, full `Skill` object model, item-skill cancel side effects, hit-time boost behavior, Java runtime/golden packet comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; zero-spell cast cancellation now reaches represented packet emission, but full skill cancellation and skill execution remain partial.
+
+Next recommended unit of work:
+- Add the represented `SkillMethod.ITEM` cancel branch for zero-spell cancellation: model the minimum item-casting metadata needed for Java's `STR_ITEM_CANCELED`, cooldown removal, and `SM_ITEM_USAGE_ANIMATION(..., 0, 3, 0)` packet, or reuse `_pendingItemUse` metadata where safe. Keep `Skill.cancelCast`, hit-time boost, last-attacker notification, and full broadcast recipient parity documented if they remain unsupported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
