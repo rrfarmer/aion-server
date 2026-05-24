@@ -19184,6 +19184,51 @@ Next recommended unit of work:
 
 ---
 
+### Session 706 (May 24, 2026)
+- Continued storage expansion parity by adding production `CM_USE_ITEM` coverage for Java warehouse ticket completed-quest offset behavior.
+- Added a connection-level test where warehouse ticket item `169640000` is used while:
+  - `WarehouseBonusExpands = 1`,
+  - warehouse quest `1987` is complete.
+- The production use-item branch now proves Java `WarehouseService.canExpandByTicket` behavior is preserved through the handler: completed warehouse quests offset bonus-expansion level checks, allowing the level-1 warehouse ticket to advance `WarehouseBonusExpands` from `1` to `2`.
+- The test also asserts represented regular warehouse capacity refreshes to `40` and emits source item update, item-use animation, warehouse-size system message, and regular warehouse info refresh packets.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionInventoryExpansionUseItemTests|InventoryExpansionService_MatchesJavaTicketLevelAndQuestGuards"` passes with 6 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1273 tests.
+
+#### Migration Parity Table - Session 706
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.WarehouseService.canExpandByTicket` | `Aion.GameServer.Services.InventoryExpansionService.CreatePlan` production caller | Service / Ticket Validation | Partial | Regression Tested | Needs Verification | Production warehouse ticket route now covers the completed-quest offset check `whBonusExpands - getCompletedWhQuests(player) < ticketLevel`. Java runtime comparison, failure packet byte comparison, and live-client behavior remain unverified. |
+| `com.aionemu.gameserver.services.WarehouseService.getCompletedWhQuests` | `InventoryExpansionService.GetCompletedWarehouseQuestCount` via `Player.Quests` | Service / Quest Dependency | Partial | Regression Tested | Needs Verification | C# counts completed quest ids `1987` and `2985`; production-route test now covers quest `1987`. Quest `2985`, repeat-completion edge cases, Java `QuestStateList` semantics, threading, and persistence-loading differences remain unverified. |
+| `com.aionemu.gameserver.questEngine.model.QuestStatus.COMPLETE` | `PlayerQuestState.IsComplete` | Enum / Quest State Dependency | Partial | Regression Tested | Needs Verification | Production-route test uses status string `COMPLETE` to match Java quest status behavior. Full enum mapping, casing behavior, serialization, and database-loaded status values remain broader than this unit. |
+| `com.aionemu.gameserver.services.WarehouseService.expand(player, false)` | `HandleInventoryExpansionUseItemAsync` plus `InventoryCapacity.GetWarehouseLimit` | Service / Ticket Expansion Effect | Partial | Regression Tested | Needs Verification | Completed-quest offset route now advances `WarehouseBonusExpands` from `1` to `2`, refreshes represented limit to `40`, and emits warehouse refresh packets. Java `Storage.setLimit`, storage dirty-state behavior, socket ordering, and live warehouse UI remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_WAREHOUSE_INFO` | `Aion.GameServer.Network.Aion.ServerPackets.SmWarehouseInfo.CreateRegularWarehouseUpdatePackets` | Server Packet / Warehouse Refresh | Partial | Regression Tested indirectly | Needs Verification | Test asserts regular warehouse refresh packets are emitted after quest-offset warehouse ticket expansion. Java golden bytes, split packet payload details, encrypted frames, and live client rendering remain unverified. |
+
+Tests added/updated:
+- `GameServerConnectionInventoryExpansionUseItemTests.HandleUseItemAsync_WarehouseExpansionTicketAllowsQuestOffsetLikeJava`: validates the production use-item route allows a level-1 warehouse ticket when one warehouse bonus expansion is offset by completed quest `1987`, then applies source item consumption, warehouse expansion mutation, capacity refresh, and packet fanout.
+- Existing successful cube/warehouse ticket route tests, persistence-failure ticket tests, and `PlayerStateTests.InventoryExpansionService_MatchesJavaTicketLevelAndQuestGuards` were rerun with the new coverage.
+- Java comparison status: expectations are source-derived from `WarehouseService.canExpandByTicket`, `WarehouseService.getCompletedWhQuests`, `WarehouseService.expand(player, false)`, `QuestStatus.COMPLETE`, and `StorageType.REGULAR_WAREHOUSE`. No Java runtime execution, Java-generated golden vector, live MySQL quest/item transaction comparison, Java `QuestStateList` comparison, Java `Storage.setLimit` mutation comparison, encrypted-frame comparison, socket-order capture, threading behavior comparison, reflection behavior comparison, precision/rounding issue, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Quest id `2985` and multi-quest offset combinations remain service-level/source-inferred but not production-route tested.
+- Java `QuestStateList` load/status semantics and database serialization remain unverified for this use-item route.
+- Live MySQL inventory/quest transaction behavior remains unverified.
+- Full encrypted client socket processor coverage is still missing for item-use expansion tickets.
+- Java golden packet bytes, encrypted frames, socket order, and live client warehouse UI behavior remain unperformed.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 production warehouse-ticket completed-quest offset coverage slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 5 Java runtime quest-offset comparison, live MySQL quest/item transaction comparison, encrypted socket processor comparison, Java `Storage.setLimit` mutation comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; inventory expansion ticket routing is now better covered through success, persistence failure, and warehouse quest-offset branches, but Java runtime/database/client parity remains partial.
+
+Next recommended unit of work:
+- Pivot back to a broader Phase 6 core gap such as kisk lifecycle cleanup, charge/power-shard/idiani burn hooks, or loot/drop handler-side quest/event paths, unless continuing storage work with Java `Storage` object dirty-state modeling, live MySQL transaction comparison, or full encrypted socket item-use coverage.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
