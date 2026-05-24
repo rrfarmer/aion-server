@@ -21804,6 +21804,61 @@ Next recommended unit of work:
 
 ---
 
+### Session 760 (May 24, 2026)
+- Re-inspected Java `SummonController.useSkill(SkillOrder)` and `CM_SUMMON_CASTSPELL.runImpl` mercenary execution:
+  - summon execution validates pet skill ownership, creates a `Skill` with skill level `1`, applies hate, calls `useSkill`, and releases only after successful use when the order requests release;
+  - mercenary execution sets the resolved target and calls controller `useSkill(skillId, skillLvl)`.
+- Added shared `PlayerSummonSkillInvocationPlan` / `PlayerSummonSkillInvocationActorKind` metadata for represented summon and mercenary execution paths.
+- Populated summon invocation plans from the represented pet summon actor id, actor template id, queued skill id, Java `SkillEngine.getSkill` level `1`, resolved target metadata, hate, and release-on-success flag.
+- Populated mercenary invocation plans from the represented mercenary actor id, actor template id, packet skill id/level, resolved target metadata, and no hate/release behavior.
+- Kept invalid/missing skill branches planless so future live execution bridges cannot accidentally consume rejected operations.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 29 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1353 tests.
+
+#### Migration Parity Table - Session 760
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.SummonController.useSkill(SkillOrder)` | `Aion.GameServer.Services.PlayerSummonSkillExecutionService` / `PlayerSummonSkillInvocationPlan` | Controller / Invocation Plan Projection | Partial | Regression Tested | Needs Verification | C# now emits a Java-shaped invocation plan for valid represented summon orders. It does not create a live `Skill`, call `SkillEngine`, mutate hate, invoke `useSkill`, release the summon, or fan out packets. |
+| `com.aionemu.gameserver.skillengine.SkillEngine.getSkill` | `PlayerSummonSkillInvocationPlan.SkillId` / `SkillLevel` / `Target` | Skill Engine Dependency Projection | Not Started | Regression Tested as plan metadata | Needs Verification | Summon plan intentionally uses skill level `1` because Java `SummonController.useSkill(SkillOrder)` passes literal level `1`, not the queued order's packet skill level. No live skill/effect/runtime comparison exists. |
+| `com.aionemu.gameserver.model.summons.SkillOrder` | `PlayerPetSkillOrder` plus `PlayerSummonSkillInvocationPlan` | DTO / Invocation Projection | Partial | Regression Tested | Needs Verification | C# carries queued skill id, hate, release flag, and represented target metadata. Java carries a live `Creature` target and object reference equality; C# still uses object-id metadata. |
+| `com.aionemu.gameserver.skillengine.model.Skill.setHate` | `PlayerSummonSkillInvocationPlan.Hate` | Skill Mutation Projection | Not Started | Regression Tested as plan metadata | Needs Verification | Hate is preserved for future invocation only. No live `Skill` object mutation, precision/rounding behavior, serialization behavior, or threading behavior is implemented. |
+| `com.aionemu.gameserver.skillengine.model.Skill.useSkill` / `com.aionemu.gameserver.services.summons.SummonsService.release` | `PlayerSummonSkillInvocationPlan.ReleaseOnSuccess` plus existing `ReleaseOnSuccess` action | Skill Use / Lifecycle Projection | Not Started | Regression Tested as plan metadata | Needs Verification | Release remains conditional plan metadata only. Java releases only after successful `skill.useSkill()`; C# has no success/failure result, lifecycle mutation, or packet fanout. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL.runImpl` mercenary branch | `PlayerMercenarySkillExecutionResult.InvocationPlan` | Client Packet Handler / Invocation Plan Projection | Partial | Regression Tested | Needs Verification | C# now emits a shared invocation plan for valid represented mercenary skills after the pet-skill guard. It still does not mutate live target, call controller, emit audit logs, or compare against Java runtime. |
+| `com.aionemu.gameserver.controllers.CreatureController.useSkill(int, int)` | `PlayerSummonSkillInvocationPlan` with `ActorKind.Mercenary` | Controller Invocation Projection | Not Started | Regression Tested as plan metadata | Needs Verification | Mercenary plan preserves packet skill level, unlike summon's Java literal level `1`. Cooldowns, effects, timing, packet fanout, precision/rounding, and live controller behavior remain unsupported. |
+| `com.aionemu.gameserver.model.gameobjects.Creature.setTarget` | `PlayerSummonSkillInvocationPlan.Target` plus existing `SetTarget` action | Target Mutation Projection | Partial | Regression Tested as plan metadata | Needs Verification | Target remains represented by object id/kind/self flag. No live target assignment, object identity/equality, synchronization, serialization, or visibility lifecycle is modeled. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_AllowsPetSkillBeforeRepresentedSkillEngineInvocation`: validates valid summon plans carry actor kind, actor object id, actor template id, skill id, Java skill level `1`, resolved target, hate, and release-on-success.
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_PlansNoReleaseWhenQueuedOrderDoesNotRelease`: validates non-release summon plans preserve Java skill level `1` and clear release-on-success.
+- `PlayerSummonSkillExecutionServiceTests.ValidateExecution_RejectsMissingSummonAndInvalidPetSkill`: validates missing-summon and invalid-skill branches remain planless.
+- `PlayerSummonSkillExecutionServiceTests.ValidateMercenaryExecution_PlansControllerUseAndAuditsInvalidSkill`: validates valid mercenary plans carry actor kind, actor object id, template id, packet skill id/level, target, zero hate, and no release behavior; invalid mercenary skills remain planless.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_ValidRepresentedPetOrderReachesExecutionGuard`: validates connection-level summon planning exposes the shared invocation plan.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_InvalidRepresentedPetSkillStopsBeforeSkillEngine`: validates invalid connection-level summon execution remains planless.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_ValidRepresentedMercenarySkillPlansControllerUse`: validates connection-level mercenary planning exposes the shared invocation plan.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_InvalidRepresentedMercenarySkillRecordsAuditProjection`: validates invalid mercenary skill audit projection remains planless.
+- Java comparison status: expectations are source-derived from Java `SummonController.useSkill(SkillOrder)`, `CM_SUMMON_CASTSPELL.runImpl`, `SkillEngine.getSkill`, `Skill.setHate`, `Skill.useSkill`, `SummonsService.release`, `Creature.setTarget`, and `CreatureController.useSkill`. No Java runtime execution, live `SkillEngine` comparison, live controller comparison, live target mutation comparison, object identity comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- Invocation plans are metadata only; no live `SkillEngine`, `Skill`, controller, target mutation, hate mutation, cooldown, effect, packet fanout, or release lifecycle behavior is executed.
+- Summon skill level intentionally differs from queued packet/order level by using Java's literal `1`; runtime parity still needs confirmation against Java behavior.
+- Resolved targets remain object-id metadata, not live `Creature` references with Java equality, visibility lifecycle, serialization, or synchronization behavior.
+- Invalid branches are safer/planless in C#, but audit/log sink parity remains missing.
+- Java runtime, golden packet/data comparison, live-client validation, reflection, threading, serialization, date/time, and precision/rounding behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 shared represented invocation-plan slice across summon and mercenary execution
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 10 live `SkillEngine`, live `Skill`, controller execution, target mutation, hate mutation, release lifecycle, packet fanout, audit/log sinks, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; summon and mercenary execution now share a Java-shaped invocation plan, but live execution parity is still partial.
+
+Next recommended unit of work:
+- Use `PlayerSummonSkillInvocationPlan` as the input to a narrow represented execution bridge result, likely separating `BuildPlan` from future `ExecutePlan` so the next slice can model SkillEngine lookup failure/success and release-on-success gating without invoking real effects yet. Keep real cooldowns, effect application, packet fanout, and live target mutation explicit until their supporting systems exist.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
