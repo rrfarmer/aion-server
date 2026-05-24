@@ -21155,6 +21155,58 @@ Next recommended unit of work:
 
 ---
 
+### Session 747 (May 24, 2026)
+- Re-read Java `CM_SUMMON_CASTSPELL.runImpl`, `SummonController.useSkill(SkillOrder)`, and the existing C# represented summon services.
+- Wired `CmSummonCastSpell` packets into `GameServerConnection` for represented pet summons.
+- Added `GameServerConnection.HandleSummonCastSpellAsync` to compose:
+  - `PlayerSummonCastSpellService` for represented summon/order/target validation;
+  - `PlayerSummonSkillExecutionService` for represented `PetSkillData.petHasSkill` validation when runtime static pet-skill data is available.
+- Added the Java pet-required packet branch: represented missing/wrong pet summon sends `SmSystemMessage.SkillNotNeedPet()` (`STR_SKILL_NOT_NEED_PET`, id `1402918`).
+- Kept no-order, target-mismatch, invalid-pet-skill, and missing-static-data branches conservative: no guessed packet emission beyond the Java pet-required branch.
+- Kept live known-list target lookup, mercenary handling, real `SummonController.useSkill`, `SkillEngine`, release-on-success, audit logging, warning logging, and visible packet fanout out of scope and documented.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests|PlayerSummonCastSpellServiceTests|PlayerPetOrderSkillServiceTests|GamePacketTests"` passes with 115 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1345 tests.
+
+#### Migration Parity Table - Session 747
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleSummonCastSpellAsync` plus dispatch case for `CmSummonCastSpell` | Client Packet Handler | Partial | Regression Tested | Needs Verification | C# now routes represented summon-cast packets through the connection and sends `STR_SKILL_NOT_NEED_PET` for missing/wrong represented pet summons. Live known-list target lookup, mercenary branch, audit logging, mismatch warning logging, and actual controller invocation remain missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_NOT_NEED_PET` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.SkillNotNeedPet` emitted by `HandleSummonCastSpellAsync` | Packet Side Effect | Partial | Regression Tested | Needs Verification | Connection-level test validates message id `1402918` is sent on the represented pet-required branch. Java golden bytes, encrypted live frames, socket order, and live-client rendering remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getSummonOrMercenary` | `PlayerSummonCastSpellService` consumed from `GameServerConnection` using `Player.HasPetSummon` / `PetSummonObjectId` | Player/Summon Lookup Projection | Partial | Regression Tested | Needs Verification | C# supports represented pet summon object id only. Java summon-or-mercenary lookup, non-pet summon rejection, summon lifecycle, and NPC template type behavior remain unsupported. |
+| `com.aionemu.gameserver.model.gameobjects.Summon.retrieveNextSkillOrder` | `Player.RetrieveNextPetSkillOrder` consumed through `GameServerConnection.HandleSummonCastSpellAsync` | Summon Queue Projection | Partial | Regression Tested | Needs Verification | Connection path now consumes represented queued orders. Queue remains player-owned, object-id based, and not thread-safe like Java `ConcurrentLinkedQueue`. |
+| `com.aionemu.gameserver.controllers.SummonController.useSkill(SkillOrder)` | `PlayerSummonSkillExecutionService` composed by `GameServerConnection` | Controller / Skill Execution Bridge | Partial | Regression Tested | Needs Verification | C# reaches the represented `petHasSkill` execution guard and records `WouldInvokeSkillEngine`/`InvalidPetSkill`. It still does not create a `Skill`, set hate, call `useSkill`, release the summon, or fan out packets. |
+| `com.aionemu.gameserver.dataholders.PetSkillData.petHasSkill` | `PetSkillTable.PetHasSkill` consumed from runtime static data during connection handling | Static Data Lookup | Partial | Regression Tested with loaded static data | Needs Verification | Connection-level tests validate pet npc `833288` accepts skill `22107` and rejects `9999`. Missing runtime static data skips execution validation rather than throwing; Java singleton availability and null-pointer behavior remain unverified. |
+| `com.aionemu.gameserver.skillengine.SkillEngine.getSkill` / `Skill.setHate` / `Skill.useSkill` | Not yet implemented; represented by `PlayerSummonSkillExecutionResult` returned from connection handler | Skill Engine Dependency | Not Started | No Tests | Needs Verification | Newly reinforced dependency. The connection can now surface the would-be execution result, but no real skill execution, timing, effects, precision/rounding, threading, or packet side effects are implemented. |
+
+Tests added/updated:
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_MissingRepresentedPetSendsPetRequiredPacket`: validates represented missing pet summon sends Java `STR_SKILL_NOT_NEED_PET` id `1402918`.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_ValidRepresentedPetOrderReachesExecutionGuard`: validates represented queued order is consumed from the connection path, skill mismatch is recorded while queued skill `22107` is used, and runtime static `PetHasSkill` reaches `WouldInvokeSkillEngine`.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_InvalidRepresentedPetSkillStopsBeforeSkillEngine`: validates invalid represented pet skill `9999` reaches the execution guard and returns `InvalidPetSkill` without packet emission.
+- Java comparison status: expectations are source-derived from Java `CM_SUMMON_CASTSPELL.runImpl`, `Summon.retrieveNextSkillOrder`, `SummonController.useSkill`, `PetSkillData.petHasSkill`, and `SM_SYSTEM_MESSAGE.STR_SKILL_NOT_NEED_PET`. No Java runtime execution, Java-generated golden packets/data, live known-list target resolution, live summon/mercenary object comparison, warning/audit log comparison, reflection comparison, threading comparison, date/time comparison, or live-client validation was run.
+
+Remaining risks:
+- The represented handler still avoids live known-list target lookup and uses target object id equality only.
+- Mercenary support and non-pet summon type checks are not implemented.
+- Invalid pet skill behavior is represented as a result; Java silently returns from `SummonController.useSkill`.
+- Actual `SkillEngine` invocation, hate transfer into a `Skill`, release-on-success, and packet fanout remain missing.
+- Runtime static data missing behavior differs from Java's always-available singleton assumption.
+- Queue behavior is not Java-thread-safe and lives on `Player` rather than a live `Summon`.
+- Packet coverage is C# regression coverage, not Java golden-byte or encrypted live-client validation.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 represented connection-level summon-cast wiring slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 8 live known-list target resolution, mercenary branch, live Summon model/type checks, real SummonController ownership, SkillEngine execution, release-on-success, Java runtime/golden comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented summon-cast packets now reach the connection and static pet-skill guard, but live summon skill execution is still partial.
+
+Next recommended unit of work:
+- Add the next narrow live-model support needed by `CM_SUMMON_CASTSPELL`: either represent known-list target validation for the queued pet order target or add a minimal `SummonController.useSkill` execution planner that carries `SkillEngine.getSkill`, `setHate`, `useSkill`, and release-on-success as explicit planned actions without executing the full skill engine. Keep mercenary handling and live object lifecycle gaps explicit if they remain unsupported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
