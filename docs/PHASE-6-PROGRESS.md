@@ -18471,6 +18471,78 @@ Summary metrics:
 Next recommended unit of work:
 - Continue compact `ResponseRequester` parity with craft skill rank-up confirmation or cube/warehouse expansion warning if their dependencies stay small. If returning to recall, wire the future SkillEngine caller only after the C# effect runtime can represent Java `RecallInstantEffect.calculate` gates and destination capture.
 
+---
+
+### Session 693 (May 24, 2026)
+- Continued compact `ResponseRequester` parity with Java `CraftSkillUpdateService.learnSkill`.
+- Added craft dialog action constant `CmDialogSelect.CombineTask = 58` and routed it through `GameServerConnection`.
+- Added craft rank-up question id `SmQuestionWindow.CraftAddSkillConfirm = 900852`.
+- Added Java craft/rank-up system-message factories:
+  - `SmSystemMessage.CraftCantExtendMoney` for id `1300834`,
+  - `SmSystemMessage.DontRankUp` for id `1390233`,
+  - `SmSystemMessage.DontRankUpGathering` for id `1390253`,
+  - `SmSystemMessage.CraftCantExtendGrandMaster` for id `1400286`.
+- Added `SmInventoryUpdateItem.DecreaseKinahLearn = 0x49`.
+- Added `PendingCraftSkillLearnRequest` and `QuestionResponseRequestKind.CraftSkillLearn`.
+- Added `CraftSkillUpdateService` with Java-shaped behavior:
+  - maps the Java Asmodian/Elyos profession NPC ids to craft/gathering professions,
+  - preserves level, unknown-NPC, unknown-skill, price-gate, and duplicate-question behavior,
+  - registers the craft rank-up response request,
+  - accepts by decreasing represented Kinah and adding/upgrading the represented player skill,
+  - denies or not-enough-Kinah without mutating represented skill state.
+- Routed `CM_QUESTION_RESPONSE` for craft rank-up through `GameServerConnection`.
+- Added enter-world/login cleanup for pending craft rank-up requests.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter CraftSkillUpdateServiceTests` passes with 6 tests.
+- Packet/service validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "CraftSkillUpdateServiceTests|GamePacketTests"` passes with 88 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1249 tests.
+
+#### Migration Parity Table - Session 693
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftSkillUpdateService` | `Aion.GameServer.Services.CraftSkillUpdateService` / `GameServerConnection` craft dialog and response handlers | Service / Request Handler | Partial | Regression Tested | Needs Verification | Models `learnSkill` request registration, price gates, rank-up failure messages, accept/deny response handling, represented Kinah decrement, and represented skill add/update. Java singleton initialization, logging, `getProfessionByNpc`, expert/master limit helpers, full `PlayerSkillList.addSkill` side effects, inventory DAO persistence, and live packet ordering remain unverified or unported. |
+| `com.aionemu.gameserver.model.craft.Profession` | `Aion.GameServer.Services.CraftProfession` / `CraftProfessionExtensions` | Enum / Utility | Partial | Regression Tested | Needs Verification | Ports Java profession skill ids, crafting predicate, upgrade costs, max-upgradable level, and grade-name l10n selection for this slice. `getBySkillId`, direct DataManager lookup behavior, and Java enum identity/reflection semantics are not represented. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest/respond/denyAll` | `Aion.GameServer.Model.GameObjects.QuestionResponseRegistry` with `QuestionResponseRequestKind.CraftSkillLearn` | Request Registry | Partial | Regression Tested | Needs Verification | Uses put-if-absent duplicate protection and response removal. Java anonymous `RequestResponseHandler<Npc>` callback identity, generic type behavior, logout `denyAll` callback behavior for craft, and concurrent-map stress remain unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_DIALOG_SELECT` craft combine action | `Aion.GameServer.Network.Aion.ClientPackets.CmDialogSelect.CombineTask` / `GameServerConnection.HandleDialogSelectAsync` | Client Packet / Handler Dependency | Partial | Regression Tested | Needs Verification | Dialog action id `58` now routes to craft rank-up after existing NPC targeting/function validation. Full Java dialog switch behavior, NPC template data coverage, and live client dialog flow were not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_CRAFT_ADDSKILL_CONFIRM` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow.CraftAddSkillConfirm` | Server Packet / Question Id | Partial | Regression Tested | Needs Verification | Question id `900852` and source-shaped payload parameters are asserted in C# packet tests. Java golden bytes, encrypted frames, and client rendering were not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_NOT_ENOUGH_MONEY` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.NotEnoughMoney` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Existing message is used for accept-without-Kinah path. This unit validates service fanout, but did not newly compare Java packet bytes or encrypted frames. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_CRAFT_CANT_EXTEND_MONEY` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.CraftCantExtendMoney` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Java id `1300834` is emitted for skill level `399` price-gate failures. Packet id asserted in C#; Java golden bytes/encrypted frames not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_DONT_RANK_UP` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.DontRankUp` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Java id `1390233` is emitted for general unsupported rank-up states. Packet id asserted in C#; Java golden bytes/encrypted frames not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_DONT_RANK_UP_GATHERING` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.DontRankUpGathering` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Java id `1390253` is represented for over-cap gathering rank-up failures. Packet id asserted in C#; Java golden bytes/encrypted frames not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_CRAFT_CANT_EXTEND_GRAND_MASTER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.CraftCantExtendGrandMaster` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Java id `1400286` is represented for skill level `499` craft rank gate. Packet id asserted in C#; Java golden bytes/encrypted frames not compared. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.ItemUpdateType.DEC_KINAH_LEARN` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryUpdateItem.DecreaseKinahLearn` | Packet Update Type | Partial | Regression Tested | Needs Verification | Java update type `0x49` is used for craft Kinah decrement and asserted from the serialized C# inventory-update payload. Java packet bytes and persistence side effects were not compared. |
+| `com.aionemu.gameserver.model.skill.PlayerSkillList.addSkill` | Represented mutation of `Player.Skills` plus `SmSkillList` | Runtime Model Dependency | Partial | Regression Tested | Needs Verification | C# adds or updates represented skill state and sends `SmSkillList` with existing Java-derived message ids. Java full skill-list persistence, DAO write behavior, skill tree side effects, passive/stat recalculation, serialization differences, and threading behavior are not represented. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerInventory.tryDecreaseKinah` | Represented mutation of `Player.InventoryItems` plus `SmInventoryUpdateItem` | Runtime Model Dependency | Partial | Regression Tested | Needs Verification | C# decrements represented cube Kinah when enough exists and leaves state unchanged otherwise. Java inventory locking, split storage behavior, precision/rounding concerns for long/count boundaries, DAO persistence, and concurrent mutation semantics are not represented. |
+
+Tests added/updated:
+- `CraftSkillUpdateServiceTests.RequestLearnSkill_RegistersQuestionForProfessionNpc`: validates Java NPC-to-profession mapping, request registration, question id `900852`, beginner price `3500`, and target skill level `1`.
+- `CraftSkillUpdateServiceTests.RequestLearnSkill_DuplicateQuestionKeepsOriginalPendingRequest`: validates Java put-if-absent duplicate behavior.
+- `CraftSkillUpdateServiceTests.RequestLearnSkill_NotUpgradableUsesJavaRankMessages`: validates price-gate failure emits the Java rank-up message packet without registering a pending request.
+- `CraftSkillUpdateServiceTests.HandleResponse_DenyConsumesPendingRequestWithoutMutation`: validates response `0` consumes the request and does not mutate skill or Kinah state.
+- `CraftSkillUpdateServiceTests.HandleResponse_AcceptDecreasesKinahAndAddsProfessionSkill`: validates response acceptance decreases represented Kinah, adds the profession skill, emits `SmInventoryUpdateItem` with update type `0x49`, and emits `SmSkillList`.
+- `CraftSkillUpdateServiceTests.HandleResponse_NotEnoughKinahConsumesPendingRequestWithoutSkillMutation`: validates insufficient Kinah sends `STR_NOT_ENOUGH_MONEY`, clears the request, and preserves represented state.
+- `GamePacketTests` system-message and question-window assertions validate ids `1300834`, `1390233`, `1390253`, `1400286`, and `900852`.
+- Java comparison status: expectations are source-derived from `CraftSkillUpdateService`, `Profession`, `SM_QUESTION_WINDOW`, `SM_SYSTEM_MESSAGE`, and `ItemPacketService.ItemUpdateType`. No Java runtime execution, Java-generated golden vector, `PlayerSkillList.addSkill` persistence comparison, inventory DAO comparison, live socket-order validation, encrypted frame comparison, reflection behavior, threading behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Java `CraftSkillUpdateService` helper methods for expert/master limits and `getProfessionByNpc` are not ported in this slice.
+- C# mutates represented `Player.Skills` and `Player.InventoryItems` only; Java skill and inventory DAO persistence are not implemented here.
+- Java `PlayerSkillList.addSkill` may trigger additional skill/stat/passive side effects that are not represented.
+- Java `Inventory.tryDecreaseKinah` concurrency, locking, storage-edge, and persistence behavior remain unverified.
+- Java anonymous `RequestResponseHandler<Npc>` callback identity and generic/reflection behavior remain unported.
+- Packet sends are validated by C# packet type/message id/update type only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 13
+- Total artifacts ported: 1 craft rank-up request/response slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 13
+- Total blocked artifacts: 8 skill DAO persistence, inventory DAO persistence, full `PlayerSkillList.addSkill` side effects, Java inventory locking/concurrency, expert/master helper methods, ResponseRequester callback identity, socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; another compact ResponseRequester path is represented, but craft skill/inventory persistence and live-client parity remain partial.
+
+Next recommended unit of work:
+- Continue compact `ResponseRequester` parity with cube/warehouse expansion warning, or take the remaining craft helper methods (`getProfessionByNpc`, expert/master counts and caps) as a small service-only slice before moving back to larger exchange/inventory work. Do not claim craft rank-up parity complete until Java skill/inventory persistence and `PlayerSkillList.addSkill` side effects have C# homes.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
