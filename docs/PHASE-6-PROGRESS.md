@@ -21662,6 +21662,53 @@ Next recommended unit of work:
 
 ---
 
+### Session 757 (May 24, 2026)
+- Re-inspected Java `CM_SUMMON_CASTSPELL.runImpl` target resolution and order-target comparison:
+  - self-target uses the summon or mercenary `Creature`;
+  - non-self targets must resolve as a `Creature` from known-list;
+  - summon order execution compares `SkillOrder.getTarget().equals(target)`.
+- Added `PlayerSummonCastSpellTarget` to represent resolved target identity separately from raw packet target id.
+- Updated represented target resolution to carry `PlayerSummonCastSpellTarget` for self-target and known creature target branches.
+- Updated `PlayerSummonCastSpellResult` to expose `ResolvedTarget` for mercenary-ready, no-order, target-mismatch, and executed outcomes.
+- Preserved object-id target comparison while creating a future bridge point for live `Creature` references.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 29 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1353 tests.
+
+#### Migration Parity Table - Session 757
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL.runImpl` target resolution | `Aion.GameServer.Services.PlayerSummonCastSpellTarget` / `PlayerSummonCastSpellResult.ResolvedTarget` | Client Packet Handler / Target Projection | Partial | Regression Tested | Needs Verification | C# now carries resolved self-target and known-creature target identity separately from packet fields. Java uses live `Creature` references. C# still uses object ids and enum kind metadata. |
+| `com.aionemu.gameserver.model.gameobjects.Creature` as summon/mercenary self-target | `PlayerSummonCastSpellTarget(IsActorSelfTarget: true)` | Creature Target Projection | Partial | Regression Tested | Needs Verification | C# represents self-target by object id and boolean flag. No live creature object, stats, controller, serialization, threading, or equality behavior exists. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.getObject` creature target branch | `PlayerSummonCastSpellTarget(IsActorSelfTarget: false)` from `Player.TryGetSummonKnownObjectKind` | Known-List Target Projection | Partial | Regression Tested | Needs Verification | C# records known creature target metadata only. Live known-list lifecycle, visibility updates, object identity, and synchronization remain unsupported. |
+| `com.aionemu.gameserver.model.summons.SkillOrder.getTarget().equals(target)` | `PlayerPetSkillOrder.TargetObjectId` compared with packet/resolved target id plus `ResolvedTarget` metadata | Target Equality Projection | Partial | Regression Tested | Needs Verification | C# still compares represented object ids. `ResolvedTarget` creates a bridge for future live `Creature` equality but does not implement Java object equality yet. |
+
+Tests added/updated:
+- `PlayerSummonCastSpellServiceTests.Handle_ConsumesMatchingQueuedPetOrderForRepresentedSummon`: validates known creature `ResolvedTarget` object id, kind, and non-self flag.
+- `PlayerSummonCastSpellServiceTests.Handle_ConsumesQueuedOrderWithoutExecutionWhenTargetDoesNotMatch`: validates target-mismatch result carries resolved target metadata while skipped execution records queued vs packet target ids.
+- `PlayerSummonCastSpellServiceTests.Handle_AllowsSummonSelfTargetWithoutKnownListLookup`: validates self-target result carries actor self-target metadata.
+- Java comparison status: expectations are source-derived from Java `CM_SUMMON_CASTSPELL.runImpl`, `KnownList.getObject`, `Creature`, and `SkillOrder.getTarget().equals(target)`. No Java runtime execution, live `Creature.equals` comparison, object identity comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- `ResolvedTarget` is object-id metadata, not a live `Creature` reference.
+- Target equality still uses object ids and not Java object identity/equality.
+- Known-list lifecycle, visibility, synchronization, serialization, and threading remain unsupported.
+- Real summon/mercenary controllers, `SkillEngine`, target mutation, packet fanout, audit/log sinks, Java runtime, and live-client behavior remain unverified.
+- Precision/rounding and date/time are not involved in this narrow slice but remain unverified for broader gameplay paths.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 represented summon-cast resolved-target projection
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 live `Creature` references/equality, live `KnownList`, synchronization/threading, serialization, controller execution, `SkillEngine`, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; target identity is better isolated for future live object work, but live reference parity remains partial.
+
+Next recommended unit of work:
+- Use `ResolvedTarget` in mercenary execution planning so planned `SetTarget` carries the resolved target reference, then continue replacing raw target ids in summon execution planning. Keep live `Creature` mutation and controller execution explicit until implemented.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
