@@ -17028,6 +17028,56 @@ Summary metrics:
 Next recommended unit of work:
 - Wire the narrow pending league invite response planner into the C# `CM_QUESTION_RESPONSE` handling path: when a player has `PendingLeagueInviteRequest` for `SmQuestionWindow.UnionInviteMe`, resolve the requester/recipient players, allocate `IDFactory.NextId()` only for the create-league branch, invoke `CreatePendingRequestResponsePlan`, and emit/apply the resulting packet intents. Keep generic `ResponseRequester` as a later abstraction unless the routing work clearly needs it.
 
+### Session 667 (May 24, 2026)
+- Source-read Java `CM_QUESTION_RESPONSE.runImpl`, existing C# `CmQuestionResponse`, and C# `GameServerConnection.HandleQuestionResponseAsync`.
+- Wired the narrow league invite response path into C# question-response handling:
+  - `SmQuestionWindow.UnionInviteMe` now dispatches before the buddy-list fallback,
+  - matched pending league invite requests resolve the requester through the online-player registry by object id,
+  - matched requests clear pending state even when the requester cannot be resolved, preserving Java `ResponseRequester.respond` removal-before-handle behavior as closely as the narrow model allows,
+  - nonzero accept responses allocate `IDFactory.NextId()` only when the requester alliance has no league,
+  - deny responses send `STR_PARTY_ALLIANCE_HE_REJECT_INVITATION` to the requester,
+  - accept responses apply the existing league/create-league join planner and send resulting `SM_ALLIANCE_INFO` packet intents through the connection registry.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionLeagueInviteQuestionResponseTests` passes with 3 tests.
+- Broader focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionLeagueInviteQuestionResponseTests|PlayerLeagueInvitePlannerTests"` passes with 20 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1155 tests.
+
+#### Migration Parity Table - Session 667
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_QUESTION_RESPONSE` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleQuestionResponseAsync` / `CmQuestionResponse` | Client Packet / Runtime Routing | Partial | Unit Tested | Needs Verification | `STR_MSGBOX_UNION_INVITE_ME` is routed to league invite response handling. Exchange-cancel side effect for accepting while trading remains unsupported. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.respond` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLeagueInviteQuestionResponseAsync` / `Player.PendingLeagueInviteRequest` | Request Registry / Runtime Bridge | Partial | Unit Tested | Needs Verification | Narrow league-invite response removes matched pending state and invokes planner behavior. Generic concurrent request map, `remove`, `denyAll`, and polymorphic handler storage remain unported. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler.handle` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.CreatePendingRequestResponsePlan` via connection routing | Request Handler / Planner | Partial | Unit Tested | Needs Verification | Live routing now reaches the response `0` deny and nonzero accept split for league invites only. Other request handler types are not generalized. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueInviteEvent.denyRequest` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLeagueInviteQuestionResponseAsync` / `PlayerLeagueInvitePlanner.CreateDenyPlan` | Event / Packet Send Bridge | Partial | Unit Tested | Needs Verification | Deny response sends the reject system message to the requester via connection registry. No Java packet capture/golden-byte validation. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueInviteEvent.acceptRequest` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLeagueInviteQuestionResponseAsync` / `PlayerLeagueInvitePlanner.CreatePendingRequestResponsePlan` | Event / Join Bridge | Partial | Unit Tested | Needs Verification | Accept response invokes existing requester-league and create-league planner branches, mutates `PlayerLeagueRuntime`, and sends join packet intents. Java live registry/object identity remains unverified. |
+| `com.aionemu.gameserver.utils.idfactory.IDFactory.nextId` | `Aion.GameServer.Utils.IdFactory.IDFactory.NextId` from `HandleLeagueInviteQuestionResponseAsync` | ID Allocation Dependency | Partial | Unit Tested | Needs Verification | Live C# route allocates an id only when requester alliance has no league. Java allocates inside `new League(...)`; no Java runtime id-sequence comparison. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `IGameClientConnectionRegistry.SendPacketToPlayerAsync` | Packet Send Runtime | Partial | Unit Tested | Needs Verification | Deny and join packet intents are sent through registry. Real socket order, encrypted frames, and client observation remain unverified. |
+
+Tests added:
+- `GameServerConnectionLeagueInviteQuestionResponseTests.HandleQuestionResponseAsync_LeagueInviteDenyClearsPendingAndSendsRejectToRequester`: validates parsed `CM_QUESTION_RESPONSE` response `0` clears pending league invite state and sends reject system message id `1300190` to the requester.
+- `GameServerConnectionLeagueInviteQuestionResponseTests.HandleQuestionResponseAsync_LeagueInviteAcceptCreatesLeagueAndFansOutAllianceInfo`: validates parsed nonzero response allocates `IDFactory.NextId()`, creates the requester league, joins the invited alliance, clears pending state, and sends two `SM_ALLIANCE_INFO` packets through the registry.
+- `GameServerConnectionLeagueInviteQuestionResponseTests.HandleQuestionResponseAsync_LeagueInviteWrongQuestionLeavesPendingRequest`: validates unrelated question ids do not consume the pending league invite.
+- Java comparison status: expectations are source-derived from `CM_QUESTION_RESPONSE.runImpl`, `ResponseRequester.respond`, `RequestResponseHandler.handle`, `LeagueInviteEvent`, and prior planner tests. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, generic concurrent request-map comparison, real socket-order validation, exchange-cancel validation, Java `IDFactory` live allocation comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Java `CM_QUESTION_RESPONSE` exchange-cancel side effect when accepting while trading is not represented in this league invite route.
+- The C# request storage remains a single typed league invite slot, not Java's generic `ConcurrentHashMap<Integer, RequestResponseHandler<?>>`.
+- Requester resolution uses the online-player registry because the narrow metadata stores ids rather than Java's live requester object reference.
+- Java static league registry, team locks, object identity, and broader `LeagueCreateEvent` side effects are still only partially represented.
+- Packet sends are tested as emitted C# packet objects, not Java golden bytes, encrypted frames, production socket ordering, packet captures, or real-client behavior.
+- Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 narrow live league invite `CM_QUESTION_RESPONSE` routing slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 7 generic `ResponseRequester`, exchange-cancel side effect, Java static league registry parity, Java team locking/object identity comparison, Java runtime/golden validation, real socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; league invite request/response is now connected to live C# question-response routing, but generic request handling and real-client parity remain open.
+
+Next recommended unit of work:
+- Close one of the remaining Java `CM_QUESTION_RESPONSE` gaps now exposed by the league invite routing: either add the generic exchange-cancel side effect for accepting while trading if C# trade state has a home, or start extracting a reusable narrow request-response registry abstraction that can host league invite plus the already-open buddy/rift/kisk/soulbind question handlers without losing Java removal-before-handle semantics.
+
 ---
 
 ## Next Steps
