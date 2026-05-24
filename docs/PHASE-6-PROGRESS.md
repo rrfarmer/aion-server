@@ -17702,6 +17702,64 @@ Summary metrics:
 Next recommended unit of work:
 - Continue with another narrow `ResponseRequester` user now that teleport-to-NPC is represented. The best next candidate is warehouse/cube expansion if static expander data and persistence can be scoped, otherwise source-read duel/group/legion invite handlers and pick the smallest one with existing C# runtime state. Do not mark teleport-to-NPC as verified until Java runtime/golden packet or live behavior comparison exists.
 
+---
+
+### Session 680 (May 24, 2026)
+- Source-read Java `PlayerGroupService.inviteToGroup` and `PlayerGroupInvite.acceptRequest` / `denyRequest`.
+- Added a focused C# group-invite `ResponseRequester` slice:
+  - `SmQuestionWindow.PartyInvite` now represents Java question id `60000`.
+  - `QuestionResponseRequestKind.GroupInvite` tracks pending group invites in the reusable registry.
+  - `SmSystemMessage.PartyInvitedHim` and `SmSystemMessage.PartyHeRejectInvitation` model the Java inviter-side invitation and rejection messages.
+  - `PlayerGroupInviteRequestService.SendInvite` registers the pending invite and returns both inviter notification and invited-player question packet.
+  - `PlayerGroupInviteRequestService.HandleResponse` consumes deny/accept responses; deny returns the Java rejection message, accept either creates a new C# group or adds the invited player to the inviter's existing group and returns the entered-packet plan.
+- Warehouse/cube NPC expansion was reviewed but deferred because C# currently has item-ticket expansion support only; Java NPC expanders require a new static expander-data import before a faithful request/response slice can be scoped.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerGroupInviteRequestServiceTests|SmSystemMessage_WritesDialogTooFarMessages"` passes with 7 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1188 tests.
+
+#### Migration Parity Table - Session 680
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.inviteToGroup` | `Aion.GameServer.Services.PlayerGroupInviteRequestService.SendInvite` | Service / Request Starter | Partial | Unit Tested | Needs Verification | Registers Java question id `60000` and returns inviter/question packets. Java `PlayerRestrictions.canInviteToGroup` is not fully ported here. |
+| `com.aionemu.gameserver.model.team.group.events.PlayerGroupInvite` | `PlayerGroupInviteRequestService.HandleResponse` | Request Handler | Partial | Unit Tested | Needs Verification | Deny and accept branches are represented with typed metadata. Java anonymous handler object identity and polymorphic callback execution remain unported. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.createGroup` | `Aion.GameServer.Services.PlayerGroupRuntime.CreateOrUpdateGroup` via group invite accept | Runtime Service | Partial | Unit Tested | Needs Verification | Creates a C# group with supplied positive id when inviter has no group. Java passes id `0`; C# runtime requires a positive id, so production connection wiring must allocate one. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroupService.addPlayer` | `PlayerGroupRuntime.AddMember` via group invite accept | Runtime Service | Partial | Unit Tested | Needs Verification | Adds invited player to existing inviter group and returns entered packet plan. Full Java `FindGroupService.onJoinedTeam` and live event fanout remain partial. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester` | `Aion.GameServer.Model.GameObjects.QuestionResponseRegistry` | Request Registry | Partial | Unit Tested / Regression Tested | Needs Verification | Adds group-invite metadata dispatch and `putIfAbsent` duplicate behavior. Java concurrent map stress parity remains unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_PARTY_DO_YOU_ACCEPT_INVITATION` | `SmQuestionWindow.PartyInvite` | Server Packet / Question Id | Partial | Unit Tested | Needs Verification | Constant `60000` added; prompt packet object is tested by code/id only, not Java golden bytes or encrypted frames. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_INVITED_HIM` | `SmSystemMessage.PartyInvitedHim` | Server Packet / System Message | Partial | Unit Tested / Regression Tested | Needs Verification | Packet test asserts message id `1300173` and parameter serialization. Java golden bytes remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_HE_REJECT_INVITATION` | `SmSystemMessage.PartyHeRejectInvitation` | Server Packet / System Message | Partial | Unit Tested / Regression Tested | Needs Verification | Packet test asserts message id `1300161` and parameter serialization. Live routing to inviter and Java golden bytes remain unverified. |
+| `com.aionemu.gameserver.restrictions.PlayerRestrictions` | Not fully ported for group invite | Restriction Dependency | Not Started | No Tests | Unknown | Newly documented dependency: Java gates invitations through `canInviteToGroup`; this unit only models response registration/handling. |
+| `com.aionemu.gameserver.services.findgroup.FindGroupService` | Not ported for group invite | Side-effect Dependency | Not Started | No Tests | Unknown | Java calls `FindGroupService.onJoinedTeam(invited)` after adding a player; C# invite accept returns group entered packet plans only. |
+
+Tests added/updated:
+- `PlayerGroupInviteRequestServiceTests.SendInvite_RegistersPartyQuestionAndReturnsInviterMessage`: validates question id `60000`, inviter message id `1300173`, payload metadata, and registry insertion.
+- `PlayerGroupInviteRequestServiceTests.SendInvite_DuplicateLeavesOriginalRequestLikeJavaPutIfAbsent`: validates duplicate registration leaves the first inviter request active.
+- `PlayerGroupInviteRequestServiceTests.HandleResponse_DenyConsumesRequestAndReturnsRejectMessage`: validates deny consumes the registry and returns message id `1300161` without creating group state.
+- `PlayerGroupInviteRequestServiceTests.HandleResponse_AcceptCreatesGroupWhenInviterHasNoGroup`: validates accept creates a new group and returns entered-packet planning.
+- `PlayerGroupInviteRequestServiceTests.HandleResponse_AcceptAddsInvitedToExistingInviterGroup`: validates accept adds invited player to an existing group.
+- `PlayerGroupInviteRequestServiceTests.HandleResponse_WrongQuestionLeavesRequest`: validates unrelated question ids do not consume the pending group invite.
+- `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages`: now also validates party invite/reject message ids and parameter serialization.
+- Java comparison status: expectations are source-derived from `PlayerGroupService`, `PlayerGroupInvite`, `ResponseRequester`, and system-message ids. No Java runtime execution, Java-generated golden vector, full `PlayerRestrictions` comparison, `FindGroupService` comparison, live packet routing, encrypted frame comparison, reflection behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Group invite is not yet wired to a production C# command/connection path; it is a reusable request/response service slice.
+- Java `PlayerRestrictions.canInviteToGroup` remains broader than this unit and must be ported before claiming behavioral parity for invite eligibility.
+- Java `FindGroupService.onJoinedTeam`, offline group checker startup, and complete group event fanout are not represented in this slice.
+- Java create-group id handling differs: Java passes `0`, while C# runtime requires a supplied positive id.
+- Generic Java `RequestResponseHandler` polymorphic callback execution remains partial; C# continues to use typed metadata in `QuestionResponseRegistry`.
+- Packet sends are validated by C# packet type/message id only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 group-invite request/response slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 8 production group-invite command wiring, full `PlayerRestrictions` parity, `FindGroupService` parity, Java group id allocation behavior, generic anonymous handler callback execution, Java concurrent map stress parity, real socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; another `ResponseRequester` user is modeled, but group invite command wiring and full group restrictions/fanout remain partial.
+
+Next recommended unit of work:
+- Either wire the new group-invite service into the production C# invite command path if that command surface is identifiable, or continue with the next narrow `ResponseRequester` handler with existing runtime support. Good candidates are alliance invite, duel request, craft-skill learn confirmation, or experience recovery dialog; defer NPC warehouse/cube expansion until static expander data is imported.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
