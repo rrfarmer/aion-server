@@ -17881,6 +17881,65 @@ Summary metrics:
 Next recommended unit of work:
 - Finish the remaining `CM_INVITE_TO_GROUP` branch by modeling invite type `12` (`PlayerAllianceService.inviteToAlliance`) if the C# alliance runtime can support the request/response flow. Otherwise move to another production-reachable `ResponseRequester` handler with a small surface, such as duel request, craft-skill learn confirmation, or experience recovery dialog.
 
+---
+
+### Session 683 (May 24, 2026)
+- Source-read Java `PlayerAllianceService.inviteToAlliance`, `PlayerAllianceInvite`, `PlayerRestrictions.canInviteToAlliance`, and the relevant `SM_QUESTION_WINDOW` / `SM_SYSTEM_MESSAGE` ids.
+- Extended production `CM_INVITE_TO_GROUP` packet routing for invite type `12`:
+  - `GameServerConnection.HandleInviteToGroupAsync` now dispatches invite type `12` to `HandleInviteToAllianceAsync`,
+  - represented Java alliance invite restrictions now cover dead inviter, self invite, non-leader/non-vice-captain inviter in an existing alliance, full alliance, already-in-own/alliance-other target, and represented not-enough-slot group-to-alliance checks,
+  - successful solo requests register `PendingAllianceInviteRequest` on `SM_QUESTION_WINDOW.STR_PARTY_ALLIANCE_DO_YOU_ACCEPT_HIS_INVITATION` (`70000`),
+  - invited group members are redirected to their group leader and send the Java requester messages before the question window,
+  - `CM_QUESTION_RESPONSE` now handles alliance invite deny and the narrow solo accept branch.
+- Added Java ids for alliance invite question/system messages used by this path.
+- Added `PlayerEnterWorldService` denial cleanup for pending alliance invites during `ResponseRequester.denyAll`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter GameServerConnectionGroupInviteTests` passes with 11 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1201 tests.
+
+#### Migration Parity Table - Session 683
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_INVITE_TO_GROUP` | `GameServerConnection.HandleInviteToGroupAsync` invite type `12` branch | Client Packet / Handler | Partial | Regression Tested | Needs Verification | Invite type `12` now reaches represented alliance invite setup. Live socket/client validation and unsupported invite types remain unverified. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.inviteToAlliance` | `PlayerAllianceInviteRequestService.SendInvite` / `GameServerConnection.HandleInviteToAllianceAsync` | Service / Request Starter | Partial | Regression Tested | Needs Verification | Registers pending alliance invite, emits requester messages, redirects selected group members to their leader, and sends question id `70000`. Java full service/static alliance map and `FindGroupService` side effects remain partial. |
+| `com.aionemu.gameserver.model.team.alliance.events.PlayerAllianceInvite` | `PendingAllianceInviteRequest` / `PlayerAllianceInviteRequestService.HandleResponse` | Request Handler / Adapter Payload | Partial | Regression Tested | Needs Verification | Deny path and narrow solo accept branch are modeled. Java requester/invited group merge, group removal, `TeamType.ALLIANCE` event graph, and anonymous handler identity remain unported. |
+| `com.aionemu.gameserver.restrictions.PlayerRestrictions.canInviteToAlliance` | `PlayerAllianceInviteRequestService.CreateRepresentedRestrictionMessage` | Restriction Utility | Partial | Regression Tested | Needs Verification | Covers dead/self/leader-or-vice/full/own alliance/other alliance/not-enough-slot represented checks. Prison, FFA/custom-state, auto-instance, race config, target-dead, defence-force/vortex, instance, and full group-leader validation remain unsupported. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest/respond/denyAll` | `QuestionResponseRegistry` with `QuestionResponseRequestKind.AllianceInvite` | Request Registry | Partial | Regression Tested | Needs Verification | Alliance invite requests use put-if-absent, response removal, and logout/enter-world deny cleanup. Java concurrent-map stress and callback polymorphism remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_PARTY_ALLIANCE_DO_YOU_ACCEPT_HIS_INVITATION` | `SmQuestionWindow.AllianceInvite` | Server Packet / Question Id | Partial | Regression Tested | Needs Verification | Question id `70000` is sent to the request target. Golden-byte and encrypted-frame comparison not run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_INVITED_HIM` | `SmSystemMessage.ForceInvitedHim` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Test asserts Java id `1301017` for solo invite setup. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_INVITE_PARTY_HIM` | `SmSystemMessage.ForceInvitePartyHim` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Test asserts Java id `1300969` when selected group member is not leader. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_FORCE_INVITE_PARTY` | `SmSystemMessage.ForceInviteParty` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Test asserts Java id `1300968` and group size parameter. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_PARTY_ALLIANCE_HE_REJECT_INVITATION` | `SmSystemMessage.PartyAllianceHeRejectInvitation` | Server Packet / System Message | Partial | Regression Tested | Needs Verification | Deny path sends Java id `1300190` to requester. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceService.createAlliance/addPlayer` | `PlayerAllianceRuntime.CreateAlliance` / `AddMember` / `CreateEnteredPlan` | Runtime Service | Partial | Regression Tested | Needs Verification | Solo accept can create an alliance and fan out represented `SM_ALLIANCE_INFO` / `SM_ALLIANCE_MEMBER_INFO`. Java `PlayerAllianceEnteredEvent`, offline checker, `FindGroupService`, and full team instance side effects remain partial. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup` | `PlayerGroupRuntime` | Runtime Dependency | Partial | Regression Tested | Needs Verification | Used to detect invited group leader and size for request redirection. Java group removal/merge during accept is not implemented. |
+| `com.aionemu.gameserver.utils.idfactory.IDFactory.nextId` | `IDFactory.NextId` from `HandleAllianceInviteQuestionResponseAsync` | ID Allocation Dependency | Partial | Regression Tested | Needs Verification | Allocates a new C# alliance id only for the solo requester-without-alliance accept path. Java allocation sequence not runtime-compared. |
+
+Tests added/updated:
+- `GameServerConnectionGroupInviteTests.HandleInviteToGroupAsync_AllianceInviteTypeRegistersQuestion`: validates invite type `12` registers a pending alliance request, sends Java message id `1301017`, and sends question id `70000`.
+- `GameServerConnectionGroupInviteTests.HandleInviteToGroupAsync_AllianceInviteTypeRedirectsSelectedGroupMemberToLeader`: validates selected non-leader group member redirects to the group leader, sends message ids `1300969` and `1300968`, and registers the question on the leader.
+- `GameServerConnectionGroupInviteTests.HandleQuestionResponseAsync_AllianceInviteDenyClearsRequestAndRejectsInviter`: validates response `0` clears pending state and sends Java reject message id `1300190`.
+- `GameServerConnectionGroupInviteTests.HandleQuestionResponseAsync_AllianceInviteAcceptCreatesAllianceForSoloPlayers`: validates narrow solo accept creates a represented C# alliance and fans out alliance info/member packets.
+- Java comparison status: expectations are source-derived from Java code and message constants. No Java runtime execution, Java-generated golden vector, full group-to-alliance merge comparison, race/config/defence-force restriction comparison, live socket-order validation, encrypted frame comparison, reflection behavior, precision/rounding behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Java `PlayerAllianceInvite.acceptRequest` group merge behavior remains intentionally unsupported: requester group collection/removal and invited group collection/removal are not ported in this unit.
+- `PlayerRestrictions.canInviteToAlliance` is still partial; prison, custom FFA states, auto-instance, race config, target-dead, defence-force/vortex, and instance checks are not represented.
+- Java `PlayerAllianceService.createAlliance` side effects such as static map semantics, offline checker scheduling, `FindGroupService.onJoinedTeam`, full `PlayerAllianceEnteredEvent`, team instance updates, and broader broadcast side effects are not fully modeled.
+- Duplicate request ordering is source-shaped but not compared against Java runtime behavior.
+- Java anonymous `RequestResponseHandler` callback identity and polymorphic/reflection behavior remain unported.
+- Packet sends are validated by C# packet type/message id only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 13
+- Total artifacts ported: 1 alliance invite type `12` production packet/request/response wiring slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 13
+- Total blocked artifacts: 8 group-to-alliance merge accept branch, full `PlayerRestrictions.canInviteToAlliance`, Java static alliance map/offline checker, `FindGroupService` join callbacks, generic anonymous handler callback execution, full alliance event graph comparison, real socket-order validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; all known `CM_INVITE_TO_GROUP` invite-type branches now have production routing, but alliance/league runtime parity and Java restriction breadth remain partial.
+
+Next recommended unit of work:
+- Continue alliance invite parity by modeling the Java group-merge accept branch from `PlayerAllianceInvite.acceptRequest`: collect requester group members, collect invited group members, remove both groups through the represented group runtime, then create/add alliance members with ordered packet fanout. If that surface proves too broad, move to the next production-reachable `ResponseRequester` handler with a smaller domain, such as duel request, craft-skill learn confirmation, or experience recovery dialog.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
