@@ -17444,6 +17444,60 @@ Summary metrics:
 Next recommended unit of work:
 - Migrate soulbind question handling onto `Player.ResponseRequester`. Source-read Java `Equipment.soulBindItem`, keep `PendingSoulBindRequest` as typed payload metadata, register `STR_SOUL_BOUND_ITEM_DO_YOU_WANT_SOUL_BOUND`, and preserve cancel/accept scheduled item-use behavior with focused cleanup tests.
 
+### Session 675 (May 24, 2026)
+- Source-read Java `Equipment.soulBindItem` and current C# soulbind request/response handling.
+- Migrated soulbind question registration onto `Player.ResponseRequester`:
+  - `StartSoulBindRequestAsync` now registers `SmQuestionWindow.SoulBoundItemConfirm` with `QuestionResponseRequestKind.SoulBind`,
+  - duplicate soulbind question ids now fail through Java-style duplicate-question semantics and send `SoulBoundCloseOtherMsgBoxAndRetry`,
+  - `PendingSoulBindRequest` remains as typed payload metadata and a narrow adapter slot.
+- Migrated soulbind question responses onto `ResponseRequester.Respond`:
+  - `HandleSoulBindQuestionResponseAsync` now consumes the registry before cancel/accept scheduled item-use behavior,
+  - response `0` clears registry and typed pending state and sends the cancel message,
+  - stale typed adapter state without a registry entry is cleared defensively.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionSoulBindQuestionResponseTests|QuestionResponseRegistryTests"` passes with 6 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1175 tests.
+
+#### Migration Parity Table - Session 675
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment` | `Aion.GameServer.Services.EquipmentService` / `GameServerConnection.StartSoulBindRequestAsync` | Model Service / Request Setup | Partial | Unit Tested | Needs Verification | Soulbind request setup now registers through `Player.ResponseRequester`. Full equipment behavior remains broader Phase 6 work. |
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment.soulBindItem` | `GameServerConnection.StartSoulBindRequestAsync` / `HandleSoulBindQuestionResponseAsync` | Request Handler / Runtime Routing | Partial | Unit Tested | Needs Verification | Registers `STR_SOUL_BOUND_ITEM_DO_YOU_WANT_SOUL_BOUND`, sends retry on duplicate, sends cancel on deny, and preserves existing C# accept scheduling. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.putRequest` | `QuestionResponseRegistry.PutRequest` via soulbind registration | Request Registry Method | Partial | Unit Tested | Needs Verification | Duplicate soulbind question ids are rejected by registry state. C# uses lock-backed metadata, not Java `ConcurrentHashMap` handler objects. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.respond` | `QuestionResponseRegistry.Respond` via `HandleSoulBindQuestionResponseAsync` | Request Registry Method | Partial | Unit Tested | Needs Verification | Soulbind responses remove the registry entry before accept/deny behavior. Java callback invocation is represented by typed dispatch metadata. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler` | `QuestionResponseRequest` / `QuestionResponseDispatch` carrying `PendingSoulBindRequest` payload | Request Handler Metadata | Partial | Unit Tested | Needs Verification | Typed metadata replaces Java anonymous `RequestResponseHandler<Player>` subclass. Reflection/polymorphic callback behavior is not reproduced. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUESTION_WINDOW.STR_SOUL_BOUND_ITEM_DO_YOU_WANT_SOUL_BOUND` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestionWindow.SoulBoundItemConfirm` | Packet Constant / Question Id | Complete | Unit Tested | Needs Verification | Used as the registry key for soulbind confirmation. No Java golden-byte or encrypted-frame comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` | `Aion.GameServer.Network.Aion.ServerPackets.SmItemUsageAnimation` through existing soulbind accept path | Server Packet / Animation | Partial | Existing Unit Coverage | Needs Verification | Existing C# accept path schedules item usage animation. This unit did not expand accept-side animation/socket-order tests. |
+| `com.aionemu.gameserver.controllers.observer.ActionObserver` | `GameServerConnection.SchedulePendingItemUseAsync` / pending item-use cancellation | Observer / Scheduled Task | Partial | Existing Unit Coverage | Needs Verification | Java move observer cancels soulbind item use. C# uses existing pending item-use cancellation infrastructure; no live movement observer comparison was run. |
+| `com.aionemu.gameserver.utils.ThreadPoolManager` | `Aion.GameServer.Services.ThreadPoolManager` via pending item-use scheduling | Scheduler Dependency | Partial | Existing Unit Coverage | Needs Verification | Existing C# scheduler path is preserved. Timing/date behavior for the 5000 ms soulbind task is not runtime-compared to Java. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.updateItemAfterInfoChange` | `PlayerEnterWorldService.SaveEquipmentMutationAsync` / `SmInventoryUpdateItem` through `CompleteSoulBindAsync` | Persistence / Packet Boundary | Partial | Existing Unit Coverage | Needs Verification | Existing C# completion path persists and emits inventory/appearance updates. Java DAO and packet-order parity remain unverified. |
+
+Tests added/updated:
+- `GameServerConnectionSoulBindQuestionResponseTests.HandleQuestionResponseAsync_SoulBindDenyConsumesResponseRequesterAndSendsCancel`: validates parsed `CM_QUESTION_RESPONSE` response `0` clears registry and typed pending state and sends cancel system message id `1300487`.
+- `GameServerConnectionSoulBindQuestionResponseTests.HandleQuestionResponseAsync_SoulBindMissingRegistryClearsAdapterSlot`: validates stale typed adapter state is cleared when no registry dispatch exists.
+- Existing `EquipmentServiceTests.ChangeEquipment_SoulBindsAndEquipsWhenConfirmed` remains coverage for confirmed soulbind item mutation, but this unit did not add a new accept-side scheduled completion test.
+- Java comparison status: expectations are source-derived from `Equipment.soulBindItem`, `CM_QUESTION_RESPONSE`, and `ResponseRequester`. No Java runtime execution, Java-generated golden vector, live anonymous-handler object comparison, movement observer comparison, scheduler timing comparison, DAO transaction comparison, real socket-order validation, encrypted frame comparison, reflection behavior, precision/rounding behavior, or client validation was run.
+
+Remaining risks:
+- Soulbind accept-side scheduled item-use parity still depends on existing partial C# tests and was not expanded in this registry unit.
+- Java move `ActionObserver` cancellation is not runtime-compared to C# pending item-use cancellation.
+- Java scheduler timing for the 5000 ms soulbind task is not compared to C# timing behavior.
+- C# stores typed metadata and an adapter slot instead of Java's anonymous `RequestResponseHandler<Player>` object.
+- Java `ConcurrentHashMap` semantics remain approximated by a C# lock without stress tests.
+- Packet sends are not validated against Java golden bytes, encrypted frames, production socket ordering, packet captures, or real-client behavior.
+- Precision/rounding is not involved in this unit; date/time behavior is limited to unverified scheduled delay handling.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 soulbind registry-adapter migration slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 7 Java movement observer comparison, scheduler timing comparison, Java DAO transaction comparison, Java polymorphic callback parity, Java concurrent map stress parity, real socket-order validation, and runtime/client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; the main specialized C# question-response flows now use the reusable response registry, while lifecycle cleanup and many broader Java `ResponseRequester` users remain.
+
+Next recommended unit of work:
+- Wire `QuestionResponseRegistry.DenyAll` into player leave/disconnect cleanup to mirror Java `PlayerLeaveWorldService.leaveWorld`, then clean up typed adapter slots for league/friend/kisk/rift/charge/soulbind on logout. Source-read Java `PlayerLeaveWorldService`, current C# disconnect/leave-world flow, and add tests that `DenyAll` removes active registry entries without claiming Java handler callback parity.
+
 ---
 
 ## Next Steps
