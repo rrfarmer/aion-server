@@ -25893,6 +25893,58 @@ Next recommended unit of work:
 
 ---
 
+### Session 845 (May 24, 2026)
+- Continued from the Session 844 / Phase 6MR handoff with a focused Java-shaped `SmItemUsageAnimation` constructor/API and direct packet-byte test unit.
+- Re-read the latest Phase 6 progress and handoff docs before starting the unit. `docs/commit-conventions.md` remains absent, so this unit continued the existing concise commit style.
+- Performed parallel work discovery. The safe implementation/test files were tiny but coupled by API shape, so no subagents were spawned for this unit; the prior read-only Java/C# audits already covered the packet and caller behavior needed for the change.
+- Added Java-shaped C# overloads for `SmItemUsageAnimation`:
+  - `(playerObjectId, itemObjectId, itemId)` with Java defaults `target=self`, `time=0`, `end=1`, `unk2=1`, `unk3=1`.
+  - `(playerObjectId, itemObjectId, itemId, time, end)` with Java default `unk3=0`.
+  - targeted `(playerObjectId, targetObjectId, itemObjectId, itemId, time, end, unknown)` mapping the final Java argument to `unk3`, while `unk`, `unk1`, and `unk2` retain Java defaults.
+- Extended direct packet byte assertions in `GamePacketTests` for the new overloads and the full 10-arg variant, including Java `writeC` byte-cast behavior for values like `0x101`, `-1`, `0x102`, and `0x103`.
+- Kept runtime behavior deliberately scoped: no `GameServerConnection` refactor, no call-site migration, no packet write-time `usingItem` mutation, no Java runtime packet capture, no opcode/frame/crypto comparison, and no live-client behavior.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GamePacketTests"` passes with 90 tests.
+- Broader focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|StaticDataNpcSkillTests|GamePacketTests"` passes with 160 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1420 tests.
+
+#### Migration Parity Table - Session 845
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` | `Aion.GameServer.Network.Aion.ServerPackets.SmItemUsageAnimation` | Packet | Partial | Unit Tested / Packet Byte Tested | Partial Parity | C# now exposes Java-shaped overloads for the 3-arg, 5-arg, 6-arg, targeted 7-arg, and full 10-arg constructor shapes and direct tests validate Java field defaults and byte order. Remaining gaps: no Java runtime-generated golden vector, no opcode/frame/crypto comparison, no write-time `Player.usingItem` mutation, no live caller fanout/order verification, and no live-client validation. |
+| `com.aionemu.gameserver.network.aion.AionServerPacket` | `Aion.GameServer.Network.Aion.ServerPackets.SmItemUsageAnimation.WritePayload` / `PacketBuffer` tests | Packet Utility | Partial | Packet Byte Tested | Partial Parity | Tests validate the selected Java primitive field order `D/D/D/D/D/C/C/C/C/D`, little-endian integers, and byte-cast behavior through C# packet serialization. They do not execute Java `writeImpl`, compare packet headers, encryption, socket queueing, or every packet writer edge case. |
+| `com.aionemu.gameserver.network.aion.ServerPacketsOpcodes` | `SmItemUsageAnimation.PacketOpCode` | Packet Opcode Metadata | Partial | Manual Only | Needs Verification | Opcode remains `183` in C# and Java audit, but this unit did not add frame/opcode byte golden validation. |
+| `com.aionemu.gameserver.world.World` | unresolved live lookup dependency | Runtime Lookup Dependency | Not Started | No Tests | Needs Verification | Java positive-time serialization performs `World.getInstance().getPlayer(playerObjId)` without a null guard. This packet API unit did not add live world/player lookup or exception parity. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Player.UsingItemObjectId` / unresolved write-time side effect | Player State Dependency | Partial | No Tests for this unit | Needs Verification | Java `SM_ITEM_USAGE_ANIMATION.writeImpl` mutates `Player.usingItem` during serialization for `time > 0`. C# still uses scheduling-side pending item state and packet serialization remains side-effect free; this is an explicit remaining gap. |
+| `com.aionemu.gameserver.model.gameobjects.player.Inventory` | unresolved positive-time item lookup dependency | Inventory Dependency | Not Started | No Tests | Needs Verification | Java inventory lookup can return null and clear `usingItem`, but missing player/inventory would throw. No live C# inventory lookup parity was added. |
+| `com.aionemu.gameserver.skillengine.model.Skill` | call sites can now use Java-shaped `SmItemUsageAnimation` overloads | Runtime / Packet Caller | Partial | No Tests for live skill callers | Needs Verification | Constructor overloads reduce future caller-default mistakes for non-combat item skill start/end paths. This unit did not change live skill execution, item consumption, scheduled effects, or use-item message ordering. |
+| `com.aionemu.gameserver.services.toypet.PetService` | full 10-arg `SmItemUsageAnimation` packet byte test | Service / Packet Caller | Partial | Packet Byte Tested for packet shape | Partial Parity | Direct C# packet test validates the full 10-arg pet-style byte truncation/payload shape. Pet skill application, `SM_PET`, cooldown, inventory decrement, and broadcast behavior remain unported/unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GamePacketTests.SerializesRepresentativeGameServerPackets` | Unit / Packet Byte Regression | Java source review of `SM_ITEM_USAGE_ANIMATION.writeImpl` and constructor overload defaults | Adds direct byte assertions for Java-shaped 3-arg, 5-arg, targeted 7-arg, existing 6-arg, and full 10-arg `SmItemUsageAnimation` payloads; validates self-target defaults, `unk2=1`, `unk3` defaults/parameter mapping, little-endian integer writes, and `writeC` byte truncation. | C# packet serialization is compared to source-derived Java field order/defaults. | Does not compare against Java-generated runtime bytes, include opcode/frame/crypto, mutate `usingItem`, execute item-use call sites, or validate live-client behavior. |
+
+Remaining risks:
+- Java `SM_ITEM_USAGE_ANIMATION.writeImpl` mutates `Player.usingItem` at serialization time when `time > 0`; C# packet serialization still does not.
+- Existing `GameServerConnection` call sites were not migrated to the new overloads, so some call-site default choices remain manually encoded.
+- Direct packet tests are source-derived and deterministic, but still not Java runtime golden vectors.
+- Opcode/frame/crypto, socket queueing, packet fanout, live item-use scheduling, cancellation, dynamic item actions, inventory/resource mutation, threading, reflection, and live-client behavior remain missing or unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 live packet API/default-overload slice plus direct packet-byte tests
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 31 blocked/not-started categories, including Java runtime packet-byte comparison, opcode/frame/crypto, packet write-time `usingItem` mutation, live `World`/player/inventory lookup, `GameServerConnection` call-site migration, live `Skill` item start/end execution, `PlayerController.cancelUseItem`, pet skill execution, dynamic item actions, quest/item handlers, packet fanout, scheduled item-use ordering, pending task cancellation, resource/item mutation, threading/serialization/date-time precision, reflection behavior, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; `SM_ITEM_USAGE_ANIMATION` constructor-default parity is stronger, but live side effects and caller integration remain intentionally unwired.
+
+Next recommended unit of work:
+- Continue item-use parity by auditing positive-time `SmItemUsageAnimation` call sites in `GameServerConnection` and adding a narrow trace/test that documents which C# paths set `Player.UsingItemObjectId` after positive-time animation versus Java's packet write-time `Player.usingItem` mutation.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -25902,4 +25954,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue NPC/item skill packet parity by adding Java-shaped `SmItemUsageAnimation` constructor/factory coverage and direct packet byte tests for all Java overload defaults, while documenting or bridging the `usingItem` write-time side-effect difference without broad `GameServerConnection` refactors.
+8. Continue item-use parity by auditing positive-time `SmItemUsageAnimation` call sites in `GameServerConnection` and adding a narrow trace/test that documents which C# paths set `Player.UsingItemObjectId` after positive-time animation versus Java's packet write-time `Player.usingItem` mutation.
