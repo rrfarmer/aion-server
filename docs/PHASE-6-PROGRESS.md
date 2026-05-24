@@ -22170,6 +22170,57 @@ Next recommended unit of work:
 
 ---
 
+### Session 767 (May 24, 2026)
+- Re-inspected Java `SkillAttackManager.chooseNextSkill` gate ordering:
+  - returns null while NPC AI is in `CAST` substate;
+  - lets a ready queued skill with `getNextSkillTime() == 0` bypass the ordinary fight-delay / `canUseNextSkill` gate;
+  - otherwise requires elapsed fight time to be strictly greater than initial skill delay and `NpcGameStats.canUseNextSkill()` before selecting queued/chain/priority skills.
+- Added `PlayerSummonKnownObjectSkillAttackPreview` / status enum.
+- Added `PlayerSummonSkillExecutionService.PreviewMercenarySkillAttack` consuming represented next-skill delay/readiness metadata:
+  - `BlockedCasting`;
+  - `WouldUseQueuedInstantSkill`;
+  - `InitialDelayNotElapsed`;
+  - `NextSkillNotReady`;
+  - `WouldEvaluateSkills`.
+- Treated missing represented next-skill delay as Java default `0` for the caller preview.
+- Kept actual queued skill readiness, chain skill selection, priority lists, distance checks, abnormal-state checks, skill-template type checks, and live AI state unimplemented.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 36 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1360 tests.
+
+#### Migration Parity Table - Session 767
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.chooseNextSkill` | `PlayerSummonSkillExecutionService.PreviewMercenarySkillAttack` / `PlayerSummonKnownObjectSkillAttackPreview` | AI Scheduling Caller Projection | Partial | Regression Tested | Needs Verification | C# now models the top-level gate ordering for represented mercenary skill evaluation. It does not choose real queued/chain/priority skills, inspect ranges, or call AI/controller systems. |
+| `com.aionemu.gameserver.ai.AISubState.CAST` | `PlayerSummonKnownObjectSkillAttackPreviewStatus.BlockedCasting` | AI State Projection | Partial | Regression Tested | Needs Verification | C# accepts an `isCasting` boolean and blocks evaluation. It does not model live AI substate transitions, threading, or state machines. |
+| `com.aionemu.gameserver.model.gameobjects.Npc.getNextQueuedSkill` / queued `NpcSkillEntry.getNextSkillTime` | `hasReadyQueuedInstantSkill` input / `WouldUseQueuedInstantSkill` status | Queued Skill Projection | Partial | Regression Tested | Needs Verification | C# represents only the Java shortcut for a ready queued instant skill. It does not store queued skill entries, run `isReady`, check distance, or select a skill object. |
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.getFightStartingTime` / `getInitialSkillDelay` | explicit fight-start/current/initial-delay parameters | Fight Timing Projection | Partial | Regression Tested | Needs Verification | C# models the strict `elapsed > initialDelay` gate with supplied timestamps. Production game clock, date/time runtime behavior, and live stats containers remain missing. |
+| `com.aionemu.gameserver.model.stats.container.NpcGameStats.canUseNextSkill` | `EvaluateMercenaryNextSkillReadiness` consumed by caller preview | Skill Readiness Projection | Partial | Regression Tested | Needs Verification | Caller preview consumes represented readiness metadata. Live AI scheduling, NPC skill templates, Java random delay, threading, and serialization remain unverified. |
+| `com.aionemu.gameserver.ai.manager.SkillAttackManager.isReady` / `targetTooFar` / chain-priority selection | Not implemented; documented blocker | AI Skill Selection Dependency | Not Started | No Tests | Needs Verification | Newly documented dependency remains missing: HP readiness, conditions, silence/bind/fear/stun/transformation restrictions, skill-template type checks, range checks, chain skill choice, priority shuffling, and 5000ms delay-on-too-far behavior. |
+
+Tests added/updated:
+- `PlayerSummonSkillExecutionServiceTests.PreviewMercenarySkillAttack_ProjectsSkillAttackManagerGates`: validates casting blocks first, ready queued instant skill bypasses ordinary delay, elapsed fight time equal to initial delay is still blocked, next-skill readiness can block evaluation, readiness allows evaluation exactly at ready time, and missing delay metadata defaults to Java's `0`.
+- Java comparison status: expectations are source-derived from Java `SkillAttackManager.chooseNextSkill`, `NpcGameStats.canUseNextSkill`, `NpcGameStats.getFightStartingTime`, `NpcGameStats.getInitialSkillDelay`, and queued `NpcSkillEntry.getNextSkillTime`. No Java runtime execution, live AI state comparison, queued skill comparison, chain/priority selection comparison, abnormal-state comparison, range comparison, threading comparison, serialization comparison, date/time runtime comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- This is a caller preview only; it does not select or execute real NPC skills.
+- Queued skill entries, skill lists, chain skills, priority ordering/shuffling, `isReady`, `conditionReady`, abnormal-state restrictions, transform restrictions, target range, and delay-on-too-far remain missing.
+- Production clock, live AI substate, live `NpcGameStats`, NPC skill templates, Java random delay generation, effects, packets, and controller execution remain unimplemented.
+- Reflection, threading, serialization, date/time runtime, precision/rounding, Java runtime, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 represented `SkillAttackManager` top-level gate preview
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 11 live AI skill scheduling, queued skill entries, NPC skill list/chain/priority selection, abnormal-state restrictions, target range checks, Java random delay generation, production game clock, live `NpcGameStats`, controller execution, Java runtime comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; top-level AI skill-evaluation gates are represented, but live NPC skill selection parity remains partial.
+
+Next recommended unit of work:
+- Continue by modeling one missing `SkillAttackManager.isReady` dependency as metadata, likely abnormal-state skill blocking for magical/silence and physical/bind using `SkillTemplateSummary.SkillType`, or represent the `targetTooFar` branch that sets next skill delay to 5000ms. Keep real skill selection, effects, packets, live AI state, and controller execution explicit until supported.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
