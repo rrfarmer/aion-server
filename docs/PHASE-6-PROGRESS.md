@@ -19703,6 +19703,51 @@ Next recommended unit of work:
 
 ---
 
+### Session 717 (May 24, 2026)
+- Continued the charge observer path by adding the persistence boundary for observer-driven charge burns.
+- Added `IPlayerEnterWorldRepository.SaveItemChargeBurnMutationAsync` and concrete repository support to persist changed `inventory.charge` values in one transaction.
+- Added `PlayerEnterWorldService.SaveItemChargeBurnMutationAsync`, which extracts all `ItemChargeBurnPlan` updates and skips the repository when the burn plan has no item changes.
+- Added `PlayerEnterWorldServiceTests.SaveItemChargeBurnMutation_PersistsAllObserverChargeUpdates`.
+- Added `PlayerEnterWorldServiceTests.SaveItemChargeBurnMutation_SkipsRepositoryWhenNothingChanged`.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerEnterWorldServiceTests|ItemChargeServiceTests"` passes with 29 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1286 tests.
+
+#### Migration Parity Table - Session 717
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.items.ChargeInfo.updateChargePoints` | `Aion.GameServer.Services.PlayerEnterWorldService.SaveItemChargeBurnMutationAsync` | Persistence Boundary / Service | Partial | Unit Tested | Needs Verification | C# now has a service boundary that persists every item charge update produced by observer burns and skips DB work when no burn occurred. Java mutates `PersistentState` and relies on normal item/equipment persistence; exact flush timing, transaction/autocommit behavior, threading, and live Java persistence cadence remain unverified. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.attack` | `ItemChargeBurnPlan` updates persisted through `SaveItemChargeBurnMutationAsync` | Observer Callback Persistence Dependency | Partial | Unit Tested indirectly | Needs Verification | Outgoing ordinary attack burn updates can now be passed to a persistence boundary. The production attack observer caller still has to invoke the plan and packet fanout. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.attacked` | `ItemChargeBurnPlan` updates persisted through `SaveItemChargeBurnMutationAsync` | Observer Callback Persistence Dependency | Partial | Unit Tested indirectly | Needs Verification | Incoming ordinary attack burn updates can now be persisted. Actual `skillId == 0` observer dispatch, packet order, and live combat source remain unwired. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.dotattacked` | `ItemChargeBurnPlan` updates persisted through `SaveItemChargeBurnMutationAsync` | Observer Callback Persistence Dependency | Partial | Unit Tested indirectly | Needs Verification | Dot-attacked burn updates can now be persisted. Dot effect lifecycle and observer sequencing are still not production-wired. |
+| `inventory.charge` Java DAO persistence via item `PersistentState.UPDATE_REQUIRED` | `Aion.GameServer.Data.IPlayerEnterWorldRepository.SaveItemChargeBurnMutationAsync` / `PlayerEnterWorldRepository.SaveItemChargeBurnMutationAsync` | Repository / Database Mutation | Partial | Unit Tested through fake repository; SQL not integration tested | Needs Verification | Concrete SQL updates `inventory.charge` for each changed item in one transaction. No live MySQL integration, Java DAO flush comparison, rollback comparison, serialization comparison, or transaction/autocommit comparison was run. |
+
+Tests added/updated:
+- `PlayerEnterWorldServiceTests.SaveItemChargeBurnMutation_PersistsAllObserverChargeUpdates`: validates all burn-produced item charge updates are passed to the repository, including updates that did and did not cross a visual charge-bar step.
+- `PlayerEnterWorldServiceTests.SaveItemChargeBurnMutation_SkipsRepositoryWhenNothingChanged`: validates the service no-ops when the burn plan has no item updates.
+- Existing `PlayerEnterWorldServiceTests` and `ItemChargeServiceTests` matched by the focused filter were rerun.
+- Java comparison status: expectations are source-derived from `ChargeInfo.updateChargePoints`, `ChargeInfo.attack`, `ChargeInfo.attacked`, `ChargeInfo.dotattacked`, item `PersistentState.UPDATE_REQUIRED`, and Java inventory charge storage. No Java runtime execution, Java-generated golden vectors, live MySQL DAO comparison, transaction/autocommit comparison, packet ordering comparison, threading comparison, serialization comparison, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- The persistence boundary is not yet invoked by a production combat/effect caller.
+- Packet fanout remains missing for observer-driven charge burns; Java sends `SM_INVENTORY_UPDATE_ITEM` only when the visual charge bar step changes.
+- Java's item/equipment persistent-state flushing may batch differently than the direct C# transaction; no live DB comparison has been run.
+- Threading parity for Java synchronized `ChargeInfo.updateChargePoints` remains unresolved.
+- Actual observer registration/removal through `ItemEquipmentListener` is still broader than this persistence slice.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 charge burn persistence boundary slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 5 production combat/effect caller invocation, charge packet fanout, live DB/DAO comparison, synchronized/threading comparison, and Java runtime/live-client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; observer charge persistence is closer, but production caller and packet behavior remain partial.
+
+Next recommended unit of work:
+- Add a packet/caller helper for `ItemChargeBurnPlan`: update `player.InventoryItems`, send `SM_INVENTORY_UPDATE_ITEM` with update type `Charge` only for burns whose `ChargeBarChanged` is true, and then invoke `SaveItemChargeBurnMutationAsync` from the first stable combat/effect observer caller. If production caller wiring remains premature, mirror this persistence+packet pattern for idian burn plans.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
