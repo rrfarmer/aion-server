@@ -21613,6 +21613,55 @@ Next recommended unit of work:
 
 ---
 
+### Session 756 (May 24, 2026)
+- Re-inspected Java `CM_SUMMON_CASTSPELL.runImpl` mercenary skill guard:
+  - after `Player.getSummonOrMercenary` returns a mercenary `Npc`, Java uses `summonOrMercenary.getObjectTemplate().getTemplateId()`;
+  - that template id is passed to `DataManager.PET_SKILL_DATA.petHasSkill(templateId, skillId)`;
+  - valid skills invoke controller use; invalid skills audit and return.
+- Extended `PlayerSummonKnownObject` with `NpcTemplateId`.
+- Added `Player.GetSummonOrMercenaryNpcId(objectId)` to resolve represented pet summon ids, known-list mercenary template ids, or legacy direct represented actor ids.
+- Updated `PlayerSummonSkillExecutionService.ValidateMercenaryExecution` to resolve the mercenary actor and npc/template id from `Player.GetSummonOrMercenaryKind` / `GetSummonOrMercenaryNpcId`.
+- Updated mercenary execution tests to seed Java-shaped known-object metadata instead of relying only on direct represented mercenary fields.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonCastSpellServiceTests|GameServerConnectionCastSpellTests|PlayerSummonSkillExecutionServiceTests"` passes with 29 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1353 tests.
+
+#### Migration Parity Table - Session 756
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_CASTSPELL.runImpl` mercenary pet-skill guard | `PlayerSummonSkillExecutionService.ValidateMercenaryExecution` using `Player.GetSummonOrMercenaryNpcId` | Client Packet Handler / Service | Partial | Regression Tested | Needs Verification | C# now derives represented mercenary npc/template id from known-object metadata when available before checking `PetSkillTable.PetHasSkill`. Java uses a live `Creature` object's template id. |
+| `com.aionemu.gameserver.model.gameobjects.Npc.getObjectTemplate().getTemplateId` | `PlayerSummonKnownObject.NpcTemplateId` / `Player.GetSummonOrMercenaryNpcId` | NPC Template Id Projection | Partial | Regression Tested | Needs Verification | C# stores caller-seeded template id metadata. Live `Npc`, `NpcTemplate`, XML template object behavior, serialization, and lifecycle remain unsupported. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getSummonOrMercenary` | `Player.GetSummonOrMercenaryKind` / `GetSummonOrMercenaryNpcId` | Player/Summon Lookup Projection | Partial | Regression Tested | Needs Verification | C# can resolve represented pet summon, known-list mercenary metadata, and legacy represented actor fallback. Java returns live `Creature` references. |
+| `com.aionemu.gameserver.dataholders.PetSkillData.petHasSkill` | `PetSkillTable.PetHasSkill` consumed by `ValidateMercenaryExecution` | Static Data Lookup | Partial | Regression Tested with loaded static data | Needs Verification | Tests validate represented known mercenary npc/template id `833288` accepts `22107` and rejects `9999`. Java singleton/golden behavior and missing-map behavior remain unverified. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.getObject` | `PlayerSummonKnownObject` metadata feeding execution validation | Known-List Projection | Partial | Regression Tested | Needs Verification | Metadata remains player-owned, not a live known-list object with visibility lifecycle, synchronization, or object identity. |
+
+Tests added/updated:
+- `PlayerSummonCastSpellServiceTests.Handle_RecognizesCreatorOwnedKnownMercenaryMetadata`: now validates represented known mercenary metadata carries npc/template id `833288` and wrong creator id yields no npc id.
+- `PlayerSummonSkillExecutionServiceTests.ValidateMercenaryExecution_PlansControllerUseAndAuditsInvalidSkill`: now seeds known-object mercenary metadata and validates valid/invalid pet-skill guard behavior from that metadata.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_ValidRepresentedMercenarySkillPlansControllerUse`: now seeds known-object mercenary metadata for connection-level valid-skill planning.
+- `GameServerConnectionCastSpellTests.HandleSummonCastSpellAsync_InvalidRepresentedMercenarySkillRecordsAuditProjection`: now seeds known-object mercenary metadata for invalid-skill audit projection.
+- Java comparison status: expectations are source-derived from Java `CM_SUMMON_CASTSPELL.runImpl`, `Npc.getObjectTemplate().getTemplateId`, `Player.getSummonOrMercenary`, `KnownList.getObject`, and `PetSkillData.petHasSkill`. No Java runtime execution, live `NpcTemplate` comparison, object identity comparison, reflection comparison, threading comparison, serialization comparison, date/time comparison, precision/rounding comparison, or live-client validation was run.
+
+Remaining risks:
+- NPC template id is represented metadata, not loaded from a live `Npc` object template.
+- Known-list objects remain player-owned metadata without Java lifecycle, synchronization, or visibility behavior.
+- Legacy direct represented mercenary fields still exist as a fallback until live object models replace them.
+- Controller execution, target mutation, `SkillEngine`, packet fanout, audit/log sinks, Java runtime, and live-client behavior remain unverified.
+- Reflection, threading, serialization, precision/rounding, and date/time behavior remain unverified for the broader path.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 represented mercenary npc/template-id resolution slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 9 live `Npc`/`NpcTemplate` objects, XML template object behavior, live `KnownList`, object identity/equality, controller execution, audit/log sinks, Java runtime comparison, live-client validation, and threading/serialization verification
+- Estimated overall migration completion: Phase 6 remains about 66% complete; represented mercenary skill validation now uses Java-shaped known-object template metadata, but live object parity remains partial.
+
+Next recommended unit of work:
+- Continue replacing legacy direct represented mercenary fields by carrying enough known-object metadata for connection-level target assignment and audit output, or add a small target-reference abstraction around object ids so future live `Creature` references can replace id equality cleanly. Keep live `Npc`, `Creature`, template loading, and controller execution gaps explicit.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
