@@ -16981,6 +16981,53 @@ Summary metrics:
 Next recommended unit of work:
 - Add the requester-without-league accept branch from `LeagueInviteEvent.acceptRequest`: after represented `canInvite` passes and the requester alliance has no league, create a league for the requester alliance before adding the invited alliance. Keep live `CM_QUESTION_RESPONSE` routing as a later unit unless this branch needs a small planner status hook.
 
+### Session 666 (May 24, 2026)
+- Source-read Java `LeagueService.createLeague`, `League` constructor, `LeagueInviteEvent.acceptRequest`, and the existing C# `PlayerLeagueRuntime.CreateLeague`.
+- Added `PlayerLeagueInvitePlanner.CreateAcceptNewLeaguePlan` for the requester-without-league accept branch:
+  - creates the requester alliance league with a caller-supplied league id,
+  - relies on `PlayerLeagueRuntime.CreateLeague` for Java default loot rules,
+  - adds the invited alliance through the existing join path,
+  - falls back to the existing-league accept path when the requester is already in a league,
+  - returns already-in-league without creating a duplicate if the invited alliance is already league-bound.
+- Extended `CreatePendingRequestResponsePlan` with optional `newLeagueId` so nonzero accept responses can create the requester league before joining the invited alliance.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerLeagueInvitePlannerTests` passes with 17 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1152 tests.
+
+#### Migration Parity Table - Session 666
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.league.LeagueService.createLeague` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.CreateAcceptNewLeaguePlan` / `PlayerLeagueRuntime.CreateLeague` | Service / Runtime | Partial | Unit Tested | Needs Verification | Requester-without-league accept creates a new league and then joins the invited alliance. Java static registry and live `LeagueCreateEvent` fanout are not fully modeled. |
+| `com.aionemu.gameserver.model.team.league.League` | `Aion.GameServer.Services.PlayerLeagueRuntime` / `PlayerLeagueSnapshot` | Team Runtime / Snapshot | Partial | Unit Tested | Needs Verification | C# runtime creates leader alliance at position 0 and default league loot rules. Java live `GeneralTeam`, locks, object pointers, race, captain, and broadcast methods are not fully ported. |
+| `com.aionemu.gameserver.utils.idfactory.IDFactory.nextId` | Caller-supplied `newLeagueId` for `CreateAcceptNewLeaguePlan` | ID Allocation Dependency | Partial | Unit Tested | Needs Verification | This unit documents the live boundary: Java allocates inside `League` constructor, while C# planner accepts an id that a future live caller should allocate via `IDFactory.NextId()`. |
+| `com.aionemu.gameserver.model.team.common.legacy.LootGroupRules` | `Aion.GameServer.Services.PlayerGroupLootRules` through `PlayerLeagueRuntime.CreateLeague` | Loot Rules DTO | Partial | Unit Tested | Needs Verification | Default league loot rules are checked as `FREEFORALL` with existing runtime defaults. Full Java DTO serialization and mutation behavior remain broader Phase 6 work. |
+| `com.aionemu.gameserver.model.team.league.events.LeagueInviteEvent.acceptRequest` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.CreatePendingRequestResponsePlan` / `CreateAcceptNewLeaguePlan` | Event / Join Planner | Partial | Unit Tested | Needs Verification | Both existing requester-league and requester-without-league represented accept branches are now modeled. Live packet routing and Java runtime comparison remain absent. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.respond` | `Aion.GameServer.Services.PlayerLeagueInvitePlanner.CreatePendingRequestResponsePlan` | Request Registry / Planner | Partial | Unit Tested | Needs Verification | Optional `newLeagueId` extends the narrow accept handler. Generic request map, concurrent removal semantics, and live packet dispatch are not ported. |
+
+Tests added:
+- `PlayerLeagueInvitePlannerTests.CreatePendingRequestResponsePlan_AcceptCreatesLeagueWhenRequesterHasNoLeagueLikeJavaEvent`: validates nonzero response clears pending request, creates requester league id `77099`, keeps requester alliance at position 0, joins invited alliance at position 1, and keeps default league loot rules.
+- `PlayerLeagueInvitePlannerTests.CreateAcceptNewLeaguePlan_ReportsAlreadyLeagueBranchesWithoutCreatingDuplicate`: validates existing-requester-league fallback and invited-already-in-league no-op behavior without duplicate league creation.
+- Java comparison status: expectations are source-derived from `LeagueService.createLeague`, `League` constructor, `LeagueInviteEvent.acceptRequest`, and existing C# runtime behavior. No Java runtime execution, Java-generated golden vector, live client packet capture, encrypted frame comparison, generic concurrent request-map comparison, live `CM_QUESTION_RESPONSE` routing, socket send comparison, `IDFactory` live allocation comparison, threading comparison, reflection behavior, precision/rounding behavior, date/time behavior, or client validation was run.
+
+Remaining risks:
+- Live `CM_QUESTION_RESPONSE` dispatch is still not wired to `PendingLeagueInviteRequest` or `IDFactory.NextId()`.
+- Java `LeagueCreateEvent` side effects and static `LeagueService.leagues` registry are only partially represented by `PlayerLeagueRuntime`.
+- C# still uses a single typed pending league invite slot, not Java's generic `ConcurrentHashMap<Integer, RequestResponseHandler<?>>`.
+- Java live alliance object identity, `GeneralTeam` locking, race/captain helpers, and broadcast methods are not runtime-compared.
+- Packet-field coverage remains C# emitted-object validation only; Java golden bytes, encrypted frames, packet captures, and real-client validation remain unavailable.
+- Threading differs from Java's concurrent map and team locks. Reflection, precision/rounding, and date/time handling are not involved in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 requester-without-league accept/create planner slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 7 live `CM_QUESTION_RESPONSE` routing, live `IDFactory.NextId()` integration, static league registry parity, generic `ResponseRequester`, Java team locking comparison, Java runtime/golden validation, and client validation
+- Estimated overall migration completion: Phase 6 remains about 64% complete; league invite accept/deny branches are represented as planner/runtime slices, but live packet routing and full Java runtime parity remain open.
+
+Next recommended unit of work:
+- Wire the narrow pending league invite response planner into the C# `CM_QUESTION_RESPONSE` handling path: when a player has `PendingLeagueInviteRequest` for `SmQuestionWindow.UnionInviteMe`, resolve the requester/recipient players, allocate `IDFactory.NextId()` only for the create-league branch, invoke `CreatePendingRequestResponsePlan`, and emit/apply the resulting packet intents. Keep generic `ResponseRequester` as a later abstraction unless the routing work clearly needs it.
+
 ---
 
 ## Next Steps
