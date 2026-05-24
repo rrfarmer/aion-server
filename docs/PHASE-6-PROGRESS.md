@@ -18354,6 +18354,63 @@ Summary metrics:
 Next recommended unit of work:
 - Either take `CM_EXCHANGE_OK` as a deliberately limited represented-confirmation slice that sends `SM_EXCHANGE_CONFIRMATION(2)` and stops before `performTrade`, or pause exchange work and return to smaller `ResponseRequester` handlers. Do not implement successful trade transfer until a real C# `Exchange` basket model, item/Kinah mutation plan, inventory validation, and persistence boundary are scoped.
 
+---
+
+### Session 691 (May 24, 2026)
+- Continued the exchange parity line with Java `CM_EXCHANGE_OK`.
+- Added `CmExchangeOk` parsing and registered in-game opcode `68`.
+- Added represented active-player confirmation state through `Player.IsExchangeConfirmed`.
+- Added `SmExchangeConfirmation.Confirmed = 2`.
+- Extended `PlayerExchangeRequestService`:
+  - accept response now resets represented confirmation state for both participants,
+  - `ConfirmExchange` marks the active participant confirmed,
+  - sends represented `SM_EXCHANGE_CONFIRMATION(2)` to the current partner,
+  - reports `TradeExecutionBlocked` when the partner was already confirmed and Java would enter `performTrade`,
+  - treats missing partners and inactive exchanges as no packet fanout,
+  - clears confirmation state during represented cancel cleanup.
+- Extended production `GameServerConnection` routing for `CM_EXCHANGE_OK`.
+- Cleared represented confirmation state during question-accept exchange cancellation and enter-world/login cleanup.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter PlayerExchangeRequestServiceTests` passes with 18 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1238 tests.
+
+#### Migration Parity Table - Session 691
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_EXCHANGE_OK` | `Aion.GameServer.Network.Aion.ClientPackets.CmExchangeOk` / `GameServerConnection.HandleExchangeOkAsync` | Client Packet / Handler | Partial | Regression Tested | Partial Parity | Opcode `68` reads zero payload bytes and routes to represented exchange confirmation. Production packet stream and Java runtime comparison not performed. |
+| `com.aionemu.gameserver.services.ExchangeService.confirmExchange` | `Aion.GameServer.Services.PlayerExchangeRequestService.ConfirmExchange` | Service Method / Runtime State | Partial | Regression Tested | Partial Parity | Models active-player confirmation and partner `SM_EXCHANGE_CONFIRMATION(2)` notification. When both sides are confirmed, C# reports `TradeExecutionBlocked` instead of running Java `performTrade`. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_EXCHANGE_CONFIRMATION` | `Aion.GameServer.Network.Aion.ServerPackets.SmExchangeConfirmation` | Server Packet | Partial | Regression Tested | Needs Verification | Adds represented confirm action `2` beside cancel action `1` and lock action `3`. C# tests assert action values; Java golden bytes/encrypted frames were not compared. |
+| `com.aionemu.gameserver.model.trade.Exchange` | `Aion.GameServer.Model.GameObjects.Player.IsExchangeConfirmed` / `IsExchangeLocked` / `CurrentExchangePartnerObjectId` | Runtime Model Dependency | Partial | Regression Tested | Needs Verification | C# still uses represented player flags instead of Java `Exchange` objects. Item map, Kinah count, temporary split-stack ids, and persistence boundary remain missing. |
+| `com.aionemu.gameserver.services.ExchangeService.performTrade` | Not represented in this unit | Service Method / Trade Execution Dependency | Not Started | No Tests | Unknown | Java full success path validates inventory, removes source items/Kinah, sends success action `0`, moves items/Kinah, stores both inventories, and cleans up exchange maps. This is explicitly blocked pending a C# exchange basket model. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store` | Not represented in this unit | Repository Dependency | Not Started | No Tests | Unknown | Java successful trade persists both players' inventories. C# confirmation-only slice does not mutate or persist inventory. |
+
+Tests added/updated:
+- `PlayerExchangeRequestServiceTests.ClientPacketFactory_ParsesExchangeOkPacketWithNoPayload`: validates opcode `68`, zero-payload parsing, and in-game state restriction.
+- `PlayerExchangeRequestServiceTests.HandleResponse_AcceptStartsRepresentedExchangeForBothPlayers`: extended to validate represented confirmation state starts unconfirmed for both participants.
+- `PlayerExchangeRequestServiceTests.ConfirmExchange_MarksActiveExchangeConfirmedAndNotifiesPartner`: validates active confirmation state and partner `SmExchangeConfirmation` action `2`.
+- `PlayerExchangeRequestServiceTests.ConfirmExchange_WhenPartnerAlreadyConfirmedStopsBeforeUnportedTradeExecution`: validates the boundary where Java would call `performTrade`, preserving represented state and returning a blocked status instead of claiming success.
+- `PlayerExchangeRequestServiceTests.ConfirmExchange_NoActiveOrMissingPartnerDoesNotConfirm`: validates inactive and missing/offline partner behavior.
+- `PlayerExchangeRequestServiceTests.CancelExchange_ClearsRepresentedTradeStateAndNotifiesPartner`: extended to validate represented confirmation cleanup.
+- Java comparison status: expectations are source-derived from `CM_EXCHANGE_OK`, `ExchangeService.confirmExchange`, `Exchange.confirm`, and `SM_EXCHANGE_CONFIRMATION`. No Java runtime execution, Java-generated golden vector, `performTrade` comparison, inventory mutation comparison, DAO persistence comparison, concurrent exchange map comparison, live socket-order validation, encrypted frame comparison, reflection behavior, threading behavior, date/time behavior, or live-client validation was run.
+
+Remaining risks:
+- Java successful exchange completion remains unported. C# confirmation deliberately stops at `TradeExecutionBlocked` when both sides confirm.
+- Java `Exchange` state is still represented with player flags, not a full exchange object with item/Kinah baskets.
+- Inventory validation, item/Kinah transfer, cube update fanout, logging, and `InventoryDAO.store` are missing.
+- Java cancel item-return behavior remains unsupported because C# still has no exchange basket items or split-stack temporary ids.
+- Packet sends are validated by C# packet type/action only; Java golden bytes, encrypted frames, production socket ordering, packet captures, and real-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 exchange OK/confirmation signal slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 6 full `performTrade`, exchange basket model, inventory validation, item/Kinah persistence, concurrent exchange map parity, and client validation
+- Estimated overall migration completion: Phase 6 remains about 65% complete; exchange request/cancel/lock/OK packet signals are represented, but successful exchange transfer remains unported.
+
+Next recommended unit of work:
+- Stop deepening exchange packets until a real C# `Exchange` basket model is scoped, or start that model as a dedicated multi-step effort beginning with Java `Exchange` / `ExchangeItem` data shape only. For a smaller next unit, return to compact `ResponseRequester` handlers such as cube/warehouse expansion warning, craft skill rank-up confirmation, or summon/recall acceptance.
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
