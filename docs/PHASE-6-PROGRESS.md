@@ -26141,6 +26141,52 @@ Next recommended unit of work:
 
 ---
 
+### Session 850 (May 24, 2026)
+- Continued from the Session 849 / Phase 6MW handoff with an adjacent cancel-end-state metadata audit.
+- Re-read the latest handoff and audited Java `ExpExtractAction`, Java `DecomposeAction`, Java generic `PlayerController.cancelUseItem`, and the C# positive-time item-use trace metadata.
+- Confirmed Java `ExpExtractAction` defines an action-specific observer abort: it cancels `TaskId.ITEM_USE`, sends `STR_DECOMPOSE_ITEM_CANCELED`, sends a zero-time `SM_ITEM_USAGE_ANIMATION` with `end=2`, and removes the observer. C# `HandleExpExtractUseItemAsync` schedules a 5000 ms self-only positive-time animation, uses `PendingItemUseCancelMessage.Decompose`, `cancelEndState=2`, and self-only cancel animation.
+- Updated `PlayerSummonKnownObjectNpcSkillItemUsageStateTrace` to add an `ExpExtract` positive-time path and `Decompose` cancel-message category.
+- Corrected stale trace metadata for `AnimationAdd` from `CancelEndState=2` to `3`, matching the UOW-849 implementation fix and Java generic cancel source.
+- Updated `ProjectMercenaryNpcSkillItemUsageStateTrace_MapsPositiveTimeUsingItemTiming` to assert both the corrected animation-add cancel state and the new exp-extract cancel-state path.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "PlayerSummonSkillExecutionServiceTests|GameServerConnectionInventoryExpansionUseItemTests"` passes with 77 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1423 tests.
+
+#### Migration Parity Table - Session 850
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.ExpExtractAction` | `PlayerSummonKnownObjectNpcSkillItemUsageStateTrace` / `Aion.GameServer.Network.Aion.GameServerConnection.HandleExpExtractUseItemAsync` | Dynamic Item Action Caller / Metadata | Partial | Unit Tested as metadata | Partial Parity | Trace now records Java/C# source-aligned exp-extract start/cancel metadata: 5000 ms self-only positive-time animation, decompose-canceled message category, and `end=2` cancel animation. It does not execute the runtime exp-extract fixture, observer abort, exp mutation, reward item mutation, persistence, Java runtime comparison, or live-client behavior. |
+| `com.aionemu.gameserver.model.templates.item.actions.AnimationAddAction` | `PlayerSummonKnownObjectNpcSkillItemUsageStateTrace` / `HandleAnimationAddUseItemAsync` | Dynamic Item Action Caller / Metadata | Partial | Unit Tested as metadata and runtime-tested in prior UOW | Partial Parity | Stale metadata was corrected from `end=2` to Java generic cancel `end=3`, matching the UOW-849 implementation and runtime regression. Remaining gaps are active-player completion, persistence, expirable registration, Java runtime comparison, and live-client behavior. |
+| `com.aionemu.gameserver.controllers.PlayerController.cancelUseItem` | `PlayerSummonKnownObjectNpcSkillItemUsageStateTrace` cancel-state rows | Runtime Cancel Dependency / Metadata | Partial | Unit Tested as metadata | Needs Verification | Trace now distinguishes generic cancel state `3` for animation-add from action-specific observer cancel state `2` for exp extract. Broader cancel trigger parity, item-reference state, task-id storage, and Java runtime behavior remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` | `SmItemUsageAnimation` / item-use state trace | Packet / Cancel Payload Dependency | Partial | Unit Tested as metadata | Partial Parity | Metadata records source-derived cancel payload end states for animation-add (`3`) and exp extract (`2`). No Java-generated packet bytes, opcode/frame/crypto, or packet-write `usingItem` side effect validation was added. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `PendingItemUseCancelMessage.Decompose` / `SmSystemMessage.DecomposeItemCanceled(...)` category | System Message / Cancel Feedback Metadata | Partial | Unit Tested as metadata | Needs Verification | C# exp-extract reuses the decompose cancel-message category, matching Java `STR_DECOMPOSE_ITEM_CANCELED` naming. This unit did not validate message id/payload bytes or localization text. |
+| `com.aionemu.gameserver.model.TaskId` / Java `ItemUseObserver` | C# pending item-use trace rows | Scheduler / Observer Dependency | Partial | Unit Tested as metadata | Needs Verification | Java exp-extract cancel is observer-driven; C# cancellation is centralized pending-item cleanup. Trace records the high-level packet/message result only; observer attach/remove semantics, task races, threading, and abort triggers remain unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `PlayerSummonSkillExecutionServiceTests.ProjectMercenaryNpcSkillItemUsageStateTrace_MapsPositiveTimeUsingItemTiming` | Unit / Regression Metadata | Java source review of `ExpExtractAction`, `AnimationAddAction`, `PlayerController.cancelUseItem`, and C# audit of `HandleExpExtractUseItemAsync` / `HandleAnimationAddUseItemAsync` | Validates metadata now records animation-add `end=3` and exp-extract self-only 5000 ms `end=2` decompose-cancel path. | Deterministic source-derived metadata assertions. | Does not execute Java or C# exp-extract runtime scheduling, observer abort, inventory/exp/reward mutation, message payload bytes, opcode/frame/crypto, packet-write side effects, threading, or live-client behavior. |
+
+Remaining risks:
+- Exp-extract parity is source-derived metadata only; runtime cancellation and mutation flow remain untested.
+- C# centralized pending-item cancellation may differ from Java action-specific `ItemUseObserver.abort` attach/remove behavior.
+- Other `cancelEndState=2` paths, including decompose, assembly, polish, toy-pet, and socket/enchant paths, still need individual audits.
+- Packet-write `usingItem` mutation, system-message payload bytes, opcode/frame/crypto, socket fanout, scheduler races, threading/date-time precision, reflection/dynamic item actions, serialization side effects, and live-client validation remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 source-derived metadata alignment slice covering exp-extract cancel-state and animation-add trace correction
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 27 blocked/not-started categories, including runtime exp-extract fixture, Java runtime cancel comparison, observer attach/remove semantics, item/exp/reward mutation, persistence, other cancel-end-state audits, packet-factory dispatch, movement cancellation, ride-action preservation, task-id scheduler parity, system-message bytes, opcode/frame/crypto, socket fanout, packet write-time `usingItem`, threading/races, reflection/dynamic item actions, date/time precision, serialization side effects, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; positive-time item-use cancel-state metadata is more accurate, but runtime action coverage is still narrow.
+
+Next recommended unit of work:
+- Continue the adjacent cancel-state audit with a runtime or metadata slice for `DecomposeAction`, comparing Java selectable/non-selectable paths, observer abort `end=2`, inventory-full checks, and C# pending decompose scheduling/cancel-message behavior.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -26150,4 +26196,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Continue the cancel-end-state audit for one adjacent positive-time item action that already has C# `cancelEndState=2`, such as decompose, exp extract, assembly, or polish, comparing Java action-specific cancel packet source to C# scheduling and adding one focused metadata or runtime regression.
+8. Continue the adjacent cancel-state audit with a runtime or metadata slice for `DecomposeAction`, comparing Java selectable/non-selectable paths, observer abort `end=2`, inventory-full checks, and C# pending decompose scheduling/cancel-message behavior.
