@@ -140,6 +140,8 @@ UOW-989 feeds the audited loader output into `QuestNpcStartTable` in a focused o
 
 UOW-990 adds `NearbyQuestCandidateProjectionService`, a staged helper that reads `QuestNpcStartTable` for NPC template ids and contributes matching start quest ids to `WorldMapInstanceRuntimeState`. The real-data audit projects 1668 NPC ids into 4503 distinct world-instance quest ids. This improves the offline nearby-candidate baseline only; no production integration, real NPC-spawn invocation, start-condition filtering, player-controller send, or automatic production dispatch is wired.
 
+UOW-991 adds `docs/QuestStartConditions-Nearby-Audit.md`, documenting the Java nearby UI start-condition predicate and level-diff marker calculation. This clarifies the next gate only; no quest-template data boundary, XML start-condition predicate, NPC faction/combine-skill support, player-controller send, or automatic production dispatch is wired.
+
 ### 4. AP Side Effects
 
 Required before automatic dispatch:
@@ -206,7 +208,7 @@ Recommended next units:
 
 1. Generate Java runtime observer artifacts for ItemPurification packet/DB capture when Java 25/Maven tooling is available.
 2. Generate Java runtime failure artifacts or deliberately choose a final production failure policy once packet/DB comparison evidence exists.
-3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next adding start-condition filtering prerequisites while preserving the no-op dispatcher seam until quest predicate parity exists.
+3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next adding a quest-template/start-condition data boundary while preserving the no-op dispatcher seam until quest predicate parity exists.
 4. Add AP spend packet/side-effect projection tests behind explicit opt-in live execution before production dispatch wiring.
 
 Unsafe next work:

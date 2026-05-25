@@ -87,4 +87,4 @@ Known limitations:
 
 ## Next Recommended Unit
 
-Continue with start-condition filtering prerequisites, such as a source audit or staged evaluator shape for Java `QuestService.checkStartConditions(player, questId, false, 2, false, false, false)`. Keep production startup and nearby-refresh dispatch disabled until predicate parity exists.
+Continue with a staged quest-template/start-condition data boundary for Java `QuestService.checkStartConditions(player, questId, false, 2, false, false, false)` and `QuestService.getLevelRequirementDiff`. Keep production startup and nearby-refresh dispatch disabled until predicate parity exists.
