@@ -168,6 +168,8 @@ UOW-1003 adds staged nearby combine-skill checks for explicit skills, the `-1` a
 
 UOW-1004 adds staged nearby NPC faction checks for active exact faction rows, mentor/non-mentor slot cooldown behavior, time-based cooldown skip, and `mentor_type` slot selection. This remains offline: production nearby sends, NPC faction repository/static-data hydration, configurable master-crafting adjustment, and production static-data integration are still not dispatch-ready.
 
+UOW-1005 adds configurable master-crafting XML required-count parity for nearby checks. This remains offline: production nearby sends, production config plumbing, NPC faction repository/static-data hydration, and production static-data integration are still not dispatch-ready.
+
 ### 4. AP Side Effects
 
 Required before automatic dispatch:
@@ -234,7 +236,7 @@ Recommended next units:
 
 1. Generate Java runtime observer artifacts for ItemPurification packet/DB capture when Java 25/Maven tooling is available.
 2. Generate Java runtime failure artifacts or deliberately choose a final production failure policy once packet/DB comparison evidence exists.
-3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next adding configurable master-crafting nearby predicate support or broader refresh-plan coverage while preserving the no-op dispatcher seam until quest predicate and send-trigger parity exist.
+3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next adding NPC faction repository/static-data hydration or broader refresh-plan coverage while preserving the no-op dispatcher seam until quest predicate and send-trigger parity exist.
 4. Add AP spend packet/side-effect projection tests behind explicit opt-in live execution before production dispatch wiring.
 
 Unsafe next work:

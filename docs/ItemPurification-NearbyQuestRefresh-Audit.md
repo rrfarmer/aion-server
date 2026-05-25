@@ -113,6 +113,7 @@ Other Java call sites also use `updateNearbyQuests`, including item get/remove v
 - UOW-1002 implements staged repeat timing for nearby checks. `PlayerQuestState` now carries nullable `NextRepeatTime` and `CompleteTime`, the repository hydrates `next_repeat_time`/`complete_time`, repeat-cycle tokens are preserved, and the predicate covers Java `QuestState.canRepeat()` edge cases for completed nearby quests.
 - UOW-1003 implements staged combine-skill checks for nearby checks, including explicit skill ids, the `-1` any-skill sentinel, NPC faction 12/13 tapping exclusion, and `TASK` work-order upper-bound behavior. A read-only NPC faction sub-agent mapped the next faction-state slice.
 - UOW-1004 implements staged NPC faction checks for nearby checks, including active exact faction rows, mentor/non-mentor slot cooldowns, time-based cooldown skip, and `mentor_type` extraction. A read-only master-crafting sub-agent mapped the next configurable XML required-count slice.
+- UOW-1005 implements configurable master-crafting XML required-count parity for nearby checks, matching Java's `combine_skillpoint == 499` and `1 - MAX_MASTER_CRAFTING_SKILLS` adjustment.
 - No production C# `QuestService.checkStartConditions` equivalent is wired for this nearby-quest UI path.
 - No C# player-controller method currently invokes real nearby quest refresh.
 
@@ -146,7 +147,7 @@ Completed prerequisite:
 
 Add only the next prerequisite:
 
-1. Add configurable master-crafting XML required-count parity or broader refresh-plan audits across representative player archetypes.
+1. Add NPC faction repository/static-data hydration or broader refresh-plan audits across representative player archetypes.
 2. Keep packet sending, dynamic quest handlers, production `StaticData` integration, and real ItemPurification dispatch disabled until each dependency is modeled and tested.
 
 ## Migration Parity Table
@@ -228,6 +229,7 @@ Add only the next prerequisite:
 | `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesJavaCombineSkillGate` | Unit | Java `QuestService.checkCombineSkill` | Validates explicit skill id, any-skill sentinel, NPC faction 12/13 tapping exclusion, and `TASK` work-order upper-bound behavior. | Deterministic C# test from source-reviewed Java predicate. | Warning packets and Java runtime comparison remain missing. |
 | `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesJavaNpcFactionGate` | Unit | Java `QuestService.checkStartConditions`; `NpcFactions.canStartQuest` | Validates active exact faction, inactive/missing faction rejection, non-time-based mentor cooldown, and time-based cooldown skip. | Deterministic C# test from source-reviewed Java predicate. | Repository/static-data hydration and daily assignment remain missing. |
 | Read-only master-crafting sub-agent analysis | Manual | Java `QuestTemplate.getRequiredConditionCount`; `CraftConfig.MAX_MASTER_CRAFTING_SKILLS` | Documents exact configurable master required-count behavior and next C# slice. | Source-reviewed report; sub-agent made no edits and was closed. | No implementation in this unit. |
+| `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesJavaMasterCraftingRequiredConditionAdjustment` | Unit | Java `QuestTemplate.getRequiredConditionCount`; `CraftConfig.MAX_MASTER_CRAFTING_SKILLS` | Validates default cap, relaxed cap, non-master guard, and zero-required-count edge. | Deterministic C# test from source-reviewed Java formula. | Production config plumbing remains missing. |
 | `NearbyQuestMarkerProjectionServiceTests.ProjectMarkers_FiltersWorldQuestIdsThroughStagedNearbyPredicateWithoutSendingPacket` | Unit | Java `PlayerController.updateNearbyQuests` filtering through `QuestService.checkStartConditions` | Validates staged world quest ids are filtered to marker DTOs and rejected ids carry predicate failure reasons. | Deterministic C# test from source-reviewed Java flow. | Does not send packets or run unsupported predicate dependencies. |
 | `NearbyQuestMarkerProjectionServiceTests.ProjectMarkers_PreservesPositiveAndNegativeLevelDiffsForPacketMarkerRule` | Unit | Java `QuestService.getLevelRequirementDiff` and `SM_NEARBY_QUESTS` marker rule | Validates positive and negative level-diff values are projected into marker DTOs for later packet serialization. | Deterministic C# test from source-reviewed Java utility/packet rule. | Packet send/order not wired. |
 | `docs/NearbyQuestRefresh-SendBoundary-Audit.md` | Manual Source Audit | Java `CM_LEVEL_READY`, `WorldMapInstance.addObject`, `PacketSendUtility.sendPacket`, and C# connection send boundaries | Documents immediate and delayed Java send triggers plus C# production safety gates. | Source-reviewed manual audit. | No executable send-path tests; no packet sends enabled. |
@@ -243,7 +245,7 @@ Add only the next prerequisite:
 - C# level-ready and NPC-spawn send triggers remain absent, and the Java 1500 ms debounce semantics have no C# runtime owner yet.
 - The supported-template projection audit uses one synthetic player archetype and excludes unsupported dependency categories; it is not broad runtime parity.
 - The non-sending refresh plan service is unit-tested but has no production caller.
-- XML, inventory, repeat-timing, combine-skill, and NPC faction start-condition support is partial and staged; production static-data integration, Java runtime comparison, configurable master-crafting required-count adjustment, quest-finish reset calculation, and timestamp timezone handling remain unverified.
+- XML, inventory, repeat-timing, combine-skill, NPC faction, and master required-count support is partial and staged; production static-data integration, Java runtime comparison, quest-finish reset calculation, and timestamp timezone handling remain unverified.
 - The current ItemPurification dispatcher seam must remain no-op until these lower-level surfaces exist.
 - Automatic `CM_ITEM_PURIFICATION` dispatch remains plan-only and must stay disabled.
 
