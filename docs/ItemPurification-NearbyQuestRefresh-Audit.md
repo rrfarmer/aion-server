@@ -1,7 +1,7 @@
 # ItemPurification Nearby Quest Refresh Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-980, updated by UOW-981 through UOW-984
+Unit of Work: UOW-980, updated by UOW-981 through UOW-985
 
 ## Purpose
 
@@ -24,6 +24,7 @@ The Java project remains the source of truth. This document does not enable prod
 - `game-server/src/com/aionemu/gameserver/questEngine/handlers/template/ReportToMany.java`
 - `game-server/src/com/aionemu/gameserver/questEngine/handlers/template/WorkOrders.java`
 - `game-server/src/com/aionemu/gameserver/questEngine/handlers/template/MonsterHunt.java`
+- Representative Java handlers under `game-server/data/handlers/quest/**`
 
 ## C# Source Breadcrumbs
 
@@ -37,6 +38,7 @@ The Java project remains the source of truth. This document does not enable prod
 - `dotnetConversion/src/Aion.GameServer/World/WorldMapInstanceRuntimeState.cs`
 - `dotnetConversion/src/Aion.GameServer/Dataholders/QuestNpcStartTable.cs`
 - `dotnetConversion/src/Aion.GameServer/Dataholders/QuestNpcStartXmlExtractor.cs`
+- `dotnetConversion/src/Aion.GameServer/Dataholders/QuestNpcStartJavaHandlerExtractor.cs`
 
 ## Java Behavior
 
@@ -76,6 +78,7 @@ Other Java call sites also use `updateNearbyQuests`, including item get/remove v
 - UOW-982 adds a minimal `WorldMapInstanceRuntimeState` quest-id registry and `RegisterQuestStartIds` method, matching Java's duplicate-collapsing `questIds.add(id)` behavior. It is not yet wired to NPC spawn or dynamic quest handlers.
 - UOW-983 adds a staged `QuestNpcStartTable`, `QuestNpcStartRegistration`, and `QuestNpcStartRegistrationSource` boundary for Java handler/XML quest-start registrations. It is not yet populated by a Java handler or XML extractor.
 - UOW-984 adds `QuestNpcStartXmlExtractor`, a pure XML quest-script extractor that emits `QuestNpcStartRegistrationSource` rows from `start_npc_ids` attributes and skips `report_to_many` rows when `start_item_id` is nonzero, matching Java `ReportToMany.register` source behavior for that suppression path. It is not wired into `StaticData`, `DataManager`, NPC spawn, or runtime dispatch.
+- UOW-985 adds `QuestNpcStartJavaHandlerExtractor`, a conservative Java source extractor that emits `QuestNpcStartRegistrationSource` rows for direct `registerQuestNpc(...).addOnQuestStart(...)` calls when the NPC id and quest id can be resolved from literals, simple `int` assignments, `int[]` indexes, or inherited `questId` via `super(...)`. Unsupported expressions are returned as unresolved rows instead of guessed. It is not wired into any loader or runtime dispatch.
 - No C# `QuestService.checkStartConditions` equivalent was found for this nearby-quest UI path.
 - No C# player-controller method currently invokes real nearby quest refresh.
 
@@ -97,8 +100,8 @@ Completed prerequisite:
 
 ## Parity Gaps
 
-- C# cannot yet compute nearby quest marker lists from a player's map-region/world-instance state because XML extraction is not loader-wired, Java handler extraction is missing, world-instance population is missing, and start-condition filtering remains missing.
-- C# has staged `QuestNpc.onQuestStart` storage and a pure XML extractor, but still lacks Java handler source extraction, static-data loader integration, NPC-spawn population, and runtime refresh wiring.
+- C# cannot yet compute nearby quest marker lists from a player's map-region/world-instance state because XML and Java handler extraction are not loader-wired, world-instance population is missing, and start-condition filtering remains missing.
+- C# has staged `QuestNpc.onQuestStart` storage, a pure XML extractor, and a conservative Java handler extractor, but still lacks static-data loader integration, NPC-spawn population, and runtime refresh wiring.
 - C# lacks Java-equivalent quest start-condition checks for this UI path.
 - Java's `HashMap` iteration order is not stable; C# must avoid claiming packet order parity without runtime or deterministic Java artifact evidence.
 - Java's delayed 1500 ms world-instance refresh for newly spawned quest NPCs is outside the ItemPurification path but is part of the same broader nearby-refresh system.
@@ -108,7 +111,7 @@ Completed prerequisite:
 
 Add only the next candidate-population prerequisite:
 
-1. Implement a conservative Java handler `addOnQuestStart` source extractor or wire the XML extractor into a staged loader with explicit unresolved cases.
+1. Wire the XML and Java handler extractors into a staged directory loader/test with explicit unresolved-case reporting, without production `StaticData`/`DataManager` integration.
 2. Keep `QuestService.checkStartConditions`, packet sending, dynamic quest handlers, and real ItemPurification dispatch disabled until registration extraction is complete enough to drive candidate source tests.
 
 ## Migration Parity Table
@@ -123,6 +126,7 @@ Add only the next candidate-population prerequisite:
 | `com.aionemu.gameserver.model.templates.quest.QuestNpc` | `Aion.GameServer.Dataholders.QuestNpcStartRegistration`; `Aion.GameServer.Dataholders.QuestNpcStartTable`; `Aion.GameServer.Dataholders.QuestNpcStartRegistrationSource` | Quest Handler Registration / DTO | Partial | Unit Tested | Partial Parity | UOW-983 mirrors `registerQuestNpc`, missing-`getQuestNpc`, default range, and duplicate-collapsing `addOnQuestStart` storage. It does not model talk/kill/attack events, Java reflection/dynamic handler execution, handler unload/reload, XML registration extraction, or Java `HashSet` iteration order. |
 | `com.aionemu.gameserver.questEngine.handlers.models.XMLQuest` | `Aion.GameServer.Dataholders.QuestNpcStartXmlExtractor` | XML Quest Loader Boundary | Partial | Unit Tested | Needs Verification | UOW-984 source-parses XML quest-script attributes into registration sources. It does not instantiate Java template handlers, run JAXB, process all XML model fields, or integrate with `QuestEngine.init`. |
 | `com.aionemu.gameserver.questEngine.handlers.template.ReportToMany` | `Aion.GameServer.Dataholders.QuestNpcStartXmlExtractor` | Template / Quest Registration | Partial | Unit Tested | Partial Parity | UOW-984 mirrors the narrow `startItemId != 0` suppression of NPC start registration for `report_to_many`. Dialog behavior, item-use start, talk events, work items, reward state, and runtime handler execution are not ported here. |
+| Representative `game-server/data/handlers/quest/**` classes extending `com.aionemu.gameserver.questEngine.handlers.AbstractQuestHandler` | `Aion.GameServer.Dataholders.QuestNpcStartJavaHandlerExtractor` | Java Handler Source Extractor | Partial | Unit Tested | Needs Verification | UOW-985 extracts direct `registerQuestNpc(...).addOnQuestStart(...)` calls only when expressions resolve conservatively. Dynamic expressions, loops, collection lookups, nonliteral assignments, reflection/loading behavior, and runtime handler execution remain unresolved. |
 
 ## Tests Added/Updated
 
@@ -140,21 +144,25 @@ Add only the next candidate-population prerequisite:
 | `QuestNpcStartXmlExtractorTests.ReportToManyWithStartItemIdSkipsNpcStartRegistrationLikeJava` | Unit | Java `ReportToMany.register` | Validates nonzero `start_item_id` suppresses NPC start registration, while `0` or absent item id emits NPC starts. | Deterministic C# test from source-reviewed Java `if (startItemId != 0) registerQuestItem else startNpcIds` branch. | Does not model quest item registration. |
 | `QuestNpcStartXmlExtractorTests.ExtractedSourcesCanPopulateQuestNpcStartTable` | Unit | Java XML start registrations feeding `QuestNpc.addOnQuestStart` | Validates extracted XML sources can populate the staged start table. | C# integration-style unit test for the staged extractor/table boundary. | No runtime world-instance population. |
 | `QuestNpcStartXmlExtractorTests.ExtractFromStreamUsesSameXmlAttributeRules` | Unit | Java XML quest-script file loading | Validates stream input uses the same attribute parsing behavior. | Deterministic C# test for loader-friendly input. | No directory scan or `DataManager` integration. |
+| `QuestNpcStartJavaHandlerExtractorTests.ExtractsLiteralNpcIdWithInheritedQuestId` | Unit | Representative Java handler `super(questId)` plus direct `registerQuestNpc(literal).addOnQuestStart(questId)` | Validates literal NPC ids and inherited `questId` extraction. | Deterministic C# test from source-reviewed Java handler shape. | No runtime Java handler loading. |
+| `QuestNpcStartJavaHandlerExtractorTests.ExtractsScalarConstantsAndArrayIndexes` | Unit | Java handlers using `START_NPC_ID`, `questStartNpcId`, and `npcIds[0]` | Validates simple integer assignment and array-index resolution. | Deterministic C# test from source-reviewed handler patterns. | Does not cover loops or computed indexes. |
+| `QuestNpcStartJavaHandlerExtractorTests.ReportsUnsupportedExpressionsInsteadOfGuessing` | Unit | Dynamic Java registration expressions | Validates unresolved rows are reported for unsupported NPC/quest expressions. | Conservative parser behavior test. | Does not enumerate every unsupported shape in the Java tree. |
+| `QuestNpcStartJavaHandlerExtractorTests.ExtractedHandlerSourcesCanPopulateQuestNpcStartTable` | Unit | Java handler start registration feeding `QuestNpc.addOnQuestStart` | Validates extracted handler sources can populate the staged start table. | C# integration-style unit test for extractor/table boundary. | No runtime world-instance population. |
 
 ## Remaining Risks
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
 - No C# quest start-condition evaluator exists for nearby quest UI.
-- C# dynamic quest-start registration storage exists and XML scripts can be source-extracted, but no loader populates it from real data and no Java handler extractor exists.
+- C# dynamic quest-start registration storage exists and XML/handler sources can be source-extracted, but no loader populates it from real data and unresolved Java expressions still need reporting/triage.
 - C# world-instance quest id registry storage exists, but it is not populated from NPC spawn or dynamic quest handlers.
 - The current ItemPurification dispatcher seam must remain no-op until these lower-level surfaces exist.
 - Automatic `CM_ITEM_PURIFICATION` dispatch remains plan-only and must stay disabled.
 
 ## Summary Metrics
 
-- Total Java artifacts discovered: 8
-- Total artifacts ported: 5 packet/opcode/registry/start-registration/XML-extractor artifacts for the nearby-quest prerequisites
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 6 packet/opcode/registry/start-registration/XML-extractor/handler-extractor artifacts for the nearby-quest prerequisites
 - Total artifacts with verified parity: 2
-- Total artifacts needing verification: 6
+- Total artifacts needing verification: 7
 - Total blocked artifacts: 3 blocked/not-started categories, including Java/XML registration extraction, quest start-condition evaluation, and dynamic quest handler execution
 - Estimated overall migration completion: Phase 6 remains about 70% complete

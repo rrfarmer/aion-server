@@ -128,6 +128,8 @@ UOW-983 adds staged `QuestNpcStartTable` storage plus `QuestNpcStartRegistration
 
 UOW-984 adds `QuestNpcStartXmlExtractor`, a pure XML quest-script extractor for `start_npc_ids` attributes, including Java `ReportToMany.register` suppression when `start_item_id` is nonzero. This satisfies only an offline XML source-extraction prerequisite; no Java handler source extractor, loader integration, NPC-spawn population, candidate filtering, player-controller send, or automatic production dispatch is wired.
 
+UOW-985 adds `QuestNpcStartJavaHandlerExtractor`, a conservative Java source extractor for direct `registerQuestNpc(...).addOnQuestStart(...)` calls, including literal ids, simple `int` assignments, `int[]` indexes, and inherited `questId` via `super(...)`. This satisfies only an offline handler source-extraction prerequisite; no loader integration, unresolved-case triage, NPC-spawn population, candidate filtering, player-controller send, or automatic production dispatch is wired.
+
 ### 4. AP Side Effects
 
 Required before automatic dispatch:
@@ -194,7 +196,7 @@ Recommended next units:
 
 1. Generate Java runtime observer artifacts for ItemPurification packet/DB capture when Java 25/Maven tooling is available.
 2. Generate Java runtime failure artifacts or deliberately choose a final production failure policy once packet/DB comparison evidence exists.
-3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next with Java handler quest-start extraction or XML extractor loader integration while preserving the no-op dispatcher seam until candidate calculation and quest start-condition evaluation exist.
+3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next with staged XML/Java handler extractor loader integration while preserving the no-op dispatcher seam until candidate calculation and quest start-condition evaluation exist.
 4. Add AP spend packet/side-effect projection tests behind explicit opt-in live execution before production dispatch wiring.
 
 Unsafe next work:
