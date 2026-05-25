@@ -27147,6 +27147,57 @@ Next recommended unit of work:
 
 ---
 
+### Session 871 (May 25, 2026)
+- Continued from the Session 870 / Phase 6NR handoff with Java-runtime comparison feasibility planning for decompose packet/order and crypt bytes.
+- Re-read required migration/orchestration docs, latest progress, and latest handoff. `docs/commit-conventions.md` remains absent, so this unit continued the established `[Phase 6][UOW-###] ...` style.
+- Performed Parallel Work Discovery across Java runtime comparison planning, corrupt encrypted packet behavior, multi-packet key evolution, and progress/handoff docs. Selected a docs/planning UOW because the handoff explicitly called for comparison feasibility before adding more same-shape decompose tests.
+- Audited Java `AionConnection`, `Crypt`, `EncryptionKeyPair`, `AionServerPacket`, `SM_KEY`, `CM_USE_ITEM`, `CM_SELECT_DECOMPOSABLE`, `PacketSendUtility`, and item packet service send points, plus the existing C# socket-loop tests.
+- Added `docs/Phase-6-Decompose-Java-Runtime-Comparison-Plan.md`, documenting target scenarios, Java artifacts, current C# evidence, expected packet order, preferred Java in-process harness, live-server fallback, risks, and the next harness spike.
+- Key finding: there is no ready-made game-core Java runtime packet comparison harness comparable to the login crypto vector tool. Java packet capture likely needs either a test seam around `AionConnection`/`PacketSendUtility` and minimal `Player`/`DataManager` setup, or a controlled live Java server capture.
+- No production code changed in this unit.
+- Validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 1445 tests.
+
+#### Migration Parity Table - Session 871
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.AionConnection` | `Aion.GameServer.Network.Aion.GameServerConnection` | Connection Lifecycle / Dispatch | Partial | Manual Only | Needs Verification | Java `initialized`, `processData`, send queue, and active-player behavior were audited for runtime comparison planning. No Java runtime capture exists yet; reflection/test-seam needs are unresolved. |
+| `com.aionemu.gameserver.network.Crypt` | `Aion.GameServer.Network.Aion.GameCrypt` | Crypto Utility | Partial | Manual Only | Needs Verification | Java first-packet unencrypted behavior, random key generation, opcode transforms, and client/server key use were audited. Deterministic Java key injection is not implemented; encrypted byte parity remains unverified. |
+| `com.aionemu.gameserver.network.EncryptionKeyPair` | `Aion.GameServer.Network.Aion.GameEncryptionKeyPair` | Crypto Utility | Partial | Manual Only | Needs Verification | Java client decrypt validation, server encrypt, static key, and key increment by body length were audited. Runtime vectors for game protocol are not generated yet; corrupt-packet and multi-packet key evolution remain unverified. |
+| `com.aionemu.gameserver.network.aion.AionServerPacket` | `Aion.GameServer.Network.Aion.GameServerPacket` | Packet Serialization | Partial | Manual Only | Needs Verification | Java frame length/opcode/static code/flipped opcode/encrypt sequence was audited. No Java-generated decompose packet bytes were captured. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_KEY` | `Aion.GameServer.Network.Aion.ServerPackets.SmKey` | Packet / Handshake | Partial | Manual Only | Needs Verification | Java writes `con.enableCryptKey()` into the first unencrypted server packet. Deterministic Java key generation or captured live key is needed before byte comparison. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ClientPackets.CmSelectDecomposable` / `GameServerConnection.HandleSelectDecomposableAsync` | Client Packet Handler | Partial | Manual Only | Needs Verification | Plan defines a selectable decompose comparison scenario and expected packet order. Java runtime packet/order artifact is not captured yet. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_USE_ITEM` | `Aion.GameServer.Network.Aion.ClientPackets.CmUseItem` / `GameServerConnection.HandleUseItemAsync` | Client Packet Handler | Partial | Manual Only | Needs Verification | Plan defines normal decompose source decrement/delete comparison scenarios. Java runtime scheduler and packet/order artifacts are not captured yet. |
+| `com.aionemu.gameserver.model.templates.item.actions.DecomposeAction` | `Aion.GameServer.Services.DecomposeService` / `GameServerConnection.HandleDecomposeUseItemAsync` | Item Action / Scheduled Handler | Partial | Manual Only | Needs Verification | Java `canAct`, selectable branch, normal 3000ms scheduled action, success message, reward add, and cancel observer were mapped to comparison scenarios. Java scheduler runtime behavior remains unverified. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `GameServerConnection.SendPacketAsync` / `BroadcastItemUsageAnimationAsync` | Packet Send / Broadcast Utility | Partial | Manual Only | Needs Verification | Java self-send and known-list broadcast semantics were audited for harness requirements. Runtime capture needs a minimal online player/client connection or live server. |
+| `com.aionemu.gameserver.services.item.ItemService` / `ItemPacketService` | `Aion.GameServer.Services.InventoryAddService` / inventory packet writers | Item Service / Packet Side Effects | Partial | Manual Only | Needs Verification | Java add/decrement/delete packet send points were identified as comparison outputs. DAO/autocommit and packet byte behavior remain unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| None | Documentation / Planning | Java source audit of connection, crypt, packet, decompose, packet-send, and item-service artifacts | Documents the minimum Java runtime comparison plan for decompose packet order and crypt bytes. | Manual source review only; no test or runtime comparison was added. | No Java runtime harness, no golden file, no Java-generated packet bytes, no encrypted byte vectors, no live-client validation. |
+
+Remaining risks:
+- Java runtime comparison remains unimplemented; no artifact currently proves Java-vs-C# packet order or byte parity for decompose.
+- Deterministic Java `Crypt` key generation may require reflection or a copied vector generator under `dotnetConversion/tools`.
+- Java `PacketSendUtility` requires an online player and client connection; a minimal in-process harness may be awkward without test seams.
+- Java static `DataManager`, inventory persistence, DAO/autocommit behavior, and scheduler behavior may force a live-server fixture rather than a small unit harness.
+- Full packet byte parity, opcode/frame/crypto breadth, broadcast fanout, socket visibility, serialization side effects, random reward selection, and live-client validation remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 0 code artifacts; 1 comparison-plan document added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 8 blocked/not-started categories, including Java runtime harness, deterministic game crypt vectors, live Java packet capture, persistence/autocommit comparison, active-player lifecycle comparison, full packet byte parity, broadcast fanout, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit improves comparison readiness but does not increase runtime parity coverage.
+
+Next recommended unit of work:
+- Start the Java harness spike from `docs/Phase-6-Decompose-Java-Runtime-Comparison-Plan.md`: determine whether `AionConnection`/`Player`/`PacketSendUtility` can be wrapped or subclassed for a selectable-decompose packet-order capture without changing production Java. If that is too broad, switch to the fallback C# verification unit for corrupt encrypted packet threshold and multi-packet key evolution in `GameCrypt`.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -27156,4 +27207,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Pivot from adding same-shape decompose socket tests to a focused Java-runtime comparison plan for decompose packet/order and crypt bytes. Identify the minimal Java harness or recorded packet fixture needed to compare `CM_SELECT_DECOMPOSABLE` and normal `CM_USE_ITEM` packet ordering against the C# socket-loop tests. If runtime comparison is too broad, audit corrupt encrypted packet behavior and multi-packet key evolution in `GameCrypt` next.
+8. Start the Java harness spike from `docs/Phase-6-Decompose-Java-Runtime-Comparison-Plan.md`: determine whether `AionConnection`/`Player`/`PacketSendUtility` can be wrapped or subclassed for a selectable-decompose packet-order capture without changing production Java. If that is too broad, switch to the fallback C# verification unit for corrupt encrypted packet threshold and multi-packet key evolution in `GameCrypt`.
