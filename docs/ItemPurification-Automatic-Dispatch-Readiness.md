@@ -29,6 +29,7 @@ Current C# source breadcrumbs:
 - `dotnetConversion/src/Aion.GameServer/Services/ItemPurificationLiveMutationService.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/ItemPurificationPersistencePlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Data/PlayerEnterWorldRepository.cs`
+- `docs/ItemPurification-Java-Observer-Design.md`
 
 Implemented opt-in seams:
 
@@ -108,6 +109,8 @@ Required before automatic dispatch:
 - Socket send failure behavior must be understood before enabling production dispatch.
 
 Current status: not satisfied. Fake-registry tests cover C# packet type order, but Java runtime capture is still blocked locally by Java 8 and missing Maven.
+
+UOW-962 adds `docs/ItemPurification-Java-Observer-Design.md` as the proposed Java packet/DB capture schema. Artifacts still need to be generated and compared before this gate is satisfied.
 
 ### 6. Storage Semantics
 
