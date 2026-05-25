@@ -87,4 +87,4 @@ Known limitations:
 
 ## Next Recommended Unit
 
-Continue with a staged quest-template/start-condition data boundary for Java `QuestService.checkStartConditions(player, questId, false, 2, false, false, false)` and `QuestService.getLevelRequirementDiff`. Keep production startup and nearby-refresh dispatch disabled until predicate parity exists.
+Continue with a staged XML/static-data extractor for `NearbyQuestTemplateSummary`, starting with the fields used by the current staged nearby predicate. Keep production startup and nearby-refresh dispatch disabled until predicate parity exists.
