@@ -33832,6 +33832,68 @@ Next recommended unit of work:
 
 ---
 
+### Session 993 (May 25, 2026)
+- Continued after UOW-992 by adding a staged XML extractor for the nearby quest-template summary fields.
+- Parallel Work Discovery selected a narrow sequential extractor unit because the parser/test contract is small and production `StaticData.cs` integration remains a shared high-risk file. No sub-agents were spawned.
+- Added `NearbyQuestTemplateXmlExtractor`.
+- The extractor reads `quest` elements into `NearbyQuestTemplateSummary` fields used by the staged nearby predicate:
+  - quest id
+  - min/max level
+  - race
+  - class list
+  - gender
+  - required rank
+  - max repeat count
+  - repeat-cycle presence
+  - XML start-condition presence
+  - inventory item presence
+  - combine skill
+  - NPC faction id
+- Added focused tests for representative XML extraction, Java-like defaults for missing optional fields, and stream input feeding `NearbyQuestTemplateTable`.
+- Kept production `StaticData`/`DataManager`, real-data audit baselines, XML start-condition evaluation, NPC faction/combine skill checks, player-controller sends, and production ItemPurification dispatch disabled.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~NearbyQuestTemplateXmlExtractorTests` passed with 3 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1693 tests.
+
+#### Migration Parity Table - Session 993
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.QuestTemplate` | `Aion.GameServer.Dataholders.NearbyQuestTemplateXmlExtractor`; `Aion.GameServer.Dataholders.NearbyQuestTemplateSummary` | Dataholder / DTO / XML Extractor | Partial | Unit Tested | Needs Verification | Staged extractor reads only fields needed by the current nearby predicate boundary. JAXB validation, production `StaticData` integration, enum mapping from real data, optional condition counting, category defaults, master-crafting adjustment, collect/inventory details, and repeat-cycle timing remain unported. |
+| `com.aionemu.gameserver.dataholders.QuestsData` | `Aion.GameServer.Dataholders.NearbyQuestTemplateTable`; `NearbyQuestTemplateXmlExtractor` | Dataholder / Index | Partial | Unit Tested | Needs Verification | Extracted summaries can feed the staged table boundary, matching the broad Java `QuestsData` index shape. It does not replace Java JAXB `afterUnmarshal`, sorted NPC-faction indexing, or production C# static-data loading. |
+| `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `Aion.GameServer.Services.NearbyQuestStartConditionService`; `NearbyQuestTemplateSummary` | Service / Quest Predicate | Partial | Unit Tested | Partial Parity | The extractor supplies staged inputs for already-modeled early gates, but XML start conditions, inventory checks, combine skill, NPC faction, warning packets, exception/log behavior, and repeat timing remain unsupported. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `NearbyQuestTemplateXmlExtractorTests.Extract_ReadsNearbyPredicateQuestTemplateFieldsLikeJavaQuestTemplate` | Unit | Java `QuestTemplate` JAXB attributes/elements | Validates staged extraction of quest id, min/max level, race, class list, gender, rank, repeat count, repeat-cycle presence, XML condition presence, inventory item presence, combine skill, and NPC faction id. | Deterministic C# test from reviewed Java `QuestTemplate` annotations/getters. | Does not run JAXB or real-data audit. |
+| `NearbyQuestTemplateXmlExtractorTests.Extract_AppliesJavaQuestTemplateDefaultsForMissingOptionalFields` | Unit | Java `QuestTemplate` primitive/default field values | Validates missing optional fields map to staged defaults, including max repeat count `1`. | Deterministic C# test from source-reviewed Java field defaults. | Does not validate all `QuestTemplate` fields. |
+| `NearbyQuestTemplateXmlExtractorTests.Extract_StreamInputFeedsNearbyQuestTemplateTableAndPredicate` | Unit | Java `QuestsData` indexing shape | Validates stream input can feed the staged table boundary. | C# staged boundary test informed by Java `QuestsData.afterUnmarshal`. | Not production `StaticData` integration. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- The staged extractor is not integrated into production `StaticData`, `DataManager`, player-controller refresh, packet sends, or ItemPurification dispatch.
+- Real repository quest-template extraction counts are not pinned yet.
+- XML start-condition, inventory item, combine-skill, NPC faction, and repeat-cycle semantics remain unsupported beyond presence flags.
+- Java JAXB schema validation and post-unmarshal behavior are not executed.
+- Enum/string mapping for Java `Race`, `PlayerClass`, and `Gender` needs real XML data audit coverage before production use.
+- Required `docs/commit-conventions.md` is still missing; commit format continues to follow `docs/orchestration-rules.md`.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 in this unit
+- Total artifacts ported: 1 staged XML extractor in this unit
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 4 blocked/not-started categories, including production quest-template loading, real-data audit, XML start conditions, and NPC faction/combine-skill dependencies
+- Estimated overall migration completion: Phase 6 remains about 70% complete; this unit adds staged XML extraction for nearby predicate inputs without enabling live nearby quest refresh.
+
+Next recommended unit of work:
+- Add a real-data audit for `NearbyQuestTemplateXmlExtractor` over repository quest XML, pinning counts for templates and unsupported-dependency flags before any production `StaticData` integration. Keep XML start conditions, NPC faction, combine skill, packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.
+- Alternative safe slice: use the sidecar persistence-gap analysis to document or implement the next ItemPurification side-effect persistence prerequisite.
+
+---
+
 ## Next Steps
 
 1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure ItemPurification quest-notification projection, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, the handler-level ItemPurification workflow/application/packet-plan composition bridge, the ItemPurification runtime-input packet bridge, the ItemPurification ready concrete-packet send bridge, the ItemPurification target object-id allocation bridge, the ItemPurification random-bonus selection seam, the ItemPurification non-persistent mutation snapshot preview, the ItemPurification non-persistent handler mutation bridge, the ItemPurification live mutation adapter boundary, the ItemPurification live execution composition seam, the ItemPurification live AP rank-drop metadata regression, the ItemPurification explicit live AP player-packet emission bridge, the ItemPurification explicit live AP rank-update broadcast bridge, the ItemPurification explicit live equipment rank-limit state mutation bridge, the ItemPurification explicit live equipment rank-limit packet fanout bridge, the ItemPurification explicit live abyss skill refresh bridge, the ItemPurification explicit opt-in quest notification no-op seam, the ItemPurification explicit transform-min-rank config plumbing, the ItemPurification quest-update items audit, the ItemPurification quest-update item static-data projection, the ItemPurification no-op nearby-refresh planning seam, the ItemPurification no-op nearby-refresh dispatcher seam, the ItemPurification nearby quest refresh surface audit, the ItemPurification nearby quest packet prerequisite, the ItemPurification nearby quest world-instance registry prerequisite, the ItemPurification nearby quest start-registration table prerequisite, the ItemPurification handler opt-in live execution seam, the ItemPurification persistence plan analysis, the ItemPurification repository contract/payload plumbing, the ItemPurification inserted target item-stone persistence, the ItemPurification opt-in persistent live execution seam, the ItemPurification handler-level opt-in persistent execution helper, the ItemPurification handler-level persistence failure-ordering regression, the ItemPurification automatic-dispatch readiness policy, the ItemPurification staged dispatch-failure policy, the ItemPurification Java observer design, the ItemPurification opt-in DB integration happy path, the ItemPurification opt-in DB rollback path, the ItemPurification AP/quest readiness audit, the pure ItemCharge AP spend guard, and the live ItemCharge selected-item/charge-all AP guard consolidation now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. ItemCharge Kinah payment guard/consolidation, charge-all stale-item payment-before-revalidation hardening, mixed stale/current charge-all AP regression coverage, mixed stale/current charge-all Kinah regression coverage, missing/current charge-all AP approximation coverage, and missing/current charge-all Kinah approximation coverage are now staged for live selected-item/charge-all paths. Move next to Java observer artifact generation when tooling is available, nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another existing planner live adapter when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player/equipment/skill packets, AP/login rank-limited equipment persistence, configured abyss transform skill updates, rank config load, and real quest handler dispatch. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.

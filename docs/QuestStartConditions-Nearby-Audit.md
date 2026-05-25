@@ -1,7 +1,7 @@
 # Nearby Quest Start Conditions Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-991, updated by UOW-992
+Unit of Work: UOW-991, updated by UOW-992 and UOW-993
 
 ## Purpose
 
@@ -26,7 +26,9 @@ Java remains the source of truth. This document does not implement a C# predicat
 - `dotnetConversion/src/Aion.GameServer/Services/NearbyQuestCandidateProjectionService.cs`
 - `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmNearbyQuests.cs`
 - `dotnetConversion/src/Aion.GameServer/Dataholders/NearbyQuestTemplateTable.cs`
+- `dotnetConversion/src/Aion.GameServer/Dataholders/NearbyQuestTemplateXmlExtractor.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/NearbyQuestStartConditionService.cs`
+- `dotnetConversion/tests/Aion.GameServer.Tests/NearbyQuestTemplateXmlExtractorTests.cs`
 - `dotnetConversion/tests/Aion.GameServer.Tests/NearbyQuestStartConditionServiceTests.cs`
 - Future production C# quest-template/start-condition dataholders and full nearby predicate service
 
@@ -113,6 +115,7 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 ## Current C# Gaps
 
 - UOW-992 adds a staged `NearbyQuestTemplateTable` and `NearbyQuestTemplateSummary` boundary for the subset of fields needed by early nearby predicate gates and level-diff calculation. It is not wired into production `StaticData` or `DataManager`.
+- UOW-993 adds `NearbyQuestTemplateXmlExtractor`, a staged XML extractor for `quest` attributes/elements used by `NearbyQuestTemplateSummary`. It is not wired into production `StaticData` or `DataManager`.
 - UOW-992 adds `NearbyQuestStartConditionService.CheckNearbyStartConditions` for the nearby UI call shape. It handles missing templates, active/reward quest state, conservative repeat-count checks, race, min/max level with Java's two-level nearby grace, class, gender, abyss rank, and explicit unsupported-dependency failures.
 - UOW-992 adds `NearbyQuestStartConditionService.GetLevelRequirementDiff`, matching Java's missing-template `99` and `minlevel_permitted - playerLevel` behavior.
 - C# has `PlayerQuestState` status/complete-count storage, but no full `QuestState.canRepeat()` equivalent because next-repeat timing is not ported. The staged predicate returns `UnsupportedRepeatTiming` for completed time-based repeat quests rather than assuming parity.
@@ -128,7 +131,7 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 |---|---|---|---|---|---|---|
 | `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `Aion.GameServer.Services.NearbyQuestStartConditionService` | Service / Quest Predicate | Partial | Unit Tested | Partial Parity | UOW-992 stages the nearby UI early gates: missing template, started/reward state, conservative repeat-count checks, race, min/max level with allowed diff 2, class, gender, and abyss rank. XML start conditions, inventory item checks, combine-skill checks, NPC faction checks, warning packets, exception/log behavior, and time-based repeat cooldowns remain unsupported. |
 | `com.aionemu.gameserver.services.QuestService.getLevelRequirementDiff` | `Aion.GameServer.Services.NearbyQuestStartConditionService.GetLevelRequirementDiff` | Utility / Quest Predicate | Partial | Unit Tested | Partial Parity | UOW-992 tests Java's missing-template `99` and `minlevel_permitted - playerLevel` behavior. Production quest template loading and packet send integration remain unwired. |
-| `com.aionemu.gameserver.model.templates.QuestTemplate` | `Aion.GameServer.Dataholders.NearbyQuestTemplateSummary`; `Aion.GameServer.Dataholders.NearbyQuestTemplateTable` | Dataholder / DTO | Partial | Unit Tested | Needs Verification | Staged DTO covers only early nearby predicate fields and unsupported-dependency flags. Production XML/JAXB loading, enum mapping from static data, optional condition counting, category defaults, master-crafting adjustment, collect/inventory details, and repeat-cycle timing remain unported. |
+| `com.aionemu.gameserver.model.templates.QuestTemplate`; `com.aionemu.gameserver.dataholders.QuestsData` | `Aion.GameServer.Dataholders.NearbyQuestTemplateSummary`; `Aion.GameServer.Dataholders.NearbyQuestTemplateTable`; `Aion.GameServer.Dataholders.NearbyQuestTemplateXmlExtractor` | Dataholder / DTO / XML Extractor | Partial | Unit Tested | Needs Verification | Staged DTO and extractor cover only early nearby predicate fields and unsupported-dependency flags. Production XML/JAXB loading, enum mapping from real static data, optional condition counting, category defaults, master-crafting adjustment, collect/inventory details, and repeat-cycle timing remain unported. |
 | `com.aionemu.gameserver.model.templates.quest.XMLStartCondition` | Future C# XML start-condition predicate | Dataholder / Predicate | Not Started | No Tests | Unknown | Finished/unfinished/acquired/noacquired/title checks are unported. Equipped-item checks intentionally do not affect nearby UI when `warn = false`, but this needs test coverage once implemented. |
 | `com.aionemu.gameserver.model.gameobjects.player.QuestStateList`; `com.aionemu.gameserver.questEngine.model.QuestState` | `Aion.GameServer.Model.GameObjects.PlayerQuestState` | Player Quest State | Partial | Unit Tested elsewhere | Needs Verification | C# stores status, vars, flags, and complete count for packet serialization, but repeatability and next-repeat timing needed by `QuestState.canRepeat()` are not ported. |
 
@@ -141,6 +144,12 @@ UOW-992 adds:
 - `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_ReportsUnsupportedJavaDependenciesInsteadOfAssumingParity`
 - `NearbyQuestStartConditionServiceTests.GetLevelRequirementDiff_MatchesJavaMissingTemplateAndMinLevelBehavior`
 
+UOW-993 adds:
+
+- `NearbyQuestTemplateXmlExtractorTests.Extract_ReadsNearbyPredicateQuestTemplateFieldsLikeJavaQuestTemplate`
+- `NearbyQuestTemplateXmlExtractorTests.Extract_AppliesJavaQuestTemplateDefaultsForMissingOptionalFields`
+- `NearbyQuestTemplateXmlExtractorTests.Extract_StreamInputFeedsNearbyQuestTemplateTableAndPredicate`
+
 Existing relevant tests remain:
 
 - `WorldMapRuntimeStateTests.NearbyQuestCandidateProjectionService_RegistersNpcStartQuestIdsLikeJavaWorldMapInstance`
@@ -151,7 +160,7 @@ Existing relevant tests remain:
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
 - C# has only a staged partial predicate for nearby `checkStartConditions`; production dispatch remains disabled.
-- Quest template static data loading for start-condition fields is not ported.
+- Quest template production static data loading for start-condition fields is not ported; only a staged XML extractor exists.
 - Repeatability max-count handling is partial; repeat reset timing and full `QuestState.canRepeat()` are not modeled.
 - XML start-condition semantics are source-audited only.
 - NPC faction, combine-skill, inventory, abyss-rank, title, class/race/gender enum mapping, and exception/log behavior need C# homes before runtime candidate filtering can be claimed.
@@ -160,7 +169,7 @@ Existing relevant tests remain:
 ## Summary Metrics
 
 - Total Java artifacts discovered: 5 in this unit
-- Total artifacts ported: 2 staged partial artifacts in UOW-992 (`NearbyQuestTemplateTable` and `NearbyQuestStartConditionService`)
+- Total artifacts ported: 3 staged partial artifacts across UOW-992/UOW-993 (`NearbyQuestTemplateTable`, `NearbyQuestStartConditionService`, and `NearbyQuestTemplateXmlExtractor`)
 - Total artifacts with verified parity: 0 in this unit
 - Total artifacts needing verification: 5
 - Total blocked artifacts: 4 blocked/not-started categories, including production quest template loading, XML start conditions, repeat timing, and NPC faction/combine-skill dependencies
@@ -168,4 +177,4 @@ Existing relevant tests remain:
 
 ## Next Recommended Unit Of Work
 
-Add a staged XML/static-data extractor for `NearbyQuestTemplateSummary` over `quest_data.xml`, starting with the fields already represented by the staged DTO. Keep XML start conditions, NPC faction, combine skill, packet sends, production `StaticData` integration, and production ItemPurification dispatch disabled until each dependency has tests.
+Add a real-data audit for `NearbyQuestTemplateXmlExtractor` over repository quest XML, pinning counts for templates and unsupported-dependency flags before any production `StaticData` integration. Keep XML start conditions, NPC faction, combine skill, packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.

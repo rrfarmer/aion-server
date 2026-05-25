@@ -1,7 +1,7 @@
 # ItemPurification Nearby Quest Refresh Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-980, updated by UOW-981 through UOW-992
+Unit of Work: UOW-980, updated by UOW-981 through UOW-993
 
 ## Purpose
 
@@ -37,6 +37,7 @@ The Java project remains the source of truth. This document does not enable prod
 - `dotnetConversion/src/Aion.GameServer/Services/WorldNpcQuestDropService.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/NearbyQuestCandidateProjectionService.cs`
 - `dotnetConversion/src/Aion.GameServer/Dataholders/NearbyQuestTemplateTable.cs`
+- `dotnetConversion/src/Aion.GameServer/Dataholders/NearbyQuestTemplateXmlExtractor.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/NearbyQuestStartConditionService.cs`
 - `dotnetConversion/src/Aion.GameServer/World/WorldMapInstanceRuntimeState.cs`
 - `docs/QuestStartConditions-Nearby-Audit.md`
@@ -92,6 +93,7 @@ Other Java call sites also use `updateNearbyQuests`, including item get/remove v
 - UOW-990 adds `NearbyQuestCandidateProjectionService`, a staged projection helper that consumes spawned NPC template ids, reads `QuestNpcStartTable`, and contributes matching `onQuestStart` quest ids to `WorldMapInstanceRuntimeState`. The real-data audit projects 1668 NPC ids into 4503 distinct world-instance quest ids. It still does not run start-condition filtering, delayed refresh scheduling, packet sends, or production startup.
 - UOW-991 adds `docs/QuestStartConditions-Nearby-Audit.md`, a source audit for the Java nearby UI predicate `QuestService.checkStartConditions(player, questId, false, 2, false, false, false)` and `QuestService.getLevelRequirementDiff`. It identifies missing C# quest-template data, repeatability, XML start conditions, inventory preconditions, combine-skill checks, NPC faction checks, and level-diff projection before any real nearby-refresh send can be wired.
 - UOW-992 adds `NearbyQuestTemplateTable` and `NearbyQuestStartConditionService`, a staged partial nearby predicate for early Java gates and `getLevelRequirementDiff`. It is not wired into production static data or packet sends, and unsupported dependencies are surfaced explicitly instead of assumed.
+- UOW-993 adds `NearbyQuestTemplateXmlExtractor`, a staged XML extractor for the nearby predicate fields already represented by `NearbyQuestTemplateSummary`. It is not wired into production `StaticData`, `DataManager`, packet sends, or ItemPurification dispatch.
 - No production C# `QuestService.checkStartConditions` equivalent is wired for this nearby-quest UI path.
 - No C# player-controller method currently invokes real nearby quest refresh.
 
@@ -124,7 +126,7 @@ Completed prerequisite:
 
 Add only the next start-condition prerequisite:
 
-1. Add a staged XML/static-data extractor for `NearbyQuestTemplateSummary` over `quest_data.xml`, starting with the fields already represented by the staged DTO.
+1. Add a real-data audit for `NearbyQuestTemplateXmlExtractor` over repository quest XML, pinning counts for templates and unsupported-dependency flags.
 2. Keep XML start conditions, NPC faction, combine skill, packet sending, dynamic quest handlers, production `StaticData` integration, and real ItemPurification dispatch disabled until each dependency is modeled and tested.
 
 ## Migration Parity Table
@@ -136,7 +138,7 @@ Add only the next start-condition prerequisite:
 | `com.aionemu.gameserver.network.aion.ServerPacketsOpcodes` | `Aion.GameServer.Network.Aion.ServerPackets.SmNearbyQuests.PacketOpCode` | Opcode Mapping | Complete | Unit Tested | Verified Parity | Java registers `SM_NEARBY_QUESTS` opcode `127` (`S_UPDATE_ZONE_QUEST`); C# packet uses opcode `127`. |
 | `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `Aion.GameServer.Services.NearbyQuestStartConditionService` | Service / Quest Predicate | Partial | Unit Tested | Partial Parity | UOW-992 stages early nearby gates only: missing template, started/reward state, conservative repeat-count checks, race, min/max level with allowed diff 2, class, gender, and abyss rank. XML start conditions, inventory item checks, combine skill, NPC faction, warning packets, exception/log behavior, and time-based repeat cooldowns remain unsupported. |
 | `com.aionemu.gameserver.services.QuestService.getLevelRequirementDiff` | `Aion.GameServer.Services.NearbyQuestStartConditionService.GetLevelRequirementDiff` | Utility / Quest Predicate | Partial | Unit Tested | Partial Parity | UOW-992 tests Java's missing-template `99` and `minlevel_permitted - playerLevel` behavior. Production quest template loading and packet send integration remain unwired. |
-| `com.aionemu.gameserver.model.templates.QuestTemplate` | `Aion.GameServer.Dataholders.NearbyQuestTemplateSummary`; `Aion.GameServer.Dataholders.NearbyQuestTemplateTable` | Dataholder / DTO | Partial | Unit Tested | Needs Verification | Staged DTO covers only early nearby predicate fields and unsupported-dependency flags. Production XML/JAXB loading, enum mapping from static data, optional condition counting, category defaults, master-crafting adjustment, collect/inventory details, and repeat-cycle timing remain unported. |
+| `com.aionemu.gameserver.model.templates.QuestTemplate`; `com.aionemu.gameserver.dataholders.QuestsData` | `Aion.GameServer.Dataholders.NearbyQuestTemplateSummary`; `Aion.GameServer.Dataholders.NearbyQuestTemplateTable`; `Aion.GameServer.Dataholders.NearbyQuestTemplateXmlExtractor` | Dataholder / DTO / XML Extractor | Partial | Unit Tested | Needs Verification | UOW-993 source-parses staged nearby predicate fields from XML. Production XML/JAXB loading, enum mapping from real static data, optional condition counting, category defaults, master-crafting adjustment, collect/inventory details, and repeat-cycle timing remain unported. |
 | `com.aionemu.gameserver.model.templates.quest.XMLStartCondition` | Future C# XML start-condition predicate | Dataholder / Predicate | Not Started | Manual Only | Needs Verification | UOW-991 source-audits finished/unfinished/acquired/noacquired/equipped/title checks. Equipped-item checks do not block nearby UI because `warn = false`, but that intentional behavior still needs implementation tests. |
 | `com.aionemu.gameserver.world.WorldMapInstance` | `Aion.GameServer.World.WorldMapInstanceRuntimeState`; `Aion.GameServer.Services.NearbyQuestCandidateProjectionService` | World / Quest Registry | Partial | Regression Tested | Partial Parity | UOW-982 adds duplicate-collapsing quest-id storage, and UOW-990 adds a staged NPC-template-id projection into that set. It does not wire production `addObject(Npc)`, delayed 1500 ms refresh scheduling, map-region lookup, or player sends. |
 | `com.aionemu.gameserver.model.templates.quest.QuestNpc` | `Aion.GameServer.Dataholders.QuestNpcStartRegistration`; `Aion.GameServer.Dataholders.QuestNpcStartTable`; `Aion.GameServer.Dataholders.QuestNpcStartRegistrationSource` | Quest Handler Registration / DTO | Partial | Unit Tested | Partial Parity | UOW-983 mirrors `registerQuestNpc`, missing-`getQuestNpc`, default range, and duplicate-collapsing `addOnQuestStart` storage. It does not model talk/kill/attack events, Java reflection/dynamic handler execution, handler unload/reload, XML registration extraction, or Java `HashSet` iteration order. |
@@ -180,11 +182,14 @@ Add only the next start-condition prerequisite:
 | `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesJavaQuestStateAndRepeatGatesConservatively` | Unit | Java `QuestState.canRepeat` and active-state checks | Validates START/REWARD blocks, nonrepeat complete blocks, repeat-count allowance, and time-based repeat cooldown is reported unsupported. | Deterministic C# test from source-reviewed Java state/repeat branches. | Does not model next-repeat timestamps. |
 | `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_ReportsUnsupportedJavaDependenciesInsteadOfAssumingParity` | Unit | Java XML/inventory/combine-skill/NPC-faction predicate dependencies | Validates staged predicate fails explicitly for dependencies not yet ported. | Conservative C# test preventing optimistic parity claims. | Does not implement those dependencies. |
 | `NearbyQuestStartConditionServiceTests.GetLevelRequirementDiff_MatchesJavaMissingTemplateAndMinLevelBehavior` | Unit | Java `QuestService.getLevelRequirementDiff` | Validates missing-template `99`, positive min-level diff, and negative min-level diff behavior. | Deterministic C# test from source-reviewed Java utility. | Production quest-template loading remains unwired. |
+| `NearbyQuestTemplateXmlExtractorTests.Extract_ReadsNearbyPredicateQuestTemplateFieldsLikeJavaQuestTemplate` | Unit | Java `QuestTemplate` JAXB attributes/elements | Validates staged extraction of quest id, min/max level, race, class list, gender, rank, repeat count, repeat-cycle presence, XML condition presence, inventory item presence, combine skill, and NPC faction id. | Deterministic C# test from reviewed Java `QuestTemplate` annotations/getters. | Does not run JAXB or real-data audit. |
+| `NearbyQuestTemplateXmlExtractorTests.Extract_AppliesJavaQuestTemplateDefaultsForMissingOptionalFields` | Unit | Java `QuestTemplate` primitive/default field values | Validates missing optional fields map to staged defaults, including max repeat count `1`. | Deterministic C# test from source-reviewed Java field defaults. | Does not validate all `QuestTemplate` fields. |
+| `NearbyQuestTemplateXmlExtractorTests.Extract_StreamInputFeedsNearbyQuestTemplateTableAndPredicate` | Unit | Java `QuestsData` indexing shape | Validates stream input can feed the staged table boundary. | C# staged boundary test informed by Java `QuestsData.afterUnmarshal`. | Not production `StaticData` integration. |
 
 ## Remaining Risks
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
-- Only a staged partial C# quest start-condition evaluator exists for nearby quest UI; production wiring and unsupported dependencies remain absent.
+- Only a staged partial C# quest start-condition evaluator and staged XML extractor exist for nearby quest UI; production wiring and unsupported dependencies remain absent.
 - C# dynamic quest-start registration storage exists and XML/handler sources can be source-extracted, staged into `QuestNpcStartTable`, and projected into a staged world-instance quest-id set with zero unresolved real-data rows, but no production loader populates it from real data.
 - C# world-instance quest id registry storage exists, but it is not populated from production NPC spawn or dynamic quest handlers.
 - The current ItemPurification dispatcher seam must remain no-op until these lower-level surfaces exist.
@@ -193,7 +198,7 @@ Add only the next start-condition prerequisite:
 ## Summary Metrics
 
 - Total Java artifacts discovered: 14
-- Total artifacts ported: 10 packet/opcode/registry/start-registration/XML-extractor/handler-extractor/source-loader/projection/template-boundary/partial-predicate artifacts for the nearby-quest prerequisites
+- Total artifacts ported: 11 packet/opcode/registry/start-registration/XML-extractor/handler-extractor/source-loader/projection/template-boundary/partial-predicate/template-XML-extractor artifacts for the nearby-quest prerequisites
 - Total artifacts with verified parity: 2
 - Total artifacts needing verification: 13
 - Total blocked artifacts: 4 blocked/not-started categories, including production NPC-spawn integration, production quest-template loading, XML condition data, and dynamic quest handler execution

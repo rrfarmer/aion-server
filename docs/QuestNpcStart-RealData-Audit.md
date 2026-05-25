@@ -87,4 +87,4 @@ Known limitations:
 
 ## Next Recommended Unit
 
-Continue with a staged XML/static-data extractor for `NearbyQuestTemplateSummary`, starting with the fields used by the current staged nearby predicate. Keep production startup and nearby-refresh dispatch disabled until predicate parity exists.
+Continue with a real-data audit for `NearbyQuestTemplateXmlExtractor`, pinning current repository quest-template counts and unsupported dependency flags. Keep production startup and nearby-refresh dispatch disabled until predicate parity exists.
