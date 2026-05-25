@@ -28182,6 +28182,62 @@ Next recommended unit of work:
 
 ---
 
+### Session 890 (May 25, 2026)
+- Continued after UOW-889 with the docs-only SQL fixture appendix because Java runtime tooling remains unavailable and the Java artifact path still needed concrete database setup guidance.
+- Performed Parallel Work Discovery across Java observer/runtime capture, SQL fixture appendix, optional reward-add cube-update comparison, and artifact schema audit. Selected the SQL appendix because it is isolated documentation work and directly supports the live-server capture runbook.
+- Reviewed Java `game-server/sql/aion_gs.sql`, Java `InventoryDAO.INSERT_QUERY`, Java `PlayerRegisteredItemsDAO`, C# `CharacterCreationRepository` inventory insert shape, and C# `MySqlUsedIdRepository`.
+- Added `docs/Phase-6-Decompose-Live-Server-SQL-Fixture-Appendix.md`.
+- The appendix defines:
+  - Java schema facts for `inventory`, `players`, and `player_registered_items`
+  - preconditions for a clean selectable-decompose capture character
+  - cleanup queries scoped to the capture player
+  - used-id collision checks across players, inventory, registered items, mail, houses, and pets
+  - seed templates for `JD-SEL-DEC-001` and `JD-SEL-DEL-001`
+  - post-capture verification queries
+  - artifact requirements for SQL seed values, item-id mapping, object-id mapping, and final inventory
+  - stop conditions for ambiguous template ids, collisions, runtime item noise, and unsafe cleanup
+- No production Java/C# code changed in this unit.
+- Validation: `git diff --check` passed aside from the repo's normal CRLF warnings. No tests were run because this was a documentation-only SQL fixture unit. Latest full C# validation remains Session 889: 1454 tests passing.
+
+#### Migration Parity Table - Session 890
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dao.InventoryDAO` | `Aion.GameServer.Data.CharacterCreationRepository` / inventory persistence helpers | Repository | Partial | Manual Only for appendix; Regression Tested elsewhere | Needs Verification | Appendix mirrors Java `InventoryDAO.INSERT_QUERY` column order for fixture seeding. It was not executed locally; transaction/autocommit and DAO load behavior remain unverified for live capture. |
+| `com.aionemu.gameserver.dao.PlayerRegisteredItemsDAO` | `Aion.GameServer.Data.MySqlUsedIdRepository` used-id query set | Repository | Partial | Manual Only | Needs Verification | Appendix includes `player_registered_items.item_unique_id` in collision checks because Java/C# used-id discovery treats it as part of the shared object-id space. Runtime `IDFactory` state remains unverified. |
+| `com.aionemu.gameserver.model.items.storage.Storage` | `Aion.GameServer` inventory mutation helpers | Storage | Partial | Manual Only for appendix; Regression Tested in C# decompose tests | Needs Verification | Appendix seeds cube storage (`item_location = 0`) and requires post-capture SQL checks for source decrement/delete. Java persistence, quest callbacks, null behavior, and transaction timing remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemService` | `Aion.GameServer.Network.Aion.GameServerConnection.SendDecomposeRewardItemsAsync` / item services | Service | Partial | Manual Only for appendix; Regression Tested in C# decompose tests | Needs Verification | Appendix documents generated reward object-id recording but does not control or verify Java `IDFactory` allocation, expirable registration, or persistence behavior. |
+| `com.aionemu.gameserver.services.item.ItemPacketService` | `Aion.GameServer.Services.Items` packet writers / guarded comparison helper | Service / Packet Side Effects | Partial | Manual Only for appendix; Regression Tested in C# comparison helper | Needs Verification | Appendix supports runtime capture of source/reward packet side effects but no Java artifact was generated. Reward-add trailing `SM_CUBE_UPDATE` remains a risk. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ClientPackets.CmSelectDecomposable` / guarded comparison helper | Client Packet Handler | Partial | Manual Only for appendix; Regression Tested in C# decompose tests | Partial Parity | Appendix defines SQL setup for the two selectable scenarios. It does not execute Java handler behavior or prove parity. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| None | Documentation / SQL Fixture Design | Java `aion_gs.sql`, Java `InventoryDAO.INSERT_QUERY`, C# used-id repository | Defines live-server SQL fixture setup, cleanup, collision checks, and post-capture verification queries. | Static source/schema inspection only. | Not executed against a Java DB; no Java runtime artifact; no C# comparison against Java output. |
+
+Remaining risks:
+- The appendix was not executed locally because Java 25/Maven/live-server capture tooling remains unavailable.
+- Real Java template ids for deterministic selectable decomposable items still must be selected from static data.
+- Java `IDFactory` reward object-id allocation is not controlled by the appendix unless the operator resets/inspects used-id state.
+- Fixture SQL cannot prevent runtime packet noise from events, mailbox, surveys, or login rewards unless those systems are also controlled.
+- Date/time, transaction/autocommit, and persistence timing behavior were not verified.
+- Full item-info blob, byte capture, and live-client validation remain outside this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 0 production code artifacts; 1 SQL fixture appendix added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 8 blocked/not-started categories, including Java observer implementation, Java runtime artifact generation, Java loopback proof validation, real template-id selection, SQL fixture execution, reward object-id control, byte capture, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit improves capture readiness but adds no runtime evidence.
+
+Next recommended unit of work:
+- If Java 25/Maven tooling is available, execute the live-server runbook with the packet observer design and SQL fixture appendix to generate the first Java artifacts.
+- If tooling remains blocked, add a guarded comparison design or test path for optional Java-observed reward-add trailing `SM_CUBE_UPDATE`, or continue an isolated non-decompose Phase 6 gameplay slice that does not touch the shared decompose comparison helper.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
