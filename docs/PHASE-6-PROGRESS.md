@@ -29598,9 +29598,63 @@ Next recommended unit of work:
 
 ---
 
+### Session 915 (May 25, 2026)
+- Continued after UOW-914 by reading the PJ handoff, confirming branch `4.8` was clean after commit `5e62e0fba`, and running Parallel Work Discovery across Aturam, Eternal Bastion, and Stonespear remaining instance AP callers.
+- Selected Aturam because Java `AturamSkyFortressInstance.onDie` has the smallest isolated AP branch: when NPC `217382` dies, set two doors, select `npc.getAggroList().getMostPlayerDamage()`, and give that player exactly `540` AP with plain `AbyssPointsService.addAp(player, 540)`.
+- Added `AturamSkyFortressApRewardService` with Java breadcrumbs for `AturamSkyFortressInstance.onDie` case `217382`.
+- Added a fixed reward NPC id constant (`217382`), fixed AP constant (`540`), result/status records, missing-most-damage-player guard, non-reward-NPC guard, and DI registration.
+- Left aggro-list most-damage selection, door changes, NPC deletion, and system-message broadcast as caller/live-instance responsibilities.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~AturamSkyFortressApRewardServiceTests --no-restore` passed with 3 tests.
+  - `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed: Commons 57, Chat 29, Login 121, GameServer 1536.
+
+#### Migration Parity Table - Session 915
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `instance.AturamSkyFortressInstance` | `Aion.GameServer.Services.AturamSkyFortressApRewardService` | Instance Handler / Reward Planner | Partial | Regression Tested in C# | Partial Parity | C# now models the AP reward slice for `onDie` case NPC `217382`: most-damage player input and fixed AP `540` applied through `AbyssPointsService.AddAp`. Door state updates, NPC deletion, message broadcast, skill/walker events, and live handler integration remain missing. |
+| `com.aionemu.gameserver.model.gameobjects.Npc.getAggroList().getMostPlayerDamage` | `AturamSkyFortressApRewardService.ApplyGeneratorApReward(Player? mostDamagePlayer, ...)` input projection | Aggro / Input Projection | Partial Input Projection | Regression Tested in C# | Needs Verification | Java selects the reward recipient from NPC aggro damage. C# accepts the already-resolved player; live aggro-list ranking and tie behavior were not ported or verified. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `Aion.GameServer.Services.AbyssPointsService.AddAp` | Service | Partial | Regression Tested in C# | Partial Parity | Aturam fixed AP reward mutates AP through the existing add-AP planner. Persistence, Legion contribution fanout, ranking cache, and live caller side effects remain incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_IDStation_3FDoor_322` | Not ported in this unit | Server Packet / Instance Message | Not Started | No Tests | Unknown | Java broadcasts the door/system message after AP reward branch. This unit only ports AP mutation. |
+| `com.aionemu.gameserver.world.WorldMapInstance.setDoorState` | Not ported in this unit | Instance Door State | Not Started | No Tests | Unknown | Java opens doors `307` and `230` in the same case. Door state side effects remain live-instance work. |
+| `instance.EternalBastionInstance` | Not ported in this unit | Instance Handler / AP Caller | Not Started | No Tests | Unknown | Discovery re-confirmed final AP distribution from `instanceReward.getFinalAp()`; not implemented in this unit. |
+| `instance.StonespearReachInstance` | Not ported in this unit | Instance Handler / AP Caller | Not Started | No Tests | Unknown | Discovery re-confirmed final AP distribution plus GP/items; not implemented in this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Tests validate AP gain message id `1320000` is planned for Aturam AP reward. Aturam-specific instance message bytes and live ordering remain unported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRank` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Tests validate rank packet intent after Aturam AP reward mutation. Ranking-position lookup and byte-level Java comparison remain unavailable. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ApplyGeneratorApReward_AddsFixedJavaRewardToMostDamagePlayer` | Regression | Java `AturamSkyFortressInstance.onDie` case `217382` and `AbyssPointsService.addAp(Player, int)` source review | Validates NPC `217382` applies fixed AP `540`, mutates AP `1000 -> 1540`, plans AP gain/rank packets, and does not create a siege callback because Java uses plain `addAp(player, amount)`. | Deterministic C# regression grounded in Java source. | No Java runtime artifact; live aggro-list recipient selection remains missing. |
+| `ApplyGeneratorApReward_SkipsMissingMostDamagePlayer` | Guard Regression | Java null check around most-damage player source review | Validates null most-damage player skips AP mutation. | Deterministic C# guard regression. | Live NPC aggro-list behavior is not ported. |
+| `ApplyGeneratorApReward_SkipsNonRewardNpc` | Guard Regression | Java switch case source review and C# planner boundary | Validates non-`217382` NPC ids do not mutate AP. | Deterministic C# guard regression. | Java caller reaches this only through the instance switch. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- `AturamSkyFortressApRewardService` is an AP-only planner slice; live `AturamSkyFortressInstance` integration, NPC aggro-list recipient selection, door state changes, NPC deletion, and instance message broadcast remain missing.
+- Most-damage-player tie behavior, offline/dead-player behavior, and aggro-list cleanup were not verified.
+- Eternal Bastion and Stonespear final AP callers remain unported, along with their GP/item reward side effects.
+- Packet bytes, persistence, ranking cache, Legion contribution fanout, and live siege callback execution remain incomplete.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 1 Aturam fixed AP reward planner slice plus 1 DI registration
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 7 blocked/not-started categories, including Java runtime artifact generation, live Aturam handler integration, aggro-list selection, door/message side effects, remaining final-AP instance callers, persistence/fanout side effects, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 68% complete; this unit adds the Aturam fixed AP reward boundary but does not wire live instance behavior.
+
+Next recommended unit of work:
+- Continue final AP instance caller convergence with `EternalBastionInstance` or `StonespearReachInstance`. Eternal Bastion appears simpler because AP is rank-table based and lacks the Stonespear GP branch.
+- Trade and item-purification AP paths remain analysis-first unless their dependency surfaces prove smaller than expected.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, and PvP Arena AP now consume their configured AP rates at planner/service boundaries, so move next to the smaller fixed/final remaining instance AP callers, Trade/AP-purification analysis, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Inspect C# coverage for Java `TradeService` and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, and Aturam fixed AP now consume their configured/fixed AP boundaries at planner/service boundaries, so move next to Eternal Bastion or Stonespear final AP callers, Trade/AP-purification analysis, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Inspect C# coverage for Java `TradeService` and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
