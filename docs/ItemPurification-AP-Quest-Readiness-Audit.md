@@ -131,6 +131,7 @@ Current C# status:
 - UOW-1001 adds staged nearby inventory item precondition support, matching Java `inventoryItemCheck` by checking item-id presence only. Optional XML counts are parsed but not enforced in this gate. A read-only repeat-timing analysis records the next date/time slice.
 - UOW-1002 adds the narrow nearby repeat-timing slice: `PlayerQuestState.NextRepeatTime`/`CompleteTime`, repository hydration for `next_repeat_time`/`complete_time`, repeat-cycle token preservation, and deterministic Java `QuestState.canRepeat()` edge-case tests.
 - UOW-1003 adds staged nearby combine-skill checks, matching Java `QuestService.checkCombineSkill` for explicit skills, the `-1` any-skill sentinel, NPC faction 12/13 tapping exclusion, and `TASK` work-order upper-bound behavior.
+- UOW-1004 adds staged nearby NPC faction checks, matching Java active exact faction rows, mentor/non-mentor slot cooldown behavior, time-based cooldown skip, and `mentor_type` slot selection. Repository/static-data hydration and live sends remain disabled.
 - Partial material count updates do not need item-remove callbacks under Java behavior.
 - Live mutation replaces the player inventory snapshot and applies AP, but intentionally leaves persistence, sends, quest callbacks, and rollback outside its boundary.
 - Production `HandleInfrastructurePacketAsync` still routes `CmItemPurification` to the plan-only `HandleItemPurificationAsync` path.
