@@ -1,7 +1,7 @@
 # ItemPurification Nearby Quest Refresh Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-980, updated by UOW-981 through UOW-987
+Unit of Work: UOW-980, updated by UOW-981 through UOW-988
 
 ## Purpose
 
@@ -83,6 +83,7 @@ Other Java call sites also use `updateNearbyQuests`, including item get/remove v
 - UOW-985 adds `QuestNpcStartJavaHandlerExtractor`, a conservative Java source extractor that emits `QuestNpcStartRegistrationSource` rows for direct `registerQuestNpc(...).addOnQuestStart(...)` calls when the NPC id and quest id can be resolved from literals, simple `int` assignments, `int[]` indexes, or inherited `questId` via `super(...)`. Unsupported expressions are returned as unresolved rows instead of guessed. It is not wired into any loader or runtime dispatch.
 - UOW-986 adds `QuestNpcStartRegistrationSourceLoader`, a staged offline file/directory loader that composes XML quest-script and Java handler extractor outputs in stable file order and preserves unresolved handler rows. It is not wired into production `StaticData`, `DataManager`, `QuestEngine`, NPC spawn, or runtime dispatch.
 - UOW-987 adds a focused real-data audit test and `docs/QuestNpcStart-RealData-Audit.md`. The staged loader currently resolves 5184 start sources from repository data: 4400 XML sources and 784 Java handler sources, with 6 unresolved Java handler registrations, all using the unsupported `butlerId` expression.
+- UOW-988 resolves the six `butlerId` registrations by supporting deterministic static integer-set iteration in Java handlers. The staged real-data audit now resolves 5214 start sources: 4400 XML sources and 814 Java handler sources, with zero unresolved Java handler registrations.
 - No C# `QuestService.checkStartConditions` equivalent was found for this nearby-quest UI path.
 - No C# player-controller method currently invokes real nearby quest refresh.
 
@@ -104,7 +105,7 @@ Completed prerequisite:
 
 ## Parity Gaps
 
-- C# cannot yet compute nearby quest marker lists from a player's map-region/world-instance state because the staged extractor loader is not production-wired, six Java handler registrations remain unresolved, world-instance population is missing, and start-condition filtering remains missing.
+- C# cannot yet compute nearby quest marker lists from a player's map-region/world-instance state because the staged extractor loader is not production-wired, world-instance population is missing, and start-condition filtering remains missing.
 - C# has staged `QuestNpc.onQuestStart` storage, a pure XML extractor, a conservative Java handler extractor, and an offline source loader, but still lacks production static-data integration, NPC-spawn population, and runtime refresh wiring.
 - C# lacks Java-equivalent quest start-condition checks for this UI path.
 - Java's `HashMap` iteration order is not stable; C# must avoid claiming packet order parity without runtime or deterministic Java artifact evidence.
@@ -115,7 +116,7 @@ Completed prerequisite:
 
 Add only the next candidate-population prerequisite:
 
-1. Resolve or explicitly classify the six `butlerId` Java handler registrations after inspecting the Java housing/butler quest pattern, without guessing and without production startup wiring.
+1. Add a staged table-population adapter or candidate-source fixture that feeds audited loader output into `QuestNpcStartTable`, without production `StaticData`/`DataManager` startup wiring.
 2. Keep `QuestService.checkStartConditions`, packet sending, dynamic quest handlers, and real ItemPurification dispatch disabled until registration extraction is complete enough to drive candidate source tests.
 
 ## Migration Parity Table
@@ -132,7 +133,7 @@ Add only the next candidate-population prerequisite:
 | `com.aionemu.gameserver.questEngine.handlers.template.ReportToMany` | `Aion.GameServer.Dataholders.QuestNpcStartXmlExtractor` | Template / Quest Registration | Partial | Unit Tested | Partial Parity | UOW-984 mirrors the narrow `startItemId != 0` suppression of NPC start registration for `report_to_many`. Dialog behavior, item-use start, talk events, work items, reward state, and runtime handler execution are not ported here. |
 | Representative `game-server/data/handlers/quest/**` classes extending `com.aionemu.gameserver.questEngine.handlers.AbstractQuestHandler` | `Aion.GameServer.Dataholders.QuestNpcStartJavaHandlerExtractor` | Java Handler Source Extractor | Partial | Unit Tested | Needs Verification | UOW-985 extracts direct `registerQuestNpc(...).addOnQuestStart(...)` calls only when expressions resolve conservatively. Dynamic expressions, loops, collection lookups, nonliteral assignments, reflection/loading behavior, and runtime handler execution remain unresolved. |
 | `com.aionemu.gameserver.questEngine.QuestEngine.init` | `Aion.GameServer.Dataholders.QuestNpcStartRegistrationSourceLoader` | Offline Loader / Source Aggregator | Partial | Unit Tested | Needs Verification | UOW-986 composes XML and Java handler extractor outputs over files/directories with stable ordering and unresolved-row preservation. It does not run Java reflection/JAXB, register handlers into `QuestEngine`, or integrate with production `DataManager`. |
-| `game-server/data/handlers/quest/oriel/*` and `game-server/data/handlers/quest/pernon/*` butler start handlers | `Aion.GameServer.Dataholders.QuestNpcStartJavaHandlerExtractor`; `QuestNpcStartRegistrationSourceRealDataAuditTests` | Java Handler Source Audit | Not Started | Regression Tested | Needs Verification | UOW-987 identifies six unresolved `butlerId` registrations. The value is intentionally not guessed; Java housing/butler source must be inspected before adding support. |
+| `game-server/data/handlers/quest/oriel/*` and `game-server/data/handlers/quest/pernon/*` butler start handlers | `Aion.GameServer.Dataholders.QuestNpcStartJavaHandlerExtractor`; `QuestNpcStartRegistrationSourceRealDataAuditTests` | Java Handler Source Audit | Partial | Regression Tested | Partial Parity | UOW-988 resolves static integer-set iterator/enhanced-for registrations used by the six `butlerId` handlers. Java `HashSet` iteration order is not claimed, and runtime handler execution remains unported. |
 
 ## Tests Added/Updated
 
@@ -157,13 +158,13 @@ Add only the next candidate-population prerequisite:
 | `QuestNpcStartRegistrationSourceLoaderTests.Load_ComposesXmlAndJavaHandlerExtractorOutputsInStableFileOrder` | Unit | Java `QuestEngine.init` loads XML and handler registrations before runtime use | Validates staged loader composes XML and Java handler extractor outputs from directories in stable file order. | Deterministic C# test over temp source files. | Does not run Java classloading/JAXB or production `DataManager`. |
 | `QuestNpcStartRegistrationSourceLoaderTests.Load_ReportsJavaHandlerUnresolvedRowsAlongsideResolvedSources` | Unit | Java handler source extraction limitations | Validates unresolved handler rows are preserved beside resolved registrations. | Conservative loader behavior test. | Does not triage real handler-tree unresolved counts. |
 | `QuestNpcStartRegistrationSourceLoaderTests.Load_MissingDirectoriesReturnEmptyResult` | Unit | Staged offline loader safety | Validates missing optional source directories do not crash the staged loader. | Deterministic C# test. | Production missing-data policy is not selected. |
-| `QuestNpcStartRegistrationSourceRealDataAuditTests.RealDataAudit_LoadsStagedQuestStartSourcesWithoutProductionWiring` | Regression | Real repository Java/XML quest-start source data | Pins current staged-loader counts: 5184 total sources, 4400 XML, 784 Java handler, 6 unresolved handler registrations, 1668 distinct NPC ids, and 4497 distinct quest ids. | Deterministic C# audit over current repository source files. | Does not run Java reflection/JAXB, execute handlers, or prove runtime parity. |
+| `QuestNpcStartRegistrationSourceRealDataAuditTests.RealDataAudit_LoadsStagedQuestStartSourcesWithoutProductionWiring` | Regression | Real repository Java/XML quest-start source data | Pins current staged-loader counts: 5214 total sources, 4400 XML, 814 Java handler, zero unresolved handler registrations, 1668 distinct NPC ids, and 4503 distinct quest ids. | Deterministic C# audit over current repository source files. | Does not run Java reflection/JAXB, execute handlers, or prove runtime parity. |
 
 ## Remaining Risks
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
 - No C# quest start-condition evaluator exists for nearby quest UI.
-- C# dynamic quest-start registration storage exists and XML/handler sources can be source-extracted through a staged loader, but no production loader populates it from real data and the six `butlerId` Java handler registrations remain unresolved.
+- C# dynamic quest-start registration storage exists and XML/handler sources can be source-extracted through a staged loader with zero unresolved real-data rows, but no production loader populates it from real data.
 - C# world-instance quest id registry storage exists, but it is not populated from NPC spawn or dynamic quest handlers.
 - The current ItemPurification dispatcher seam must remain no-op until these lower-level surfaces exist.
 - Automatic `CM_ITEM_PURIFICATION` dispatch remains plan-only and must stay disabled.

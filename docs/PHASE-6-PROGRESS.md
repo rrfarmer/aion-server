@@ -33537,6 +33537,75 @@ Next recommended unit of work:
 
 ---
 
+### Session 988 (May 25, 2026)
+- Continued after UOW-987 by resolving the six real-data `butlerId` Java handler start registrations.
+- Parallel Work Discovery considered `butlerId` source analysis/extractor support, broader unresolved-case audit, ItemPurification side-effect persistence docs, and Java observer artifact generation. The selected unit stayed sequential because it edits the shared Java handler extractor, focused tests, real-data audit baseline, and shared Phase 6 docs; no sub-agents were spawned.
+- Reviewed the Oriel/Pernon Java handlers and confirmed the unresolved registrations come from deterministic static integer sets:
+  - Oriel handlers populate `butlers` with `810017` through `810021`.
+  - Pernon handlers populate `butlers` with `810022` through `810026`.
+  - The handlers iterate those sets and call `qe.registerQuestNpc(butlerId).addOnQuestStart(questId)`.
+- Updated `QuestNpcStartJavaHandlerExtractor` to expand static integer-set values when a local NPC expression is assigned from `Iterator<Integer>.next()` or an enhanced `for (int value : set)` loop.
+- Added focused test coverage for iterator and enhanced-for set extraction.
+- Updated the real-data audit baseline:
+  - total resolved staged start sources: 5214
+  - XML quest-script sources: 4400
+  - Java handler sources: 814
+  - unresolved Java handler registrations: 0
+  - distinct NPC ids: 1668
+  - distinct quest ids: 4503
+- Kept production `StaticData`/`DataManager` integration, Java handler execution, NPC-spawn population, delayed refresh scheduling, `QuestService.checkStartConditions`, player-controller sends, and production ItemPurification dispatch disabled.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~QuestNpcStartJavaHandlerExtractorTests` passed with 5 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~QuestNpcStartRegistrationSourceRealDataAuditTests` passed with 1 test after updating the baseline.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1683 tests.
+
+#### Migration Parity Table - Session 988
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `game-server/data/handlers/quest/oriel/_18806HeartofRock.java` | `Aion.GameServer.Dataholders.QuestNpcStartJavaHandlerExtractor` | Java Handler Source Extraction | Partial | Regression Tested | Partial Parity | C# now expands the static `butlers` set and `Iterator<Integer>.next()` start-registration pattern. Runtime dialog behavior, house ownership checks, talk events, Java `HashSet` iteration order, and handler execution are not ported here. |
+| `game-server/data/handlers/quest/oriel/_18821AlmostForgotMyBlessings.java` | `Aion.GameServer.Dataholders.QuestNpcStartJavaHandlerExtractor` | Java Handler Source Extraction | Partial | Regression Tested | Partial Parity | Same static Oriel butler set support as above. Quest dialog/reward behavior and active-house butler checks remain outside the extractor. |
+| `game-server/data/handlers/quest/oriel/_18828UserFriendly.java` | `Aion.GameServer.Dataholders.QuestNpcStartJavaHandlerExtractor` | Java Handler Source Extraction | Partial | Regression Tested | Partial Parity | Start registrations are extracted; Java item registration/use behavior for `182213191` and dialog flow remain unported here. |
+| `game-server/data/handlers/quest/pernon/_28806WiltingFlowersFallingTears.java` | `Aion.GameServer.Dataholders.QuestNpcStartJavaHandlerExtractor` | Java Handler Source Extraction | Partial | Regression Tested | Partial Parity | C# now expands the static Pernon `butlers` set and iterator start-registration pattern. Runtime dialog behavior, house ownership checks, talk events, Java `HashSet` iteration order, and handler execution are not ported here. |
+| `game-server/data/handlers/quest/pernon/_28821YourButlerGift.java` | `Aion.GameServer.Dataholders.QuestNpcStartJavaHandlerExtractor` | Java Handler Source Extraction | Partial | Regression Tested | Partial Parity | Same static Pernon butler set support as above. Quest dialog/reward behavior and active-house butler checks remain outside the extractor. |
+| `game-server/data/handlers/quest/pernon/_28828TheManyFacetsOfFriendship.java` | `Aion.GameServer.Dataholders.QuestNpcStartJavaHandlerExtractor` | Java Handler Source Extraction | Partial | Regression Tested | Partial Parity | Start registrations are extracted; Java item registration/use behavior for `182213205` and dialog flow remain unported here. |
+| Representative `game-server/data/handlers/quest/**` classes extending `com.aionemu.gameserver.questEngine.handlers.AbstractQuestHandler` | `Aion.GameServer.Dataholders.QuestNpcStartJavaHandlerExtractor`; `Aion.GameServer.Dataholders.QuestNpcStartRegistrationSourceLoader` | Java Handler Source Loader | Partial | Regression Tested | Needs Verification | Real-data audit now reports zero unresolved handler registrations. This still does not execute Java classloading/reflection or prove full runtime handler parity. |
+| `com.aionemu.gameserver.model.templates.quest.QuestNpc.addOnQuestStart` | `Aion.GameServer.Dataholders.QuestNpcStartTable.RegisterOnQuestStart`; `Aion.GameServer.Dataholders.QuestNpcStartRegistrationSource` | Quest NPC Registration / DTO | Partial | Regression Tested | Partial Parity | Extracted set-expanded handler sources can feed staged table storage, but this unit does not populate runtime world instances or claim Java `HashSet` iteration order. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `QuestNpcStartJavaHandlerExtractorTests.ExtractsIteratorAndForEachValuesFromStaticIntegerSets` | Unit | Java Oriel/Pernon butler handlers using `Set<Integer>`, `Iterator<Integer>.next()`, and enhanced `for` | Static integer-set values are expanded into one start source per set value for iterator and enhanced-for loops. | Deterministic C# test from reviewed Java handler source. | Does not claim Java `HashSet` iteration order or execute handlers. |
+| `QuestNpcStartRegistrationSourceRealDataAuditTests.RealDataAudit_LoadsStagedQuestStartSourcesWithoutProductionWiring` | Regression | Real repository Java/XML quest-start source data | Pins updated staged-loader counts: 5214 total sources, 4400 XML, 814 Java handler, zero unresolved handler registrations, 1668 distinct NPC ids, and 4503 distinct quest ids. | Deterministic C# audit over current repository source files. | Does not run Java reflection/JAXB, execute handlers, populate production runtime state, or prove runtime parity. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- The staged source loader and audit are not integrated into production `StaticData`, `DataManager`, `QuestEngine`, NPC spawn, world instance population, or production dispatch.
+- Java `HashSet` iteration order is not claimed for expanded set values; the staged table stores sets, but source-list order must not be used as parity evidence.
+- The handler extractor still supports only conservative source patterns; future dynamic expressions, collection-derived IDs, constructor parameters, inherited fields, method calls, and nonliteral assignments may need triage if new unresolved rows appear.
+- XML extraction remains partial and does not model `aggro_start_npc_ids`, talk/kill/end/distance/zone registrations, template-specific dialogs, quest item registration, or JAXB schema validation.
+- No C# nearby-UI `QuestService.checkStartConditions` equivalent exists.
+- `SmNearbyQuests` remains a packet prerequisite only; no production code sends it.
+- The current ItemPurification dispatcher seam must remain no-op until extraction, candidate calculation, start-condition evaluation, and a controlled send boundary exist.
+- ItemPurification persistent execution still does not persist secondary rank-limit equipment unequips or abyss skill deletion intents from AP-rank side effects.
+- Automatic `CM_ITEM_PURIFICATION` dispatch remains plan-only and must stay disabled.
+- Required `docs/commit-conventions.md` is still missing; commit format continues to follow `docs/orchestration-rules.md`.
+
+Summary metrics:
+- Total Java artifacts discovered: 8 in this unit
+- Total artifacts ported: 1 extractor pattern enhancement in this unit
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 3 blocked/not-started categories, including production loader integration, quest start-condition evaluation, and dynamic quest handler execution
+- Estimated overall migration completion: Phase 6 remains about 70% complete; this unit closes the current real-data unresolved source-extraction rows without enabling live nearby quest refresh.
+
+Next recommended unit of work:
+- Add a staged table-population adapter or test fixture that feeds audited loader output into `QuestNpcStartTable`, verifies duplicate-collapsing registration behavior on real data, and reports table/source counts; keep production `StaticData`/`DataManager`, `QuestService.checkStartConditions`, player-controller sends, and ItemPurification dispatch disabled.
+- Alternative safe slice: use the sidecar persistence-gap analysis to document or implement the next ItemPurification side-effect persistence prerequisite.
+
+---
+
 ## Next Steps
 
 1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure ItemPurification quest-notification projection, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, the handler-level ItemPurification workflow/application/packet-plan composition bridge, the ItemPurification runtime-input packet bridge, the ItemPurification ready concrete-packet send bridge, the ItemPurification target object-id allocation bridge, the ItemPurification random-bonus selection seam, the ItemPurification non-persistent mutation snapshot preview, the ItemPurification non-persistent handler mutation bridge, the ItemPurification live mutation adapter boundary, the ItemPurification live execution composition seam, the ItemPurification live AP rank-drop metadata regression, the ItemPurification explicit live AP player-packet emission bridge, the ItemPurification explicit live AP rank-update broadcast bridge, the ItemPurification explicit live equipment rank-limit state mutation bridge, the ItemPurification explicit live equipment rank-limit packet fanout bridge, the ItemPurification explicit live abyss skill refresh bridge, the ItemPurification explicit opt-in quest notification no-op seam, the ItemPurification explicit transform-min-rank config plumbing, the ItemPurification quest-update items audit, the ItemPurification quest-update item static-data projection, the ItemPurification no-op nearby-refresh planning seam, the ItemPurification no-op nearby-refresh dispatcher seam, the ItemPurification nearby quest refresh surface audit, the ItemPurification nearby quest packet prerequisite, the ItemPurification nearby quest world-instance registry prerequisite, the ItemPurification nearby quest start-registration table prerequisite, the ItemPurification handler opt-in live execution seam, the ItemPurification persistence plan analysis, the ItemPurification repository contract/payload plumbing, the ItemPurification inserted target item-stone persistence, the ItemPurification opt-in persistent live execution seam, the ItemPurification handler-level opt-in persistent execution helper, the ItemPurification handler-level persistence failure-ordering regression, the ItemPurification automatic-dispatch readiness policy, the ItemPurification staged dispatch-failure policy, the ItemPurification Java observer design, the ItemPurification opt-in DB integration happy path, the ItemPurification opt-in DB rollback path, the ItemPurification AP/quest readiness audit, the pure ItemCharge AP spend guard, and the live ItemCharge selected-item/charge-all AP guard consolidation now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. ItemCharge Kinah payment guard/consolidation, charge-all stale-item payment-before-revalidation hardening, mixed stale/current charge-all AP regression coverage, mixed stale/current charge-all Kinah regression coverage, missing/current charge-all AP approximation coverage, and missing/current charge-all Kinah approximation coverage are now staged for live selected-item/charge-all paths. Move next to Java observer artifact generation when tooling is available, nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another existing planner live adapter when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player/equipment/skill packets, AP/login rank-limited equipment persistence, configured abyss transform skill updates, rank config load, and real quest handler dispatch. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.

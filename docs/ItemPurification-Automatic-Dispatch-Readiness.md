@@ -134,6 +134,8 @@ UOW-986 adds `QuestNpcStartRegistrationSourceLoader`, a staged offline loader th
 
 UOW-987 adds a focused real-data audit for the staged loader. Current repository data yields 5184 resolved staged start sources, split into 4400 XML and 784 Java handler sources, with 6 unresolved Java handler registrations using `butlerId`. This satisfies only an offline audit baseline; no production integration, NPC-spawn population, candidate filtering, player-controller send, or automatic production dispatch is wired.
 
+UOW-988 resolves the six `butlerId` Java handler registrations by supporting deterministic static integer-set iteration in the Java handler source extractor. Current repository data now yields 5214 resolved staged start sources, split into 4400 XML and 814 Java handler sources, with zero unresolved Java handler registrations. This improves the offline audit baseline only; no production integration, NPC-spawn population, candidate filtering, player-controller send, or automatic production dispatch is wired.
+
 ### 4. AP Side Effects
 
 Required before automatic dispatch:
@@ -200,7 +202,7 @@ Recommended next units:
 
 1. Generate Java runtime observer artifacts for ItemPurification packet/DB capture when Java 25/Maven tooling is available.
 2. Generate Java runtime failure artifacts or deliberately choose a final production failure policy once packet/DB comparison evidence exists.
-3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next resolving/classifying the six `butlerId` handler registrations or adding candidate-filtering prerequisites while preserving the no-op dispatcher seam until quest start-condition evaluation exists.
+3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next adding staged table population or candidate-filtering prerequisites while preserving the no-op dispatcher seam until quest start-condition evaluation exists.
 4. Add AP spend packet/side-effect projection tests behind explicit opt-in live execution before production dispatch wiring.
 
 Unsafe next work:

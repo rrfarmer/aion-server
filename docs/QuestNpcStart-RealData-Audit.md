@@ -1,7 +1,7 @@
 # Quest NPC Start Source Real-Data Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-987
+Unit of Work: UOW-987, updated by UOW-988
 
 ## Purpose
 
@@ -37,25 +37,18 @@ The staged loader extracts XML `start_npc_ids`, extracts direct Java handler `re
 
 | Metric | Count |
 |---|---:|
-| Total staged start sources | 5184 |
+| Total staged start sources | 5214 |
 | XML quest-script sources | 4400 |
-| Java handler sources | 784 |
-| Unresolved Java handler registrations | 6 |
+| Java handler sources | 814 |
+| Unresolved Java handler registrations | 0 |
 | Distinct NPC ids across resolved sources | 1668 |
-| Distinct quest ids across resolved sources | 4497 |
+| Distinct quest ids across resolved sources | 4503 |
 
 ## Unresolved Java Handler Registrations
 
-All unresolved rows are the current `butlerId` pattern. The extractor does not guess these because `butlerId` is not resolved by the current literal/simple-assignment/array-index subset.
+None in the current repository-data audit.
 
-| Java Handler | Line | NPC Expression | Quest Expression | Reason |
-|---|---:|---|---|---|
-| `game-server/data/handlers/quest/oriel/_18806HeartofRock.java` | 41 | `butlerId` | `questId` | Unsupported expression |
-| `game-server/data/handlers/quest/oriel/_18821AlmostForgotMyBlessings.java` | 41 | `butlerId` | `questId` | Unsupported expression |
-| `game-server/data/handlers/quest/oriel/_18828UserFriendly.java` | 43 | `butlerId` | `questId` | Unsupported expression |
-| `game-server/data/handlers/quest/pernon/_28806WiltingFlowersFallingTears.java` | 41 | `butlerId` | `questId` | Unsupported expression |
-| `game-server/data/handlers/quest/pernon/_28821YourButlerGift.java` | 41 | `butlerId` | `questId` | Unsupported expression |
-| `game-server/data/handlers/quest/pernon/_28828TheManyFacetsOfFriendship.java` | 43 | `butlerId` | `questId` | Unsupported expression |
+UOW-988 resolved the previous six `butlerId` rows by adding support for the deterministic Java pattern where handlers populate a static integer set through `butlers.add(...)`, iterate it with `Iterator<Integer>.next()` or enhanced `for`, and call `registerQuestNpc(butlerId).addOnQuestStart(questId)`.
 
 ## Interpretation
 
@@ -65,10 +58,10 @@ Known limitations:
 
 - Java reflection/classloading behavior is not executed.
 - JAXB model loading and schema validation are not executed.
-- Java handler dynamic expressions remain unresolved unless supported explicitly.
+- Java handler dynamic expressions remain unresolved unless supported explicitly, but the current real-data audit has no unresolved rows.
 - XML extraction still focuses only on NPC start registrations, not talk/kill/end/distance/zone registrations.
 - Candidate calculation, `QuestService.checkStartConditions`, level-difference marker calculation, and `SM_NEARBY_QUESTS` sending remain unimplemented for runtime nearby refresh.
 
 ## Next Recommended Unit
 
-Resolve the six `butlerId` handler registrations by inspecting the Java housing/butler quest pattern and adding a conservative extraction rule only if the Java source makes the value deterministic. Keep production startup and nearby-refresh dispatch disabled.
+Continue with a staged candidate-population prerequisite, such as building a table-population adapter from the audited loader output into `QuestNpcStartTable`, or begin nearby quest candidate filtering. Keep production startup and nearby-refresh dispatch disabled until start-condition evaluation exists.
