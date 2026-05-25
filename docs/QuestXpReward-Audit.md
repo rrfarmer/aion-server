@@ -1,4 +1,4 @@
-# Quest XP Reward Audit - UOW-1044/UOW-1056
+# Quest XP Reward Audit - UOW-1044/UOW-1057
 
 Date: May 25, 2026
 
@@ -26,6 +26,10 @@ Date: May 25, 2026
 - `game-server/src/com/aionemu/gameserver/dataholders/SkillTreeData.java#getTemplatesFor`
 - `game-server/src/com/aionemu/gameserver/services/reward/StarterKitService.java#onLevelUp`
 - `game-server/src/com/aionemu/gameserver/configs/main/CustomConfig.java#ENABLE_STARTER_KIT`
+- `game-server/src/com/aionemu/gameserver/services/BonusPackService.java#addPlayerCustomReward`
+- `game-server/src/com/aionemu/gameserver/services/FactionPackService.java#addPlayerCustomReward`
+- `game-server/src/com/aionemu/gameserver/dao/BonusPackDAO.java`
+- `game-server/src/com/aionemu/gameserver/dao/FactionPackDAO.java`
 
 ## Java Behavior Summary
 
@@ -189,13 +193,26 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - Disabled starter-kit config, missing player, empty level ranges, and no matching reward levels are explicit non-live planner statuses.
 - The staged XP execution plan still records starter kit as a descriptor only; this sub-plan is not composed into `QuestXpExecutionPlanService`.
 
+## C# State After UOW-1057
+
+- Added non-live `CustomLevelRewardPlanService.CreateBonusPackPlan`.
+- Added non-live `CustomLevelRewardPlanService.CreateFactionPackPlan`.
+- The planner stages Java `BonusPackService.addPlayerCustomReward` and `FactionPackService.addPlayerCustomReward` without writing DAO rows or sending live mail:
+  1. Applies Java level-65 and mailbox-capacity guards.
+  2. Records one-per-account DAO load/store gates from `BonusPackDAO` and `FactionPackDAO`.
+  3. Preserves Java bonus-pack reward item ids/counts and express system-mail metadata.
+  4. Preserves Java faction-pack reward item ids/counts, Elyos/Asmodian account creation windows, and opposite-race item-template skip behavior.
+  5. Records future `SystemMailService.sendMail` intent with Java sender/title/body, item id/count, zero kinah, and express letter type.
+- The planner takes account creation local time, DAO results, and optional item templates as explicit inputs because the live account object, DAO, server-time conversion, and `DataManager.ITEM_DATA` dependencies are not wired into XP execution.
+- The staged XP execution plan still records bonus/faction packs as descriptors only; this sub-plan is not composed into `QuestXpExecutionPlanService`.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
 - XP live mutation is not wired into quest finish; UOW-1045 only composes non-live operation metadata.
 - `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are ported for the XP reward messages used by `PlayerCommonData.addExp`, and `QuestXpRewardPlan` can now produce ordered non-live packet metadata.
 - `SM_STATUPDATE_EXP` is now represented by staged execution metadata, but no packet instance is created or sent from the XP execution plan.
-- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant, upgrade-player sub-plan, NPC faction level-up sub-plan, QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent, guide HTML sub-plan, skill auto-learn sub-plan, and starter-kit sub-plan now exist, but stat recalculation, max-stat calculation, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML packets/persistence, live starter-kit mail sends, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
+- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant, upgrade-player sub-plan, NPC faction level-up sub-plan, QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent, guide HTML sub-plan, skill auto-learn sub-plan, starter-kit sub-plan, and custom bonus/faction reward sub-plan now exist, but stat recalculation, max-stat calculation, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML packets/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
 - The C# plan uses the current C# `Player.Level` as the previous/display level input. Java derives and updates level through `PlayerCommonData.setExp`; this needs verification before live mutation.
 - No-exp state and Daeva/non-Daeva cap are explicit method inputs because equivalent C# player state is not fully modeled.
 - Repose and salvation formulas are source-reviewed and unit-tested, but edge cases around negative XP, large XP, unusual float rates, and live max-repose updates still need runtime verification.
@@ -230,7 +247,11 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `StarterKitLevelChangePlanServiceTests.CreatePlan_StagesJavaStarterKitLevelBucketsInInclusiveOrder`
 - `StarterKitLevelChangePlanServiceTests.CreatePlan_RecordsDisabledEmptyNoMatchAndMissingPlayerBranches`
 - `StarterKitLevelChangePlanServiceTests.RewardBuckets_MatchJavaStarterKitStaticItems`
+- `CustomLevelRewardPlanServiceTests.CreateBonusPackPlan_StagesJavaBonusPackMailRewards`
+- `CustomLevelRewardPlanServiceTests.CreateBonusPackPlan_RecordsJavaGuardBranches`
+- `CustomLevelRewardPlanServiceTests.CreateFactionPackPlan_StagesWindowAndOppositeRaceTemplateFiltering`
+- `CustomLevelRewardPlanServiceTests.CreateFactionPackPlan_RecordsCreationWindowDaoAndCapacityBranches`
 
 ## Next Recommendation
 
-Add another focused non-live side-effect sub-plan or audit behind staged XP execution, such as composing existing level-change sub-plans into XP execution metadata or auditing bonus/faction custom rewards. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit mail sends, live NPC faction mutation, custom rewards, and persistence behavior are modeled.
+Compose existing level-change sub-plans into XP execution metadata only after choosing a stable context shape for player/account/DAO/static-data inputs, or add concrete mail/DAO prerequisites. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
