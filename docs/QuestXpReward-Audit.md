@@ -1,4 +1,4 @@
-# Quest XP Reward Audit - UOW-1044/UOW-1053
+# Quest XP Reward Audit - UOW-1044/UOW-1054
 
 Date: May 25, 2026
 
@@ -14,6 +14,10 @@ Date: May 25, 2026
 - `game-server/src/com/aionemu/gameserver/controllers/PlayerController.java#onLevelChange`
 - `game-server/src/com/aionemu/gameserver/model/gameobjects/player/npcFaction/NpcFactions.java#onLevelUp`
 - `game-server/src/com/aionemu/gameserver/questEngine/QuestEngine.java#onLevelChanged`
+- `game-server/src/com/aionemu/gameserver/services/HTMLService.java#sendGuideHtml`
+- `game-server/src/com/aionemu/gameserver/dataholders/GuideHtmlData.java#getTemplatesFor`
+- `game-server/src/com/aionemu/gameserver/configs/main/HTMLConfig.java#ENABLE_GUIDES`
+- `game-server/src/com/aionemu/gameserver/network/aion/serverpackets/SM_QUESTIONNAIRE.java`
 - `game-server/src/com/aionemu/gameserver/services/SkillLearnService.java#learnNewSkills`
 
 ## Java Behavior Summary
@@ -140,13 +144,25 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - C# now reports packet-send intent for `Ready`, `NoWorldQuestIds`, and `NoMarkers` plans.
 - C# still treats missing world instance or missing quest template table as guarded planner blockers because live controller context is not wired.
 
+## C# State After UOW-1054
+
+- Added non-live `GuideHtmlLevelChangePlanService.CreatePlan`.
+- The planner stages Java `PlayerController.onLevelChange -> HTMLService.sendGuideHtml` behavior without allocating ids, sending packets, writing guide rows, or rendering HTML:
+  1. Applies the Java outer gates: `HTMLConfig.ENABLE_GUIDES` and `player.isSpawned()`.
+  2. Preserves the Java inclusive level loop from `fromLevel` through `toLevel`.
+  3. Preserves `GuideHtmlData.getTemplatesFor` order for each level: class+race, class+`PC_ALL`, all-class+race, all-class+`PC_ALL`.
+  4. Records inactive `GuideTemplate.isActivated() == false` skips.
+  5. Records future side-effect intent for `IDFactory.nextId`, `SM_QUESTIONNAIRE` chunk sends through `HTMLService.sendData`, and `GuideDAO.saveGuide`.
+- Missing guide static data, disabled guides, unspawned players, and empty level ranges are explicit non-live planner statuses.
+- The staged XP execution plan still records guide HTML as a descriptor only; this sub-plan is not composed into `QuestXpExecutionPlanService`.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
 - XP live mutation is not wired into quest finish; UOW-1045 only composes non-live operation metadata.
 - `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are ported for the XP reward messages used by `PlayerCommonData.addExp`, and `QuestXpRewardPlan` can now produce ordered non-live packet metadata.
 - `SM_STATUPDATE_EXP` is now represented by staged execution metadata, but no packet instance is created or sent from the XP execution plan.
-- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant, upgrade-player sub-plan, NPC faction level-up sub-plan, QuestEngine level-change callback dispatch sub-plan, and nearby quest empty-packet intent now exist, but stat recalculation, max-stat calculation, live nearby quest refresh, live quest handler execution, skills, guide, starter-kit, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
+- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant, upgrade-player sub-plan, NPC faction level-up sub-plan, QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent, and guide HTML sub-plan now exist, but stat recalculation, max-stat calculation, live nearby quest refresh, live quest handler execution, skills, live guide HTML packets/persistence, starter-kit, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
 - The C# plan uses the current C# `Player.Level` as the previous/display level input. Java derives and updates level through `PlayerCommonData.setExp`; this needs verification before live mutation.
 - No-exp state and Daeva/non-Daeva cap are explicit method inputs because equivalent C# player state is not fully modeled.
 - Repose and salvation formulas are source-reviewed and unit-tested, but edge cases around negative XP, large XP, unusual float rates, and live max-repose updates still need runtime verification.
@@ -174,7 +190,9 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `QuestLevelChangedCallbackPlanServiceTests.CreatePlan_TreatsEveryNonCompleteQuestStateAsDispatchableLikeJava`
 - `QuestLevelChangedCallbackPlanServiceTests.CreatePlan_RecordsNoRegisteredNoDispatchAndMissingRegistrationBranches`
 - `NearbyQuestRefreshPlanServiceTests.CreatePlan_MatchesJavaEmptyNearbyQuestPacketIntent`
+- `GuideHtmlLevelChangePlanServiceTests.CreatePlan_StagesJavaGuideTemplateOrderAndPersistenceIntent`
+- `GuideHtmlLevelChangePlanServiceTests.CreatePlan_RecordsJavaConfigSpawnedMissingRangeAndInactiveBranches`
 
 ## Next Recommendation
 
-Add another focused non-live side-effect sub-plan or audit behind staged XP execution, such as composing existing level-change sub-plans into XP execution metadata or auditing guide HTML / skill auto-learn ordering. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, skill learning, live NPC faction mutation, custom rewards, and persistence behavior are modeled.
+Add another focused non-live side-effect sub-plan or audit behind staged XP execution, such as skill auto-learn ordering or composition of existing level-change sub-plans into XP execution metadata. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, skill learning, live guide HTML send/persistence, live NPC faction mutation, custom rewards, and persistence behavior are modeled.
