@@ -29003,6 +29003,59 @@ Next recommended unit of work:
 
 ---
 
+### Session 905 (May 25, 2026)
+- Continued after UOW-904 by performing Parallel Work Discovery across charge-all AP cap coverage, remaining AP caller wiring, Legion domain analysis, and Java runtime artifact capture.
+- Selected a compact charge-all AP cap regression because the remaining production AP callers still require broader Trade, Quest, PvP, NPC reward, and purification systems.
+- Reused the Java cap edge case from UOW-904 for the charge-all confirmation path: AP `1600`, payment `500`, cap `1000` produces actual delta `-600` and AP-use message amount `600`.
+- Added `HandleQuestionResponseAsync_ChargeAllApPaymentHonorsConfiguredAbyssPointCapClamp`.
+- Extended `EmptyPlayerEnterWorldRepository` with `ChargeAllPaymentAbyssRank` capture so the regression verifies the capped rank handed to charge-all persistence.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests --no-restore` passed with 44 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1483 tests.
+
+#### Migration Parity Table - Session 905
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemChargeService.startChargingEquippedItems` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleChargeAllQuestionResponseAsync` / `PendingChargeAllRequest` | Service / Handler | Partial | Regression Tested in C# | Partial Parity | Charge-all AP conditioning payment now has cap-enabled confirmation coverage for Java's above-cap negative-payment clamp. Multi-item charge-all cap coverage, mixed charge bars, and observer-driven burn behavior remain partial. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler` | `Aion.GameServer.Model.GameObjects.QuestionResponseRegistry` | Request / Response Registry | Partial | Regression Tested in C# | Needs Verification | Test seeds and accepts a charge-all request like Java `RequestResponseHandler.acceptRequest`. Concurrent request expiry/replacement behavior remains unverified. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `Aion.GameServer.Services.AbyssPointsService` | Service | Partial | Unit + Regression Tested in C# | Partial Parity | Regression exercises planner cap support through charge-all AP payment. Full Legion contribution fanout, siege callback execution, large-AP logging, and other AP callers remain incomplete. |
+| `com.aionemu.gameserver.model.gameobjects.player.AbyssRank` | `Aion.GameServer.Model.GameObjects.PlayerAbyssRank` | Model | Partial | Unit + Regression Tested in C# | Partial Parity | Regression validates Java's cap math when charge-all AP payment starts above cap: AP `1600`, payment `500`, cap `1000` results in AP `1000` and actual removed delta `600`. Daily/weekly AP reset timing and persistent-state flags remain unmodeled. |
+| `com.aionemu.gameserver.configs.main.CustomConfig` | `Aion.GameServer.Configuration.GameServerCustomOptions` / `GameServerOptions` | Configuration | Partial | Regression Tested through connection fixture options | Needs Verification | Test supplies Java-equivalent cap options directly and verifies they reach charge-all AP conditioning payment. Config file/environment loading was not newly tested here. |
+| `com.aionemu.gameserver.dao.AbyssRankDAO` / charge-all persistence boundary | `Aion.GameServer.Data.PlayerEnterWorldRepository.SaveItemChargeAllMutationAsync` / `EmptyPlayerEnterWorldRepository.ChargeAllPaymentAbyssRank` | Repository Boundary / Test Support | Partial | Regression Tested through test double | Needs Verification | Test-helper capture verifies capped rank AP `1000` handed to charge-all persistence. Live SQL transaction/autocommit behavior and rollback ordering were not Java-runtime compared. |
+| `com.aionemu.gameserver.model.items.ChargeInfo` | `Aion.GameServer.Model.GameObjects.InventoryItem.Charge` / `ItemChargeService.Level1ChargePoints` | Model / Value Object | Partial | Regression Tested in C# | Needs Verification | Regression validates the equipped item still reaches Java level-1 conditioning points while AP is cap-clamped. Burn/depletion behavior is outside this slice. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Regression validates `STR_MSG_USE_ABYSSPOINT` (`1300965`) carries actual capped removed delta `600`, not requested payment `500`, followed by charge success/all-complete messages. No Java byte comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRank` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Regression validates rank packet emission after cap-clamped charge-all AP payment. Ranking-position lookup and byte comparison remain unavailable. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryUpdateItem` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Regression validates charge update packet remains emitted after cap-clamped charge-all AP payment. Update-mask bytes were not Java-runtime compared. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleQuestionResponseAsync_ChargeAllApPaymentHonorsConfiguredAbyssPointCapClamp` | Regression | Java `ItemChargeService.startChargingEquippedItems`, `RequestResponseHandler.acceptRequest`, `processAPPayment`, `AbyssPointsService.addAp`, `AbyssRank.addAp`, and `CustomConfig` source review | Validates charge-all AP confirmation with cap enabled clamps AP `1600` to `1000`, persists that capped rank, clears the pending request, sends AP-use amount `600`, charges the equipped item to level 1, and emits rank/charge/stats/all-complete packets. | Deterministic C# connection-level regression grounded in Java source. | No Java runtime artifact; no byte-level packet comparison; no multi-item charge-all cap coverage. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Remaining Java AP callers in Trade, Quest, PvP, NPC reward, item purification, and distribution systems still need convergence through `AbyssPointsService`.
+- Multi-item charge-all cap ordering, mixed charge bars, and partial item filtering remain covered only by existing non-cap or service-level tests.
+- Java daily/weekly AP reset behavior, persistent-state flags, full Legion contribution fanout, ranking cache, and siege callback execution remain incomplete.
+- Packet bytes were not compared against Java runtime output.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 0 new production gameplay artifacts; 1 charge-all AP cap integration regression plus 1 test-helper persistence capture added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 7 blocked/not-started categories, including Java runtime artifact generation, remaining AP caller convergence, persistent-state/reset timing, full Legion contribution fanout, ranking cache/siege execution, multi-item charge-all cap runtime parity, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit closes the charge-all AP cap integration coverage gap from UOW-904.
+
+Next recommended unit of work:
+- Continue AP caller convergence by inspecting C# coverage for Java `TradeService`, `QuestService`, `PvpService`, `NpcController`, and `ItemPurificationService` AP usages; wire the smallest already-ported AP reward/spend path through `AbyssPointsService` if one is compact.
+- If AP caller work remains too broad, continue isolated Legion domain groundwork or choose another independent non-AP Phase 6 slice.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
 1. Continue AP caller convergence on `AbyssPointsService`: inspect C# coverage for Java `TradeService`, `QuestService`, `PvpService`, `NpcController`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
