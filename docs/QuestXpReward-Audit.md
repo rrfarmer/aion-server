@@ -1,4 +1,4 @@
-# Quest XP Reward Audit - UOW-1044/UOW-1055
+# Quest XP Reward Audit - UOW-1044/UOW-1056
 
 Date: May 25, 2026
 
@@ -24,6 +24,8 @@ Date: May 25, 2026
 - `game-server/src/com/aionemu/gameserver/model/skill/PlayerSkillList.java#addSkill`
 - `game-server/src/com/aionemu/gameserver/model/skill/PlayerSkillList.java#removeSkill`
 - `game-server/src/com/aionemu/gameserver/dataholders/SkillTreeData.java#getTemplatesFor`
+- `game-server/src/com/aionemu/gameserver/services/reward/StarterKitService.java#onLevelUp`
+- `game-server/src/com/aionemu/gameserver/configs/main/CustomConfig.java#ENABLE_STARTER_KIT`
 
 ## Java Behavior Summary
 
@@ -176,13 +178,24 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - Missing skill tree/static skill templates, missing player, and empty level ranges are explicit non-live planner statuses.
 - The staged XP execution plan still records skill auto-learn as a descriptor only; this sub-plan is not composed into `QuestXpExecutionPlanService`.
 
+## C# State After UOW-1056
+
+- Added non-live `StarterKitLevelChangePlanService.CreatePlan`.
+- The planner stages Java `PlayerController.onLevelChange -> StarterKitService.onLevelUp` behavior without creating system-mail rows or sending live mail:
+  1. Applies the Java caller gate equivalent to `CustomConfig.ENABLE_STARTER_KIT`.
+  2. Preserves Java inclusive level iteration from `fromLevel` through `toLevel`.
+  3. Preserves fixed `LinkedHashMap` reward bucket order for levels 1, 20, 25, 35, 50, and 60.
+  4. Records future `SystemMailService.sendMail` intent with Java sender, title, body, item id/count, zero kinah, and express letter type.
+- Disabled starter-kit config, missing player, empty level ranges, and no matching reward levels are explicit non-live planner statuses.
+- The staged XP execution plan still records starter kit as a descriptor only; this sub-plan is not composed into `QuestXpExecutionPlanService`.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
 - XP live mutation is not wired into quest finish; UOW-1045 only composes non-live operation metadata.
 - `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are ported for the XP reward messages used by `PlayerCommonData.addExp`, and `QuestXpRewardPlan` can now produce ordered non-live packet metadata.
 - `SM_STATUPDATE_EXP` is now represented by staged execution metadata, but no packet instance is created or sent from the XP execution plan.
-- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant, upgrade-player sub-plan, NPC faction level-up sub-plan, QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent, guide HTML sub-plan, and skill auto-learn sub-plan now exist, but stat recalculation, max-stat calculation, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML packets/persistence, starter-kit, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
+- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant, upgrade-player sub-plan, NPC faction level-up sub-plan, QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent, guide HTML sub-plan, skill auto-learn sub-plan, and starter-kit sub-plan now exist, but stat recalculation, max-stat calculation, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML packets/persistence, live starter-kit mail sends, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
 - The C# plan uses the current C# `Player.Level` as the previous/display level input. Java derives and updates level through `PlayerCommonData.setExp`; this needs verification before live mutation.
 - No-exp state and Daeva/non-Daeva cap are explicit method inputs because equivalent C# player state is not fully modeled.
 - Repose and salvation formulas are source-reviewed and unit-tested, but edge cases around negative XP, large XP, unusual float rates, and live max-repose updates still need runtime verification.
@@ -214,7 +227,10 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `GuideHtmlLevelChangePlanServiceTests.CreatePlan_RecordsJavaConfigSpawnedMissingRangeAndInactiveBranches`
 - `SkillAutoLearnPlanServiceTests.CreateAutoLearnPlan_StagesJavaReverseLevelLoopStartingClassBackfillAndDaevaGatheringUpgrade`
 - `SkillAutoLearnPlanServiceTests.CreateAutoLearnPlan_RecordsMissingInputsNoChangesAndAlreadyKnownBranches`
+- `StarterKitLevelChangePlanServiceTests.CreatePlan_StagesJavaStarterKitLevelBucketsInInclusiveOrder`
+- `StarterKitLevelChangePlanServiceTests.CreatePlan_RecordsDisabledEmptyNoMatchAndMissingPlayerBranches`
+- `StarterKitLevelChangePlanServiceTests.RewardBuckets_MatchJavaStarterKitStaticItems`
 
 ## Next Recommendation
 
-Add another focused non-live side-effect sub-plan or audit behind staged XP execution, such as composing existing level-change sub-plans into XP execution metadata or auditing bonus/faction custom rewards and starter-kit ordering. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live NPC faction mutation, custom rewards, and persistence behavior are modeled.
+Add another focused non-live side-effect sub-plan or audit behind staged XP execution, such as composing existing level-change sub-plans into XP execution metadata or auditing bonus/faction custom rewards. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit mail sends, live NPC faction mutation, custom rewards, and persistence behavior are modeled.
