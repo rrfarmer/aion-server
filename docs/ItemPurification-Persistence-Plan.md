@@ -56,7 +56,7 @@ Current C# behavior:
 
 Add an ItemPurification-specific repository method rather than a broad generic inventory transaction.
 
-Implementation status as of UOW-954: the method signature, empty-repository recording stub, MySQL repository method, and pure persistence payload mapper exist. Automatic handler invocation remains disabled, and inherited target `item_stones` row persistence is still incomplete.
+Implementation status as of UOW-955: the method signature, empty-repository recording stub, MySQL repository method, pure persistence payload mapper, and inserted-item `item_stones` row persistence exist. Automatic handler invocation remains disabled, real DB integration verification is still missing, and quest/AP side-effect execution remains incomplete.
 
 Recommended signature:
 
@@ -113,6 +113,6 @@ Recommended focused tests:
 - Java runtime packet/DB capture is still unavailable locally.
 - C# does not model Java `PersistentState`, `Storage.deletedItems`, `QuestEngine.onItemRemoved`, or `QuestEngine.onItemGet`.
 - AP side-effect execution is still only represented as `AbyssPointsAddPlan` metadata. Rank-limit equipment checks, abyss skill updates, Legion contribution, Siege callback, and packet fanout are not persisted/executed here.
-- `InsertInventoryItemAsync` persists inventory rows but does not insert inherited socket/godstone/fusion/idian rows for newly copied purification targets. This must be solved before real persistence of inherited target items is considered complete.
+- `InsertInventoryItemAsync` now inserts inherited socket/godstone/fusion/idian rows for newly copied purification targets, but this has unit coverage for row mapping only. Live DB integration and Java runtime comparison are still missing.
 - Threading differs: Java `ItemStorage` uses a `ConcurrentHashMap` and storage queues; C# currently replaces immutable snapshots on the `Player`.
 - Transaction behavior differs if C# commits all writes atomically; this should remain an intentional safety difference unless runtime Java behavior proves partial commits are required.
