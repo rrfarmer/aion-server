@@ -30176,9 +30176,62 @@ Next recommended unit of work:
 
 ---
 
+### Session 925 (May 25, 2026)
+- Continued after UOW-924 by selecting the narrow non-persistent `CM_ITEM_PURIFICATION` packet parser slice.
+- Parallel Work Discovery considered packet parser/guard work, a persistence application plan, live purification integration, and read-only Java/C# analysis. Two read-only explorer agents audited packet fields and persistence patterns; both were closed after reporting.
+- Added `CmItemPurification` for Java opcode `247` / `[C_ITEM_UPGRADE]`.
+- Registered opcode `247` as `InGame` only in `GameClientPacketFactory`, matching Java `AionClientPacketFactory`.
+- Ported Java `readImpl` field order exactly as eight `readD()` values:
+  - player object id
+  - base/upgraded item object id
+  - result item id
+  - five required-material object ids
+- Preserved the required-material object ids in the C# packet model but documented that Java `runImpl` ignores them and decreases materials by item id.
+- Kept live `GameServerConnection` dispatch, inventory lookup, workflow execution, persistence, AP/rank mutation, system messages, and packet fanout out of scope.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter ClientPacketFactory_ParsesItemPurificationPacket` passed with 1 test.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1581 tests.
+
+#### Migration Parity Table - Session 925
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_ITEM_PURIFICATION` | `Aion.GameServer.Network.Aion.ClientPackets.CmItemPurification` | Client Packet DTO / Parser | Partial | Regression Tested in C# | Partial Parity | Parser covers Java `readImpl` byte field order and InGame registration. Live `runImpl` dispatch, active-player lookup, base-item resolution, validation/mutation/upgrade calls, system messages, persistence, and packet fanout remain unported. Java ignores packet player id and required-material object ids; C# preserves them for inspection but future handlers must ignore them for parity. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` | Packet Factory | Partial | Regression Tested in C# | Partial Parity | Opcode `247` now maps to `CmItemPurification` in `InGame` state only. Other factory behavior is outside this unit. |
+| `com.aionemu.gameserver.services.item.ItemPurificationService` | Existing ItemPurification planner services, not invoked by this unit | Service Boundary | Partial | No New Service Tests in this unit | Needs Verification | Java `runImpl` calls `isPurificationAllowed`, `decreaseMaterials`, then `upgradeItem`. This unit does not wire those calls into the live packet handler. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ClientPacketFactory_ParsesItemPurificationPacket` | Regression | Java `CM_ITEM_PURIFICATION.readImpl` and `AionClientPacketFactory` source review | Validates opcode `247`, InGame-only state, eight dword field order, result item id, base item object id, player object id, and five material object ids. | Deterministic C# packet parser regression grounded in Java source. | Does not execute Java `runImpl` or compare encrypted client bytes. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Packet parsing is covered, but live `GameServerConnection` handling is still absent.
+- Future live handler must ignore packet `playerObjectId` and required-material object ids, using the active player and material item ids instead.
+- Java can throw/null-deref if the base item cannot be resolved; existing C# planners normalize missing base item to a status. Any live difference needs explicit documentation.
+- Persistence, target object-id allocation, AP rank side effects, kinah behavior, random-bonus selection, inventory packets, system messages, and byte-level packet comparisons remain unimplemented.
+- Required `docs/commit-conventions.md` is still missing; commit format continues to follow `docs/orchestration-rules.md`.
+
+Summary metrics:
+- Total Java artifacts discovered: 3
+- Total artifacts ported: 1 packet parser/registration slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, live packet handler, repository persistence, object-id allocation/factory add, AP/rank side effects, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 68% complete; this unit adds the packet parser surface but not live purification behavior.
+
+Next recommended unit of work:
+- Add a non-persistent `GameServerConnection` guard adapter for `CmItemPurification` that resolves the base item from the active player, ignores packet material/player object ids for Java parity, calls the composed workflow planner, and returns without applying mutations or sending success packets.
+- Alternatively add a persistence application plan for the composed workflow that enumerates repository mutations without executing them.
+- Do not wire live mutation/fanout until object-id allocation, inventory add, AP rank side effects, kinah parity decision, and packet ordering are scoped together.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, and the composed ItemPurification workflow planner now consume their configured/fixed/formula AP and item-state boundaries at planner/service boundaries. Move next to a non-persistent `CM_ITEM_PURIFICATION` parser/guard adapter, a persistence application plan for the composed workflow, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, and the `CM_ITEM_PURIFICATION` packet parser now consume their configured/fixed/formula AP and item-state boundaries at planner/parser boundaries. Move next to a non-persistent `GameServerConnection` guard adapter for `CmItemPurification`, a persistence application plan for the composed workflow, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
