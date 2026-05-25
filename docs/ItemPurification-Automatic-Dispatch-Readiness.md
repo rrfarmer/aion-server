@@ -133,6 +133,8 @@ UOW-972 emits the explicit live-path rank-limit unequip fanout after the equipme
 
 UOW-973 invokes `AbyssSkillService.UpdateSkills` from explicit ItemPurification live execution after the equipment rank-limit pass when AP spend changes rank. The explicit path now mutates `player.Skills` and sends modeled `SmSkillRemove` and `SmSkillList` packets for the resulting deltas. Automatic production dispatch remains disabled, and the AP gate is still open for skill persistence, broader SkillEngine effect apply/remove fanout, configured transform-min-rank plumbing from production options, and Java runtime packet/order comparison.
 
+UOW-975 plumbs `GameServerOptions.Custom.TopRankingXformMinRank` into the explicit ItemPurification live and persistent live helper paths from `GameServerConnection`. The static live-execution service keeps `AbyssSkillService.DefaultTransformMinRank` as its direct-call default. Automatic production dispatch remains disabled, and the AP gate is still open for skill persistence, broader SkillEngine effect apply/remove fanout, and Java runtime packet/order comparison.
+
 ### 5. Packet Ordering And Runtime Comparison
 
 Required before automatic dispatch:

@@ -68,6 +68,7 @@ Current C# status:
 - UOW-971 runs `EquipmentService.CheckRankLimitItems` from the explicit live-execution helper at the AP rank-change point, mutates the player inventory when rank-limited equipment is unequipped, and exposes the `EquipmentChangeResult`. It still does not send the unequip packet fanout, persist the unequipped rows, or refresh abyss skills.
 - UOW-972 sends explicit live-execution rank-limit unequip fanout after the rank-limit state mutation: owner `SmInventoryUpdateItem` equip/unequip packets, `SmSystemMessage.UnequipRankItem` messages, and visible-player `SmUpdatePlayerAppearance` broadcasts when `EquipmentChangeResult.BroadcastAppearance` is true. It still does not persist the unequipped rows, refresh stats, or execute abyss skills in this path.
 - UOW-973 runs `AbyssSkillService.UpdateSkills` from explicit live execution after the equipment rank-limit pass when AP spend changes rank, mutates `player.Skills`, and sends `SmSkillRemove` / `SmSkillList` packets for the modeled skill deltas. It still does not execute broader SkillEngine effect fanout, persist skill rows, or compare against Java runtime artifacts.
+- UOW-975 plumbs the configured `GameServerOptions.Custom.TopRankingXformMinRank` from `GameServerConnection` into explicit ItemPurification live and persistent live execution. The static helper still defaults to `AbyssSkillService.DefaultTransformMinRank` for isolated tests and direct callers.
 - `ItemPurificationPersistentLiveExecutionService.ExecuteAsync` persists inventory mutation and updated abyss rank together, but does not execute rank-change side-effect services.
 
 AP parity gaps:
@@ -75,7 +76,7 @@ AP parity gaps:
 - AP spend player packets are emitted by explicit ItemPurification live execution, but no Java runtime packet-byte/order artifact exists yet.
 - Rank update broadcast is emitted from explicit ItemPurification live execution, but no Java runtime packet-byte/order artifact exists yet.
 - Equipment rank-limit unequip is invoked from explicit ItemPurification live execution, mutates in-memory equipment state, and emits the current C# equip/unequip packet fanout. Persistence and Java runtime ordering/byte comparison are not wired in this path.
-- Abyss skill refresh is invoked from explicit ItemPurification live execution and emits modeled skill add/remove packets, but broader SkillEngine effect fanout, skill persistence, configured transform-rank override plumbing, and Java runtime comparison remain missing.
+- Abyss skill refresh is invoked from explicit ItemPurification live execution and emits modeled skill add/remove packets. The connection-level explicit helpers now pass the configured transform-rank minimum, but broader SkillEngine effect fanout, skill persistence, and Java runtime comparison remain missing.
 - Legion contribution is correctly absent for spend.
 - Siege callback is correctly absent for purification's plain AP spend path.
 - Ranking cache behavior and AP/login rank-limited equipment passes remain outside this dispatch scope.
