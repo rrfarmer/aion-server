@@ -71,10 +71,11 @@ Java remains the source of truth. This document is read-only and does not implem
 - `PlayerQuestState` preserves nullable `NextRepeatTime` and `CompleteTime`.
 - `MySqlPlayerEnterWorldRepository.LoadPlayerQuestsAsync` hydrates `next_repeat_time` and `complete_time`.
 - `NearbyQuestStartConditionService` uses loaded `NextRepeatTime` for the already-completed nearby repeat check.
+- UOW-1010 adds `QuestRepeatDateService.CalculateNextRepeatTime`, a pure calculator for Java server-time 09:00 daily/weekly reset selection. It is not wired to quest completion yet.
 
 ## C# Gaps
 
-- No C# quest-finish service calculates or persists `next_repeat_time`.
+- No C# quest-finish service calls the pure calculator or persists `next_repeat_time`.
 - No C# implementation uses configured server timezone equivalent to Java `GSConfig.TIME_ZONE_ID`.
 - No C# packet bridge sends Java daily/weekly reset system messages.
 - No C# quest completion path increments `CompleteCount`, sets `CompleteTime`, clears vars, sends `SM_QUEST_ACTION`, calls quest-completed handlers, updates NPC faction completion state, or triggers nearby quest refresh.
@@ -82,19 +83,9 @@ Java remains the source of truth. This document is read-only and does not implem
 
 ## Recommended Implementation Slice
 
-1. Add a pure repeat-date calculator that accepts:
-   - current server time as `DateTimeOffset`
-   - server timezone or offset policy
-   - repeat-cycle tokens
-2. Match Java reset candidate behavior around 09:00:
-   - before 09:00: same-day 09:00
-   - exactly 09:00: same-day 09:00 because Java checks `isAfter`
-   - after 09:00: next-day 09:00
-3. Match weekly selection:
-   - use the reset candidate's weekday, not the original current day before after-09:00 adjustment
-   - choose the first sorted configured weekday `>=` candidate weekday
-   - otherwise wrap to first configured weekday next week
-4. Keep quest-finish mutation and packets out of scope until the pure calculator is tested.
+1. Wire `QuestRepeatDateService.CalculateNextRepeatTime` into a future quest-finish service only after that service has an explicit server-timezone policy.
+2. Add daylight-saving transition tests once the production timezone source is selected.
+3. Keep quest-finish mutation and packets out of scope until the pure calculator is integrated behind a staged quest-completion boundary.
 
 ## Remaining Risks
 
