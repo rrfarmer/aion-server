@@ -1,4 +1,4 @@
-# Quest XP Reward Audit - UOW-1044/UOW-1058
+# Quest XP Reward Audit - UOW-1044/UOW-1059
 
 Date: May 25, 2026
 
@@ -224,13 +224,30 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - Sub-plan metadata is only attached when the XP reward plan changes level, matching Java `PlayerController.onLevelChange` being skipped when old and new levels are equal.
 - The context still requires callers to construct sub-plans explicitly; no live level-change side effects execute and no supporting DAO/mail/static-data dependencies are invoked by XP execution.
 
+## C# State After UOW-1059
+
+- Added non-live `QuestXpLevelChangeContextFactoryService.CreateContext`.
+- Added `QuestXpLevelChangeContextFactoryInput` as a snapshot-style input object for level-change sub-plan prerequisites.
+- The factory builds a `QuestXpLevelChangeCompositionContext` from a supplied player and explicit runtime/static-data inputs without executing live side effects:
+  1. `PlayerLevelChangeUpgradePlanService.CreatePlan`
+  2. `NpcFactionLevelUpPlanService.CreatePlan`
+  3. `QuestLevelChangedCallbackPlanService.CreatePlan`
+  4. `NearbyQuestRefreshPlanService.CreatePlan`
+  5. `GuideHtmlLevelChangePlanService.CreatePlan`
+  6. `SkillLearnService.CreateAutoLearnPlan`
+  7. `CustomLevelRewardPlanService.CreateBonusPackPlan`
+  8. `CustomLevelRewardPlanService.CreateFactionPackPlan`
+  9. `StarterKitLevelChangePlanService.CreatePlan`
+- Missing player/dependency inputs produce guarded sub-plans rather than live behavior.
+- The factory still requires callers to provide DAO outcomes, account creation local time, guide/static templates, skill/static templates, NPC faction table, nearby quest runtime state, and starter-kit config. It does not read production services, send packets, write repositories, or mutate the player.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
 - XP live mutation is not wired into quest finish; UOW-1045 only composes non-live operation metadata.
 - `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are ported for the XP reward messages used by `PlayerCommonData.addExp`, and `QuestXpRewardPlan` can now produce ordered non-live packet metadata.
 - `SM_STATUPDATE_EXP` is now represented by staged execution metadata, but no packet instance is created or sent from the XP execution plan.
-- Level-change hooks are represented as Java-order descriptors and optional non-live sub-plan metadata. The level-up animation packet constant, upgrade-player sub-plan, NPC faction level-up sub-plan, QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent, guide HTML sub-plan, skill auto-learn sub-plan, starter-kit sub-plan, and custom bonus/faction reward sub-plan now exist, but stat recalculation, max-stat calculation, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML packets/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
+- Level-change hooks are represented as Java-order descriptors, optional non-live sub-plan metadata, and a non-live context factory. The level-up animation packet constant, upgrade-player sub-plan, NPC faction level-up sub-plan, QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent, guide HTML sub-plan, skill auto-learn sub-plan, starter-kit sub-plan, and custom bonus/faction reward sub-plan now exist, but stat recalculation, max-stat calculation, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML packets/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
 - The C# plan uses the current C# `Player.Level` as the previous/display level input. Java derives and updates level through `PlayerCommonData.setExp`; this needs verification before live mutation.
 - No-exp state and Daeva/non-Daeva cap are explicit method inputs because equivalent C# player state is not fully modeled.
 - Repose and salvation formulas are source-reviewed and unit-tested, but edge cases around negative XP, large XP, unusual float rates, and live max-repose updates still need runtime verification.
@@ -251,6 +268,8 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `QuestXpExecutionPlanServiceTests.CreatePlan_AppendsAscensionWarningAfterXpMessageAndSkipsGuardedPlans`
 - `QuestXpExecutionPlanServiceTests.CreatePlan_ComposesLevelChangeSubPlansInJavaOrderWithoutExecutingThem`
 - `QuestXpExecutionPlanServiceTests.CreatePlan_DoesNotComposeLevelChangeSubPlansWhenLevelIsUnchanged`
+- `QuestXpLevelChangeContextFactoryServiceTests.CreateContext_BuildsJavaLevelChangeSubPlansFromSnapshotInputs`
+- `QuestXpLevelChangeContextFactoryServiceTests.CreateContext_RecordsGuardedSubPlansWhenDependenciesAreMissing`
 - `GamePacketTests.CharacterSelectionServerPackets_WriteJavaShapedPayloads` level-up `SM_ACTION_ANIMATION` assertion
 - `PlayerLevelChangeUpgradePlanServiceTests.CreatePlan_StagesJavaUpgradePlayerOrderWithTeamAndLegionDependencies`
 - `PlayerLevelChangeUpgradePlanServiceTests.CreatePlan_RecordsMissingMaxStatsDeadAndNoTeamLegionBranches`
@@ -274,4 +293,4 @@ Level-change side effects include stat template refresh, max repose recalculatio
 
 ## Next Recommendation
 
-Next, either create a higher-level non-live level-change context factory that builds these sub-plans from a player/runtime snapshot, or add concrete mail/DAO prerequisites. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
+Next, either compose the context factory into quest-finish XP operation metadata behind explicit inputs, or add concrete mail/DAO prerequisites. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
