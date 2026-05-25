@@ -30723,9 +30723,62 @@ Next recommended unit of work:
 
 ---
 
+### Session 935 (May 25, 2026)
+- Continued after UOW-934 by adding explicit post-mutation cube snapshots for ItemPurification packet-plan cube updates.
+- Parallel Work Discovery considered cube snapshot bridging, cube keying/count analysis, packet payload regression audit, and ItemCharge AP fallback. Two read-only agents reviewed Java/C# cube semantics and packet-test shape.
+- Added `SmCubeUpdate.CubeSizeSnapshot` so callers can build Java-shaped cube-size packets without reading live `Player.InventoryItems`.
+- Extended `ItemPurificationPacketPlanService.CreatePacketPlan` with optional `cubePacketInputsByPacketOperationIndex`, keyed by packet-plan operation index because Java cube counts are order-sensitive.
+- `ItemPurificationCubePacketInput` validates cube storage id/ordinal, source operation type, object id, item id, non-negative item count, and byte-safe expansion fields before attaching a concrete `SmCubeUpdate`.
+- Missing or mismatched cube snapshots leave cube operations metadata-only; the planner does not synthesize counts from stale storage.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "ItemPurificationPacketPlanServiceTests|GamePacketTests"` passed with 103 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1600 tests.
+
+#### Migration Parity Table - Session 935
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CUBE_UPDATE` | `Aion.GameServer.Network.Aion.ServerPackets.SmCubeUpdate.CubeSizeSnapshot` | Server Packet DTO | Partial | Regression Tested in C# | Partial Parity | Snapshot factory writes action `0`, cube ordinal `0`, item count, and expand bytes from explicit caller inputs. Java runtime byte comparison remains unavailable. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CUBE_UPDATE.cubeSize` | `Aion.GameServer.Services.ItemPurificationPacketPlanService` plus `ItemPurificationCubePacketInput` | Packet Planner / Cube Bridge | Partial | Regression Tested in C# | Partial Parity | Concrete cube packets are attached only when caller provides packet-indexed post-mutation snapshots with matching source operation/object/item fields. Storage count source remains external and unverified. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.sendItemDeletePacket` | `ItemPurificationPacketPlanService.CreatePacketPlan` | Delete Fanout / Cube Follow-up | Partial | Regression Tested in C# | Partial Parity | Delete operations can now be followed by concrete cube packets in Java order when snapshots exist. Live delete mutation, quest removal hook, persistence, and runtime storage count capture remain missing. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.sendStorageUpdatePacket` | `ItemPurificationPacketPlanService.CreatePacketPlan` | Add Fanout / Cube Follow-up | Partial | Regression Tested in C# | Partial Parity | Target-add operations can now be followed by concrete cube packets in Java order when snapshots exist. Live `Storage.add`, quest item-get hook, persistence, and target slot allocation remain missing. |
+| `com.aionemu.gameserver.model.items.storage.ItemStorage.size` | `ItemPurificationCubePacketInput.ItemsCount` | Storage Count Snapshot | Not Started for live storage capture | Manual Review + Regression Tested Consumer | Needs Verification | Java `size()` counts stored item objects after mutation. C# planner accepts explicit counts but does not compute or verify Java-equivalent live storage semantics. |
+| `com.aionemu.gameserver.model.items.storage.StorageType` | `ItemPurificationPacketPlanService.CubeStorageTypeId` / `CubeStorageTypeOrdinal` | Enum / Constant Projection | Partial | Regression Tested in C# | Needs Verification | ItemPurification supports only Java `StorageType.CUBE` id/ordinal `0` for this bridge. Other storage types remain unsupported. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GamePacketTests` cube snapshot payload assertion | Regression | Java `SM_CUBE_UPDATE.writeImpl` source review | Validates `CubeSizeSnapshot(7,2,3,4)` writes `000007000000020304`. | Deterministic byte-level C# regression for Java packet field order. | Not generated from Java runtime. |
+| `CreatePacketPlan_AttachesConcreteCubePacketsWhenRuntimeSnapshotsProvided` | Regression | Java `ItemPacketService` and `SM_CUBE_UPDATE.cubeSize` source review | Validates delete/add cube operations attach concrete `SmCubeUpdate` packets by packet index and preserve Java fanout order. | Deterministic C# regression with decoded payload checks. | Snapshot source is caller-provided, not live storage. |
+| `CreatePacketPlan_LeavesCubeMetadataWhenRuntimeSnapshotDoesNotMatchOperation` | Regression | Java storage fanout source review | Validates mismatched source operation and out-of-byte-range expansion values leave cube operations metadata-only. | Deterministic safety regression. | Does not validate every malformed snapshot combination. |
+| `SendConcretePacketsAsync_IncludesConcreteCubePacketsInPlanOrderWhenSnapshotsProvided` | Regression | Java `PacketSendUtility.sendPacket`, `ItemPacketService.sendItemDeletePacket`, and `sendStorageUpdatePacket` source review | Validates the send adapter includes concrete cube packets in plan order when snapshots are supplied. | Deterministic C# send-order regression. | No live handler wiring or Java runtime packet comparison. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Packet-index keying is intentionally order-sensitive; callers must generate snapshots from the same packet plan they send.
+- The planner does not compute Java `Storage.size()` and cannot prove live storage count parity.
+- Live ItemPurification mutation/emission, object-id allocation, `Storage.add`, delete persistence, quest hooks, AP/rank fanout, Kinah parity decision, and rollback/error behavior remain unimplemented.
+- C# `SmCubeUpdate.CubeSize(Player)` currently counts non-kinah location-0 inventory items; Java `ItemStorage.size()` semantics for all live callers still need broader verification before claiming full cube parity.
+- Required `docs/commit-conventions.md` is still missing; commit format continues to follow `docs/orchestration-rules.md`.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 narrow ItemPurification cube snapshot packet bridge slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, live ItemPurification mutation/emission, live cube snapshot capture, AP concrete fanout, object-id allocation/storage mutation, and repository/quest side effects
+- Estimated overall migration completion: Phase 6 remains about 69% complete; this unit converts cube metadata into concrete packets only when explicit post-mutation snapshots are supplied.
+
+Next recommended unit of work:
+- Add a narrow ItemPurification runtime snapshot assembler that takes an already-mutated item list/snapshot and produces packet-indexed `ItemPurificationInventoryPacketInput` plus `ItemPurificationCubePacketInput` without touching `GameServerConnection`, persistence, AP mutation, or object-id allocation.
+- If that boundary grows too broad, pivot to ItemCharge AP spend hardening as the next isolated AP caller convergence unit.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, and the concrete-packet send adapter now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. Move next to cube snapshot prerequisites for the dry-run ItemPurification packet plan, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, and the explicit cube snapshot bridge now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. Move next to a runtime snapshot assembler for ItemPurification packet inputs, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
