@@ -1,7 +1,7 @@
 # Quest Reward Side-Effects Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1034, updated by UOW-1035, UOW-1037, UOW-1038, and UOW-1039
+Unit of Work: UOW-1034, updated by UOW-1035, UOW-1037, UOW-1038, UOW-1039, and UOW-1040
 
 ## Purpose
 
@@ -115,8 +115,8 @@ GP:
 - Java calls `GloryPointsService.addGp(playerObjectId, Rates.GP.calcResult(player, rewards.getGp()))`.
 - Online players mutate current GP and positive daily/weekly GP, clamp current GP at zero, send GP gain/loss system messages, and send `SM_ABYSS_RANK` when actual GP changes.
 - Offline players update directly through `AbyssRankDAO.addGp`.
-- C# has no `GloryPointsService` or quest GP live helper found.
-- C# has no `GameServerRateOptions` GP rate array matching Java `gameserver.rates.gp.gain`.
+- UOW-1040 adds `GameServerRateOptions.GpRates`, `GloryPointsService`, `PlayerAbyssRank.AddGp`, GP gain/loss system-message helpers, and `QuestRewardService.ApplyGpReward`.
+- Offline `AbyssRankDAO.addGp` remains metadata only through `GloryPointsAddPlan.OfflineDaoUpdateRequired`; no C# repository write exists.
 
 ## Persistence And Failure Ordering
 
@@ -135,24 +135,27 @@ GP:
 - Existing live helpers:
   - `QuestRewardService.ApplyApReward`
   - `QuestRewardService.ApplyDpRewardAsync`
+  - `QuestRewardService.ApplyGpReward`
   - `AbyssPointsService.AddAp`
+  - `GloryPointsService.AddGp`
   - `WorldNpcResourceStatsService.AddPlayerDpAsync`
 - Missing live homes include:
   - quest XP helper,
   - quest title reward helper,
   - quest cube expansion helper,
   - quest warehouse expansion helper,
-  - quest GP helper and GP rate config.
+  - offline quest GP DAO update.
 - UOW-1035 staged a non-composed quest kinah planner on `QuestRewardService`; quest finish still does not execute it.
 - UOW-1037 staged title/cube/warehouse reward planners on `QuestRewardSideEffectPlanService`; UOW-1038 composes them into quest-finish metadata but still does not execute them.
+- UOW-1040 adds a quest GP helper and live online GP planner/mutator, but quest finish still does not execute it.
 
 ## Remaining Risks
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
-- Precision and overflow for Java `Rates.XP_QUEST` and `Rates.GP` are not ported.
+- Precision and overflow for Java `Rates.XP_QUEST` are not ported. `Rates.GP` is source-reviewed and unit-tested for membership fallback and int-overflow fallback, but lacks Java runtime comparison.
 - `Rates.QUEST_KINAH` precision/truncation is unit-tested in C# from source-reviewed Java behavior, but it still lacks Java runtime comparison.
 - C# AP rate helper intentionally omits Java overflow logging.
-- Packet masks and packet ordering are incomplete for quest kinah, cube expansion, warehouse expansion, GP, and XP. Quest title now has a concrete system-message helper, but no live send or Java golden-byte comparison.
+- Packet masks and packet ordering are incomplete for quest kinah, cube expansion, warehouse expansion, and XP. Quest title and GP now have concrete system-message helpers, but no live quest-finish send or Java golden-byte comparison.
 - C# quest finish still does not execute any reward mutation.
 - Title/cube/warehouse planners are now visible in quest-finish operation metadata when a side-effect context is supplied, but remain metadata only; quest title DAO writes, expirable registration, cube update sends, warehouse info sends, and player expansion counter persistence are not live.
 - Live reward mutation needs an explicit failure-ordering policy before composition.
@@ -160,6 +163,6 @@ GP:
 
 ## Recommended Next Units
 
-1. Add a GP live-helper design audit or scaffold before composing AP/DP/GP live helpers into quest finish.
-2. Add a quest XP helper design or scaffold only after documenting level-up/stat/nearby-refresh side effects.
-3. Revisit title/cube/warehouse live adapter boundaries only after packet, persistence, and failure-ordering gaps are narrower.
+1. Compose GP helper metadata into quest-finish operation descriptors only if it remains non-live and preserves Java reward ordering.
+2. Add the offline GP DAO update plan/repository boundary before enabling siege/offline GP callers.
+3. Add a quest XP helper design or scaffold only after documenting level-up/stat/nearby-refresh side effects.
