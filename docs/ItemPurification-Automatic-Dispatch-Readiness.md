@@ -83,7 +83,15 @@ Required before automatic dispatch:
   - intentionally diverge from Java ordering for safety
 - The selected policy must have handler-level tests.
 
-Current status: not satisfied. UOW-958 proves the current opt-in path sends/mutates before a repository save failure is surfaced, but there is no automatic-dispatch runtime policy or rollback.
+Current status: staged policy selected, production gate still not satisfied. UOW-958 proves the current opt-in path sends/mutates before a repository save failure is surfaced, and UOW-965 records that this behavior is allowed only for explicit test/caller opt-in. Automatic packet dispatch must remain plan-only until either Java runtime evidence approves send/mutate-before-save without rollback, or a future unit deliberately selects and tests a safer production ordering such as persist-before-send or explicit reconciliation.
+
+Staged failure policy as of UOW-965:
+
+- `HandleInfrastructurePacketAsync` must keep `CM_ITEM_PURIFICATION` on the plan-only `HandleItemPurificationAsync` path.
+- `HandleItemPurificationPersistentLiveExecutionAsync` remains an explicit opt-in helper for tests/callers, not production packet dispatch.
+- The explicit opt-in helper may send packets and mutate in-memory player state before repository save, then return `PersistenceSaveFailed` if persistence fails.
+- No rollback is attempted after packets/state mutation in the explicit opt-in helper.
+- This policy is a temporary safety gate, not a claim of Java parity. Java runtime packet/DB artifacts are still required before production dispatch can choose a final failure behavior.
 
 ### 3. Quest Callbacks
 
@@ -132,7 +140,7 @@ Do not wire `HandleInfrastructurePacketAsync` to `HandleItemPurificationPersiste
 - [x] Live DB integration coverage for `SaveItemPurificationMutationAsync`.
 - [x] Inserted target `item_stones` DB integration coverage.
 - [x] Repository failure/rollback coverage against the real C# transaction path.
-- [ ] Automatic-dispatch failure policy selected and tested.
+- [ ] Final automatic-dispatch failure policy selected and tested; UOW-965 records a staged "dispatch disabled, explicit opt-in only" policy.
 - [ ] Quest get/remove callback strategy implemented or formally deferred.
 - [ ] AP side-effect gap list updated and required side effects implemented for the dispatch scope.
 - [ ] Java runtime packet/DB comparison artifacts generated or an approved temporary verification substitute recorded.
@@ -144,7 +152,7 @@ Do not wire `HandleInfrastructurePacketAsync` to `HandleItemPurificationPersiste
 Recommended next units:
 
 1. Generate Java runtime observer artifacts for ItemPurification packet/DB capture when Java 25/Maven tooling is available.
-2. Select and test an automatic-dispatch failure policy without enabling production dispatch.
+2. Generate Java runtime failure artifacts or deliberately choose a final production failure policy once packet/DB comparison evidence exists.
 3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification.
 
 Unsafe next work:
