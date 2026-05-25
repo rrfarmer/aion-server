@@ -1,4 +1,4 @@
-# Quest XP Reward Audit - UOW-1044/UOW-1048
+# Quest XP Reward Audit - UOW-1044/UOW-1051
 
 Date: May 25, 2026
 
@@ -12,6 +12,7 @@ Date: May 25, 2026
 - `game-server/src/com/aionemu/gameserver/network/aion/serverpackets/SM_STATUPDATE_EXP.java`
 - `game-server/src/com/aionemu/gameserver/network/aion/serverpackets/SM_SYSTEM_MESSAGE.java` XP reward helpers
 - `game-server/src/com/aionemu/gameserver/controllers/PlayerController.java#onLevelChange`
+- `game-server/src/com/aionemu/gameserver/model/gameobjects/player/npcFaction/NpcFactions.java#onLevelUp`
 - `game-server/src/com/aionemu/gameserver/questEngine/QuestEngine.java#onLevelChanged`
 - `game-server/src/com/aionemu/gameserver/services/SkillLearnService.java#learnNewSkills`
 
@@ -108,13 +109,26 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - The sub-plan can record planned HP/MP/FP synchronization when a max-stat snapshot is supplied, but it does not calculate max stats itself and does not send HP/MP/FP, `SM_STATS_INFO`, group/alliance, or legion packets.
 - The staged XP execution plan still records `upgradePlayer` as descriptors only; this sub-plan is a prerequisite surface, not live integration.
 
+## C# State After UOW-1051
+
+- Added `NpcFactionLevelUpPlanService.CreatePlan`.
+- The planner stages Java `NpcFactions.onLevelUp` behavior without mutating live player state:
+  1. Reads active non-mentor and mentor faction slots in Java order.
+  2. Uses `NpcFactionTable.GetNpcFactionById` as the C# equivalent of `DataManager.NPC_FACTIONS_DATA.getNpcFactionById`.
+  3. Leaves factions active when `template.maxLevel >= player.Level`.
+  4. Plans deactivation when `template.maxLevel < player.Level`.
+  5. Records `QuestService.abandonQuest` intent only for START-state factions.
+  6. Records Java `SM_SYSTEM_MESSAGE.STR_FACTION_LEAVE_BY_LEVEL_LIMIT` message id `1400770`.
+  7. Resets the planned faction state to `Noting`, matching Java after the optional abandon call.
+- The helper is non-live and does not call quest abandon, send system messages, persist `PlayerNpcFactionsDAO`, or compose into `QuestXpExecutionPlanService`.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
 - XP live mutation is not wired into quest finish; UOW-1045 only composes non-live operation metadata.
 - `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are ported for the XP reward messages used by `PlayerCommonData.addExp`, and `QuestXpRewardPlan` can now produce ordered non-live packet metadata.
 - `SM_STATUPDATE_EXP` is now represented by staged execution metadata, but no packet instance is created or sent from the XP execution plan.
-- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant and upgrade-player sub-plan now exist, but stat recalculation, max-stat calculation, nearby quest refresh, quest engine callbacks, skills, guide, starter-kit, NPC faction effects, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
+- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant, upgrade-player sub-plan, and NPC faction level-up sub-plan now exist, but stat recalculation, max-stat calculation, nearby quest refresh, quest engine callbacks, skills, guide, starter-kit, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
 - The C# plan uses the current C# `Player.Level` as the previous/display level input. Java derives and updates level through `PlayerCommonData.setExp`; this needs verification before live mutation.
 - No-exp state and Daeva/non-Daeva cap are explicit method inputs because equivalent C# player state is not fully modeled.
 - Repose and salvation formulas are source-reviewed and unit-tested, but edge cases around negative XP, large XP, unusual float rates, and live max-repose updates still need runtime verification.
@@ -136,7 +150,9 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `GamePacketTests.CharacterSelectionServerPackets_WriteJavaShapedPayloads` level-up `SM_ACTION_ANIMATION` assertion
 - `PlayerLevelChangeUpgradePlanServiceTests.CreatePlan_StagesJavaUpgradePlayerOrderWithTeamAndLegionDependencies`
 - `PlayerLevelChangeUpgradePlanServiceTests.CreatePlan_RecordsMissingMaxStatsDeadAndNoTeamLegionBranches`
+- `PlayerNpcFactionsSnapshotTests.LevelUpPlan_DeactivatesOverLevelActiveFactionAndRecordsJavaSideEffects`
+- `PlayerNpcFactionsSnapshotTests.LevelUpPlan_RecordsNoChangesMissingTemplateAndNoActiveBranches`
 
 ## Next Recommendation
 
-Add another focused non-live side-effect sub-plan or audit behind staged XP execution, such as NPC faction level-up behavior or QuestEngine level-change callback dispatch. Keep live XP mutation disabled until stat updates, nearby quest refresh, quest callbacks, skill learning, NPC factions, custom rewards, and persistence behavior are modeled.
+Add another focused non-live side-effect sub-plan or audit behind staged XP execution, with `QuestEngine.onLevelChanged` callback dispatch now the most direct Java-order dependency after NPC faction level-up. Keep live XP mutation disabled until stat updates, nearby quest refresh, quest callbacks, skill learning, live NPC faction mutation, custom rewards, and persistence behavior are modeled.
