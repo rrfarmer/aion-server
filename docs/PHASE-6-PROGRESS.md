@@ -34195,6 +34195,78 @@ Next recommended unit of work:
 
 ---
 
+### Session 999 (May 25, 2026)
+- Continued after UOW-998 by implementing the narrow staged XML start-condition subset for nearby quest filtering.
+- Added `NearbyQuestXmlStartCondition` and `NearbyQuestFinishedCondition` staged DTOs.
+- Extended `NearbyQuestTemplateXmlExtractor` to parse supported `start_conditions` children:
+  - `finished`
+  - `unfinished`
+  - `noacquired`
+  - `acquired`
+  - `equipped`
+  - `required_title`
+- Extended `NearbyQuestStartConditionService` to evaluate the Java nearby `warn = false` XML subset:
+  - `finished` requires COMPLETE state, reward-group match when specified, and exact repeatable prerequisite max count unless max repeat is `255`.
+  - `unfinished` fails on COMPLETE.
+  - `noacquired` fails on START or REWARD.
+  - `acquired` passes for any non-LOCKED existing quest state, including COMPLETE.
+  - `equipped` is ignored for nearby checks because Java returns true when `warn = false`.
+  - `required_title` compares the displayed player title.
+- Unknown XML start-condition children still fail closed as `UnsupportedXmlStartConditions`.
+- Added nullable `RewardGroup` to `PlayerQuestState` for staged `finished reward="..."` checks.
+- Kept inventory item preconditions, combine-skill checks, NPC faction checks, time-based repeat cooldowns, live nearby sends, production `StaticData` integration, and production ItemPurification dispatch disabled.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~NearbyQuestStartConditionServiceTests|FullyQualifiedName~NearbyQuestTemplateXmlExtractorTests|FullyQualifiedName~NearbyQuestRefreshPlanServiceTests|FullyQualifiedName~NearbyQuestMarkerProjectionServiceTests"` passed with 19 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1706 tests.
+
+#### Migration Parity Table - Session 999
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.quest.XMLStartCondition` | `Aion.GameServer.Dataholders.NearbyQuestXmlStartCondition`; `Aion.GameServer.Services.NearbyQuestStartConditionService` | Dataholder / Predicate | Partial | Unit Tested | Partial Parity | Implements staged nearby `warn = false` support for finished/unfinished/noacquired/acquired/required-title checks, optional-block counting, and ignored equipped checks. Unknown XML children fail closed. Inventory items, combine skill, NPC faction, master-crafting required-count adjustment, warning packets, production static-data loading, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.templates.quest.FinishedQuestCond` | `Aion.GameServer.Dataholders.NearbyQuestFinishedCondition` | DTO / XML Predicate Dependency | Partial | Unit Tested | Partial Parity | Parses `quest_id` and default/explicit `reward`, and evaluates staged reward-group matching. Production reward-group loading into `PlayerQuestState` is not verified. |
+| `com.aionemu.gameserver.model.templates.QuestTemplate`; `com.aionemu.gameserver.dataholders.QuestsData` | `Aion.GameServer.Dataholders.NearbyQuestTemplateSummary`; `NearbyQuestTemplateXmlExtractor`; `NearbyQuestTemplateTable` | Dataholder / XML Extractor | Partial | Unit Tested; Regression Tested | Needs Verification | Extractor now preserves supported XML start-condition fields and marks unknown XML children unsupported. Production JAXB/`StaticData`, enum mapping, master-crafting metadata, inventory/combine/NPC-faction data, and live loading remain unverified. |
+| `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `Aion.GameServer.Services.NearbyQuestStartConditionService` | Service / Quest Predicate | Partial | Unit Tested | Partial Parity | Predicate now covers early gates plus staged XML subset and still reports unsupported dependencies explicitly. Time-based repeat cooldowns, inventory checks, combine-skill, NPC faction, exception/log behavior, warning packets, and production integration remain unsupported. |
+| `com.aionemu.gameserver.model.gameobjects.player.QuestStateList`; `com.aionemu.gameserver.questEngine.model.QuestState` | `Aion.GameServer.Model.GameObjects.PlayerQuestState` | Player Quest State | Partial | Unit Tested | Needs Verification | Adds nullable reward group for staged XML `finished reward` matching. Repository hydration/persistence and next-repeat-time behavior are not ported or verified. |
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestMarkerProjectionService`; `NearbyQuestRefreshPlanService` | Controller / Quest UI Projection Dependency | Partial | Unit Tested | Partial Parity | Existing projection/plan services automatically consume the broader staged predicate. No live map-region lookup, `SM_NEARBY_QUESTS` send, `CM_LEVEL_READY` trigger, delayed NPC-spawn refresh, or ItemPurification dispatch is enabled. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `NearbyQuestTemplateXmlExtractorTests.Extract_ReadsNearbyPredicateQuestTemplateFieldsLikeJavaQuestTemplate` | Unit | Java `QuestTemplate` and `XMLStartCondition` JAXB fields | Now validates supported XML start-condition child parsing in addition to existing nearby template fields. | Deterministic C# test from source-reviewed Java annotations and fields. | No Java JAXB runtime comparison. |
+| `NearbyQuestTemplateXmlExtractorTests.Extract_AppliesJavaQuestTemplateDefaultsForMissingOptionalFields` | Unit | Java `QuestTemplate` defaults | Validates empty XML condition list and unsupported-child flag defaults. | Deterministic C# test. | Not all Java `QuestTemplate` fields are modeled. |
+| `NearbyQuestTemplateXmlExtractorTests.Extract_MarksUnknownXmlStartConditionChildrenUnsupported` | Unit | Conservative unsupported XML policy | Validates unknown XML condition children are not treated as supported. | Safety test preventing optimistic parity. | Unknown/future Java XML fields remain unimplemented. |
+| `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesSupportedJavaXmlStartConditions` | Unit | Java `XMLStartCondition.check(player, warn=false)` | Validates finished/reward/repeat prerequisite, unfinished, noacquired, acquired, required-title, and equipped no-op behavior. | Deterministic C# test from source-reviewed Java predicate. | Production reward-group hydration and Java runtime comparison remain missing. |
+| `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesJavaXmlStartConditionFailures` | Unit | Java `XMLStartCondition` failure branches | Validates missing finished quest, wrong reward group, complete unfinished quest, acquired noacquired quest, locked acquired quest, and wrong title failures. | Deterministic C# test from source-reviewed Java predicate. | Warning packets intentionally absent for nearby `warn = false`. |
+| `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_RequiresAllMandatoryAndOneOptionalXmlBlockLikeJava` | Unit | Java `QuestTemplate.getRequiredConditionCount` | Validates all mandatory XML blocks plus one optional finished block are required. | Deterministic C# test from source-reviewed Java formula. | Master-crafting adjustment remains blocked by combine-skill support. |
+| `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_FailsClosedForUnknownXmlStartConditionChildren` | Unit | Conservative unsupported XML policy | Validates unknown XML children return `UnsupportedXmlStartConditions`. | C# fail-closed test. | Does not implement unknown/future Java fields. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- XML start-condition support is staged and partial, not production-wired.
+- Production `StaticData`/`DataManager` loading for these new XML DTOs is not wired.
+- `PlayerQuestState.RewardGroup` is staged, but repository load/save behavior for reward groups is not verified.
+- Inventory item preconditions, combine-skill checks, NPC faction checks, and time-based repeat cooldowns remain unsupported.
+- Master-crafting required-condition-count adjustment remains blocked by missing combine-skill/skill-point support.
+- Warning packets are intentionally absent because nearby checks use `warn = false`; non-nearby quest acquisition remains outside this staged service.
+- Packet sends, `CM_LEVEL_READY`, NPC-spawn delayed refresh, production player-controller refresh, and ItemPurification dispatch remain disabled.
+- Java `HashMap`/set ordering is not claimed.
+- Reflection/dynamic handler execution and production startup integration remain unported.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 in this unit
+- Total artifacts ported: 3 staged partial artifacts in this unit: `NearbyQuestXmlStartCondition`, `NearbyQuestFinishedCondition`, and `PlayerQuestState.RewardGroup`
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 6 blocked/not-started categories: production static-data integration, reward-group repository hydration, inventory item predicates, combine-skill predicates, NPC faction predicates, and live nearby send triggers
+- Estimated overall migration completion: Phase 6 remains about 70% complete; this unit reduces one nearby predicate blocker without enabling live nearby quest refresh.
+
+Next recommended unit of work:
+- Add the next narrow nearby predicate dependency: inventory item preconditions, combine-skill checks, NPC faction checks, production reward-group hydration for `PlayerQuestState`, or broader refresh-plan audits across representative player archetypes. Keep packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.
+
+---
+
 ## Next Steps
 
 1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure ItemPurification quest-notification projection, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, the handler-level ItemPurification workflow/application/packet-plan composition bridge, the ItemPurification runtime-input packet bridge, the ItemPurification ready concrete-packet send bridge, the ItemPurification target object-id allocation bridge, the ItemPurification random-bonus selection seam, the ItemPurification non-persistent mutation snapshot preview, the ItemPurification non-persistent handler mutation bridge, the ItemPurification live mutation adapter boundary, the ItemPurification live execution composition seam, the ItemPurification live AP rank-drop metadata regression, the ItemPurification explicit live AP player-packet emission bridge, the ItemPurification explicit live AP rank-update broadcast bridge, the ItemPurification explicit live equipment rank-limit state mutation bridge, the ItemPurification explicit live equipment rank-limit packet fanout bridge, the ItemPurification explicit live abyss skill refresh bridge, the ItemPurification explicit opt-in quest notification no-op seam, the ItemPurification explicit transform-min-rank config plumbing, the ItemPurification quest-update items audit, the ItemPurification quest-update item static-data projection, the ItemPurification no-op nearby-refresh planning seam, the ItemPurification no-op nearby-refresh dispatcher seam, the ItemPurification nearby quest refresh surface audit, the ItemPurification nearby quest packet prerequisite, the ItemPurification nearby quest world-instance registry prerequisite, the ItemPurification nearby quest start-registration table prerequisite, the ItemPurification handler opt-in live execution seam, the ItemPurification persistence plan analysis, the ItemPurification repository contract/payload plumbing, the ItemPurification inserted target item-stone persistence, the ItemPurification opt-in persistent live execution seam, the ItemPurification handler-level opt-in persistent execution helper, the ItemPurification handler-level persistence failure-ordering regression, the ItemPurification automatic-dispatch readiness policy, the ItemPurification staged dispatch-failure policy, the ItemPurification Java observer design, the ItemPurification opt-in DB integration happy path, the ItemPurification opt-in DB rollback path, the ItemPurification AP/quest readiness audit, the pure ItemCharge AP spend guard, and the live ItemCharge selected-item/charge-all AP guard consolidation now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. ItemCharge Kinah payment guard/consolidation, charge-all stale-item payment-before-revalidation hardening, mixed stale/current charge-all AP regression coverage, mixed stale/current charge-all Kinah regression coverage, missing/current charge-all AP approximation coverage, and missing/current charge-all Kinah approximation coverage are now staged for live selected-item/charge-all paths. Move next to Java observer artifact generation when tooling is available, nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another existing planner live adapter when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player/equipment/skill packets, AP/login rank-limited equipment persistence, configured abyss transform skill updates, rank config load, and real quest handler dispatch. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.

@@ -1,7 +1,7 @@
 # ItemPurification Nearby Quest Refresh Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-980, updated by UOW-981 through UOW-998
+Unit of Work: UOW-980, updated by UOW-981 through UOW-999
 
 ## Purpose
 
@@ -107,6 +107,7 @@ Other Java call sites also use `updateNearbyQuests`, including item get/remove v
 - UOW-997 extends the real-data audit with a staged supported-template marker projection. Current repository data has 4503 projected world quest ids, 2072 of those have no currently unsupported nearby dependencies, and a level-65 Elyos male Gladiator produces 920 staged markers plus 1152 supported early-gate rejections. No unsupported dependency failures are allowed in this filtered subset.
 - UOW-998 adds `NearbyQuestRefreshPlanService`, a non-sending refresh-plan composer that reports fail-closed statuses, world quest-id count, marker DTOs, rejected quest ids, rejection counts, and whether unsupported dependencies are present. It is not wired into live player-controller refresh, `CM_LEVEL_READY`, NPC-spawn refresh, or ItemPurification dispatch.
 - UOW-998 also records read-only XML start-condition dependency findings: `finished`, `unfinished`, `noacquired`, `acquired`, and `required_title` are the next narrow XML predicate slice; `equipped` must pass for nearby checks because Java uses `warn = false`.
+- UOW-999 implements that narrow staged XML start-condition subset for nearby checks: `finished`, `unfinished`, `noacquired`, `acquired`, Java nearby `equipped` no-op behavior, and `required_title`. Unknown XML children still fail closed, and live sends remain disabled.
 - No production C# `QuestService.checkStartConditions` equivalent is wired for this nearby-quest UI path.
 - No C# player-controller method currently invokes real nearby quest refresh.
 
@@ -140,8 +141,8 @@ Completed prerequisite:
 
 Add only the next prerequisite:
 
-1. Add a narrow XML start-condition staged data model/predicate for `finished`, `unfinished`, `noacquired`, `acquired`, and `required_title`, or expand the refresh-plan audits across representative player archetypes.
-2. Keep XML start conditions, NPC faction, combine skill, packet sending, dynamic quest handlers, production `StaticData` integration, and real ItemPurification dispatch disabled until each dependency is modeled and tested.
+1. Add inventory item preconditions, combine-skill checks, NPC faction checks, production reward-group hydration for `PlayerQuestState`, or broader refresh-plan audits across representative player archetypes.
+2. Keep packet sending, dynamic quest handlers, production `StaticData` integration, and real ItemPurification dispatch disabled until each dependency is modeled and tested.
 
 ## Migration Parity Table
 
@@ -170,7 +171,8 @@ Add only the next prerequisite:
 | `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestMarkerProjectionService`; `QuestNpcStartRegistrationSourceRealDataAuditTests` | Controller / Quest UI Projection Audit | Partial | Regression Tested | Partial Parity | UOW-997 pins the supported-template real-data projection subset: 2072 supported projected quest ids, 920 staged markers, 1152 supported early-gate rejections for a level-65 Elyos male Gladiator. It deliberately excludes unsupported XML/inventory/combine-skill/NPC-faction/time-based templates and still does not send packets. |
 | `com.aionemu.gameserver.model.templates.QuestTemplate`; `com.aionemu.gameserver.dataholders.QuestsData` | `Aion.GameServer.Dataholders.NearbyQuestTemplateXmlExtractor`; `NearbyQuestTemplateTable` | Dataholder / Real-Data Projection Input | Partial | Regression Tested | Needs Verification | UOW-997 consumes the staged real-data table to filter out unsupported dependency categories before marker projection. Production JAXB/`StaticData` loading, XML start-condition semantics, and enum mapping remain unverified. |
 | `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestRefreshPlanService` | Controller / Quest UI Refresh Plan | Partial | Unit Tested | Partial Parity | UOW-998 adds a non-sending plan boundary for marker readiness and rejection reporting. It fails closed for missing instance/template data, but it does not resolve live player map regions, send packets, schedule refreshes, or invoke ItemPurification dispatch. |
-| `com.aionemu.gameserver.model.templates.quest.XMLStartCondition` | Future C# XML start-condition predicate | Dataholder / Predicate | Not Started | Manual Only | Needs Verification | UOW-998 read-only analysis clarifies optional `finished` rows, mandatory non-finished rows, reward matching, repeatable prerequisite count, acquired/noacquired behavior, required-title enforcement, and equipped-item warn gating. No predicate implementation yet. |
+| `com.aionemu.gameserver.model.templates.quest.XMLStartCondition` | `Aion.GameServer.Dataholders.NearbyQuestXmlStartCondition`; `Aion.GameServer.Services.NearbyQuestStartConditionService` | Dataholder / Predicate | Partial | Unit Tested | Partial Parity | UOW-999 implements the staged nearby `warn = false` subset: finished/unfinished/noacquired/acquired/title checks, optional-block counting, reward matching, repeatable prerequisite max-count, and ignored equipped-item checks. Production static-data integration, inventory/combine/NPC-faction/time-based behavior, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.templates.quest.FinishedQuestCond` | `Aion.GameServer.Dataholders.NearbyQuestFinishedCondition` | DTO / XML Predicate Dependency | Partial | Unit Tested | Partial Parity | UOW-999 parses and evaluates `quest_id` plus default/explicit `reward`; production reward-group loading into `PlayerQuestState` still needs verification. |
 
 ## Tests Added/Updated
 
@@ -208,6 +210,11 @@ Add only the next prerequisite:
 | `NearbyQuestTemplateXmlExtractorTests.Extract_AppliesJavaQuestTemplateDefaultsForMissingOptionalFields` | Unit | Java `QuestTemplate` primitive/default field values | Validates missing optional fields map to staged defaults, including max repeat count `1`. | Deterministic C# test from source-reviewed Java field defaults. | Does not validate all `QuestTemplate` fields. |
 | `NearbyQuestTemplateXmlExtractorTests.Extract_StreamInputFeedsNearbyQuestTemplateTableAndPredicate` | Unit | Java `QuestsData` indexing shape | Validates stream input can feed the staged table boundary. | C# staged boundary test informed by Java `QuestsData.afterUnmarshal`. | Not production `StaticData` integration. |
 | `NearbyQuestTemplateXmlExtractorTests.RealDataAudit_LoadsNearbyQuestTemplateSummariesWithoutProductionWiring` | Regression | Real repository `quest_data.xml` and Java `QuestTemplate` fields | Pins staged extractor counts: 8043 summaries; 2427 XML-condition templates; 363 inventory templates; 628 combine-skill templates; 365 NPC-faction templates; 927 time-based templates; race/class/gender/rank/min/max-level counts. | Deterministic C# audit over current repository XML. | Does not run Java JAXB, production `StaticData`, XML condition predicates, or packet sends. |
+| `NearbyQuestTemplateXmlExtractorTests.Extract_MarksUnknownXmlStartConditionChildrenUnsupported` | Unit | Java `XMLStartCondition` JAXB-supported child set | Validates unknown XML start-condition children are preserved as unsupported instead of assumed safe. | Conservative C# test around Java source-audited XML fields. | No Java JAXB runtime comparison. |
+| `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesSupportedJavaXmlStartConditions` | Unit | Java `XMLStartCondition.check(player, warn=false)` | Validates staged `finished`, `unfinished`, `noacquired`, `acquired`, ignored `equipped`, `required_title`, reward-group, and repeatable prerequisite max-count behavior. | Deterministic C# test from source-reviewed Java predicate. | Production reward-group hydration and Java runtime comparison remain missing. |
+| `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesJavaXmlStartConditionFailures` | Unit | Java `XMLStartCondition` failure branches | Validates missing/incorrect finished quests, wrong reward group, complete unfinished quest, acquired noacquired quest, locked acquired quest, and wrong required title fail. | Deterministic C# test from source-reviewed Java predicate. | Warning packets are intentionally absent because nearby calls use `warn = false`. |
+| `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_RequiresAllMandatoryAndOneOptionalXmlBlockLikeJava` | Unit | Java `QuestTemplate.getRequiredConditionCount` | Validates all mandatory XML blocks plus one optional finished block are required. | Deterministic C# test from source-reviewed Java count formula. | Master-crafting adjustment remains blocked by combine-skill support. |
+| `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_FailsClosedForUnknownXmlStartConditionChildren` | Unit | Conservative unsupported XML policy | Validates unknown XML condition children return `UnsupportedXmlStartConditions`. | C# safety test preventing optimistic parity. | Does not implement unknown/future Java fields. |
 | `NearbyQuestMarkerProjectionServiceTests.ProjectMarkers_FiltersWorldQuestIdsThroughStagedNearbyPredicateWithoutSendingPacket` | Unit | Java `PlayerController.updateNearbyQuests` filtering through `QuestService.checkStartConditions` | Validates staged world quest ids are filtered to marker DTOs and rejected ids carry predicate failure reasons. | Deterministic C# test from source-reviewed Java flow. | Does not send packets or run unsupported predicate dependencies. |
 | `NearbyQuestMarkerProjectionServiceTests.ProjectMarkers_PreservesPositiveAndNegativeLevelDiffsForPacketMarkerRule` | Unit | Java `QuestService.getLevelRequirementDiff` and `SM_NEARBY_QUESTS` marker rule | Validates positive and negative level-diff values are projected into marker DTOs for later packet serialization. | Deterministic C# test from source-reviewed Java utility/packet rule. | Packet send/order not wired. |
 | `docs/NearbyQuestRefresh-SendBoundary-Audit.md` | Manual Source Audit | Java `CM_LEVEL_READY`, `WorldMapInstance.addObject`, `PacketSendUtility.sendPacket`, and C# connection send boundaries | Documents immediate and delayed Java send triggers plus C# production safety gates. | Source-reviewed manual audit. | No executable send-path tests; no packet sends enabled. |
@@ -223,15 +230,15 @@ Add only the next prerequisite:
 - C# level-ready and NPC-spawn send triggers remain absent, and the Java 1500 ms debounce semantics have no C# runtime owner yet.
 - The supported-template projection audit uses one synthetic player archetype and excludes unsupported dependency categories; it is not broad runtime parity.
 - The non-sending refresh plan service is unit-tested but has no production caller.
-- XML start-condition dependency findings are read-only; XML predicates remain unimplemented.
+- XML start-condition support is partial and staged; production static-data integration, Java runtime comparison, master-crafting required-count adjustment, and repository reward-group hydration remain unverified.
 - The current ItemPurification dispatcher seam must remain no-op until these lower-level surfaces exist.
 - Automatic `CM_ITEM_PURIFICATION` dispatch remains plan-only and must stay disabled.
 
 ## Summary Metrics
 
-- Total Java artifacts discovered: 18
-- Total artifacts ported: 13 packet/opcode/registry/start-registration/XML-extractor/handler-extractor/source-loader/projection/template-boundary/partial-predicate/template-XML-extractor/marker-projection/refresh-plan artifacts for the nearby-quest prerequisites
+- Total Java artifacts discovered: 19
+- Total artifacts ported: 15 packet/opcode/registry/start-registration/XML-extractor/handler-extractor/source-loader/projection/template-boundary/partial-predicate/template-XML-extractor/marker-projection/refresh-plan/XML-start-condition/finished-condition artifacts for the nearby-quest prerequisites
 - Total artifacts with verified parity: 2
-- Total artifacts needing verification: 17
+- Total artifacts needing verification: 18
 - Total blocked artifacts: 5 blocked/not-started categories, including production NPC-spawn integration, delayed refresh scheduling, production quest-template loading, XML condition data, and dynamic quest handler execution
 - Estimated overall migration completion: Phase 6 remains about 70% complete

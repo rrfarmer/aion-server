@@ -106,6 +106,11 @@ UOW-998 follow-up:
 - `NearbyQuestRefreshPlanServiceTests` covers a non-sending refresh-plan boundary that composes staged marker projection into explicit readiness/failure states.
 - The plan remains offline and does not call connection or registry send APIs.
 
+UOW-999 follow-up:
+
+- `NearbyQuestStartConditionServiceTests` now cover a staged XML start-condition subset for nearby checks.
+- This reduces one predicate blocker but still does not enable production nearby sends.
+
 Existing relevant tests remain:
 
 - `GamePacketTests.ServerPacketPayloads_MatchJavaShapes` for `SmNearbyQuests` payload serialization.
@@ -124,7 +129,8 @@ Existing relevant tests remain:
 | `com.aionemu.gameserver.world.WorldMapInstance.addObject` | `Aion.GameServer.World.WorldMapInstanceRuntimeState`; future NPC-spawn refresh scheduler | World Instance / Delayed Refresh Trigger | Partial | Regression Tested plus Manual Audit | Partial Parity | Staged quest-id storage/projection has tests, but production `addObject(Npc)`, `QuestEngine.getQuestNpc`, 1500 ms debounce scheduling, task reset, and per-player instance fanout are not wired. C# async/threading parity is unknown. |
 | `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `Aion.GameServer.Network.Aion.IGameClientConnectionRegistry.SendPacketToPlayerAsync`; `GameServerConnection.SendPacketAsync` | Packet Send Utility Boundary | Partial | Existing Regression Coverage Elsewhere plus Manual Audit | Needs Verification | C# has owner-send primitives used by other systems. A nearby-refresh caller has not been implemented. Java `player.isOnline()` gating must be matched by active connection/player checks. Socket send failure behavior remains unverified for this path. |
 | `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `Aion.GameServer.Network.Aion.ServerPackets.SmNearbyQuests` | Server Packet / Serialization | Complete | Unit Tested | Verified Parity | Existing tests cover source-reviewed byte layout: `C(0)`, negative count, and `1 << 17` marker flag for positive level diff. Caller ordering remains not claimed because Java `HashMap` iteration order is not deterministic. |
-| `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `Aion.GameServer.Services.NearbyQuestStartConditionService` | Service / Quest Predicate Dependency | Partial | Unit Tested | Partial Parity | Current staged predicate covers early gates only and rejects unsupported dependencies. Full XML start conditions, inventory checks, combine-skill, NPC faction, exception/log behavior, and time-based repeat timing remain unsupported. |
+| `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `Aion.GameServer.Services.NearbyQuestStartConditionService` | Service / Quest Predicate Dependency | Partial | Unit Tested | Partial Parity | Current staged predicate covers early gates plus the UOW-999 XML subset for nearby `warn = false`: finished/unfinished/noacquired/acquired/title, optional-block counting, reward matching, repeatable prerequisite max-count, and ignored equipped checks. Inventory checks, combine-skill, NPC faction, exception/log behavior, production static-data loading, reward-group hydration, and time-based repeat timing remain unsupported. |
+| `com.aionemu.gameserver.model.templates.quest.XMLStartCondition` | `Aion.GameServer.Dataholders.NearbyQuestXmlStartCondition`; `NearbyQuestStartConditionService` | Dataholder / Predicate Dependency | Partial | Unit Tested | Partial Parity | UOW-999 adds staged support for the source-audited nearby XML subset while keeping unknown XML children fail-closed. Master-crafting required-count adjustment and Java runtime comparison remain missing. |
 | `com.aionemu.gameserver.questEngine.QuestEngine.onItemGet` / `onItemRemoved` nearby refresh calls | `Aion.GameServer.Services.NoOpItemPurificationNearbyQuestRefreshDispatcher` | Quest Callback / ItemPurification Refresh Dependency | Partial | Unit Tested for Planning; Manual Audit for Send Boundary | Needs Verification | ItemPurification can plan refresh candidates through `questUpdateItems`, but dispatcher stays no-op. Real quest handlers and nearby marker sends remain disabled by design. |
 | `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestRefreshPlanService` | Controller / Quest UI Refresh Plan | Partial | Unit Tested | Partial Parity | Non-sending plan composes staged marker projection and rejection counts with fail-closed missing-data statuses. It does not send `SM_NEARBY_QUESTS`, resolve live map regions, schedule delayed refresh, or invoke ItemPurification dispatch. |
 
@@ -135,7 +141,7 @@ Existing relevant tests remain:
 - `CM_LEVEL_READY` nearby marker send is absent in C#.
 - NPC-spawn delayed refresh fanout is absent in C#.
 - Production quest-template loading and production quest-start source loading remain unwired.
-- Unsupported nearby predicate dependencies remain broad and must fail closed.
+- Unsupported nearby predicate dependencies remain broad and must fail closed; XML start conditions are now partial, while inventory/combine/NPC-faction/time-based dependencies remain unsupported.
 - Java `HashMap`/set ordering is not deterministic; packet marker order parity is not claimed.
 - C# async scheduling for a future 1500 ms debounce will need concurrency tests.
 - `NearbyQuestRefreshPlanService` has no production caller and is intentionally non-sending.
@@ -146,12 +152,12 @@ Existing relevant tests remain:
 ## Summary Metrics
 
 - Total Java artifacts discovered: 7 in this unit
-- Total artifacts ported: 1 non-sending refresh-plan boundary after this audit's original unit
+- Total artifacts ported: 2 staged boundaries after this audit's original unit: non-sending refresh plan and XML start-condition subset
 - Total artifacts with verified parity: 1 existing packet artifact referenced by this audit
-- Total artifacts needing verification: 6
+- Total artifacts needing verification: 7
 - Total blocked artifacts: 4 blocked/not-started categories: production send method, level-ready send trigger, delayed NPC-spawn refresh scheduler, and unsupported predicate dependencies
 - Estimated overall migration completion: Phase 6 remains about 70% complete; this unit clarifies send-boundary blockers without enabling live nearby quest refresh.
 
 ## Next Recommended Unit Of Work
 
-Add a narrow XML start-condition staged data model/predicate for `finished`, `unfinished`, `noacquired`, `acquired`, and `required_title`, preserving Java nearby behavior that `equipped` passes when `warn = false`; or broaden refresh-plan audits across representative player archetypes. Keep actual packet sends, `CM_LEVEL_READY` integration, NPC-spawn delayed refresh, production `StaticData` integration, and production ItemPurification dispatch disabled until follow-up tests cover each gate.
+Add the next narrow predicate dependency: inventory item preconditions, combine-skill checks, NPC faction checks, production reward-group hydration, or broaden refresh-plan audits across representative player archetypes. Keep actual packet sends, `CM_LEVEL_READY` integration, NPC-spawn delayed refresh, production `StaticData` integration, and production ItemPurification dispatch disabled until follow-up tests cover each gate.
