@@ -33418,6 +33418,62 @@ Next recommended unit of work:
 
 ---
 
+### Session 986 (May 25, 2026)
+- Continued after UOW-985 by implementing a staged offline loader that composes XML quest-script and Java handler quest-start extractor outputs.
+- Parallel Work Discovery considered staged loader integration, real-data unresolved-case audit, ItemPurification side-effect persistence docs, and Java observer artifact generation. The selected unit stayed sequential because it edits a new loader, new focused tests, and shared Phase 6 docs; no sub-agents were spawned.
+- Added `QuestNpcStartRegistrationSourceLoader` and `QuestNpcStartRegistrationSourceLoadResult`.
+- The loader scans optional XML and Java handler directories recursively in stable ordinal file order, feeds XML files through `QuestNpcStartXmlExtractor`, feeds Java files through `QuestNpcStartJavaHandlerExtractor`, and preserves unresolved handler registrations.
+- Missing optional directories return empty results rather than throwing, keeping this as an offline staging tool.
+- Kept production `StaticData`/`DataManager` integration, Java handler execution, NPC-spawn population, delayed refresh scheduling, `QuestService.checkStartConditions`, player-controller sends, and production ItemPurification dispatch disabled.
+- Updated nearby-refresh/readiness docs to state that the composed loader remains offline and not production-wired.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~QuestNpcStartRegistrationSourceLoaderTests` passed with 3 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1681 tests.
+
+#### Migration Parity Table - Session 986
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.questEngine.QuestEngine.init` | `Aion.GameServer.Dataholders.QuestNpcStartRegistrationSourceLoader` | Offline Loader / Source Aggregator | Partial | Unit Tested | Needs Verification | C# composes XML and Java handler source-extractor outputs over directories in stable order. It does not run Java reflection/JAXB, instantiate handlers, register into `QuestEngine`, model reload/unload behavior, or integrate with production `DataManager`. |
+| `com.aionemu.gameserver.questEngine.handlers.models.XMLQuest` | `Aion.GameServer.Dataholders.QuestNpcStartRegistrationSourceLoader`; `Aion.GameServer.Dataholders.QuestNpcStartXmlExtractor` | XML Quest Loader Boundary | Partial | Unit Tested | Needs Verification | Loader includes XML extractor output, but remains offline. JAXB validation, XML model construction, template execution, serialization differences, and runtime registration ordering are not verified. |
+| Representative `game-server/data/handlers/quest/**` classes extending `com.aionemu.gameserver.questEngine.handlers.AbstractQuestHandler` | `Aion.GameServer.Dataholders.QuestNpcStartRegistrationSourceLoader`; `Aion.GameServer.Dataholders.QuestNpcStartJavaHandlerExtractor` | Java Handler Source Loader | Partial | Unit Tested | Needs Verification | Loader includes resolved handler sources and unresolved rows, but does not execute Java classloading/reflection or guarantee full handler-tree coverage. Dynamic expressions and loops remain unresolved. |
+| `com.aionemu.gameserver.model.templates.quest.QuestNpc.addOnQuestStart` | `Aion.GameServer.Dataholders.QuestNpcStartTable.RegisterOnQuestStart`; `Aion.GameServer.Dataholders.QuestNpcStartRegistrationSource` | Quest NPC Registration / DTO | Partial | Unit Tested | Partial Parity | Loader outputs can feed staged table storage, but this unit does not populate runtime world instances or claim Java `HashSet` iteration order. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `QuestNpcStartRegistrationSourceLoaderTests.Load_ComposesXmlAndJavaHandlerExtractorOutputsInStableFileOrder` | Unit | Java `QuestEngine.init` loads XML and handler registrations before runtime use | Loader composes XML and Java handler extractor outputs from directories in stable file order. | Deterministic C# test over temp source files. | Does not run Java classloading/JAXB or production `DataManager`. |
+| `QuestNpcStartRegistrationSourceLoaderTests.Load_ReportsJavaHandlerUnresolvedRowsAlongsideResolvedSources` | Unit | Java handler source extraction limitations | Unresolved handler rows are preserved beside resolved registrations. | Conservative loader behavior test. | Does not triage real handler-tree unresolved counts. |
+| `QuestNpcStartRegistrationSourceLoaderTests.Load_MissingDirectoriesReturnEmptyResult` | Unit | Staged offline loader safety | Missing optional source directories do not crash the staged loader. | Deterministic C# test. | Production missing-data policy is not selected. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- `QuestNpcStartRegistrationSourceLoader` is not integrated into production `StaticData`, `DataManager`, `QuestEngine`, NPC spawn, world instance population, or production dispatch.
+- No real-data audit has been run yet to summarize resolved/unresolved XML and Java handler registrations across the repository.
+- The handler extractor intentionally leaves dynamic expressions unresolved; loops, collection-derived IDs, constructor parameters, inherited fields, method calls, nonliteral assignments, and comments/preprocessor-like edge cases need future triage before loader use.
+- XML extraction remains partial and does not model `aggro_start_npc_ids`, talk/kill/end/distance/zone registrations, template-specific dialogs, quest item registration, or JAXB schema validation.
+- No C# nearby-UI `QuestService.checkStartConditions` equivalent exists.
+- `SmNearbyQuests` remains a packet prerequisite only; no production code sends it.
+- The current ItemPurification dispatcher seam must remain no-op until extraction, candidate calculation, start-condition evaluation, and a controlled send boundary exist.
+- ItemPurification persistent execution still does not persist secondary rank-limit equipment unequips or abyss skill deletion intents from AP-rank side effects.
+- Automatic `CM_ITEM_PURIFICATION` dispatch remains plan-only and must stay disabled.
+- Required `docs/commit-conventions.md` is still missing; commit format continues to follow `docs/orchestration-rules.md`.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 in this unit
+- Total artifacts ported: 1 partial staged source loader in this unit
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 4 blocked/not-started categories, including real-data loader audit, production loader integration, quest start-condition evaluation, and dynamic quest handler execution
+- Estimated overall migration completion: Phase 6 remains about 70% complete; this unit adds one offline source-aggregation prerequisite without enabling live nearby quest refresh.
+
+Next recommended unit of work:
+- Run a real-data staged loader audit over representative `quest_script_data` and `data/handlers/quest` trees, record resolved/unresolved counts in docs, and keep production `StaticData`/`DataManager`, `QuestService.checkStartConditions`, player-controller sends, and ItemPurification dispatch disabled.
+- Alternative safe slice: use the sidecar persistence-gap analysis to document or implement the next ItemPurification side-effect persistence prerequisite.
+
+---
+
 ## Next Steps
 
 1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure ItemPurification quest-notification projection, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, the handler-level ItemPurification workflow/application/packet-plan composition bridge, the ItemPurification runtime-input packet bridge, the ItemPurification ready concrete-packet send bridge, the ItemPurification target object-id allocation bridge, the ItemPurification random-bonus selection seam, the ItemPurification non-persistent mutation snapshot preview, the ItemPurification non-persistent handler mutation bridge, the ItemPurification live mutation adapter boundary, the ItemPurification live execution composition seam, the ItemPurification live AP rank-drop metadata regression, the ItemPurification explicit live AP player-packet emission bridge, the ItemPurification explicit live AP rank-update broadcast bridge, the ItemPurification explicit live equipment rank-limit state mutation bridge, the ItemPurification explicit live equipment rank-limit packet fanout bridge, the ItemPurification explicit live abyss skill refresh bridge, the ItemPurification explicit opt-in quest notification no-op seam, the ItemPurification explicit transform-min-rank config plumbing, the ItemPurification quest-update items audit, the ItemPurification quest-update item static-data projection, the ItemPurification no-op nearby-refresh planning seam, the ItemPurification no-op nearby-refresh dispatcher seam, the ItemPurification nearby quest refresh surface audit, the ItemPurification nearby quest packet prerequisite, the ItemPurification nearby quest world-instance registry prerequisite, the ItemPurification nearby quest start-registration table prerequisite, the ItemPurification handler opt-in live execution seam, the ItemPurification persistence plan analysis, the ItemPurification repository contract/payload plumbing, the ItemPurification inserted target item-stone persistence, the ItemPurification opt-in persistent live execution seam, the ItemPurification handler-level opt-in persistent execution helper, the ItemPurification handler-level persistence failure-ordering regression, the ItemPurification automatic-dispatch readiness policy, the ItemPurification staged dispatch-failure policy, the ItemPurification Java observer design, the ItemPurification opt-in DB integration happy path, the ItemPurification opt-in DB rollback path, the ItemPurification AP/quest readiness audit, the pure ItemCharge AP spend guard, and the live ItemCharge selected-item/charge-all AP guard consolidation now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. ItemCharge Kinah payment guard/consolidation, charge-all stale-item payment-before-revalidation hardening, mixed stale/current charge-all AP regression coverage, mixed stale/current charge-all Kinah regression coverage, missing/current charge-all AP approximation coverage, and missing/current charge-all Kinah approximation coverage are now staged for live selected-item/charge-all paths. Move next to Java observer artifact generation when tooling is available, nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another existing planner live adapter when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player/equipment/skill packets, AP/login rank-limited equipment persistence, configured abyss transform skill updates, rank config load, and real quest handler dispatch. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
