@@ -30831,9 +30831,60 @@ Next recommended unit of work:
 
 ---
 
+### Session 937 (May 25, 2026)
+- Continued after UOW-936 by selecting the bounded ItemCharge AP spend hardening fallback.
+- Parallel Work Discovery considered a pure ItemCharge AP payment guard, selected-item live AP audit, charge-all confirm AP audit, and broader AP side effects. The write unit was kept to `ItemChargeService` and focused tests only.
+- Added `ItemChargeService.CreateAbyssPointPaymentPlan` to mirror Java `ItemChargeService.processAPPayment`: check current AP before delegating to `AbyssPointsService.CreateAddApPlan`.
+- Added `ItemChargeAbyssPointPaymentPlan` and `ItemChargeAbyssPointPaymentStatus` for no-payment, no-player, insufficient-AP, and too-large-payment states.
+- The guard does not mutate `Player.AbyssRank`; it only returns an AP spend plan when payment is affordable and can fit Java's `int` AP spend path.
+- Kept live selected-item and charge-all handlers unchanged because they already contain AP checks; a future unit can consolidate those checks onto the pure guard.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "ItemChargeServiceTests|AbyssPointsServiceTests"` passed with 20 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1611 tests.
+
+#### Migration Parity Table - Session 937
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemChargeService.processAPPayment` | `Aion.GameServer.Services.ItemChargeService.CreateAbyssPointPaymentPlan` | Service / AP Payment Guard | Partial | Regression Tested in C# | Partial Parity | C# now has a pure AP affordability guard before creating an AP spend plan. It does not mutate AP directly and is not yet wired into live charge handlers. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService.addAp` | `Aion.GameServer.Services.AbyssPointsService.CreateAddApPlan` via `ItemChargeAbyssPointPaymentPlan` | AP Spend Planner | Partial | Regression Tested in C# | Partial Parity | Affordable AP payments produce a negative AP plan without mutating the player. Rank/legion/siege side effects remain at the existing AP planner boundary. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CHARGE_ITEM` | existing `GameServerConnection.HandleChargeItemAsync` plus pure guard | Client Handler / Caller Boundary | Partial | Existing Regression Tested in C# + New Service Tests | Needs Verification | Live selected-item handler already has AP checks, but this unit does not rewire it to the new guard. Java runtime packet comparison remains unavailable. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.startChargingEquippedItems` | existing charge-all request/response flow plus pure guard | Service / Request Flow | Partial | Existing Regression Tested in C# + New Service Tests | Needs Verification | Charge-all confirm path already checks AP before applying mutation, but this unit leaves live flow unchanged. Consolidation remains future work. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateAbyssPointPaymentPlan_RejectsInsufficientApBeforeAbyssPointsClamp` | Regression | Java `ItemChargeService.processAPPayment` source review | Validates insufficient AP returns a failure without creating an `AbyssPointsAddPlan` or mutating player AP. | Deterministic C# regression for Java affordability guard. | Not wired to live handler in this unit. |
+| `CreateAbyssPointPaymentPlan_CreatesNegativeAbyssPointsPlanWhenAffordable` | Regression | Java `processAPPayment` delegating to `AbyssPointsService.addAp` | Validates affordable AP payment returns a negative AP plan and leaves the player unchanged until caller applies it. | Deterministic C# regression grounded in Java call order. | AP side-effect fanout remains at `AbyssPointsService` boundary. |
+| `CreateAbyssPointPaymentPlan_RejectsPaymentsThatCannotMatchJavaIntSpend` | Regression | Java `processAPPayment` casts required AP to `int` through `addAp(player, (int) -requiredAP)` | Validates C# rejects payments larger than `int.MaxValue` rather than overflowing. | Deterministic C# guard regression; documented as a safe C# boundary for Java int behavior. | Exact Java overflow behavior is not replicated intentionally; no runtime comparison. |
+| `CreateAbyssPointPaymentPlan_SkipsZeroPayment` | Regression | Java `processAPPayment` is only meaningful for positive AP costs | Validates zero/negative AP costs do not create AP spend plans. | Deterministic C# guard regression. | Does not alter charge planning. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- The new AP guard is not yet wired into `GameServerConnection` selected-item or charge-all live paths.
+- Existing live handlers still duplicate AP affordability checks.
+- Kinah payment parity for `ItemChargeService.processKinahPayment` remains outside this unit.
+- Broader AP rank/legion/siege side effects remain owned by `AbyssPointsService` and are not completed here.
+- Required `docs/commit-conventions.md` is still missing; commit format continues to follow `docs/orchestration-rules.md`.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 narrow ItemCharge AP payment guard slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 4 blocked/not-started categories, including Java runtime artifact generation, live handler guard consolidation, kinah payment guard parity, and broader AP side-effect completion
+- Estimated overall migration completion: Phase 6 remains about 69% complete; this unit hardens a pure AP spend guard but does not change live charge execution.
+
+Next recommended unit of work:
+- Consolidate selected-item and charge-all live ItemCharge AP checks onto `ItemChargeService.CreateAbyssPointPaymentPlan` with focused regressions proving insufficient AP sends no AP packets, no charge packets, no success/all-complete messages, and no persistence mutation.
+- Keep broad `AbyssPointsService` rank/legion/siege side effects separate unless a focused AP caller requires them.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, and the pure packet-input snapshot assembler now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. Move next to ItemCharge AP spend hardening or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, and the pure ItemCharge AP spend guard now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. Move next to live ItemCharge AP guard consolidation or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
