@@ -1,7 +1,7 @@
 # Quest Reward Side-Effects Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1034, updated by UOW-1035 and UOW-1037
+Unit of Work: UOW-1034, updated by UOW-1035, UOW-1037, and UOW-1038
 
 ## Purpose
 
@@ -71,6 +71,7 @@ Title:
 - Invalid title can throw during validation/template lookup.
 - C# has `TitleAddService`, `PlayerTitle`, and `SmTitleInfo` for item-title-style support, but no live quest-title grant path or quest-title system message equivalent.
 - UOW-1037 adds non-live `QuestRewardSideEffectPlanService.CreateTitleRewardPlan`, which records invalid-title throw intent, owner-null return, race failure plain-text message, duplicate title tooltip intent, successful permanent title creation, expirable registration, immediate persistence, quest-title message intent, and full-title-info intent.
+- UOW-1038 composes `CreateTitleRewardPlan` into `QuestFinishOperationPlanService` through `QuestFinishRewardSideEffectContext`, after the matching non-item title projection and before the coarse Java non-item placeholder. The descriptor is metadata only and keeps live title mutation, DAO write, expirable registration, and packet send disabled.
 
 Cube:
 
@@ -78,6 +79,7 @@ Cube:
 - It checks `CustomConfig.CUBE_EXPANSION_LIMIT`, increments `questExpands`, recalculates cube limit, sends inventory-size system message, and sends `SM_CUBE_UPDATE.cubeSize(CUBE, player)`.
 - C# has inventory capacity and cube update packet helpers, but no quest cube expansion executor.
 - UOW-1037 adds non-live `CreateCubeExpansionPlan`, which records Java `canExpand` boundary behavior, next `QuestExpands`, slot-limit delta, required player persistence, inventory-size message intent, and cube update intent without mutating the player.
+- UOW-1038 composes `CreateCubeExpansionPlan` into quest-finish operation metadata after the cube non-item projection and before the coarse Java non-item placeholder. It remains non-live.
 
 Warehouse:
 
@@ -85,6 +87,7 @@ Warehouse:
 - It checks fixed `MAX_EXPAND = 11`, increments `whBonusExpands`, recalculates regular warehouse limit, sends warehouse-size system message, and sends regular/account warehouse info packets.
 - C# has `StorageExpansionNpcService`, `InventoryExpansionService`, `SmWarehouseInfo`, and persistence fields, but no quest reward warehouse expansion executor.
 - UOW-1037 adds non-live `CreateWarehouseExpansionPlan`, which records Java `canExpand` boundary behavior, next `WarehouseBonusExpands`, slot-limit delta, required player persistence, warehouse-size message intent, and regular warehouse info intent without mutating the player.
+- UOW-1038 composes `CreateWarehouseExpansionPlan` into quest-finish operation metadata after the warehouse non-item projection and before the coarse Java non-item placeholder. It remains non-live and can carry Java cannot-expand boundary plans.
 
 Other `extend_inventory` values are ignored by Java `giveReward`. C# non-item projection records unsupported values as warning descriptors.
 
@@ -127,6 +130,7 @@ GP:
 
 - `QuestFinishRewardPlanService.CreateNonItemRewardProjection` records kinah, XP, title, AP, DP, GP, cube, and warehouse metadata only.
 - `QuestFinishOperationPlanService` composes these descriptors before quest-state mutation.
+- UOW-1038 adds optional `QuestFinishRewardSideEffectContext`; when supplied, title/cube/warehouse non-item reward projections gain adjacent `NonItemRewardSideEffectPlan` descriptors carrying `QuestTitleRewardPlan` or `QuestExpansionRewardPlan`. The default planner path is unchanged when the context is absent.
 - Existing live helpers:
   - `QuestRewardService.ApplyApReward`
   - `QuestRewardService.ApplyDpRewardAsync`
@@ -139,7 +143,7 @@ GP:
   - quest warehouse expansion helper,
   - quest GP helper and GP rate config.
 - UOW-1035 staged a non-composed quest kinah planner on `QuestRewardService`; quest finish still does not execute it.
-- UOW-1037 staged non-composed title/cube/warehouse reward planners on `QuestRewardSideEffectPlanService`; quest finish still does not execute them.
+- UOW-1037 staged title/cube/warehouse reward planners on `QuestRewardSideEffectPlanService`; UOW-1038 composes them into quest-finish metadata but still does not execute them.
 
 ## Remaining Risks
 
@@ -149,12 +153,12 @@ GP:
 - C# AP rate helper intentionally omits Java overflow logging.
 - Packet masks and packet ordering are incomplete for quest kinah, quest title, cube expansion, warehouse expansion, GP, and XP.
 - C# quest finish still does not execute any reward mutation.
-- Title/cube/warehouse planners are metadata only; quest title DAO writes, expirable registration, cube update sends, warehouse info sends, and player expansion counter persistence are not live.
+- Title/cube/warehouse planners are now visible in quest-finish operation metadata when a side-effect context is supplied, but remain metadata only; quest title DAO writes, expirable registration, cube update sends, warehouse info sends, and player expansion counter persistence are not live.
 - Live reward mutation needs an explicit failure-ordering policy before composition.
 - Threading assumptions differ: Java mutates live player state directly; C# must preserve per-player execution order once live execution is enabled.
 
 ## Recommended Next Units
 
-1. Compose the non-live title/cube/warehouse side-effect planners into quest-finish operation metadata, still without live mutation.
-2. Add a GP live-helper design audit or scaffold before composing AP/DP/GP live helpers into quest finish.
-3. Add a quest XP helper design or scaffold only after documenting level-up/stat/nearby-refresh side effects.
+1. Add a GP live-helper design audit or scaffold before composing AP/DP/GP live helpers into quest finish.
+2. Add a quest XP helper design or scaffold only after documenting level-up/stat/nearby-refresh side effects.
+3. Add a concrete quest-title system-message helper and packet-level tests before enabling live title reward sends.
