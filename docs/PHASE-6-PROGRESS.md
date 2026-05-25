@@ -27549,6 +27549,67 @@ Next recommended unit of work:
 
 ---
 
+### Session 879 (May 25, 2026)
+- Continued from the Session 878 / Phase 6NZ handoff with the recommended Java loopback socket capture design notes for selectable-decompose runtime artifacts.
+- Re-read the latest handoff, Java capture contract, and Java harness feasibility audit. `docs/commit-conventions.md` remains absent, so this unit continued the established `[Phase 6][UOW-###] ...` style.
+- Performed Parallel Work Discovery across Java loopback design, live-server runbook, decoded C# `SmCubeUpdate` assertions, and artifact folder scaffolding. Selected the Java loopback design because it is the next runtime-comparison prerequisite and has docs-only write ownership.
+- Added `docs/Phase-6-Java-Loopback-Capture-Design.md`.
+- Audited Java NIO bootstrap, connection initialization, crypt enablement, client opcode framing, and server packet opcode decoding:
+  - `NioServer.connect` starts dispatcher threads and binds configured `ServerCfg` channels.
+  - `Acceptor.accept` registers a real socket connection before calling `AionConnection.initialized()`.
+  - `AionConnection.initialized()` sends `SM_KEY`; `Crypt.encrypt` enables crypt while leaving that first packet unencrypted.
+  - `AionClientPacketFactory` registers `CM_SELECT_DECOMPOSABLE` at opcode `236`, valid only for `IN_GAME`.
+  - Relevant server opcodes were documented for future decoder implementation.
+- Chose client-side loopback capture as the first implementation path: read/decode actual server frames from the harness client instead of reflecting into private Java send queues.
+- Defined the first implementation proof target: handshake, `SM_KEY` decode, encrypted client-frame delivery boundary, and clear stop conditions before full fixture/artifact generation.
+- No production Java or C# code changed in this unit.
+- Validation: no .NET tests were run because this was a documentation/source-design-only unit with no code changes. Previous full C# validation remains Session 878: 1450 tests passing.
+
+#### Migration Parity Table - Session 879
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.commons.network.NioServer` | `Aion.GameServer.Network.Aion.GameServerConnection` / test socket harnesses | Network Bootstrap | Partial | Manual Only | Needs Verification | Loopback design uses real Java server socket and dispatcher with `readWriteThreads = 0`. No Java harness has been implemented; dispatcher shutdown/thread cleanup remains a risk. |
+| `com.aionemu.commons.network.Acceptor` | `Aion.GameServer.Network.Aion.GameServerConnection` accept path | Network Bootstrap | Partial | Manual Only | Needs Verification | Source review confirms accepted sockets are registered before `initialized()` sends `SM_KEY`, giving a valid `SelectionKey` for `sendPacket`. Runtime capture remains missing. |
+| `com.aionemu.commons.network.AConnection` | `Aion.Commons.Network` connection primitives / `GameServerConnection` | Connection Base | Partial | Manual Only | Needs Verification | Design intentionally avoids fake connections because Java `sendPacket` is final and depends on a private registered key. Reflection differences remain unsupported for first proof. |
+| `com.aionemu.gameserver.network.aion.AionConnection` | `Aion.GameServer.Network.Aion.GameServerConnection` | Game Connection | Partial | Manual Only | Needs Verification | Loopback design exercises real `SM_KEY`, crypt enablement, packet queue, and `processData`; heartbeat scheduler cleanup and player fixture attachment remain risks. |
+| `com.aionemu.gameserver.network.Crypt` | `Aion.GameServer.Network.Aion.GameCrypt` | Crypto Utility | Partial | Unit Tested in C#; Manual Only for Java design | Needs Verification | Design documents Java key recovery, client opcode encoding, and server frame decoding. No Java-generated crypt vectors or runtime artifacts produced in this unit. |
+| `com.aionemu.gameserver.network.EncryptionKeyPair` | `Aion.GameServer.Network.Aion.GameCrypt` | Crypto Utility | Partial | Unit Tested in C#; Manual Only for Java design | Needs Verification | Client/server rolling-key algorithms are source-reviewed for harness implementation. Java runtime byte parity remains unverified. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` | `Aion.GameServer.Network.Aion.ClientPacketFactory` / socket parser | Packet Factory | Partial | Regression Tested in C#; Manual Only for Java design | Needs Verification | Design identifies opcode `236` and valid `IN_GAME` state for `CM_SELECT_DECOMPOSABLE`. Future proof must show encrypted frame dispatch reaches the Java handler. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ClientPackets.CmSelectDecomposable` | Client Packet Handler | Partial | Regression Tested in C#; Manual Only for Java design | Partial Parity | Source-reviewed packet order remains the expected runtime target. No Java runtime artifact generated yet. |
+| `com.aionemu.gameserver.network.aion.AionServerPacket` | `Aion.GameServer.Network.Aion.GameServerPacket` | Packet Serialization | Partial | Regression Tested in C#; Manual Only for Java design | Needs Verification | Design captures outbound bytes from the loopback client side and decodes opcodes/fields, avoiding private queue reflection. Java packet bytes remain uncaptured. |
+| `com.aionemu.gameserver.network.aion.ServerPacketsOpcodes` | `Aion.GameServer.Network.Aion.ServerPackets` opcode map | Packet Metadata | Partial | Manual Only | Needs Verification | Relevant decompose response opcodes are documented for future decoder implementation. Broader opcode parity remains unverified. |
+| `com.aionemu.gameserver.services.item.ItemPacketService` | `Aion.GameServer.Services.Items` packet writers | Service / Packet Side Effects | Partial | Regression Tested in C#; Manual Only for Java design | Partial Parity | Design preserves Java delete order `SM_DELETE_ITEM` then `SM_CUBE_UPDATE` as a required runtime check. Java runtime output still missing. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `Aion.GameServer.Network.Aion.GameServerConnection` send/broadcast helpers | Utility | Partial | Manual Only | Needs Verification | Design requires online player and empty known-list fanout to make self-send order deterministic. Broadcast/threading differences remain unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| None | Documentation / Java Design | Source review of Java NIO bootstrap, Aion connection, crypt, packet factory, and selectable-decompose side effects | Documents a concrete loopback capture path and first proof target. | Static source inspection only. | No Java harness, no runtime artifact, no C# comparison against Java output, no byte vectors. |
+
+Remaining risks:
+- Java runtime capture remains unimplemented.
+- Player/account/static-data setup may still require broad Java infrastructure or test-safe DB configuration.
+- `IDFactory` and DAO initialization may block deterministic reward item creation.
+- Java dispatcher and `ThreadPoolManager` scheduler cleanup must be proven before adding repeatable tests.
+- Packet byte decoding logic must handle Java little-endian frame/body layout and signed int key overflow exactly.
+- Level 3/4 byte capture remains unverified until the loopback decoder emits stable unencrypted/encrypted bytes.
+- Threading differences remain unresolved between Java packet processor execution and C# async handler execution.
+
+Summary metrics:
+- Total Java artifacts discovered: 12
+- Total artifacts ported: 0 code artifacts; 1 loopback capture design document added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 12
+- Total blocked artifacts: 7 blocked/not-started categories, including Java loopback proof harness, deterministic player/static-data fixture, Java ID allocation fixture, Java runtime artifacts for both selectable scenarios, C# artifact comparison tests, unencrypted body byte capture, and encrypted frame byte capture
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit reduces implementation uncertainty but does not add runtime parity evidence.
+
+Next recommended unit of work:
+- Create a Java loopback proof harness that reaches the handshake and encrypted client-packet delivery boundary: start `NioServer`, accept a real `AionConnection`, read/decode `SM_KEY`, send one encrypted client frame with the correct client checksum/static-code shape, and document whether fixture setup or packet delivery is the next blocker.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -27558,4 +27619,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Return to Java runtime comparison implementation planning by adding Java loopback socket capture design notes for the `JD-SEL-DEC-001` / `JD-SEL-DEL-001` contract, or, if choosing more C# cleanup first, add decoded `SmCubeUpdate` field assertions for the decompose delete tests.
+8. Create a Java loopback proof harness for the `JD-SEL-DEC-001` / `JD-SEL-DEL-001` path that reaches handshake and encrypted client-packet delivery before attempting full player/static-data fixture artifact generation.
