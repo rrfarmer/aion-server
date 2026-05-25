@@ -74,6 +74,7 @@ Java remains the source of truth. This document is read-only and does not implem
 - UOW-1010 adds `QuestRepeatDateService.CalculateNextRepeatTime`, a pure calculator for Java server-time 09:00 daily/weekly reset selection. It is not wired to quest completion yet.
 - UOW-1011 exposes the loaded `gameserver.timezone` value through `GameServerCoreOptions.GetTimeZone()` and adds a `QuestRepeatDateService` overload that consumes `GameServerOptions`.
 - UOW-1012 adds a staged `QuestFinishStateMutationService` that calls the options-based repeat-date calculator for time-based quest completions. It still does not persist, send packets, fire callbacks, complete NPC faction state, or refresh nearby quests.
+- UOW-1013 adds a separate `NpcFactionDailyResetService` for Java `NpcFactions.getNextTime()`. Its exact-09:00 behavior differs from quest repeat dates: NPC faction reset advances to tomorrow when server hour is `>= 9`.
 
 ## C# Gaps
 
@@ -95,3 +96,4 @@ Java remains the source of truth. This document is read-only and does not implem
 - SQL `Timestamp` interpretation and MySQL connector timezone behavior need a dedicated DB/runtime check.
 - Daily `ALL` plus other weekday token combinations should be treated exactly like Java `contains(ALL)` daily behavior.
 - The staged C# service returns a new immutable quest-state record, while Java mutates `QuestState` in place; production caller semantics still need verification.
+- NPC faction reset timing must stay separate from quest repeat timing because Java uses `hour >= 9` for factions but `now.isAfter(repeatDate)` for quest repeat dates.
