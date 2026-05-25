@@ -114,6 +114,8 @@ UOW-976 adds `docs/ItemPurification-QuestUpdateItems-Audit.md`, a source audit f
 
 UOW-977 adds `StaticData.QuestUpdateItems` backed by `QuestUpdateItemTable` and focused static-data tests. The C# loader now collects distinct quest inventory `item_id` values in Java first-seen order and ignores optional `count`, matching the source-reviewed static-data membership behavior. This does not satisfy the quest-callback gate: no real nearby-quest refresh, get-item handler dispatch, or automatic production dispatch is wired.
 
+UOW-978 adds `PlanningItemPurificationQuestMutationNotifier` and `ItemPurificationNearbyQuestRefreshPlan`, which filter projected ItemPurification get/remove notifications through `StaticData.QuestUpdateItems` and report which candidates would request nearby refresh. This still does not satisfy the quest-callback gate: no player-controller refresh, dynamic quest handler dispatch, or automatic production dispatch is wired.
+
 ### 4. AP Side Effects
 
 Required before automatic dispatch:
@@ -180,7 +182,7 @@ Recommended next units:
 
 1. Generate Java runtime observer artifacts for ItemPurification packet/DB capture when Java 25/Maven tooling is available.
 2. Generate Java runtime failure artifacts or deliberately choose a final production failure policy once packet/DB comparison evidence exists.
-3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, now using `StaticData.QuestUpdateItems` as the static membership source for any nearby-refresh planning.
+3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, now using `ItemPurificationNearbyQuestRefreshPlan` as the no-op planning source for any future nearby-refresh dispatch.
 4. Add AP spend packet/side-effect projection tests behind explicit opt-in live execution before production dispatch wiring.
 
 Unsafe next work:

@@ -105,6 +105,7 @@ Current C# status:
 - UOW-974 adds `IItemPurificationQuestMutationNotifier` plus `NoOpItemPurificationQuestMutationNotifier` as an explicit opt-in live-execution seam. When a notifier is supplied, live execution projects the Java-ordered candidates after a successful mutation send and returns the dispatch result. The default path still does not invoke quest handlers or nearby-quest refresh.
 - UOW-976 adds `docs/ItemPurification-QuestUpdateItems-Audit.md`, documenting that Java `QuestEngine.init` builds `questUpdateItems` from quest XML `<inventory_items><inventory_item item_id=...>` and that C# does not yet expose that membership set.
 - UOW-977 adds `StaticData.QuestUpdateItems` backed by `QuestUpdateItemTable`, collecting distinct quest inventory `item_id` values in Java first-seen order and ignoring optional `count`. This is static-data membership only; no real nearby-quest refresh or quest handler dispatch is wired.
+- UOW-978 adds `PlanningItemPurificationQuestMutationNotifier` and `ItemPurificationNearbyQuestRefreshPlan`, an opt-in no-op planning seam that filters projected get/remove notifications through `StaticData.QuestUpdateItems` and reports which candidates would request nearby refresh. It does not invoke `updateNearbyQuests`, quest handlers, or automatic production dispatch.
 - Partial material count updates do not need item-remove callbacks under Java behavior.
 - Live mutation replaces the player inventory snapshot and applies AP, but intentionally leaves persistence, sends, quest callbacks, and rollback outside its boundary.
 - Production `HandleInfrastructurePacketAsync` still routes `CmItemPurification` to the plan-only `HandleItemPurificationAsync` path.
@@ -114,14 +115,14 @@ Quest parity gaps:
 
 - C# has metadata, a pure ordered projection, and an opt-in no-op notifier seam for quest notification intent, but it does not invoke real `onItemGet` or `onItemRemoved` equivalents by default.
 - C# does not yet model the Java distinction between get-item handler dispatch and nearby-quest refresh.
-- C# now has the `questUpdateItems` static-data membership projection, but it still lacks `questItems` get-handler registration and any dispatcher that invokes nearby-quest refresh.
+- C# now has the `questUpdateItems` static-data membership projection and a no-op nearby-refresh planner, but it still lacks `questItems` get-handler registration and any dispatcher that invokes nearby-quest refresh.
 - Target add callback must remain CUBE/actor-backed and must occur after storage update packet semantics are preserved.
 - Remove callback must fire only for material/base deletes, not partial count updates.
 
 Safe quest next tests:
 
 - Add a disabled or no-op `IQuestItemMutationNotifier` seam behind explicit opt-in live execution only, preserving automatic dispatch disabled.
-- Add an opt-in nearby-refresh planning seam that filters ItemPurification get/remove candidates through `StaticData.QuestUpdateItems` before invoking any live quest handlers.
+- Add an opt-in nearby-refresh dispatcher interface that can consume `ItemPurificationNearbyQuestRefreshPlan`, keeping the default implementation no-op before invoking any live quest handlers.
 
 ## Readiness Impact
 
