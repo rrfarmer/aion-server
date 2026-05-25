@@ -1,7 +1,7 @@
 # ItemPurification Nearby Quest Refresh Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-980, updated by UOW-981 through UOW-993
+Unit of Work: UOW-980, updated by UOW-981 through UOW-994
 
 ## Purpose
 
@@ -94,6 +94,7 @@ Other Java call sites also use `updateNearbyQuests`, including item get/remove v
 - UOW-991 adds `docs/QuestStartConditions-Nearby-Audit.md`, a source audit for the Java nearby UI predicate `QuestService.checkStartConditions(player, questId, false, 2, false, false, false)` and `QuestService.getLevelRequirementDiff`. It identifies missing C# quest-template data, repeatability, XML start conditions, inventory preconditions, combine-skill checks, NPC faction checks, and level-diff projection before any real nearby-refresh send can be wired.
 - UOW-992 adds `NearbyQuestTemplateTable` and `NearbyQuestStartConditionService`, a staged partial nearby predicate for early Java gates and `getLevelRequirementDiff`. It is not wired into production static data or packet sends, and unsupported dependencies are surfaced explicitly instead of assumed.
 - UOW-993 adds `NearbyQuestTemplateXmlExtractor`, a staged XML extractor for the nearby predicate fields already represented by `NearbyQuestTemplateSummary`. It is not wired into production `StaticData`, `DataManager`, packet sends, or ItemPurification dispatch.
+- UOW-994 adds a focused real-data audit for the staged nearby quest-template extractor. Current repository `quest_data.xml` yields 8043 summaries, including 2427 with XML start conditions, 363 with inventory preconditions, 628 with combine-skill requirements, 365 with NPC faction requirements, and 927 time-based repeat templates.
 - No production C# `QuestService.checkStartConditions` equivalent is wired for this nearby-quest UI path.
 - No C# player-controller method currently invokes real nearby quest refresh.
 
@@ -126,7 +127,7 @@ Completed prerequisite:
 
 Add only the next start-condition prerequisite:
 
-1. Add a real-data audit for `NearbyQuestTemplateXmlExtractor` over repository quest XML, pinning counts for templates and unsupported-dependency flags.
+1. Add a staged bridge that combines world-instance quest ids, `NearbyQuestTemplateTable`, and `NearbyQuestStartConditionService` into candidate marker DTOs without sending `SM_NEARBY_QUESTS`.
 2. Keep XML start conditions, NPC faction, combine skill, packet sending, dynamic quest handlers, production `StaticData` integration, and real ItemPurification dispatch disabled until each dependency is modeled and tested.
 
 ## Migration Parity Table
@@ -185,11 +186,12 @@ Add only the next start-condition prerequisite:
 | `NearbyQuestTemplateXmlExtractorTests.Extract_ReadsNearbyPredicateQuestTemplateFieldsLikeJavaQuestTemplate` | Unit | Java `QuestTemplate` JAXB attributes/elements | Validates staged extraction of quest id, min/max level, race, class list, gender, rank, repeat count, repeat-cycle presence, XML condition presence, inventory item presence, combine skill, and NPC faction id. | Deterministic C# test from reviewed Java `QuestTemplate` annotations/getters. | Does not run JAXB or real-data audit. |
 | `NearbyQuestTemplateXmlExtractorTests.Extract_AppliesJavaQuestTemplateDefaultsForMissingOptionalFields` | Unit | Java `QuestTemplate` primitive/default field values | Validates missing optional fields map to staged defaults, including max repeat count `1`. | Deterministic C# test from source-reviewed Java field defaults. | Does not validate all `QuestTemplate` fields. |
 | `NearbyQuestTemplateXmlExtractorTests.Extract_StreamInputFeedsNearbyQuestTemplateTableAndPredicate` | Unit | Java `QuestsData` indexing shape | Validates stream input can feed the staged table boundary. | C# staged boundary test informed by Java `QuestsData.afterUnmarshal`. | Not production `StaticData` integration. |
+| `NearbyQuestTemplateXmlExtractorTests.RealDataAudit_LoadsNearbyQuestTemplateSummariesWithoutProductionWiring` | Regression | Real repository `quest_data.xml` and Java `QuestTemplate` fields | Pins staged extractor counts: 8043 summaries; 2427 XML-condition templates; 363 inventory templates; 628 combine-skill templates; 365 NPC-faction templates; 927 time-based templates; race/class/gender/rank/min/max-level counts. | Deterministic C# audit over current repository XML. | Does not run Java JAXB, production `StaticData`, XML condition predicates, or packet sends. |
 
 ## Remaining Risks
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
-- Only a staged partial C# quest start-condition evaluator and staged XML extractor exist for nearby quest UI; production wiring and unsupported dependencies remain absent.
+- Only a staged partial C# quest start-condition evaluator, staged XML extractor, and real-data extractor audit exist for nearby quest UI; production wiring and unsupported dependencies remain absent.
 - C# dynamic quest-start registration storage exists and XML/handler sources can be source-extracted, staged into `QuestNpcStartTable`, and projected into a staged world-instance quest-id set with zero unresolved real-data rows, but no production loader populates it from real data.
 - C# world-instance quest id registry storage exists, but it is not populated from production NPC spawn or dynamic quest handlers.
 - The current ItemPurification dispatcher seam must remain no-op until these lower-level surfaces exist.

@@ -87,4 +87,4 @@ Known limitations:
 
 ## Next Recommended Unit
 
-Continue with a real-data audit for `NearbyQuestTemplateXmlExtractor`, pinning current repository quest-template counts and unsupported dependency flags. Keep production startup and nearby-refresh dispatch disabled until predicate parity exists.
+Continue with a staged candidate-marker bridge that combines world-instance quest ids with `NearbyQuestTemplateTable` and `NearbyQuestStartConditionService`, without sending `SM_NEARBY_QUESTS`. Keep production startup and nearby-refresh dispatch disabled until predicate parity exists.

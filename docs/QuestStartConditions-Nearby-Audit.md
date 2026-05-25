@@ -1,7 +1,7 @@
 # Nearby Quest Start Conditions Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-991, updated by UOW-992 and UOW-993
+Unit of Work: UOW-991, updated by UOW-992 through UOW-994
 
 ## Purpose
 
@@ -116,6 +116,7 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 
 - UOW-992 adds a staged `NearbyQuestTemplateTable` and `NearbyQuestTemplateSummary` boundary for the subset of fields needed by early nearby predicate gates and level-diff calculation. It is not wired into production `StaticData` or `DataManager`.
 - UOW-993 adds `NearbyQuestTemplateXmlExtractor`, a staged XML extractor for `quest` attributes/elements used by `NearbyQuestTemplateSummary`. It is not wired into production `StaticData` or `DataManager`.
+- UOW-994 adds a real-data audit over `game-server/data/static_data/quest_data/quest_data.xml`, pinning 8043 staged quest-template summaries and dependency-flag counts before production integration.
 - UOW-992 adds `NearbyQuestStartConditionService.CheckNearbyStartConditions` for the nearby UI call shape. It handles missing templates, active/reward quest state, conservative repeat-count checks, race, min/max level with Java's two-level nearby grace, class, gender, abyss rank, and explicit unsupported-dependency failures.
 - UOW-992 adds `NearbyQuestStartConditionService.GetLevelRequirementDiff`, matching Java's missing-template `99` and `minlevel_permitted - playerLevel` behavior.
 - C# has `PlayerQuestState` status/complete-count storage, but no full `QuestState.canRepeat()` equivalent because next-repeat timing is not ported. The staged predicate returns `UnsupportedRepeatTiming` for completed time-based repeat quests rather than assuming parity.
@@ -150,6 +151,28 @@ UOW-993 adds:
 - `NearbyQuestTemplateXmlExtractorTests.Extract_AppliesJavaQuestTemplateDefaultsForMissingOptionalFields`
 - `NearbyQuestTemplateXmlExtractorTests.Extract_StreamInputFeedsNearbyQuestTemplateTableAndPredicate`
 
+UOW-994 adds:
+
+- `NearbyQuestTemplateXmlExtractorTests.RealDataAudit_LoadsNearbyQuestTemplateSummariesWithoutProductionWiring`
+
+## Real-Data Staged Extractor Baseline
+
+| Metric | Count |
+|---|---:|
+| Quest template summaries | 8043 |
+| Templates with XML start conditions | 2427 |
+| Templates with inventory item preconditions | 363 |
+| Templates with combine-skill requirements | 628 |
+| Templates with NPC faction requirements | 365 |
+| Time-based repeat templates | 927 |
+| Race-restricted templates | 7431 |
+| Class-restricted templates | 483 |
+| Gender-restricted templates | 18 |
+| Abyss-rank restricted templates | 12 |
+| Templates with nonzero min level | 8043 |
+| Templates with nonzero max level | 1355 |
+| Largest class-permitted list | 16 |
+
 Existing relevant tests remain:
 
 - `WorldMapRuntimeStateTests.NearbyQuestCandidateProjectionService_RegistersNpcStartQuestIdsLikeJavaWorldMapInstance`
@@ -160,7 +183,7 @@ Existing relevant tests remain:
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
 - C# has only a staged partial predicate for nearby `checkStartConditions`; production dispatch remains disabled.
-- Quest template production static data loading for start-condition fields is not ported; only a staged XML extractor exists.
+- Quest template production static data loading for start-condition fields is not ported; only a staged XML extractor and real-data audit exist.
 - Repeatability max-count handling is partial; repeat reset timing and full `QuestState.canRepeat()` are not modeled.
 - XML start-condition semantics are source-audited only.
 - NPC faction, combine-skill, inventory, abyss-rank, title, class/race/gender enum mapping, and exception/log behavior need C# homes before runtime candidate filtering can be claimed.
@@ -169,7 +192,7 @@ Existing relevant tests remain:
 ## Summary Metrics
 
 - Total Java artifacts discovered: 5 in this unit
-- Total artifacts ported: 3 staged partial artifacts across UOW-992/UOW-993 (`NearbyQuestTemplateTable`, `NearbyQuestStartConditionService`, and `NearbyQuestTemplateXmlExtractor`)
+- Total artifacts ported: 3 staged partial artifacts across UOW-992 through UOW-994 (`NearbyQuestTemplateTable`, `NearbyQuestStartConditionService`, and `NearbyQuestTemplateXmlExtractor`)
 - Total artifacts with verified parity: 0 in this unit
 - Total artifacts needing verification: 5
 - Total blocked artifacts: 4 blocked/not-started categories, including production quest template loading, XML start conditions, repeat timing, and NPC faction/combine-skill dependencies
@@ -177,4 +200,4 @@ Existing relevant tests remain:
 
 ## Next Recommended Unit Of Work
 
-Add a real-data audit for `NearbyQuestTemplateXmlExtractor` over repository quest XML, pinning counts for templates and unsupported-dependency flags before any production `StaticData` integration. Keep XML start conditions, NPC faction, combine skill, packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.
+Add a staged bridge that combines world-instance quest ids, `NearbyQuestTemplateTable`, and `NearbyQuestStartConditionService` into candidate markers without sending `SM_NEARBY_QUESTS`. Keep XML start conditions, NPC faction, combine skill, packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.
