@@ -104,7 +104,9 @@ Required before automatic dispatch:
 
 Current status: not satisfied. Quest get/remove callbacks are not modeled in the ItemPurification path.
 
-UOW-966 adds `docs/ItemPurification-AP-Quest-Readiness-Audit.md`, which records the source-reviewed Java callback ordering: remove notifications fire only through `Storage.delete` when material/base item counts reach zero, target get notifications fire only for actor-backed CUBE adds after the storage update packet, and `QuestEngine.onItemRemoved` only refreshes nearby quests for `questUpdateItems` rather than invoking a symmetric remove-handler map. C# has ordered `QuestNotification` metadata in the application plan, but no dispatcher is wired.
+UOW-966 adds `docs/ItemPurification-AP-Quest-Readiness-Audit.md`, which records the source-reviewed Java callback ordering: remove notifications fire only through `Storage.delete` when material/base item counts reach zero, target get notifications fire only for actor-backed CUBE adds after the storage update packet, and `QuestEngine.onItemRemoved` only refreshes nearby quests for `questUpdateItems` rather than invoking a symmetric remove-handler map.
+
+UOW-967 adds `ItemPurificationApplicationPlanService.ProjectQuestNotifications`, a pure metadata projection that emits Java-ordered `ItemRemoved` candidates for exhausted material/base deletes and `ItemGet` candidates for target add. This does not wire a dispatcher, invoke quest handlers, refresh nearby quests, or satisfy the automatic-dispatch gate.
 
 ### 4. AP Side Effects
 

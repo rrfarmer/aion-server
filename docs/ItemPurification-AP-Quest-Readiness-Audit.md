@@ -94,14 +94,15 @@ Java storage callback behavior relevant to purification:
 Current C# status:
 
 - `ItemPurificationApplicationPlanService` records ordered operations and already flags quest-notification intent on exhausted material/base deletes and target adds.
+- UOW-967 adds `ItemPurificationApplicationPlanService.ProjectQuestNotifications`, a pure projection that maps `DeleteMaterialItem` and `DeleteBaseItem` operations to `ItemRemoved` candidates and `AddTargetItem` operations to `ItemGet` candidates.
 - Partial material count updates do not need item-remove callbacks under Java behavior.
 - Live mutation replaces the player inventory snapshot and applies AP, but intentionally leaves persistence, sends, quest callbacks, and rollback outside its boundary.
 - Production `HandleInfrastructurePacketAsync` still routes `CmItemPurification` to the plan-only `HandleItemPurificationAsync` path.
-- No C# quest item get/remove dispatcher is wired into ItemPurification execution.
+- No C# quest item get/remove dispatcher is wired into ItemPurification execution; the UOW-967 projection is metadata only.
 
 Quest parity gaps:
 
-- C# has metadata for quest notification intent but does not invoke `onItemGet` or `onItemRemoved` equivalents.
+- C# has metadata and a pure ordered projection for quest notification intent but does not invoke `onItemGet` or `onItemRemoved` equivalents.
 - C# does not yet model the Java distinction between get-item handler dispatch and nearby-quest refresh.
 - C# does not yet have a complete `questItems`/`questUpdateItems` projection from Java quest registration data for this path.
 - Target add callback must remain CUBE/actor-backed and must occur after storage update packet semantics are preserved.
@@ -109,7 +110,6 @@ Quest parity gaps:
 
 Safe quest next tests:
 
-- Add a pure projection test over `ItemPurificationApplicationPlan.Operations`: deleted materials, deleted base, and target add produce ordered notification candidates, while partial material updates and Kinah no-op produce none.
 - Add a disabled or no-op `IQuestItemMutationNotifier` seam behind explicit opt-in live execution only, preserving automatic dispatch disabled.
 - Add static-data tests for `questUpdateItems` projection before invoking any live quest handlers.
 
@@ -125,4 +125,3 @@ The next implementation units should prefer narrow opt-in tests and pure project
 4. Java observer artifact generation when Java 25/Maven tooling is available.
 
 Do not mark any AP or quest side effect as verified parity until Java runtime artifacts, deterministic Java comparison, or equivalent objective validation exists.
-
