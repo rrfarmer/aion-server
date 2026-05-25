@@ -28238,6 +28238,53 @@ Next recommended unit of work:
 
 ---
 
+### Session 891 (May 25, 2026)
+- Continued after UOW-890 with the guarded comparison diagnostic for Java-observed reward-add trailing `SM_CUBE_UPDATE`, because Java source shows `ItemPacketService.sendStorageUpdatePacket` sends `SM_INVENTORY_ADD_ITEM` and then `SM_CUBE_UPDATE` for cube storage.
+- Performed Parallel Work Discovery across Java observer/runtime capture, reward-add trailing cube-update diagnostic, real XML template-id audit, and isolated non-decompose gameplay work. Selected the diagnostic as a sequential test-infrastructure unit because it touches the shared decompose comparison helper.
+- Updated `GameServerConnectionInventoryExpansionUseItemTests` so future Java artifacts that match the current C# packet sequence plus a trailing reward-add `SM_CUBE_UPDATE` fail with a targeted parity-gap message instead of a generic packet-order assertion.
+- Added `CompareSelectableDecomposeJavaArtifacts_WithJavaRewardAddTrailingCubeUpdate_ReportsParityGap`.
+- The new regression builds a synthetic live-server-shaped artifact with `SM_CUBE_UPDATE` appended after the reward `SM_INVENTORY_ADD_ITEM` and verifies the comparison reports Java `ItemPacketService.sendStorageUpdatePacket` as the source-reviewed behavior to investigate.
+- This unit intentionally does not ignore or normalize the extra Java packet. If a real Java artifact contains it, the comparison should fail until C# implements equivalent behavior or documents an intentional difference.
+- No production Java/C# code changed in this unit.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests --no-restore` passed with 34 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1455 tests.
+
+#### Migration Parity Table - Session 891
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemPacketService` | `Aion.GameServer.Services.Items` packet writers / guarded comparison helper | Service / Packet Side Effects | Partial | Regression Tested for diagnostic; Java Artifact Comparison Guard Added | Needs Verification | Java source shows cube storage add sends `SM_INVENTORY_ADD_ITEM` then `SM_CUBE_UPDATE`. The guarded comparison now reports that sequence as a parity gap instead of silently accepting it. Real Java artifact still absent. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CUBE_UPDATE` | `Aion.GameServer.Network.Aion.ServerPackets.SmCubeUpdate` | Server Packet | Partial | Regression Tested for diagnostic; Java Artifact Comparison Guard Added | Partial Parity | Diagnostic recognizes a reward-add trailing cube update after reward add as source-reviewed Java behavior needing C# follow-up. It does not verify Java runtime bytes, fields, or whether selectable reward add emits it in a live run. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_ADD_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryAddItem` | Server Packet | Partial | Regression Tested for diagnostic; Java Artifact Comparison Guard Added | Partial Parity | Diagnostic checks packet-order context after reward add. Reward item fields remain guarded by comparison helper; full blob and byte-level parity remain unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ClientPackets.CmSelectDecomposable` / guarded comparison helper | Client Packet Handler | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Future selectable Java artifacts with reward-add trailing cube update now produce a clear gap message. Java runtime handler output remains uncaptured. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CompareSelectableDecomposeJavaArtifacts_WithJavaRewardAddTrailingCubeUpdate_ReportsParityGap` | Regression / Comparison Readiness | Java `ItemPacketService.sendStorageUpdatePacket` source review | Proves the guarded comparison reports a targeted parity gap when a Java-shaped artifact includes `SM_CUBE_UPDATE` after reward `SM_INVENTORY_ADD_ITEM`. | Synthetic C# JSON artifact shaped like future Java output and source-reviewed Java packet service behavior. | Does not compare real Java runtime artifacts; does not implement the trailing cube update in C#; does not verify byte fields. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally because Java 25/Maven/live-server tooling is unavailable.
+- No Java artifact exists yet, so the reward-add trailing cube update has source-review evidence but no runtime confirmation for selectable decompose.
+- C# still may need to emit `SM_CUBE_UPDATE` after reward add if runtime Java artifacts confirm the source-reviewed sequence.
+- Full item-info blob, byte-level payload/frame parity, Java `IDFactory` allocation, persistence, dispatcher ordering, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 0 production code artifacts; 1 guarded comparison diagnostic added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 blocked/not-started categories, including Java observer implementation, Java runtime artifact generation, Java loopback proof validation, real template-id selection, SQL fixture execution, reward-add trailing cube update implementation decision, byte capture, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit improves future artifact diagnostics but adds no Java runtime evidence.
+
+Next recommended unit of work:
+- If Java 25/Maven tooling is available, execute the live-server runbook with the packet observer design and SQL fixture appendix to generate the first Java artifacts.
+- If tooling remains blocked, audit real Java decomposable XML data to pick deterministic source/reward template ids for the live-server capture, or continue an isolated non-decompose Phase 6 gameplay slice that does not touch shared decompose comparison helpers.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
