@@ -1,7 +1,7 @@
 # Quest Reward Side-Effects Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1034, updated by UOW-1035, UOW-1037, UOW-1038, UOW-1039, UOW-1040, UOW-1041, UOW-1042, UOW-1043, UOW-1044, UOW-1045, and UOW-1046
+Unit of Work: UOW-1034, updated by UOW-1035, UOW-1037, UOW-1038, UOW-1039, UOW-1040, UOW-1041, UOW-1042, UOW-1043, UOW-1044, UOW-1045, UOW-1046, and UOW-1047
 
 ## Purpose
 
@@ -63,6 +63,7 @@ XP:
 - The XP plan records Java guard outcomes, Java `float` rate/boost/legion truncation, repose and salvation bonus metadata, capped resulting XP, display level, max repose energy, ascension-limit message intent, XP message kind, `SM_STATUPDATE_EXP` intent, and level-change side-effect intent.
 - UOW-1045 composes the XP plan into quest-finish operation metadata immediately after the XP non-item projection when `QuestFinishRewardSideEffectContext.ExperienceTable` is supplied.
 - UOW-1046 adds concrete XP reward `SmSystemMessage` helpers for Java `PlayerCommonData.addExp` message variants and the level-9 ascension-limit warning, with packet serialization regression coverage.
+- UOW-1047 adds non-live `QuestRewardService.CreateXpSystemMessagePackets`, which maps XP plan message kinds to the concrete XP packet helpers and appends the ascension-limit warning after the XP gain message.
 - The XP plan intentionally does not mutate player XP/level/repose, send packets, call level-change hooks, update nearby quests, or persist state.
 
 ## Title, Cube, And Warehouse
@@ -167,7 +168,7 @@ GP:
 - Precision and overflow for Java `Rates.XP_QUEST` are now source-reviewed and unit-tested in the non-live helper, but lack Java runtime comparison and live quest-finish composition. `Rates.GP` is source-reviewed and unit-tested for membership fallback and int-overflow fallback, but lacks Java runtime comparison.
 - `Rates.QUEST_KINAH` precision/truncation is unit-tested in C# from source-reviewed Java behavior, but it still lacks Java runtime comparison.
 - C# AP rate helper intentionally omits Java overflow logging.
-- Packet masks and packet ordering are incomplete for quest kinah, cube expansion, warehouse expansion, and XP. XP now has concrete reward system-message helpers, but they are not bridged from `QuestXpRewardPlan` or sent live. Quest title and GP have concrete system-message helpers, but no live quest-finish send or Java golden-byte comparison.
+- Packet masks and packet ordering are incomplete for quest kinah, cube expansion, warehouse expansion, and XP. XP now has concrete reward system-message helpers and a non-live plan-to-packet bridge, but no live quest-finish send. Quest title and GP have concrete system-message helpers, but no live quest-finish send or Java golden-byte comparison.
 - C# quest finish still does not execute any reward mutation.
 - Title/cube/warehouse planners are now visible in quest-finish operation metadata when a side-effect context is supplied, but remain metadata only; quest title DAO writes, expirable registration, cube update sends, warehouse info sends, and player expansion counter persistence are not live.
 - GP planner metadata is now visible in quest-finish operation metadata when a side-effect context is supplied, but live GP mutation, offline DAO writes, and deferred persistence are not live by default.
@@ -178,6 +179,6 @@ GP:
 
 ## Recommended Next Units
 
-1. Bridge `QuestXpRewardPlan.MessageKind` to concrete XP system-message helper metadata without live sends, or start a staged level-change executor/plan from the UOW-1046 level-change audit.
+1. Start a staged level-change executor/plan from the UOW-1046 level-change audit.
 2. Add opt-in integration tests/adapter plumbing for the gated offline GP execution path before enabling siege/offline GP callers.
 3. Compose AP/DP/Kinah side-effect metadata only if it remains non-live and preserves Java reward ordering.

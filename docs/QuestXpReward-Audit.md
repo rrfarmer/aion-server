@@ -1,4 +1,4 @@
-# Quest XP Reward Audit - UOW-1044/UOW-1046
+# Quest XP Reward Audit - UOW-1044/UOW-1047
 
 Date: May 25, 2026
 
@@ -69,11 +69,19 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - The helpers are not wired to `QuestXpRewardPlan` or live quest-finish execution yet.
 - Read-only level-change analysis confirmed Java XP level-up side effects happen before `QuestService.finishQuest` marks the quest complete, and before the later quest update/completion-callback sequence.
 
+## C# State After UOW-1047
+
+- Added `QuestRewardService.CreateXpSystemMessagePackets(QuestXpRewardPlan)`.
+- The helper maps `QuestXpRewardPlan.MessageKind` to the concrete UOW-1046 `SmSystemMessage` XP helpers.
+- It returns XP gain message metadata first and appends `LevelLimitQuestNotFinished` when `RequiresAscensionLimitMessage` is true, matching Java `PlayerCommonData.addExp` message order after `setExp`.
+- It returns no packets for skipped XP plans.
+- The helper is still non-live: it creates packet objects only and does not send them.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
 - XP live mutation is not wired into quest finish; UOW-1045 only composes non-live operation metadata.
-- `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are now ported for the XP reward messages used by `PlayerCommonData.addExp`, but `QuestXpRewardPlan` still carries message-kind metadata rather than concrete packet instances.
+- `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are ported for the XP reward messages used by `PlayerCommonData.addExp`, and `QuestXpRewardPlan` can now produce ordered non-live packet metadata.
 - `SM_STATUPDATE_EXP` is represented as a packet intent only; no live send is performed.
 - Level-change hooks are represented as a coarse `LevelChangeSideEffects` intent only. Stat recalculation, nearby quest refresh, quest engine callbacks, skills, guide, starter-kit, and NPC faction effects remain unported.
 - The C# plan uses the current C# `Player.Level` as the previous/display level input. Java derives and updates level through `PlayerCommonData.setExp`; this needs verification before live mutation.
@@ -90,7 +98,8 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `GameServerOptionsTests.LoadFromJavaConfig_AppliesMyGsOverridesLast`
 - `QuestFinishOperationPlanServiceTests.CreatePlan_ComposesXpSideEffectPlanAfterMatchingNonItemProjectionWithoutMutatingPlayer`
 - `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages`
+- `QuestRewardServiceTests.CreateXpSystemMessagePackets_MapsPlanMessageKindsAndAscensionWarningInJavaOrder`
 
 ## Next Recommendation
 
-Bridge `QuestXpRewardPlan.MessageKind` to the concrete XP system-message helpers without enabling live sends, or start a staged level-change executor/plan from the UOW-1046 read-only level-change findings. Keep live XP mutation disabled until stat updates, nearby quest refresh, quest callbacks, skill learning, and persistence behavior are modeled.
+Start a staged level-change executor/plan from the UOW-1046 read-only level-change findings. Keep live XP mutation disabled until stat updates, nearby quest refresh, quest callbacks, skill learning, and persistence behavior are modeled.
