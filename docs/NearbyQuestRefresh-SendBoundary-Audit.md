@@ -67,7 +67,7 @@ Do not wire a real C# nearby-refresh send until all selected gates for the targe
 
 2. Predicate coverage
    - The target send path must either implement full Java nearby `QuestService.checkStartConditions(player, questId, false, 2, false, false, false)` behavior or filter out unsupported templates before sending.
-- Current unsupported or incomplete categories include production player-controller refresh wiring, NPC faction daily assignment/mutation and start-quest `questId` guard, and quest-finish repeat-date calculation. Staged static-data loading, configurable master-crafting adjustment, and enter-world NPC faction hydration now exist, but they have not been Java-runtime verified or wired to live sends.
+- Current unsupported or incomplete categories include production player-controller refresh wiring, NPC faction daily assignment/mutation and quest-start wiring, and quest-finish repeat-date calculation. Staged static-data loading, configurable master-crafting adjustment, enter-world NPC faction hydration, the future assigned-faction quest-start helper, and a read-only repeat-date audit now exist, but they have not been Java-runtime verified or wired to live sends.
 
 3. Player/world lookup
    - The send method must resolve the player's current map-region parent/world-instance equivalent.

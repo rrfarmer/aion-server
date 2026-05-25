@@ -157,6 +157,7 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 - UOW-1006 adds staged NPC faction static-data loading, matching Java `NpcFactionsData` id/NPC-id indexing and `NpcFactionTemplate.isMentor()` category behavior.
 - UOW-1007 hydrates Java-schema `player_npc_factions` rows into `Player.NpcFactions` during enter-world when `GameServerRuntimeContext.DataManager.StaticData.NpcFactions` is available. It derives the mentor slot from static `npc_factions.xml` metadata like Java `NpcFaction`, but daily assignment, join/leave mutation, future `QuestService.startQuest` assigned-quest wiring, and faction persistence writes remain unported.
 - UOW-1008 stages the assigned NPC faction quest guard as `PlayerNpcFactionsSnapshot.CanStartAssignedQuest`. This is intentionally not called from the nearby predicate because Java enforces the `faction.getQuestId() == id` check in `QuestService.startQuest`, after the nearby `checkStartConditions` path.
+- UOW-1009 adds `docs/QuestRepeatDate-Audit.md`, a read-only audit for Java `QuestService.calculateRepeatDate`. The current nearby repeat check can consume loaded `next_repeat_time`, but C# still does not calculate that value on quest completion.
 
 ## Migration Parity Table
 
