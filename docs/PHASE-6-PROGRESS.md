@@ -28543,6 +28543,76 @@ Next recommended unit of work:
 
 ---
 
+### Session 897 (May 25, 2026)
+- Continued after UOW-896 with an isolated AP rank/legion contribution planning slice because Java runtime tooling remains unavailable and AP work was the latest handoff's preferred non-decompose candidate.
+- Performed Parallel Work Discovery across Java decompose runtime capture, AP rank/legion contribution, `CM_EMOTION` observer/stat fanout, group portal fanout, and read-only AP analysis. Selected a sequential orchestrator-owned AP slice because the first useful implementation touches new shared service/packet/test files and progress docs.
+- Reviewed Java:
+  - `services/abyss/AbyssPointsService.addAp(Player, int)`
+  - `services/abyss/AbyssPointsService.addAp(Player, VisibleObject, int)`
+  - `model/gameobjects/player/AbyssRank.addAp`
+  - `services/SiegeService.onAbyssPointsAdded`
+  - `network/aion/serverpackets/SM_LEGION_EDIT`
+  - `model/team/legion/Legion.addContributionPoints`
+- Added `AbyssPointsService` as a pure C# planning/mutation boundary for Java AP add behavior:
+  - null-player no-op
+  - AP mutation through `PlayerAbyssRank.AddAp`
+  - AP gain/spend system-message intents
+  - `SM_ABYSS_RANK` intent when AP/rank changes
+  - rank-change intent for `SM_ABYSS_RANK_UPDATE`
+  - rank-limit equipment and abyss-skill update flags
+  - positive legion contribution intent
+  - siege callback intent for player or non-peace siege-NPC sources
+- Added contribution-only `SmLegionEdit` for Java `SM_LEGION_EDIT` type `0x03`.
+- Added `AbyssPointsServiceTests`.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~AbyssPointsServiceTests --no-restore` passed with 7 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1466 tests.
+
+#### Migration Parity Table - Session 897
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `Aion.GameServer.Services.AbyssPointsService` | Service | Partial | Unit Tested | Partial Parity | C# planner covers null-player no-op, AP gain/spend messages, rank packet intents, rank-change flags, legion contribution intent, and visible-object siege callback intent. Not yet wired into AP callers. Java logging for values over 30000, direct packet dispatch, equipment/skill side-effect execution, and runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.gameobjects.player.AbyssRank` | `Aion.GameServer.Model.GameObjects.PlayerAbyssRank` | Model | Partial | Unit Tested through AP planner and existing rank tests | Needs Verification | Existing `AddAp` behavior is reused. Java AP-cap config (`CustomConfig.ENABLE_AP_CAP` / `AP_CAP_VALUE`) is not represented in this slice. GP rank thresholds, daily/weekly positive-only AP updates, and zero-floor behavior remain source-reviewed but not runtime compared. |
+| `com.aionemu.gameserver.services.SiegeService` | `Aion.GameServer.Services.AbyssPointsSiegeCallback` | Service / Intent | Partial | Unit Tested | Needs Verification | C# records a callback intent only for player sources or non-peace siege NPC sources, matching Java `onAbyssPointsAdded` gate. Active siege counter mutation is not ported here. |
+| `com.aionemu.gameserver.model.team.legion.Legion` | `Aion.GameServer.Services.AbyssPointsLegionContribution` | Model / Intent | Partial | Unit Tested | Needs Verification | C# records positive gained AP as legion contribution and computes a new contribution total from supplied current contribution. No full Legion aggregate, persistence, online-member lookup, or broadcast execution exists in this slice. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LEGION_EDIT` | `Aion.GameServer.Network.Aion.ServerPackets.SmLegionEdit` | Server Packet | Partial | Unit Tested | Needs Verification | Only type `0x03` contribution update is ported and payload-tested (`C type`, `Q contribution`). Other Java edit types (`0x00`, `0x01`, `0x02`, `0x04`-`0x08`) remain unsupported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRank` | Server Packet | Partial | Unit Tested via planner intent and existing packet tests | Needs Verification | Planner emits rank packet intent when AP/rank changes. Byte-level packet parity relies on existing packet tests, not Java runtime output. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK_UPDATE` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRankUpdate` | Server Packet | Partial | Unit Tested via planner intent and existing packet tests | Needs Verification | Planner emits rank-change broadcast intent when rank changes. Visible-player fanout and equipment/skill side effects are flags only in this slice. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Unit Tested | Needs Verification | Planner tests cover Java AP gain (`1320000`) and spend (`1300965`) message ids. Message parameter payloads were not byte-compared against Java runtime. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `AddAp_GainsPointsSendsRankAndLegionContributionLikeJava` | Unit | Java `AbyssPointsService.addAp`, `AbyssRank.addAp`, `SM_LEGION_EDIT` source review | Positive AP gain mutates rank, emits gain/rank intents, flags rank side effects, and creates a contribution update packet with the new total. | Deterministic C# unit test grounded in Java source. | No Java runtime comparison; no full Legion aggregate or broadcast execution. |
+| `AddAp_SpendingSendsUseMessageWithoutLegionContribution` | Unit | Java `AbyssPointsService.addAp` source review | Negative AP sends spend message, emits rank packet for AP change, and does not add legion contribution. | Deterministic C# unit test grounded in Java source. | AP-cap config and runtime message bytes not verified. |
+| `AddApFromObject_CreatesSiegeCallbackOnlyForPlayerOrNonPeaceSiegeNpc` | Unit | Java `AbyssPointsService.addAp(Player, VisibleObject, int)` and `SiegeService.onAbyssPointsAdded` source review | Siege callback intent appears only for player or non-peace siege-NPC sources. | Deterministic C# unit test grounded in Java source. | Active siege counters are not ported. |
+| `AddAp_NullPlayerDoesNothingLikeJava` | Unit | Java `AbyssPointsService.addAp` null guard | Null player returns no mutation or packets. | Deterministic C# unit test grounded in Java source. | None for this narrow branch; broader service still partial. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- `AbyssPointsService` is not yet wired into `ApExtractService`, PVP, quest rewards, trade, item charge, purification, or NPC reward callers.
+- Full legion model, persistence, online member broadcast, and other `SM_LEGION_EDIT` edit types remain unported.
+- Active siege counter updates are represented only as intents.
+- Java AP-cap config is not represented in `PlayerAbyssRank.AddAp` or the new planner.
+- Rank-change side effects (`Equipment.checkRankLimitItems`, `AbyssSkillService.updateSkills`) are flags only; caller wiring remains future work.
+- Packet bytes were tested for the new contribution packet but not compared against Java runtime output.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 partial AP planning service and 1 partial legion-edit packet
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 7 blocked/not-started categories, including caller wiring, full Legion aggregate/broadcast, active siege counters, Java AP cap config, rank-limit equipment execution, abyss-skill update execution, and Java runtime comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit adds a reusable AP side-effect boundary but does not wire every AP caller.
+
+Next recommended unit of work:
+- Wire `AbyssPointsService` into the AP extraction path as the smallest existing AP caller, preserving existing inventory mutation behavior while adding AP packet/side-effect intents.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
