@@ -1,7 +1,7 @@
 # Quest Persistence Contract Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1021
+Unit of Work: UOW-1021; updated by UOW-1022
 
 ## Purpose
 
@@ -134,6 +134,7 @@ The mentor title side effects are not part of `PlayerNpcFactionsDAO`; they belon
 - `LoadPlayerQuestsAsync` orders by `quest_id`; Java load uses SQL without `ORDER BY` but then stores quests in a `TreeMap`.
 - `PlayerEnterWorldRepository.LoadPlayerNpcFactionsAsync` reads NPC faction rows and builds `PlayerNpcFactionsSnapshot`.
 - `SavePlayerLogoutAsync` saves life stats, cooldowns, settings, and core `players` columns, then marks `online = false`.
+- UOW-1022 adds `QuestPersistencePlanService`, a pure non-live planner that accepts explicit Java-shaped persistence states and emits delete, insert, and update descriptors in Java DAO phase order.
 - C# has no quest-state write path equivalent to `PlayerQuestListDAO.store`.
 - C# has no NPC-faction write path equivalent to `PlayerNpcFactionsDAO.storeNpcFactions`.
 - `QuestFinishOperationPlanService` has deferred quest and NPC-faction persistence descriptors only.
@@ -141,8 +142,8 @@ The mentor title side effects are not part of `PlayerNpcFactionsDAO`; they belon
 
 ## Recommended Implementation Slices
 
-1. Add a non-live quest persistence plan that classifies current/deleted quest states into delete, insert, and update operations in Java order.
-2. Add a non-live NPC-faction persistence plan that classifies faction rows into insert/update operations and records Java's lack of updated-state reset.
+1. Add a non-live NPC-faction persistence plan that classifies faction rows into insert/update operations and records Java's lack of updated-state reset.
+2. Compose quest and NPC-faction persistence plans into `QuestFinishOperationPlanService` only after both planners exist.
 3. Decide whether C# should intentionally preserve Java's helper-level commit/no-rollback behavior or use a safer transaction as an explicit intentional difference.
 4. Keep live DAO writes disabled until operation plans and failure-ordering tests are in place.
 
@@ -153,3 +154,4 @@ The mentor title side effects are not part of `PlayerNpcFactionsDAO`; they belon
 - Java NPC faction persistence opens one connection per row and does not mark rows `UPDATED` after insert/update.
 - Java `HashSet`/`HashMap` ordering affects deleted quest id order and NPC faction write order; C# should not assume deterministic order unless it intentionally normalizes and documents the difference.
 - C# lacks `PersistentState` on quest and NPC-faction snapshots, so live writes need either explicit operation inputs or new state tracking.
+- UOW-1022 normalizes current quest rows by quest id like Java's `TreeMap`, but deleted quest id set ordering remains caller-provided because Java uses a `HashSet`.

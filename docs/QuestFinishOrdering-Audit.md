@@ -113,15 +113,16 @@ The NPC faction update persists:
 - UOW-1019 composes `QuestFinishRewardPlanService` into `QuestFinishOperationPlanService` through an optional reward projection, keeping detailed reward/work-item descriptors before staged quest-state mutation.
 - UOW-1020 adds `docs/QuestCompletionCallback-Audit.md`, documenting Java completion callback registration, dynamic handler loading, dispatch ordering, and follow-up quest side effects.
 - UOW-1021 adds `docs/QuestPersistenceContract-Audit.md`, documenting logout/store ordering, quest DAO commit behavior, NPC-faction write behavior, and Java persistent-state gaps.
+- UOW-1022 adds `QuestPersistencePlanService`, a non-live quest persistence operation planner for Java delete/insert/update DAO phases.
 - C# has quest and NPC faction read hydration, but no corresponding write persistence path for these completion mutations.
 - C# has packet serializers for quest list/completed-list shapes and a non-sending `SM_QUEST_ACTION(ActionType.UPDATE, qs)` body. No production quest-finish send path is wired.
 - C# has no `QuestEngine.onQuestCompleted` equivalent or production nearby-refresh send trigger wired to quest completion.
 
 ## Recommended Implementation Slices
 
-1. Add non-live quest and NPC-faction persistence operation plans before replacing deferred persistence descriptors with repository writes.
-2. Add a non-live callback dispatch plan only after deciding how to model Java handler registration order and exception behavior.
-3. Connect `SmQuestAction.Update` to the staged operation plan only as a non-live packet descriptor/object.
+1. Add the non-live NPC-faction persistence operation plan before replacing deferred persistence descriptors with repository writes.
+2. Compose quest/NPC-faction persistence plans into the quest-finish operation plan only as non-live descriptors.
+3. Add a non-live callback dispatch plan only after deciding how to model Java handler registration order and exception behavior.
 4. Wire live sends and DAO writes only behind explicit opt-in tests.
 
 ## Remaining Risks
