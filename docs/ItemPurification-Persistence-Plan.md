@@ -56,6 +56,8 @@ Current C# behavior:
 
 Add an ItemPurification-specific repository method rather than a broad generic inventory transaction.
 
+Implementation status as of UOW-954: the method signature, empty-repository recording stub, MySQL repository method, and pure persistence payload mapper exist. Automatic handler invocation remains disabled, and inherited target `item_stones` row persistence is still incomplete.
+
 Recommended signature:
 
 ```csharp
@@ -114,4 +116,3 @@ Recommended focused tests:
 - `InsertInventoryItemAsync` persists inventory rows but does not insert inherited socket/godstone/fusion/idian rows for newly copied purification targets. This must be solved before real persistence of inherited target items is considered complete.
 - Threading differs: Java `ItemStorage` uses a `ConcurrentHashMap` and storage queues; C# currently replaces immutable snapshots on the `Player`.
 - Transaction behavior differs if C# commits all writes atomically; this should remain an intentional safety difference unless runtime Java behavior proves partial commits are required.
-
