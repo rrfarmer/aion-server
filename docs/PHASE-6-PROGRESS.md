@@ -34373,6 +34373,59 @@ Next recommended unit of work:
 
 ---
 
+### Session 1002 (May 25, 2026)
+- Continued after UOW-1001 by implementing the narrow staged repeat-timing slice for nearby start checks.
+- Java breadcrumbs:
+  - `QuestState.canRepeat()` blocks when `completeCount >= maxRepeatCount`, except `maxRepeatCount == 255` is unlimited.
+  - For time-based repeat quests, Java blocks only when `nextRepeatTime != null` and current wall-clock time is before that timestamp.
+  - Null `nextRepeatTime` is immediately repeatable, and equality at the reset timestamp passes.
+- Added nullable `NextRepeatTime` and `CompleteTime` to `PlayerQuestState`.
+- Updated `MySqlPlayerEnterWorldRepository.LoadPlayerQuestsAsync` to select and hydrate `next_repeat_time` and `complete_time` alongside reward group.
+- Preserved parsed `repeat_cycle` tokens on `NearbyQuestTemplateSummary` instead of only reducing them to `IsTimeBased`.
+- Replaced the staged fail-closed `UnsupportedRepeatTiming` branch with tested Java `canRepeat()` comparisons for completed nearby quests.
+- Kept repeat-date calculation at quest finish, weekly/daily reset notification packets, live nearby sends, production player-controller refresh, production `StaticData` integration, and production ItemPurification dispatch disabled.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~NearbyQuestStartConditionServiceTests|FullyQualifiedName~NearbyQuestTemplateXmlExtractorTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~NearbyQuestRefreshPlanServiceTests|FullyQualifiedName~NearbyQuestMarkerProjectionServiceTests"` passed with 23 tests.
+
+#### Migration Parity Table - Session 1002
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.questEngine.model.QuestState.canRepeat` | `Aion.GameServer.Services.NearbyQuestStartConditionService`; `Aion.GameServer.Model.GameObjects.PlayerQuestState` | Quest State / Predicate | Partial | Unit Tested | Partial Parity | C# now matches the deterministic nearby start subset: max-repeat exhaustion, unlimited `255`, null `nextRepeatTime`, future timestamp block, and equality-at-reset pass. Java runtime comparison is still blocked. |
+| `com.aionemu.gameserver.questEngine.model.QuestState` | `Aion.GameServer.Model.GameObjects.PlayerQuestState` | DTO / Quest State | Partial | Unit Tested; Integration Tested when DB flag enabled | Partial Parity | Adds nullable `NextRepeatTime` and `CompleteTime`. Mutation on quest completion and persistence updates remain outside this slice. |
+| `com.aionemu.gameserver.dao.PlayerQuestListDAO.load` | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.LoadPlayerQuestsAsync` | Repository / Quest State Hydration | Partial | Integration Tested when DB flag enabled | Partial Parity | Selects Java-schema `next_repeat_time` and `complete_time`. The DB integration assertion is gated; normal local tests compile it and return early. Timezone interpretation of unspecified MySQL `DateTime` values needs live DB verification. |
+| `com.aionemu.gameserver.model.templates.QuestTemplate`; `com.aionemu.gameserver.model.templates.quest.QuestRepeatCycle` | `Aion.GameServer.Dataholders.NearbyQuestTemplateSummary`; `NearbyQuestTemplateXmlExtractor` | Dataholder / Enum-like XML Dependency | Partial | Unit Tested | Partial Parity | Preserves parsed repeat-cycle tokens such as `ALL`, `MON`, and `WED`; C# does not yet calculate the next reset day at quest finish. |
+| `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `Aion.GameServer.Services.NearbyQuestStartConditionService` | Service / Quest Predicate | Partial | Unit Tested | Partial Parity | Completed time-based nearby quests now use staged repeat timing instead of failing closed. Combine-skill, NPC faction, warning packets, exception/log behavior, production static-data loading, and live send triggers remain unsupported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesJavaQuestStateAndRepeatGatesConservatively` | Unit | Java `QuestState.canRepeat` | Validates START/REWARD blocking, max-repeat exhaustion, `255` unlimited repeat count, time-based null next-repeat pass, future next-repeat block, and equality-at-reset pass. | Deterministic C# test from source-reviewed Java predicate. | Does not compare against a running Java server. |
+| `NearbyQuestTemplateXmlExtractorTests.Extract_ReadsNearbyPredicateQuestTemplateFieldsLikeJavaQuestTemplate` | Unit | Java `QuestTemplate.repeat_cycle` JAXB field and `QuestRepeatCycle` enum names | Validates repeat-cycle token preservation from XML. | Deterministic C# XML extractor test. | Does not validate JAXB runtime conversion. |
+| `PlayerEnterWorldRepositoryDatabaseIntegrationTests.LoadPlayerQuests_HydratesRewardGroupAndRepeatTimesAgainstJavaSchema_WhenEnabled` | Integration | Java `PlayerQuestListDAO.SELECT_QUERY` | Validates reward group, next-repeat time, and complete time hydration when DB integration is enabled. | Gated Java-schema integration assertion. | Skips unless `AION_GAMESERVER_DB_INTEGRATION=1`; timezone behavior still needs live DB verification. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Repeat timing is staged for nearby start checks only; quest-finish repeat-date calculation and reset notification packets are not ported.
+- `DateTimeKind.Unspecified` MySQL timestamp interpretation uses the local offset until repository-level server-timezone plumbing exists.
+- Production `StaticData`/JAXB loading remains unwired.
+- Combine-skill checks and NPC faction checks remain unsupported.
+- Packet sends, `CM_LEVEL_READY`, NPC-spawn delayed refresh, production player-controller refresh, and ItemPurification dispatch remain disabled.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 in this unit
+- Total artifacts ported: 3 staged partial artifacts in this unit: repeat predicate support, repeat-cycle token preservation, and quest timestamp hydration
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 5 blocked/not-started categories: quest-finish repeat-date calculation, server-timezone DB verification, combine-skill predicates, NPC faction predicates, and live nearby send triggers
+- Estimated overall migration completion: Phase 6 remains about 70% complete; this unit removes the nearby start-check repeat timing blocker without enabling live nearby quest refresh.
+
+Next recommended unit of work:
+- Add the next narrow nearby predicate dependency: combine-skill/master-crafting checks, NPC faction checks, or broader representative-player refresh-plan audits. Keep packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.
+
+---
+
 ## Next Steps
 
 1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure ItemPurification quest-notification projection, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, the handler-level ItemPurification workflow/application/packet-plan composition bridge, the ItemPurification runtime-input packet bridge, the ItemPurification ready concrete-packet send bridge, the ItemPurification target object-id allocation bridge, the ItemPurification random-bonus selection seam, the ItemPurification non-persistent mutation snapshot preview, the ItemPurification non-persistent handler mutation bridge, the ItemPurification live mutation adapter boundary, the ItemPurification live execution composition seam, the ItemPurification live AP rank-drop metadata regression, the ItemPurification explicit live AP player-packet emission bridge, the ItemPurification explicit live AP rank-update broadcast bridge, the ItemPurification explicit live equipment rank-limit state mutation bridge, the ItemPurification explicit live equipment rank-limit packet fanout bridge, the ItemPurification explicit live abyss skill refresh bridge, the ItemPurification explicit opt-in quest notification no-op seam, the ItemPurification explicit transform-min-rank config plumbing, the ItemPurification quest-update items audit, the ItemPurification quest-update item static-data projection, the ItemPurification no-op nearby-refresh planning seam, the ItemPurification no-op nearby-refresh dispatcher seam, the ItemPurification nearby quest refresh surface audit, the ItemPurification nearby quest packet prerequisite, the ItemPurification nearby quest world-instance registry prerequisite, the ItemPurification nearby quest start-registration table prerequisite, the ItemPurification handler opt-in live execution seam, the ItemPurification persistence plan analysis, the ItemPurification repository contract/payload plumbing, the ItemPurification inserted target item-stone persistence, the ItemPurification opt-in persistent live execution seam, the ItemPurification handler-level opt-in persistent execution helper, the ItemPurification handler-level persistence failure-ordering regression, the ItemPurification automatic-dispatch readiness policy, the ItemPurification staged dispatch-failure policy, the ItemPurification Java observer design, the ItemPurification opt-in DB integration happy path, the ItemPurification opt-in DB rollback path, the ItemPurification AP/quest readiness audit, the pure ItemCharge AP spend guard, and the live ItemCharge selected-item/charge-all AP guard consolidation now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. ItemCharge Kinah payment guard/consolidation, charge-all stale-item payment-before-revalidation hardening, mixed stale/current charge-all AP regression coverage, mixed stale/current charge-all Kinah regression coverage, missing/current charge-all AP approximation coverage, and missing/current charge-all Kinah approximation coverage are now staged for live selected-item/charge-all paths. Move next to Java observer artifact generation when tooling is available, nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another existing planner live adapter when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player/equipment/skill packets, AP/login rank-limited equipment persistence, configured abyss transform skill updates, rank config load, and real quest handler dispatch. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.

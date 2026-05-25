@@ -162,6 +162,8 @@ UOW-1000 hydrates Java-schema `player_quests.reward` into `PlayerQuestState.Rewa
 
 UOW-1001 adds staged nearby inventory item precondition support, matching Java `inventoryItemCheck` by checking item-id presence only and ignoring optional XML count for this gate. This remains offline: production nearby sends, combine/NPC-faction predicates, and time-based repeat behavior are still not dispatch-ready.
 
+UOW-1002 adds staged nearby repeat timing for completed quests, including `PlayerQuestState.NextRepeatTime`/`CompleteTime`, repository hydration for `next_repeat_time`/`complete_time`, repeat-cycle token preservation, and deterministic Java `QuestState.canRepeat()` edge-case tests. This remains offline: production nearby sends, combine/NPC-faction predicates, quest-finish repeat reset calculation, and timestamp timezone verification are still not dispatch-ready.
+
 ### 4. AP Side Effects
 
 Required before automatic dispatch:
@@ -228,7 +230,7 @@ Recommended next units:
 
 1. Generate Java runtime observer artifacts for ItemPurification packet/DB capture when Java 25/Maven tooling is available.
 2. Generate Java runtime failure artifacts or deliberately choose a final production failure policy once packet/DB comparison evidence exists.
-3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next adding repeat timing, combine/NPC-faction nearby predicate support, or broader refresh-plan coverage while preserving the no-op dispatcher seam until quest predicate and send-trigger parity exist.
+3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next adding combine/NPC-faction nearby predicate support or broader refresh-plan coverage while preserving the no-op dispatcher seam until quest predicate and send-trigger parity exist.
 4. Add AP spend packet/side-effect projection tests behind explicit opt-in live execution before production dispatch wiring.
 
 Unsafe next work:
