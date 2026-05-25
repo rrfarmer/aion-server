@@ -121,6 +121,8 @@ UOW-966 records the source-reviewed AP gap list in `docs/ItemPurification-AP-Que
 
 UOW-968 adds focused live-execution regression coverage for a rank-dropping AP spend. The test verifies C# produces the modeled spend system-message packet, `SmAbyssRank`, rank-update broadcast packet, rank-limit flag, and abyss-skill flag, but also verifies ItemPurification live execution still skips the AP metadata operation instead of sending those packets. This improves evidence for the AP gate but does not satisfy it.
 
+UOW-969 emits `AbyssPointsAddPlan.PlayerPackets` from the explicit ItemPurification live-execution helper at the existing AP packet-plan slot. This improves the opt-in live path only. Automatic production dispatch remains disabled, and the AP gate is still open for rank-update broadcast execution, rank-limited equipment execution, abyss skill refresh execution, and Java runtime packet comparison.
+
 ### 5. Packet Ordering And Runtime Comparison
 
 Required before automatic dispatch:
