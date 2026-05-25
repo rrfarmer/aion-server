@@ -107,22 +107,23 @@ The NPC faction update persists:
 - UOW-1012 stages quest state completion in `QuestFinishStateMutationService`, including status, quest vars, complete count/time, and next repeat time.
 - UOW-1013 stages NPC faction completion in `PlayerNpcFactionsSnapshot.CompleteActiveQuest`.
 - UOW-1015 adds `QuestFinishOperationPlanService`, a non-live operation plan that composes staged quest-state mutation and optional NPC faction completion with Java-ordered descriptors for future packet, callback, nearby-refresh, and persistence work.
+- UOW-1016 adds `SmQuestAction.Update`, a non-sending C# serializer for the Java `SM_QUEST_ACTION(ActionType.UPDATE, qs)` payload body plus explicit extra-category suppression.
 - C# has quest and NPC faction read hydration, but no corresponding write persistence path for these completion mutations.
-- C# has packet serializers for quest list/completed-list shapes, but no production `SM_QUEST_ACTION(ActionType.UPDATE, qs)` quest-finish send path.
+- C# has packet serializers for quest list/completed-list shapes and a non-sending `SM_QUEST_ACTION(ActionType.UPDATE, qs)` body. No production quest-finish send path is wired.
 - C# has no `QuestEngine.onQuestCompleted` equivalent or production nearby-refresh send trigger wired to quest completion.
 
 ## Recommended Implementation Slices
 
-1. Add a C# `SM_QUEST_ACTION` update packet only after the operation plan can prove ordering and extra-category suppression.
-2. Add quest-state and NPC-faction persistence contracts after the runtime operation plan is stable.
-3. Audit or stage reward/work-item mutation before enabling any live quest-finish path.
+1. Audit or stage reward/work-item mutation before enabling any live quest-finish path.
+2. Connect `SmQuestAction.Update` to the staged operation plan only as a non-live packet descriptor/object.
+3. Add quest-state and NPC-faction persistence contracts after reward and operation planning are stable.
 4. Wire live sends and DAO writes only behind explicit opt-in tests.
 
 ## Remaining Risks
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
 - Reward calculation and inventory mutation ordering are not ported.
-- `SM_QUEST_ACTION` extra-category suppression may make packet emission conditional even after state mutation.
+- `SM_QUEST_ACTION` extra-category suppression is currently an explicit C# flag rather than a production static-data lookup.
 - Java callback handlers can perform additional quest mutations and packet sends; C# has no quest handler runtime yet.
 - Persistence is deferred and split across player-store phases, so immediate quest completion is not transactional with later DAO writes.
 - `PlayerQuestListDAO.store` commits delete/insert/update phases separately and does not rollback on helper-level SQL errors; matching or intentionally changing this behavior needs a deliberate persistence design.

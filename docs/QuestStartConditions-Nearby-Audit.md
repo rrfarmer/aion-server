@@ -164,6 +164,7 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 - UOW-1013 adds staged NPC faction completion state and the Java `NpcFactions.getNextTime()` daily 09:00 reset helper. It is not wired to production quest completion, mentor title side effects, faction DAO writes, daily assignment, packets, or nearby refresh.
 - UOW-1014 adds `docs/QuestFinishOrdering-Audit.md`, documenting Java quest-finish packet, callback, NPC faction completion, nearby-refresh, and deferred persistence ordering. It does not change runtime code.
 - UOW-1015 adds a staged `QuestFinishOperationPlanService` that composes quest-state mutation, optional NPC faction completion, and ordered non-live descriptors for packet update, callback dispatch, nearby refresh, and deferred persistence. It does not send packets or write DAOs.
+- UOW-1016 adds non-sending `SmQuestAction.Update` byte serialization for Java `SM_QUEST_ACTION(ActionType.UPDATE, qs)`, including explicit extra-category body suppression. It is not wired to live quest completion.
 
 ## Migration Parity Table
 
@@ -186,6 +187,7 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 | `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestRefreshPlanService` | Controller / Quest UI Refresh Plan | Partial | Unit Tested | Partial Parity | UOW-998 composes staged marker projection into a non-sending plan with explicit readiness/failure states. It does not resolve live map-region parents, send `SM_NEARBY_QUESTS`, schedule NPC-spawn refresh, or claim Java `HashMap` ordering parity. |
 | `com.aionemu.gameserver.network.aion.serverpackets.SM_QUEST_ACTION`; `QuestEngine.onQuestCompleted`; `PlayerQuestListDAO.store`; `PlayerNpcFactionsDAO.storeNpcFactions` | Future C# quest-finish operation plan / packet / persistence boundaries | Packet / Callback / Repository Dependency | Not Started | Manual Only | Needs Verification | UOW-1014 documents Java ordering: update packet before callbacks, callbacks before NPC faction completion, nearby refresh last, and DAO writes deferred to `PlayerService.storePlayer`. No C# composed operation plan or live side effects exist yet. |
 | `com.aionemu.gameserver.services.QuestService.finishQuest`; `SM_QUEST_ACTION`; `QuestEngine.onQuestCompleted`; `NpcFactions.completeQuest` | `Aion.GameServer.Services.QuestFinishOperationPlanService` | Service / Operation Plan | Partial | Unit Tested | Partial Parity | UOW-1015 composes staged quest-state and NPC faction helpers into Java-ordered descriptors. Reward mutation, work-item removal, live packets, callback runtime, DAO writes, and production nearby refresh remain unported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_QUEST_ACTION` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestAction` | Packet | Partial | Unit Tested | Partial Parity | UOW-1016 ports the non-sending `UPDATE` body shape and explicit extra-category suppression. Other action types and production static-data suppression lookup remain unported. |
 | `com.aionemu.gameserver.model.templates.quest.XMLStartCondition` | Future C# XML start-condition predicate | Dataholder / Predicate | Not Started | Manual Only | Needs Verification | UOW-998 read-only analysis clarifies optional `finished` rows, mandatory non-finished rows, reward-group matching, repeatable prerequisite completion, `acquired` COMPLETE behavior, `equipped` warn gating, and `required_title` enforcement. No C# predicate code added yet. |
 
 ## Tests Added/Updated
@@ -275,7 +277,7 @@ Existing relevant tests remain:
 ## Summary Metrics
 
 - Total Java artifacts discovered: 9 in this unit
-- Total artifacts ported: 17 staged partial artifacts across UOW-992 through UOW-1015 (`NearbyQuestTemplateTable`, `NearbyQuestStartConditionService`, `NearbyQuestTemplateXmlExtractor`, `NearbyQuestMarkerProjectionService`, `NearbyQuestRefreshPlanService`, `NearbyQuestXmlStartCondition`, `NearbyQuestFinishedCondition`, `NearbyQuestInventoryItem`, `PlayerQuestState` reward/repeat fields, repository hydration, combine-skill predicate support, NPC faction snapshot support, master required-count support, NPC faction static-data loading, staged quest-finish state mutation, staged NPC faction completion, and staged quest-finish operation planning)
+- Total artifacts ported: 18 staged partial artifacts across UOW-992 through UOW-1016 (`NearbyQuestTemplateTable`, `NearbyQuestStartConditionService`, `NearbyQuestTemplateXmlExtractor`, `NearbyQuestMarkerProjectionService`, `NearbyQuestRefreshPlanService`, `NearbyQuestXmlStartCondition`, `NearbyQuestFinishedCondition`, `NearbyQuestInventoryItem`, `PlayerQuestState` reward/repeat fields, repository hydration, combine-skill predicate support, NPC faction snapshot support, master required-count support, NPC faction static-data loading, staged quest-finish state mutation, staged NPC faction completion, staged quest-finish operation planning, and non-sending quest action update packet)
 - Total artifacts with verified parity: 0 in this unit
 - Total artifacts needing verification: 14
 - Total blocked artifacts: 6 blocked/not-started categories, including production quest template loading/config plumbing, quest-finish packet/persistence/callback wiring, NPC faction mentor-title/daily-assignment side effects, timestamp timezone verification, broader refresh-plan archetype audits, and production send triggers
@@ -283,4 +285,4 @@ Existing relevant tests remain:
 
 ## Next Recommended Unit Of Work
 
-Port a non-sending `SM_QUEST_ACTION` update packet serializer or audit reward/work-item mutation. Keep packet sends, production integration, DAO writes, live nearby refresh, and production ItemPurification dispatch disabled until each dependency has tests.
+Audit reward/work-item mutation for `QuestService.finishQuest`, then stage descriptors or pure helpers without live item rewards. Keep packet sends, production integration, DAO writes, live nearby refresh, and production ItemPurification dispatch disabled until each dependency has tests.
