@@ -28120,6 +28120,68 @@ Next recommended unit of work:
 
 ---
 
+### Session 889 (May 25, 2026)
+- Continued after UOW-888 with the now-unblocked object-id mapping/comparison task because the Java packet-observer design defined explicit logical/Java object-id mapping names for future artifacts.
+- Performed Parallel Work Discovery across Java observer implementation, object-id comparison support, SQL fixture appendix work, and artifact schema review. Selected object-id comparison support as a sequential test-infrastructure unit because Java tooling remains unavailable and the shared comparison helper should have one owner.
+- Updated `GameServerConnectionInventoryExpansionUseItemTests` so the guarded Java artifact comparison now compares:
+  - client packet `payload_fields.object_id`
+  - source item object id in `SM_ITEM_USAGE_ANIMATION`
+  - source object id in `SM_INVENTORY_UPDATE_ITEM`, `SM_DELETE_ITEM`, and `SM_SECONDARY_SHOW_DECOMPOSABLE`
+  - generated reward object id in `SM_INVENTORY_ADD_ITEM`
+- Added `CompareSelectableDecomposeJavaArtifacts_WithDeclaredObjectIdMapping_NormalizesMappedObjectIds`.
+- The new regression builds a synthetic live-server-shaped artifact with:
+  - `logical_source_object_id = 5001` / `java_source_object_id = 70001`
+  - `logical_reward_index_1_object_id = 1` / `java_reward_index_1_object_id = 70002`
+  - remapped client payload/source packet object ids and reward-add object id
+- The existing `fixture.id_mapping` normalization handles both item ids and object ids; unmapped Java numeric values still compare exactly and will fail if they differ.
+- No production Java/C# code changed in this unit.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests --no-restore` passed with 33 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1454 tests.
+
+#### Migration Parity Table - Session 889
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ClientPackets.CmSelectDecomposable` / guarded comparison helper | Client Packet Handler | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Comparison now checks selectable source object id in the client payload with explicit mapping support. Java runtime artifacts remain absent, so parity is not verified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` | `Aion.GameServer.Network.Aion.ServerPackets.SmItemUsageAnimation` | Server Packet | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Guard now compares mapped `item_object_id` in addition to item id/time/end/unknown3. Java constructor defaults and bytes still need runtime artifact evidence. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryUpdateItem` | Server Packet | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Guard now compares mapped source `object_id` on the decrement path. Full blob serialization and Java byte order remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DELETE_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmDeleteItem` | Server Packet | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Guard now compares mapped source `object_id` on the delete path. Runtime Java artifact is still missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SECONDARY_SHOW_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSecondaryShowDecomposable` | Server Packet | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Guard now compares mapped `source_object_id` for the secondary clear packet. Non-empty selectable-list display remains outside the first artifact comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_ADD_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryAddItem` | Server Packet | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Guard now compares mapped generated reward `object_id` plus reward item id/count/slot/cloth flag. Java `IDFactory` allocation and trailing cube update behavior remain unverified. |
+| `com.aionemu.gameserver.network.aion.iteminfo.ItemInfoBlob` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryInfo.WriteItemInfoBlob` | Serialization Utility | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Touched only through source/reward decoded field comparison. Full blob serialization, optional entries, and equipment/temporary fields remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemPacketService` | `Aion.GameServer.Services.Items` packet writers / connection item side effects | Service / Packet Side Effects | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Comparison is now ready for mapped object ids emitted by Java item packet services. Runtime Java sequence, including possible reward-add trailing `SM_CUBE_UPDATE`, remains unverified. |
+| `com.aionemu.gameserver.services.item.ItemService` | `Aion.GameServer.Network.Aion.GameServerConnection.SendDecomposeRewardItemsAsync` / item services | Service | Partial | Regression Tested; Java Artifact Comparison Guard Added | Needs Verification | Object-id mapping support prepares for generated reward ids but does not verify Java item creation, `IDFactory`, expirable registration, or persistence behavior. |
+| `com.aionemu.gameserver.model.items.storage.Storage` | `Aion.GameServer` inventory mutation helpers | Storage | Partial | Regression Tested; Java Artifact Comparison Guard Added | Needs Verification | Source object-id comparison now covers the emitted mutation packets, but Java storage persistence, quest callbacks, null behavior, and transaction behavior remain unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CompareSelectableDecomposeJavaArtifacts_WithDeclaredObjectIdMapping_NormalizesMappedObjectIds` | Regression / Comparison Readiness | Java packet-observer design mapping names and capture contract | Proves the guarded comparison accepts different Java source/reward object ids only when `fixture.id_mapping` explicitly maps them to logical C# fixture object ids. | Synthetic C# JSON artifact shaped like future Java output. | Does not compare real Java runtime artifacts; does not verify Java `IDFactory` allocation, byte fields, or trailing cube update behavior. |
+| `CompareSelectableDecomposeJavaArtifacts_WhenPresent_ComparesContractFields` | Regression / Guarded Future Artifact Comparison | Java capture contract, live-server runbook, packet-observer design | Now requires future Java artifacts to include comparable source/reward object-id fields along with existing item/count/type fields. | Comparison infrastructure only while artifacts are absent. | Missing Java JSON means no runtime comparison yet. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally because Java 25 JDK and Maven are unavailable; neither the loopback proof nor packet observer has been run.
+- Java artifact files do not exist yet, so object-id normalization has only been tested against synthetic JSON.
+- The id/object-id mapping remains numeric and broad; future artifacts should keep mappings precise to avoid masking unrelated numeric mismatches.
+- Future Java artifacts may include a reward-add trailing `SM_CUBE_UPDATE`; current comparison still expects the existing C# packet order until runtime evidence requires a focused parity fix.
+- Byte-level payload/frame parity, full item-info blob parity, Java `IDFactory` allocation, persistence, threading/order under real dispatcher load, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 0 production code artifacts; 1 object-id mapping/comparison path added to guarded comparison tests
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 8 blocked/not-started categories, including Java observer implementation, Java runtime artifact generation, Java loopback proof validation, SQL fixture automation, reward-add trailing cube update parity, full item-info blob comparison, byte capture, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit improves future artifact comparison readiness but adds no Java runtime evidence.
+
+Next recommended unit of work:
+- If Java 25/Maven tooling is available, implement the temporary Java packet observer or run the loopback proof to generate `JD-SEL-DEC-001.json` and `JD-SEL-DEL-001.json`.
+- If tooling remains blocked, add a SQL fixture appendix for the live-server capture runbook, or add a guarded comparison mode for optional Java-observed reward-add trailing `SM_CUBE_UPDATE` once the expected artifact shape is documented.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
