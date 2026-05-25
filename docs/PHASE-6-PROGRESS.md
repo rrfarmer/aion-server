@@ -27899,6 +27899,63 @@ Next recommended unit of work:
 
 ---
 
+### Session 885 (May 25, 2026)
+- Continued after UOW-884 with the guarded C# comparison test recommended by the Phase 6OF handoff.
+- Re-read the required migration, orchestration, parity, progress, latest handoff, Java capture contract, and live-server capture runbook docs. `docs/commit-conventions.md` remains absent, so this unit continued the established `[Phase 6][UOW-###] ...` style.
+- Performed Parallel Work Discovery across Java proof validation, live-server runbook execution, guarded artifact comparison, and packet-observer design notes. Selected guarded artifact comparison because Java 25/Maven tooling and Java runtime artifacts remain unavailable locally, and the work is isolated to the existing decompose test fixture.
+- Updated `GameServerConnectionInventoryExpansionUseItemTests` with `CompareSelectableDecomposeJavaArtifacts_WhenPresent_ComparesContractFields`.
+- The new test:
+  - looks for future Java artifacts at `docs/parity-artifacts/java/decompose/selectable/JD-SEL-DEC-001.json` and `JD-SEL-DEL-001.json`
+  - logs an explicit `Needs Verification` message and returns when artifacts are missing
+  - requires `capture_method = live-java-server` when artifacts are present
+  - compares scenario id, client opcode, select index, ignored dword, packet class order, and decoded contract fields against the current deterministic C# projection
+  - checks decrement fields for item usage, source `DEC_ITEM_USE`, secondary clear, and reward add `DECOMPOSABLE`
+  - checks delete fields for item usage, delete `USE`, cube update counts/expansion fields, secondary clear, and reward add `DECOMPOSABLE`
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests --no-restore` passed with 31 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1452 tests.
+
+#### Migration Parity Table - Session 885
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ClientPackets.CmSelectDecomposable` / `GameServerConnection.HandleSelectDecomposableAsync` | Client Packet Handler | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Test now has a future Java-artifact comparison path for both selectable scenarios, but artifacts are absent locally. Missing Java runtime JSON prevents verified parity. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` | `Aion.GameServer.Network.Aion.ServerPackets.SmItemUsageAnimation` | Server Packet | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Guard compares usage item id/time/end/unknown3 when Java artifacts exist. Constructor/default behavior remains unverified until runtime artifacts are present. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested | Needs Verification | Artifact comparison currently validates packet class order but not factory-name/message-id parity. Java factory mapping remains a known gap. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryUpdateItem` | Server Packet | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Guard compares decrement source count and update type mask/name when Java artifacts exist. Broader blob fields and byte-level parity remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DELETE_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmDeleteItem` | Server Packet | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Guard compares delete type mask/name for delete scenario when Java artifacts exist. Java packet bytes remain absent. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CUBE_UPDATE` | `Aion.GameServer.Network.Aion.ServerPackets.SmCubeUpdate` | Server Packet | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Guard compares action, storage, item count, and expansion fields for delete scenario when Java artifacts exist. Other cube callers remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SECONDARY_SHOW_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSecondaryShowDecomposable` | Server Packet | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Guard compares secondary reward count when Java artifacts exist. Byte-level Java output remains missing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_ADD_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryAddItem` | Server Packet | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Guard compares add type, item count, item id, reward count, slot, and cloth flag when Java artifacts exist. Object-id and bytes remain unverified. |
+| `com.aionemu.gameserver.network.aion.iteminfo.ItemInfoBlob` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryInfo.WriteItemInfoBlob` | Serialization Utility | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Guard compares only decoded general-info counts surfaced by projection. Full blob serialization, optional entries, and equipment/temporary-data fields remain unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CompareSelectableDecomposeJavaArtifacts_WhenPresent_ComparesContractFields` | Regression / Guarded Future Artifact Comparison | Java capture contract, live-server runbook, and C# projection | When Java JSON artifacts are absent, logs explicit needs-verification output and returns; when present, compares packet order and selected decoded fields for `JD-SEL-DEC-001` and `JD-SEL-DEL-001`. | C# comparison infrastructure is tested; no Java runtime artifact is present yet. | Does not prove parity until Java artifacts exist; does not compare byte fields; currently does not compare system-message factory names or full `ItemInfoBlob` fields. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally because Java 25 JDK and Maven are unavailable; `LoopbackCaptureProof` still has not been compiled or run.
+- Java artifact files do not exist yet, so the guarded comparison path has not compared Java output.
+- The missing-artifact branch passes while logging needs-verification output; docs remain the authority that parity is not verified.
+- `SM_SYSTEM_MESSAGE` factory-name/message-id mapping remains outside this unit.
+- Full item-info blob, object-id allocation, byte-level payload/frame parity, and live-client behavior remain unverified.
+- Future real Java XML id mapping may require enhancing the comparison helper before mapped artifacts can pass.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 0 production code artifacts; 1 guarded Java-artifact comparison test added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 8 blocked/not-started categories, including Java loopback proof validation, live Java JSON artifact generation, fixture SQL/script automation, packet observer implementation, byte capture, system-message factory mapping, object-id/id-mapping support, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit adds the comparison gate for future Java artifacts but no runtime evidence.
+
+Next recommended unit of work:
+- If Java 25/Maven tooling is available, run `LoopbackCaptureProof` or execute the live-server runbook to produce the Java JSON artifacts. If tooling remains blocked, add system-message factory-name mapping to the C# projection/comparison or draft Java packet-observer design notes for producing Level 2 artifact fields with less manual work.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -27908,4 +27965,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Run and harden `LoopbackCaptureProof` under Java 25/Maven tooling when available; while tooling is blocked locally, add a guarded file-backed comparison test for future Java decompose JSON artifacts without claiming Java runtime verification.
+8. Run and harden `LoopbackCaptureProof` under Java 25/Maven tooling when available; while tooling is blocked locally, add system-message factory-name mapping to the C# projection/comparison or draft Java packet-observer design notes for Level 2 artifact generation without claiming Java runtime verification.
