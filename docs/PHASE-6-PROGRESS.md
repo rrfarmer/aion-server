@@ -29110,9 +29110,64 @@ Next recommended unit of work:
 
 ---
 
+### Session 907 (May 25, 2026)
+- Continued after UOW-906 by re-reading the required migration docs and latest handoff, confirming `docs/commit-conventions.md` is still missing, and running Parallel Work Discovery across Java AP callers, C# NPC/PvP/Quest reward surfaces, and AP service tests.
+- Selected the PvE AP calculation slice because it directly closes the projected-input gap left by UOW-906 and only touches the NPC solo reward service/test ownership area.
+- Added `WorldNpcSoloDpRewardService.CalculatePveApGained` for Java `StatFunctions.calculatePvEApGained` plus the relevant `Rates.AP_PVE` membership/AP boost behavior.
+- Added `WorldNpcSoloDpRewardService.GetApNpcRating` for Java `StatFunctions.getApNpcRating`.
+- Added `ApplySoloApRewardFromNpcStats` so the NPC solo AP planner can compute Java PvE AP from player level, NPC template rating/name, membership AP rates, and AP boost before applying damage percent and AP multiplier.
+- Added regressions for Java NPC AP rating values, the over-level fallback returning `1`, the exact case-sensitive `flame hoverstone` override, membership-rate clamping to the last configured value, empty-rate fallback to `1`, AP boost scaling/truncation, and calculated PvE AP feeding the solo AP reward planner.
+- Validation:
+  - First focused run failed because `apNpcRate` was inferred as `int`; fixed it to `float`.
+  - Second focused run failed because the rating table test used membership `1`, which correctly applies Java's default second AP PvE rate `2.0`; adjusted the base rating cases to membership `0`.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~WorldNpcSoloDpRewardServiceTests --no-restore` passed with 21 tests.
+  - `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed: Commons 57, Chat 29, Login 121, GameServer 1496.
+
+#### Migration Parity Table - Session 907
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.utils.stats.StatFunctions.calculatePvEApGained` | `Aion.GameServer.Services.WorldNpcSoloDpRewardService.CalculatePveApGained` / `ApplySoloApRewardFromNpcStats` | Utility / Reward Calculation | Partial | Regression Tested in C# | Partial Parity | Java rating table, over-level fallback, `flame hoverstone` special case, AP PvE membership-rate selection, AP boost scaling, and Java-style truncation are covered. Full live `Creature`/`Npc` object integration, stat container lookup for `StatEnum.AP_BOOST`, config-bound `RatesConfig.AP_PVE_RATES`, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.utils.stats.StatFunctions.getApNpcRating` | `Aion.GameServer.Services.WorldNpcSoloDpRewardService.GetApNpcRating` | Utility | Complete for known Java enum names | Regression Tested in C# | Partial Parity | Java values `JUNK=1`, `NORMAL=2`, `ELITE=4`, `HERO=35`, `LEGENDARY=2500`, default `1` are ported. C# consumes string ratings from `NpcTemplateSummary`; Java consumes `NpcRating`, so unknown/case handling is an input-shape difference and remains documented. |
+| `com.aionemu.gameserver.model.gameobjects.player.Rates.AP_PVE` | `WorldNpcSoloDpRewardService.CalculatePveApGained` parameters `apPveRates` / `apBoostStat` | Rate Calculation / Input Projection | Partial | Regression Tested in C# | Partial Parity | C# mirrors Java membership-rate clamping, empty-rate fallback, AP boost percent scaling, and integer truncation. Rates are caller-supplied or defaulted to Java defaults `[1.0, 2.0]`; `GameServerOptions` does not yet bind `gameserver.rates.ap.pve`, and live `PlayerGameStats.getStat(AP_BOOST)` is not ported. |
+| `com.aionemu.gameserver.configs.main.RatesConfig` | `Aion.GameServer.Configuration.GameServerRateOptions` / `CalculatePveApGained` default rate input | Configuration | Partial | Regression Tested at calculation boundary | Needs Verification | The Java default AP PvE rates are represented in the calculation default, but config loading for `gameserver.rates.ap.pve` was not added in this unit. Other AP rate arrays for PvP, quest, loss, and dredgion remain unmodeled. |
+| `com.aionemu.gameserver.controllers.NpcController` | `WorldNpcSoloDpRewardService.ApplySoloApRewardFromNpcStats` | Controller Reward Slice / Service | Partial | Regression Tested in C# | Partial Parity | The solo NPC AP planner can now compute `calculatedAp` from NPC stats before damage-percent/AP-multiplier scaling. Full controller invocation, AI ask dispatch, group/alliance distribution, XP/drop/tap-list side effects, and persistence remain missing. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CalculatePveApGained_MatchesJavaNpcRatingLevelAndSpecialNameRules` | Regression | Java `StatFunctions.calculatePvEApGained` and `getApNpcRating` source review | Validates AP rating table values, over-level fallback returning `1`, and exact lowercase `flame hoverstone` override producing base AP `7`. | Deterministic C# regression grounded in Java source. | No live Java runtime artifact; C# uses `NpcTemplateSummary` string rating/name instead of Java `Npc`/`NpcRating`. |
+| `CalculatePveApGained_AppliesJavaMembershipAndApBoostRates` | Regression | Java `Rates.AP_PVE` and `Rates.get` source review | Validates membership index clamps to the last configured rate, empty rate arrays fall back to `1`, AP boost stat scales by `current/100f`, and float product truncates to int. | Deterministic C# regression grounded in Java source. | C# still receives AP PvE rates and AP boost stat as inputs; config binding and stat container lookup are missing. |
+| `ApplySoloApRewardFromNpcStats_CalculatesPveApBeforeRewardScaling` | Regression | Java `NpcController.doReward`, `StatFunctions.calculatePvEApGained`, and `AbyssPointsService.addAp` source review | Validates calculated PvE AP (`90`) feeds the solo AP reward planner, then damage percent scales it to reward AP (`45`) and mutates player AP from `500` to `545`. | Deterministic C# regression grounded in Java source. | AI/controller live integration and Java runtime packet comparison remain unavailable. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- `GameServerOptions` still does not bind `gameserver.rates.ap.pve`; AP PvE rates are caller-supplied/defaulted in the calculation helper.
+- `StatEnum.AP_BOOST` and live `PlayerGameStats` stat lookup are represented by an integer input, not a full stat container.
+- C# uses string NPC ratings from `NpcTemplateSummary`; Java uses `NpcRating`, so unknown/case behavior is not a perfect type-level match.
+- Remaining AP callers in PvP, Quest, Trade, item purification, Dredgion/basic PvP instances, and team distribution still need convergence through `AbyssPointsService`.
+- Full NPC controller invocation, AI ask dispatch, group/alliance distribution, persistence, packet delivery, ranking cache, Legion contribution fanout, and live siege callback execution remain incomplete.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 utility calculation slice plus 1 controller-facing overload
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, AP PvE config binding, live AP boost stat lookup, live NPC controller integration, team reward distribution, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit closes the projected `calculatePvEApGained` gap from UOW-906.
+
+Next recommended unit of work:
+- Continue AP caller convergence by adding config-bound AP rate options (`gameserver.rates.ap.pve`, quest, PvP gain/loss, dredgion) or by selecting a compact PvP AP reward/loss slice around `PvpService` and `PvpDpRewardService`.
+- Quest AP reward remains a candidate once AP quest rates/config are modeled.
+- Trade and item-purification AP paths likely require broader inventory/dialog/action surfaces and should be analyzed before implementation.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: port `StatFunctions.calculatePvEApGained` for NPC AP reward parity, or inspect C# coverage for Java `TradeService`, `QuestService`, `PvpService`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: add config-bound AP rate options (`gameserver.rates.ap.pve`, quest, PvP gain/loss, dredgion), inspect C# coverage for Java `PvpService`, `QuestService`, `TradeService`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
