@@ -27383,6 +27383,68 @@ Next recommended unit of work:
 
 ---
 
+### Session 876 (May 25, 2026)
+- Continued from the Session 875 / Phase 6NW handoff by returning to the Java runtime comparison path.
+- Re-read required migration/orchestration docs, latest progress, and latest handoff. `docs/commit-conventions.md` remains absent, so this unit continued the established `[Phase 6][UOW-###] ...` style.
+- Performed Parallel Work Discovery across Java connection capture feasibility, player/inventory fixture feasibility, selectable decompose handler analysis, fixture schema documentation, and Java capture implementation.
+- Selected a read-only Java feasibility audit because the previous C# crypto fallback work is now covered and the next risk is deciding whether Java packet-order capture can be done without production Java changes.
+- Added `docs/Phase-6-Java-Decompose-Harness-Feasibility.md`.
+- Audited Java:
+  - `AConnection` / `AionConnection` / `AionServerPacket` connection and packet-write constraints.
+  - `CM_SELECT_DECOMPOSABLE` selectable handler order.
+  - `PacketSendUtility` online-player and broadcast self-before-known-list behavior.
+  - `Player`, `PlayerStorage`, `Storage`, `ItemService`, `ItemPacketService`, `ItemFactory`, `IDFactory`, and `DecomposableItemsData` fixture dependencies.
+- Feasibility result: a no-socket fake `AionConnection` is not a clean seam because Java `sendPacket` is final, touches a private registered `SelectionKey`, and `AionConnection` owns private final crypt state plus a scheduled heartbeat. In-process capture remains possible only as an integration-style harness with real or reflected connection state. A real Java loopback socket or live-server capture is the more realistic runtime path.
+- No production Java or C# code changed in this unit.
+- Validation: no .NET tests were run because this was a documentation/source-audit-only unit with no code changes. Previous full C# validation remains Session 875: 1450 tests passing.
+
+#### Migration Parity Table - Session 876
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.commons.network.AConnection` | `Aion.Commons.Network` connection primitives / `Aion.GameServer.Network.Aion.GameServerConnection` | Connection Base | Partial | Manual Only | Needs Verification | Java `sendPacket` is final and touches private `SelectionKey`; this blocks a clean fake connection capture seam. C# socket behavior remains tested separately, but Java runtime comparison is not implemented. Reflection differences and threading/scheduler side effects are unresolved. |
+| `com.aionemu.gameserver.network.aion.AionConnection` | `Aion.GameServer.Network.Aion.GameServerConnection` | Game Connection | Partial | Manual Only | Needs Verification | Java constructor schedules heartbeat and owns private final `Crypt`; queue capture likely needs real dispatcher/socket or fragile reflection. No Java runtime capture exists yet. Threading and encryption-state differences remain risks. |
+| `com.aionemu.gameserver.network.aion.AionServerPacket` | `Aion.GameServer.Network.Aion.GameServerPacket` | Packet Serialization | Partial | Manual Only | Needs Verification | Java packet serialization requires an `AionConnection` because `write` calls `con.encrypt`. Broader frame-byte parity and deterministic Java crypt capture remain missing. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ClientPackets.CmSelectDecomposable` | Client Packet Handler | Partial | Regression Tested in C#; Manual Only for Java audit | Partial Parity | Java packet order was source-reviewed: usage animation, success message, source decrement/delete side effect, secondary clear, reward add. Runtime Java packet capture and byte comparison remain missing. Random reward count must be fixed by min=max fixture. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Aion.GameServer.Model.GameObjects.Player.Player` | Domain Model | Partial | Manual Only | Needs Verification | Java online state requires a non-null client connection; constructor initializes many real subsystems and leaves world position null. Harness needs explicit connection, known-list, and possibly position/world setup. |
+| `com.aionemu.gameserver.model.items.storage.PlayerStorage` | `Aion.GameServer.Model.Items.Storage.PlayerStorage` / inventory services | Storage | Partial | Manual Only | Needs Verification | Java storage routes add/decrease/delete through owner-aware packet side effects. Source decrement/delete runtime capture remains unverified. |
+| `com.aionemu.gameserver.model.items.storage.Storage` | `Aion.GameServer.Model.Items.Storage.Storage` / inventory services | Storage | Partial | Manual Only | Needs Verification | Java `decreaseByObjectId` updates item counts, persistent state, deleted-items queue, quest removal callback, and item packets. Persistence/DAO and side-effect parity are not verified by this audit. |
+| `com.aionemu.gameserver.services.item.ItemService` | `Aion.GameServer.Services.Items.InventoryAddService` / item services | Service | Partial | Manual Only | Needs Verification | Java reward add uses `DataManager.ITEM_DATA`, `ItemFactory`, `IDFactory`, expirable registration, storage capacity, and item packet add/update side effects. Runtime fixture needs deterministic static data and ID allocation. |
+| `com.aionemu.gameserver.services.item.ItemPacketService` | `Aion.GameServer.Services.Items` packet writers | Service / Packet Side Effects | Partial | Manual Only | Needs Verification | Java delete/update/add packet type selection was source-reviewed, including `ItemAddType.DECOMPOSABLE` and `ItemUpdateType.INC_ITEM_COLLECT`. Exact packet bytes and source-delete/decrement runtime order remain unverified. |
+| `com.aionemu.gameserver.dataholders.DecomposableItemsData` | `Aion.GameServer.Data.StaticData` decomposable item data | Data Holder | Partial | Manual Only | Needs Verification | Java selectable data returns a copy, so handler filtering is isolated. Harness needs either real XML load or minimal reflective fixture data. Serialization/XML defaults were not verified in this unit. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `Aion.GameServer.Network.Aion.GameServerConnection` send/broadcast helpers | Utility | Partial | Manual Only | Needs Verification | Java `sendPacket` drops packets unless player is online; `broadcastPacketAndReceive` sends self before known-list players. Empty known-list fixture is required to make order deterministic. |
+| `com.aionemu.gameserver.services.item.ItemFactory` | `Aion.GameServer.Services.Items.ItemFactory` / item creation services | Utility | Partial | Manual Only | Needs Verification | Java reward creation calls global `IDFactory` and `DataManager.ITEM_DATA`; this can pull DAO/database dependencies into an in-process harness. |
+| `com.aionemu.gameserver.utils.idfactory.IDFactory` | `Aion.GameServer.Services.IdFactory` / object id allocation | Utility | Partial | Manual Only | Needs Verification | Java singleton initializes used IDs from multiple DAOs. Test fixture must avoid accidental production DB assumptions or explicitly configure a test DB. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| None | Documentation / Java Analysis | Source review of Java connection, packet, player, storage, item-service, decomposable-data, and packet-send artifacts | Documents whether selectable-decompose packet-order capture can be implemented without production Java changes. | Static source inspection only. | No Java harness, no Java runtime output, no golden packet class sequence, no byte vectors, no live-server capture. |
+
+Remaining risks:
+- Java runtime comparison remains unimplemented.
+- In-process capture may require fragile reflection against `AConnection.key`, `AionConnection.sendMsgQueue`, private final `Crypt`, or scheduler state.
+- Live Java socket capture may require DB/static-data/player fixture setup beyond the current C# test fixtures.
+- Java `IDFactory` and `ItemFactory` can pull DAO/database dependencies into reward-add capture.
+- Decompose reward count must be deterministic (`min == max`) before comparing output.
+- Encryption byte parity cannot be claimed until Java key generation/capture is controlled.
+- Threading differences remain unresolved: Java dispatcher/packet processor/scheduler ordering differs from C# async/socket-loop execution.
+- Serialization differences remain unresolved for item update/add/delete packet bytes.
+
+Summary metrics:
+- Total Java artifacts discovered: 13
+- Total artifacts ported: 0 code artifacts; 1 feasibility audit document added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 13
+- Total blocked artifacts: 8 blocked/not-started categories, including Java runtime harness, deterministic connection capture, Java crypt byte vectors, fixture DB/static-data setup, source decrement/delete runtime comparison, reward-add packet byte comparison, broadcast fanout comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit clarifies the Java runtime comparison path but does not increase runtime parity coverage.
+
+Next recommended unit of work:
+- Create the decompose Java capture fixture contract and artifact schema before writing harness code. Include scenario ids, static-data fixture inputs, player/account/inventory setup, packet class/order fields, decoded important fields, byte-capture levels, pass/fail criteria, and the decision checkpoint between Java loopback socket capture and live-server capture.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -27392,4 +27454,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Return to the Java harness feasibility spike from `docs/Phase-6-Decompose-Java-Runtime-Comparison-Plan.md`. The immediate next step is a read-only feasibility audit of `AionConnection`, `Player`, inventory/storage constructors, and `PacketSendUtility` to determine whether selectable-decompose packet order can be captured in-process without changing production Java.
+8. Create the decompose Java capture fixture contract and artifact schema before writing harness code. Include scenario ids, static-data fixture inputs, player/account/inventory setup, packet class/order fields, decoded important fields, byte-capture levels, pass/fail criteria, and the decision checkpoint between Java loopback socket capture and live-server capture.
