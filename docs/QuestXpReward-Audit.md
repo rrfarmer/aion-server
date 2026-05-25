@@ -1,4 +1,4 @@
-# Quest XP Reward Audit - UOW-1044/UOW-1051
+# Quest XP Reward Audit - UOW-1044/UOW-1052
 
 Date: May 25, 2026
 
@@ -122,13 +122,24 @@ Level-change side effects include stat template refresh, max repose recalculatio
   7. Resets the planned faction state to `Noting`, matching Java after the optional abandon call.
 - The helper is non-live and does not call quest abandon, send system messages, persist `PlayerNpcFactionsDAO`, or compose into `QuestXpExecutionPlanService`.
 
+## C# State After UOW-1052
+
+- Added `QuestLevelChangedCallbackPlanService.CreatePlan`.
+- The planner stages Java `QuestEngine.onLevelChanged` callback dispatch without loading or invoking dynamic handlers:
+  1. Applies Java `registerOnLevelChanged` race scoping: null race registers for both Elyos and Asmodians; explicit race registers only for that race.
+  2. Preserves registered quest order while suppressing duplicate quest ids for the player's race list.
+  3. Skips quests whose player quest state is `COMPLETE`.
+  4. Skips missing quest handlers.
+  5. Plans `AbstractQuestHandler.onLevelChangedEvent(player)` dispatch for missing quest states and all non-COMPLETE states.
+- The helper is non-live and does not call `defaultOnLevelChangedEvent`, mutate quests to START/LOCKED, send quest packets, invoke dynamic handlers, or compose into `QuestXpExecutionPlanService`.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
 - XP live mutation is not wired into quest finish; UOW-1045 only composes non-live operation metadata.
 - `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are ported for the XP reward messages used by `PlayerCommonData.addExp`, and `QuestXpRewardPlan` can now produce ordered non-live packet metadata.
 - `SM_STATUPDATE_EXP` is now represented by staged execution metadata, but no packet instance is created or sent from the XP execution plan.
-- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant, upgrade-player sub-plan, and NPC faction level-up sub-plan now exist, but stat recalculation, max-stat calculation, nearby quest refresh, quest engine callbacks, skills, guide, starter-kit, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
+- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant, upgrade-player sub-plan, NPC faction level-up sub-plan, and QuestEngine level-change callback dispatch sub-plan now exist, but stat recalculation, max-stat calculation, nearby quest refresh, live quest handler execution, skills, guide, starter-kit, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
 - The C# plan uses the current C# `Player.Level` as the previous/display level input. Java derives and updates level through `PlayerCommonData.setExp`; this needs verification before live mutation.
 - No-exp state and Daeva/non-Daeva cap are explicit method inputs because equivalent C# player state is not fully modeled.
 - Repose and salvation formulas are source-reviewed and unit-tested, but edge cases around negative XP, large XP, unusual float rates, and live max-repose updates still need runtime verification.
@@ -152,7 +163,10 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `PlayerLevelChangeUpgradePlanServiceTests.CreatePlan_RecordsMissingMaxStatsDeadAndNoTeamLegionBranches`
 - `PlayerNpcFactionsSnapshotTests.LevelUpPlan_DeactivatesOverLevelActiveFactionAndRecordsJavaSideEffects`
 - `PlayerNpcFactionsSnapshotTests.LevelUpPlan_RecordsNoChangesMissingTemplateAndNoActiveBranches`
+- `QuestLevelChangedCallbackPlanServiceTests.CreatePlan_DispatchesRegisteredRaceCallbacksInJavaOrderAndSkipsCompleteAndMissingHandlers`
+- `QuestLevelChangedCallbackPlanServiceTests.CreatePlan_TreatsEveryNonCompleteQuestStateAsDispatchableLikeJava`
+- `QuestLevelChangedCallbackPlanServiceTests.CreatePlan_RecordsNoRegisteredNoDispatchAndMissingRegistrationBranches`
 
 ## Next Recommendation
 
-Add another focused non-live side-effect sub-plan or audit behind staged XP execution, with `QuestEngine.onLevelChanged` callback dispatch now the most direct Java-order dependency after NPC faction level-up. Keep live XP mutation disabled until stat updates, nearby quest refresh, quest callbacks, skill learning, live NPC faction mutation, custom rewards, and persistence behavior are modeled.
+Add another focused non-live side-effect sub-plan or audit behind staged XP execution, with `PlayerController.updateNearbyQuests` now the most direct Java-order dependency after QuestEngine callback dispatch. Keep live XP mutation disabled until stat updates, nearby quest refresh, live quest handler execution, skill learning, live NPC faction mutation, custom rewards, and persistence behavior are modeled.
