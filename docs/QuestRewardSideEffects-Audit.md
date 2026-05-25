@@ -1,7 +1,7 @@
 # Quest Reward Side-Effects Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1034, updated by UOW-1035, UOW-1037, UOW-1038, UOW-1039, and UOW-1040
+Unit of Work: UOW-1034, updated by UOW-1035, UOW-1037, UOW-1038, UOW-1039, UOW-1040, UOW-1041, UOW-1042, UOW-1043, and UOW-1044
 
 ## Purpose
 
@@ -59,7 +59,9 @@ XP:
 - `addExp` can early-return for no-exp state or special world restrictions, applies `Rates.XP_QUEST`, handles repose/salvation bonus messages, and calls `setExp`.
 - `setExp` can level change, update stats, trigger quest/skill/bonus hooks, update nearby quests, and send `SM_STATUPDATE_EXP`.
 - C# has `SmStatUpdateExp`, `SmStatsInfo`, `NpcTemplateTable`, `PlayerExperienceTable`, and player models, but no quest XP live helper equivalent to `PlayerCommonData.addExp`.
-- C# currently carries XP rate and NPC l10n lookup as non-live metadata only.
+- UOW-1044 adds `GameServerRateOptions.XpQuestRates`, `QuestRewardService.ApplyQuestXpRate`, and non-live `QuestRewardService.CreateXpRewardPlan`.
+- The XP plan records Java guard outcomes, Java `float` rate/boost/legion truncation, repose and salvation bonus metadata, capped resulting XP, display level, max repose energy, ascension-limit message intent, XP message kind, `SM_STATUPDATE_EXP` intent, and level-change side-effect intent.
+- The XP plan intentionally does not mutate player XP/level/repose, send packets, call level-change hooks, update nearby quests, persist state, or compose into quest-finish operation descriptors yet.
 
 ## Title, Cube, And Warehouse
 
@@ -134,7 +136,7 @@ GP:
 
 - `QuestFinishRewardPlanService.CreateNonItemRewardProjection` records kinah, XP, title, AP, DP, GP, cube, and warehouse metadata only.
 - `QuestFinishOperationPlanService` composes these descriptors before quest-state mutation.
-- UOW-1038 adds optional `QuestFinishRewardSideEffectContext`; when supplied, title/cube/warehouse non-item reward projections gain adjacent `NonItemRewardSideEffectPlan` descriptors carrying `QuestTitleRewardPlan` or `QuestExpansionRewardPlan`. UOW-1041 extends this to GP through `QuestGpRewardResult`. The default planner path is unchanged when the context is absent.
+- UOW-1038 adds optional `QuestFinishRewardSideEffectContext`; when supplied, title/cube/warehouse non-item reward projections gain adjacent `NonItemRewardSideEffectPlan` descriptors carrying `QuestTitleRewardPlan` or `QuestExpansionRewardPlan`. UOW-1041 extends this to GP through `QuestGpRewardResult`. UOW-1044 adds a standalone XP reward plan helper but does not compose it into quest-finish descriptors yet. The default planner path is unchanged when the context is absent.
 - Existing live helpers:
   - `QuestRewardService.ApplyApReward`
   - `QuestRewardService.ApplyDpRewardAsync`
@@ -146,11 +148,13 @@ GP:
 - Existing repository boundaries:
   - `IAbyssRankRepository.AddGpAsync`
 - Missing live homes include:
-  - quest XP helper,
   - quest title reward helper,
   - quest cube expansion helper,
   - quest warehouse expansion helper,
   - offline quest GP DAO update.
+- Existing non-live XP helper:
+  - `QuestRewardService.CreateXpRewardPlan`
+  - `QuestRewardService.ApplyQuestXpRate`
 - UOW-1035 staged a non-composed quest kinah planner on `QuestRewardService`; quest finish still does not execute it.
 - UOW-1037 staged title/cube/warehouse reward planners on `QuestRewardSideEffectPlanService`; UOW-1038 composes them into quest-finish metadata but still does not execute them.
 - UOW-1040 adds a quest GP helper and live online GP planner/mutator; UOW-1041 composes non-live GP metadata into quest finish but still does not execute it.
@@ -158,19 +162,20 @@ GP:
 ## Remaining Risks
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
-- Precision and overflow for Java `Rates.XP_QUEST` are not ported. `Rates.GP` is source-reviewed and unit-tested for membership fallback and int-overflow fallback, but lacks Java runtime comparison.
+- Precision and overflow for Java `Rates.XP_QUEST` are now source-reviewed and unit-tested in the non-live helper, but lack Java runtime comparison and live quest-finish composition. `Rates.GP` is source-reviewed and unit-tested for membership fallback and int-overflow fallback, but lacks Java runtime comparison.
 - `Rates.QUEST_KINAH` precision/truncation is unit-tested in C# from source-reviewed Java behavior, but it still lacks Java runtime comparison.
 - C# AP rate helper intentionally omits Java overflow logging.
-- Packet masks and packet ordering are incomplete for quest kinah, cube expansion, warehouse expansion, and XP. Quest title and GP now have concrete system-message helpers, but no live quest-finish send or Java golden-byte comparison.
+- Packet masks and packet ordering are incomplete for quest kinah, cube expansion, warehouse expansion, and XP. XP now has packet/message-kind intents only. Quest title and GP have concrete system-message helpers, but no live quest-finish send or Java golden-byte comparison.
 - C# quest finish still does not execute any reward mutation.
 - Title/cube/warehouse planners are now visible in quest-finish operation metadata when a side-effect context is supplied, but remain metadata only; quest title DAO writes, expirable registration, cube update sends, warehouse info sends, and player expansion counter persistence are not live.
 - GP planner metadata is now visible in quest-finish operation metadata when a side-effect context is supplied, but live GP mutation, offline DAO writes, and deferred persistence are not live by default.
+- XP planner metadata exists as a standalone helper, but it is not visible in quest-finish operation metadata and does not perform live level/packet/persistence side effects.
 - Offline GP repository SQL and the gated execution call are tested in isolation, but no quest-finish gameplay path invokes them yet.
 - Live reward mutation needs an explicit failure-ordering policy before composition.
 - Threading assumptions differ: Java mutates live player state directly; C# must preserve per-player execution order once live execution is enabled.
 
 ## Recommended Next Units
 
-1. Add opt-in integration tests/adapter plumbing for the gated offline GP execution path before enabling siege/offline GP callers.
-2. Add a quest XP helper design or scaffold only after documenting level-up/stat/nearby-refresh side effects.
+1. Compose the standalone XP plan into quest-finish operation descriptors without live mutation.
+2. Add opt-in integration tests/adapter plumbing for the gated offline GP execution path before enabling siege/offline GP callers.
 3. Compose AP/DP/Kinah side-effect metadata only if it remains non-live and preserves Java reward ordering.
