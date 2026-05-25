@@ -1,7 +1,7 @@
 # Quest Reward Side-Effects Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1034
+Unit of Work: UOW-1034, updated by UOW-1035
 
 ## Purpose
 
@@ -48,8 +48,9 @@ Kinah:
 - `Storage.increaseKinah` creates a zero-count kinah item if missing.
 - Positive amounts mutate the kinah item count, send `SM_INVENTORY_UPDATE_ITEM`, and mark item/storage state update-required.
 - Quest reward kinah uses `ItemUpdateType.INC_KINAH_QUEST`; agent audit found this packet mask as `0x32`.
-- C# has generic `InventoryAddService` and `SmInventoryUpdateItem`, but no quest-kinah live helper or `IncreaseKinahQuest = 0x32` packet intent.
-- C# `GameServerRateOptions` has AP quest rates but no quest kinah rate array.
+- C# UOW-1035 added non-live `QuestRewardService.CreateKinahRewardPlan`, `GameServerRateOptions.QuestKinahRates`, and `SmInventoryUpdateItem.IncreaseKinahQuest = 0x32`.
+- The C# helper is intentionally not wired into live quest finish. It plans Java branch behavior for raw zero skip, missing kinah item creation, positive-only count increase, Java `float` rate truncation, and `Item.increaseItemCount` max-stack cap remainder.
+- Runtime packet sends, item/storage persistent-state flags, object id generation through the production ID factory, and DAO persistence remain disabled and need live composition work.
 
 XP:
 
@@ -129,17 +130,18 @@ GP:
   - `AbyssPointsService.AddAp`
   - `WorldNpcResourceStatsService.AddPlayerDpAsync`
 - Missing live homes include:
-  - quest kinah reward helper with `INC_KINAH_QUEST`,
   - quest XP helper,
   - quest title reward helper,
   - quest cube expansion helper,
   - quest warehouse expansion helper,
   - quest GP helper and GP rate config.
+- UOW-1035 staged a non-composed quest kinah planner on `QuestRewardService`; quest finish still does not execute it.
 
 ## Remaining Risks
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
-- Precision and overflow for Java `Rates.QUEST_KINAH`, `Rates.XP_QUEST`, and `Rates.GP` are not ported.
+- Precision and overflow for Java `Rates.XP_QUEST` and `Rates.GP` are not ported.
+- `Rates.QUEST_KINAH` precision/truncation is unit-tested in C# from source-reviewed Java behavior, but it still lacks Java runtime comparison.
 - C# AP rate helper intentionally omits Java overflow logging.
 - Packet masks and packet ordering are incomplete for quest kinah, quest title, cube expansion, warehouse expansion, GP, and XP.
 - C# quest finish still does not execute any reward mutation.
@@ -148,6 +150,6 @@ GP:
 
 ## Recommended Next Units
 
-1. Add a small non-composed quest kinah planning/helper unit: `QuestKinahRates`, Java-float truncation helper, `SmInventoryUpdateItem` quest kinah update mask `0x32`, and tests for zero/negative rewards, missing/existing kinah item, fractional rates, and overflow/cap policy. Do not wire into quest finish.
+1. Pin Java quest-finish failure ordering in a non-live operation/persistence policy test or audit: reward side effects before state mutation, quest update packet before completion callback, and quest persistence deferred to save tasks.
 2. Add a non-live quest title/cube/warehouse execution plan describing validation, persistence, packet fanout, duplicate/invalid title handling, cube limit, warehouse limit, and packet sequence expectations.
 3. Add a GP live-helper design audit or scaffold before composing AP/DP/GP live helpers into quest finish.
