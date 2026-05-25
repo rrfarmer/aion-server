@@ -277,6 +277,7 @@ Existing relevant tests remain:
 - The supported-template real-data audit uses one synthetic player archetype and excludes unsupported dependency categories rather than proving full Java predicate parity.
 - The non-sending plan service has no production caller and intentionally does not send packets.
 - XML start-condition dependency analysis is documentation only; predicate implementation remains absent.
+- Quest-finish reward item projection now has a non-live fixed/selectable/class/extended scaffold, but nearby refresh must still treat quest completion as non-production because reward XML loading, live inventory mutation, callbacks, persistence, and packet sends remain incomplete.
 
 ## Summary Metrics
 

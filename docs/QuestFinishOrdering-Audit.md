@@ -121,6 +121,7 @@ The NPC faction update persists:
 - UOW-1027 adds `QuestCompletionFollowUpPlanService`, a non-live planner for default callback follow-up `LOCKED`/`START` quest result and callback-triggered quest-action packet intent.
 - UOW-1028 composes optional follow-up result plans into callback descriptors.
 - UOW-1029 adds regression coverage proving nested follow-up result payloads survive through quest-finish callback composition.
+- UOW-1030 adds `QuestFinishRewardPlanService.CreateRewardItemProjection`, a non-live projection scaffold for Java `QuestService.getRewardItems` fixed/selectable/class/extended item choices. It is not yet composed into production quest finish or live inventory mutation.
 - C# has quest and NPC faction read hydration, but no corresponding write persistence path for these completion mutations.
 - C# has packet serializers for quest list/completed-list shapes and a non-sending `SM_QUEST_ACTION(ActionType.UPDATE, qs)` body. No production quest-finish send path is wired.
 - C# has no `QuestEngine.onQuestCompleted` equivalent or production nearby-refresh send trigger wired to quest completion.
@@ -133,7 +134,7 @@ The NPC faction update persists:
 ## Remaining Risks
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
-- Reward calculation and inventory mutation ordering are source-audited and partially composed as non-live descriptors, but full reward selection and mutation are not ported.
+- Reward calculation and inventory mutation ordering are source-audited and partially composed as non-live descriptors. Item reward projection now covers fixed/selectable/class/extended descriptor categories, but real XML loading, bonus handlers, live `ItemService.addItem`, and non-item mutation remain missing.
 - `SM_QUEST_ACTION` extra-category suppression is currently an explicit C# flag rather than a production static-data lookup.
 - Java callback handlers can perform additional quest mutations and packet sends; C# has no quest handler runtime yet.
 - Java completion callback registration order depends on dynamic script class loading and reflection; C# has no equivalent ordering source.

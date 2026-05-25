@@ -1,7 +1,7 @@
 # Quest Finish Reward and Work-Item Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1017; updated by UOW-1018 and UOW-1019
+Unit of Work: UOW-1017; updated by UOW-1018, UOW-1019, and UOW-1030
 
 ## Purpose
 
@@ -74,6 +74,25 @@ Bonus rewards:
 - If the handler result is not `FAILED`, Java calls `BonusService.getQuestBonus`.
 - A non-null bonus item is appended to `questItems`.
 
+UOW-1030 adds a non-live C# reward item projection scaffold for the source-reviewed `getRewardItems` branches:
+
+- `QuestFinishRewardItemTemplateProjection.RewardGroups` projects Java `QuestTemplate.getRewards()`.
+- `QuestFinishRewardGroupProjection.FixedRewardItems` projects Java `Rewards.getRewardItem()`.
+- `QuestFinishRewardGroupProjection.SelectableRewardItems` projects Java `Rewards.getSelectableRewardItem()`.
+- `QuestFinishRewardItemTemplateProjection.ExtendedRewards` projects Java `QuestTemplate.getExtendedRewards()`.
+- `QuestFinishRewardItemTemplateProjection.ClassSelectableRewards` projects Java `QuestTemplate.getSelectableRewardByClass(PlayerClass)`.
+- `QuestFinishRewardItemProjectionInput.DialogActionId` uses the Java dialog action constants directly: `SELECTED_QUEST_REWARD1` is `8`, `SELECTED_QUEST_REWARD15` is `22`, and `SELECTED_QUEST_NOREWARD` is `23`.
+- Projection descriptors are metadata only and keep `IsLive = false`; they do not call `ItemService.addItem`.
+- Bonus rewards are represented as an explicit `BonusHandlerNotProjected` warning because Java delegates that behavior to handlers and `BonusService`.
+
+Known UOW-1030 item projection limits:
+
+- No JAXB/XML quest reward loading is wired.
+- Player class is represented as a projected string key rather than the Java `PlayerClass` enum.
+- Java warning/log side effects are represented as warning descriptors, not log output.
+- No inventory mutation, stack handling, overflow handling, packets, or persistence is executed.
+- No Java runtime comparison artifact exists; behavior is source-reviewed and unit-tested in C# only.
+
 ## Non-Item Rewards
 
 `giveReward` applies these side effects:
@@ -108,9 +127,10 @@ Because `finishQuest` calls `removeQuestWorkItems` before setting status to `COM
 - `QuestFinishRewardPlanService.CorrectRewardGroup` preserves the Java reward-state guard, reward-group defaulting, out-of-range clamping, and the odd empty-list behavior where `rewardGroups.size() - 1` becomes `-1`.
 - The C# reward plan intentionally exposes a nullable reward-group count so the source-audited Java null branch can be represented, even though `QuestTemplate.getRewards()` normally returns `Collections.emptyList()` when XML rewards are absent.
 - UOW-1019 composes the reward plan into `QuestFinishOperationPlanService` through an optional projection so reward correction and detailed reward/work-item descriptors occur before staged quest-state mutation.
+- UOW-1030 adds `QuestFinishRewardPlanService.CreateRewardItemProjection`, a pure non-live item reward projection for extended fixed/selectable rewards, regular fixed/selectable rewards, class-specific selectable rewards, Java dialog reward-index mapping, and explicit bonus-handler projection warnings.
 - C# has inventory, AP, title, exp, DP, GP, cube, and warehouse-related surfaces in various partial states, but no composed quest-finish reward mutation plan.
-- C# quest-finish state mutation currently starts at status/var/repeat updates and does not yet compose the staged reward-group correction plan.
-- C# does not parse or stage full `Rewards`, `QuestItems`, extended reward data, class-specific selectable rewards, or quest work items for quest finish.
+- C# quest-finish state mutation currently starts at status/var/repeat updates and composes reward/work-item descriptors only as non-live operation metadata.
+- C# does not parse real quest XML `Rewards`, `QuestItems`, extended reward data, class-specific selectable rewards, or quest work items for quest finish.
 
 ## Recommended Implementation Slices
 
@@ -122,10 +142,11 @@ Because `finishQuest` calls `removeQuestWorkItems` before setting status to `COM
 ## Remaining Risks
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
-- Reward selection depends on dialog action ids, extended reward indexes, repeat count, class-specific reward data, bonus handlers, and static quest template data not fully ported in C#.
+- Reward selection depends on dialog action ids, extended reward indexes, repeat count, class-specific reward data, bonus handlers, and static quest template data not fully loaded in C#.
 - Work-item removal removes all owned matching item ids, which can be surprising if a player has extra copies.
 - Non-item reward side effects fan out to several partially ported systems.
 - Java logging/warning behavior for malformed reward selection is not modeled.
 - Java reward mutation is not transactional with later quest state persistence.
 - UOW-1018 descriptors do not prove full parity for reward item selection, class-specific rewards, bonus handlers, live inventory mutation, or runtime packet/callback ordering.
 - UOW-1019 operation-plan composition is still non-live and does not parse real quest XML reward data.
+- UOW-1030 item projection is source-reviewed and unit-tested but not composed into live quest finish, not backed by real XML loading, and not Java runtime-verified.
