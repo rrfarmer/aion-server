@@ -28834,9 +28834,72 @@ Next recommended unit of work:
 
 ---
 
+### Session 902 (May 25, 2026)
+- Continued after UOW-901 by checking remaining AP caller surfaces and selecting isolated `SM_LEGION_EDIT` packet completion because the obvious AP callers map to broader unported systems.
+- Performed Parallel Work Discovery across AP caller coverage, remaining `SM_LEGION_EDIT` packet types, AP cap integration regression, and Java runtime capture. Selected a sequential packet unit because it is isolated and avoids shared AP caller paths.
+- Reviewed Java `network/aion/serverpackets/SM_LEGION_EDIT`.
+- Extended C# `SmLegionEdit` factories and serialization for Java edit types:
+  - `0x00` legion level
+  - `0x01` abyss ranking position
+  - `0x02` permissions
+  - `0x03` contribution points
+  - `0x04` warehouse Kinah
+  - `0x05` announcement text and Unix time
+  - `0x06` disband Unix time
+  - `0x07` recover type-only packet
+  - `0x08` refresh-announcement type-only packet
+- Added `SmLegionEditTests`.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~SmLegionEditTests --no-restore` passed with 9 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1480 tests.
+
+#### Migration Parity Table - Session 902
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LEGION_EDIT` | `Aion.GameServer.Network.Aion.ServerPackets.SmLegionEdit` | Server Packet | Partial | Unit Tested | Partial Parity | C# now serializes all Java edit type payload shapes `0x00` through `0x08`. Runtime integration with full Legion, warehouse, permissions, announcement, disband, recover, ranking cache, and online-member broadcast systems remains missing. Byte-level Java runtime comparison is unavailable. |
+| `com.aionemu.gameserver.model.team.legion.Legion` | `SmLegionEdit` factory inputs | Domain Model Dependency | Not Started / Partial Input Projection | Unit Tested at packet payload level | Needs Verification | Full C# Legion aggregate is not ported here; factories accept primitive projected values. Java object-derived values such as level, permissions, contribution, and warehouse Kinah must be supplied by future Legion services. |
+| `com.aionemu.gameserver.services.abyss.AbyssRankingCache` | `SmLegionEdit.RankingPosition(int)` | Service Dependency | Not Started / Input Projection | Unit Tested at packet payload level | Needs Verification | Ranking cache lookup is not ported here; packet factory accepts the projected ranking position. |
+| `com.aionemu.gameserver.model.team.legion.Legion.Announcement` | `SmLegionEdit.Announcement(string, int)` | DTO / Value Dependency | Not Started / Input Projection | Unit Tested at packet payload level | Needs Verification | Java announcement object/time conversion is not ported; factory accepts message text and Unix seconds. Date/time conversion remains caller responsibility. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `Level_WritesJavaTypeAndLevel` | Unit | Java `SM_LEGION_EDIT.writeImpl` source review | Type `0x00` writes `C level`. | Deterministic packet payload test grounded in Java source. | No Java runtime byte artifact. |
+| `RankingPosition_WritesJavaTypeAndPosition` | Unit | Java `SM_LEGION_EDIT.writeImpl` source review | Type `0x01` writes `D rankingPosition`. | Deterministic packet payload test grounded in Java source. | Ranking cache lookup not ported. |
+| `Permissions_WritesJavaPermissionOrder` | Unit | Java `SM_LEGION_EDIT.writeImpl` source review | Type `0x02` writes deputy, centurion, legionary, volunteer permission masks as `H`. | Deterministic packet payload test grounded in Java source. | Full permission domain not ported. |
+| `Contribution_WritesJavaTypeAndContribution` | Unit | Java `SM_LEGION_EDIT.writeImpl` source review | Type `0x03` writes `Q contributionPoints`. | Deterministic packet payload test grounded in Java source. | Legion contribution execution remains partial. |
+| `WarehouseKinah_WritesJavaTypeAndKinah` | Unit | Java `SM_LEGION_EDIT.writeImpl` source review | Type `0x04` writes `Q warehouseKinah`. | Deterministic packet payload test grounded in Java source. | Legion warehouse model not ported. |
+| `Announcement_WritesJavaMessageAndUnixTime` | Unit | Java `SM_LEGION_EDIT.writeImpl` source review | Type `0x05` writes `S announcement`, `D unixTime`. | Deterministic packet payload test grounded in Java source. | Java `Date` to Unix conversion is caller-side and not tested. |
+| `Disband_WritesJavaTypeAndUnixTime` | Unit | Java `SM_LEGION_EDIT.writeImpl` source review | Type `0x06` writes `D unixTime`. | Deterministic packet payload test grounded in Java source. | Disband scheduler/domain not ported. |
+| `EmptyEdits_WriteOnlyJavaType` | Unit | Java `SM_LEGION_EDIT.writeImpl` source review | Types `0x07` and `0x08` write only the edit type. | Deterministic packet payload test grounded in Java source. | Recover/refresh behavior not integrated. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Full Legion aggregate, permissions, warehouse, announcement, disband/recover, online-member broadcast, and ranking-cache systems remain incomplete.
+- `SmLegionEdit` factories accept primitive projected values rather than Java-equivalent Legion objects.
+- Date/time conversion for announcements/disband is caller responsibility and not runtime compared.
+- Packet bytes were not compared against Java runtime output.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 packet serializer expanded to all Java edit payload shapes
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, full Legion aggregate, ranking cache, Legion warehouse, announcement/disband domain services, and online-member broadcast integration
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit improves packet surface readiness for future Legion/AP work.
+
+Next recommended unit of work:
+- Continue AP caller convergence by inspecting C# coverage for Java AP callers and wiring the smallest already-ported AP path through `AbyssPointsService`.
+- If AP caller work remains too broad, continue isolated Legion packet/domain groundwork or choose another independent non-AP Phase 6 slice.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: inspect C# coverage for Java `TradeService`, `QuestService`, `PvpService`, `NpcController`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: inspect C# coverage for Java `TradeService`, `QuestService`, `PvpService`, `NpcController`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
