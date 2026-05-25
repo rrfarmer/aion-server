@@ -1,7 +1,7 @@
 # Quest Reward Side-Effects Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1034, updated by UOW-1035, UOW-1037, and UOW-1038
+Unit of Work: UOW-1034, updated by UOW-1035, UOW-1037, UOW-1038, and UOW-1039
 
 ## Purpose
 
@@ -72,6 +72,7 @@ Title:
 - C# has `TitleAddService`, `PlayerTitle`, and `SmTitleInfo` for item-title-style support, but no live quest-title grant path or quest-title system message equivalent.
 - UOW-1037 adds non-live `QuestRewardSideEffectPlanService.CreateTitleRewardPlan`, which records invalid-title throw intent, owner-null return, race failure plain-text message, duplicate title tooltip intent, successful permanent title creation, expirable registration, immediate persistence, quest-title message intent, and full-title-info intent.
 - UOW-1038 composes `CreateTitleRewardPlan` into `QuestFinishOperationPlanService` through `QuestFinishRewardSideEffectContext`, after the matching non-item title projection and before the coarse Java non-item placeholder. The descriptor is metadata only and keeps live title mutation, DAO write, expirable registration, and packet send disabled.
+- UOW-1039 adds concrete `SmSystemMessage.QuestGetRewardTitle(titleName)` packet support for Java `STR_QUEST_GET_REWARD_TITLE(String)` message id `1300035`, covered by packet serialization tests. Quest finish still does not send it live.
 
 Cube:
 
@@ -151,7 +152,7 @@ GP:
 - Precision and overflow for Java `Rates.XP_QUEST` and `Rates.GP` are not ported.
 - `Rates.QUEST_KINAH` precision/truncation is unit-tested in C# from source-reviewed Java behavior, but it still lacks Java runtime comparison.
 - C# AP rate helper intentionally omits Java overflow logging.
-- Packet masks and packet ordering are incomplete for quest kinah, quest title, cube expansion, warehouse expansion, GP, and XP.
+- Packet masks and packet ordering are incomplete for quest kinah, cube expansion, warehouse expansion, GP, and XP. Quest title now has a concrete system-message helper, but no live send or Java golden-byte comparison.
 - C# quest finish still does not execute any reward mutation.
 - Title/cube/warehouse planners are now visible in quest-finish operation metadata when a side-effect context is supplied, but remain metadata only; quest title DAO writes, expirable registration, cube update sends, warehouse info sends, and player expansion counter persistence are not live.
 - Live reward mutation needs an explicit failure-ordering policy before composition.
@@ -161,4 +162,4 @@ GP:
 
 1. Add a GP live-helper design audit or scaffold before composing AP/DP/GP live helpers into quest finish.
 2. Add a quest XP helper design or scaffold only after documenting level-up/stat/nearby-refresh side effects.
-3. Add a concrete quest-title system-message helper and packet-level tests before enabling live title reward sends.
+3. Revisit title/cube/warehouse live adapter boundaries only after packet, persistence, and failure-ordering gaps are narrower.
