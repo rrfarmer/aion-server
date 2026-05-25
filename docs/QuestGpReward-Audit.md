@@ -1,4 +1,4 @@
-# Quest GP Reward Audit - UOW-1040/UOW-1041
+# Quest GP Reward Audit - UOW-1040/UOW-1042
 
 Date: May 25, 2026
 
@@ -58,6 +58,15 @@ Date: May 25, 2026
 - The GP descriptor is emitted after the matching non-item GP projection and before the coarse non-item reward placeholder.
 - Quest finish still does not execute live GP mutation or offline DAO writes.
 
+## C# State After UOW-1042
+
+- Added `IAbyssRankRepository`, `EmptyAbyssRankRepository`, and `MySqlAbyssRankRepository`.
+- Added `AbyssRankGpUpdatePlan` to expose Java `AbyssRankDAO.addGp` SQL text and parameter order.
+- Positive/stat-modifying GP uses `UPDATE abyss_rank SET gp = gp + ?, daily_gp = daily_gp + ?, weekly_gp = weekly_gp + ? WHERE player_id = ?`.
+- Current-GP-only changes use `UPDATE abyss_rank SET gp = GREATEST(gp + ?, 0) WHERE player_id = ?`.
+- `MySqlAbyssRankRepository.AddGpAsync` returns true when SQL execution completes, including zero affected rows, matching Java's no row-count check.
+- The repository is not yet wired into `GloryPointsService` or quest-finish execution.
+
 ## Known Gaps
 
 - No Java runtime golden comparison was generated.
@@ -67,6 +76,7 @@ Date: May 25, 2026
 - Positive offline GP SQL overflow/sign behavior is database-dependent and unverified.
 - Siege and fortress GP callers are not wired; siege GP must remain unrated.
 - Quest finish composition carries GP rate/helper metadata only and does not call the live mutating helper.
+- Offline repository execution exists as a boundary but is not called by gameplay.
 
 ## Tests Added Or Updated
 
@@ -83,7 +93,10 @@ Date: May 25, 2026
 - `GameServerOptionsTests.LoadFromJavaConfig_AppliesMyGsOverridesLast`
 - `QuestRewardSideEffectPlanServiceTests.CreateGpRewardPlan_AppliesRateAndPlansPacketsWithoutMutatingPlayer`
 - `QuestFinishOperationPlanServiceTests.CreatePlan_ComposesGpSideEffectPlanAfterMatchingNonItemProjectionWithoutMutatingPlayer`
+- `AbyssRankRepositoryTests.AbyssRankGpUpdatePlan_UsesJavaPositiveStatsSqlAndParameterOrder`
+- `AbyssRankRepositoryTests.AbyssRankGpUpdatePlan_UsesJavaCurrentGpClampSqlWhenStatsAreNotModified`
+- `AbyssRankRepositoryTests.EmptyAbyssRankRepository_ReportsUnavailableMutationBoundary`
 
 ## Next Recommendation
 
-Keep GP live integration out of quest finish until offline DAO, daily/weekly rollover, and reward failure ordering are better bounded. The next small unit should either add the offline GP DAO update plan/repository boundary or audit/scaffold quest XP, which has broader level/stat side effects.
+Keep GP live integration out of quest finish until offline DAO execution is explicitly composed, daily/weekly rollover is bounded, and reward failure ordering is settled. The next small unit should either compose the offline repository into a non-live/executor boundary or audit/scaffold quest XP, which has broader level/stat side effects.
