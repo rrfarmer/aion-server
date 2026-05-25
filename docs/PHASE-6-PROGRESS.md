@@ -28390,6 +28390,55 @@ Next recommended unit of work:
 
 ---
 
+### Session 894 (May 25, 2026)
+- Continued after UOW-893 with a docs-only projection guide because Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Performed Parallel Work Discovery across Java observer/runtime capture, decompose projection guide, non-decompose gameplay work, and Java static-data override design. Selected the projection guide because UOW-893 added C# real-count projection support and the artifact contract needed explicit mode rules.
+- Added `docs/Phase-6-Decompose-Artifact-Projection-Guide.md`.
+- Updated `docs/Phase-6-Decompose-Live-Server-Capture-Runbook.md` to require `fixture.projection.mode` for selectable-decompose artifacts.
+- The guide defines:
+  - `logical_static_override` for Java test data matching `101 -> 201 x2 / 202 x3`
+  - `real_java_xml_candidate` for Java real XML source `188051516`, reward index 0 `164000076 x100`, reward index 1 `164000073 x100`
+  - `custom_java_fixture` for future deterministic selectable sources
+  - allowed and disallowed `fixture.id_mapping` use
+  - stop conditions for ambiguous projection mode, count normalization, random counts, reward filtering, packet noise, and reward-add trailing cube update
+- No production Java/C# code changed.
+- Validation: `git diff --check` passed aside from the repo's normal CRLF warnings. No tests were run because this was a documentation-only contract unit. Latest full C# validation remains Session 893: 1456 tests passing.
+
+#### Migration Parity Table - Session 894
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `game-server/data/static_data/decomposable_items/decomposable_items.xml` | `docs/Phase-6-Decompose-Artifact-Projection-Guide.md` / `SelectableDecomposeTestData.RealJavaXmlCandidate` | Static Data / Fixture Contract | Partial | Manual Only for guide; Unit Tested in C# projection | Needs Verification | Guide documents exact real-candidate ids/counts and forbids count normalization through id mapping. Java runtime static-data loading remains unverified. |
+| `game-server/data/static_data/items/item_templates.xml` | `docs/Phase-6-Decompose-Artifact-Projection-Guide.md` / generated C# fixture templates | Static Data / Item Template Contract | Partial | Manual Only for guide; Unit Tested in C# projection | Needs Verification | Guide records names and ids needed by future artifacts. Full template attributes and serialization effects remain unverified. |
+| `com.aionemu.gameserver.model.templates.item.ResultedItem` | `Aion.GameServer.Tests.GameServerConnectionInventoryExpansionUseItemTests.SelectableDecomposeTestData` | DTO / Static Data Model | Partial | Manual Only for guide; Unit Tested in C# projection | Needs Verification | Guide relies on source-reviewed Java `max_count` normalization to explain `x100` rewards. Runtime JAXB behavior, random ranges, and race/class filtering remain unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ClientPackets.CmSelectDecomposable` / artifact comparison contract | Client Packet Handler | Partial | Manual Only for guide; Regression Tested in C# projection | Partial Parity | Guide defines artifact projection modes for the existing two selectable scenarios. No live Java handler artifact exists. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| None | Documentation / Contract Guide | Java XML/source audit and C# UOW-893 projection test | Documents artifact projection mode rules and count-mapping stop conditions. | Static source review plus previously passing C# projection tests. | No new runtime validation; no Java artifact; no packet byte comparison. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- The guide is only as useful as future artifact authors following `fixture.projection.mode`.
+- Real XML candidate behavior may still be affected by live item restrictions, inventory capacity, event systems, server config, or packet side effects.
+- Full item-info blob serialization, byte-level payload/frame parity, object-id allocation, persistence, threading, date/time, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 0 production code artifacts; 1 artifact projection guide added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 blocked/not-started categories, including Java observer implementation, Java runtime artifact generation, Java loopback proof validation, Java static-data override setup, SQL fixture execution, reward-add trailing cube update implementation decision, byte capture, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit reduces future artifact ambiguity but adds no runtime evidence.
+
+Next recommended unit of work:
+- If Java 25/Maven tooling is available, generate selectable-decompose artifacts using the projection guide and run the guarded C# comparison.
+- If tooling remains blocked, continue an isolated non-decompose Phase 6 gameplay slice that avoids shared decompose comparison helpers and progress docs until commit time.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.

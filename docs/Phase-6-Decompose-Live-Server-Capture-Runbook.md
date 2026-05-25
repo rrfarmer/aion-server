@@ -96,6 +96,8 @@ If the live Java server cannot use the test-only item ids, choose real Java XML 
 
 Do not silently rewrite ids in the JSON. The C# comparison should know whether it is comparing logical fixture ids or mapped live ids.
 
+After UOW-894, artifacts should also declare `fixture.projection.mode` using `docs/Phase-6-Decompose-Artifact-Projection-Guide.md`. Use `logical_static_override` for the test-only `101 -> 201 x2 / 202 x3` fixture, or `real_java_xml_candidate` for source `188051516` with rewards `164000076 x100` and `164000073 x100`. Do not map reward counts through `fixture.id_mapping`.
+
 ## Database Fixture Checklist
 
 Before the capture:
