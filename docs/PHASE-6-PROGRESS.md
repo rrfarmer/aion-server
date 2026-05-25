@@ -28492,6 +28492,57 @@ Next recommended unit of work:
 
 ---
 
+### Session 896 (May 25, 2026)
+- Continued after UOW-895 with focused item-skill `CM_EMOTION` cancellation coverage, as recommended by the previous handoff.
+- Performed Parallel Work Discovery across item-skill emotion cancellation coverage, Java observer/runtime capture, AP rank-change work, and group portal fanout. Selected item-skill emotion cancellation because it exercised the branch added in UOW-895 without additional production changes.
+- Added `HandleEmotionAsync_ItemSkillCastCancelsCooldownAndUsageBeforeModeChange`.
+- The regression sets a represented item-skill cast with item object/template/target metadata and an item cooldown, then sends `CM_EMOTION` sit.
+- The test verifies Java-style ordering:
+  - `STR_ITEM_CANCELED`
+  - cancel `SM_ITEM_USAGE_ANIMATION`
+  - final `SM_EMOTION`
+- It also verifies casting state is cleared, `LastCastingSkillId` is recorded, the item cooldown is removed, and the sit state is applied.
+- No production Java/C# code changed in this unit.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests --no-restore` passed with 38 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1459 tests.
+
+#### Migration Parity Table - Session 896
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_EMOTION` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleEmotionAsync` | Client Packet Handler | Partial | Regression Tested in C# | Partial Parity | Item-skill cancellation before sit mode change now has focused test coverage. Java runtime packet capture remains absent, so parity cannot be verified. |
+| `com.aionemu.gameserver.controllers.PlayerController.cancelCurrentSkill` | `Aion.GameServer.Network.Aion.GameServerConnection.CancelCurrentSkillForEmotionAsync` / `Player.ClearCastingSkill` | Controller / Skill Cancellation | Partial | Regression Tested in C# for cast and item-skill metadata branches | Needs Verification | New test covers item-skill metadata branch: state clear, `STR_ITEM_CANCELED`, cooldown removal, cancel animation, then emotion broadcast. Java Skill object cancellation, scheduler cancellation, hit-time boost reset, and last-attacker messages remain unsupported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` | `Aion.GameServer.Network.Aion.ServerPackets.SmItemUsageAnimation` | Server Packet | Partial | Regression Tested in C# | Needs Verification | New test validates decoded cancel animation fields for item-skill emotion cancellation using represented item metadata. Java byte-level payload remains unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested in C# | Needs Verification | New test covers `STR_ITEM_CANCELED` message id in the `CM_EMOTION` item-skill cancellation path. Java runtime payload capture remains absent. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_EMOTION` | `Aion.GameServer.Network.Aion.ServerPackets.SmEmotion` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Test verifies the final mode-change emotion is still emitted after item-skill cancellation. Full visible-player fanout and Java runtime ordering remain unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleEmotionAsync_ItemSkillCastCancelsCooldownAndUsageBeforeModeChange` | Regression | Java `CM_EMOTION.runImpl` and `PlayerController.cancelCurrentSkill` source review | Validates item-skill emotion cancellation clears state, removes cooldown, sends `STR_ITEM_CANCELED`, broadcasts cancel usage animation, and then applies/broadcasts sit. | Deterministic C# packet/state regression grounded in Java source ordering. | No Java runtime artifact; no full Skill object/scheduler cancellation; no hit-time boost reset; no visible-player registry integration. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Java `cancelCurrentSkill` still has deeper behaviors not represented by this C# slice: active Skill cancellation, hit-time boost reset, scheduler interaction, and last-attacker notification.
+- The item-skill test uses represented metadata rather than a full Java `Skill` object or item template action runtime.
+- Packet fanout with a real connection registry and visible players remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 0 production code artifacts; 1 item-skill emotion cancellation regression added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 5 blocked/not-started categories, including Java runtime artifact generation, full SkillEngine cancellation, hit-time boost reset, last-attacker cancellation message, and visible-player registry integration
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit improves regression coverage for the UOW-895 behavior slice but adds no Java runtime evidence.
+
+Next recommended unit of work:
+- Continue another isolated non-decompose Phase 6 gameplay slice, preferably AP rank-change legion contribution design or a small `CM_EMOTION` observer/stat fanout follow-up if it can remain narrow.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
