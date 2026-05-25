@@ -30566,9 +30566,60 @@ Next recommended unit of work:
 
 ---
 
+### Session 932 (May 25, 2026)
+- Continued after UOW-931 by selecting the delete-only concrete `SmDeleteItem` bridge for the dry-run ItemPurification packet plan.
+- Parallel Work Discovery considered the delete bridge, Java delete/cube ordering analysis, C# delete DTO API analysis, and broader cube/add/AP fanout. The code patch was kept sequential because it touches the shared packet-plan service and its focused tests; two read-only explorer agents reviewed Java behavior and C# packet DTO requirements in parallel.
+- Updated `ItemPurificationPacketPlanService` so delete operations carry a concrete `SmDeleteItem(operation.ObjectId, UseDeleteType)`.
+- Preserved Java ordering by keeping each delete operation immediately followed by its cube-size metadata operation.
+- Added a focused regression that decodes the concrete delete packet payload and validates object id plus Java `ItemDeleteType.USE` mask `0x17`.
+- Kept cube-size, target-add, AP, Kinah no-packet, live sends, inventory/AP mutation, object-id allocation, storage mutation, repository persistence, and connection wiring out of scope.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter ItemPurificationPacketPlanServiceTests` passed with 6 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1594 tests.
+
+#### Migration Parity Table - Session 932
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemPacketService.sendItemDeletePacket` | `Aion.GameServer.Services.ItemPurificationPacketPlanService.CreatePacketPlan` | Packet Planner / Inventory Delete Bridge | Partial | Regression Tested in C# | Partial Parity | Delete operations now carry concrete `SmDeleteItem` packets with object id and `USE` delete type `0x17`, followed by cube-size metadata operations. Java source reviewed; no live send or Java runtime packet capture exists. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DELETE_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmDeleteItem` via `ItemPurificationPacketOperation.ConcretePacket` | Server Packet DTO / Inventory Delete | Complete for this packet DTO path | Regression Tested in C# planner | Partial Parity | Focused test decodes C# payload as object id then delete type. Java byte-golden/runtime comparison is still unavailable, so parity remains partial rather than verified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CUBE_UPDATE.cubeSize` | `ItemPurificationPacketOperationType.CubeSizeUpdate` | Packet Intent / Cube Size | Partial | Regression Tested in C# planner | Needs Verification | C# preserves delete-then-cube ordering but keeps cube payload metadata-only because Java computes cube counts/expansion fields from live storage/player state at send time. |
+| `com.aionemu.gameserver.model.items.storage.Storage.delete` | `ItemPurificationApplicationOperationType.DeleteMaterialItem` / `DeleteBaseItem` plus delete packet plan | Storage Delete Boundary Projection | Partial | Regression Tested in C# planner | Partial Parity | Packet planner creates the delete packet only; it does not remove items, mark persistent state, queue deleted rows, log deletion, or fire `QuestEngine.onItemRemoved`. Threading/concurrency behavior remains unported. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseItemCount` | `ItemPurificationApplicationPlanService` + `ItemPurificationPacketPlanService` | Stack Consumption Projection | Partial | Regression Tested in C# planner | Partial Parity | Java maps exhausted non-Kinah stacks from `DEC_ITEM_USE` to delete type `USE`. C# planner preserves delete/update split from application operations, but live item mutation and Java runtime ordering across storage collections are not compared. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePacketPlan_PutsUpgradeSuccessMessageBeforeInventoryFanout` updated | Regression | Java `ItemPurificationService.isPurificationAllowed`, `ItemPacketService.sendItemDeletePacket` source review | Validates the success message still leads the fanout and only non-delete/non-update operations remain metadata-only. | Deterministic C# regression. | Does not send packets or compare Java runtime bytes. |
+| `CreatePacketPlan_AttachesConcreteInventoryUpdatePacketWhenRuntimeItemInputProvided` updated | Regression | Java update/delete packet split source review | Validates update operations stay concrete when caller supplies snapshots while delete operations may also be concrete. | Deterministic C# regression. | No live send or Java byte comparison. |
+| `CreatePacketPlan_AttachesConcreteDeletePacketsBeforeCubeSizeMetadata` | Regression | Java `ItemPacketService.sendItemDeletePacket`, `SM_DELETE_ITEM.writeImpl`, and `Storage.decreaseItemCount` source review | Validates material/base delete operations carry concrete `SmDeleteItem` packets, serialize object id plus `0x17`, and remain immediately followed by metadata-only cube-size operations. | Deterministic C# payload regression grounded in Java packet fields and ordering. | No Java runtime golden file; cube-size payload remains unmodeled. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Concrete delete packets are now in the packet plan but still not emitted by live ItemPurification handling.
+- Cube-size packets remain metadata-only because Java computes payload fields from live player storage/cube expansion state.
+- Target add, AP, and Kinah packet operations remain metadata-only.
+- Live inventory mutation, delete queue/persistent-state changes, item deletion logging, quest item-removal hooks, AP/rank side effects, target object-id allocation, `Storage.add`, dirty-state persistence, `ItemStoneListDAO.save`, Kinah parity decision, packet byte order, and rollback/error behavior remain unimplemented.
+- Required `docs/commit-conventions.md` is still missing; commit format continues to follow `docs/orchestration-rules.md`.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 narrow ItemPurification delete-packet bridge slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, live ItemPurification packet emission, cube/add/AP concrete fanout, live object-id allocation/storage mutation, repository dirty-state persistence, and AP/rank side effects
+- Estimated overall migration completion: Phase 6 remains about 68% complete; this unit adds one concrete delete packet bridge but not live purification fanout.
+
+Next recommended unit of work:
+- Add a narrow concrete `SmInventoryAddItem` bridge for `ItemPurificationPacketPlanService` target-add operations only if caller-provided target item/template snapshots can keep object-id allocation and `Storage.add` out of scope; otherwise pivot to ItemCharge AP spend hardening.
+- Keep cube-size/AP/live send fanout blocked until target object-id allocation, `Storage.add`, repository dirty-state saves, AP rank side effects, Kinah parity decision, and packet byte ordering are scoped together.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, and the concrete update-packet bridge now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. Move next to a delete-packet bridge for the dry-run ItemPurification packet plan, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, and the concrete delete-packet bridge now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. Move next to a target-add packet bridge for the dry-run ItemPurification packet plan, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
