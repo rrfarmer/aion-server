@@ -34006,6 +34006,63 @@ Next recommended unit of work:
 
 ---
 
+### Session 996 (May 25, 2026)
+- Continued after UOW-995 by adding a read-only Java/C# audit for the future nearby quest refresh send boundary and production safety gates.
+- Parallel Work Discovery selected a narrow sequential documentation unit because the shared Phase 6 docs/handoff are orchestrator-owned and production send wiring remains unsafe.
+- Added `docs/NearbyQuestRefresh-SendBoundary-Audit.md`.
+- Audited the two reviewed Java send triggers:
+  - `CM_LEVEL_READY.runImpl` calls `activePlayer.getController().updateNearbyQuests()` for an immediate owner-only `SM_NEARBY_QUESTS` send.
+  - `WorldMapInstance.addObject(Npc)` registers new `QuestNpc.getOnQuestStart()` ids and schedules one delayed 1500 ms instance-wide refresh task guarded by a pending-task field.
+- Confirmed C# has `SmNearbyQuests`, staged world quest-id storage/projection, staged partial predicate filtering, staged marker projection, and send primitives, but no live nearby-refresh send method, no level-ready marker send, no NPC-spawn delayed refresh scheduler, and no production ItemPurification dispatcher.
+- Kept `CM_ITEM_PURIFICATION` production dispatch, nearby marker packet sends, `CM_LEVEL_READY` nearby send integration, NPC-spawn delayed refresh, and production `StaticData` integration disabled.
+- Validation:
+  - Documentation/source-review only. No tests were run because no code or test files changed.
+
+#### Migration Parity Table - Session 996
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | Future C# nearby refresh send service using `NearbyQuestMarkerProjectionService` and `SmNearbyQuests` | Controller / Quest UI Send Boundary | Not Started | Manual Only | Needs Verification | Java source reviewed for marker calculation and owner packet send. C# has staged marker projection only; no player-controller method, map-region lookup, production quest-template loading, packet send, or Java `HashMap` ordering parity. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_LEVEL_READY` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLevelReadyAsync` | Client Packet Handler / Enter-Map Trigger | Partial | Manual Only | Needs Verification | Java calls `updateNearbyQuests()` from level-ready. C# level-ready sends baseline map-ready packets but intentionally does not send nearby quest markers yet. |
+| `com.aionemu.gameserver.world.WorldMapInstance.addObject` | `Aion.GameServer.World.WorldMapInstanceRuntimeState`; future NPC-spawn refresh scheduler | World Instance / Delayed Refresh Trigger | Partial | Regression Tested plus Manual Audit | Partial Parity | Staged quest-id storage/projection has tests, but production `addObject(Npc)`, `QuestEngine.getQuestNpc`, 1500 ms debounce scheduling, task reset, and per-player instance fanout are not wired. C# async/threading parity is unknown. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `Aion.GameServer.Network.Aion.IGameClientConnectionRegistry.SendPacketToPlayerAsync`; `GameServerConnection.SendPacketAsync` | Packet Send Utility Boundary | Partial | Existing Regression Coverage Elsewhere plus Manual Audit | Needs Verification | C# has owner-send primitives used by other systems. A nearby-refresh caller has not been implemented. Java `player.isOnline()` gating must be matched by active connection/player checks. Socket send failure behavior remains unverified for this path. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `Aion.GameServer.Network.Aion.ServerPackets.SmNearbyQuests` | Server Packet / Serialization | Complete | Unit Tested | Verified Parity | Existing tests cover source-reviewed byte layout: `C(0)`, negative count, and `1 << 17` marker flag for positive level diff. Caller ordering remains not claimed because Java `HashMap` iteration order is not deterministic. |
+| `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `Aion.GameServer.Services.NearbyQuestStartConditionService` | Service / Quest Predicate Dependency | Partial | Unit Tested | Partial Parity | Current staged predicate covers early gates only and rejects unsupported dependencies. Full XML start conditions, inventory checks, combine-skill, NPC faction, exception/log behavior, and time-based repeat timing remain unsupported. |
+| `com.aionemu.gameserver.questEngine.QuestEngine.onItemGet` / `onItemRemoved` nearby refresh calls | `Aion.GameServer.Services.NoOpItemPurificationNearbyQuestRefreshDispatcher` | Quest Callback / ItemPurification Refresh Dependency | Partial | Unit Tested for Planning; Manual Audit for Send Boundary | Needs Verification | ItemPurification can plan refresh candidates through `questUpdateItems`, but dispatcher stays no-op. Real quest handlers and nearby marker sends remain disabled by design. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `docs/NearbyQuestRefresh-SendBoundary-Audit.md` | Manual | Java `PlayerController.updateNearbyQuests`, `CM_LEVEL_READY`, `WorldMapInstance.addObject`, `PacketSendUtility.sendPacket`, `SM_NEARBY_QUESTS` | Documents Java send triggers, C# send primitives, and production safety gates before packet wiring. | Source-reviewed manual audit. | No executable tests; no runtime packet send or Java comparison artifact. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- C# has no production nearby-refresh send method.
+- `CM_LEVEL_READY` nearby marker send is absent in C#.
+- NPC-spawn delayed refresh fanout and the Java 1500 ms debounce are absent in C#.
+- Production quest-template loading and production quest-start source loading remain unwired.
+- Unsupported nearby predicate dependencies remain broad and must fail closed.
+- Java `HashMap`/set ordering is not deterministic; packet marker order parity is not claimed.
+- C# async scheduling/threading for a future debounce needs dedicated tests.
+- Reflection/dynamic Java quest-handler execution remains unported.
+- No date/time behavior was added in this unit; repeat-cycle date/time remains unsupported from prior units.
+- No serialization code changed in this unit; existing `SmNearbyQuests` tests remain the serialization evidence.
+
+Summary metrics:
+- Total Java artifacts discovered: 7 in this unit
+- Total artifacts ported: 0 new runtime artifacts in this unit
+- Total artifacts with verified parity: 1 existing packet artifact referenced by this audit
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 4 blocked/not-started categories: production send method, level-ready send trigger, delayed NPC-spawn refresh scheduler, and unsupported predicate dependencies
+- Estimated overall migration completion: Phase 6 remains about 70% complete; this unit clarifies send-boundary blockers without enabling live nearby quest refresh.
+
+Next recommended unit of work:
+- Add a staged real-data marker projection test for templates that have no unsupported dependencies, or implement a non-sending `NearbyQuestRefreshPlanService` that composes current staged world quest ids, staged templates, and marker projection into a send-ready plan with explicit failure reasons. Keep actual packet sends, `CM_LEVEL_READY` integration, NPC-spawn delayed refresh, production `StaticData` integration, and production ItemPurification dispatch disabled until follow-up tests cover each gate.
+- Alternative safe slice: use the sidecar persistence-gap analysis to document or implement the next ItemPurification side-effect persistence prerequisite.
+
+---
+
 ## Next Steps
 
 1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure ItemPurification quest-notification projection, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, the handler-level ItemPurification workflow/application/packet-plan composition bridge, the ItemPurification runtime-input packet bridge, the ItemPurification ready concrete-packet send bridge, the ItemPurification target object-id allocation bridge, the ItemPurification random-bonus selection seam, the ItemPurification non-persistent mutation snapshot preview, the ItemPurification non-persistent handler mutation bridge, the ItemPurification live mutation adapter boundary, the ItemPurification live execution composition seam, the ItemPurification live AP rank-drop metadata regression, the ItemPurification explicit live AP player-packet emission bridge, the ItemPurification explicit live AP rank-update broadcast bridge, the ItemPurification explicit live equipment rank-limit state mutation bridge, the ItemPurification explicit live equipment rank-limit packet fanout bridge, the ItemPurification explicit live abyss skill refresh bridge, the ItemPurification explicit opt-in quest notification no-op seam, the ItemPurification explicit transform-min-rank config plumbing, the ItemPurification quest-update items audit, the ItemPurification quest-update item static-data projection, the ItemPurification no-op nearby-refresh planning seam, the ItemPurification no-op nearby-refresh dispatcher seam, the ItemPurification nearby quest refresh surface audit, the ItemPurification nearby quest packet prerequisite, the ItemPurification nearby quest world-instance registry prerequisite, the ItemPurification nearby quest start-registration table prerequisite, the ItemPurification handler opt-in live execution seam, the ItemPurification persistence plan analysis, the ItemPurification repository contract/payload plumbing, the ItemPurification inserted target item-stone persistence, the ItemPurification opt-in persistent live execution seam, the ItemPurification handler-level opt-in persistent execution helper, the ItemPurification handler-level persistence failure-ordering regression, the ItemPurification automatic-dispatch readiness policy, the ItemPurification staged dispatch-failure policy, the ItemPurification Java observer design, the ItemPurification opt-in DB integration happy path, the ItemPurification opt-in DB rollback path, the ItemPurification AP/quest readiness audit, the pure ItemCharge AP spend guard, and the live ItemCharge selected-item/charge-all AP guard consolidation now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. ItemCharge Kinah payment guard/consolidation, charge-all stale-item payment-before-revalidation hardening, mixed stale/current charge-all AP regression coverage, mixed stale/current charge-all Kinah regression coverage, missing/current charge-all AP approximation coverage, and missing/current charge-all Kinah approximation coverage are now staged for live selected-item/charge-all paths. Move next to Java observer artifact generation when tooling is available, nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another existing planner live adapter when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player/equipment/skill packets, AP/login rank-limited equipment persistence, configured abyss transform skill updates, rank config load, and real quest handler dispatch. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.

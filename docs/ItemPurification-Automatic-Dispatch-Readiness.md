@@ -150,6 +150,8 @@ UOW-994 adds a real-data audit for the staged nearby quest-template extractor, p
 
 UOW-995 adds `NearbyQuestMarkerProjectionService`, a staged bridge from world quest ids through the partial nearby predicate into marker DTOs and rejection reasons. This remains offline: no player-controller send, socket packet write, production static-data integration, or automatic production dispatch is wired.
 
+UOW-996 adds `docs/NearbyQuestRefresh-SendBoundary-Audit.md`, a read-only audit of the future nearby-refresh send boundary. Java sends nearby markers from `CM_LEVEL_READY` and from a delayed 1500 ms `WorldMapInstance.addObject(Npc)` refresh fanout. C# still has no live nearby-refresh send caller, no NPC-spawn refresh scheduler, and no production ItemPurification nearby-refresh dispatcher.
+
 ### 4. AP Side Effects
 
 Required before automatic dispatch:
@@ -216,7 +218,7 @@ Recommended next units:
 
 1. Generate Java runtime observer artifacts for ItemPurification packet/DB capture when Java 25/Maven tooling is available.
 2. Generate Java runtime failure artifacts or deliberately choose a final production failure policy once packet/DB comparison evidence exists.
-3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next auditing the player-controller send boundary or adding a staged real-data marker projection while preserving the no-op dispatcher seam until quest predicate parity exists.
+3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next adding a staged real-data marker projection or a non-sending nearby-refresh plan service while preserving the no-op dispatcher seam until quest predicate and send-trigger parity exist.
 4. Add AP spend packet/side-effect projection tests behind explicit opt-in live execution before production dispatch wiring.
 
 Unsafe next work:

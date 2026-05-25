@@ -1,0 +1,145 @@
+# Nearby Quest Refresh Send Boundary Audit
+
+Date: May 25, 2026
+Unit of Work: UOW-996
+
+## Purpose
+
+This audit records the Java send triggers and C# production safety gates for future `SM_NEARBY_QUESTS` wiring.
+
+Java remains the source of truth. This document does not enable packet sends, production player-controller refresh, production `StaticData` integration, or ItemPurification dispatch.
+
+## Java Source Breadcrumbs
+
+- `game-server/src/com/aionemu/gameserver/controllers/PlayerController.java::updateNearbyQuests`
+- `game-server/src/com/aionemu/gameserver/network/aion/clientpackets/CM_LEVEL_READY.java::runImpl`
+- `game-server/src/com/aionemu/gameserver/world/WorldMapInstance.java::addObject`
+- `game-server/src/com/aionemu/gameserver/utils/PacketSendUtility.java::sendPacket`
+- `game-server/src/com/aionemu/gameserver/network/aion/serverpackets/SM_NEARBY_QUESTS.java::writeImpl`
+
+## C# Source Breadcrumbs
+
+- `dotnetConversion/src/Aion.GameServer/Network/Aion/GameServerConnection.cs::HandleLevelReadyAsync`
+- `dotnetConversion/src/Aion.GameServer/Network/Aion/GameServerConnection.cs::SendPacketAsync`
+- `dotnetConversion/src/Aion.GameServer/Network/Aion/GameClientSocketServer.cs::SendPacketToPlayerAsync`
+- `dotnetConversion/src/Aion.GameServer/Network/Aion/IGameClientConnectionRegistry.cs`
+- `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmNearbyQuests.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/NearbyQuestMarkerProjectionService.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/ItemPurificationQuestMutationNotifier.cs`
+
+## Java Send Triggers
+
+Java sends nearby quest markers from two reviewed paths:
+
+1. `CM_LEVEL_READY.runImpl`
+   - After the player reaches the level-ready/map-ready point, Java calls `activePlayer.getController().updateNearbyQuests()`.
+   - This is an owner-only send through `PacketSendUtility.sendPacket`.
+
+2. `WorldMapInstance.addObject(Npc)`
+   - When an NPC is added, Java asks `QuestEngine.getQuestNpc(object.getObjectTemplate().getTemplateId())`.
+   - New `QuestNpc.getOnQuestStart()` ids are added to the world-instance `questIds` set.
+   - If any ids are new and no refresh task is already pending, Java schedules one delayed task for 1500 ms.
+   - The delayed task clears the pending-task field and calls `player.getController().updateNearbyQuests()` for every player in the instance.
+   - The null-check plus delay is a packet-spam guard for multi-spawn batches.
+
+`PacketSendUtility.sendPacket(player, packet)` only sends when `player.isOnline()` is true, then calls `player.getClientConnection().sendPacket(packet)`.
+
+## C# Current Boundary
+
+C# already has these staged pieces:
+
+- `SmNearbyQuests` serializes the reviewed Java payload shape.
+- `WorldMapInstanceRuntimeState` stores staged world-instance quest ids.
+- `NearbyQuestCandidateProjectionService` can contribute quest ids from staged NPC template ids.
+- `NearbyQuestStartConditionService` handles only the early nearby predicate gates and rejects unsupported dependencies explicitly.
+- `NearbyQuestMarkerProjectionService` projects passing staged quest ids to `NearbyQuestMarker` DTOs without sending.
+- `GameServerConnection.HandleLevelReadyAsync` sends the current map-ready baseline packets but does not call a nearby refresh method.
+- `IGameClientConnectionRegistry.SendPacketToPlayerAsync` and `GameServerConnection.SendPacketAsync` are available send boundaries, but no nearby-refresh caller uses them.
+- `NoOpItemPurificationNearbyQuestRefreshDispatcher` remains intentionally no-op even when a refresh plan says nearby quests should refresh.
+
+## Production Safety Gates
+
+Do not wire a real C# nearby-refresh send until all selected gates for the target scope are satisfied:
+
+1. Production quest-id source
+   - `QuestNpcStartTable` must be populated from production startup data, or the send path must be explicitly limited to a staged/offline table.
+   - NPC spawn or world-instance initialization must populate the active instance quest-id set.
+
+2. Predicate coverage
+   - The target send path must either implement full Java nearby `QuestService.checkStartConditions(player, questId, false, 2, false, false, false)` behavior or filter out unsupported templates before sending.
+   - Current unsupported categories include XML start conditions, inventory preconditions, combine-skill requirements, NPC faction requirements, and time-based repeat cooldowns.
+
+3. Player/world lookup
+   - The send method must resolve the player's current map-region parent/world-instance equivalent.
+   - Missing instance data must fail closed rather than sending an empty list that could hide real markers.
+
+4. Send trigger selection
+   - `CM_LEVEL_READY` immediate owner send and `WorldMapInstance.addObject(Npc)` delayed instance fanout are separate Java triggers.
+   - Implement and test them independently.
+
+5. Debounce semantics
+   - The NPC-spawn refresh path needs a 1500 ms one-pending-task guard before runtime parity can be claimed.
+   - C# async scheduling/threading will differ from Java `ThreadPoolManager`; that difference needs tests around duplicate suppression and task reset.
+
+6. Ordering and collection semantics
+   - Java builds a `HashMap<Integer, Integer>` and iterates `entrySet()`.
+   - C# must not claim packet order parity unless a deterministic runtime artifact or approved ordering decision exists.
+
+7. Socket/send behavior
+   - Java checks `player.isOnline()` before calling the connection send.
+   - C# registry sends fail when no active connection/player exists; the final player-controller boundary needs equivalent online/connection gating.
+
+8. ItemPurification isolation
+   - ItemPurification may continue to plan nearby-refresh candidates, but production `CM_ITEM_PURIFICATION` dispatch must not invoke real nearby-refresh until the above gates are satisfied.
+
+## Tests Added Or Updated
+
+No tests were added in UOW-996. Verification for this unit is manual source review of the Java/C# send boundary and documentation updates only.
+
+Existing relevant tests remain:
+
+- `GamePacketTests.ServerPacketPayloads_MatchJavaShapes` for `SmNearbyQuests` payload serialization.
+- `WorldMapRuntimeStateTests.NearbyQuestCandidateProjectionService_RegistersNpcStartQuestIdsLikeJavaWorldMapInstance`.
+- `QuestNpcStartRegistrationSourceRealDataAuditTests.RealDataAudit_ProjectsStagedQuestIdsIntoWorldInstanceWithoutRefreshWiring`.
+- `NearbyQuestStartConditionServiceTests.*`.
+- `NearbyQuestTemplateXmlExtractorTests.RealDataAudit_LoadsNearbyQuestTemplateSummariesWithoutProductionWiring`.
+- `NearbyQuestMarkerProjectionServiceTests.*`.
+
+## Migration Parity Table
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | Future C# nearby refresh send service using `NearbyQuestMarkerProjectionService` and `SmNearbyQuests` | Controller / Quest UI Send Boundary | Not Started | Manual Only | Needs Verification | Java source reviewed for marker calculation and owner packet send. C# has staged marker projection only; no player-controller method, map-region lookup, production quest-template loading, packet send, or Java `HashMap` ordering parity. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_LEVEL_READY` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLevelReadyAsync` | Client Packet Handler / Enter-Map Trigger | Partial | Manual Only | Needs Verification | Java calls `activePlayer.getController().updateNearbyQuests()` from level-ready. C# level-ready sends baseline map-ready packets but intentionally does not send nearby quest markers yet. |
+| `com.aionemu.gameserver.world.WorldMapInstance.addObject` | `Aion.GameServer.World.WorldMapInstanceRuntimeState`; future NPC-spawn refresh scheduler | World Instance / Delayed Refresh Trigger | Partial | Regression Tested plus Manual Audit | Partial Parity | Staged quest-id storage/projection has tests, but production `addObject(Npc)`, `QuestEngine.getQuestNpc`, 1500 ms debounce scheduling, task reset, and per-player instance fanout are not wired. C# async/threading parity is unknown. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `Aion.GameServer.Network.Aion.IGameClientConnectionRegistry.SendPacketToPlayerAsync`; `GameServerConnection.SendPacketAsync` | Packet Send Utility Boundary | Partial | Existing Regression Coverage Elsewhere plus Manual Audit | Needs Verification | C# has owner-send primitives used by other systems. A nearby-refresh caller has not been implemented. Java `player.isOnline()` gating must be matched by active connection/player checks. Socket send failure behavior remains unverified for this path. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `Aion.GameServer.Network.Aion.ServerPackets.SmNearbyQuests` | Server Packet / Serialization | Complete | Unit Tested | Verified Parity | Existing tests cover source-reviewed byte layout: `C(0)`, negative count, and `1 << 17` marker flag for positive level diff. Caller ordering remains not claimed because Java `HashMap` iteration order is not deterministic. |
+| `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `Aion.GameServer.Services.NearbyQuestStartConditionService` | Service / Quest Predicate Dependency | Partial | Unit Tested | Partial Parity | Current staged predicate covers early gates only and rejects unsupported dependencies. Full XML start conditions, inventory checks, combine-skill, NPC faction, exception/log behavior, and time-based repeat timing remain unsupported. |
+| `com.aionemu.gameserver.questEngine.QuestEngine.onItemGet` / `onItemRemoved` nearby refresh calls | `Aion.GameServer.Services.NoOpItemPurificationNearbyQuestRefreshDispatcher` | Quest Callback / ItemPurification Refresh Dependency | Partial | Unit Tested for Planning; Manual Audit for Send Boundary | Needs Verification | ItemPurification can plan refresh candidates through `questUpdateItems`, but dispatcher stays no-op. Real quest handlers and nearby marker sends remain disabled by design. |
+
+## Remaining Risks
+
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- C# has no production nearby-refresh send method.
+- `CM_LEVEL_READY` nearby marker send is absent in C#.
+- NPC-spawn delayed refresh fanout is absent in C#.
+- Production quest-template loading and production quest-start source loading remain unwired.
+- Unsupported nearby predicate dependencies remain broad and must fail closed.
+- Java `HashMap`/set ordering is not deterministic; packet marker order parity is not claimed.
+- C# async scheduling for a future 1500 ms debounce will need concurrency tests.
+- Reflection/dynamic Java quest-handler execution remains unported.
+- No date/time behavior was added in this unit; repeat-cycle date/time remains unsupported from prior units.
+- No serialization code changed in this unit; existing `SmNearbyQuests` tests remain the serialization evidence.
+
+## Summary Metrics
+
+- Total Java artifacts discovered: 7 in this unit
+- Total artifacts ported: 0 new runtime artifacts in this unit
+- Total artifacts with verified parity: 1 existing packet artifact referenced by this audit
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 4 blocked/not-started categories: production send method, level-ready send trigger, delayed NPC-spawn refresh scheduler, and unsupported predicate dependencies
+- Estimated overall migration completion: Phase 6 remains about 70% complete; this unit clarifies send-boundary blockers without enabling live nearby quest refresh.
+
+## Next Recommended Unit Of Work
+
+Add a staged real-data marker projection test for templates that have no unsupported dependencies, or implement a non-sending `NearbyQuestRefreshPlanService` that composes current staged world quest ids, staged templates, and marker projection into a send-ready plan with explicit failure reasons. Keep actual packet sends, `CM_LEVEL_READY` integration, NPC-spawn delayed refresh, production `StaticData` integration, and production ItemPurification dispatch disabled until follow-up tests cover each gate.
