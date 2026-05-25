@@ -71,4 +71,4 @@ Selected batch: local-only A. No sub-agent was spawned because the change was a 
 
 ## Next Recommended Unit Of Work
 
-Add production server-timezone option plumbing/tests for repeat-date calculation or begin a staged quest-finish mutation boundary that calls the pure calculator without sending live nearby packets. Keep persistence writes, packet sends, NPC faction completion writes, and ItemPurification dispatch disabled until each is separately covered.
+Begin a staged quest-finish state mutation planner that calls the pure repeat-date calculator without sending live nearby packets, or audit NPC faction completion lifecycle first. Keep persistence writes, packet sends, NPC faction completion writes, and ItemPurification dispatch disabled until each is separately covered.

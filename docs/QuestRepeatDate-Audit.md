@@ -72,24 +72,23 @@ Java remains the source of truth. This document is read-only and does not implem
 - `MySqlPlayerEnterWorldRepository.LoadPlayerQuestsAsync` hydrates `next_repeat_time` and `complete_time`.
 - `NearbyQuestStartConditionService` uses loaded `NextRepeatTime` for the already-completed nearby repeat check.
 - UOW-1010 adds `QuestRepeatDateService.CalculateNextRepeatTime`, a pure calculator for Java server-time 09:00 daily/weekly reset selection. It is not wired to quest completion yet.
+- UOW-1011 exposes the loaded `gameserver.timezone` value through `GameServerCoreOptions.GetTimeZone()` and adds a `QuestRepeatDateService` overload that consumes `GameServerOptions`.
 
 ## C# Gaps
 
 - No C# quest-finish service calls the pure calculator or persists `next_repeat_time`.
-- No C# implementation uses configured server timezone equivalent to Java `GSConfig.TIME_ZONE_ID`.
 - No C# packet bridge sends Java daily/weekly reset system messages.
 - No C# quest completion path increments `CompleteCount`, sets `CompleteTime`, clears vars, sends `SM_QUEST_ACTION`, calls quest-completed handlers, updates NPC faction completion state, or triggers nearby quest refresh.
 - Existing C# `DateTimeOffset` hydration needs server-timezone comparison before parity can be claimed.
 
 ## Recommended Implementation Slice
 
-1. Wire `QuestRepeatDateService.CalculateNextRepeatTime` into a future quest-finish service only after that service has an explicit server-timezone policy.
-2. Add daylight-saving transition tests once the production timezone source is selected.
-3. Keep quest-finish mutation and packets out of scope until the pure calculator is integrated behind a staged quest-completion boundary.
+1. Wire `QuestRepeatDateService.CalculateNextRepeatTime` into a future quest-finish service using `GameServerOptions.Core.GetTimeZone()`.
+2. Keep quest-finish mutation and packets out of scope until the pure calculator is integrated behind a staged quest-completion boundary.
 
 ## Remaining Risks
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
-- `GSConfig.TIME_ZONE_ID` may differ from local machine timezone; C# must not assume local time.
+- `GSConfig.TIME_ZONE_ID` may differ from local machine timezone; C# now has an option resolver, but runtime integration still needs coverage.
 - SQL `Timestamp` interpretation and MySQL connector timezone behavior need a dedicated DB/runtime check.
 - Daily `ALL` plus other weekday token combinations should be treated exactly like Java `contains(ALL)` daily behavior.
