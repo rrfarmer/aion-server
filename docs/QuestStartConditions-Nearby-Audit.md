@@ -1,7 +1,7 @@
 # Nearby Quest Start Conditions Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-991, updated by UOW-992 through UOW-1003
+Unit of Work: UOW-991, updated by UOW-992 through UOW-1007
 
 ## Purpose
 
@@ -155,6 +155,7 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 - UOW-1004 adds staged NPC faction support: active exact faction checks, mentor/non-mentor slot cooldown via `NpcFactions.canStartQuest`, time-based cooldown skip, and `mentor_type` parsing for slot selection.
 - UOW-1005 adds configurable master-crafting XML required-count support, matching Java `QuestTemplate.getRequiredConditionCount` adjustment for `combine_skillpoint == 499` and `CraftConfig.MAX_MASTER_CRAFTING_SKILLS`.
 - UOW-1006 adds staged NPC faction static-data loading, matching Java `NpcFactionsData` id/NPC-id indexing and `NpcFactionTemplate.isMentor()` category behavior.
+- UOW-1007 hydrates Java-schema `player_npc_factions` rows into `Player.NpcFactions` during enter-world when `GameServerRuntimeContext.DataManager.StaticData.NpcFactions` is available. It derives the mentor slot from static `npc_factions.xml` metadata like Java `NpcFaction`, but daily assignment, join/leave mutation, `questId` start guard, and faction persistence writes remain unported.
 
 ## Migration Parity Table
 

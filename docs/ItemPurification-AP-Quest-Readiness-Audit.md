@@ -97,6 +97,7 @@ Java storage callback behavior relevant to purification:
 - `Storage.add` inserts the item, assigns storage location, marks storage `UPDATE_REQUIRED`, sends the storage update packet, then calls `QuestEngine.onItemGet(actor, itemId)` only when `actor != null` and the storage type is `CUBE`.
 - `QuestEngine.onItemGet` invokes registered get-item quest handlers, then calls `player.getController().updateNearbyQuests()` when the item id is in `questUpdateItems`.
 - `QuestEngine.onItemRemoved` only calls `updateNearbyQuests()` when the item id is in `questUpdateItems`; there is no symmetric remove-handler map.
+- UOW-1007 stages enter-world hydration for `player_npc_factions`, so future nearby-refresh predicate checks can consume loaded NPC faction state when a player snapshot exists. This does not satisfy the ItemPurification quest-callback gate because live item get/remove callbacks, nearby-refresh sends, daily faction mutation/assignment, and Java runtime packet/order comparison remain unwired.
 
 Current C# status:
 

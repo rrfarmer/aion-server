@@ -66,7 +66,7 @@ Required before automatic dispatch:
 - Repository failure behavior must be tested against the real transaction path, not only `EmptyPlayerEnterWorldRepository`.
 - The C# transaction boundary must remain documented as an intentional safety difference unless Java runtime evidence proves partial category commits are required.
 
-Current status: not satisfied. Fake repository, row-mapper tests, one live DB happy-path test, and one live DB rollback test exist, but Java runtime comparison, quest callbacks, AP side effects, packet ordering, and the automatic-dispatch failure policy are still missing.
+Current status: not satisfied. Fake repository, row-mapper tests, one live DB happy-path test, and one live DB rollback test exist. UOW-1007 also stages enter-world NPC faction hydration for future nearby quest predicate inputs, but Java runtime comparison, quest callbacks, AP side effects, packet ordering, live nearby sends, and the automatic-dispatch failure policy are still missing.
 
 UOW-963 adds and live-runs an opt-in game-server MySQL integration test for `SaveItemPurificationMutationAsync`, gated by `AION_GAMESERVER_DB_INTEGRATION=1`. It passed against a Docker-hosted Java-shaped `aion_gs` schema on `localhost:3307`, covering the happy-path repository writes for inventory rows, `item_stones`, and `abyss_rank`. This satisfies the first live DB smoke gate only; failure/rollback behavior, Java runtime comparison, quest callbacks, AP side effects, and automatic dispatch remain open.
 

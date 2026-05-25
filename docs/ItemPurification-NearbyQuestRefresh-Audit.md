@@ -1,7 +1,7 @@
 # ItemPurification Nearby Quest Refresh Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-980, updated by UOW-981 through UOW-1003
+Unit of Work: UOW-980, updated by UOW-981 through UOW-1007
 
 ## Purpose
 
@@ -115,6 +115,7 @@ Other Java call sites also use `updateNearbyQuests`, including item get/remove v
 - UOW-1004 implements staged NPC faction checks for nearby checks, including active exact faction rows, mentor/non-mentor slot cooldowns, time-based cooldown skip, and `mentor_type` extraction. A read-only master-crafting sub-agent mapped the next configurable XML required-count slice.
 - UOW-1005 implements configurable master-crafting XML required-count parity for nearby checks, matching Java's `combine_skillpoint == 499` and `1 - MAX_MASTER_CRAFTING_SKILLS` adjustment.
 - UOW-1006 adds staged NPC faction static-data loading for Java `NpcFactionsData`, including faction-id lookup, registrar NPC-id lookup, and mentor-category detection.
+- UOW-1007 hydrates `player_npc_factions` through the enter-world repository/service path when static NPC faction metadata is present, allowing staged nearby predicates to consume real loaded active faction slots. Live nearby sends, production player-controller refresh, daily faction assignment/mutation, and ItemPurification dispatch remain disabled.
 - No production C# `QuestService.checkStartConditions` equivalent is wired for this nearby-quest UI path.
 - No C# player-controller method currently invokes real nearby quest refresh.
 
