@@ -124,6 +124,7 @@ The NPC faction update persists:
 - UOW-1030 adds `QuestFinishRewardPlanService.CreateRewardItemProjection`, a non-live projection scaffold for Java `QuestService.getRewardItems` fixed/selectable/class/extended item choices. It is not yet composed into production quest finish or live inventory mutation.
 - UOW-1031 composes detailed non-live item reward projection descriptors and projection-warning descriptors into `QuestFinishOperationPlanService` before the existing coarse item reward placeholder and before quest-state mutation.
 - UOW-1032 adds a non-live `QuestService.giveReward` projection scaffold for kinah, XP, title, AP, DP, GP, cube expansion, and warehouse expansion. It is not yet composed into the operation plan.
+- UOW-1033 composes non-live non-item reward projection descriptors and warning descriptors into `QuestFinishOperationPlanService` after item reward projection and before the existing coarse non-item reward placeholder.
 - C# has quest and NPC faction read hydration, but no corresponding write persistence path for these completion mutations.
 - C# has packet serializers for quest list/completed-list shapes and a non-sending `SM_QUEST_ACTION(ActionType.UPDATE, qs)` body. No production quest-finish send path is wired.
 - C# has no `QuestEngine.onQuestCompleted` equivalent or production nearby-refresh send trigger wired to quest completion.
@@ -138,6 +139,7 @@ The NPC faction update persists:
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
 - Reward calculation and inventory mutation ordering are source-audited and partially composed as non-live descriptors. Item reward projection now covers fixed/selectable/class/extended descriptor categories and can be nested under quest-finish operation planning, but real XML loading, bonus handlers, live `ItemService.addItem`, and non-item mutation remain missing.
 - Non-item reward projection can now describe Java `giveReward` fields and rate dependencies, but those descriptors are not yet nested under quest-finish operation planning or live reward services.
+- Non-item reward descriptors now survive quest-finish operation planning, but still do not execute live reward services.
 - `SM_QUEST_ACTION` extra-category suppression is currently an explicit C# flag rather than a production static-data lookup.
 - Java callback handlers can perform additional quest mutations and packet sends; C# has no quest handler runtime yet.
 - Java completion callback registration order depends on dynamic script class loading and reflection; C# has no equivalent ordering source.

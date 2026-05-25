@@ -1,7 +1,7 @@
 # Quest Finish Reward and Work-Item Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1017; updated by UOW-1018, UOW-1019, UOW-1030, UOW-1031, and UOW-1032
+Unit of Work: UOW-1017; updated by UOW-1018, UOW-1019, UOW-1030, UOW-1031, UOW-1032, and UOW-1033
 
 ## Purpose
 
@@ -140,6 +140,7 @@ Because `finishQuest` calls `removeQuestWorkItems` before setting status to `COM
 - UOW-1030 adds `QuestFinishRewardPlanService.CreateRewardItemProjection`, a pure non-live item reward projection for extended fixed/selectable rewards, regular fixed/selectable rewards, class-specific selectable rewards, Java dialog reward-index mapping, and explicit bonus-handler projection warnings.
 - UOW-1031 composes the detailed item projection into `QuestFinishOperationPlanService` before the coarse item reward placeholder. The operation plan now can carry `ItemRewardProjection` and `ItemRewardProjectionWarning` descriptors while keeping `ItemService.addItem` disabled.
 - UOW-1032 adds `QuestFinishRewardPlanService.CreateNonItemRewardProjection`, a pure non-live non-item reward projection for Java `giveReward` fields and rate/dependency metadata.
+- UOW-1033 composes the detailed non-item projection into `QuestFinishOperationPlanService` before the coarse non-item reward placeholder and before quest-state mutation. Existing partial live AP/DP helpers remain disabled.
 - C# has inventory, AP, title, exp, DP, GP, cube, and warehouse-related surfaces in various partial states, but no composed quest-finish reward mutation plan.
 - C# quest-finish state mutation currently starts at status/var/repeat updates and composes reward/work-item descriptors only as non-live operation metadata.
 - C# does not parse real quest XML `Rewards`, `QuestItems`, extended reward data, class-specific selectable rewards, or quest work items for quest finish.
@@ -163,4 +164,4 @@ Because `finishQuest` calls `removeQuestWorkItems` before setting status to `COM
 - UOW-1019 operation-plan composition is still non-live and does not parse real quest XML reward data.
 - UOW-1030 item projection is source-reviewed and unit-tested but not composed into live quest finish, not backed by real XML loading, and not Java runtime-verified.
 - UOW-1031 operation-plan composition is still descriptor-only; detailed reward items and warning descriptors must not be treated as inventory mutation or handler execution.
-- UOW-1032 non-item reward projection is not yet composed into `QuestFinishOperationPlanService` and remains separate from existing partial live AP/DP reward helpers.
+- UOW-1033 operation-plan composition is still descriptor-only; detailed non-item reward descriptors must not be treated as kinah, XP, title, AP, DP, GP, cube, or warehouse mutation.
