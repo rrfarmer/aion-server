@@ -26567,6 +26567,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 859 (May 24, 2026)
+- Continued from the Session 858 / Phase 6NF handoff with compact selectable decompose missing-source/data no-op coverage.
+- Re-read the latest handoff and audited Java `CM_SELECT_DECOMPOSABLE.runImpl` early returns for missing inventory item and missing selectable item data.
+- Performed Parallel Work Discovery across missing source, non-selectable source data, packet-factory dispatch, Java DB failure research, and docs. Implementation stayed single-writer because the useful tests share `GameServerConnectionInventoryExpansionUseItemTests.cs`.
+- Added `HandleSelectDecomposableAsync_MissingSourceDoesNotCallPersistenceOrSendPackets`, which invokes selection with a missing object id and verifies no repository call, unchanged source inventory, and no packets.
+- Added `HandleSelectDecomposableAsync_NonSelectableSourceDoesNotCallPersistenceOrSendPackets`, which invokes selection on the normal non-selectable decompose fixture item `100` and verifies no repository call, unchanged source inventory, and no packets.
+- Kept the unit deliberately narrow: no missing reward template path, no packet-factory dispatch, no Java runtime comparison, and no live-client validation.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionInventoryExpansionUseItemTests"` passes with 17 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1433 tests.
+
+#### Migration Parity Table - Session 859
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleSelectDecomposableAsync` / missing-source and non-selectable-source tests | Client Packet Handler / Runtime Test | Partial | Regression Tested | Partial Parity | Runtime tests cover Java-reviewed early returns for missing inventory object id and missing selectable data: no repository call, no packets, and no runtime mutation. Missing reward template, packet-factory dispatch, Java runtime comparison, and live-client behavior remain unverified. |
+| `com.aionemu.gameserver.dataholders.DecomposableItemsData` | fixture `DecomposableItemTable` / `DecomposeService.CreateSelectableRewardPlan` | Static Data / Reward Selection Dependency | Partial | Regression Tested for non-selectable no-op | Partial Parity | Non-selectable source item `100` has normal decompose data but no selectable list, producing a no-op selection path. Missing reward template and broader data edge cases remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Inventory.getItemByObjId` | C# inventory lookup in `HandleSelectDecomposableAsync` | Inventory Lookup Dependency | Partial | Regression Tested for missing object id | Partial Parity | Missing object id returns before static-data selection, repository calls, packets, or mutation. Location/equipped filtering edge cases remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemService` / `ItemPacketService.ItemAddType.DECOMPOSABLE` | `InventoryAddService.CreateAddItemPlan` guarded by selection plan success | Inventory Mutation / Reward Add Dependency | Partial | Regression Tested for no-op guards | Partial Parity | Missing source/data tests prove reward planning/add is not reached. Missing reward template, inventory-full behavior, and Java DB/runtime comparison remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Inventory.decreaseByObjectId` | `ApplySourceItemMutationAsync` guarded by source and selection plan success | Inventory Mutation / Source Consume Dependency | Partial | Regression Tested for no-op guards | Partial Parity | Missing source/data tests prove source consume is not reached. Equipped/location filtering, Java runtime output, and persistence rollback remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` / `SM_SYSTEM_MESSAGE` / `SM_SECONDARY_SHOW_DECOMPOSABLE` / inventory packets | C# packet emission guarded by source and selection plan success | Packet / Early-return Dependency | Partial | Regression Tested for absence on no-op paths | Partial Parity | Missing source/data tests emit no packets. Full packet byte parity and live dispatch remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemService.ItemUpdatePredicate` | `IPlayerEnterWorldRepository.SaveDecomposeActionMutationAsync` / repository call counter | Repository Boundary / Test Support | Partial | Regression Tested for no-op guards | Partial Parity | Tests assert persistence is not called for missing source/data no-op paths. Live SQL behavior remains unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GameServerConnectionInventoryExpansionUseItemTests.HandleSelectDecomposableAsync_MissingSourceDoesNotCallPersistenceOrSendPackets` | Runtime / Regression | Java source review of `CM_SELECT_DECOMPOSABLE.runImpl` null item guard | Validates C# missing source object id returns without repository call, packet emission, or inventory mutation. | Deterministic C# runtime regression aligned to reviewed Java source for the missing-item early return. | Uses reflection to call the private handler; does not run Java, packet-factory dispatch, equipped/location filtering, Java-generated bytes, opcode/frame/crypto, socket fanout, or live-client behavior. |
+| `GameServerConnectionInventoryExpansionUseItemTests.HandleSelectDecomposableAsync_NonSelectableSourceDoesNotCallPersistenceOrSendPackets` | Runtime / Regression | Java source review of `CM_SELECT_DECOMPOSABLE.runImpl` null selectable-items guard | Validates C# non-selectable decompose source returns without repository call, packet emission, or inventory mutation. | Deterministic C# runtime regression aligned to reviewed Java source for the missing-selectable-data early return. | Uses reflection to call the private handler; does not run Java, packet-factory dispatch, missing reward template, Java-generated bytes, opcode/frame/crypto, socket fanout, or live-client behavior. |
+
+Remaining risks:
+- Missing reward template, equipped/location source filtering, and inventory-full behavior still need coverage.
+- The selection tests invoke a private handler reflectively; packet-factory dispatch for real client frames remains unverified and is now the main seam risk for this packet family.
+- Java runtime behavior under persistence/DAO failure remains unverified and may differ from the C# deferred-mutation transaction-safety boundary.
+- Full packet byte parity, opcode/frame/crypto, broadcast fanout, socket visibility, threading/date-time precision, serialization side effects, and live-client validation remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 C# runtime regression slice for selectable decompose missing-source/data early returns
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 18 blocked/not-started categories, including missing reward template, equipped/location filtering, inventory-full behavior, packet-factory dispatch, Java persistence failure comparison, full packet byte parity, opcode/frame/crypto, broadcast fanout, socket visibility, serialization side effects, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; selectable decompose selection has broad runtime branch coverage, but dispatch, byte-level parity, and live validation remain partial.
+
+Next recommended unit of work:
+- Add packet-factory dispatch coverage for `CM_SELECT_DECOMPOSABLE` if feasible with the existing connection fixture: feed an opcode `236` frame through the normal packet processing path and prove it reaches the same selection behavior without reflective handler invocation. If dispatch setup is too broad, add missing reward-template no-op coverage first.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -26576,4 +26624,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Add compact missing-source/data negative coverage for selectable decompose selection: missing source object id and/or non-selectable source item should return without repository calls, packets, or runtime mutation. Keep packet-factory dispatch as a separate follow-up unless tiny.
+8. Add packet-factory dispatch coverage for `CM_SELECT_DECOMPOSABLE` if feasible with the existing connection fixture: feed an opcode `236` frame through the normal packet processing path and prove it reaches the same selection behavior without reflective handler invocation. If dispatch setup is too broad, add missing reward-template no-op coverage first.
