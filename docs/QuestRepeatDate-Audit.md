@@ -73,18 +73,20 @@ Java remains the source of truth. This document is read-only and does not implem
 - `NearbyQuestStartConditionService` uses loaded `NextRepeatTime` for the already-completed nearby repeat check.
 - UOW-1010 adds `QuestRepeatDateService.CalculateNextRepeatTime`, a pure calculator for Java server-time 09:00 daily/weekly reset selection. It is not wired to quest completion yet.
 - UOW-1011 exposes the loaded `gameserver.timezone` value through `GameServerCoreOptions.GetTimeZone()` and adds a `QuestRepeatDateService` overload that consumes `GameServerOptions`.
+- UOW-1012 adds a staged `QuestFinishStateMutationService` that calls the options-based repeat-date calculator for time-based quest completions. It still does not persist, send packets, fire callbacks, complete NPC faction state, or refresh nearby quests.
 
 ## C# Gaps
 
-- No C# quest-finish service calls the pure calculator or persists `next_repeat_time`.
+- No production C# quest-finish handler persists `next_repeat_time` or sends quest update packets.
 - No C# packet bridge sends Java daily/weekly reset system messages.
-- No C# quest completion path increments `CompleteCount`, sets `CompleteTime`, clears vars, sends `SM_QUEST_ACTION`, calls quest-completed handlers, updates NPC faction completion state, or triggers nearby quest refresh.
+- Only the staged quest-finish state service increments `CompleteCount`, sets `CompleteTime`, clears vars, and calculates `NextRepeatTime`; it is not wired to rewards, packets, persistence, quest-completed handlers, NPC faction completion state, or nearby quest refresh.
 - Existing C# `DateTimeOffset` hydration needs server-timezone comparison before parity can be claimed.
 
 ## Recommended Implementation Slice
 
-1. Wire `QuestRepeatDateService.CalculateNextRepeatTime` into a future quest-finish service using `GameServerOptions.Core.GetTimeZone()`.
-2. Keep quest-finish mutation and packets out of scope until the pure calculator is integrated behind a staged quest-completion boundary.
+1. Audit NPC faction completion mutation from Java `QuestService.finishQuest` through `NpcFactions.completeQuest`.
+2. Audit packet and persistence ordering for `SM_QUEST_ACTION`, reset messages, and `PlayerQuestListDAO.store`.
+3. Keep production quest-finish mutation, packets, and DAO writes disabled until those side effects are separately staged and tested.
 
 ## Remaining Risks
 
@@ -92,3 +94,4 @@ Java remains the source of truth. This document is read-only and does not implem
 - `GSConfig.TIME_ZONE_ID` may differ from local machine timezone; C# now has an option resolver, but runtime integration still needs coverage.
 - SQL `Timestamp` interpretation and MySQL connector timezone behavior need a dedicated DB/runtime check.
 - Daily `ALL` plus other weekday token combinations should be treated exactly like Java `contains(ALL)` daily behavior.
+- The staged C# service returns a new immutable quest-state record, while Java mutates `QuestState` in place; production caller semantics still need verification.
