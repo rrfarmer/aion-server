@@ -26663,6 +26663,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 861 (May 24, 2026)
+- Continued from the Session 860 / Phase 6NH handoff with selectable decompose missing reward-template no-op coverage.
+- Re-read required migration/orchestration docs and the latest handoff. `docs/commit-conventions.md` remains absent, so this unit continued the established concise commit style.
+- Performed Parallel Work Discovery across missing reward template, equipped/location source filtering, inventory-full behavior, encrypted socket-loop dispatch, Java DB failure research, and docs. Implementation stayed single-writer because the safe unit touched the shared item-use fixture.
+- Audited Java `CM_SELECT_DECOMPOSABLE.runImpl` through selectable filtering and reward selection, then compared C# `CreateSelectableRewardPlan` with `CreateDecomposeRewardInventoryPlan`'s template lookup guard.
+- Added `HandleSelectDecomposableAsync_MissingRewardTemplateDoesNotCallPersistenceOrSendPackets`, which uses an Asmodian/Gladiator player so selectable rewards include unrestricted item `202` and Asmodian-only item `203`, selects index `1` for missing-template item `203`, and verifies no persistence call, unchanged source inventory, and no packet emission.
+- Updated the fixture `CreatePlayer` helper to accept race/class overrides while preserving the existing Elyos/Ranger default.
+- Kept the unit deliberately narrow: no equipped/location source filtering, no inventory-full behavior, no encrypted socket loop, no Java runtime comparison, and no live-client validation.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionInventoryExpansionUseItemTests"` passes with 19 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1435 tests.
+
+#### Migration Parity Table - Session 861
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleSelectDecomposableAsync` / `GameServerConnectionInventoryExpansionUseItemTests.HandleSelectDecomposableAsync_MissingRewardTemplateDoesNotCallPersistenceOrSendPackets` | Client Packet Handler / Runtime Test | Partial | Regression Tested | Partial Parity | Runtime test covers C# missing reward-template guard after Java-like obtainable filtering and reward selection: no repository call, no packets, and no runtime mutation. Java source does not show an explicit reward-template guard at this packet layer because Java `ItemService.addItem` handles item creation; Java runtime behavior for missing templates remains unverified. |
+| `com.aionemu.gameserver.dataholders.DecomposableItemsData` | fixture `DecomposableItemTable` / `DecomposeService.CreateSelectableRewardPlan` | Static Data / Reward Selection Dependency | Partial | Regression Tested for race-filtered missing-template selection | Partial Parity | Test uses Asmodian/Gladiator filtering to make missing-template reward `203` selectable at index `1`. Broader race/class combinations and Java runtime output remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemService` / `ItemPacketService.ItemAddType.DECOMPOSABLE` | `InventoryAddService.CreateAddItemPlan` / `CreateDecomposeRewardInventoryPlan` | Inventory Mutation / Reward Add Dependency | Partial | Regression Tested for missing-template no-op | Partial Parity | C# returns before persistence/mutation when selected reward has no item template. Java `ItemService.addItem` missing-template behavior has not been runtime-compared, so this remains Partial rather than Verified. |
+| `com.aionemu.gameserver.services.item.ItemService.ItemUpdatePredicate` | `IPlayerEnterWorldRepository.SaveDecomposeActionMutationAsync` / repository call counter | Repository Boundary / Test Support | Partial | Regression Tested for no repository call | Partial Parity | Test asserts persistence is not called when reward template is missing. Live SQL behavior remains unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Inventory.decreaseByObjectId` | `ApplySourceItemMutationAsync` guarded by reward inventory plan success | Inventory Mutation / Source Consume Dependency | Partial | Regression Tested for no-op guard | Partial Parity | Test proves source consume is not reached for missing reward template. Equipped/location source filtering and Java runtime behavior remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` / `SM_SYSTEM_MESSAGE` / `SM_SECONDARY_SHOW_DECOMPOSABLE` / inventory packets | C# packet emission guarded by reward inventory plan success | Packet / Early-return Dependency | Partial | Regression Tested for absence on missing-template path | Partial Parity | Missing reward-template test emits no packets. Full packet byte parity, encrypted socket loop, and live-client output remain unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GameServerConnectionInventoryExpansionUseItemTests.HandleSelectDecomposableAsync_MissingRewardTemplateDoesNotCallPersistenceOrSendPackets` | Runtime / Regression | Java source review of `CM_SELECT_DECOMPOSABLE.runImpl`; C# audit of `CreateSelectableRewardPlan` and `CreateDecomposeRewardInventoryPlan` template guard | Validates C# missing selected reward template returns before repository call, packet emission, or inventory mutation. | Deterministic C# runtime regression for the C# guard, with Java packet source and C# template guard documented. | Uses reflection to call the private handler; does not run Java, Java `ItemService.addItem` missing-template behavior, equipped/location source filtering, inventory-full behavior, encrypted socket loop, Java-generated bytes, opcode/frame/crypto, socket fanout, or live-client behavior. |
+
+Remaining risks:
+- Java runtime behavior for missing reward templates is unverified; this C# no-op may be a safety guard rather than a proven Java-equivalent path.
+- Equipped/location source filtering and inventory-full behavior still need coverage.
+- Dispatch coverage still bypasses the encrypted socket read loop and active-player setup lifecycle.
+- Java runtime behavior under persistence/DAO failure remains unverified and may differ from the C# deferred-mutation transaction-safety boundary.
+- Full packet byte parity, opcode/frame/crypto, broadcast fanout, socket visibility, threading/date-time precision, serialization side effects, and live-client validation remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 C# runtime regression slice for selectable decompose missing reward-template guard
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 16 blocked/not-started categories, including Java missing-template runtime comparison, equipped/location filtering, inventory-full behavior, encrypted socket loop, active-player lifecycle, Java persistence failure comparison, full packet byte parity, opcode/frame/crypto, broadcast fanout, socket visibility, serialization side effects, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; selectable decompose selection now has broad runtime branch coverage, but Java runtime edge comparison and live/byte-level parity remain partial.
+
+Next recommended unit of work:
+- Add compact equipped/location source filtering coverage for selectable decompose selection: equipped source item and/or non-cube location source should return without repository calls, packets, or runtime mutation, matching C#'s current guard and documenting the Java inventory lookup assumption.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -26672,4 +26720,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Add missing reward-template no-op coverage for selectable decompose selection, or shift to the next decompose completion gap if reward-template setup becomes artificial. A compact test can use an Asmodian player selecting the existing reward candidate `203`, which has no fixture item template, and assert no repository call, packets, or inventory mutation.
+8. Add compact equipped/location source filtering coverage for selectable decompose selection: equipped source item and/or non-cube location source should return without repository calls, packets, or runtime mutation, matching C#'s current guard and documenting the Java inventory lookup assumption.
