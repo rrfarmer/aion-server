@@ -28725,9 +28725,60 @@ Next recommended unit of work:
 
 ---
 
+### Session 900 (May 25, 2026)
+- Continued after UOW-899 with the compact charge-all AP payment regression called out by the previous handoff.
+- Performed Parallel Work Discovery across charge-all AP regression, AP cap audit, remaining AP caller wiring, and Java runtime artifact capture. Selected a test-only charge-all regression because the production branch was already wired in UOW-899.
+- Seeded `PendingChargeAllRequest` and `QuestionResponseRegistry` directly, then accepted Java `SM_QUESTION_WINDOW.STR_ITEM_CHARGE2_ALL_CONFIRM` through `HandleQuestionResponseAsync`.
+- Added `HandleQuestionResponseAsync_ChargeAllApPaymentSendsAbyssPointsPlannerPackets`.
+- Validation:
+  - Initial focused run failed because the fixture tried to assign init-only `InventoryItem.IsEquipped` after construction; fixed by constructing an equipped item explicitly.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests --no-restore` passed with 41 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1469 tests.
+
+#### Migration Parity Table - Session 900
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemChargeService.startChargingEquippedItems` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleChargeAllQuestionResponseAsync` / `PendingChargeAllRequest` | Service / Handler | Partial | Regression Tested in C# | Partial Parity | Charge-all AP accept path now has focused coverage for AP spend planner packets, rank update, charge update, stats, and all-complete packet order. Initial question-window creation already existed; this unit tests the acceptance side. |
+| `com.aionemu.gameserver.model.gameobjects.player.RequestResponseHandler` | `Aion.GameServer.Model.GameObjects.QuestionResponseRegistry` | Request / Response Registry | Partial | Regression Tested in C# | Needs Verification | Test seeds and consumes a charge-all pending request like Java `ResponseRequester.respond`. Broader concurrent/request-expiry behavior remains unverified. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `Aion.GameServer.Services.AbyssPointsService` | Service | Partial | Unit + Regression Tested in C# | Partial Parity | Charge-all AP spend now has direct regression coverage for planner packet execution. Full Legion, siege, AP cap config, large-AP logging, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.gameobjects.player.AbyssRank` | `Aion.GameServer.Model.GameObjects.PlayerAbyssRank` | Model | Partial | Regression Tested through charge-all AP payment | Needs Verification | Test validates AP decreases from `1000` to `500`. Java AP-cap config remains absent. |
+| `com.aionemu.gameserver.model.items.ChargeInfo` | `Aion.GameServer.Model.GameObjects.InventoryItem.Charge` / `ItemChargeService.Level1ChargePoints` | Model / Value Object | Partial | Regression Tested in C# | Needs Verification | Test validates equipped item reaches level-1 charge after charge-all accept. Observer-driven burn behavior remains partial. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Test validates `STR_MSG_USE_ABYSSPOINT` (`1300965`) amount `500`, plus charge success/all-complete packet presence. No Java byte comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRank` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Test validates rank packet emission after charge-all AP spend. No Java byte comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryUpdateItem` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Test validates charge update packet presence and runtime charge state; negative charge mask bytes are not decoded here. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleQuestionResponseAsync_ChargeAllApPaymentSendsAbyssPointsPlannerPackets` | Regression | Java `ItemChargeService.startChargingEquippedItems`, `RequestResponseHandler.acceptRequest`, `processAPPayment`, and `AbyssPointsService.addAp` source review | Validates charge-all AP confirmation spends `500` AP through planner packets, clears pending request, charges the equipped item to level 1, and emits AP spend/rank/charge/success/stats/all-complete packets. | Deterministic C# connection-level regression grounded in Java source. | No Java runtime artifact; no multi-item charge-all coverage; no rank-threshold side-effect assertion. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Charge-all question creation and acceptance are covered separately but not compared against a Java runtime artifact.
+- Java AP-cap config is not represented in `PlayerAbyssRank.AddAp` or `AbyssPointsService`.
+- Multi-item charge-all ordering, mixed charge bars, and partial item filtering remain covered only by existing service-level tests, not this AP planner regression.
+- Rank-threshold AP payment fanout remains partial and was not exercised here.
+- Packet bytes were not compared against Java runtime output.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 0 production code artifacts; 1 charge-all AP payment regression added for UOW-899 wiring
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, Java AP cap config, rank-threshold AP payment fanout, multi-item charge-all runtime parity, full Legion/siege execution for other AP callers, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit improves regression confidence for the second AP caller family.
+
+Next recommended unit of work:
+- Continue AP caller convergence by wiring another existing AP reward/spend path through `AbyssPointsService`, or pivot to AP cap config support if no compact caller is available.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: wire another existing AP payment/reward path or add compact charge-all AP regression coverage, then continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: wire another existing AP payment/reward path or pivot to AP cap config support, then continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
