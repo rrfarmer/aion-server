@@ -28439,6 +28439,59 @@ Next recommended unit of work:
 
 ---
 
+### Session 895 (May 25, 2026)
+- Continued after UOW-894 with an isolated `CM_EMOTION` stance/current-skill cancellation slice because Java runtime tooling remains unavailable and decompose helpers should stay stable.
+- Performed Parallel Work Discovery across Java observer/runtime capture, AP legion contribution fanout, `CM_EMOTION` stance guard work, and group portal fanout. Selected `CM_EMOTION` because the Java source path was local, the C# TODO was nearby, and the change was narrow.
+- Reviewed Java `network/aion/clientpackets/CM_EMOTION.runImpl` and `controllers/PlayerController.cancelCurrentSkill`.
+- Updated `GameServerConnection.HandleEmotionAsync` so non-`SELECT_TARGET` handled emotions cancel the current skill before the stance guard, matching Java's `cancelUseItem(); if SELECT_TARGET return; cancelCurrentSkill(null); check stance` ordering.
+- Added `CancelCurrentSkillForEmotionAsync` for cast and item-skill cancellation side effects:
+  - cast skill: clear casting state, broadcast `SM_SKILL_CANCEL`, send `STR_SKILL_CANCELED`
+  - item skill with metadata: clear casting state, send `STR_ITEM_CANCELED`, remove item cooldown, broadcast cancel `SM_ITEM_USAGE_ANIMATION`
+- Reused a generic `BroadcastToSightedPlayersAsync` helper for self-inclusive Java-style fanout when no connection registry is installed.
+- Added `HandleEmotionAsync_StanceCancelsCurrentCastBeforeModeGuardMessage`.
+- Added `HandleEmotionAsync_StanceFlySendsTakeoffGuardMessage`.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests --no-restore` passed with 37 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1458 tests.
+
+#### Migration Parity Table - Session 895
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_EMOTION` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleEmotionAsync` | Client Packet Handler | Partial | Regression Tested in C# | Partial Parity | C# now mirrors Java ordering for handled non-`SELECT_TARGET` emotions: abnormal/private-shop/weapon guards, cancel item use, skip select target, cancel current skill, then stance guard. Java runtime packet capture is absent, so not verified parity. |
+| `com.aionemu.gameserver.controllers.PlayerController.cancelCurrentSkill` | `Aion.GameServer.Network.Aion.GameServerConnection.CancelCurrentSkillForEmotionAsync` / `Player.ClearCastingSkill` | Controller / Skill Cancellation | Partial | Regression Tested in C# for cast; item-skill branch untested in this unit | Needs Verification | Cast cancellation clears represented casting state, sends `SM_SKILL_CANCEL`, and sends `STR_SKILL_CANCELED`. Item-skill cancellation path is implemented with cooldown removal and cancel animation when metadata exists, but lacks a focused test in this unit. Full hit-time boost reset, last-attacker message, and SkillEngine task cancellation are still unsupported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SKILL_CANCEL` | `Aion.GameServer.Network.Aion.ServerPackets.SmSkillCancel` | Server Packet | Partial | Regression Tested in C# | Needs Verification | New stance/cast regression verifies packet order and decoded creature object id/skill id. Byte-level Java comparison is not available. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Tests cover `STR_SKILL_CANCELED`, `STR_SKILL_CAN_NOT_CHANGE_MODE__WHILE_IN_CURRENT_STANCE`, and `STR_SKILL_CAN_NOT_TAKE_OFF__WHILE_IN_CURRENT_STANCE` message ids. Java runtime payload capture remains absent. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` / `CreatureState` stance state | `Aion.GameServer.Model.GameObjects.Player.StanceSkillId` / `IsUnderStance` | Model State | Partial | Regression Tested in C# | Needs Verification | Existing stance representation is used to block sit/fly mode changes. Full Java stance observer lifecycle, SkillEngine effect wiring, and removal fanout remain future work. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleEmotionAsync_StanceCancelsCurrentCastBeforeModeGuardMessage` | Regression | Java `CM_EMOTION.runImpl` and `PlayerController.cancelCurrentSkill` source review | Validates current cast is cleared and `SM_SKILL_CANCEL`, `STR_SKILL_CANCELED`, then stance mode-change message are sent before sit state changes. | Deterministic C# packet/state regression grounded in Java source ordering. | No Java runtime artifact; no item-skill cancellation coverage; no SkillEngine task cancellation or hit-time boost reset. |
+| `HandleEmotionAsync_StanceFlySendsTakeoffGuardMessage` | Regression | Java `CM_EMOTION.runImpl` stance switch | Validates fly under stance sends the takeoff-specific stance message and does not start flying. | Deterministic C# packet/state regression grounded in Java source ordering. | No Java runtime artifact or byte comparison. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Item-skill cancellation from `CM_EMOTION` is implemented but not directly regression-tested in this unit.
+- Java `cancelCurrentSkill` also cancels the active Skill object, resets hit-time boost, may send last-attacker messages, and interacts with scheduler/SkillEngine state; those deeper behaviors remain unsupported.
+- Stance observer lifecycle and SkillEngine effect application/removal fanout are still partial.
+- Packet fanout with a real connection registry and visible players was not integration-tested here.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 1 partial behavior slice (`CM_EMOTION` current-skill cancellation before stance guard)
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, item-skill emotion cancellation tests, full SkillEngine cancellation, hit-time boost reset, last-attacker cancellation message, and stance observer lifecycle
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit improves one `CM_EMOTION` parity branch but does not add Java runtime evidence.
+
+Next recommended unit of work:
+- Add focused coverage for the item-skill `CM_EMOTION` cancel branch if a compact fixture can set `PlayerCastingSkillMethod.Item` with cooldown metadata, or continue another isolated non-decompose Phase 6 gameplay slice.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
