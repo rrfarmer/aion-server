@@ -111,6 +111,7 @@ Current C# status:
 - UOW-981 adds `SmNearbyQuests` packet serialization and tests for Java's `SM_NEARBY_QUESTS` byte layout. C# still lacks candidate calculation, world-instance quest ids, start-condition evaluation, and a send path, so the dispatcher must remain no-op.
 - UOW-982 adds minimal world-map instance quest-id registry storage and duplicate-collapsing registration tests. C# still lacks dynamic `QuestNpc.onQuestStart` population, start-condition evaluation, and a send path, so the dispatcher must remain no-op.
 - UOW-983 adds staged `QuestNpcStartTable` storage plus source metadata for future Java handler/XML quest-start extraction. C# still lacks extractors/loaders, NPC-spawn population, candidate filtering, start-condition evaluation, and a send path, so the dispatcher must remain no-op.
+- UOW-984 adds a pure XML quest-script `start_npc_ids` extractor that emits staged `QuestNpcStartRegistrationSource` rows and mirrors Java `ReportToMany.register` by skipping NPC start registration when `start_item_id` is nonzero. C# still lacks Java handler source extraction, loader integration, NPC-spawn population, candidate filtering, start-condition evaluation, and a send path, so the dispatcher must remain no-op.
 - Partial material count updates do not need item-remove callbacks under Java behavior.
 - Live mutation replaces the player inventory snapshot and applies AP, but intentionally leaves persistence, sends, quest callbacks, and rollback outside its boundary.
 - Production `HandleInfrastructurePacketAsync` still routes `CmItemPurification` to the plan-only `HandleItemPurificationAsync` path.
@@ -120,14 +121,14 @@ Quest parity gaps:
 
 - C# has metadata, a pure ordered projection, and an opt-in no-op notifier seam for quest notification intent, but it does not invoke real `onItemGet` or `onItemRemoved` equivalents by default.
 - C# does not yet model the Java distinction between get-item handler dispatch and nearby-quest refresh.
-- C# now has the `questUpdateItems` static-data membership projection, a no-op nearby-refresh planner, a no-op dispatcher seam, `SmNearbyQuests` packet serialization, minimal world-instance quest-id storage, and staged `QuestNpc.onQuestStart` table storage, but it still lacks `questItems` get-handler registration, Java/XML quest-start extraction, nearby quest candidate filtering, and any dispatcher that invokes real nearby-quest refresh.
+- C# now has the `questUpdateItems` static-data membership projection, a no-op nearby-refresh planner, a no-op dispatcher seam, `SmNearbyQuests` packet serialization, minimal world-instance quest-id storage, staged `QuestNpc.onQuestStart` table storage, and a pure XML quest-start extractor, but it still lacks `questItems` get-handler registration, Java handler quest-start extraction, XML loader integration, nearby quest candidate filtering, and any dispatcher that invokes real nearby-quest refresh.
 - Target add callback must remain CUBE/actor-backed and must occur after storage update packet semantics are preserved.
 - Remove callback must fire only for material/base deletes, not partial count updates.
 
 Safe quest next tests:
 
 - Add a disabled or no-op `IQuestItemMutationNotifier` seam behind explicit opt-in live execution only, preserving automatic dispatch disabled.
-- Add Java handler/XML quest-start extraction and candidate filtering coverage before any player-controller refresh adapter; keep it disconnected from production ItemPurification dispatch before invoking any live quest handlers.
+- Add Java handler quest-start extraction or loader integration for the XML extractor before any player-controller refresh adapter; keep it disconnected from production ItemPurification dispatch before invoking any live quest handlers.
 
 ## Readiness Impact
 
