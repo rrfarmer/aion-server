@@ -30285,9 +30285,80 @@ Next recommended unit of work:
 
 ---
 
+### Session 927 (May 25, 2026)
+- Continued after UOW-926 by selecting the pure ItemPurification application-operation plan recommended by the handoff.
+- Parallel Work Discovery considered the pure application plan, live mutation/fanout, and a separate ItemCharge AP hardening slice. Live mutation/fanout remains too broad until allocation, dirty-state persistence, AP rank side effects, kinah behavior, system messages, and packet ordering are wired together.
+- Spawned two read-only explorer agents:
+  - Agent A audited Java `upgradeItem`, `ItemFactory.newItem`, `Storage.add`, item packet fanout, and dirty-state persistence order.
+  - Agent B audited existing C# planner/application/persistence naming patterns and item-use packet/persistence shapes.
+  - Both agents were closed after reporting; no sub-agent edited files.
+- Added `ItemPurificationApplicationPlanService` as a pure, non-mutating operation enumerator over the composed workflow plan.
+- The new plan records Java-order runtime/persistence/packet operations without executing them:
+  - material item updates/deletes in mutation-step order
+  - AP spend after material consumption
+  - documented Kinah no-op for Java's `decreaseKinah(-necessaryKinah)` path
+  - base-item update/delete after AP/Kinah
+  - target item add after `upgradeItem` projection
+- Added flags for runtime blockers:
+  - target object id allocation still required when object id is `0`
+  - random-bonus selection still required when `TuningAction.getRandomStatBonusIdFor` was not injected
+  - base-delete verification still required when Java would ignore a failed base delete
+- Application operations carry effect flags for runtime state, persistence, packet, quest notification, and AP rank side-effect categories.
+- Kept repository writes, inventory mutation, packet emission, AP rank mutation, `QuestEngine.onItemGet`, `InventoryDAO.store`, `ItemStoneListDAO.save`, and target object-id allocation out of scope.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter ItemPurificationApplicationPlanServiceTests` passed with 5 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1588 tests.
+
+#### Migration Parity Table - Session 927
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_ITEM_PURIFICATION.runImpl` | `Aion.GameServer.Services.ItemPurificationApplicationPlanService.CreateApplicationPlan` | Workflow Application Planner | Partial | Regression Tested in C# | Partial Parity | C# enumerates post-workflow operation order after prior parser/guard planning. It still does not send the Java success system message, execute live mutations, persist dirty inventory, or emit packets. |
+| `com.aionemu.gameserver.services.item.ItemPurificationService.decreaseMaterials` | `ItemPurificationApplicationPlanService` + `ItemPurificationMaterialMutationPlan` | Service Mutation Application Projection | Partial | Regression Tested in C# | Partial Parity | Operation plan preserves Java order of material item updates/deletes, AP spend, Kinah no-op, then base-item update/delete. Live `Storage` mutation, `AbyssPointsService.addAp`, AP rank side effects, `SM_DELETE_ITEM`/item-update packets, audit logging, and dirty-state persistence are not executed. |
+| `com.aionemu.gameserver.services.item.ItemPurificationService.upgradeItem` | `ItemPurificationApplicationPlanService` + `ItemPurificationInheritancePlan` | Service Target Add Projection | Partial | Regression Tested in C# | Partial Parity | Target add is listed after material/base operations and carries runtime/persistence/packet/quest effects. Live `ItemFactory.newItem`, `IDFactory.nextId`, `Storage.add`, `SM_INVENTORY_ADD_ITEM`, cube-size packet, and `QuestEngine.onItemGet` remain unimplemented. |
+| `com.aionemu.gameserver.services.item.ItemFactory.newItem` | `ItemPurificationApplicationPlan.RequiresTargetObjectIdAllocation` | Factory / Allocation Boundary | Not Started for live allocation | Regression Tested in C# planner | Needs Verification | C# flags object id `0` as requiring allocation instead of allocating. Java creates a new `Item` with a fresh `IDFactory` id and `PersistentState.NEW`; C# live factory/default state still needs a dedicated port. |
+| `com.aionemu.gameserver.model.items.storage.Storage.add` | `ItemPurificationApplicationOperationType.AddTargetItem` | Storage Add Boundary Projection | Not Started for live add | Regression Tested in C# planner | Needs Verification | C# records the target add and effect categories only. Java directly calls `Storage.add`, bypassing `ItemService.addItem`, inventory-full checks, and expirable registration. Live storage add semantics and packet order are not wired. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseKinah` | `ItemPurificationApplicationOperationType.PreserveKinahNoOp` | Currency Boundary Projection | Partial | Regression Tested in C# | Needs Verification | C# explicitly documents that the Java call uses a negative amount and `Storage.decreaseKinah` only mutates positive amounts. Needs runtime/project-owner decision before live behavior is finalized. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store` | Not ported in this unit | Repository / Dirty-State Persistence | Not Started | Manual Analysis | Needs Verification | Java persists dirty items later, batching deletes, inserts, then updates; `ItemStoneListDAO.save` runs after item rows. C# only records that persistence is required and does not write repositories. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService.addAp` | `ItemPurificationApplicationOperationType.SpendAbyssPoints` | AP Mutation Boundary Projection | Not Started for live mutation | Regression Tested in C# planner | Needs Verification | Operation plan records AP spend amount and AP rank side-effect category. It does not mutate AP, ranking, legion contribution, siege hooks, or packets. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateApplicationPlan_OrdersMaterialApKinahBaseAndTargetOperationsLikeJava` | Regression | Java `CM_ITEM_PURIFICATION.runImpl`, `ItemPurificationService.decreaseMaterials`, `upgradeItem`, `Storage.add` source review | Validates operation order: material delete, AP spend, Kinah no-op, base delete, target add; validates target add effect categories. | Deterministic C# regression grounded in Java source ordering. | Does not execute Java runtime or emit packets. |
+| `CreateApplicationPlan_PreservesMaterialUpdateBeforeApAndBaseDelete` | Regression | Java `Storage.decreaseByItemId` and `decreaseMaterials` source review | Validates partial material stack update is ordered before AP spend and base delete. | Deterministic C# regression. | Java item-storage iteration order still not runtime-compared. |
+| `CreateApplicationPlan_FlagsPlaceholderTargetObjectId` | Regression | Java `ItemFactory.newItem` / `IDFactory.nextId` source review | Validates target object id `0` is treated as an allocation blocker while preserving the target-add operation. | Deterministic C# planner regression. | No live object-id allocation or factory default comparison. |
+| `CreateApplicationPlan_FlagsRandomBonusSelectionWhenRerollWasNotInjected` | Regression | Java `TuningAction.getRandomStatBonusIdFor` branch in `upgradeItem` source review | Validates random-bonus reroll dependency is explicit when source/target stat bonus sets differ and no rerolled id was injected. | Deterministic C# planner regression. | No data-backed random bonus selection. |
+| `CreateApplicationPlan_RejectsMissingOrUnplannedWorkflow` | Regression | C# workflow boundary plus Java `runImpl` early-return sequence source review | Validates missing/null and failed workflow plans produce no application operations. | Deterministic C# guard regression. | Java null base item may throw earlier; live difference remains documented. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- The application plan is intentionally descriptive and does not mutate runtime state or persist rows.
+- Java success system message is sent during validation before material/AP/base/target operations; the C# operation plan starts after the composed workflow and does not model that message yet.
+- Live target object-id allocation, `ItemFactory` defaults, `PersistentState.NEW`, `Storage.add`, cube-size packet, and `QuestEngine.onItemGet` are not wired.
+- Java dirty-state persistence batches deleted, new, and updated item rows later; C# repository save shape is not implemented for this flow.
+- `ItemStoneListDAO.save` ordering after inventory rows is only documented, not ported.
+- AP rank side effects, legion/ranking/siege hooks, Kinah parity decision, system messages, packet byte order, and rollback/error behavior remain unimplemented.
+- Required `docs/commit-conventions.md` is still missing; commit format continues to follow `docs/orchestration-rules.md`.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 pure ItemPurification application-operation planner slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 7 blocked/not-started categories, including Java runtime artifact generation, live object-id allocation/factory defaults, live storage add/delete/update, repository dirty-state persistence, AP/rank side effects, packet/system-message fanout, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 68% complete; this unit clarifies live application order but does not execute purification mutations.
+
+Next recommended unit of work:
+- Add a dry-run `ItemPurificationPacketPlanService` or equivalent packet-order plan that includes the already-known validation success system message before material/AP/base/target operations and enumerates expected item update/delete/add/cube-size packet categories without sending them.
+- Keep actual live mutation/fanout blocked until object-id allocation, `Storage.add`, repository dirty-state saves, AP rank side effects, kinah parity decision, and packet ordering are scoped together.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, and the non-persistent connection guard adapter now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. Move next to a persistence application plan for the composed workflow, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, and the pure ItemPurification application-operation plan now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. Move next to an ItemPurification packet-order plan, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
