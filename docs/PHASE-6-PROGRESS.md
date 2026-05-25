@@ -28285,6 +28285,58 @@ Next recommended unit of work:
 
 ---
 
+### Session 892 (May 25, 2026)
+- Continued after UOW-891 with the real Java XML template-id audit because Java runtime tooling remains unavailable and the live-server capture path still needed concrete source/reward ids.
+- Performed Parallel Work Discovery across Java observer/runtime capture, real XML template-id audit, real-count C# projection support, and isolated non-decompose gameplay work. Selected the XML audit because it is read-only/static-data documentation work and clarifies the next comparison-fixture decision.
+- Reviewed Java `decomposable_items.xml`, `decomposable_items.xsd`, `item_templates.xml`, `DecomposableItemsData`, `DecomposableItemInfo`, and `ResultedItem`.
+- Added `docs/Phase-6-Decompose-Real-XML-Candidate-Audit.md`.
+- Findings:
+  - Java XML has 187 selectable decomposable entries.
+  - Java loader uses only the first `<items>` group for selectable decomposables.
+  - Java `ResultedItem.afterUnmarshal` normalizes missing `max_count` to `min_count`.
+  - No selectable Java XML entry matches the current C# logical fixture's exact first-two reward counts (`index 0 = 2`, `index 1 = 3`).
+  - Best low-noise real XML candidate is source `188051516` (`Smart Greater Scroll Bundle`) with neutral deterministic rewards `164000076 x100` (`Greater Running Scroll`) and `164000073 x100` (`Greater Courage Scroll`).
+  - Because real reward counts differ from the C# logical fixture, future live artifacts should either use a Java static-data override that mirrors ids/counts `101 -> 201 x2 / 202 x3`, or the C# projection should be parameterized for real Java ids/counts before comparison.
+- No production Java/C# code changed in this unit.
+- Validation: no tests were run because this was a documentation-only static-data audit. Latest full C# validation remains Session 891: 1455 tests passing.
+
+#### Migration Parity Table - Session 892
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dataholders.DecomposableItemsData` | `Aion.GameServer.Data.StaticData` / guarded comparison fixture | Data Holder | Partial | Manual Only for audit; Regression Tested in C# comparison helper | Needs Verification | Java loader source reviewed: selectable entries use only first `<items>` group and return copied reward lists. Real XML runtime loading was not executed locally. |
+| `com.aionemu.gameserver.model.templates.item.DecomposableItemInfo` | `Aion.GameServer.Data.StaticData` decomposable item model | DTO / Static Data Model | Partial | Manual Only | Needs Verification | XML attributes `item_id` and `selectable` reviewed. C# static-data equivalent was not changed in this unit. |
+| `com.aionemu.gameserver.model.templates.item.ResultedItem` | `Aion.GameServer.Data.StaticData` resulted-item model / decompose fixture projection | DTO / Static Data Model | Partial | Manual Only | Needs Verification | Java count normalization and race/class filtering reviewed. No runtime comparison; count behavior remains a future projection concern if real XML ids are used. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ClientPackets.CmSelectDecomposable` / guarded comparison helper | Client Packet Handler | Partial | Regression Tested in C#; Manual Only for XML audit | Partial Parity | Audit selects possible real source/reward ids for future handler capture. No Java runtime artifact generated. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| None | Documentation / Static Data Audit | Java XML, Java XSD, `DecomposableItemsData`, `ResultedItem` source review | Identifies real selectable XML candidates and documents count mismatch with current C# logical fixture. | Static source/XML inspection only. | No Java XML loader execution, no runtime artifact, no C# projection change, no Java/C# comparison. |
+
+Remaining risks:
+- Java runtime capture remains unavailable locally.
+- The recommended real XML candidate has deterministic counts, but they differ from the current C# logical fixture.
+- Item template existence was checked by source text, not Java runtime static-data loading.
+- Real live-server behavior may still be affected by item use restrictions, inventory capacity, event systems, login rewards, or server configuration.
+- Count parameterization must be carefully scoped; broad numeric normalization could hide real parity mismatches.
+- Byte-level payload/frame parity, full item-info blob parity, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 0 production code artifacts; 1 real XML candidate audit document added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 8 blocked/not-started categories, including Java observer implementation, Java runtime artifact generation, Java loopback proof validation, Java static-data override setup, C# real-count projection support, SQL fixture execution, byte capture, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit improves capture planning but adds no runtime evidence.
+
+Next recommended unit of work:
+- If Java 25/Maven tooling is available, choose between Java static-data override and real XML candidate capture, then execute the live-server runbook.
+- If tooling remains blocked, add narrowly scoped C# projection support for real Java selectable-decompose source/reward ids and counts so a future artifact using `188051516` can be compared without abusing id mapping.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
