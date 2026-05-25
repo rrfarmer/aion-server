@@ -1,7 +1,7 @@
 # Quest Persistence Contract Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1021; updated by UOW-1022 and UOW-1023
+Unit of Work: UOW-1021; updated by UOW-1022, UOW-1023, and UOW-1024
 
 ## Purpose
 
@@ -136,16 +136,16 @@ The mentor title side effects are not part of `PlayerNpcFactionsDAO`; they belon
 - `SavePlayerLogoutAsync` saves life stats, cooldowns, settings, and core `players` columns, then marks `online = false`.
 - UOW-1022 adds `QuestPersistencePlanService`, a pure non-live planner that accepts explicit Java-shaped persistence states and emits delete, insert, and update descriptors in Java DAO phase order.
 - UOW-1023 adds `NpcFactionPersistencePlanService`, a pure non-live planner that accepts explicit Java-shaped persistence states and emits insert/update descriptors in Java DAO filter order while preserving caller order for Java `HashMap.values()` risk.
+- UOW-1024 composes both persistence plans into `QuestFinishOperationPlanService` as detailed non-live descriptors after nearby-refresh planning.
 - C# has no quest-state write path equivalent to `PlayerQuestListDAO.store`.
 - C# has no NPC-faction write path equivalent to `PlayerNpcFactionsDAO.storeNpcFactions`.
-- `QuestFinishOperationPlanService` has deferred quest and NPC-faction persistence descriptors only.
+- `QuestFinishOperationPlanService` has detailed quest and NPC-faction persistence descriptors only when explicit plans are supplied; otherwise it preserves legacy deferred placeholders.
 - C# immutable quest/faction snapshots do not carry Java `PersistentState`; write planning must track changed rows explicitly or introduce a Java-shaped persistence-state model.
 
 ## Recommended Implementation Slices
 
-1. Compose quest and NPC-faction persistence plans into `QuestFinishOperationPlanService` as non-live descriptors.
-2. Decide whether C# should intentionally preserve Java's helper-level commit/no-rollback behavior or use a safer transaction as an explicit intentional difference.
-3. Keep live DAO writes disabled until operation plans and failure-ordering tests are in place.
+1. Decide whether C# should intentionally preserve Java's helper-level commit/no-rollback behavior or use a safer transaction as an explicit intentional difference.
+2. Keep live DAO writes disabled until operation plans and failure-ordering tests are in place.
 
 ## Remaining Risks
 
@@ -156,3 +156,4 @@ The mentor title side effects are not part of `PlayerNpcFactionsDAO`; they belon
 - C# lacks `PersistentState` on quest and NPC-faction snapshots, so live writes need either explicit operation inputs or new state tracking.
 - UOW-1022 normalizes current quest rows by quest id like Java's `TreeMap`, but deleted quest id set ordering remains caller-provided because Java uses a `HashSet`.
 - UOW-1023 preserves caller order for NPC-faction descriptors, but Java `HashMap.values()` ordering still lacks runtime verification.
+- UOW-1024 composes detailed descriptors but still does not execute `PlayerService.storePlayer` or model callback mutations that can happen before persistence.
