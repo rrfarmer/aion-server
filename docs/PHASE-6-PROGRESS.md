@@ -27845,6 +27845,60 @@ Next recommended unit of work:
 
 ---
 
+### Session 884 (May 25, 2026)
+- Continued after UOW-883 with the docs-only live-server capture runbook candidate because Java 25/Maven tooling remains unavailable locally.
+- Performed Parallel Work Discovery across Java loopback proof validation, guarded C# artifact comparison, live-server capture runbook, and system-message factory mapping. Selected the runbook because it is low-risk documentation work and gives a Java-capable environment exact artifact-generation steps.
+- Added `docs/Phase-6-Decompose-Live-Server-Capture-Runbook.md`.
+- The runbook defines:
+  - prerequisites and known local blocker
+  - startup path using the existing mixed-mode DB/login/Java server scripts
+  - fixture strategy and id mapping rules
+  - database fixture checklist
+  - required packet order and decoded fields for `JD-SEL-DEC-001` and `JD-SEL-DEL-001`
+  - artifact paths under `docs/parity-artifacts/java/decompose/selectable/`
+  - client-side frame capture, Java instrumentation logger, and manual-decoder fallback options
+  - pass/fail gates and stop conditions
+- No production Java/C# code changed in this unit.
+- Validation: no tests were run because this was a documentation-only runbook unit. Latest full C# validation remains Session 883: 1451 tests passing.
+
+#### Migration Parity Table - Session 884
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ClientPackets.CmSelectDecomposable` / C# JSON projection helper | Client Packet Handler | Partial | Manual Only for runbook; Regression Tested in C# projection | Needs Verification | Runbook defines live Java capture steps for both selectable scenarios. No Java artifact was captured in this unit. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `Aion.GameServer.Network.Aion.GameServerConnection` send observer / projection helper | Utility | Partial | Manual Only | Needs Verification | Runbook recommends self-send isolation and optional Java instrumentation at send boundaries. Broadcast/threading behavior remains uncaptured. |
+| `com.aionemu.gameserver.model.items.storage.Storage` | `Aion.GameServer` inventory mutation helpers | Storage | Partial | Manual Only | Needs Verification | Runbook requires source decrement/delete side effects to be captured from Java runtime. Persistence and quest callback behavior remain outside first artifacts. |
+| `com.aionemu.gameserver.services.item.ItemPacketService` | `Aion.GameServer.Services.Items` packet writers / server packets | Service / Packet Side Effects | Partial | Manual Only | Needs Verification | Runbook requires Java `SM_CUBE_UPDATE` after delete and source/reward packet fields. No runtime artifact yet. |
+| `com.aionemu.gameserver.services.item.ItemService` | `Aion.GameServer.Network.Aion.GameServerConnection.SendDecomposeRewardItemsAsync` | Service | Partial | Manual Only | Needs Verification | Runbook covers deterministic reward counts and id mapping requirements. Java reward object-id allocation remains uncaptured. |
+| `com.aionemu.gameserver.dataholders.DecomposableItemsData` | `Aion.GameServer.Data.StaticData` decomposable item data | Data Holder | Partial | Manual Only | Needs Verification | Runbook allows test ids or real XML ids with explicit mapping. Java XML/static-data runtime parity remains unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| None | Documentation / Runbook | Java capture contract, Phase 3 mixed-mode startup docs, and Java source references | Defines how to produce live Java selectable-decompose JSON artifacts. | No runtime evidence; planning only. | No Java artifact, no C# comparison against Java JSON, no byte capture, no live-client result in this unit. |
+
+Remaining risks:
+- Local Java 25/Maven tooling remains unavailable, so the runbook was not executed here.
+- Live client setup may need account/character creation, client patching, and DB fixture work not fully scripted.
+- Real Java XML ids may differ from C# fixture ids and require explicit mapping.
+- Packet observation may need temporary Java diagnostics; any such patch must be isolated and documented.
+- Login/event systems can emit unrelated item packets and pollute capture order.
+- Byte-level capture remains deferred.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 0 production code artifacts; 1 live-server capture runbook added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 8 blocked/not-started categories, including Java loopback proof validation, live Java JSON artifact generation, fixture SQL/script automation, packet observer implementation, byte capture, C# Java-artifact comparison tests, object-id parity, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit improves the Java artifact path but adds no runtime evidence.
+
+Next recommended unit of work:
+- If Java 25/Maven tooling is available, run `LoopbackCaptureProof` or execute the live-server runbook to generate the first Java JSON artifacts. If tooling remains blocked, add a guarded C# comparison test that looks for future Java artifacts and compares packet order/decoded fields when those files exist.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -27854,4 +27908,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Run and harden `LoopbackCaptureProof` under Java 25/Maven tooling when available; while tooling is blocked locally, either add a guarded file-backed comparison test for future Java decompose JSON artifacts or create a live-server capture runbook for producing those artifacts without claiming Java runtime verification.
+8. Run and harden `LoopbackCaptureProof` under Java 25/Maven tooling when available; while tooling is blocked locally, add a guarded file-backed comparison test for future Java decompose JSON artifacts without claiming Java runtime verification.
