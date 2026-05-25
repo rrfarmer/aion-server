@@ -129,6 +129,8 @@ UOW-971 invokes `EquipmentService.CheckRankLimitItems` from explicit ItemPurific
 
 UOW-972 emits the explicit live-path rank-limit unequip fanout after the equipment rank-limit mutation: owner `SmInventoryUpdateItem` equip/unequip packet(s), owner `SmSystemMessage.UnequipRankItem` message(s), and visible-player `SmUpdatePlayerAppearance` broadcast when the equipment result asks for appearance refresh. Automatic production dispatch remains disabled, and the AP gate is still open for persistence of rank-limited equipment changes, stats packet refresh, abyss skill refresh execution, and Java runtime packet/order comparison.
 
+UOW-973 invokes `AbyssSkillService.UpdateSkills` from explicit ItemPurification live execution after the equipment rank-limit pass when AP spend changes rank. The explicit path now mutates `player.Skills` and sends modeled `SmSkillRemove` and `SmSkillList` packets for the resulting deltas. Automatic production dispatch remains disabled, and the AP gate is still open for skill persistence, broader SkillEngine effect apply/remove fanout, configured transform-min-rank plumbing from production options, and Java runtime packet/order comparison.
+
 ### 5. Packet Ordering And Runtime Comparison
 
 Required before automatic dispatch:
