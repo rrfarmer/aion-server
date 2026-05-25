@@ -62,6 +62,7 @@ Current C# status:
 - The plan includes spend/gain system-message packets, `SmAbyssRank`, `SmAbyssRankUpdate`, rank-limit and abyss-skill flags, Legion contribution intent for positive AP, and Siege callback intent only through `AddApFromObject`.
 - `ItemPurificationLiveMutationService.Apply` calls `AbyssPointsService.AddAp(player, -AbyssPointsToSpend, ...)`.
 - `ItemPurificationLiveExecutionService.ExecuteAsync` sends the success message first, applies live mutation, then sends the concrete inventory/cube packet plan. It does not currently send `AbyssPointsAddPlan.PlayerPackets` at the AP operation point, broadcast rank update packets, execute rank-limited unequip, or refresh abyss skills.
+- UOW-968 adds live-execution regression coverage proving a purification AP spend that drops rank still produces `AbyssPointsAddPlan` rank-change metadata (`SmSystemMessage`, `SmAbyssRank`, `SmAbyssRankUpdate`, rank-limit flag, abyss-skill flag), while the live execution packet sender still skips the AP metadata operation.
 - `ItemPurificationPersistentLiveExecutionService.ExecuteAsync` persists inventory mutation and updated abyss rank together, but does not execute rank-change side-effect services.
 
 AP parity gaps:
@@ -76,7 +77,6 @@ AP parity gaps:
 
 Safe AP next tests:
 
-- Add a focused live-mutation or live-execution regression where AP spend changes rank and assert `AbyssPointsPlan.ShouldCheckRankLimitItems`, `ShouldUpdateAbyssSkills`, and `RankUpdatePacket` are populated.
 - Add live-execution packet ordering coverage before wiring sends: success system message, material mutations, AP spend system message/rank packet, base delete, target add, with Java artifacts still required before verified parity.
 - Add an explicit side-effect executor only behind opt-in live execution, then cover equipment rank-limit and abyss-skill invocation without enabling production dispatch.
 
