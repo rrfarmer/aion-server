@@ -29450,9 +29450,81 @@ Next recommended unit of work:
 
 ---
 
+### Session 913 (May 25, 2026)
+- Continued after UOW-912 by reading the PH handoff, confirming `docs/commit-conventions.md` is still missing, and running Parallel Work Discovery around Java NPC team/group reward distribution, remaining instance AP callers, Trade/AP-purification, and live adapter feasibility.
+- Selected a compact NPC team-member AP reward planner because Java `PlayerTeamDistributionService.doReward` isolates the AP branch once team filtering has already produced `PlayerTeamRewardStats.players`, `mentorCount`, `hasLivingPlayer`, and the instance AP multiplier.
+- Added `WorldNpcTeamApRewardService` with Java breadcrumbs for:
+  - `PlayerTeamDistributionService.doReward`
+  - `PlayerTeamRewardStats`
+  - `StatFunctions.calculatePvEApGained`
+  - `Rates.AP_PVE`
+  - `AbyssPointsService.addAp(Player, VisibleObject, int)`
+- Added `ApplyMemberApRewardFromNpcStats` with caller-supplied Java input projections for eligible team-member count, `AIQuestion.REWARD_AP`, mentor AP suppression, and instance AP multiplier.
+- Reused `WorldNpcSoloDpRewardService.CalculatePveApGained` for Java PvE AP formula parity and consumed configured `GameServerOptions.Rates.ApPveRates`.
+- Added Java float-to-int narrowing before integer group-share division, dead-member skip, missing/no-eligible guards, no-reward guard, and siege callback intent for non-peace siege NPC sources.
+- Registered `WorldNpcTeamApRewardService` in DI.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~WorldNpcTeamApRewardServiceTests --no-restore` passed with 6 tests.
+  - `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed: Commons 57, Chat 29, Login 121, GameServer 1527.
+
+#### Migration Parity Table - Session 913
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamDistributionService` | `Aion.GameServer.Services.WorldNpcTeamApRewardService` | Service / Reward Planner | Partial | Regression Tested in C# | Partial Parity | C# now models the AP reward slice for one already-filtered team member: AI reward gate, mentor AP suppression input, instance AP multiplier input, `calculatePvEApGained`, group-share division, AP mutation, and siege callback intent. Full team traversal, league/alliance expansion, range filtering, quest kill hook, XP/DP, loot, and live `NpcController` invocation remain missing. |
+| `com.aionemu.gameserver.model.team.common.service.PlayerTeamDistributionService.PlayerTeamRewardStats` | `WorldNpcTeamApRewardService.ApplyMemberApRewardFromNpcStats` input projection | Internal Stats / Input Projection | Partial Input Projection | Regression Tested in C# | Needs Verification | `eligiblePlayerCount`, mentor suppression, and living/dead member decisions are supplied by the caller. C# does not yet build the filtered player list, count mentors, or detect `hasLivingPlayer`. Dead members are skipped per member, but the Java denominator can still include filtered dead non-mentor players; this must be preserved by the caller-provided count. |
+| `com.aionemu.gameserver.model.team.TemporaryPlayerTeam` | Not ported in this unit | Team Model | Not Started | No Tests | Unknown | Java team iteration dependency discovered while reading `PlayerTeamDistributionService`. C# has runtime group/alliance models, but this unit did not wire live team membership traversal. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAlliance` | Not ported in this unit | Team Model | Not Started | No Tests | Unknown | Java league/alliance expansion branch is not ported. Future live distribution must handle `alli.isInLeague()` and league-member traversal. |
+| `com.aionemu.gameserver.configs.main.DropConfig.DISABLE_RANGE_CHECK_MAPS` | Not ported in this unit | Configuration / Range Filter | Not Started | No Tests | Unknown | Java disables range checks for configured maps before filtering team members. C# planner accepts already-filtered members and does not evaluate map/range config. |
+| `com.aionemu.gameserver.configs.main.GroupConfig.GROUP_MAX_DISTANCE` | Not ported in this unit | Configuration / Range Filter | Not Started | No Tests | Unknown | Java range filtering uses `GROUP_MAX_DISTANCE` unless disabled by map. C# live filtering remains a future integration dependency. |
+| `com.aionemu.gameserver.questEngine.QuestEngine.onKill` | Not ported in this unit | Quest Hook | Not Started | No Tests | Unknown | Java invokes quest kill handling for each eligible filtered member before reward AP. C# team AP planner intentionally excludes quest side effects. |
+| `com.aionemu.gameserver.world.WorldMapInstance.getInstanceHandler().getApMultiplier` | `WorldNpcTeamApRewardService.ApplyMemberApRewardFromNpcStats(instanceApMultiplier)` | Instance Handler / Input Projection | Partial Input Projection | Regression Tested in C# | Needs Verification | Instance AP multiplier is supplied by the caller and covered in AP math tests. Live world-map-instance handler lookup remains unwired. |
+| `com.aionemu.gameserver.utils.stats.StatFunctions.calculatePvEApGained` | `WorldNpcSoloDpRewardService.CalculatePveApGained` reused by `WorldNpcTeamApRewardService` | Utility / Reward Calculation | Partial | Regression Tested in C# | Partial Parity | Existing PvE AP formula is reused for team member AP. Tests cover configured AP PvE rate consumption through the new team planner; Java runtime comparison remains unavailable. |
+| `com.aionemu.gameserver.model.gameobjects.player.Rates.AP_PVE` | `GameServerRateOptions.ApPveRates` / `WorldNpcTeamApRewardService` | Rate Calculation / Configuration Consumption | Partial | Regression Tested in C# | Partial Parity | Configured membership rates are consumed through `CalculatePveApGained`; empty-rate fallback and overflow behavior are covered by earlier solo AP tests, while configured team consumption is covered here. Live `StatEnum.AP_BOOST` remains an integer input. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `Aion.GameServer.Services.AbyssPointsService.AddApFromObject` | Service | Partial | Regression Tested in C# | Partial Parity | Team AP planner mutates AP through the existing add-AP-from-object planner. Persistence, full Legion contribution fanout, ranking cache, large-AP logging, and live caller side effects remain incomplete. |
+| `com.aionemu.gameserver.services.SiegeService.onAbyssPointsAdded` | `Aion.GameServer.Services.AbyssPointsSiegeCallback` | Service Callback / Intent DTO | Partial | Regression Tested in C# | Needs Verification | Regression validates non-peace siege NPC sources create callback intent. Live `SiegeService` execution and fort state mutation remain unported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Tests validate AP gain message id `1320000` is planned for team AP rewards. Packet bytes and live ordering were not Java-runtime compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRank` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Tests validate rank packet intent after team AP reward mutation. Ranking-position lookup and byte-level Java comparison remain unavailable. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ApplyMemberApRewardFromNpcStats_CalculatesJavaTeamShareAndAddsAp` | Regression | Java `PlayerTeamDistributionService.doReward`, `StatFunctions.calculatePvEApGained`, `Rates.AP_PVE`, and `AbyssPointsService.addAp(Player, VisibleObject, int)` source review | Validates calculated PvE AP `90`, damage and instance multiplier scaling, group-share AP `30`, AP mutation `1000 -> 1030`, AP gain packet intent, rank packet intent, and no ordinary siege callback. | Deterministic C# regression grounded in Java source. | No Java runtime artifact; live team filtering and `NpcController` invocation remain missing. |
+| `ApplyMemberApRewardFromNpcStats_UsesConfiguredApPveRatesWhenNoOverrideIsSupplied` | Regression | Java `Rates.AP_PVE` and config source review | Validates injected `GameServerOptions.Rates.ApPveRates = [1.0, 1.25]` is used for team AP when no explicit override is supplied, producing calculated AP `75`, reward AP `15`, and AP mutation `600 -> 615`. | Deterministic C# regression grounded in Java source and prior config binding. | AP boost remains an input projection. |
+| `CalculateTeamMemberApReward_MatchesJavaFloatNarrowingAndGroupDivision` | Regression | Java compound float scaling and `(int) rewardAp / players.size()` source review | Validates Java-style float narrowing, integer group-share division, NaN cast behavior, and no-eligible guard. | Deterministic C# formula regression. | Positive reward division is mathematically equivalent to floor-after-division, but code intentionally mirrors Java operation order. |
+| `ApplyMemberApRewardFromNpcStats_SkipsAiDeniedMentorSuppressedAndBelowMinimum` | Guard Regression | Java `AIQuestion.REWARD_AP`, mentor group AP condition, and `ap >= 1` branch source review | Validates denied AI reward, mentor AP suppression, and below-minimum AP do not mutate AP. | Deterministic C# guard regression. | Mentor count/config evaluation is caller-projected. |
+| `ApplyMemberApRewardFromNpcStats_SkipsMissingDeadAndNoEligibleTargets` | Guard Regression | Java dead-member skip and C# planner boundary | Validates missing member, missing NPC, no eligible players, and dead member do not mutate AP. | Deterministic C# guard regression. | Java filtered players can include dead non-mentor players in denominator; future live caller must preserve that count. |
+| `ApplyMemberApRewardFromNpcStats_CreatesSiegeCallbackForNonPeaceSiegeNpc` | Regression | Java `AbyssPointsService.addAp(Player, VisibleObject, int)` and `SiegeService.onAbyssPointsAdded` source review | Validates non-peace siege NPC source creates siege callback intent with player/source/reward AP. | Deterministic C# regression through existing AP planner. | Live `SiegeService` execution remains unported. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- `WorldNpcTeamApRewardService` is a planner slice; live team filtering, league/alliance expansion, map/range checks, quest kill hooks, XP/DP rewards, loot/kinah distribution, and `NpcController` reward invocation remain missing.
+- Java denominator behavior is subtle: `filteredStats.players.size()` can include dead non-mentor filtered members while the loop skips the dead member. The C# planner preserves this only if future callers pass the Java-equivalent eligible count.
+- `AIQuestion.REWARD_AP`, `CustomConfig.MENTOR_GROUP_AP`, mentor counting, and instance AP multiplier are input projections until their live C# homes are ready.
+- `StatEnum.AP_BOOST` and live `PlayerGameStats` stat lookup remain represented by an integer input through the reused PvE AP helper.
+- Remaining AP callers in Trade, item purification, remaining instance handlers, admin paths, and live adapters still need convergence through `AbyssPointsService` as appropriate.
+- Packet bytes, persistence, ranking cache, Legion contribution fanout, and live siege callback execution remain incomplete.
+
+Summary metrics:
+- Total Java artifacts discovered: 14
+- Total artifacts ported: 1 NPC team-member AP reward planner slice plus 1 DI registration
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 14
+- Total blocked artifacts: 8 blocked/not-started categories, including Java runtime artifact generation, live team filtering, league/alliance traversal, quest kill hooks, XP/DP/loot side effects, remaining AP callers, persistence/fanout side effects, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 67% complete; this unit adds the NPC team AP planner boundary but does not wire live team distribution.
+
+Next recommended unit of work:
+- Continue AP caller convergence by analyzing the remaining instance AP reward callers (`AturamSkyFortressInstance`, `EternalBastionInstance`, `StonespearReachInstance`, `PvPArenaInstance`) and port the smallest isolated planner if one exists.
+- Alternatively, map a narrow live adapter for an existing AP planner only if the caller boundary can pass Java-equivalent projection inputs without pulling in broad combat/team/quest runtime.
+- Trade and item-purification AP paths likely require broader inventory/dialog/action surfaces and should remain analysis-first.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, PvP AP gain/loss, Quest AP, and Dredgion/basic PvP instance AP now consume their configured AP rates at planner/service boundaries, so move next to NPC team/group AP distribution, remaining instance AP callers, Trade/AP-purification analysis, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Inspect C# coverage for Java `TradeService` and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, and Dredgion/basic PvP instance AP now consume their configured AP rates at planner/service boundaries, so move next to remaining instance AP callers, Trade/AP-purification analysis, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Inspect C# coverage for Java `TradeService` and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
