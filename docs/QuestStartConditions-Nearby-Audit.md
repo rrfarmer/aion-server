@@ -1,7 +1,7 @@
 # Nearby Quest Start Conditions Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-991, updated by UOW-992 through UOW-996
+Unit of Work: UOW-991, updated by UOW-992 through UOW-997
 
 ## Purpose
 
@@ -34,6 +34,7 @@ Java remains the source of truth. This document does not implement a C# predicat
 - `dotnetConversion/tests/Aion.GameServer.Tests/NearbyQuestTemplateXmlExtractorTests.cs`
 - `dotnetConversion/tests/Aion.GameServer.Tests/NearbyQuestStartConditionServiceTests.cs`
 - `docs/NearbyQuestRefresh-SendBoundary-Audit.md`
+- `dotnetConversion/tests/Aion.GameServer.Tests/QuestNpcStartRegistrationSourceRealDataAuditTests.cs`
 - Future production C# quest-template/start-condition dataholders and full nearby predicate service
 
 ## Nearby Call Shape
@@ -131,6 +132,7 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 - C# does not have combine-skill lookup parity for this quest path.
 - C# has `SmNearbyQuests` packet serialization, staged world quest-id projection, a staged early-gate predicate, and a level-diff projector, but no production player-controller refresh method or packet send path.
 - UOW-996 documents the future send boundary: Java sends nearby markers immediately from `CM_LEVEL_READY` and schedules a debounced 1500 ms instance-wide refresh from `WorldMapInstance.addObject(Npc)`. C# does not yet implement either send trigger.
+- UOW-997 adds a real-data staged marker projection audit for templates with no currently unsupported nearby dependencies. Current repository data yields 2072 supported projected quest ids; a level-65 Elyos male Gladiator receives 920 staged markers and 1152 supported early-gate rejections, with no unsupported dependency failures.
 
 ## Migration Parity Table
 
@@ -143,6 +145,7 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 | `com.aionemu.gameserver.model.gameobjects.player.QuestStateList`; `com.aionemu.gameserver.questEngine.model.QuestState` | `Aion.GameServer.Model.GameObjects.PlayerQuestState` | Player Quest State | Partial | Unit Tested elsewhere | Needs Verification | C# stores status, vars, flags, and complete count for packet serialization, but repeatability and next-repeat timing needed by `QuestState.canRepeat()` are not ported. |
 | `com.aionemu.gameserver.network.aion.clientpackets.CM_LEVEL_READY` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLevelReadyAsync` | Client Packet Handler / Nearby Send Trigger | Partial | Manual Only | Needs Verification | UOW-996 source-audits Java's immediate level-ready call to `updateNearbyQuests`. C# intentionally omits the nearby marker send until production candidate sources and predicates are safe. |
 | `com.aionemu.gameserver.world.WorldMapInstance.addObject` | Future C# NPC-spawn delayed nearby refresh scheduler | World Instance / Delayed Refresh Trigger | Not Started | Manual Only | Needs Verification | UOW-996 source-audits Java's 1500 ms one-pending-task debounce for NPC-spawn quest-id changes. C# has staged quest-id storage only; no live scheduler/fanout exists. |
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestMarkerProjectionService`; `QuestNpcStartRegistrationSourceRealDataAuditTests` | Controller / Quest UI Projection Audit | Partial | Regression Tested | Partial Parity | UOW-997 pins one supported-template real-data projection slice. It excludes unsupported XML/inventory/combine-skill/NPC-faction/time-based templates and still does not send packets or verify Java `HashMap` order. |
 
 ## Tests Added/Updated
 
@@ -192,6 +195,7 @@ Existing relevant tests remain:
 - `QuestNpcStartRegistrationSourceRealDataAuditTests.RealDataAudit_ProjectsStagedQuestIdsIntoWorldInstanceWithoutRefreshWiring`
 - `GamePacketTests.ServerPacketPayloads_MatchJavaShapes` (`SmNearbyQuests` cases)
 - `docs/NearbyQuestRefresh-SendBoundary-Audit.md` manual source audit for send triggers and safety gates
+- `QuestNpcStartRegistrationSourceRealDataAuditTests.RealDataAudit_ProjectsSupportedNearbyMarkersWithoutProductionSendWiring`
 
 ## Remaining Risks
 
@@ -203,6 +207,7 @@ Existing relevant tests remain:
 - NPC faction, combine-skill, inventory, abyss-rank, title, class/race/gender enum mapping, and exception/log behavior need C# homes before runtime candidate filtering can be claimed.
 - Packet sends and production ItemPurification dispatch must remain disabled.
 - Level-ready and NPC-spawn send triggers remain documented only; no C# runtime send path exists.
+- The supported-template real-data audit uses one synthetic player archetype and excludes unsupported dependency categories rather than proving full Java predicate parity.
 
 ## Summary Metrics
 
@@ -215,4 +220,4 @@ Existing relevant tests remain:
 
 ## Next Recommended Unit Of Work
 
-Add a staged real-data marker projection only for templates without unsupported dependencies, or implement a non-sending `NearbyQuestRefreshPlanService` that composes the staged candidate source, template table, predicate, and marker projection with explicit failure reasons. Keep packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.
+Implement a non-sending `NearbyQuestRefreshPlanService` that composes the staged candidate source, template table, predicate, and marker projection with explicit readiness/failure reasons, or broaden the supported-template real-data audit across representative player archetypes. Keep packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.

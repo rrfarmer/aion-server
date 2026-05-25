@@ -1,7 +1,7 @@
 # ItemPurification Nearby Quest Refresh Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-980, updated by UOW-981 through UOW-996
+Unit of Work: UOW-980, updated by UOW-981 through UOW-997
 
 ## Purpose
 
@@ -103,6 +103,7 @@ Other Java call sites also use `updateNearbyQuests`, including item get/remove v
 - UOW-994 adds a focused real-data audit for the staged nearby quest-template extractor. Current repository `quest_data.xml` yields 8043 summaries, including 2427 with XML start conditions, 363 with inventory preconditions, 628 with combine-skill requirements, 365 with NPC faction requirements, and 927 time-based repeat templates.
 - UOW-995 adds `NearbyQuestMarkerProjectionService`, a staged bridge that filters a `WorldMapInstanceRuntimeState` quest-id set through `NearbyQuestStartConditionService` and returns `NearbyQuestMarker` DTOs plus rejection reasons. It does not send `SM_NEARBY_QUESTS` or wire player-controller refresh.
 - UOW-996 adds `docs/NearbyQuestRefresh-SendBoundary-Audit.md`, a read-only Java/C# audit of the future nearby-refresh send boundary. Java has an immediate `CM_LEVEL_READY` owner send and a delayed 1500 ms NPC-spawn instance fanout through `WorldMapInstance.addObject`; C# has send primitives and staged marker projection only. Production packet sends and ItemPurification dispatch remain disabled.
+- UOW-997 extends the real-data audit with a staged supported-template marker projection. Current repository data has 4503 projected world quest ids, 2072 of those have no currently unsupported nearby dependencies, and a level-65 Elyos male Gladiator produces 920 staged markers plus 1152 supported early-gate rejections. No unsupported dependency failures are allowed in this filtered subset.
 - No production C# `QuestService.checkStartConditions` equivalent is wired for this nearby-quest UI path.
 - No C# player-controller method currently invokes real nearby quest refresh.
 
@@ -136,7 +137,7 @@ Completed prerequisite:
 
 Add only the next prerequisite:
 
-1. Add a staged real-data marker projection only for templates without unsupported dependencies, or implement a non-sending refresh-plan service that composes the staged candidate, predicate, and marker pieces.
+1. Implement a non-sending refresh-plan service that composes the staged candidate, predicate, and marker pieces with explicit readiness/failure reasons, or expand the supported-template projection across representative player archetypes.
 2. Keep XML start conditions, NPC faction, combine skill, packet sending, dynamic quest handlers, production `StaticData` integration, and real ItemPurification dispatch disabled until each dependency is modeled and tested.
 
 ## Migration Parity Table
@@ -163,6 +164,8 @@ Add only the next prerequisite:
 | `com.aionemu.gameserver.network.aion.clientpackets.CM_LEVEL_READY` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLevelReadyAsync` | Client Packet Handler / Nearby Send Trigger | Partial | Manual Only | Needs Verification | UOW-996 source-audits that Java invokes `updateNearbyQuests()` during level-ready. C# level-ready currently sends baseline map-ready packets only and intentionally does not send nearby markers. |
 | `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `Aion.GameServer.Network.Aion.IGameClientConnectionRegistry.SendPacketToPlayerAsync`; `Aion.GameServer.Network.Aion.GameServerConnection.SendPacketAsync` | Packet Send Utility Boundary | Partial | Manual Only | Needs Verification | UOW-996 confirms available C# send primitives but no nearby-refresh caller. Java's `player.isOnline()` gate must be mirrored by active connection/player checks, and socket send failure behavior for this path remains unverified. |
 | `com.aionemu.gameserver.world.WorldMapInstance.addObject` delayed nearby refresh task | Future C# NPC-spawn refresh scheduler over `WorldMapInstanceRuntimeState` | World Instance / Delayed Refresh Trigger | Not Started | Manual Only | Needs Verification | UOW-996 audits Java's 1500 ms one-pending-task debounce before instance-wide player refresh. C# has no production NPC-spawn trigger, scheduler, task reset, or per-player fanout for nearby markers. |
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestMarkerProjectionService`; `QuestNpcStartRegistrationSourceRealDataAuditTests` | Controller / Quest UI Projection Audit | Partial | Regression Tested | Partial Parity | UOW-997 pins the supported-template real-data projection subset: 2072 supported projected quest ids, 920 staged markers, 1152 supported early-gate rejections for a level-65 Elyos male Gladiator. It deliberately excludes unsupported XML/inventory/combine-skill/NPC-faction/time-based templates and still does not send packets. |
+| `com.aionemu.gameserver.model.templates.QuestTemplate`; `com.aionemu.gameserver.dataholders.QuestsData` | `Aion.GameServer.Dataholders.NearbyQuestTemplateXmlExtractor`; `NearbyQuestTemplateTable` | Dataholder / Real-Data Projection Input | Partial | Regression Tested | Needs Verification | UOW-997 consumes the staged real-data table to filter out unsupported dependency categories before marker projection. Production JAXB/`StaticData` loading, XML start-condition semantics, and enum mapping remain unverified. |
 
 ## Tests Added/Updated
 
@@ -203,6 +206,7 @@ Add only the next prerequisite:
 | `NearbyQuestMarkerProjectionServiceTests.ProjectMarkers_FiltersWorldQuestIdsThroughStagedNearbyPredicateWithoutSendingPacket` | Unit | Java `PlayerController.updateNearbyQuests` filtering through `QuestService.checkStartConditions` | Validates staged world quest ids are filtered to marker DTOs and rejected ids carry predicate failure reasons. | Deterministic C# test from source-reviewed Java flow. | Does not send packets or run unsupported predicate dependencies. |
 | `NearbyQuestMarkerProjectionServiceTests.ProjectMarkers_PreservesPositiveAndNegativeLevelDiffsForPacketMarkerRule` | Unit | Java `QuestService.getLevelRequirementDiff` and `SM_NEARBY_QUESTS` marker rule | Validates positive and negative level-diff values are projected into marker DTOs for later packet serialization. | Deterministic C# test from source-reviewed Java utility/packet rule. | Packet send/order not wired. |
 | `docs/NearbyQuestRefresh-SendBoundary-Audit.md` | Manual Source Audit | Java `CM_LEVEL_READY`, `WorldMapInstance.addObject`, `PacketSendUtility.sendPacket`, and C# connection send boundaries | Documents immediate and delayed Java send triggers plus C# production safety gates. | Source-reviewed manual audit. | No executable send-path tests; no packet sends enabled. |
+| `QuestNpcStartRegistrationSourceRealDataAuditTests.RealDataAudit_ProjectsSupportedNearbyMarkersWithoutProductionSendWiring` | Regression | Java `WorldMapInstance.addObject`, `QuestNpc.getOnQuestStart`, `QuestService.checkStartConditions`, and real repository quest XML | Pins the supported-template staged projection: 2072 supported projected quest ids, 920 markers, 1152 early-gate rejections, and zero unsupported-dependency failures. | Deterministic C# audit over current repository source/XML through staged Java-derived services. | Uses one synthetic player archetype; no Java runtime comparison, production `StaticData`, or packet send. |
 
 ## Remaining Risks
 
@@ -211,6 +215,7 @@ Add only the next prerequisite:
 - C# dynamic quest-start registration storage exists and XML/handler sources can be source-extracted, staged into `QuestNpcStartTable`, and projected into a staged world-instance quest-id set with zero unresolved real-data rows, but no production loader populates it from real data.
 - C# world-instance quest id registry storage exists, but it is not populated from production NPC spawn or dynamic quest handlers.
 - C# level-ready and NPC-spawn send triggers remain absent, and the Java 1500 ms debounce semantics have no C# runtime owner yet.
+- The supported-template projection audit uses one synthetic player archetype and excludes unsupported dependency categories; it is not broad runtime parity.
 - The current ItemPurification dispatcher seam must remain no-op until these lower-level surfaces exist.
 - Automatic `CM_ITEM_PURIFICATION` dispatch remains plan-only and must stay disabled.
 

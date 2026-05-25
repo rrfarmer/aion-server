@@ -96,6 +96,11 @@ Do not wire a real C# nearby-refresh send until all selected gates for the targe
 
 No tests were added in UOW-996. Verification for this unit is manual source review of the Java/C# send boundary and documentation updates only.
 
+UOW-997 follow-up:
+
+- `QuestNpcStartRegistrationSourceRealDataAuditTests.RealDataAudit_ProjectsSupportedNearbyMarkersWithoutProductionSendWiring` now pins a supported-template staged marker projection over current repository data.
+- The test remains offline and does not send `SM_NEARBY_QUESTS`.
+
 Existing relevant tests remain:
 
 - `GamePacketTests.ServerPacketPayloads_MatchJavaShapes` for `SmNearbyQuests` payload serialization.
@@ -142,4 +147,4 @@ Existing relevant tests remain:
 
 ## Next Recommended Unit Of Work
 
-Add a staged real-data marker projection test for templates that have no unsupported dependencies, or implement a non-sending `NearbyQuestRefreshPlanService` that composes current staged world quest ids, staged templates, and marker projection into a send-ready plan with explicit failure reasons. Keep actual packet sends, `CM_LEVEL_READY` integration, NPC-spawn delayed refresh, production `StaticData` integration, and production ItemPurification dispatch disabled until follow-up tests cover each gate.
+Implement a non-sending `NearbyQuestRefreshPlanService` that composes current staged world quest ids, staged templates, and marker projection into a send-ready plan with explicit failure reasons, or broaden the supported-template projection audit across representative player archetypes. Keep actual packet sends, `CM_LEVEL_READY` integration, NPC-spawn delayed refresh, production `StaticData` integration, and production ItemPurification dispatch disabled until follow-up tests cover each gate.
