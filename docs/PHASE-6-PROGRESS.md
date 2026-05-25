@@ -30421,9 +30421,56 @@ Next recommended unit of work:
 
 ---
 
+### Session 929 (May 25, 2026)
+- Continued after UOW-928 by selecting the concrete ItemPurification upgrade-success system-message packet slice.
+- Parallel Work Discovery considered the message DTO, concrete inventory packet fanout, and ItemCharge AP hardening. The message DTO was the smallest safe slice because it only touched `SmSystemMessage` and packet serialization tests.
+- Added `SmSystemMessage.ItemUpgradeSuccess(string baseItemName, string resultItemName)` for Java `SM_SYSTEM_MESSAGE.STR_ITEM_UPGRADE_MSG_UPGRADE_SUCCESS`.
+- Added a packet serialization regression for message id `1402579` and both string parameters.
+- Kept `ItemPurificationPacketPlanService` as dry-run intent records for now; no live packet emission, inventory mutation, AP packet fanout, object-id allocation, repository save, or `GameServerConnection` wiring was added.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests"` passed with 91 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1592 tests.
+
+#### Migration Parity Table - Session 929
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_ITEM_UPGRADE_MSG_UPGRADE_SUCCESS` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ItemUpgradeSuccess` | Server Packet DTO / System Message | Complete for this message factory | Regression Tested in C# | Partial Parity | C# serializes message id `1402579` with base/result item string parameters. Runtime l10n lookup, send ordering from `ItemPurificationService.isPurificationAllowed`, and Java runtime byte comparison remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemPurificationService.isPurificationAllowed` | `SmSystemMessage.ItemUpgradeSuccess` used by future ItemPurification packet path | Service Message Boundary | Partial | Regression Tested in C# packet DTO only | Needs Verification | Java sends this success message before material/AP/base/target operations. The packet DTO now exists, but the live service/connection path still does not create or send it. |
+| `com.aionemu.gameserver.services.item.ItemPurificationService.decreaseMaterials` | Not changed in this unit | Service Mutation Boundary | Partial | No New Service Tests in this unit | Needs Verification | Still represented by existing planner/application/packet-order intents only. Live mutation, AP packet fanout, and Kinah decision remain unimplemented. |
+| `com.aionemu.gameserver.services.item.ItemPacketService` | Not changed in this unit | Packet Fanout Service | Partial | No New Fanout Tests in this unit | Needs Verification | Inventory update/delete/add/cube-size fanout remains dry-run in `ItemPurificationPacketPlanService`; no concrete inventory packets were wired for purification. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SmSystemMessage_WritesDialogTooFarMessages` updated with `ItemUpgradeSuccess` assertion | Regression | Java `SM_SYSTEM_MESSAGE.STR_ITEM_UPGRADE_MSG_UPGRADE_SUCCESS` source review | Validates C# `SmSystemMessage.ItemUpgradeSuccess("base", "result")` serializes message id `1402579` with two parameters in existing system-message packet test coverage. | Deterministic C# packet serialization regression grounded in Java generated message id and arguments. | No Java runtime packet capture; not wired into ItemPurification live flow. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- The success message packet factory exists, but ItemPurification still does not emit live packets.
+- Live l10n lookup for base/result item names is not wired into a purification send path.
+- Inventory update/delete/add/cube-size packets remain dry-run intents for purification.
+- AP rank packet/fanout, target object-id allocation, `Storage.add`, dirty-state persistence, `ItemStoneListDAO.save`, Kinah parity decision, and rollback/error behavior remain unimplemented.
+- Required `docs/commit-conventions.md` is still missing; commit format continues to follow `docs/orchestration-rules.md`.
+
+Summary metrics:
+- Total Java artifacts discovered: 4
+- Total artifacts ported: 1 concrete system-message packet factory slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, live ItemPurification packet emission, concrete inventory fanout, live object-id allocation/storage mutation, repository dirty-state persistence, and AP/rank side effects
+- Estimated overall migration completion: Phase 6 remains about 68% complete; this unit adds one concrete packet DTO but not live purification fanout.
+
+Next recommended unit of work:
+- Wire `ItemPurificationPacketPlanService` to carry an optional concrete `SmSystemMessage.ItemUpgradeSuccess` instance for its first operation, while leaving inventory/AP packets as dry-run intents, or add a focused packet DTO regression for the next missing concrete inventory packet prerequisite if the message bridge is too small.
+- Keep live inventory mutation/fanout blocked until object-id allocation, `Storage.add`, repository dirty-state saves, AP rank side effects, Kinah parity decision, and packet byte ordering are scoped together.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, and the pure packet-order plan now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. Move next to the ItemPurification upgrade-success system-message packet, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure packet-order plan, and the concrete upgrade-success system-message packet now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. Move next to connecting that concrete message into the dry-run ItemPurification packet plan, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
