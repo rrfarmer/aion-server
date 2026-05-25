@@ -56,7 +56,9 @@ Current C# behavior:
 
 Add an ItemPurification-specific repository method rather than a broad generic inventory transaction.
 
-Implementation status as of UOW-958: the method signature, empty-repository recording stub, MySQL repository method, pure persistence payload mapper, inserted-item `item_stones` row persistence, an explicit opt-in persistent live execution seam, a handler-level opt-in helper, and handler-level repository-save failure-ordering coverage exist. Automatic `HandleInfrastructurePacketAsync` invocation remains disabled, real DB integration verification is still missing, and quest/AP side-effect execution remains incomplete.
+Implementation status as of UOW-960: the method signature, empty-repository recording stub, MySQL repository method, pure persistence payload mapper, inserted-item `item_stones` row persistence, an explicit opt-in persistent live execution seam, a handler-level opt-in helper, handler-level repository-save failure-ordering coverage, and an automatic-dispatch readiness policy exist. Automatic `HandleInfrastructurePacketAsync` invocation remains disabled, real DB integration verification is still missing, and quest/AP side-effect execution remains incomplete.
+
+See `docs/ItemPurification-Automatic-Dispatch-Readiness.md` before considering any production dispatch change.
 
 Recommended signature:
 
