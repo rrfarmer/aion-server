@@ -27610,6 +27610,68 @@ Next recommended unit of work:
 
 ---
 
+### Session 880 (May 25, 2026)
+- Continued from the Session 879 / Phase 6OA handoff with the first Java loopback proof harness implementation slice.
+- Re-read the new loopback design and inspected the Java test/build layout. Java tests live under each module's `test` directory, with `game-server/pom.xml` using `test` as the test source root.
+- Performed Parallel Work Discovery across Java loopback proof utility, Java build/test enablement, full player/static-data fixture work, and C# decoded cube-update assertions. Selected the loopback proof utility because it is the narrowest implementation step before full selectable-decompose artifacts.
+- Added `game-server/test/com/aionemu/gameserver/network/aion/LoopbackCaptureProof.java`.
+- Kept the proof utility standalone and opt-in rather than a default JUnit test because Java `Dispatcher`, `PacketProcessor`, and `ThreadPoolManager` do not expose a normal repeatable test shutdown seam.
+- Implemented the first proof boundary:
+  - starts a daemon `AcceptReadWriteDispatcherImpl`
+  - accepts a loopback socket through a manual accept thread
+  - creates a real `AionConnection`
+  - registers it with the dispatcher for `OP_READ`
+  - calls `initialized()` through a test subclass to emit Java `SM_KEY`
+  - reads and validates the unencrypted `SM_KEY` frame
+  - recovers the Java base key from the false key
+  - builds and sends one encrypted `CM_SELECT_DECOMPOSABLE` frame with Java-shaped opcode/static-code/complement bytes
+  - prints the captured `SM_KEY` and encrypted client frame hex for future artifact work
+- Validation was blocked locally:
+  - `javac -version` failed because `javac` is not installed/on PATH.
+  - `mvn -version` failed because Maven is not installed/on PATH.
+  - `java -version` reports Java 8, while the repo's `pom.xml` targets `maven.compiler.release` 25.
+- No C# code changed in this unit and no .NET tests were run.
+
+#### Migration Parity Table - Session 880
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.LoopbackCaptureProof` | Future Java artifact capture reader / `Aion.GameServer.Tests` comparison fixtures | Test Utility | Partial | Manual Only | Needs Verification | New standalone Java proof utility added under `game-server/test`. It is not a default JUnit test and was not compiled or run locally due missing Java 25/Maven tooling. |
+| `com.aionemu.commons.network.AcceptReadWriteDispatcherImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` socket-loop tests | Dispatcher | Partial | Manual Only | Needs Verification | Proof utility uses a daemon dispatcher directly rather than `NioServer` because `NioServer` does not expose a test shutdown seam. Runtime behavior still needs Java 25 execution. |
+| `com.aionemu.commons.network.Dispatcher.register` | `GameServerConnection` socket registration path | Network Registration | Partial | Manual Only | Needs Verification | Proof registers a real `AionConnection` for `OP_READ`, matching the important post-accept condition from Java `Acceptor`. Not runtime-verified locally. |
+| `com.aionemu.gameserver.network.aion.AionConnection` | `Aion.GameServer.Network.Aion.GameServerConnection` | Game Connection | Partial | Manual Only | Needs Verification | Proof subclass exposes `initialized()` to send `SM_KEY` after real dispatcher registration. Packet processor/thread cleanup remains a risk; utility exits the process intentionally. |
+| `com.aionemu.gameserver.network.Crypt` | `Aion.GameServer.Network.Aion.GameCrypt` | Crypto Utility | Partial | Unit Tested in C#; Manual Only for Java proof | Needs Verification | Proof implements Java-shaped false-key recovery and client-frame encryption. Must be compiled/run under Java 25 before it can count as runtime evidence. |
+| `com.aionemu.gameserver.network.EncryptionKeyPair` | `Aion.GameServer.Network.Aion.GameCrypt` | Crypto Utility | Partial | Unit Tested in C#; Manual Only for Java proof | Needs Verification | Proof copies the Java rolling XOR/key-advance algorithm for client frame construction. Java runtime byte acceptance remains unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_KEY` | `Aion.GameServer.Network.Aion.ServerPackets.SmKey` | Server Packet | Partial | Manual Only | Needs Verification | Proof reads the real Java `SM_KEY` frame and is intended to print its hex. Not yet run, so no artifact exists. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ClientPackets.CmSelectDecomposable` | Client Packet Handler | Partial | Regression Tested in C#; Manual Only for Java proof | Partial Parity | Proof builds an encrypted Java client frame for opcode `236`, object id `5001`, unknown dword `0`, index `1`. Handler dispatch and full fixture behavior remain unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `LoopbackCaptureProof.main` | Standalone Java proof utility | Java `Acceptor`, `AionConnection.initialized`, `Crypt`, `EncryptionKeyPair`, and `AionClientPacketFactory` source review | Intended to validate loopback accept, `SM_KEY` read/decode, base-key recovery, and encrypted `CM_SELECT_DECOMPOSABLE` frame delivery boundary. | Implementation only; not compiled or run in this environment. | Needs Java 25 JDK and Maven/classpath setup. Does not create JSON artifacts or compare C# output yet. |
+
+Remaining risks:
+- Java proof utility may need compile fixes once run under Java 25 because local Java/Maven tooling is unavailable.
+- The utility intentionally uses a manual daemon dispatcher instead of `NioServer` to avoid non-terminating dispatcher threads; this is a controlled proof difference that must be documented in future artifacts.
+- `PacketProcessor` has no shutdown API; the standalone proof calls `System.exit` after execution and should not be treated as a normal unit test.
+- The proof does not yet attach a real `Player`, static data, inventory, known-list, or ID fixture.
+- It does not yet verify that `CM_SELECT_DECOMPOSABLE.runImpl` executed; it only targets encrypted frame delivery boundary.
+- No Java runtime artifact or C# comparison test exists yet.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 0 production code artifacts; 1 Java proof utility added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 8 blocked/not-started categories, including local Java 25/Maven validation, proof utility compile/run, handler execution observation, player/static-data fixture, Java runtime artifact generation, C# artifact comparison tests, unencrypted body byte capture, and encrypted frame byte capture
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit adds the first Java proof utility but does not add validated runtime evidence.
+
+Next recommended unit of work:
+- Run `LoopbackCaptureProof` in an environment with Java 25 JDK and Maven/classpath support, fix any compile/runtime issues, and record the resulting `SM_KEY`/encrypted client-frame output. Do not advance to full selectable-decompose fixture artifacts until the proof boundary is actually green.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -27619,4 +27681,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Create a Java loopback proof harness for the `JD-SEL-DEC-001` / `JD-SEL-DEL-001` path that reaches handshake and encrypted client-packet delivery before attempting full player/static-data fixture artifact generation.
+8. Run and harden `LoopbackCaptureProof` under Java 25/Maven tooling, then extend it toward player/static-data fixture attachment and first `JD-SEL-DEC-001` runtime artifact only after the handshake/encrypted-frame proof is green.
