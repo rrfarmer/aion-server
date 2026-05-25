@@ -111,15 +111,16 @@ The NPC faction update persists:
 - UOW-1017 adds `docs/QuestFinishRewardWorkItem-Audit.md`, documenting Java reward-group correction, item reward selection, non-item rewards, challenge-task notification, and work-item removal before quest-state mutation.
 - UOW-1018 adds `QuestFinishRewardPlanService`, a non-live reward/work-item descriptor planner with Java-shaped reward-group correction and work-item removal metadata.
 - UOW-1019 composes `QuestFinishRewardPlanService` into `QuestFinishOperationPlanService` through an optional reward projection, keeping detailed reward/work-item descriptors before staged quest-state mutation.
+- UOW-1020 adds `docs/QuestCompletionCallback-Audit.md`, documenting Java completion callback registration, dynamic handler loading, dispatch ordering, and follow-up quest side effects.
 - C# has quest and NPC faction read hydration, but no corresponding write persistence path for these completion mutations.
 - C# has packet serializers for quest list/completed-list shapes and a non-sending `SM_QUEST_ACTION(ActionType.UPDATE, qs)` body. No production quest-finish send path is wired.
 - C# has no `QuestEngine.onQuestCompleted` equivalent or production nearby-refresh send trigger wired to quest completion.
 
 ## Recommended Implementation Slices
 
-1. Audit `QuestEngine.onQuestCompleted` callback dispatch before replacing the callback descriptor with a staged dispatcher.
-2. Connect `SmQuestAction.Update` to the staged operation plan only as a non-live packet descriptor/object.
-3. Add quest-state and NPC-faction persistence contracts after callback and reward operation planning are stable.
+1. Audit quest-state and NPC-faction persistence contracts before replacing deferred persistence descriptors with repository plans.
+2. Add a non-live callback dispatch plan only after deciding how to model Java handler registration order and exception behavior.
+3. Connect `SmQuestAction.Update` to the staged operation plan only as a non-live packet descriptor/object.
 4. Wire live sends and DAO writes only behind explicit opt-in tests.
 
 ## Remaining Risks
@@ -128,6 +129,7 @@ The NPC faction update persists:
 - Reward calculation and inventory mutation ordering are source-audited and partially composed as non-live descriptors, but full reward selection and mutation are not ported.
 - `SM_QUEST_ACTION` extra-category suppression is currently an explicit C# flag rather than a production static-data lookup.
 - Java callback handlers can perform additional quest mutations and packet sends; C# has no quest handler runtime yet.
+- Java completion callback registration order depends on dynamic script class loading and reflection; C# has no equivalent ordering source.
 - Persistence is deferred and split across player-store phases, so immediate quest completion is not transactional with later DAO writes.
 - `PlayerQuestListDAO.store` commits delete/insert/update phases separately and does not rollback on helper-level SQL errors; matching or intentionally changing this behavior needs a deliberate persistence design.
 - The C# operation plan uses descriptors for side effects; callers must not treat descriptor presence as live execution.
