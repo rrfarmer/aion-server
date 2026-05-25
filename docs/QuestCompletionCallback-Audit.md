@@ -1,7 +1,7 @@
 # Quest Completion Callback Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1020; updated by UOW-1025, UOW-1026, and UOW-1027
+Unit of Work: UOW-1020; updated by UOW-1025, UOW-1026, UOW-1027, and UOW-1028
 
 ## Purpose
 
@@ -82,13 +82,14 @@ Because `QuestEngine.onQuestCompleted` catches exceptions around the whole loop,
 - UOW-1025 adds `QuestCompletionCallbackPlanService`, a pure non-live planner for registered completion handlers, shared-env metadata, duplicate registration normalization, missing handler skips, and exception-stop behavior.
 - UOW-1026 composes optional `QuestCompletionCallbackPlan` descriptors into `QuestFinishOperationPlanService` after the update packet and before NPC faction completion.
 - UOW-1027 adds `QuestCompletionFollowUpPlanService`, a pure non-live planner for default callback follow-up `LOCKED`/`START` outcomes and `SM_QUEST_ACTION` `ADD`/`UPDATE` packet-action intent.
+- UOW-1028 composes optional `QuestCompletionFollowUpPlan` payloads into `QuestCompletionCallbackDescriptor`.
 - C# has no runtime quest handler registry, no dynamic Java-style handler loading, and no `QuestEnv` callback object.
 - C# has staged quest-state mutation and operation-plan descriptors, but no live callback dispatch or follow-up quest start/lock mutation.
 - C# packet serializers include `SmQuestAction.Update`, but callback-triggered `ADD` or callback-specific packets are not wired.
 
 ## Recommended Implementation Slices
 
-1. Compose follow-up result plans into callback descriptors before any live handler runtime exists.
+1. Add a quest-finish operation-plan regression proving nested callback follow-up payloads survive callback composition.
 2. Keep callback execution disabled until quest handler registration, static-data preconditions, and packet side effects have tested C# homes.
 3. If a live dispatcher is later introduced, decide explicitly whether to match Java's whole-loop exception catch semantics.
 
@@ -100,3 +101,4 @@ Because `QuestEngine.onQuestCompleted` catches exceptions around the whole loop,
 - Java's exception handling stops the remaining callback loop after the first thrown exception.
 - UOW-1026 carries detailed callback descriptors in quest-finish planning when supplied, but C# still has no callback registry, callback result model, mutable `QuestEnv`, or live execution surface.
 - UOW-1027 models follow-up result actions but does not execute Java start-condition checks, XML condition recursion, quest-state mutation, or packet sends.
+- UOW-1028 carries follow-up result plans through callback descriptors, but no live callback execution or packet serialization exists.
