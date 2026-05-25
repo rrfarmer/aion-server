@@ -140,6 +140,10 @@ UOW-1005 follow-up:
 
 - `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesJavaMasterCraftingRequiredConditionAdjustment` covers Java's configurable master-crafting XML required-count adjustment.
 
+UOW-1006 follow-up:
+
+- `StaticDataLoadingTests.StaticData_LoadsNpcFactionTemplatesLikeJavaDataholder` covers Java NPC faction static-data indexing and mentor-category behavior.
+
 Existing relevant tests remain:
 
 - `GamePacketTests.ServerPacketPayloads_MatchJavaShapes` for `SmNearbyQuests` payload serialization.
@@ -162,6 +166,7 @@ Existing relevant tests remain:
 | `com.aionemu.gameserver.model.templates.quest.InventoryItems`; `com.aionemu.gameserver.model.templates.quest.InventoryItem` | `Aion.GameServer.Dataholders.NearbyQuestInventoryItem`; `NearbyQuestTemplateXmlExtractor` | Dataholder / Predicate Dependency | Partial | Unit Tested | Partial Parity | UOW-1001 parses `inventory_item.item_id` and optional `count`; nearby start filtering uses item-id presence only. Count-based collection/consumption behavior remains outside this send-boundary unit. |
 | `com.aionemu.gameserver.model.templates.quest.XMLStartCondition`; `QuestTemplate.getRequiredConditionCount`; `CraftConfig.MAX_MASTER_CRAFTING_SKILLS` | `Aion.GameServer.Dataholders.NearbyQuestXmlStartCondition`; `NearbyQuestStartConditionService` | Dataholder / Predicate Dependency | Partial | Unit Tested | Partial Parity | UOW-999 adds staged support for the source-audited nearby XML subset while keeping unknown XML children fail-closed. UOW-1005 adds configurable master-crafting required-count adjustment. Java runtime comparison and production config plumbing remain missing. |
 | `com.aionemu.gameserver.dao.PlayerQuestListDAO.load` | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.LoadPlayerQuestsAsync` | Repository / Quest State Hydration | Partial | Integration Tested when DB flag enabled | Partial Parity | UOW-1002 reads nullable `player_quests.reward`, `next_repeat_time`, and `complete_time` into `PlayerQuestState`, matching Java's load shape. Timezone interpretation of unspecified MySQL timestamps needs live DB verification. |
+| `com.aionemu.gameserver.dataholders.NpcFactionsData`; `NpcFactionTemplate` | `Aion.GameServer.Dataholders.NpcFactionTable`; `StaticData.NpcFactions` | Static Data / NPC Faction Dependency | Partial | Unit Tested; Regression Tested | Partial Parity | UOW-1006 loads faction templates by id and registrar NPC id, including mentor-category behavior needed by future `player_npc_factions` hydration. Java JAXB runtime comparison remains missing. |
 | `com.aionemu.gameserver.questEngine.QuestEngine.onItemGet` / `onItemRemoved` nearby refresh calls | `Aion.GameServer.Services.NoOpItemPurificationNearbyQuestRefreshDispatcher` | Quest Callback / ItemPurification Refresh Dependency | Partial | Unit Tested for Planning; Manual Audit for Send Boundary | Needs Verification | ItemPurification can plan refresh candidates through `questUpdateItems`, but dispatcher stays no-op. Real quest handlers and nearby marker sends remain disabled by design. |
 | `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestRefreshPlanService` | Controller / Quest UI Refresh Plan | Partial | Unit Tested | Partial Parity | Non-sending plan composes staged marker projection and rejection counts with fail-closed missing-data statuses. It does not send `SM_NEARBY_QUESTS`, resolve live map regions, schedule delayed refresh, or invoke ItemPurification dispatch. |
 
@@ -172,7 +177,7 @@ Existing relevant tests remain:
 - `CM_LEVEL_READY` nearby marker send is absent in C#.
 - NPC-spawn delayed refresh fanout is absent in C#.
 - Production quest-template loading and production quest-start source loading remain unwired.
-- Unsupported nearby predicate dependencies remain broad and must fail closed; XML, inventory, repeat timing, combine-skill, NPC faction, and master required-count conditions are now partial with reward/time hydration, while repository/static-data integration remains unsupported.
+- Unsupported nearby predicate dependencies remain broad and must fail closed; XML, inventory, repeat timing, combine-skill, NPC faction, master required-count, and NPC faction static-data conditions are now partial with reward/time hydration, while NPC faction repository hydration remains unsupported.
 - Java `HashMap`/set ordering is not deterministic; packet marker order parity is not claimed.
 - C# async scheduling for a future 1500 ms debounce will need concurrency tests.
 - `NearbyQuestRefreshPlanService` has no production caller and is intentionally non-sending.
@@ -183,12 +188,12 @@ Existing relevant tests remain:
 ## Summary Metrics
 
 - Total Java artifacts discovered: 7 in this unit
-- Total artifacts ported: 8 staged boundaries after this audit's original unit: non-sending refresh plan, XML start-condition subset, reward/repeat hydration, inventory preconditions, repeat timing predicate support, combine-skill predicate support, NPC faction predicate support, and master required-count support
+- Total artifacts ported: 9 staged boundaries after this audit's original unit: non-sending refresh plan, XML start-condition subset, reward/repeat hydration, inventory preconditions, repeat timing predicate support, combine-skill predicate support, NPC faction predicate support, master required-count support, and NPC faction static-data support
 - Total artifacts with verified parity: 1 existing packet artifact referenced by this audit
-- Total artifacts needing verification: 10
+- Total artifacts needing verification: 11
 - Total blocked artifacts: 4 blocked/not-started categories: production send method, level-ready send trigger, delayed NPC-spawn refresh scheduler, and unsupported predicate dependencies
 - Estimated overall migration completion: Phase 6 remains about 70% complete; this unit clarifies send-boundary blockers without enabling live nearby quest refresh.
 
 ## Next Recommended Unit Of Work
 
-Add NPC faction repository/static-data hydration or broaden refresh-plan audits across representative player archetypes. Keep actual packet sends, `CM_LEVEL_READY` integration, NPC-spawn delayed refresh, production `StaticData` integration, and production ItemPurification dispatch disabled until follow-up tests cover each gate.
+Add NPC faction repository hydration or broaden refresh-plan audits across representative player archetypes. Keep actual packet sends, `CM_LEVEL_READY` integration, NPC-spawn delayed refresh, production `StaticData` integration, and production ItemPurification dispatch disabled until follow-up tests cover each gate.

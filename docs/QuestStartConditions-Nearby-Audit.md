@@ -154,6 +154,7 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 - UOW-1003 adds staged combine-skill support: explicit `combineskill`, `combine_skillpoint`, `combineskill = -1` any-skill behavior, NPC faction 12/13 tapping exclusion, `QuestCategory.TASK` upper-bound skip, and category default parsing.
 - UOW-1004 adds staged NPC faction support: active exact faction checks, mentor/non-mentor slot cooldown via `NpcFactions.canStartQuest`, time-based cooldown skip, and `mentor_type` parsing for slot selection.
 - UOW-1005 adds configurable master-crafting XML required-count support, matching Java `QuestTemplate.getRequiredConditionCount` adjustment for `combine_skillpoint == 499` and `CraftConfig.MAX_MASTER_CRAFTING_SKILLS`.
+- UOW-1006 adds staged NPC faction static-data loading, matching Java `NpcFactionsData` id/NPC-id indexing and `NpcFactionTemplate.isMentor()` category behavior.
 
 ## Migration Parity Table
 
@@ -163,6 +164,7 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 | `com.aionemu.gameserver.services.QuestService.getLevelRequirementDiff` | `Aion.GameServer.Services.NearbyQuestStartConditionService.GetLevelRequirementDiff` | Utility / Quest Predicate | Partial | Unit Tested | Partial Parity | UOW-992 tests Java's missing-template `99` and `minlevel_permitted - playerLevel` behavior. Production quest template loading and packet send integration remain unwired. |
 | `com.aionemu.gameserver.model.templates.QuestTemplate`; `com.aionemu.gameserver.dataholders.QuestsData`; `com.aionemu.gameserver.model.templates.quest.QuestRepeatCycle`; `QuestCategory`; `QuestMentorType` | `Aion.GameServer.Dataholders.NearbyQuestTemplateSummary`; `Aion.GameServer.Dataholders.NearbyQuestTemplateTable`; `Aion.GameServer.Dataholders.NearbyQuestTemplateXmlExtractor` | Dataholder / DTO / XML Extractor | Partial | Unit Tested | Needs Verification | Staged DTO and extractor cover nearby predicate fields, XML start-condition subset data, inventory rows, repeat-cycle tokens, combine-skill point, category token, and mentor slot flag. Production XML/JAXB loading, full enum mapping, configurable master-crafting adjustment, collect item details, and quest-finish repeat-date calculation remain unported. |
 | `com.aionemu.gameserver.model.gameobjects.player.npcFaction.NpcFactions`; `NpcFaction`; `ENpcFactionQuestState` | `Aion.GameServer.Model.GameObjects.PlayerNpcFactionsSnapshot`; `PlayerNpcFactionState`; `PlayerNpcFactionQuestState` | Player State / DTO / Enum | Partial | Unit Tested | Partial Parity | Staged snapshot covers exact active faction and mentor/non-mentor slot cooldowns for nearby checks. Repository hydration, `npc_factions.xml`, daily assignment, mutation behavior, and persistence states remain missing. |
+| `com.aionemu.gameserver.dataholders.NpcFactionsData`; `NpcFactionTemplate`; `FactionCategory` | `Aion.GameServer.Dataholders.NpcFactionTable`; `NpcFactionSummary`; `StaticData.NpcFactions` | Static Data / DTO / Enum-like Dependency | Partial | Unit Tested; Regression Tested | Partial Parity | UOW-1006 loads faction templates by id and NPC id, preserving category/race tokens and Java `maxLevel = 99` default. Full enum modeling and Java JAXB runtime comparison remain missing. |
 | `com.aionemu.gameserver.model.templates.quest.InventoryItems`; `com.aionemu.gameserver.model.templates.quest.InventoryItem` | `Aion.GameServer.Dataholders.NearbyQuestInventoryItem`; `NearbyQuestTemplateXmlExtractor` | DTO / XML Predicate Dependency | Partial | Unit Tested | Partial Parity | UOW-1001 parses `inventory_item.item_id` and optional `count`. The nearby predicate intentionally checks item-id presence only, matching Java `inventoryItemCheck`; count enforcement belongs to other collect-item paths and remains out of scope. Production JAXB/static-data integration remains unwired. |
 | `com.aionemu.gameserver.model.templates.quest.XMLStartCondition`; `QuestTemplate.getRequiredConditionCount`; `CraftConfig.MAX_MASTER_CRAFTING_SKILLS` | `Aion.GameServer.Dataholders.NearbyQuestXmlStartCondition`; `Aion.GameServer.Services.NearbyQuestStartConditionService` | Dataholder / Predicate | Partial | Unit Tested | Partial Parity | UOW-999 implements the nearby `warn = false` supported subset and UOW-1005 adds configurable master-crafting required-count adjustment. Unknown XML children still fail closed. Production static-data loading and Java runtime comparison remain unported. |
 | `com.aionemu.gameserver.model.templates.quest.FinishedQuestCond` | `Aion.GameServer.Dataholders.NearbyQuestFinishedCondition` | DTO / XML Predicate Dependency | Partial | Unit Tested | Partial Parity | UOW-999 parses `quest_id` and default/explicit `reward`. Reward-group matching is unit-tested with staged `PlayerQuestState.RewardGroup`; production quest-state repository hydration is not yet verified. Repeatable prerequisite exact max-complete-count behavior is unit-tested for staged templates. |
@@ -240,6 +242,7 @@ Existing relevant tests remain:
 - UOW-1004 adds `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesJavaNpcFactionGate`
 - UOW-1004 read-only master-crafting sub-agent analysis for `QuestTemplate.getRequiredConditionCount` and `CraftConfig.MAX_MASTER_CRAFTING_SKILLS`
 - UOW-1005 adds `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesJavaMasterCraftingRequiredConditionAdjustment`
+- UOW-1006 adds `StaticDataLoadingTests.StaticData_LoadsNpcFactionTemplatesLikeJavaDataholder` and extends `DataManager_LoadsRealJavaStaticDataManifestCounts`
 
 ## Remaining Risks
 
@@ -249,7 +252,7 @@ Existing relevant tests remain:
 - Repeatability start-check handling is partial; quest-finish repeat reset calculation, reset notification packets, and timestamp timezone verification remain incomplete.
 - XML start-condition semantics are partial: the nearby supported subset and configurable master-crafting adjustment are unit-tested, but production static-data loading, unknown future XML children, and Java runtime comparison remain unverified.
 - `PlayerQuestState.RewardGroup` is now hydrated by the MySQL enter-world repository when DB integration is enabled, but broader persistence/update behavior and Java runtime comparison remain unverified.
-- NPC faction repository/static-data hydration, abyss-rank/title/class/race/gender enum mapping, exception/log behavior, and production static-data loading need C# homes before runtime candidate filtering can be claimed.
+- NPC faction repository hydration, abyss-rank/title/class/race/gender enum mapping, exception/log behavior, and production static-data/JAXB comparison need C# homes before runtime candidate filtering can be claimed.
 - Packet sends and production ItemPurification dispatch must remain disabled.
 - Level-ready and NPC-spawn send triggers remain documented only; no C# runtime send path exists.
 - The supported-template real-data audit uses one synthetic player archetype and excludes unsupported dependency categories rather than proving full Java predicate parity.
@@ -259,12 +262,12 @@ Existing relevant tests remain:
 ## Summary Metrics
 
 - Total Java artifacts discovered: 9 in this unit
-- Total artifacts ported: 13 staged partial artifacts across UOW-992 through UOW-1005 (`NearbyQuestTemplateTable`, `NearbyQuestStartConditionService`, `NearbyQuestTemplateXmlExtractor`, `NearbyQuestMarkerProjectionService`, `NearbyQuestRefreshPlanService`, `NearbyQuestXmlStartCondition`, `NearbyQuestFinishedCondition`, `NearbyQuestInventoryItem`, `PlayerQuestState` reward/repeat fields, repository hydration, combine-skill predicate support, NPC faction snapshot support, and master required-count support)
+- Total artifacts ported: 14 staged partial artifacts across UOW-992 through UOW-1006 (`NearbyQuestTemplateTable`, `NearbyQuestStartConditionService`, `NearbyQuestTemplateXmlExtractor`, `NearbyQuestMarkerProjectionService`, `NearbyQuestRefreshPlanService`, `NearbyQuestXmlStartCondition`, `NearbyQuestFinishedCondition`, `NearbyQuestInventoryItem`, `PlayerQuestState` reward/repeat fields, repository hydration, combine-skill predicate support, NPC faction snapshot support, master required-count support, and NPC faction static-data loading)
 - Total artifacts with verified parity: 0 in this unit
-- Total artifacts needing verification: 13
-- Total blocked artifacts: 5 blocked/not-started categories, including production quest template loading/config plumbing, quest-finish repeat-date calculation/timezone verification, NPC faction repository/static-data hydration, broader refresh-plan archetype audits, and production send triggers
+- Total artifacts needing verification: 14
+- Total blocked artifacts: 5 blocked/not-started categories, including production quest template loading/config plumbing, quest-finish repeat-date calculation/timezone verification, NPC faction repository hydration, broader refresh-plan archetype audits, and production send triggers
 - Estimated overall migration completion: Phase 6 remains about 70% complete; this unit clarifies the next predicate blocker without enabling live nearby quest refresh.
 
 ## Next Recommended Unit Of Work
 
-Add NPC faction repository/static-data hydration or broaden refresh-plan audits across representative player archetypes now that nearby XML/inventory/repeat/combine/NPC/master predicate slices are staged. Keep packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.
+Hydrate `player_npc_factions` into `Player.NpcFactions` using `StaticData.NpcFactions` to derive mentor flags, or broaden refresh-plan audits across representative player archetypes. Keep packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.

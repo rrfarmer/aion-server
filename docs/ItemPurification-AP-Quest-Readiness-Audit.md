@@ -133,6 +133,7 @@ Current C# status:
 - UOW-1003 adds staged nearby combine-skill checks, matching Java `QuestService.checkCombineSkill` for explicit skills, the `-1` any-skill sentinel, NPC faction 12/13 tapping exclusion, and `TASK` work-order upper-bound behavior.
 - UOW-1004 adds staged nearby NPC faction checks, matching Java active exact faction rows, mentor/non-mentor slot cooldown behavior, time-based cooldown skip, and `mentor_type` slot selection. Repository/static-data hydration and live sends remain disabled.
 - UOW-1005 adds configurable master-crafting XML required-count parity for nearby checks. Production config plumbing and live sends remain disabled.
+- UOW-1006 adds staged NPC faction static-data loading for Java `NpcFactionsData`. Repository hydration and live sends remain disabled.
 - Partial material count updates do not need item-remove callbacks under Java behavior.
 - Live mutation replaces the player inventory snapshot and applies AP, but intentionally leaves persistence, sends, quest callbacks, and rollback outside its boundary.
 - Production `HandleInfrastructurePacketAsync` still routes `CmItemPurification` to the plan-only `HandleItemPurificationAsync` path.
