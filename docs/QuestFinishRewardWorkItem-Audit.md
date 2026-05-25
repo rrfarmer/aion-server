@@ -1,7 +1,7 @@
 # Quest Finish Reward and Work-Item Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1017; updated by UOW-1018
+Unit of Work: UOW-1017; updated by UOW-1018 and UOW-1019
 
 ## Purpose
 
@@ -107,16 +107,17 @@ Because `finishQuest` calls `removeQuestWorkItems` before setting status to `COM
 - UOW-1018 adds `QuestFinishRewardPlanService`, a pure non-live planner for reward-group correction, item reward placeholders, non-item reward placeholders, challenge-task notification placeholders, and quest work-item removal descriptors.
 - `QuestFinishRewardPlanService.CorrectRewardGroup` preserves the Java reward-state guard, reward-group defaulting, out-of-range clamping, and the odd empty-list behavior where `rewardGroups.size() - 1` becomes `-1`.
 - The C# reward plan intentionally exposes a nullable reward-group count so the source-audited Java null branch can be represented, even though `QuestTemplate.getRewards()` normally returns `Collections.emptyList()` when XML rewards are absent.
+- UOW-1019 composes the reward plan into `QuestFinishOperationPlanService` through an optional projection so reward correction and detailed reward/work-item descriptors occur before staged quest-state mutation.
 - C# has inventory, AP, title, exp, DP, GP, cube, and warehouse-related surfaces in various partial states, but no composed quest-finish reward mutation plan.
 - C# quest-finish state mutation currently starts at status/var/repeat updates and does not yet compose the staged reward-group correction plan.
 - C# does not parse or stage full `Rewards`, `QuestItems`, extended reward data, class-specific selectable rewards, or quest work items for quest finish.
 
 ## Recommended Implementation Slices
 
-1. Compose `QuestFinishRewardPlanService` into `QuestFinishOperationPlanService` as pre-state-mutation descriptors while keeping all reward and inventory actions non-live.
-2. Add staged DTOs or projection records for full quest-finish reward groups and quest work items, sourced from existing/static quest template loading only after XML fields are available.
-3. Expand item reward planning to distinguish fixed, selectable, extended, class-specific, and bonus item descriptors.
-4. Defer live inventory/AP/XP/title/cube/warehouse mutation until each side effect has a tested C# home.
+1. Add staged DTOs or projection records for full quest-finish reward groups and quest work items, sourced from existing/static quest template loading only after XML fields are available.
+2. Expand item reward planning to distinguish fixed, selectable, extended, class-specific, and bonus item descriptors.
+3. Defer live inventory/AP/XP/title/cube/warehouse mutation until each side effect has a tested C# home.
+4. Audit callback and persistence dependencies before live quest-finish execution.
 
 ## Remaining Risks
 
@@ -127,3 +128,4 @@ Because `finishQuest` calls `removeQuestWorkItems` before setting status to `COM
 - Java logging/warning behavior for malformed reward selection is not modeled.
 - Java reward mutation is not transactional with later quest state persistence.
 - UOW-1018 descriptors do not prove full parity for reward item selection, class-specific rewards, bonus handlers, live inventory mutation, or runtime packet/callback ordering.
+- UOW-1019 operation-plan composition is still non-live and does not parse real quest XML reward data.
