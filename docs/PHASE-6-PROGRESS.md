@@ -34125,6 +34125,76 @@ Next recommended unit of work:
 
 ---
 
+### Session 998 (May 25, 2026)
+- Continued after UOW-997 by adding a non-sending nearby quest refresh plan composer.
+- Parallel Work Discovery selected a two-part batch:
+  - Orchestrator implemented the non-sending plan service and tests.
+  - A read-only sub-agent analyzed Java `XMLStartCondition` dependencies and was closed after completion.
+- Added `NearbyQuestRefreshPlanService`.
+- Added `NearbyQuestRefreshPlanServiceTests`.
+- The plan service composes:
+  - `WorldMapInstanceRuntimeState.QuestIds`
+  - `NearbyQuestTemplateTable`
+  - `NearbyQuestMarkerProjectionService`
+- It returns explicit non-sending plan status, world quest-id count, marker DTOs, rejected quest ids, rejection counts, and whether unsupported dependencies were encountered.
+- Fail-closed statuses cover missing world instance, missing quest-template table, no world quest ids, and no markers.
+- The read-only XML analysis clarified the next predicate slice:
+  - implement `finished`, `unfinished`, `noacquired`, `acquired`, and `required_title`
+  - preserve Java nearby behavior that `equipped` passes when `warn = false`
+  - keep inventory items, combine skill, time-based repeat cooldowns, and NPC faction as separate follow-up slices
+- Kept packet sends, `CM_LEVEL_READY` nearby integration, NPC-spawn delayed refresh, production `StaticData` integration, and production ItemPurification dispatch disabled.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~NearbyQuestRefreshPlanServiceTests` passed with 4 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1701 tests.
+
+#### Migration Parity Table - Session 998
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestRefreshPlanService` | Controller / Quest UI Refresh Plan | Partial | Unit Tested | Partial Parity | Adds a non-sending plan boundary that composes staged marker projection and rejection counts. It fails closed for missing instance/template data. It does not resolve live map regions, send `SM_NEARBY_QUESTS`, schedule delayed refresh, or claim Java `HashMap` order parity. |
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestMarkerProjectionService`; `NearbyQuestRefreshPlanService` | Controller / Quest UI Projection Dependency | Partial | Unit Tested | Partial Parity | Plan service delegates marker generation to the staged projection service. Unsupported predicate dependencies are surfaced through rejection counts; no live packet send occurs. |
+| `com.aionemu.gameserver.world.WorldMapInstance` | `Aion.GameServer.World.WorldMapInstanceRuntimeState`; `NearbyQuestRefreshPlanService` | World / Quest Registry Dependency | Partial | Unit Tested | Partial Parity | Plan consumes an already available staged world-instance quest-id set. Production NPC spawn, map-region parent lookup, 1500 ms delayed refresh scheduling, and threading remain unported. |
+| `com.aionemu.gameserver.model.templates.QuestTemplate`; `com.aionemu.gameserver.dataholders.QuestsData` | `Aion.GameServer.Dataholders.NearbyQuestTemplateTable`; `NearbyQuestRefreshPlanService` | Dataholder / Quest Template Dependency | Partial | Unit Tested | Needs Verification | Plan fails closed when the staged template table is missing and delegates per-quest lookup to the staged predicate. Production JAXB/`StaticData` loading and XML start-condition data remain unported. |
+| `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `Aion.GameServer.Services.NearbyQuestStartConditionService`; `NearbyQuestRefreshPlanService` | Service / Quest Predicate Dependency | Partial | Unit Tested | Partial Parity | Plan reports rejection counts from the staged predicate. Full XML start conditions, inventory checks, combine-skill, NPC faction, exception/log behavior, and time-based repeat timing remain unsupported. |
+| `com.aionemu.gameserver.model.templates.quest.XMLStartCondition` | Future C# XML start-condition predicate | Dataholder / Predicate | Not Started | Manual Only | Needs Verification | Read-only sub-agent analysis clarified optional `finished` rows, mandatory non-finished rows, reward matching, repeatable prerequisite complete count, `acquired` COMPLETE behavior, `required_title` enforcement, and `equipped` warn gating. No C# predicate code added yet. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `Aion.GameServer.Network.Aion.ServerPackets.SmNearbyQuests`; `NearbyQuestRefreshPlanService` | Server Packet / Plan Output Dependency | Complete | Unit Tested | Verified Parity | Packet byte parity remains covered by existing tests. UOW-998 only prepares marker DTOs in a plan; it does not serialize or send the packet. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `NearbyQuestRefreshPlanServiceTests.CreatePlan_FailsClosedWithoutWorldInstanceOrQuestTemplates` | Unit | Java `PlayerController.updateNearbyQuests` prerequisites and C# staged safety gates | Validates missing instance/template table do not produce a send-ready plan. | Deterministic C# fail-closed test around Java-derived refresh prerequisites. | Java does not have this exact null-plan object; this is a staged safety boundary. |
+| `NearbyQuestRefreshPlanServiceTests.CreatePlan_ReturnsNoWorldQuestIdsWithoutSending` | Unit | Java `WorldMapInstance.getQuestIds` candidate source | Validates empty world quest-id set returns no-send status. | Deterministic C# test over staged world-state boundary. | Does not invoke live map-region lookup. |
+| `NearbyQuestRefreshPlanServiceTests.CreatePlan_ComposesMarkersAndRejectionReasonsWithoutSending` | Unit | Java `PlayerController.updateNearbyQuests` filtering through `QuestService.checkStartConditions` | Validates marker projection, rejected quest ids, rejection counts, and unsupported-dependency reporting. | Deterministic C# test over Java-source-derived staged services. | Does not serialize/send `SM_NEARBY_QUESTS`. |
+| `NearbyQuestRefreshPlanServiceTests.CreatePlan_ReturnsNoMarkersWhenAllQuestIdsAreRejected` | Unit | Java nearby predicate filtering before packet send | Validates all-rejected plans are not send-ready and report supported early-gate rejection counts. | Deterministic C# test over staged predicate. | No Java runtime comparison. |
+| Read-only sub-agent XMLStartCondition analysis | Manual | Java `XMLStartCondition`, `FinishedQuestCond`, `QuestTemplate.getRequiredConditionCount`, `QuestState`, `QuestStatus`, and `QuestStateList` | Documents the next XML predicate slice and edge cases. | Source-reviewed report; agent made no edits and was closed. | No C# implementation yet. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- The refresh plan service is non-sending and has no production caller.
+- `CM_LEVEL_READY` nearby marker send is absent in C#.
+- NPC-spawn delayed refresh fanout and Java 1500 ms debounce are absent in C#.
+- Production `StaticData`/`DataManager`, player-controller refresh, and ItemPurification dispatch remain disabled.
+- XML start-condition, inventory item, combine-skill, NPC faction, and time-based repeat semantics are still unsupported.
+- Java `HashMap`/set ordering is not claimed.
+- Reflection/dynamic handler execution and production startup integration remain unported.
+- No date/time behavior was added; repeat-cycle date/time remains unsupported from prior units.
+- Serialization was not changed in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 7 in this unit
+- Total artifacts ported: 1 non-sending refresh-plan boundary in this unit
+- Total artifacts with verified parity: 1 existing packet artifact referenced by this unit
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 5 blocked/not-started categories: production send method, level-ready send trigger, delayed NPC-spawn refresh scheduler, production static-data integration, and unsupported predicate dependencies
+- Estimated overall migration completion: Phase 6 remains about 70% complete; this unit adds a non-sending plan boundary without enabling live nearby quest refresh.
+
+Next recommended unit of work:
+- Add a narrow XML start-condition staged data model and predicate slice for `finished`, `unfinished`, `noacquired`, `acquired`, and `required_title`, preserving Java nearby behavior that `equipped` passes when `warn = false`. Keep inventory items, combine skill, time-based repeat cooldowns, NPC faction, packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.
+- Alternative safe slice: broaden refresh-plan audits across representative player archetypes.
+
+---
+
 ## Next Steps
 
 1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure ItemPurification quest-notification projection, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, the handler-level ItemPurification workflow/application/packet-plan composition bridge, the ItemPurification runtime-input packet bridge, the ItemPurification ready concrete-packet send bridge, the ItemPurification target object-id allocation bridge, the ItemPurification random-bonus selection seam, the ItemPurification non-persistent mutation snapshot preview, the ItemPurification non-persistent handler mutation bridge, the ItemPurification live mutation adapter boundary, the ItemPurification live execution composition seam, the ItemPurification live AP rank-drop metadata regression, the ItemPurification explicit live AP player-packet emission bridge, the ItemPurification explicit live AP rank-update broadcast bridge, the ItemPurification explicit live equipment rank-limit state mutation bridge, the ItemPurification explicit live equipment rank-limit packet fanout bridge, the ItemPurification explicit live abyss skill refresh bridge, the ItemPurification explicit opt-in quest notification no-op seam, the ItemPurification explicit transform-min-rank config plumbing, the ItemPurification quest-update items audit, the ItemPurification quest-update item static-data projection, the ItemPurification no-op nearby-refresh planning seam, the ItemPurification no-op nearby-refresh dispatcher seam, the ItemPurification nearby quest refresh surface audit, the ItemPurification nearby quest packet prerequisite, the ItemPurification nearby quest world-instance registry prerequisite, the ItemPurification nearby quest start-registration table prerequisite, the ItemPurification handler opt-in live execution seam, the ItemPurification persistence plan analysis, the ItemPurification repository contract/payload plumbing, the ItemPurification inserted target item-stone persistence, the ItemPurification opt-in persistent live execution seam, the ItemPurification handler-level opt-in persistent execution helper, the ItemPurification handler-level persistence failure-ordering regression, the ItemPurification automatic-dispatch readiness policy, the ItemPurification staged dispatch-failure policy, the ItemPurification Java observer design, the ItemPurification opt-in DB integration happy path, the ItemPurification opt-in DB rollback path, the ItemPurification AP/quest readiness audit, the pure ItemCharge AP spend guard, and the live ItemCharge selected-item/charge-all AP guard consolidation now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. ItemCharge Kinah payment guard/consolidation, charge-all stale-item payment-before-revalidation hardening, mixed stale/current charge-all AP regression coverage, mixed stale/current charge-all Kinah regression coverage, missing/current charge-all AP approximation coverage, and missing/current charge-all Kinah approximation coverage are now staged for live selected-item/charge-all paths. Move next to Java observer artifact generation when tooling is available, nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another existing planner live adapter when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player/equipment/skill packets, AP/login rank-limited equipment persistence, configured abyss transform skill updates, rank config load, and real quest handler dispatch. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
