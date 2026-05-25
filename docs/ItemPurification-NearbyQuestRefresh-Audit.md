@@ -1,7 +1,7 @@
 # ItemPurification Nearby Quest Refresh Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-980, updated by UOW-981
+Unit of Work: UOW-980, updated by UOW-981 and UOW-982
 
 ## Purpose
 
@@ -28,6 +28,7 @@ The Java project remains the source of truth. This document does not enable prod
 - `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmQuestCompletedList.cs`
 - `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmNearbyQuests.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/WorldNpcQuestDropService.cs`
+- `dotnetConversion/src/Aion.GameServer/World/WorldMapInstanceRuntimeState.cs`
 
 ## Java Behavior
 
@@ -64,7 +65,7 @@ Other Java call sites also use `updateNearbyQuests`, including item get/remove v
 - UOW-979 adds `IItemPurificationNearbyQuestRefreshDispatcher` and `NoOpItemPurificationNearbyQuestRefreshDispatcher`, an explicit no-op dispatch seam.
 - C# currently has quest state packets such as `SmQuestList` and `SmQuestCompletedList`, and quest-drop static-data/runtime services for NPC drops.
 - UOW-981 adds `SmNearbyQuests` and `NearbyQuestMarker`, with packet tests for empty, available, and not-yet-available marker payloads.
-- No C# world-map-instance quest id registry equivalent was found.
+- UOW-982 adds a minimal `WorldMapInstanceRuntimeState` quest-id registry and `RegisterQuestStartIds` method, matching Java's duplicate-collapsing `questIds.add(id)` behavior. It is not yet wired to NPC spawn or dynamic quest handlers.
 - No C# `QuestNpc` registration table equivalent for dynamic quest handler `addOnQuestStart` was found.
 - No C# `QuestService.checkStartConditions` equivalent was found for this nearby-quest UI path.
 - No C# player-controller method currently invokes real nearby quest refresh.
@@ -73,7 +74,7 @@ Other Java call sites also use `updateNearbyQuests`, including item get/remove v
 
 A real ItemPurification nearby-refresh dispatcher cannot be a direct call from the current no-op seam yet. It still needs lower-level surfaces first:
 
-1. A way to represent the candidate quest ids for the player's current world-map instance.
+1. A way to populate the player's current world-map instance quest ids from dynamic `QuestNpc.onQuestStart` registrations during NPC spawn.
 2. A Java-equivalent or deliberately staged `QuestService.checkStartConditions` surface for the nearby UI path, including `allowedDiffToMinLevel = 2`.
 3. A level-requirement-difference calculator that matches Java's grey-marker bit behavior.
 4. A player/connection send boundary that can emit the packet without enabling production `CM_ITEM_PURIFICATION`.
@@ -81,10 +82,11 @@ A real ItemPurification nearby-refresh dispatcher cannot be a direct call from t
 Completed prerequisite:
 
 - UOW-981 implements the `SmNearbyQuests` packet byte layout with C# unit tests. This does not compute marker lists or send the packet from a player-controller refresh path.
+- UOW-982 implements the minimal world-map instance quest-id registry with unit tests. This does not dynamically populate it from quest handlers or schedule Java's delayed 1500 ms refresh.
 
 ## Parity Gaps
 
-- C# cannot yet compute nearby quest marker lists from a player's map-region/world-instance state.
+- C# cannot yet compute nearby quest marker lists from a player's map-region/world-instance state because registry population and start-condition filtering remain missing.
 - C# lacks dynamic quest handler registration data that populates Java `QuestNpc.onQuestStart`.
 - C# lacks Java-equivalent quest start-condition checks for this UI path.
 - Java's `HashMap` iteration order is not stable; C# must avoid claiming packet order parity without runtime or deterministic Java artifact evidence.
@@ -92,9 +94,9 @@ Completed prerequisite:
 
 ## Recommended Next Implementation Slice
 
-Add only the next candidate-calculation prerequisite:
+Add only the next candidate-population prerequisite:
 
-1. Audit or introduce a read-only world-map quest-id registry model equivalent to Java `WorldMapInstance.questIds`.
+1. Audit or introduce a staged `QuestNpc.onQuestStart` registration source that can populate `WorldMapInstanceRuntimeState.RegisterQuestStartIds` without invoking real dynamic handlers.
 2. Keep `QuestService.checkStartConditions`, packet sending, dynamic quest handlers, and real ItemPurification dispatch disabled until the candidate source is understood.
 
 ## Migration Parity Table
@@ -105,7 +107,7 @@ Add only the next candidate-calculation prerequisite:
 | `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `Aion.GameServer.Network.Aion.ServerPackets.SmNearbyQuests`; `Aion.GameServer.Network.Aion.ServerPackets.NearbyQuestMarker` | Server Packet / DTO | Complete | Unit Tested | Verified Parity | UOW-981 verifies deterministic payload layout from Java source: `C(0)`, negative count as unsigned `H`, and `1 << 17` marker bit for positive level diff. Packet order parity is only for caller-provided marker order; Java `HashMap` iteration order is not claimed. |
 | `com.aionemu.gameserver.network.aion.ServerPacketsOpcodes` | `Aion.GameServer.Network.Aion.ServerPackets.SmNearbyQuests.PacketOpCode` | Opcode Mapping | Complete | Unit Tested | Verified Parity | Java registers `SM_NEARBY_QUESTS` opcode `127` (`S_UPDATE_ZONE_QUEST`); C# packet uses opcode `127`. |
 | `com.aionemu.gameserver.services.QuestService.checkStartConditions` | Not started for nearby quest UI | Service / Quest Predicate | Not Started | No Tests | Unknown | Needed with `allowedDiffToMinLevel = 2`, `warn = false`, and no skip flags. Full Java predicate has quest state, repeat-count, race, precondition, and level gates; C# equivalent is missing. |
-| `com.aionemu.gameserver.world.WorldMapInstance` | Future C# world-map quest registry | World / Quest Registry | Partial | Manual Only | Needs Verification | C# has world/NPC spawn services, but no discovered equivalent of Java instance-level `questIds` populated from `QuestNpc.onQuestStart`. |
+| `com.aionemu.gameserver.world.WorldMapInstance` | `Aion.GameServer.World.WorldMapInstanceRuntimeState` | World / Quest Registry | Partial | Unit Tested | Partial Parity | UOW-982 adds duplicate-collapsing quest-id registry storage and registration result semantics. It does not wire Java `addObject(Npc)`, delayed 1500 ms refresh scheduling, map-region lookup, or player sends. |
 | `com.aionemu.gameserver.model.templates.quest.QuestNpc` | Not started for dynamic quest start registration | Quest Handler Registration | Not Started | No Tests | Unknown | Java dynamic handlers call `registerQuestNpc(...).addOnQuestStart`; C# dynamic quest handler registration is not ported for this path. Reflection/dynamic loading differences are significant. |
 
 ## Tests Added/Updated
@@ -115,21 +117,22 @@ Add only the next candidate-calculation prerequisite:
 | `GamePacketTests.ServerPacketPayloads_MatchJavaShapes` (`SmNearbyQuests` empty case) | Unit | Java `SM_NEARBY_QUESTS.writeImpl` | Validates empty payload writes `C(0)` and zero negative count. | Deterministic byte assertion from source-reviewed Java packet layout. | No Java runtime capture. |
 | `GamePacketTests.ServerPacketPayloads_MatchJavaShapes` (`SmNearbyQuests` available case) | Unit | Java `SM_NEARBY_QUESTS.writeImpl` | Validates one marker writes negative count and unflagged quest id. | Deterministic byte assertion from source-reviewed Java packet layout. | Does not calculate candidates. |
 | `GamePacketTests.ServerPacketPayloads_MatchJavaShapes` (`SmNearbyQuests` not-yet-available case) | Unit | Java `SM_NEARBY_QUESTS.writeImpl` | Validates positive level diff sets bit `1 << 17` before writing the quest id. | Deterministic byte assertion from source-reviewed Java packet layout. | Packet order follows provided marker order; Java `HashMap` runtime order is not claimed. |
+| `WorldMapRuntimeStateTests.WorldMapInstanceRuntimeState_TracksQuestStartIdsLikeJavaWorldMapInstance` | Unit | Java `WorldMapInstance.addObject(Npc)` and `QuestNpc.getOnQuestStart` | Validates quest ids are stored once, repeated ids do not report a new addition, and newly registered ids are visible via snapshot. | Deterministic test from Java source-reviewed set semantics. | Does not invoke NPC spawn, `QuestEngine.getQuestNpc`, delayed refresh scheduling, or packet send. |
 
 ## Remaining Risks
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
 - No C# quest start-condition evaluator exists for nearby quest UI.
 - No C# dynamic quest handler registration table exists for `QuestNpc.onQuestStart`.
-- No C# world-instance quest id registry has been verified for this nearby-quest path.
+- C# world-instance quest id registry storage exists, but it is not populated from NPC spawn or dynamic quest handlers.
 - The current ItemPurification dispatcher seam must remain no-op until these lower-level surfaces exist.
 - Automatic `CM_ITEM_PURIFICATION` dispatch remains plan-only and must stay disabled.
 
 ## Summary Metrics
 
 - Total Java artifacts discovered: 6
-- Total artifacts ported: 2 packet/opcode artifacts for the nearby-quest packet prerequisite
+- Total artifacts ported: 3 packet/opcode/registry artifacts for the nearby-quest prerequisites
 - Total artifacts with verified parity: 2
 - Total artifacts needing verification: 4
-- Total blocked artifacts: 3 blocked/not-started categories, including nearby quest candidate calculation, quest start-condition evaluation, and dynamic quest handler registration
+- Total blocked artifacts: 3 blocked/not-started categories, including dynamic quest-id population, quest start-condition evaluation, and dynamic quest handler registration
 - Estimated overall migration completion: Phase 6 remains about 70% complete
