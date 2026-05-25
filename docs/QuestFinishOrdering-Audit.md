@@ -112,13 +112,14 @@ The NPC faction update persists:
 - UOW-1018 adds `QuestFinishRewardPlanService`, a non-live reward/work-item descriptor planner with Java-shaped reward-group correction and work-item removal metadata.
 - UOW-1019 composes `QuestFinishRewardPlanService` into `QuestFinishOperationPlanService` through an optional reward projection, keeping detailed reward/work-item descriptors before staged quest-state mutation.
 - UOW-1020 adds `docs/QuestCompletionCallback-Audit.md`, documenting Java completion callback registration, dynamic handler loading, dispatch ordering, and follow-up quest side effects.
+- UOW-1021 adds `docs/QuestPersistenceContract-Audit.md`, documenting logout/store ordering, quest DAO commit behavior, NPC-faction write behavior, and Java persistent-state gaps.
 - C# has quest and NPC faction read hydration, but no corresponding write persistence path for these completion mutations.
 - C# has packet serializers for quest list/completed-list shapes and a non-sending `SM_QUEST_ACTION(ActionType.UPDATE, qs)` body. No production quest-finish send path is wired.
 - C# has no `QuestEngine.onQuestCompleted` equivalent or production nearby-refresh send trigger wired to quest completion.
 
 ## Recommended Implementation Slices
 
-1. Audit quest-state and NPC-faction persistence contracts before replacing deferred persistence descriptors with repository plans.
+1. Add non-live quest and NPC-faction persistence operation plans before replacing deferred persistence descriptors with repository writes.
 2. Add a non-live callback dispatch plan only after deciding how to model Java handler registration order and exception behavior.
 3. Connect `SmQuestAction.Update` to the staged operation plan only as a non-live packet descriptor/object.
 4. Wire live sends and DAO writes only behind explicit opt-in tests.
@@ -133,3 +134,4 @@ The NPC faction update persists:
 - Persistence is deferred and split across player-store phases, so immediate quest completion is not transactional with later DAO writes.
 - `PlayerQuestListDAO.store` commits delete/insert/update phases separately and does not rollback on helper-level SQL errors; matching or intentionally changing this behavior needs a deliberate persistence design.
 - The C# operation plan uses descriptors for side effects; callers must not treat descriptor presence as live execution.
+- C# lacks Java `PersistentState` tracking for quest and NPC-faction snapshots, so future write plans need explicit operation inputs or a state-tracking model.
