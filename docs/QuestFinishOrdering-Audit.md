@@ -120,15 +120,15 @@ The NPC faction update persists:
 - UOW-1026 composes optional callback dispatch plans into `QuestFinishOperationPlanService` as detailed non-live descriptors after the quest update packet and before NPC-faction completion.
 - UOW-1027 adds `QuestCompletionFollowUpPlanService`, a non-live planner for default callback follow-up `LOCKED`/`START` quest result and callback-triggered quest-action packet intent.
 - UOW-1028 composes optional follow-up result plans into callback descriptors.
+- UOW-1029 adds regression coverage proving nested follow-up result payloads survive through quest-finish callback composition.
 - C# has quest and NPC faction read hydration, but no corresponding write persistence path for these completion mutations.
 - C# has packet serializers for quest list/completed-list shapes and a non-sending `SM_QUEST_ACTION(ActionType.UPDATE, qs)` body. No production quest-finish send path is wired.
 - C# has no `QuestEngine.onQuestCompleted` equivalent or production nearby-refresh send trigger wired to quest completion.
 
 ## Recommended Implementation Slices
 
-1. Add a focused quest-finish operation-plan regression for nested callback follow-up result payloads.
-2. Decide persistence failure-ordering policy before replacing detailed descriptors with repository writes.
-3. Wire live sends, live callbacks, and DAO writes only behind explicit opt-in tests.
+1. Decide persistence failure-ordering policy before replacing detailed descriptors with repository writes.
+2. Wire live sends, live callbacks, and DAO writes only behind explicit opt-in tests.
 
 ## Remaining Risks
 
