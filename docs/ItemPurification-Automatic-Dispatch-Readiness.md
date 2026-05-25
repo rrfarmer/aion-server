@@ -65,9 +65,11 @@ Required before automatic dispatch:
 - Repository failure behavior must be tested against the real transaction path, not only `EmptyPlayerEnterWorldRepository`.
 - The C# transaction boundary must remain documented as an intentional safety difference unless Java runtime evidence proves partial category commits are required.
 
-Current status: not satisfied. Fake repository, row-mapper tests, and one live DB happy-path test exist, but failure/rollback and Java runtime comparison are still missing.
+Current status: not satisfied. Fake repository, row-mapper tests, one live DB happy-path test, and one live DB rollback test exist, but Java runtime comparison, quest callbacks, AP side effects, packet ordering, and the automatic-dispatch failure policy are still missing.
 
 UOW-963 adds and live-runs an opt-in game-server MySQL integration test for `SaveItemPurificationMutationAsync`, gated by `AION_GAMESERVER_DB_INTEGRATION=1`. It passed against a Docker-hosted Java-shaped `aion_gs` schema on `localhost:3307`, covering the happy-path repository writes for inventory rows, `item_stones`, and `abyss_rank`. This satisfies the first live DB smoke gate only; failure/rollback behavior, Java runtime comparison, quest callbacks, AP side effects, and automatic dispatch remain open.
+
+UOW-964 adds and live-runs a second opt-in MySQL integration test that updates one material row, then forces a missing required-delete failure and verifies the earlier update is rolled back. This records the intentional C# one-transaction safety behavior against the Java-shaped schema. Java's `InventoryDAO` category-level commits remain source-reviewed only and still need Java runtime failure comparison before the transaction-boundary difference can be considered fully characterized.
 
 ### 2. Failure Policy
 
@@ -127,8 +129,9 @@ Current status: not satisfied. Several storage behaviors are intentionally simpl
 
 Do not wire `HandleInfrastructurePacketAsync` to `HandleItemPurificationPersistentLiveExecutionAsync` until all checklist items are complete or explicitly waived in a future handoff:
 
-- [ ] Live DB integration coverage for `SaveItemPurificationMutationAsync`.
-- [ ] Inserted target `item_stones` DB integration coverage.
+- [x] Live DB integration coverage for `SaveItemPurificationMutationAsync`.
+- [x] Inserted target `item_stones` DB integration coverage.
+- [x] Repository failure/rollback coverage against the real C# transaction path.
 - [ ] Automatic-dispatch failure policy selected and tested.
 - [ ] Quest get/remove callback strategy implemented or formally deferred.
 - [ ] AP side-effect gap list updated and required side effects implemented for the dispatch scope.
@@ -140,9 +143,9 @@ Do not wire `HandleInfrastructurePacketAsync` to `HandleItemPurificationPersiste
 
 Recommended next units:
 
-1. Add live DB integration coverage for `SaveItemPurificationMutationAsync`.
-2. Add Java runtime observer design notes for ItemPurification packet/DB capture while Java tooling remains unavailable.
-3. Continue narrow ItemCharge regressions if avoiding ItemPurification production dispatch work.
+1. Generate Java runtime observer artifacts for ItemPurification packet/DB capture when Java 25/Maven tooling is available.
+2. Select and test an automatic-dispatch failure policy without enabling production dispatch.
+3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification.
 
 Unsafe next work:
 
