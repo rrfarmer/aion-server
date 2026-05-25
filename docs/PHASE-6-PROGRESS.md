@@ -34426,6 +34426,66 @@ Next recommended unit of work:
 
 ---
 
+### Session 1003 (May 25, 2026)
+- Continued after UOW-1002 by implementing staged combine-skill checks for nearby start conditions.
+- Parallel Work Discovery selected:
+  - Orchestrator-owned implementation for combine-skill predicates in the central nearby predicate/template files.
+  - A read-only sub-agent NPC faction audit, with all writes forbidden. The sub-agent completed and was closed.
+- Java breadcrumbs:
+  - `QuestService.checkCombineSkill` checks `QuestTemplate.combineskill` and `combine_skillpoint`.
+  - `combineskill = -1` means any profession skill: essence/aether tapping plus crafting/construction, except NPC faction 12/13 excludes tapping.
+  - `QuestCategory.TASK` work orders reject skills that are more than 40 points above `combine_skillpoint`.
+  - Nearby checks use `warn = false`, so C# does not emit Java combine-skill warning packets.
+- Added staged `CombineSkillPoint` and `QuestCategory` fields to `NearbyQuestTemplateSummary`.
+- Extended `NearbyQuestTemplateXmlExtractor` to parse `combine_skillpoint` and default `category` to Java's `QUEST`.
+- Extended `NearbyQuestStartConditionService` to evaluate combine-skill requirements against `Player.Skills`.
+- Removed combine-skill from `NearbyQuestRefreshPlan.HasUnsupportedDependencies`; NPC faction remains unsupported.
+- Kept NPC faction predicates, quest-finish repeat-date calculation, live nearby sends, production player-controller refresh, production `StaticData` integration, and production ItemPurification dispatch disabled.
+- NPC faction read-only analysis found the next narrow slice should model `PlayerNpcFactionState` plus a snapshot-level `CanStartQuest(template, now)` for nearby checks, especially Java's mentor/non-mentor slot `timeLimit` behavior.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~NearbyQuestStartConditionServiceTests|FullyQualifiedName~NearbyQuestTemplateXmlExtractorTests|FullyQualifiedName~NearbyQuestRefreshPlanServiceTests|FullyQualifiedName~NearbyQuestMarkerProjectionServiceTests|FullyQualifiedName~QuestNpcStartRegistrationSourceRealDataAuditTests"` passed with 25 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1709 tests.
+
+#### Migration Parity Table - Session 1003
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.QuestService.checkCombineSkill` | `Aion.GameServer.Services.NearbyQuestStartConditionService` | Service / Quest Predicate | Partial | Unit Tested | Partial Parity | Implements staged nearby combine-skill filtering for explicit skill ids, `-1` any-skill sentinel, NPC faction 12/13 tapping exclusion, and `QuestCategory.TASK` upper-bound skip. Warning packet behavior is intentionally absent because nearby checks use `warn = false`. |
+| `com.aionemu.gameserver.model.templates.QuestTemplate` | `Aion.GameServer.Dataholders.NearbyQuestTemplateSummary`; `NearbyQuestTemplateXmlExtractor` | Dataholder / XML Extractor | Partial | Unit Tested | Partial Parity | Adds `CombineSkillPoint` and `QuestCategory` to the existing staged summary. Production JAXB/static-data loading and Java runtime comparison remain unwired. |
+| `com.aionemu.gameserver.model.templates.quest.QuestCategory` | `Aion.GameServer.Dataholders.NearbyQuestTemplateSummary.QuestCategory` | Enum-like XML Dependency | Partial | Unit Tested | Partial Parity | C# preserves the category token as a string for the nearby `TASK` branch only. Full enum modeling and validation of all category values remain out of scope. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerSkillList`; `com.aionemu.gameserver.model.skill.PlayerSkillEntry` | `Aion.GameServer.Model.GameObjects.Player.Skills`; `PlayerSkill` | Player Skill Dependency | Partial | Unit Tested | Partial Parity | Existing player skill DTO supplies `SkillId` and `SkillLevel` for the combine predicate. Skill persistence already exists, but Java runtime comparison for this quest branch remains missing. |
+| `com.aionemu.gameserver.model.gameobjects.player.npcFaction.NpcFactions`; `NpcFaction`; `PlayerNpcFactionsDAO` | Future `PlayerNpcFactionState` / snapshot predicate | Player NPC Faction Dependency | Not Started | Manual Only | Needs Verification | Read-only sub-agent mapped Java behavior. C# still lacks faction state models, repository hydration, active mentor/non-mentor slot reconstruction, and slot-level cooldown checks. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesJavaCombineSkillGate` | Unit | Java `QuestService.checkCombineSkill` | Validates explicit skill id, missing skill point failure, any-skill `-1`, NPC faction 12/13 tapping exclusion, and `TASK` upper-bound behavior. | Deterministic C# test from source-reviewed Java predicate. | Does not compare against a running Java server or emit warning packets. |
+| `NearbyQuestTemplateXmlExtractorTests.Extract_ReadsNearbyPredicateQuestTemplateFieldsLikeJavaQuestTemplate` | Unit | Java `QuestTemplate` JAXB attributes | Now validates `combine_skillpoint` and `category` extraction. | Deterministic C# XML extractor test. | No Java JAXB runtime comparison. |
+| `NearbyQuestTemplateXmlExtractorTests.Extract_AppliesJavaQuestTemplateDefaultsForMissingOptionalFields` | Unit | Java `QuestTemplate` field defaults | Validates `CombineSkillPoint = 0` and `QuestCategory = QUEST` defaults. | Deterministic C# test from source-reviewed Java defaults. | Full `QuestCategory` enum is not modeled. |
+| Read-only NPC faction sub-agent analysis | Manual | Java `QuestService`, `NpcFactions`, `NpcFaction`, `PlayerNpcFactionsDAO`, `QuestsData`, `NpcFactionTemplate` | Documents exact NPC faction nearby predicate behavior and next C# slice. | Source-reviewed report; sub-agent made no edits and was closed. | No C# NPC faction implementation yet. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Combine-skill support is staged and unit-tested, but production static-data integration is absent.
+- Java warning packets are not modeled because nearby checks call with `warn = false`; non-nearby quest acquisition remains outside this staged service.
+- Master-crafting XML required-condition-count adjustment still needs configurable `CraftConfig.MAX_MASTER_CRAFTING_SKILLS` plumbing before non-default configs can be claimed.
+- NPC faction predicates remain unsupported; Java uses active exact faction rows plus mentor/non-mentor slot `timeLimit`, not just per-row cooldown.
+- Quest-finish repeat-date calculation, server-timezone DB verification, packet sends, `CM_LEVEL_READY`, NPC-spawn delayed refresh, production player-controller refresh, and ItemPurification dispatch remain disabled.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 in this unit
+- Total artifacts ported: 2 staged partial artifacts in this unit: combine-skill predicate support and combine/category XML field extraction
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 5 blocked/not-started categories: NPC faction predicates, configurable master-crafting condition adjustment, production static-data integration, quest-finish repeat-date calculation/timezone verification, and live nearby send triggers
+- Estimated overall migration completion: Phase 6 remains about 70% complete; this unit removes the combine-skill nearby predicate blocker without enabling live nearby quest refresh.
+
+Next recommended unit of work:
+- Implement a staged NPC faction state snapshot for nearby checks: model active faction rows, exact faction active check, non-time-based mentor/non-mentor slot cooldown, time-based cooldown skip, and deterministic tests. Keep repository hydration, live sends, production integration, and ItemPurification dispatch disabled until the model tests are green.
+
+---
+
 ## Next Steps
 
 1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure ItemPurification quest-notification projection, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, the handler-level ItemPurification workflow/application/packet-plan composition bridge, the ItemPurification runtime-input packet bridge, the ItemPurification ready concrete-packet send bridge, the ItemPurification target object-id allocation bridge, the ItemPurification random-bonus selection seam, the ItemPurification non-persistent mutation snapshot preview, the ItemPurification non-persistent handler mutation bridge, the ItemPurification live mutation adapter boundary, the ItemPurification live execution composition seam, the ItemPurification live AP rank-drop metadata regression, the ItemPurification explicit live AP player-packet emission bridge, the ItemPurification explicit live AP rank-update broadcast bridge, the ItemPurification explicit live equipment rank-limit state mutation bridge, the ItemPurification explicit live equipment rank-limit packet fanout bridge, the ItemPurification explicit live abyss skill refresh bridge, the ItemPurification explicit opt-in quest notification no-op seam, the ItemPurification explicit transform-min-rank config plumbing, the ItemPurification quest-update items audit, the ItemPurification quest-update item static-data projection, the ItemPurification no-op nearby-refresh planning seam, the ItemPurification no-op nearby-refresh dispatcher seam, the ItemPurification nearby quest refresh surface audit, the ItemPurification nearby quest packet prerequisite, the ItemPurification nearby quest world-instance registry prerequisite, the ItemPurification nearby quest start-registration table prerequisite, the ItemPurification handler opt-in live execution seam, the ItemPurification persistence plan analysis, the ItemPurification repository contract/payload plumbing, the ItemPurification inserted target item-stone persistence, the ItemPurification opt-in persistent live execution seam, the ItemPurification handler-level opt-in persistent execution helper, the ItemPurification handler-level persistence failure-ordering regression, the ItemPurification automatic-dispatch readiness policy, the ItemPurification staged dispatch-failure policy, the ItemPurification Java observer design, the ItemPurification opt-in DB integration happy path, the ItemPurification opt-in DB rollback path, the ItemPurification AP/quest readiness audit, the pure ItemCharge AP spend guard, and the live ItemCharge selected-item/charge-all AP guard consolidation now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. ItemCharge Kinah payment guard/consolidation, charge-all stale-item payment-before-revalidation hardening, mixed stale/current charge-all AP regression coverage, mixed stale/current charge-all Kinah regression coverage, missing/current charge-all AP approximation coverage, and missing/current charge-all Kinah approximation coverage are now staged for live selected-item/charge-all paths. Move next to Java observer artifact generation when tooling is available, nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another existing planner live adapter when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player/equipment/skill packets, AP/login rank-limited equipment persistence, configured abyss transform skill updates, rank config load, and real quest handler dispatch. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.

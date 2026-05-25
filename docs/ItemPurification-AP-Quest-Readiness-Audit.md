@@ -130,6 +130,7 @@ Current C# status:
 - UOW-1000 hydrates Java-schema `player_quests.reward` into `PlayerQuestState.RewardGroup`, removing the production-load gap for XML `finished reward` checks while leaving repeat timing and live sends disabled.
 - UOW-1001 adds staged nearby inventory item precondition support, matching Java `inventoryItemCheck` by checking item-id presence only. Optional XML counts are parsed but not enforced in this gate. A read-only repeat-timing analysis records the next date/time slice.
 - UOW-1002 adds the narrow nearby repeat-timing slice: `PlayerQuestState.NextRepeatTime`/`CompleteTime`, repository hydration for `next_repeat_time`/`complete_time`, repeat-cycle token preservation, and deterministic Java `QuestState.canRepeat()` edge-case tests.
+- UOW-1003 adds staged nearby combine-skill checks, matching Java `QuestService.checkCombineSkill` for explicit skills, the `-1` any-skill sentinel, NPC faction 12/13 tapping exclusion, and `TASK` work-order upper-bound behavior.
 - Partial material count updates do not need item-remove callbacks under Java behavior.
 - Live mutation replaces the player inventory snapshot and applies AP, but intentionally leaves persistence, sends, quest callbacks, and rollback outside its boundary.
 - Production `HandleInfrastructurePacketAsync` still routes `CmItemPurification` to the plan-only `HandleItemPurificationAsync` path.
@@ -146,7 +147,7 @@ Quest parity gaps:
 Safe quest next tests:
 
 - Add a disabled or no-op `IQuestItemMutationNotifier` seam behind explicit opt-in live execution only, preserving automatic dispatch disabled.
-- Continue toward combine/NPC-faction predicate support or broader refresh-plan audits before any player-controller refresh adapter; keep it disconnected from production ItemPurification dispatch before invoking any live quest handlers.
+- Continue toward NPC-faction predicate support or broader refresh-plan audits before any player-controller refresh adapter; keep it disconnected from production ItemPurification dispatch before invoking any live quest handlers.
 
 ## Readiness Impact
 
