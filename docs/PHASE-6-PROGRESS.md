@@ -27719,6 +27719,70 @@ Next recommended unit of work:
 
 ---
 
+### Session 882 (May 25, 2026)
+- Continued after UOW-881 with the safe C# comparison-readiness candidate from the handoff: decoded reward-add packet assertions for decompose success paths.
+- Re-read the required migration, orchestration, parity, progress, and latest handoff docs. `docs/commit-conventions.md` remains absent, so this unit continued the established `[Phase 6][UOW-###] ...` style.
+- Performed Parallel Work Discovery across Java proof validation, C# reward-add field assertions, JSON observation projection, and live-server runbook work. Selected reward-add field assertions because local Java 25/Maven tooling remains unavailable and the test fixture ownership is sequential.
+- Updated `GameServerConnectionInventoryExpansionUseItemTests` so decompose reward-add assertions decode `SmInventoryAddItem` instead of only asserting packet type.
+- Added `AssertInventoryAddPayload` coverage for Java-shaped decomposable reward add packets:
+  - add type `SmInventoryAddItem.Decomposable` / Java `ItemAddType.DECOMPOSABLE` mask `0x50`
+  - item count `1`
+  - generated reward object id `1` in deterministic fixtures
+  - reward item ids `200`, `201`, or `202`
+  - general-info blob reward counts `1`, `2`, or `3`
+  - slot sentinel `65535`
+  - cloth flag `0`
+- Applied the decoded add-packet assertion to normal scheduled decompose, source-delete decompose, selectable decompose, full-cube selectable overflow behavior, packet-dispatch selectable handling, and encrypted socket paths.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests --no-restore` passed with 29 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1450 tests.
+
+#### Migration Parity Table - Session 882
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_ADD_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryAddItem` | Server Packet | Partial | Regression Tested | Partial Parity | Tests now decode add type `0x50`, single reward count, object id, item id, blob count, slot sentinel, and cloth flag for decompose reward adds. Java runtime bytes remain uncaptured, so parity is not verified. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.ItemAddType.DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryAddItem.Decomposable` | Packet Metadata | Complete | Regression Tested | Partial Parity | C# constant `0x50` is decoded in reward-add tests and matches reviewed Java source. Runtime packet comparison remains missing. |
+| `com.aionemu.gameserver.network.aion.iteminfo.ItemInfoBlob` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryInfo.WriteItemInfoBlob` | Serialization Utility | Partial | Regression Tested | Partial Parity | Tests decode the first general-info blob entry and reward count only. Other Java blob entries, optional stats, temporary data, serialization edge cases, precision/rounding concerns, and equipment-specific fields remain outside this unit. |
+| `com.aionemu.gameserver.services.item.ItemService.addItem` | `Aion.GameServer.Network.Aion.GameServerConnection.SendDecomposeRewardItemsAsync` | Service / Packet Side Effect | Partial | Regression Tested | Partial Parity | Reward object ids and counts are now asserted for deterministic fixture rewards. Java persistence, full overflow behavior, DAO side effects, and runtime object-id parity remain unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ClientPackets.CmSelectDecomposable` / `GameServerConnection.HandleSelectDecomposableAsync` | Client Packet Handler | Partial | Regression Tested | Partial Parity | Selectable decompose direct, process-packet, and encrypted socket paths now assert decoded reward-add item ids/counts after the secondary selection packets. Java runtime capture remains missing. |
+| `com.aionemu.gameserver.model.templates.item.actions.DecomposeAction` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleDecomposeUseItemAsync` / scheduled completion | Scheduled Item Action | Partial | Regression Tested | Partial Parity | Normal scheduled decompose direct and encrypted socket paths now assert decoded reward-add fields. Java scheduler/threading order and byte-level runtime output remain unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleUseItemAsync_DecomposeCompletesAndAddsReward` | Regression | Java `DecomposeAction`, `ItemService.addItem`, and `SM_INVENTORY_ADD_ITEM` source review | Direct scheduled decompose decrement path emits decomposable reward add with object id `1`, item `200`, count `1`. | Deterministic C# packet decode aligned to reviewed Java source. | No Java runtime artifact or byte-for-byte comparison. |
+| `HandleUseItemAsync_DecomposeDeletesLastSourceAndAddsReward` | Regression | Java delete-plus-add decompose source review | Source-delete scheduled decompose emits decoded reward add with item `200`, count `1` after delete/cube update. | Deterministic C# packet decode aligned to reviewed Java source. | No Java runtime artifact or object-id comparison. |
+| `HandleSelectDecomposableAsync_SelectableRewardConsumesSourceAndAddsReward` | Regression | Java `CM_SELECT_DECOMPOSABLE.runImpl` and selectable reward source review | Selectable decrement path emits decoded reward item `202`, count `3`. | Deterministic C# packet decode aligned to reviewed Java source. | No Java runtime artifact. |
+| `HandleSelectDecomposableAsync_FullCubeStillAddsSelectableRewardLikeJavaOverflow` | Regression | Java selectable overflow behavior source review | Full-cube selectable path still emits decoded reward add item `202`, count `3`. | C# regression preserves reviewed Java-shaped behavior. | Java runtime overflow artifact remains missing. |
+| `HandleSelectDecomposableAsync_SelectableRewardDeletesSingleCountSource` | Regression | Java selectable delete-plus-add source review | Selectable delete path emits decoded reward item `201`, count `2`. | Deterministic C# packet decode aligned to reviewed Java source. | No Java runtime artifact. |
+| `ProcessPacketAsync_SelectDecomposableDispatchesSelection` | Regression | Java client-packet handler source review | Process-packet dispatch path emits decoded selectable reward add item `202`, count `3`. | C# dispatch regression only. | Java packet processor runtime comparison remains missing. |
+| `RunAsync_EncryptedSelectDecomposableFrameDispatchesSelection` | Socket Loop / Regression | Java encrypted client-frame handling target | Encrypted C# socket path emits decoded selectable reward add item `202`, count `3`. | C# encrypted socket evidence only. | Java encrypted runtime capture remains missing. |
+| `RunAsync_EncryptedUseItemFrameSchedulesAndCompletesDecompose` | Socket Loop / Regression | Java scheduled item-use target | Encrypted C# scheduled decompose emits decoded reward add item `200`, count `1`. | C# encrypted socket evidence only. | Java scheduler/runtime comparison remains missing. |
+| `RunAsync_EncryptedUseItemFrameDeletesLastSourceAndAddsReward` | Socket Loop / Regression | Java scheduled source-delete target | Encrypted C# delete-source decompose emits decoded reward add item `200`, count `1`. | C# encrypted socket evidence only. | Java runtime capture remains missing. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally because Java 25 JDK and Maven are unavailable; `LoopbackCaptureProof` still has not been compiled or run.
+- Reward-add parity is source-reviewed plus C# regression evidence only; no Java packet bytes, unencrypted bodies, encrypted frames, or object-id artifact comparison exists yet.
+- `ItemInfoBlob` coverage in this unit decodes only the first general-info entry count. Additional Java blob entries, equipment fields, temporary data, serialization differences, and unsupported Java behavior remain unverified.
+- Deterministic reward object id `1` is fixture-specific and may differ from live Java ID allocation depending on IDFactory state and persistence.
+- Threading/scheduler ordering remains unverified against Java runtime output.
+- Full inventory overflow, persistence/DAO, and broadcast/known-list side effects remain partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 0 production code artifacts; 1 decoded reward-add test helper plus 9 updated decompose reward-add assertions
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 8 blocked/not-started categories, including Java loopback proof validation, Java runtime reward-add artifact generation, C# artifact comparison tests, full item-info blob comparison, object-id parity, encrypted frame byte capture, live-client validation, and broader inventory overflow/persistence side effects
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit strengthens C# packet-field evidence without adding Java runtime verification.
+
+Next recommended unit of work:
+- If Java 25/Maven tooling is available, run and harden `LoopbackCaptureProof` before attempting full decompose capture artifacts. If tooling remains blocked, add a C# JSON observation projection for the existing decompose packet sequences so future Java artifacts can be compared mechanically without changing production behavior.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -27728,4 +27792,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Run and harden `LoopbackCaptureProof` under Java 25/Maven tooling when available; while tooling is blocked locally, continue isolated C# packet-field or comparison-readiness work that strengthens decompose parity without claiming Java runtime verification.
+8. Run and harden `LoopbackCaptureProof` under Java 25/Maven tooling when available; while tooling is blocked locally, add a C# JSON observation projection for the existing decompose packet sequences or continue other isolated packet-field comparison-readiness work without claiming Java runtime verification.
