@@ -30118,9 +30118,67 @@ Next recommended unit of work:
 
 ---
 
+### Session 924 (May 25, 2026)
+- Continued after UOW-923 by selecting the recommended pure composed ItemPurification workflow planner.
+- Parallel Work Discovery considered the composed workflow planner, a shared inventory decrement helper refactor, and live `CM_ITEM_PURIFICATION` wiring. Live wiring remains blocked by persistence/fanout and kinah parity decisions.
+- Added `ItemPurificationWorkflowService` to compose existing ItemPurification planner slices in Java order without mutating live AP or persistence state.
+- Ported the composed workflow order at planner level:
+  - resolve base-item purification template and selected result item
+  - run `isPurificationAllowed` validation before any material/base mutation plan
+  - create the material/base/kinah mutation plan only after validation succeeds
+  - create the target inheritance plan only after material planning succeeds
+  - preserve the composed target-object id and injected random-bonus reroll boundary for future live factory/RNG work
+- Validation confirmed that missing materials stop during validation rather than in material mutation when the same inventory snapshot is used.
+- Kept live packet parsing/routing, repository mutation, AP rank mutation, target item allocation/add, system messages, and packet fanout out of scope.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter ItemPurificationWorkflowServiceTests` passed with 4 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1580 tests.
+
+#### Migration Parity Table - Session 924
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_ITEM_PURIFICATION.runImpl` | `Aion.GameServer.Services.ItemPurificationWorkflowService.CreateWorkflowPlan` | Workflow Planner / Packet Boundary Projection | Partial | Regression Tested in C# | Partial Parity | C# composes lookup, validation, material planning, and target inheritance in Java order. Live packet parsing, object lookup, persistence, system messages, and packet fanout remain unported. |
+| `com.aionemu.gameserver.services.item.ItemPurificationService.isPurificationAllowed` | `ItemPurificationWorkflowService` + `ItemPurificationApService.ValidatePurificationAllowed` | Service Validation | Partial | Regression Tested in C# | Partial Parity | Validation is called before material mutation planning. Java warn/audit/system-message side effects remain absent. |
+| `com.aionemu.gameserver.services.item.ItemPurificationService.decreaseMaterials` | `ItemPurificationWorkflowService` + `ItemPurificationMaterialMutationService.CreateDecreaseMaterialsPlan` | Service Mutation Planner | Partial | Regression Tested in C# | Partial Parity | Material/base/kinah plan is only created after validation succeeds. Live inventory/AP/Kinah mutation and persistence remain unported. |
+| `com.aionemu.gameserver.services.item.ItemPurificationService.upgradeItem` | `ItemPurificationWorkflowService` + `ItemPurificationInheritanceService.CreateTargetItemPlan` | Service Target Projection | Partial | Regression Tested in C# | Partial Parity | Target inheritance is only planned after material planning succeeds. Live `ItemFactory.newItem`, inventory add, random-bonus selection, persistence, and fanout remain missing. |
+| `com.aionemu.gameserver.dataholders.ItemPurificationData` | `Aion.GameServer.Dataholders.ItemPurificationTable` consumed by workflow planner | Static Data Lookup | Partial | Regression Tested in C# | Partial Parity | Workflow planner resolves base template and result item before validation. Java JAXB/null lifecycle is not runtime-compared. |
+| `com.aionemu.gameserver.model.templates.item.ItemTemplate` | `Aion.GameServer.Dataholders.ItemTemplateTable` consumed by workflow planner | Static Data Lookup / DTO | Partial | Regression Tested in C# | Needs Verification | Source/target templates are required for inheritance planning. Full template/factory defaults remain outside this unit. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService.addAp` | Not invoked by workflow planner | Service Boundary | Not Started for this workflow | Regression Tested in C# planner | Needs Verification | Workflow intentionally avoids live AP mutation and carries spend projection through material plan. AP rank side effects remain future live work. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateWorkflowPlan_ComposesValidationMaterialMutationAndInheritanceWithoutLiveApMutation` | Regression | Java `CM_ITEM_PURIFICATION` and `ItemPurificationService` source review | Validates lookup/validation/material/target composition, AP spend projection, base/material deletes, target projection, and no live AP mutation. | Deterministic C# regression grounded in Java source ordering. | No live packet, persistence, or packet fanout. |
+| `CreateWorkflowPlan_StopsBeforeMaterialMutationWhenValidationFails` | Regression | Java `isPurificationAllowed` before `decreaseMaterials` source review | Validates enchant failure stops before material or target planning. | Deterministic C# regression. | Java system messages/audit not modeled. |
+| `CreateWorkflowPlan_StopsBeforeMaterialMutationWhenValidationFindsMissingMaterials` | Regression | Java material count validation before decrease source review | Validates missing materials are rejected at validation with no material mutation plan when using one inventory snapshot. | Deterministic C# regression. | Does not model concurrent inventory race between validation and mutation. |
+| `CreateWorkflowPlan_ReportsLookupAndTemplateFailures` | Regression | Java lookup and target-template source review | Validates missing purification template, invalid result, and missing target template statuses. | Deterministic C# regression. | Java live null/NPE behavior and logs remain unported. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Workflow planner is pure and does not parse packets, resolve world/inventory objects, allocate object ids, mutate repositories, send packets, or log audit events.
+- Java concurrent inventory races between validation and material mutation are not modeled beyond the lower-level material planner's defensive failure path.
+- Kinah behavior remains unresolved for live wiring: the composed workflow carries the lower-level documented Java negative-spend no-op.
+- Random bonus selection and target item creation remain injected/projected rather than data-backed live runtime work.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 composed ItemPurification workflow planner slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, live packet handler, object-id allocation/factory add, AP/rank side effects, repository persistence, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 68% complete; this unit composes the ItemPurification planner boundary but not live purification behavior.
+
+Next recommended unit of work:
+- Begin a narrow live `CM_ITEM_PURIFICATION` packet parser/guard adapter only if kept non-persistent, or add a persistence application plan for the composed workflow that lists repository mutations without executing them.
+- Keep actual live mutation/fanout blocked until object-id allocation, inventory add, AP rank side effects, kinah parity decision, and packet ordering are scoped together.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, and material/base/kinah mutation planning now consume their configured/fixed/formula AP and item-state boundaries at planner/service boundaries. Move next to a pure composed ItemPurification workflow planner, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, and the composed ItemPurification workflow planner now consume their configured/fixed/formula AP and item-state boundaries at planner/service boundaries. Move next to a non-persistent `CM_ITEM_PURIFICATION` parser/guard adapter, a persistence application plan for the composed workflow, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
