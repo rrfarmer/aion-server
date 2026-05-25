@@ -26711,6 +26711,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 862 (May 24, 2026)
+- Continued from the Session 861 / Phase 6NI handoff with selectable decompose equipped/non-cube source filtering coverage.
+- Re-read the latest handoff and audited Java `CM_SELECT_DECOMPOSABLE.runImpl` inventory lookup plus the C# guard that only selects unequipped cube-location source items.
+- Performed Parallel Work Discovery across equipped source filtering, non-cube source filtering, inventory-full behavior, normal decompose completion, encrypted socket-loop dispatch, and docs. Implementation stayed single-writer because the safe unit touched the shared item-use fixture.
+- Added `HandleSelectDecomposableAsync_NonCubeOrEquippedSourceDoesNotCallPersistenceOrSendPackets`, covering an equipped source item and a non-cube-location source item.
+- Updated the fixture `CreatePlayer` helper to accept source `IsEquipped` and `Location` overrides while preserving existing defaults.
+- The new theory verifies both guarded cases return before persistence, packet emission, or runtime mutation, and preserves the original source item metadata.
+- Kept the unit deliberately narrow: no inventory-full behavior, no encrypted socket loop, no Java runtime comparison for equipped/non-cube inventory lookup, and no live-client validation.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionInventoryExpansionUseItemTests"` passes with 21 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1437 tests.
+
+#### Migration Parity Table - Session 862
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleSelectDecomposableAsync` / `GameServerConnectionInventoryExpansionUseItemTests.HandleSelectDecomposableAsync_NonCubeOrEquippedSourceDoesNotCallPersistenceOrSendPackets` | Client Packet Handler / Runtime Test | Partial | Regression Tested | Partial Parity | Runtime theory covers C# guards for equipped and non-cube source items: no repository call, no packets, and no runtime mutation. Java `getInventory().getItemByObjId` equipped/location semantics were not runtime-compared, so parity remains partial. |
+| `com.aionemu.gameserver.model.gameobjects.player.Inventory.getItemByObjId` | C# source lookup filter `item.Location == CubeStorageId && !item.IsEquipped` | Inventory Lookup Dependency | Partial | Regression Tested for guarded no-op paths | Needs Verification | C# explicitly rejects equipped and non-cube rows for selectable decompose. Java inventory lookup assumptions around equipped/non-cube items require runtime/source-deeper verification. |
+| `com.aionemu.gameserver.services.item.ItemService.ItemUpdatePredicate` | `IPlayerEnterWorldRepository.SaveDecomposeActionMutationAsync` / repository call counter | Repository Boundary / Test Support | Partial | Regression Tested for no repository call | Partial Parity | Tests assert persistence is not reached when source lookup rejects the item. Live SQL behavior remains unverified. |
+| `com.aionemu.gameserver.services.item.ItemService` / `ItemPacketService.ItemAddType.DECOMPOSABLE` | `InventoryAddService.CreateAddItemPlan` guarded by source lookup success | Inventory Mutation / Reward Add Dependency | Partial | Regression Tested for no-op guard | Partial Parity | Reward planning/add is not reached for equipped/non-cube source rows. Inventory-full behavior remains unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Inventory.decreaseByObjectId` | `ApplySourceItemMutationAsync` guarded by source lookup success | Inventory Mutation / Source Consume Dependency | Partial | Regression Tested for no-op guard | Partial Parity | Source consume is not reached for equipped/non-cube source rows. Java runtime behavior remains unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` / `SM_SYSTEM_MESSAGE` / `SM_SECONDARY_SHOW_DECOMPOSABLE` / inventory packets | C# packet emission guarded by source lookup success | Packet / Early-return Dependency | Partial | Regression Tested for absence on guarded paths | Partial Parity | Equipped/non-cube guarded paths emit no packets. Full packet byte parity and live-client output remain unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GameServerConnectionInventoryExpansionUseItemTests.HandleSelectDecomposableAsync_NonCubeOrEquippedSourceDoesNotCallPersistenceOrSendPackets` | Runtime / Regression | Java source review of `CM_SELECT_DECOMPOSABLE.runImpl`; C# audit of source item lookup guard | Validates C# equipped and non-cube source rows return before repository call, packet emission, or inventory mutation. | Deterministic C# runtime regression for the C# guard, with Java inventory lookup assumptions documented as not runtime-compared. | Uses reflection to call the private handler; does not run Java, Java equipped/non-cube lookup comparison, inventory-full behavior, encrypted socket loop, Java-generated bytes, opcode/frame/crypto, socket fanout, or live-client behavior. |
+
+Remaining risks:
+- Java runtime semantics for equipped/non-cube `getInventory().getItemByObjId` remain unverified.
+- Inventory-full behavior for selectable selection remains untested.
+- Dispatch coverage still bypasses the encrypted socket read loop and active-player setup lifecycle.
+- Java runtime behavior under persistence/DAO failure remains unverified and may differ from the C# deferred-mutation transaction-safety boundary.
+- Full packet byte parity, opcode/frame/crypto, broadcast fanout, socket visibility, threading/date-time precision, serialization side effects, and live-client validation remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 C# runtime regression slice for selectable decompose equipped/non-cube source guards
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 15 blocked/not-started categories, including Java equipped/non-cube lookup comparison, inventory-full behavior, encrypted socket loop, active-player lifecycle, Java persistence failure comparison, full packet byte parity, opcode/frame/crypto, broadcast fanout, socket visibility, serialization side effects, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; selectable decompose selection has extensive C# runtime branch coverage, but Java runtime edge comparison and live/byte-level parity remain partial.
+
+Next recommended unit of work:
+- Move to the next decompose completion gap: add a normal decompose successful completion regression if the existing fixture can wait through the scheduler and assert source consume, reward add, success animation `end=1`, and reward packets. If that is too slow/flaky, add selectable/normal inventory-full behavior through `DecomposeService` first.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -26720,4 +26768,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Add compact equipped/location source filtering coverage for selectable decompose selection: equipped source item and/or non-cube location source should return without repository calls, packets, or runtime mutation, matching C#'s current guard and documenting the Java inventory lookup assumption.
+8. Move to the next decompose completion gap: add a normal decompose successful completion regression if the existing fixture can wait through the scheduler and assert source consume, reward add, success animation `end=1`, and reward packets. If that is too slow/flaky, add selectable/normal inventory-full behavior through `DecomposeService` first.
