@@ -29165,9 +29165,65 @@ Next recommended unit of work:
 
 ---
 
+### Session 908 (May 25, 2026)
+- Continued after UOW-907 by re-reading the required migration docs and latest handoff, confirming `docs/commit-conventions.md` is still missing, and running Parallel Work Discovery across Java AP rate config, AP callers, and existing C# reward/config surfaces.
+- Selected the AP rate config binding slice because Java `RatesConfig` exposes five AP rate arrays used by `Rates`, while C# only bound manastone/enchant rate arrays.
+- Added `GameServerRateOptions` properties and Java property loading for:
+  - `gameserver.rates.ap.pvp.gain`
+  - `gameserver.rates.ap.pvp.loss`
+  - `gameserver.rates.ap.pve`
+  - `gameserver.rates.ap.quest`
+  - `gameserver.rates.ap.dredgion`
+- Added default and `mygs.properties` override assertions in `GameServerOptionsTests`.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameServerOptionsTests --no-restore` passed with 4 tests.
+  - `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed: Commons 57, Chat 29, Login 121, GameServer 1496.
+
+#### Migration Parity Table - Session 908
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.configs.main.RatesConfig` | `Aion.GameServer.Configuration.GameServerRateOptions` / `GameServerOptions.LoadFromJavaConfig` | Configuration | Partial | Regression Tested in C# | Partial Parity | C# now binds Java AP rate keys for PvP gain/loss, PvE, quest, and dredgion with Java defaults and `mygs.properties` override behavior. Other Java rate arrays remain partially modeled; environment override coverage is inherited from the shared loader but not specifically retested for these new AP keys. |
+| `com.aionemu.gameserver.model.gameobjects.player.Rates.AP_PVP` | `GameServerRateOptions.ApPvpGainRates` | Rate Configuration | Partial | Regression Tested in C# | Needs Verification | Config array is now available to future PvP AP reward code. The Java AP boost stat multiplier, member reward distribution, and `Rates.AP_PVP.calcResult` caller integration remain incomplete. |
+| `com.aionemu.gameserver.model.gameobjects.player.Rates.AP_PVP_LOST` | `GameServerRateOptions.ApPvpLossRates` | Rate Configuration | Partial | Regression Tested in C# | Needs Verification | Config array is now available to future PvP AP loss code. Java death-loss calculation and caller integration remain incomplete. |
+| `com.aionemu.gameserver.model.gameobjects.player.Rates.AP_PVE` | `GameServerRateOptions.ApPveRates` | Rate Configuration | Partial | Regression Tested in C# | Partial Parity | Config array is now bound with Java defaults; UOW-907 calculation still accepts rates as caller input and has not yet been wired to `GameServerOptions`. Live AP boost stat lookup remains missing. |
+| `com.aionemu.gameserver.model.gameobjects.player.Rates.AP_QUEST` | `GameServerRateOptions.ApQuestRates` | Rate Configuration | Partial | Regression Tested in C# | Needs Verification | Config array is now available to future quest AP reward code. `QuestService.giveReward` AP branch remains unported/unwired. |
+| `com.aionemu.gameserver.model.gameobjects.player.Rates.AP_DREDGION` | `GameServerRateOptions.ApDredgionRates` | Rate Configuration | Partial | Regression Tested in C# | Needs Verification | Config array is now available to future Dredgion/basic PvP instance reward code. Instance reward handlers remain outside this slice. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `LoadFromJavaConfig_ReadsCoreAndNetworkDefaults` | Regression | Java `RatesConfig` annotations and `game-server/config/main/rates.properties` source review | Validates default AP PvP gain/loss, PvE, quest, and dredgion rate arrays match Java defaults. | Deterministic C# config regression grounded in Java config source. | Does not execute Java `Rates.calcResult`; only verifies binding. |
+| `LoadFromJavaConfig_AppliesMyGsOverridesLast` | Regression | Java property loader override behavior and AP rate property keys | Validates `mygs.properties` overrides all five AP rate arrays with float parsing and ordered values. | Deterministic C# config override regression. | Environment override path is shared but not specifically retested for AP keys. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- AP rate arrays are now configured but not yet consumed by all AP reward/spend callers.
+- `WorldNpcSoloDpRewardService.CalculatePveApGained` still receives AP PvE rates as a parameter and is not yet wired to `GameServerOptions`.
+- Live `PlayerGameStats.getStat(StatEnum.AP_BOOST)` remains represented by an input in existing AP calculations.
+- Remaining AP callers in PvP, Quest, Trade, item purification, Dredgion/basic PvP instances, and team distribution still need convergence through `AbyssPointsService`.
+- Packet bytes, persistence, ranking cache, Legion contribution fanout, and live siege callback execution remain incomplete.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 AP rate configuration slice covering 5 Java AP rate arrays
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, AP caller consumption of config rates, live AP boost stat lookup, PvP/Quest/Dredgion caller integration, persistence/fanout side effects, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit removes the AP rate config blocker for the next AP caller slices.
+
+Next recommended unit of work:
+- Wire `GameServerOptions.Rates.ApPveRates` into the NPC solo AP calculation path, or start a compact PvP AP reward/loss slice around `PvpService` and `PvpDpRewardService` using the newly bound AP rate arrays.
+- Quest AP reward is also unblocked at the config level, but still needs a careful `QuestService.giveReward` AP branch design.
+- Trade and item-purification AP paths likely require broader inventory/dialog/action surfaces and should remain analysis-first.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: add config-bound AP rate options (`gameserver.rates.ap.pve`, quest, PvP gain/loss, dredgion), inspect C# coverage for Java `PvpService`, `QuestService`, `TradeService`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: wire the newly bound AP rate arrays into NPC PvE AP, PvP AP reward/loss, Quest AP, and Dredgion/basic PvP instance reward paths as each caller slice is ported. Inspect C# coverage for Java `PvpService`, `QuestService`, `TradeService`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
