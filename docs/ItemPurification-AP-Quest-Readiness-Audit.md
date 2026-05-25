@@ -116,6 +116,7 @@ Current C# status:
 - UOW-986 adds a staged offline source loader that composes XML quest-script and Java handler extractor outputs from source directories and preserves unresolved handler rows. C# still lacks production loader integration, NPC-spawn population, candidate filtering, start-condition evaluation, and a send path, so the dispatcher must remain no-op.
 - UOW-987 adds a focused real-data audit test for the staged source loader. Current repository data yields 5184 resolved staged start sources, split into 4400 XML and 784 Java handler sources, with 6 unresolved Java handler registrations using `butlerId`. C# still lacks production loader integration, NPC-spawn population, candidate filtering, start-condition evaluation, and a send path, so the dispatcher must remain no-op.
 - UOW-988 resolves the six `butlerId` Java handler registrations by supporting deterministic static integer-set iteration. Current repository data now yields 5214 resolved staged start sources, split into 4400 XML and 814 Java handler sources, with zero unresolved Java handler registrations. C# still lacks production loader integration, NPC-spawn population, candidate filtering, start-condition evaluation, and a send path, so the dispatcher must remain no-op.
+- UOW-989 feeds the audited loader output into `QuestNpcStartTable` in a focused offline regression test, yielding 1668 registered NPC ids and 5214 registered NPC/quest start pairs. C# still lacks production loader integration, NPC-spawn population, candidate filtering, start-condition evaluation, and a send path, so the dispatcher must remain no-op.
 - Partial material count updates do not need item-remove callbacks under Java behavior.
 - Live mutation replaces the player inventory snapshot and applies AP, but intentionally leaves persistence, sends, quest callbacks, and rollback outside its boundary.
 - Production `HandleInfrastructurePacketAsync` still routes `CmItemPurification` to the plan-only `HandleItemPurificationAsync` path.
@@ -125,14 +126,14 @@ Quest parity gaps:
 
 - C# has metadata, a pure ordered projection, and an opt-in no-op notifier seam for quest notification intent, but it does not invoke real `onItemGet` or `onItemRemoved` equivalents by default.
 - C# does not yet model the Java distinction between get-item handler dispatch and nearby-quest refresh.
-- C# now has the `questUpdateItems` static-data membership projection, a no-op nearby-refresh planner, a no-op dispatcher seam, `SmNearbyQuests` packet serialization, minimal world-instance quest-id storage, staged `QuestNpc.onQuestStart` table storage, a pure XML quest-start extractor, a conservative Java handler quest-start extractor, an offline source loader, and a pinned real-data audit with zero unresolved handler rows, but it still lacks `questItems` get-handler registration, production extractor loader integration, nearby quest candidate filtering, and any dispatcher that invokes real nearby-quest refresh.
+- C# now has the `questUpdateItems` static-data membership projection, a no-op nearby-refresh planner, a no-op dispatcher seam, `SmNearbyQuests` packet serialization, minimal world-instance quest-id storage, staged `QuestNpc.onQuestStart` table storage, a pure XML quest-start extractor, a conservative Java handler quest-start extractor, an offline source loader, and pinned real-data source/table audits with zero unresolved handler rows, but it still lacks `questItems` get-handler registration, production extractor loader integration, nearby quest candidate filtering, and any dispatcher that invokes real nearby-quest refresh.
 - Target add callback must remain CUBE/actor-backed and must occur after storage update packet semantics are preserved.
 - Remove callback must fire only for material/base deletes, not partial count updates.
 
 Safe quest next tests:
 
 - Add a disabled or no-op `IQuestItemMutationNotifier` seam behind explicit opt-in live execution only, preserving automatic dispatch disabled.
-- Continue toward staged table population or candidate filtering before any player-controller refresh adapter; keep it disconnected from production ItemPurification dispatch before invoking any live quest handlers.
+- Continue toward staged candidate filtering before any player-controller refresh adapter; keep it disconnected from production ItemPurification dispatch before invoking any live quest handlers.
 
 ## Readiness Impact
 

@@ -33606,6 +33606,62 @@ Next recommended unit of work:
 
 ---
 
+### Session 989 (May 25, 2026)
+- Continued after UOW-988 by adding an offline real-data table-population regression for the staged quest-start source path.
+- Parallel Work Discovery considered real-data table population, candidate-filtering Java analysis, ItemPurification side-effect persistence docs, and Java observer artifact generation. The selected unit stayed sequential because it edits the focused real-data audit test and shared Phase 6 docs; no sub-agents were spawned.
+- Extended `QuestNpcStartRegistrationSourceRealDataAuditTests` with `RealDataAudit_PopulatesStagedQuestNpcStartTableWithoutProductionWiring`.
+- The test feeds the audited `QuestNpcStartRegistrationSourceLoader` output into `QuestNpcStartTable` without production startup wiring.
+- Pinned the current staged table-population counts:
+  - source rows recorded by `QuestNpcStartTable.Sources`: 5214
+  - registered NPC ids: 1668
+  - registered NPC/quest start pairs: 5214
+  - largest quest-start set on one NPC: 50
+- Kept production `StaticData`/`DataManager` integration, Java handler execution, NPC-spawn population, delayed refresh scheduling, `QuestService.checkStartConditions`, player-controller sends, and production ItemPurification dispatch disabled.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~QuestNpcStartRegistrationSourceRealDataAuditTests` passed with 2 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1684 tests.
+
+#### Migration Parity Table - Session 989
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.quest.QuestNpc.addOnQuestStart` | `Aion.GameServer.Dataholders.QuestNpcStartTable.RegisterOnQuestStart`; `Aion.GameServer.Tests.QuestNpcStartRegistrationSourceRealDataAuditTests` | Quest NPC Registration Table | Partial | Regression Tested | Partial Parity | Real-data staged table population stores 5214 NPC/quest start pairs across 1668 NPC ids. Production `QuestEngine`, NPC spawn, world-instance population, threading, and Java `HashSet` iteration order remain unverified. |
+| `com.aionemu.gameserver.questEngine.QuestEngine.init` | `Aion.GameServer.Dataholders.QuestNpcStartRegistrationSourceLoader`; `Aion.GameServer.Dataholders.QuestNpcStartTable` | Offline Loader / Source Aggregator | Partial | Regression Tested | Needs Verification | Loader output can populate the staged table with current real-data counts. This still does not run Java reflection/JAXB, instantiate handlers, register into runtime `QuestEngine`, model reload/unload behavior, or integrate with production `DataManager`. |
+| `com.aionemu.gameserver.world.WorldMapInstance` | Future staged candidate-population adapter consuming `QuestNpcStartTable` | World / Quest Registry | Partial | Unit Tested | Needs Verification | World-instance quest-id storage exists from UOW-982, but this unit does not feed table rows into `WorldMapInstanceRuntimeState` or schedule Java's delayed nearby refresh. |
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | Future nearby-quest candidate projection | Controller / Quest UI | Not Started | No Tests | Unknown | Candidate filtering remains missing: no map-region lookup, `QuestService.checkStartConditions`, level-diff calculation, or `SmNearbyQuests` send path. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `QuestNpcStartRegistrationSourceRealDataAuditTests.RealDataAudit_PopulatesStagedQuestNpcStartTableWithoutProductionWiring` | Regression | Java `QuestNpc.addOnQuestStart` set semantics plus real repository source data | Pins staged table counts after feeding audited source rows: 5214 source rows, 1668 registered NPC ids, 5214 registered NPC/quest pairs, and largest per-NPC quest count 50. | Deterministic C# audit over current repository source files and staged table behavior. | Does not populate Java/C# runtime world instances, execute handlers, or run start-condition filtering. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- The staged source loader/table audit is not integrated into production `StaticData`, `DataManager`, `QuestEngine`, NPC spawn, world instance population, or production dispatch.
+- Java `HashSet` iteration order is not claimed for expanded set values or table source ordering.
+- XML extraction remains partial and does not model `aggro_start_npc_ids`, talk/kill/end/distance/zone registrations, template-specific dialogs, quest item registration, or JAXB schema validation.
+- No C# nearby-UI `QuestService.checkStartConditions` equivalent exists.
+- `SmNearbyQuests` remains a packet prerequisite only; no production code sends it.
+- The current ItemPurification dispatcher seam must remain no-op until extraction, candidate calculation, start-condition evaluation, and a controlled send boundary exist.
+- ItemPurification persistent execution still does not persist secondary rank-limit equipment unequips or abyss skill deletion intents from AP-rank side effects.
+- Automatic `CM_ITEM_PURIFICATION` dispatch remains plan-only and must stay disabled.
+- Required `docs/commit-conventions.md` is still missing; commit format continues to follow `docs/orchestration-rules.md`.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 in this unit
+- Total artifacts ported: 0 new production artifacts in this unit; 1 real-data table-population regression added
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4
+- Total blocked artifacts: 3 blocked/not-started categories, including production loader/world-instance integration, quest start-condition evaluation, and dynamic quest handler execution
+- Estimated overall migration completion: Phase 6 remains about 70% complete; this unit strengthens the offline candidate-source baseline without enabling live nearby quest refresh.
+
+Next recommended unit of work:
+- Add a staged nearby-quest candidate projection from a populated `QuestNpcStartTable` and a world-instance quest-id set, preserving Java's duplicate-collapsing set semantics, but keep `QuestService.checkStartConditions`, player-controller sends, and ItemPurification dispatch disabled.
+- Alternative safe slice: use the sidecar persistence-gap analysis to document or implement the next ItemPurification side-effect persistence prerequisite.
+
+---
+
 ## Next Steps
 
 1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure ItemPurification quest-notification projection, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, the handler-level ItemPurification workflow/application/packet-plan composition bridge, the ItemPurification runtime-input packet bridge, the ItemPurification ready concrete-packet send bridge, the ItemPurification target object-id allocation bridge, the ItemPurification random-bonus selection seam, the ItemPurification non-persistent mutation snapshot preview, the ItemPurification non-persistent handler mutation bridge, the ItemPurification live mutation adapter boundary, the ItemPurification live execution composition seam, the ItemPurification live AP rank-drop metadata regression, the ItemPurification explicit live AP player-packet emission bridge, the ItemPurification explicit live AP rank-update broadcast bridge, the ItemPurification explicit live equipment rank-limit state mutation bridge, the ItemPurification explicit live equipment rank-limit packet fanout bridge, the ItemPurification explicit live abyss skill refresh bridge, the ItemPurification explicit opt-in quest notification no-op seam, the ItemPurification explicit transform-min-rank config plumbing, the ItemPurification quest-update items audit, the ItemPurification quest-update item static-data projection, the ItemPurification no-op nearby-refresh planning seam, the ItemPurification no-op nearby-refresh dispatcher seam, the ItemPurification nearby quest refresh surface audit, the ItemPurification nearby quest packet prerequisite, the ItemPurification nearby quest world-instance registry prerequisite, the ItemPurification nearby quest start-registration table prerequisite, the ItemPurification handler opt-in live execution seam, the ItemPurification persistence plan analysis, the ItemPurification repository contract/payload plumbing, the ItemPurification inserted target item-stone persistence, the ItemPurification opt-in persistent live execution seam, the ItemPurification handler-level opt-in persistent execution helper, the ItemPurification handler-level persistence failure-ordering regression, the ItemPurification automatic-dispatch readiness policy, the ItemPurification staged dispatch-failure policy, the ItemPurification Java observer design, the ItemPurification opt-in DB integration happy path, the ItemPurification opt-in DB rollback path, the ItemPurification AP/quest readiness audit, the pure ItemCharge AP spend guard, and the live ItemCharge selected-item/charge-all AP guard consolidation now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. ItemCharge Kinah payment guard/consolidation, charge-all stale-item payment-before-revalidation hardening, mixed stale/current charge-all AP regression coverage, mixed stale/current charge-all Kinah regression coverage, missing/current charge-all AP approximation coverage, and missing/current charge-all Kinah approximation coverage are now staged for live selected-item/charge-all paths. Move next to Java observer artifact generation when tooling is available, nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another existing planner live adapter when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player/equipment/skill packets, AP/login rank-limited equipment persistence, configured abyss transform skill updates, rank config load, and real quest handler dispatch. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.

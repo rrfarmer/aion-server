@@ -1,7 +1,7 @@
 # Quest NPC Start Source Real-Data Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-987, updated by UOW-988
+Unit of Work: UOW-987, updated by UOW-988 and UOW-989
 
 ## Purpose
 
@@ -44,6 +44,17 @@ The staged loader extracts XML `start_npc_ids`, extracts direct Java handler `re
 | Distinct NPC ids across resolved sources | 1668 |
 | Distinct quest ids across resolved sources | 4503 |
 
+## Staged Table Population Results
+
+UOW-989 feeds the audited loader output into `QuestNpcStartTable` in a focused regression test. This remains offline and does not wire production startup.
+
+| Metric | Count |
+|---|---:|
+| Source rows recorded by `QuestNpcStartTable.Sources` | 5214 |
+| Registered NPC ids | 1668 |
+| Registered NPC/quest start pairs | 5214 |
+| Largest quest-start set on one NPC | 50 |
+
 ## Unresolved Java Handler Registrations
 
 None in the current repository-data audit.
@@ -64,4 +75,4 @@ Known limitations:
 
 ## Next Recommended Unit
 
-Continue with a staged candidate-population prerequisite, such as building a table-population adapter from the audited loader output into `QuestNpcStartTable`, or begin nearby quest candidate filtering. Keep production startup and nearby-refresh dispatch disabled until start-condition evaluation exists.
+Continue with candidate filtering prerequisites, such as a staged nearby-quest candidate projection from a populated `QuestNpcStartTable` and a world-instance quest-id set. Keep production startup and nearby-refresh dispatch disabled until `QuestService.checkStartConditions` parity exists.
