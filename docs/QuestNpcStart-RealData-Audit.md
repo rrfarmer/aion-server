@@ -55,6 +55,18 @@ UOW-989 feeds the audited loader output into `QuestNpcStartTable` in a focused r
 | Registered NPC/quest start pairs | 5214 |
 | Largest quest-start set on one NPC | 50 |
 
+## Staged World-Instance Projection Results
+
+UOW-990 projects the populated `QuestNpcStartTable` into a staged `WorldMapInstanceRuntimeState` quest-id set. This mirrors only Java's `WorldMapInstance.addObject(Npc)` contribution of `QuestNpc.getOnQuestStart()` ids and does not run start-condition filtering, delayed refresh scheduling, or packet sends.
+
+| Metric | Count |
+|---|---:|
+| Inspected NPC ids from populated table | 1668 |
+| NPC ids with staged quest starts | 1668 |
+| Projected distinct quest ids | 4503 |
+| Newly registered world-instance quest ids | 4503 |
+| Final world-instance quest-id count | 4503 |
+
 ## Unresolved Java Handler Registrations
 
 None in the current repository-data audit.
@@ -75,4 +87,4 @@ Known limitations:
 
 ## Next Recommended Unit
 
-Continue with candidate filtering prerequisites, such as a staged nearby-quest candidate projection from a populated `QuestNpcStartTable` and a world-instance quest-id set. Keep production startup and nearby-refresh dispatch disabled until `QuestService.checkStartConditions` parity exists.
+Continue with start-condition filtering prerequisites, such as a source audit or staged evaluator shape for Java `QuestService.checkStartConditions(player, questId, false, 2, false, false, false)`. Keep production startup and nearby-refresh dispatch disabled until predicate parity exists.

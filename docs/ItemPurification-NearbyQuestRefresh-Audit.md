@@ -1,7 +1,7 @@
 # ItemPurification Nearby Quest Refresh Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-980, updated by UOW-981 through UOW-989
+Unit of Work: UOW-980, updated by UOW-981 through UOW-990
 
 ## Purpose
 
@@ -35,6 +35,7 @@ The Java project remains the source of truth. This document does not enable prod
 - `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmQuestCompletedList.cs`
 - `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmNearbyQuests.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/WorldNpcQuestDropService.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/NearbyQuestCandidateProjectionService.cs`
 - `dotnetConversion/src/Aion.GameServer/World/WorldMapInstanceRuntimeState.cs`
 - `dotnetConversion/src/Aion.GameServer/Dataholders/QuestNpcStartTable.cs`
 - `dotnetConversion/src/Aion.GameServer/Dataholders/QuestNpcStartXmlExtractor.cs`
@@ -85,6 +86,7 @@ Other Java call sites also use `updateNearbyQuests`, including item get/remove v
 - UOW-987 adds a focused real-data audit test and `docs/QuestNpcStart-RealData-Audit.md`. The staged loader currently resolves 5184 start sources from repository data: 4400 XML sources and 784 Java handler sources, with 6 unresolved Java handler registrations, all using the unsupported `butlerId` expression.
 - UOW-988 resolves the six `butlerId` registrations by supporting deterministic static integer-set iteration in Java handlers. The staged real-data audit now resolves 5214 start sources: 4400 XML sources and 814 Java handler sources, with zero unresolved Java handler registrations.
 - UOW-989 adds a focused offline table-population audit that feeds those 5214 source rows into `QuestNpcStartTable`, producing 1668 registered NPC ids, 5214 registered NPC/quest start pairs, and a largest per-NPC quest-start set of 50. It still does not wire production startup or world-instance population.
+- UOW-990 adds `NearbyQuestCandidateProjectionService`, a staged projection helper that consumes spawned NPC template ids, reads `QuestNpcStartTable`, and contributes matching `onQuestStart` quest ids to `WorldMapInstanceRuntimeState`. The real-data audit projects 1668 NPC ids into 4503 distinct world-instance quest ids. It still does not run start-condition filtering, delayed refresh scheduling, packet sends, or production startup.
 - No C# `QuestService.checkStartConditions` equivalent was found for this nearby-quest UI path.
 - No C# player-controller method currently invokes real nearby quest refresh.
 
@@ -115,10 +117,10 @@ Completed prerequisite:
 
 ## Recommended Next Implementation Slice
 
-Add only the next candidate-population prerequisite:
+Add only the next start-condition prerequisite:
 
-1. Add a staged nearby-quest candidate projection from a populated `QuestNpcStartTable` and world-instance quest-id set, without `QuestService.checkStartConditions` or packet sends.
-2. Keep `QuestService.checkStartConditions`, packet sending, dynamic quest handlers, and real ItemPurification dispatch disabled until registration extraction is complete enough to drive candidate source tests.
+1. Audit or stage the Java `QuestService.checkStartConditions(player, questId, false, 2, false, false, false)` surface for nearby UI filtering.
+2. Keep packet sending, dynamic quest handlers, and real ItemPurification dispatch disabled until the predicate is ported or deliberately staged behind an explicit test-only seam.
 
 ## Migration Parity Table
 
@@ -128,7 +130,7 @@ Add only the next candidate-population prerequisite:
 | `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `Aion.GameServer.Network.Aion.ServerPackets.SmNearbyQuests`; `Aion.GameServer.Network.Aion.ServerPackets.NearbyQuestMarker` | Server Packet / DTO | Complete | Unit Tested | Verified Parity | UOW-981 verifies deterministic payload layout from Java source: `C(0)`, negative count as unsigned `H`, and `1 << 17` marker bit for positive level diff. Packet order parity is only for caller-provided marker order; Java `HashMap` iteration order is not claimed. |
 | `com.aionemu.gameserver.network.aion.ServerPacketsOpcodes` | `Aion.GameServer.Network.Aion.ServerPackets.SmNearbyQuests.PacketOpCode` | Opcode Mapping | Complete | Unit Tested | Verified Parity | Java registers `SM_NEARBY_QUESTS` opcode `127` (`S_UPDATE_ZONE_QUEST`); C# packet uses opcode `127`. |
 | `com.aionemu.gameserver.services.QuestService.checkStartConditions` | Not started for nearby quest UI | Service / Quest Predicate | Not Started | No Tests | Unknown | Needed with `allowedDiffToMinLevel = 2`, `warn = false`, and no skip flags. Full Java predicate has quest state, repeat-count, race, precondition, and level gates; C# equivalent is missing. |
-| `com.aionemu.gameserver.world.WorldMapInstance` | `Aion.GameServer.World.WorldMapInstanceRuntimeState` | World / Quest Registry | Partial | Unit Tested | Partial Parity | UOW-982 adds duplicate-collapsing quest-id registry storage and registration result semantics. It does not wire Java `addObject(Npc)`, delayed 1500 ms refresh scheduling, map-region lookup, or player sends. |
+| `com.aionemu.gameserver.world.WorldMapInstance` | `Aion.GameServer.World.WorldMapInstanceRuntimeState`; `Aion.GameServer.Services.NearbyQuestCandidateProjectionService` | World / Quest Registry | Partial | Regression Tested | Partial Parity | UOW-982 adds duplicate-collapsing quest-id storage, and UOW-990 adds a staged NPC-template-id projection into that set. It does not wire production `addObject(Npc)`, delayed 1500 ms refresh scheduling, map-region lookup, or player sends. |
 | `com.aionemu.gameserver.model.templates.quest.QuestNpc` | `Aion.GameServer.Dataholders.QuestNpcStartRegistration`; `Aion.GameServer.Dataholders.QuestNpcStartTable`; `Aion.GameServer.Dataholders.QuestNpcStartRegistrationSource` | Quest Handler Registration / DTO | Partial | Unit Tested | Partial Parity | UOW-983 mirrors `registerQuestNpc`, missing-`getQuestNpc`, default range, and duplicate-collapsing `addOnQuestStart` storage. It does not model talk/kill/attack events, Java reflection/dynamic handler execution, handler unload/reload, XML registration extraction, or Java `HashSet` iteration order. |
 | `com.aionemu.gameserver.questEngine.handlers.models.XMLQuest` | `Aion.GameServer.Dataholders.QuestNpcStartXmlExtractor` | XML Quest Loader Boundary | Partial | Unit Tested | Needs Verification | UOW-984 source-parses XML quest-script attributes into registration sources. It does not instantiate Java template handlers, run JAXB, process all XML model fields, or integrate with `QuestEngine.init`. |
 | `com.aionemu.gameserver.questEngine.handlers.template.ReportToMany` | `Aion.GameServer.Dataholders.QuestNpcStartXmlExtractor` | Template / Quest Registration | Partial | Unit Tested | Partial Parity | UOW-984 mirrors the narrow `startItemId != 0` suppression of NPC start registration for `report_to_many`. Dialog behavior, item-use start, talk events, work items, reward state, and runtime handler execution are not ported here. |
@@ -136,6 +138,7 @@ Add only the next candidate-population prerequisite:
 | `com.aionemu.gameserver.questEngine.QuestEngine.init` | `Aion.GameServer.Dataholders.QuestNpcStartRegistrationSourceLoader` | Offline Loader / Source Aggregator | Partial | Unit Tested | Needs Verification | UOW-986 composes XML and Java handler extractor outputs over files/directories with stable ordering and unresolved-row preservation. It does not run Java reflection/JAXB, register handlers into `QuestEngine`, or integrate with production `DataManager`. |
 | `game-server/data/handlers/quest/oriel/*` and `game-server/data/handlers/quest/pernon/*` butler start handlers | `Aion.GameServer.Dataholders.QuestNpcStartJavaHandlerExtractor`; `QuestNpcStartRegistrationSourceRealDataAuditTests` | Java Handler Source Audit | Partial | Regression Tested | Partial Parity | UOW-988 resolves static integer-set iterator/enhanced-for registrations used by the six `butlerId` handlers. Java `HashSet` iteration order is not claimed, and runtime handler execution remains unported. |
 | `com.aionemu.gameserver.model.templates.quest.QuestNpc.addOnQuestStart` | `Aion.GameServer.Dataholders.QuestNpcStartTable`; `QuestNpcStartRegistrationSourceRealDataAuditTests` | Quest NPC Registration Table | Partial | Regression Tested | Partial Parity | UOW-989 feeds all audited real-data source rows into the staged table, yielding 1668 NPC registrations and 5214 NPC/quest start pairs. Production `QuestEngine`, NPC spawn, world-instance population, threading, and Java `HashSet` iteration order remain unverified. |
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestCandidateProjectionService`; future start-condition filter | Controller / Quest UI | Partial | Regression Tested | Needs Verification | UOW-990 stages the pre-filter world quest-id candidate source only. Java `QuestService.checkStartConditions`, level-diff calculation, `SM_NEARBY_QUESTS` send, and Java `HashMap` iteration order remain unimplemented/unverified. |
 
 ## Tests Added/Updated
 
@@ -145,6 +148,7 @@ Add only the next candidate-population prerequisite:
 | `GamePacketTests.ServerPacketPayloads_MatchJavaShapes` (`SmNearbyQuests` available case) | Unit | Java `SM_NEARBY_QUESTS.writeImpl` | Validates one marker writes negative count and unflagged quest id. | Deterministic byte assertion from source-reviewed Java packet layout. | Does not calculate candidates. |
 | `GamePacketTests.ServerPacketPayloads_MatchJavaShapes` (`SmNearbyQuests` not-yet-available case) | Unit | Java `SM_NEARBY_QUESTS.writeImpl` | Validates positive level diff sets bit `1 << 17` before writing the quest id. | Deterministic byte assertion from source-reviewed Java packet layout. | Packet order follows provided marker order; Java `HashMap` runtime order is not claimed. |
 | `WorldMapRuntimeStateTests.WorldMapInstanceRuntimeState_TracksQuestStartIdsLikeJavaWorldMapInstance` | Unit | Java `WorldMapInstance.addObject(Npc)` and `QuestNpc.getOnQuestStart` | Validates quest ids are stored once, repeated ids do not report a new addition, and newly registered ids are visible via snapshot. | Deterministic test from Java source-reviewed set semantics. | Does not invoke NPC spawn, `QuestEngine.getQuestNpc`, delayed refresh scheduling, or packet send. |
+| `WorldMapRuntimeStateTests.NearbyQuestCandidateProjectionService_RegistersNpcStartQuestIdsLikeJavaWorldMapInstance` | Unit | Java `WorldMapInstance.addObject(Npc)` and `QuestNpc.getOnQuestStart` | Validates staged NPC ids project table `onQuestStart` ids into the world-instance quest-id set, preserving duplicate collapse and reporting newly added ids. | Deterministic C# test from source-reviewed Java set contribution behavior. | Does not evaluate start conditions, schedule refresh, or send packets. |
 | `QuestNpcStartTableTests.RegisterQuestNpc_ReusesRegistrationAndTracksStartQuestIdsLikeJava` | Unit | Java `QuestEngine.registerQuestNpc` and `QuestNpc.addOnQuestStart` | Validates registration reuse, default quest range, and duplicate-collapsing start quest ids. | Deterministic C# test from source-reviewed Java map/set behavior. | Does not execute Java handlers or parse source/XML. |
 | `QuestNpcStartTableTests.GetQuestNpc_ReturnsUnregisteredEmptyRegistrationLikeJava` | Unit | Java `QuestEngine.getQuestNpc` | Validates missing lookup returns an empty non-stored registration. | Deterministic C# test from reviewed Java method. | Does not model other `QuestNpc` event lists. |
 | `QuestNpcStartTableTests.RegisterOnQuestStart_RecordsSourceBoundaryForFutureHandlerAndXmlExtractors` | Unit | Java `QuestEngine.init`, script handler loading, and XML quest registration review | Validates Java-handler/XML/manual source metadata can feed the same start table. | C# boundary test informed by Java load paths and explorer analysis. | Does not parse Java/XML sources yet. |
@@ -162,21 +166,22 @@ Add only the next candidate-population prerequisite:
 | `QuestNpcStartRegistrationSourceLoaderTests.Load_MissingDirectoriesReturnEmptyResult` | Unit | Staged offline loader safety | Validates missing optional source directories do not crash the staged loader. | Deterministic C# test. | Production missing-data policy is not selected. |
 | `QuestNpcStartRegistrationSourceRealDataAuditTests.RealDataAudit_LoadsStagedQuestStartSourcesWithoutProductionWiring` | Regression | Real repository Java/XML quest-start source data | Pins current staged-loader counts: 5214 total sources, 4400 XML, 814 Java handler, zero unresolved handler registrations, 1668 distinct NPC ids, and 4503 distinct quest ids. | Deterministic C# audit over current repository source files. | Does not run Java reflection/JAXB, execute handlers, or prove runtime parity. |
 | `QuestNpcStartRegistrationSourceRealDataAuditTests.RealDataAudit_PopulatesStagedQuestNpcStartTableWithoutProductionWiring` | Regression | Java `QuestNpc.addOnQuestStart` set semantics plus real repository source data | Pins current staged table-population counts: 5214 source rows, 1668 registered NPC ids, 5214 registered NPC/quest start pairs, and largest per-NPC quest count 50. | Deterministic C# audit over current repository source files and staged table behavior. | Does not populate Java/C# runtime world instances or run start-condition filtering. |
+| `QuestNpcStartRegistrationSourceRealDataAuditTests.RealDataAudit_ProjectsStagedQuestIdsIntoWorldInstanceWithoutRefreshWiring` | Regression | Java `WorldMapInstance.addObject(Npc)` reading `QuestNpc.getOnQuestStart` | Pins staged world-instance projection counts from current real data: 1668 inspected/matched NPC ids and 4503 projected/new/world quest ids. | Deterministic C# audit over current repository source files, staged table behavior, and world quest-id storage. | Does not run Java/C# runtime NPC spawn, delayed refresh scheduling, start-condition filtering, or packet sends. |
 
 ## Remaining Risks
 
 - Java runtime capture remains blocked locally by Java 8 and missing Maven.
 - No C# quest start-condition evaluator exists for nearby quest UI.
-- C# dynamic quest-start registration storage exists and XML/handler sources can be source-extracted and staged into `QuestNpcStartTable` with zero unresolved real-data rows, but no production loader populates it from real data.
-- C# world-instance quest id registry storage exists, but it is not populated from NPC spawn or dynamic quest handlers.
+- C# dynamic quest-start registration storage exists and XML/handler sources can be source-extracted, staged into `QuestNpcStartTable`, and projected into a staged world-instance quest-id set with zero unresolved real-data rows, but no production loader populates it from real data.
+- C# world-instance quest id registry storage exists, but it is not populated from production NPC spawn or dynamic quest handlers.
 - The current ItemPurification dispatcher seam must remain no-op until these lower-level surfaces exist.
 - Automatic `CM_ITEM_PURIFICATION` dispatch remains plan-only and must stay disabled.
 
 ## Summary Metrics
 
 - Total Java artifacts discovered: 11
-- Total artifacts ported: 7 packet/opcode/registry/start-registration/XML-extractor/handler-extractor/source-loader artifacts for the nearby-quest prerequisites
+- Total artifacts ported: 8 packet/opcode/registry/start-registration/XML-extractor/handler-extractor/source-loader/projection artifacts for the nearby-quest prerequisites
 - Total artifacts with verified parity: 2
-- Total artifacts needing verification: 9
-- Total blocked artifacts: 3 blocked/not-started categories, including Java/XML registration extraction, quest start-condition evaluation, and dynamic quest handler execution
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 3 blocked/not-started categories, including production NPC-spawn integration, quest start-condition evaluation, and dynamic quest handler execution
 - Estimated overall migration completion: Phase 6 remains about 70% complete
