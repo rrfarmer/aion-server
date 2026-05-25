@@ -29273,9 +29273,77 @@ Next recommended unit of work:
 
 ---
 
+### Session 910 (May 25, 2026)
+- Continued after UOW-909 by reading the PE handoff, confirming the branch was clean after commit `5ff064baf`, and running Parallel Work Discovery around Java PvP, Quest, Dredgion, Trade, and purification AP paths.
+- Selected the compact PvP AP reward/loss planner because Java `PvpService` isolates AP gain/loss formulas in `StatFunctions` and the rate dependencies were unblocked by UOW-908.
+- Added `PvpApRewardService` with Java breadcrumbs for:
+  - `PvpService.rewardPlayerTeam` AP member reward branch
+  - `StatFunctions.calculatePvpApGained`
+  - `StatFunctions.calculatePvPApLost`
+  - `Rates.AP_PVP` and `Rates.AP_PVP_LOST`
+  - `AbyssRankEnum` points gained/lost table
+- Added member AP reward planning through `AbyssPointsService.AddApFromObject`, including Java per-member `Math.round`, daily-kill-limit minimum AP behavior, configured PvP gain rates, AP boost input, and player-source siege callback intent.
+- Added victim AP loss planning through `AbyssPointsService.AddAp`, including level penalty, configured PvP loss rates, AP-relevant damage fraction, and loss packet intent.
+- Registered `PvpApRewardService` in DI.
+- Validation:
+  - First focused run failed because the member-reward regression expected no siege callback; Java `AbyssPointsService.addAp(player, victim, amount)` does notify siege for player sources, so the test was corrected to assert callback intent.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~PvpApRewardServiceTests --no-restore` passed with 13 tests.
+  - `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed: Commons 57, Chat 29, Login 121, GameServer 1510.
+
+#### Migration Parity Table - Session 910
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.PvpService` | `Aion.GameServer.Services.PvpApRewardService` | Service / Reward Planner | Partial | Regression Tested in C# | Partial Parity | C# now models the AP member gain and victim loss planner slices: per-member AP share, daily-kill-limit minimum AP, AP-relevant damage fraction, and AP mutation through `AbyssPointsService`. Full damage-list/team extraction, kill counters, bounty/headhunting, quest/event hooks, PvP map handling, death broadcasts, XP/DP reward fanout, and live controller invocation remain missing. |
+| `com.aionemu.gameserver.utils.stats.StatFunctions.calculatePvpApGained` | `PvpApRewardService.CalculatePvpApGained` | Utility / Reward Calculation | Partial | Regression Tested in C# | Partial Parity | Level penalties, under-level bonus, soldier rank penalty, and Java positive `Math.round` behavior are covered against source-derived cases. No Java runtime comparison and no live `DamageList`/team integration. |
+| `com.aionemu.gameserver.utils.stats.StatFunctions.calculatePvPApLost` | `PvpApRewardService.CalculatePvpApLost` / `ApplyVictimApLoss` | Utility / Loss Calculation | Partial | Regression Tested in C# | Partial Parity | Death-loss level penalties and AP-relevant damage scaling are covered. C# guards zero/negative total damage instead of throwing; this is documented as a defensive boundary around an input that Java expects `DamageList` to provide. |
+| `com.aionemu.gameserver.model.gameobjects.player.Rates.AP_PVP` | `GameServerRateOptions.ApPvpGainRates` / `PvpApRewardService.ApplyPvpGainRate` | Rate Calculation / Configuration Consumption | Partial | Regression Tested in C# | Partial Parity | Configured membership rates and AP boost input are applied with Java long-to-int fallback behavior. Live `PlayerGameStats.getStat(StatEnum.AP_BOOST)` remains an integer input projection. |
+| `com.aionemu.gameserver.model.gameobjects.player.Rates.AP_PVP_LOST` | `GameServerRateOptions.ApPvpLossRates` / `PvpApRewardService.ApplyPvpLossRate` | Rate Calculation / Configuration Consumption | Partial | Regression Tested in C# | Partial Parity | Configured membership rates are applied to victim AP loss with Java long-to-int fallback behavior. Live caller integration and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.utils.stats.AbyssRankEnum` | `PvpApRewardService` internal AP points table | Enum / Source Table Projection | Partial | Regression Tested in C# | Needs Verification | Points gained/lost for ranks 1-18 were copied for PvP AP formulas only. Required AP/GP, quotas, GP loss, names, and ranking behavior remain in `PlayerAbyssRank`/other slices and were not revalidated here. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `Aion.GameServer.Services.AbyssPointsService` | Service | Partial | Regression Tested in C# | Partial Parity | PvP AP planner uses `AddApFromObject` for member gains and `AddAp` for victim losses. Tests validate packet intents, AP mutation, and player-source siege callback intent. Full persistence, Legion contribution fanout, ranking cache, large-AP logging, and live siege callback execution remain incomplete. |
+| `com.aionemu.gameserver.services.SiegeService.onAbyssPointsAdded` | `Aion.GameServer.Services.AbyssPointsSiegeCallback` | Service Callback / Intent DTO | Partial | Regression Tested in C# | Needs Verification | Regression validates player-source PvP AP gains create callback intent. Live `SiegeService` execution and fort state mutation remain unported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Tests validate AP gain message id `1320000` and AP loss/use message id `1300965` are planned. Byte-level Java comparison and live ordering remain unavailable. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRank` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Tests validate rank packet intent after PvP AP gain/loss mutation. Ranking-position lookup and byte-level Java comparison remain unavailable. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ApplyMemberApReward_CalculatesConfiguredRateAndAddsApThroughPlanner` | Regression | Java `PvpService.rewardPlayerTeam`, `StatFunctions.calculatePvpApGained`, `Rates.AP_PVP`, and `AbyssPointsService.addAp(Player, VisibleObject, int)` source review | Validates base AP `523`, AP-win multiplier, group damage/member `Math.round` share `262`, configured gain rate/AP boost producing `491`, AP mutation `1000 -> 1491`, AP gain packet intent, rank packet intent, and player-source siege callback intent. | Deterministic C# regression grounded in Java source. | No Java runtime artifact; live damage list/team extraction and kill counter are not wired. |
+| `ApplyVictimApLoss_CalculatesConfiguredRateAndRemovesDamageShare` | Regression | Java `PvpService.doReward`, `StatFunctions.calculatePvPApLost`, and `Rates.AP_PVP_LOST` source review | Validates base loss `101`, configured loss rate to `151`, AP-relevant damage fraction to actual loss `90`, AP mutation `1000 -> 910`, AP-use packet intent, and rank packet intent. | Deterministic C# regression grounded in Java source. | No Java runtime artifact; live `apRelevantDamage` accumulation is not wired. |
+| `CalculatePvpApGained_MatchesJavaLevelAndRankPenalties` | Regression | Java `StatFunctions.calculatePvpApGained` and `AbyssRankEnum` source review | Validates neutral level, high-level penalty, under-level bonus, and soldier rank penalty. | Deterministic C# formula regression. | No Java runtime artifact; only selected rank/level cases. |
+| `CalculatePvpApLost_MatchesJavaLevelPenalties` | Regression | Java `StatFunctions.calculatePvPApLost` and `AbyssRankEnum` source review | Validates neutral, +3, +4, and +5 winner-level penalty cases. | Deterministic C# formula regression. | No Java runtime artifact; only selected rank/level cases. |
+| `CalculateMemberApGain_UsesJavaMinimumAndRateFallbacks` | Regression | Java `PvpService.rewardPlayerTeam` and `Rates.get` source review | Validates daily-cap and zero-reward minimum AP `1`, empty-rate fallback to `1`, and AP boost truncation. | Deterministic C# regression. | AP boost is input-projected. |
+| `ApplyVictimApLoss_SkipsMissingAndNonRelevantDamage` | Guard Regression | Java caller assumptions plus C# defensive planner boundary | Validates missing victim/winner and non-positive damage inputs do not mutate AP. | Deterministic C# guard regression. | Java does not explicitly guard every projected input; these are planner-boundary safeguards. |
+| `ApplyMemberApReward_SkipsMissingInputsAndNoEligibleMembers` | Guard Regression | Java `PvpService.rewardPlayerTeam` empty-player branch source review | Validates missing member/victim and no eligible members do not mutate AP. | Deterministic C# guard regression. | Live team membership filtering remains separate. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- `PvpApRewardService` is a planner slice; full `PvpService.doReward` integration, damage-list/team extraction, kill counters, bounty/headhunting, quest/event hooks, PvP map handling, XP/DP fanout, and death broadcasts remain missing.
+- `StatEnum.AP_BOOST` and live `PlayerGameStats` stat lookup remain represented by an integer input.
+- C# defensively guards non-positive `totalDamage`; Java relies on valid `DamageList` state, so this is an intentional planner-boundary difference pending live integration.
+- Remaining AP callers in Quest, Trade, item purification, and Dredgion/basic PvP instances still need convergence through `AbyssPointsService`.
+- Packet bytes, persistence, ranking cache, Legion contribution fanout, and live siege callback execution remain incomplete.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 PvP AP reward/loss planner slice plus 1 DI registration
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 7 blocked/not-started categories, including Java runtime artifact generation, live PvP service integration, live AP boost stat lookup, damage-list/team extraction, quest/event/bounty side effects, remaining AP callers, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 67% complete; this unit adds the first PvP AP reward/loss planner and consumes the PvP AP rate arrays.
+
+Next recommended unit of work:
+- Either wire `PvpApRewardService` into a narrow future combat/death adapter surface if one is available, or continue AP caller convergence with a compact Quest AP reward planner around Java `QuestService.giveReward` and `Rates.AP_QUEST`.
+- Dredgion/basic PvP instance AP rewards are also unblocked at the config level but need handler-surface analysis first.
+- Trade and item-purification AP paths likely require broader inventory/dialog/action surfaces and should remain analysis-first.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP now consumes configured AP PvE rates at the service boundary, so move next to PvP AP reward/loss, Quest AP, Dredgion/basic PvP instance rewards, or NPC team/group AP distribution as each caller slice becomes compact enough. Inspect C# coverage for Java `PvpService`, `QuestService`, `TradeService`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP consumes configured AP PvE rates and the PvP AP gain/loss planner now consumes PvP AP gain/loss rates, so move next to Quest AP, Dredgion/basic PvP instance rewards, NPC team/group AP distribution, or a narrow live PvP adapter when supporting combat/death surfaces are ready. Inspect C# coverage for Java `QuestService`, `TradeService`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
