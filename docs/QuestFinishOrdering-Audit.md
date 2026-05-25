@@ -116,15 +116,16 @@ The NPC faction update persists:
 - UOW-1022 adds `QuestPersistencePlanService`, a non-live quest persistence operation planner for Java delete/insert/update DAO phases.
 - UOW-1023 adds `NpcFactionPersistencePlanService`, a non-live NPC-faction persistence operation planner for Java insert/update DAO filters.
 - UOW-1024 composes optional quest/NPC-faction persistence plans into `QuestFinishOperationPlanService` as detailed non-live descriptors after nearby refresh.
+- UOW-1025 adds `QuestCompletionCallbackPlanService`, a non-live planner for Java completion callback registration order, shared env metadata, and exception-stop behavior.
 - C# has quest and NPC faction read hydration, but no corresponding write persistence path for these completion mutations.
 - C# has packet serializers for quest list/completed-list shapes and a non-sending `SM_QUEST_ACTION(ActionType.UPDATE, qs)` body. No production quest-finish send path is wired.
 - C# has no `QuestEngine.onQuestCompleted` equivalent or production nearby-refresh send trigger wired to quest completion.
 
 ## Recommended Implementation Slices
 
-1. Add a non-live callback dispatch plan only after deciding how to model Java handler registration order and exception behavior.
+1. Compose the non-live callback dispatch plan into the quest-finish operation plan as detailed descriptors.
 2. Decide persistence failure-ordering policy before replacing detailed descriptors with repository writes.
-3. Wire live sends and DAO writes only behind explicit opt-in tests.
+3. Wire live sends, live callbacks, and DAO writes only behind explicit opt-in tests.
 
 ## Remaining Risks
 

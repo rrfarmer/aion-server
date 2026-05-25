@@ -1,7 +1,7 @@
 # Quest Completion Callback Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1020
+Unit of Work: UOW-1020; updated by UOW-1025
 
 ## Purpose
 
@@ -79,13 +79,14 @@ Because `QuestEngine.onQuestCompleted` catches exceptions around the whole loop,
 ## Current C# State
 
 - `QuestFinishOperationPlanService` has a `QuestCompletedCallback` descriptor in Java order after the quest update packet descriptor and before NPC faction completion.
+- UOW-1025 adds `QuestCompletionCallbackPlanService`, a pure non-live planner for registered completion handlers, shared-env metadata, duplicate registration normalization, missing handler skips, and exception-stop behavior.
 - C# has no runtime quest handler registry, no dynamic Java-style handler loading, and no `QuestEnv` callback object.
 - C# has staged quest-state mutation and operation-plan descriptors, but no live callback dispatch or follow-up quest start/lock mutation.
 - C# packet serializers include `SmQuestAction.Update`, but callback-triggered `ADD` or callback-specific packets are not wired.
 
 ## Recommended Implementation Slices
 
-1. Add a non-live callback dispatch plan that records registered handler quest ids and Java source order assumptions without executing handlers.
+1. Compose the non-live callback dispatch plan into `QuestFinishOperationPlanService` as detailed callback descriptors.
 2. Add a callback result descriptor for possible follow-up quest `ADD`/`UPDATE` packets before any live handler runtime exists.
 3. Keep callback execution disabled until quest handler registration, static-data preconditions, and packet side effects have tested C# homes.
 4. If a live dispatcher is later introduced, decide explicitly whether to match Java's whole-loop exception catch semantics.
@@ -96,4 +97,4 @@ Because `QuestEngine.onQuestCompleted` catches exceptions around the whole loop,
 - Handler registration order is dynamic and depends on script loading/reflection behavior.
 - Callback methods can mutate quest state or send packets beyond the default helper behavior.
 - Java's exception handling stops the remaining callback loop after the first thrown exception.
-- The current C# operation plan has only a descriptor and no callback registry, callback result model, or live execution surface.
+- UOW-1025 models callback dispatch as non-live descriptors only; the current C# operation plan still has only a generic callback descriptor and no callback registry, callback result model, or live execution surface.
