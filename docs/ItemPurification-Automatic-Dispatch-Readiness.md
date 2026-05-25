@@ -127,6 +127,8 @@ UOW-970 emits `AbyssPointsAddPlan.RankUpdatePacket` through the visible-player b
 
 UOW-971 invokes `EquipmentService.CheckRankLimitItems` from explicit ItemPurification live execution at the AP rank-change point and mutates the player inventory when rank-limited equipment is unequipped. This is still an opt-in live-path step only. Automatic production dispatch remains disabled, and the AP gate is still open for unequip packet fanout, persistence of rank-limited equipment changes, abyss skill refresh execution, and Java runtime packet comparison.
 
+UOW-972 emits the explicit live-path rank-limit unequip fanout after the equipment rank-limit mutation: owner `SmInventoryUpdateItem` equip/unequip packet(s), owner `SmSystemMessage.UnequipRankItem` message(s), and visible-player `SmUpdatePlayerAppearance` broadcast when the equipment result asks for appearance refresh. Automatic production dispatch remains disabled, and the AP gate is still open for persistence of rank-limited equipment changes, stats packet refresh, abyss skill refresh execution, and Java runtime packet/order comparison.
+
 ### 5. Packet Ordering And Runtime Comparison
 
 Required before automatic dispatch:
