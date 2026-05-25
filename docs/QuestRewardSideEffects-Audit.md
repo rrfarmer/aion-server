@@ -116,6 +116,7 @@ GP:
 - Online players mutate current GP and positive daily/weekly GP, clamp current GP at zero, send GP gain/loss system messages, and send `SM_ABYSS_RANK` when actual GP changes.
 - Offline players update directly through `AbyssRankDAO.addGp`.
 - UOW-1040 adds `GameServerRateOptions.GpRates`, `GloryPointsService`, `PlayerAbyssRank.AddGp`, GP gain/loss system-message helpers, and `QuestRewardService.ApplyGpReward`.
+- UOW-1041 composes a non-live GP side-effect plan into `QuestFinishOperationPlanService` after the matching GP non-item projection and before the coarse non-item placeholder. It applies `Rates.GP` and uses `GloryPointsService.CreateAddGpPlan` without mutating the player.
 - Offline `AbyssRankDAO.addGp` remains metadata only through `GloryPointsAddPlan.OfflineDaoUpdateRequired`; no C# repository write exists.
 
 ## Persistence And Failure Ordering
@@ -131,7 +132,7 @@ GP:
 
 - `QuestFinishRewardPlanService.CreateNonItemRewardProjection` records kinah, XP, title, AP, DP, GP, cube, and warehouse metadata only.
 - `QuestFinishOperationPlanService` composes these descriptors before quest-state mutation.
-- UOW-1038 adds optional `QuestFinishRewardSideEffectContext`; when supplied, title/cube/warehouse non-item reward projections gain adjacent `NonItemRewardSideEffectPlan` descriptors carrying `QuestTitleRewardPlan` or `QuestExpansionRewardPlan`. The default planner path is unchanged when the context is absent.
+- UOW-1038 adds optional `QuestFinishRewardSideEffectContext`; when supplied, title/cube/warehouse non-item reward projections gain adjacent `NonItemRewardSideEffectPlan` descriptors carrying `QuestTitleRewardPlan` or `QuestExpansionRewardPlan`. UOW-1041 extends this to GP through `QuestGpRewardResult`. The default planner path is unchanged when the context is absent.
 - Existing live helpers:
   - `QuestRewardService.ApplyApReward`
   - `QuestRewardService.ApplyDpRewardAsync`
@@ -147,7 +148,7 @@ GP:
   - offline quest GP DAO update.
 - UOW-1035 staged a non-composed quest kinah planner on `QuestRewardService`; quest finish still does not execute it.
 - UOW-1037 staged title/cube/warehouse reward planners on `QuestRewardSideEffectPlanService`; UOW-1038 composes them into quest-finish metadata but still does not execute them.
-- UOW-1040 adds a quest GP helper and live online GP planner/mutator, but quest finish still does not execute it.
+- UOW-1040 adds a quest GP helper and live online GP planner/mutator; UOW-1041 composes non-live GP metadata into quest finish but still does not execute it.
 
 ## Remaining Risks
 
@@ -158,11 +159,12 @@ GP:
 - Packet masks and packet ordering are incomplete for quest kinah, cube expansion, warehouse expansion, and XP. Quest title and GP now have concrete system-message helpers, but no live quest-finish send or Java golden-byte comparison.
 - C# quest finish still does not execute any reward mutation.
 - Title/cube/warehouse planners are now visible in quest-finish operation metadata when a side-effect context is supplied, but remain metadata only; quest title DAO writes, expirable registration, cube update sends, warehouse info sends, and player expansion counter persistence are not live.
+- GP planner metadata is now visible in quest-finish operation metadata when a side-effect context is supplied, but live GP mutation, offline DAO writes, and deferred persistence are not live.
 - Live reward mutation needs an explicit failure-ordering policy before composition.
 - Threading assumptions differ: Java mutates live player state directly; C# must preserve per-player execution order once live execution is enabled.
 
 ## Recommended Next Units
 
-1. Compose GP helper metadata into quest-finish operation descriptors only if it remains non-live and preserves Java reward ordering.
-2. Add the offline GP DAO update plan/repository boundary before enabling siege/offline GP callers.
-3. Add a quest XP helper design or scaffold only after documenting level-up/stat/nearby-refresh side effects.
+1. Add the offline GP DAO update plan/repository boundary before enabling siege/offline GP callers.
+2. Add a quest XP helper design or scaffold only after documenting level-up/stat/nearby-refresh side effects.
+3. Compose AP/DP/Kinah side-effect metadata only if it remains non-live and preserves Java reward ordering.

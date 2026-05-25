@@ -1,4 +1,4 @@
-# Quest GP Reward Audit - UOW-1040
+# Quest GP Reward Audit - UOW-1040/UOW-1041
 
 Date: May 25, 2026
 
@@ -50,6 +50,14 @@ Date: May 25, 2026
 - Offline GP updates are represented as `OfflineDaoUpdateRequired` metadata only; no C# DAO write exists yet.
 - Quest finish still does not execute live reward mutation.
 
+## C# State After UOW-1041
+
+- Added non-live GP side-effect composition to `QuestFinishOperationPlanService`.
+- Added `QuestRewardSideEffectPlanService.CreateGpRewardPlan`, which applies `Rates.GP` and calls `GloryPointsService.CreateAddGpPlan` without mutating the player.
+- Added `QuestFinishOperationDescriptor.GpRewardPlan` metadata.
+- The GP descriptor is emitted after the matching non-item GP projection and before the coarse non-item reward placeholder.
+- Quest finish still does not execute live GP mutation or offline DAO writes.
+
 ## Known Gaps
 
 - No Java runtime golden comparison was generated.
@@ -58,7 +66,7 @@ Date: May 25, 2026
 - Java daily/weekly rollover through `AbyssRank.doUpdate` and `last_update` is not ported.
 - Positive offline GP SQL overflow/sign behavior is database-dependent and unverified.
 - Siege and fortress GP callers are not wired; siege GP must remain unrated.
-- Quest finish composition still carries GP as metadata only and does not call the live helper.
+- Quest finish composition carries GP rate/helper metadata only and does not call the live mutating helper.
 
 ## Tests Added Or Updated
 
@@ -73,7 +81,9 @@ Date: May 25, 2026
 - `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages`
 - `GameServerOptionsTests.LoadFromJavaConfig_ReadsCoreAndNetworkDefaults`
 - `GameServerOptionsTests.LoadFromJavaConfig_AppliesMyGsOverridesLast`
+- `QuestRewardSideEffectPlanServiceTests.CreateGpRewardPlan_AppliesRateAndPlansPacketsWithoutMutatingPlayer`
+- `QuestFinishOperationPlanServiceTests.CreatePlan_ComposesGpSideEffectPlanAfterMatchingNonItemProjectionWithoutMutatingPlayer`
 
 ## Next Recommendation
 
-Keep GP live integration out of quest finish until offline DAO, daily/weekly rollover, and reward failure ordering are better bounded. The next small unit can either compose GP helper metadata into quest-finish operation descriptors or audit/scaffold quest XP, which has broader level/stat side effects.
+Keep GP live integration out of quest finish until offline DAO, daily/weekly rollover, and reward failure ordering are better bounded. The next small unit should either add the offline GP DAO update plan/repository boundary or audit/scaffold quest XP, which has broader level/stat side effects.
