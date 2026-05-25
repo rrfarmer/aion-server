@@ -30,6 +30,7 @@ Current C# source breadcrumbs:
 - `dotnetConversion/src/Aion.GameServer/Services/ItemPurificationPersistencePlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Data/PlayerEnterWorldRepository.cs`
 - `docs/ItemPurification-Java-Observer-Design.md`
+- `docs/ItemPurification-AP-Quest-Readiness-Audit.md`
 
 Implemented opt-in seams:
 
@@ -103,6 +104,8 @@ Required before automatic dispatch:
 
 Current status: not satisfied. Quest get/remove callbacks are not modeled in the ItemPurification path.
 
+UOW-966 adds `docs/ItemPurification-AP-Quest-Readiness-Audit.md`, which records the source-reviewed Java callback ordering: remove notifications fire only through `Storage.delete` when material/base item counts reach zero, target get notifications fire only for actor-backed CUBE adds after the storage update packet, and `QuestEngine.onItemRemoved` only refreshes nearby quests for `questUpdateItems` rather than invoking a symmetric remove-handler map. C# has ordered `QuestNotification` metadata in the application plan, but no dispatcher is wired.
+
 ### 4. AP Side Effects
 
 Required before automatic dispatch:
@@ -110,7 +113,9 @@ Required before automatic dispatch:
 - AP spend must execute the side effects Java reaches through `AbyssPointsService.addAp`, including rank update packets and other supported rank-change side effects as their C# homes become available.
 - Missing side effects must be explicitly listed, especially rank-limited equipment checks, abyss skill updates, Legion contribution, Siege callbacks, and ranking cache behavior.
 
-Current status: not satisfied. C# carries `AbyssPointsAddPlan` metadata and sends currently modeled rank packets in live execution, but broader Java AP side effects remain incomplete.
+Current status: not satisfied. C# carries `AbyssPointsAddPlan` metadata, but ItemPurification live execution does not currently send the AP spend packets or execute broader rank-change side effects.
+
+UOW-966 records the source-reviewed AP gap list in `docs/ItemPurification-AP-Quest-Readiness-Audit.md`: Java sends `STR_MSG_USE_ABYSSPOINT` and `SM_ABYSS_RANK` from `AbyssPointsService.addAp`, broadcasts `SM_ABYSS_RANK_UPDATE`, checks rank-limited equipment, and refreshes abyss skills on rank change. Legion contribution and Siege callback are correctly absent for purification AP spend because Java only contributes positive AP and purification calls the plain `addAp(Player, int)` overload.
 
 ### 5. Packet Ordering And Runtime Comparison
 
@@ -154,6 +159,7 @@ Recommended next units:
 1. Generate Java runtime observer artifacts for ItemPurification packet/DB capture when Java 25/Maven tooling is available.
 2. Generate Java runtime failure artifacts or deliberately choose a final production failure policy once packet/DB comparison evidence exists.
 3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification.
+4. Add AP spend packet/side-effect projection tests behind explicit opt-in live execution before production dispatch wiring.
 
 Unsafe next work:
 
