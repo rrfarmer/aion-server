@@ -97,13 +97,24 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - Updated the XP execution plan descriptor note to reference the named C# constant instead of documenting it as missing.
 - The level-up animation remains metadata only in XP execution; no live broadcast is wired from XP level changes.
 
+## C# State After UOW-1050
+
+- Added `PlayerLevelChangeUpgradePlanService.CreatePlan`.
+- The sub-plan stages Java `PlayerController.upgradePlayer` order without mutating the player:
+  1. `PlayerLifeStats.synchronizeWithMaxStats`.
+  2. `PlayerGameStats.updateStatsVisually`.
+  3. Conditional `TeamStatUpdater.add` for group/alliance membership.
+  4. Conditional `LegionService.updateMemberInfo` for legion membership.
+- The sub-plan can record planned HP/MP/FP synchronization when a max-stat snapshot is supplied, but it does not calculate max stats itself and does not send HP/MP/FP, `SM_STATS_INFO`, group/alliance, or legion packets.
+- The staged XP execution plan still records `upgradePlayer` as descriptors only; this sub-plan is a prerequisite surface, not live integration.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
 - XP live mutation is not wired into quest finish; UOW-1045 only composes non-live operation metadata.
 - `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are ported for the XP reward messages used by `PlayerCommonData.addExp`, and `QuestXpRewardPlan` can now produce ordered non-live packet metadata.
 - `SM_STATUPDATE_EXP` is now represented by staged execution metadata, but no packet instance is created or sent from the XP execution plan.
-- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant and packet shape now exist, but stat recalculation, nearby quest refresh, quest engine callbacks, skills, guide, starter-kit, NPC faction effects, team/alliance updates, legion updates, ratio updates, and live animation broadcast remain unported behavior.
+- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant and upgrade-player sub-plan now exist, but stat recalculation, max-stat calculation, nearby quest refresh, quest engine callbacks, skills, guide, starter-kit, NPC faction effects, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
 - The C# plan uses the current C# `Player.Level` as the previous/display level input. Java derives and updates level through `PlayerCommonData.setExp`; this needs verification before live mutation.
 - No-exp state and Daeva/non-Daeva cap are explicit method inputs because equivalent C# player state is not fully modeled.
 - Repose and salvation formulas are source-reviewed and unit-tested, but edge cases around negative XP, large XP, unusual float rates, and live max-repose updates still need runtime verification.
@@ -123,7 +134,9 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `QuestXpExecutionPlanServiceTests.CreatePlan_KeepsNoLevelChangePlanInJavaPacketOrder`
 - `QuestXpExecutionPlanServiceTests.CreatePlan_AppendsAscensionWarningAfterXpMessageAndSkipsGuardedPlans`
 - `GamePacketTests.CharacterSelectionServerPackets_WriteJavaShapedPayloads` level-up `SM_ACTION_ANIMATION` assertion
+- `PlayerLevelChangeUpgradePlanServiceTests.CreatePlan_StagesJavaUpgradePlayerOrderWithTeamAndLegionDependencies`
+- `PlayerLevelChangeUpgradePlanServiceTests.CreatePlan_RecordsMissingMaxStatsDeadAndNoTeamLegionBranches`
 
 ## Next Recommendation
 
-Add a focused non-live side-effect sub-plan behind the staged XP execution plan, such as visual stats/update-player metadata or NPC faction level-up analysis. Keep live XP mutation disabled until stat updates, nearby quest refresh, quest callbacks, skill learning, NPC factions, custom rewards, and persistence behavior are modeled.
+Add another focused non-live side-effect sub-plan or audit behind staged XP execution, such as NPC faction level-up behavior or QuestEngine level-change callback dispatch. Keep live XP mutation disabled until stat updates, nearby quest refresh, quest callbacks, skill learning, NPC factions, custom rewards, and persistence behavior are modeled.
