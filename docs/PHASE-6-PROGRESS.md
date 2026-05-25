@@ -26999,6 +26999,55 @@ Next recommended unit of work:
 
 ---
 
+### Session 868 (May 25, 2026)
+- Continued from the Session 867 / Phase 6NO handoff with encrypted socket/read-loop coverage for selectable decompose dispatch.
+- Re-read required migration/orchestration docs, latest progress, and latest handoff. `docs/commit-conventions.md` remains absent, so this unit continued the established `[Phase 6][UOW-###] ...` style.
+- Audited `GameServerConnection.RunAsync`, `ReadPacketAsync`, `GameCrypt`, `GameEncryptionKeyPair`, existing game socket smoke tests, and the shared inventory/decompose fixture before selecting implementation.
+- Performed Parallel Work Discovery across socket-loop selectable decompose, socket-loop normal decompose with scheduler timing, read-only dispatch audit, and Java runtime comparison planning. Implementation stayed single-writer because the selected test extended the shared item-use fixture.
+- Added `RunAsync_EncryptedSelectDecomposableFrameDispatchesSelection`, which starts the real connection loop, receives the initial `SmKey`, sends an encrypted client frame for `CM_SELECT_DECOMPOSABLE`, and verifies the live read-loop path dispatches selection to the same runtime mutation/packet sequence as the private dispatch test.
+- Added fixture helpers for uninitialized crypt startup, client frame reads/writes, and deterministic client-payload encryption mirroring the C# `GameEncryptionKeyPair.DecryptClient` algorithm.
+- Kept the unit deliberately narrow: no normal `CM_USE_ITEM` socket-loop coverage with scheduler delay, no Java runtime comparison, no full packet byte comparison, and no live external client validation.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests --no-restore` passes with 27 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 1443 tests.
+
+#### Migration Parity Table - Session 868
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.AionConnection.initialized` | `Aion.GameServer.Network.Aion.GameServerConnection.RunAsync` / `SmKey` | Connection Lifecycle / Handshake | Partial | Regression Tested | Partial Parity | Socket-loop test observes `RunAsync` emit `SmKey` before client packet processing. Java runtime bytes and client-key negotiation were not compared against a live Java server. |
+| `com.aionemu.gameserver.network.aion.AionPacketHandler` / `GameCrypt.decrypt` | `GameServerConnection.ReadPacketAsync` / `GameCrypt.DecryptClientPayload` | Frame Reader / Crypto | Partial | Regression Tested | Partial Parity | Test sends a deterministic encrypted client frame through the real TCP stream and C# decrypts it before dispatch. Client encryption helper mirrors C# decrypt math; Java crypt runtime and corrupt-packet edge behavior remain unverified. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` | `Aion.GameServer.Network.Aion.GameClientPacketFactory.TryCreatePacket` | Packet Factory / Dispatch | Partial | Regression Tested through socket loop | Partial Parity | Encoded opcode `236` is read from the encrypted frame and dispatched as `CmSelectDecomposable` in `InGame` state. Broader state gating, unknown packets, and full opcode-table parity remain unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `GameServerConnection.HandleSelectDecomposableAsync` via `RunAsync` | Client Packet Handler | Partial | Regression Tested through socket loop | Partial Parity | Selectable decompose now has coverage through `RunAsync -> ReadPacketAsync -> ProcessPacketAsync`, including source decrement and reward add. Java runtime comparison, live-client validation, and full packet bytes remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Inventory.decreaseByObjectId` | `ApplySourceItemMutationAsync` / `SmInventoryUpdateItem.DecreaseItemUse` | Inventory Mutation / Source Consume Dependency | Partial | Regression Tested through socket loop | Partial Parity | Source stack `101 x2` decrements to `101 x1` from an encrypted client frame. Java DB/runtime output remains unverified. |
+| `com.aionemu.gameserver.services.item.ItemService.addItem` / `ItemUpdatePredicate` | `InventoryAddService.CreateAddItemPlan` / `SmInventoryAddItem.CreateDecomposable` | Service / Reward Dependency | Partial | Regression Tested through socket loop | Partial Parity | Reward `202 x3` is added and decompose add packet is observed after encrypted dispatch. Random reward ranges, SQL/autocommit behavior, and Java runtime side effects remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` / `SM_SYSTEM_MESSAGE` / `SM_SECONDARY_SHOW_DECOMPOSABLE` / inventory packets | `SmItemUsageAnimation` / `SmSystemMessage.UncompressCompressedItemSucceeded` / `SmSecondaryShowDecomposable` / inventory packets | Packet / Selection Completion | Partial | Regression Tested for observer type/order and selected fields | Partial Parity | Test asserts observer sequence after `SmKey`: usage animation, system message, source update, secondary decomposable clear, and reward add. It does not compare encrypted server bytes or broadcast visibility. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GameServerConnectionInventoryExpansionUseItemTests.RunAsync_EncryptedSelectDecomposableFrameDispatchesSelection` | Socket Loop / Regression | Java source review of `AionConnection.initialized`, `AionPacketHandler`, `GameCrypt`, `AionClientPacketFactory`, and `CM_SELECT_DECOMPOSABLE.runImpl` | Validates C# can start the game connection loop, send `SmKey`, decrypt an encrypted selectable-decompose client frame, dispatch packet opcode `236`, decrement source item, add reward `202 x3`, and emit the selectable success packet sequence. | Deterministic C# runtime regression through real `TcpClient`/`NetworkStream` and C# crypt/read-loop path aligned to reviewed Java source. | Does not run Java, does not compare Java-generated bytes, does not cover normal scheduled `CM_USE_ITEM` socket loop, corrupt encrypted packets, reconnect/key rotation, broadcast fanout, or live-client validation. |
+
+Remaining risks:
+- Normal decompose `CM_USE_ITEM` still lacks socket-loop coverage through scheduler completion.
+- Java runtime behavior under persistence/DAO failure remains unverified and may differ from the C# deferred-mutation transaction-safety boundary.
+- Client encryption helper mirrors the C# decrypt implementation; Java crypt was source-reviewed but not runtime-compared.
+- Decompose coverage is still mostly connection/test-fixture based rather than live Java-vs-C# runtime comparison.
+- Full packet byte parity, opcode/frame/crypto breadth, broadcast fanout, socket visibility, threading/date-time precision, serialization side effects, random reward selection, and live-client validation remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 C# socket-loop regression slice for encrypted selectable decompose dispatch
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 10 blocked/not-started categories, including normal decompose socket-loop scheduler coverage, Java persistence failure comparison, full Java-vs-C# crypt comparison, active-player lifecycle comparison, full packet byte parity, opcode/frame/crypto breadth, broadcast fanout, socket visibility, serialization side effects, random reward ranges, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; selectable decompose now has encrypted read-loop coverage, but normal scheduled socket-loop behavior and live/byte-level parity remain partial.
+
+Next recommended unit of work:
+- Add socket-loop coverage for normal `CM_USE_ITEM` decompose with scheduler completion if the current fixture can keep the timing stable: send encrypted opcode `37`, wait through the 3000ms task, and assert source decrement/delete, reward add, success message, and final usage animation. If timing makes this flaky, add a smaller socket-loop test for the initial normal decompose scheduling packet sequence only, or write the Java-runtime comparison plan for decompose packet/order behavior.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -27008,4 +27057,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Move from decompose branch coverage to dispatch/read-loop validation: add encrypted or socket-loop coverage for `CM_SELECT_DECOMPOSABLE`/decompose item-use if a compact fixture exists, or perform a read-only audit first to identify the smallest safe socket-loop test. If socket-loop setup expands too much, add a focused Java-runtime comparison plan for decompose packet/order behavior instead.
+8. Continue dispatch/read-loop validation by adding socket-loop coverage for normal `CM_USE_ITEM` decompose with scheduler completion if timing stays stable: send encrypted opcode `37`, wait through the 3000ms task, and assert source decrement/delete, reward add, success message, and final usage animation. If timing makes this flaky, add a smaller socket-loop test for the initial scheduling packet sequence only, or write the Java-runtime comparison plan for decompose packet/order behavior.
