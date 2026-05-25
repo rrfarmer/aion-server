@@ -124,6 +124,8 @@ UOW-981 adds `SmNearbyQuests` packet serialization and tests for the Java `SM_NE
 
 UOW-982 adds minimal `WorldMapInstanceRuntimeState` quest-id registry storage and tests for Java's duplicate-collapsing `questIds.add(id)` behavior. This satisfies only the storage prerequisite; dynamic `QuestNpc.onQuestStart` population, candidate filtering, player-controller sends, and automatic production dispatch remain disabled.
 
+UOW-983 adds staged `QuestNpcStartTable` storage plus `QuestNpcStartRegistrationSource` metadata for future Java handler and XML quest-start extraction. This satisfies only the in-memory registration prerequisite; no Java/XML extractor, NPC-spawn population, candidate filtering, player-controller send, or automatic production dispatch is wired.
+
 ### 4. AP Side Effects
 
 Required before automatic dispatch:
@@ -190,7 +192,7 @@ Recommended next units:
 
 1. Generate Java runtime observer artifacts for ItemPurification packet/DB capture when Java 25/Maven tooling is available.
 2. Generate Java runtime failure artifacts or deliberately choose a final production failure policy once packet/DB comparison evidence exists.
-3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next with dynamic quest-start registration/candidate filtering and preserving the no-op dispatcher seam until candidate calculation and quest start-condition evaluation exist.
+3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next with Java handler/XML quest-start extraction and preserving the no-op dispatcher seam until candidate calculation and quest start-condition evaluation exist.
 4. Add AP spend packet/side-effect projection tests behind explicit opt-in live execution before production dispatch wiring.
 
 Unsafe next work:
