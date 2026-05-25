@@ -1,4 +1,4 @@
-# Quest XP Reward Audit - UOW-1044/UOW-1054
+# Quest XP Reward Audit - UOW-1044/UOW-1055
 
 Date: May 25, 2026
 
@@ -19,6 +19,11 @@ Date: May 25, 2026
 - `game-server/src/com/aionemu/gameserver/configs/main/HTMLConfig.java#ENABLE_GUIDES`
 - `game-server/src/com/aionemu/gameserver/network/aion/serverpackets/SM_QUESTIONNAIRE.java`
 - `game-server/src/com/aionemu/gameserver/services/SkillLearnService.java#learnNewSkills`
+- `game-server/src/com/aionemu/gameserver/services/SkillLearnService.java#autoLearnSkills`
+- `game-server/src/com/aionemu/gameserver/services/SkillLearnService.java#onLearnSkill`
+- `game-server/src/com/aionemu/gameserver/model/skill/PlayerSkillList.java#addSkill`
+- `game-server/src/com/aionemu/gameserver/model/skill/PlayerSkillList.java#removeSkill`
+- `game-server/src/com/aionemu/gameserver/dataholders/SkillTreeData.java#getTemplatesFor`
 
 ## Java Behavior Summary
 
@@ -156,13 +161,28 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - Missing guide static data, disabled guides, unspawned players, and empty level ranges are explicit non-live planner statuses.
 - The staged XP execution plan still records guide HTML as a descriptor only; this sub-plan is not composed into `QuestXpExecutionPlanService`.
 
+## C# State After UOW-1055
+
+- Added non-live `SkillLearnService.CreateAutoLearnPlan`.
+- The planner stages Java `PlayerController.onLevelChange -> SkillLearnService.learnNewSkills` behavior without mutating `Player.Skills`, sending packets, applying effects, learning recipes, refreshing nearby quests, or persisting skills:
+  1. Preserves Java reverse level iteration from `toLevel` down to `fromLevel`.
+  2. Preserves switched-class starting-class backfill for levels below 10.
+  3. Reuses `SkillTreeTable.GetTemplatesFor` class+race then class+`PC_ALL` ordering.
+  4. Records non-autolearn template skips.
+  5. Records Java human-gathering skip for advanced classes.
+  6. Projects Java `PlayerSkillList.addSkill` add/upgrade/no-change behavior.
+  7. Records `onLearnSkill` side-effect intent for skill-list packets, craft-level-up animation broadcasts, passive effect application, nearby quest refresh, and recipe auto-learn.
+  8. Projects Daeva human gathering upgrade from skill `30001` to `30002`, then planned removal of `30001`.
+- Missing skill tree/static skill templates, missing player, and empty level ranges are explicit non-live planner statuses.
+- The staged XP execution plan still records skill auto-learn as a descriptor only; this sub-plan is not composed into `QuestXpExecutionPlanService`.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
 - XP live mutation is not wired into quest finish; UOW-1045 only composes non-live operation metadata.
 - `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are ported for the XP reward messages used by `PlayerCommonData.addExp`, and `QuestXpRewardPlan` can now produce ordered non-live packet metadata.
 - `SM_STATUPDATE_EXP` is now represented by staged execution metadata, but no packet instance is created or sent from the XP execution plan.
-- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant, upgrade-player sub-plan, NPC faction level-up sub-plan, QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent, and guide HTML sub-plan now exist, but stat recalculation, max-stat calculation, live nearby quest refresh, live quest handler execution, skills, live guide HTML packets/persistence, starter-kit, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
+- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant, upgrade-player sub-plan, NPC faction level-up sub-plan, QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent, guide HTML sub-plan, and skill auto-learn sub-plan now exist, but stat recalculation, max-stat calculation, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML packets/persistence, starter-kit, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
 - The C# plan uses the current C# `Player.Level` as the previous/display level input. Java derives and updates level through `PlayerCommonData.setExp`; this needs verification before live mutation.
 - No-exp state and Daeva/non-Daeva cap are explicit method inputs because equivalent C# player state is not fully modeled.
 - Repose and salvation formulas are source-reviewed and unit-tested, but edge cases around negative XP, large XP, unusual float rates, and live max-repose updates still need runtime verification.
@@ -192,7 +212,9 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `NearbyQuestRefreshPlanServiceTests.CreatePlan_MatchesJavaEmptyNearbyQuestPacketIntent`
 - `GuideHtmlLevelChangePlanServiceTests.CreatePlan_StagesJavaGuideTemplateOrderAndPersistenceIntent`
 - `GuideHtmlLevelChangePlanServiceTests.CreatePlan_RecordsJavaConfigSpawnedMissingRangeAndInactiveBranches`
+- `SkillAutoLearnPlanServiceTests.CreateAutoLearnPlan_StagesJavaReverseLevelLoopStartingClassBackfillAndDaevaGatheringUpgrade`
+- `SkillAutoLearnPlanServiceTests.CreateAutoLearnPlan_RecordsMissingInputsNoChangesAndAlreadyKnownBranches`
 
 ## Next Recommendation
 
-Add another focused non-live side-effect sub-plan or audit behind staged XP execution, such as skill auto-learn ordering or composition of existing level-change sub-plans into XP execution metadata. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, skill learning, live guide HTML send/persistence, live NPC faction mutation, custom rewards, and persistence behavior are modeled.
+Add another focused non-live side-effect sub-plan or audit behind staged XP execution, such as composing existing level-change sub-plans into XP execution metadata or auditing bonus/faction custom rewards and starter-kit ordering. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live NPC faction mutation, custom rewards, and persistence behavior are modeled.
