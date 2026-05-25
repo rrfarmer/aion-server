@@ -101,6 +101,7 @@ Current C# status:
 
 - `ItemPurificationApplicationPlanService` records ordered operations and already flags quest-notification intent on exhausted material/base deletes and target adds.
 - UOW-967 adds `ItemPurificationApplicationPlanService.ProjectQuestNotifications`, a pure projection that maps `DeleteMaterialItem` and `DeleteBaseItem` operations to `ItemRemoved` candidates and `AddTargetItem` operations to `ItemGet` candidates.
+- UOW-974 adds `IItemPurificationQuestMutationNotifier` plus `NoOpItemPurificationQuestMutationNotifier` as an explicit opt-in live-execution seam. When a notifier is supplied, live execution projects the Java-ordered candidates after a successful mutation send and returns the dispatch result. The default path still does not invoke quest handlers or nearby-quest refresh.
 - Partial material count updates do not need item-remove callbacks under Java behavior.
 - Live mutation replaces the player inventory snapshot and applies AP, but intentionally leaves persistence, sends, quest callbacks, and rollback outside its boundary.
 - Production `HandleInfrastructurePacketAsync` still routes `CmItemPurification` to the plan-only `HandleItemPurificationAsync` path.
@@ -108,7 +109,7 @@ Current C# status:
 
 Quest parity gaps:
 
-- C# has metadata and a pure ordered projection for quest notification intent but does not invoke `onItemGet` or `onItemRemoved` equivalents.
+- C# has metadata, a pure ordered projection, and an opt-in no-op notifier seam for quest notification intent, but it does not invoke real `onItemGet` or `onItemRemoved` equivalents by default.
 - C# does not yet model the Java distinction between get-item handler dispatch and nearby-quest refresh.
 - C# does not yet have a complete `questItems`/`questUpdateItems` projection from Java quest registration data for this path.
 - Target add callback must remain CUBE/actor-backed and must occur after storage update packet semantics are preserved.

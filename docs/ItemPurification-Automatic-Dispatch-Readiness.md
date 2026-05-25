@@ -108,6 +108,8 @@ UOW-966 adds `docs/ItemPurification-AP-Quest-Readiness-Audit.md`, which records 
 
 UOW-967 adds `ItemPurificationApplicationPlanService.ProjectQuestNotifications`, a pure metadata projection that emits Java-ordered `ItemRemoved` candidates for exhausted material/base deletes and `ItemGet` candidates for target add. This does not wire a dispatcher, invoke quest handlers, refresh nearby quests, or satisfy the automatic-dispatch gate.
 
+UOW-974 adds an explicit opt-in quest-notification seam: `IItemPurificationQuestMutationNotifier` and `NoOpItemPurificationQuestMutationNotifier`. When a notifier is supplied to explicit live execution, the path projects Java-ordered candidates after a successful mutation send and returns a dispatch result. Automatic production dispatch still passes no notifier, so no real quest handler invocation or nearby-quest refresh occurs.
+
 ### 4. AP Side Effects
 
 Required before automatic dispatch:
