@@ -29395,9 +29395,64 @@ Next recommended unit of work:
 
 ---
 
+### Session 912 (May 25, 2026)
+- Continued after UOW-911 by reading the PG handoff, confirming `docs/commit-conventions.md` is still missing, and running Parallel Work Discovery around Dredgion/basic PvP instance AP rewards, NPC team/group AP distribution, live PvP adapter feasibility, Trade, and AP-purification paths.
+- Selected the Dredgion/basic PvP instance AP reward planner because Java `DredgionInstance` and `BasicPvpInstance` both isolate AP distribution to `Rates.AP_DREDGION.calcResult(player, reward.getBaseAp() + reward.getBonusAp())` followed by `AbyssPointsService.addAp`.
+- Added `PvpInstanceApRewardService` with Java breadcrumbs for `DredgionInstance.distributeRewards`, `BasicPvpInstance.distributeRewards`, their winner/loser/draw AP reward setup, and `Rates.AP_DREDGION`.
+- Added `CalculateFactionApReward` for Java winner/loser/draw base AP and bonus AP math, including Basic PvP winner boss-bonus support.
+- Added configured `GameServerOptions.Rates.ApDredgionRates` consumption with membership clamping, empty-rate fallback, and Java long-to-int overflow fallback.
+- Registered `PvpInstanceApRewardService` in DI.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~PvpInstanceApRewardServiceTests --no-restore` passed with 7 tests.
+  - `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed: Commons 57, Chat 29, Login 121, GameServer 1521.
+
+#### Migration Parity Table - Session 912
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `instance.dredgion.DredgionInstance` | `Aion.GameServer.Services.PvpInstanceApRewardService` | Instance Handler / Reward Planner | Partial | Regression Tested in C# | Partial Parity | C# now models Dredgion winner/loser/draw AP base/bonus math and AP_DREDGION rate application at the planner boundary. Full instance lifecycle, score updates, room capture, quest reward callback, item rewards, score packets, revive/leave timers, NPC deletion, random start position, and live handler loading remain missing. |
+| `instance.pvp.BasicPvpInstance` | `Aion.GameServer.Services.PvpInstanceApRewardService` | Instance Handler / Reward Planner | Partial | Regression Tested in C# | Partial Parity | C# models the shared Basic PvP AP distribution step and generic winner/loser/draw reward math, including winner boss-bonus input used by subclasses. Full progression state, score packets, GP rewards, item rewards, boss-kill conditions, point updates, revive/leave timers, and live handler integration remain missing. |
+| `com.aionemu.gameserver.model.instance.instancescore.PvpInstanceScore` | `PvpInstanceApRewardService.CalculateFactionApReward` | Score / Reward Input Projection | Partial Input Projection | Regression Tested in C# | Needs Verification | Winner/loser/draw AP rewards and score points are accepted as inputs. C# does not yet port score storage, race score calculation, progression types, kill counters, or score writer serialization for this unit. |
+| `com.aionemu.gameserver.model.instance.playerreward.PvpInstancePlayerReward` | `PvpInstanceApRewardBreakdown` / `PvpInstanceApRewardResult` | Reward DTO Projection | Partial | Regression Tested in C# | Needs Verification | Base AP, bonus AP, total AP, applied AP, and AP plan result are modeled. Reward item IDs/counts, GP, kills, points, and packet serialization fields remain outside this slice. |
+| `com.aionemu.gameserver.model.gameobjects.player.Rates.AP_DREDGION` | `PvpInstanceApRewardService.ApplyDredgionApRate` / `GameServerRateOptions.ApDredgionRates` | Rate Calculation / Configuration Consumption | Partial | Regression Tested in C# | Partial Parity | Configured membership rates, membership clamping, empty-rate fallback, and Java long-to-int fallback behavior are covered. No Java runtime comparison. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `Aion.GameServer.Services.AbyssPointsService.AddAp` | Service | Partial | Regression Tested in C# | Partial Parity | Instance AP reward mutates AP through the existing add-AP planner. Persistence, full Legion contribution fanout, ranking cache, large-AP logging, and live caller side effects remain incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Regression validates AP gain message id `1320000` is planned for instance AP rewards, including zero-reward planner behavior. Packet bytes and live ordering were not Java-runtime compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRank` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Regression validates rank packet intent after nonzero instance AP reward mutation. Ranking-position lookup and byte-level Java comparison remain unavailable. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ApplyApReward_AppliesConfiguredDredgionRateAndAddsApThroughPlanner` | Regression | Java `DredgionInstance.distributeRewards`, `BasicPvpInstance.distributeRewards`, `Rates.AP_DREDGION`, and `AbyssPointsService.addAp(Player, int)` source review | Validates base AP `4500`, bonus AP `500`, total AP `5000`, configured rate `1.5` producing applied AP `7500`, AP mutation `1000 -> 8500`, and AP gain/rank packet intent. | Deterministic C# regression grounded in Java source. | No Java runtime artifact; live instance handler integration remains missing. |
+| `CalculateFactionApReward_MatchesJavaDredgionAndBasicPvpRewardBranches` | Regression | Java `DredgionInstance.doReward` and Basic PvP subclass `setAndDistributeRewards` source review | Validates winner bonus `2 * score / 6`, loser/draw bonus `score / 6`, draw base override, and winner boss-bonus addition. | Deterministic C# formula regression grounded in Java source. | Subclass-specific reward constants and item/GP rewards are not fully modeled. |
+| `ApplyDredgionApRate_MatchesJavaMembershipFallbacksAndOverflowBehavior` | Regression | Java `Rates.AP_DREDGION`, `Rates.get`, and `Rates.calcResult(int)` source review | Validates membership clamping, empty-rate fallback to `1`, and overflow fallback to original AP. | Deterministic C# formula regression. | No Java runtime artifact. |
+| `ApplyApReward_HandlesMissingPlayerAndZeroRewardLikePlannerBoundary` | Guard Regression | Java reward distribution plus C# planner boundary | Validates missing player does not mutate AP and zero AP still routes through add-AP planner, producing AP gain message intent with no rank packet. | Deterministic C# guard regression grounded in existing `AbyssPointsService` planner behavior. | Java runtime packet behavior for zero AP was not captured. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- `PvpInstanceApRewardService` is a planner slice; live Dredgion/Basic PvP instance handler loading, score lifecycle, score packets, quest callbacks, GP rewards, item rewards, revive/leave timers, NPC deletion, and map-specific subclass behavior remain incomplete.
+- Basic PvP subclass constants and boss-kill bonuses are represented as inputs rather than live handler state.
+- Remaining AP callers in Trade, item purification, NPC team/group distribution, Aturam/EternalBastion/Stonespear/PvP arena, and admin paths still need convergence through `AbyssPointsService` as appropriate.
+- Packet bytes, persistence, ranking cache, Legion contribution fanout, and live siege callback execution remain incomplete.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 Dredgion/basic PvP instance AP reward planner slice plus 1 DI registration
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 7 blocked/not-started categories, including Java runtime artifact generation, live instance handler integration, score/packet serialization lifecycle, item/GP reward side effects, remaining AP callers, persistence/fanout side effects, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 67% complete; this unit consumes the Dredgion AP rate array in a C# instance reward planner.
+
+Next recommended unit of work:
+- Continue AP caller convergence by analyzing NPC team/group AP distribution or the remaining instance AP reward callers (`AturamSkyFortressInstance`, `EternalBastionInstance`, `StonespearReachInstance`, `PvPArenaInstance`) and port the smallest isolated planner.
+- Trade and item-purification AP paths likely require broader inventory/dialog/action surfaces and should remain analysis-first.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, PvP AP gain/loss, and Quest AP now consume their configured AP rates at planner/service boundaries, so move next to Dredgion/basic PvP instance rewards, NPC team/group AP distribution, Trade/AP-purification analysis, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Inspect C# coverage for Java `TradeService` and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, PvP AP gain/loss, Quest AP, and Dredgion/basic PvP instance AP now consume their configured AP rates at planner/service boundaries, so move next to NPC team/group AP distribution, remaining instance AP callers, Trade/AP-purification analysis, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Inspect C# coverage for Java `TradeService` and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
