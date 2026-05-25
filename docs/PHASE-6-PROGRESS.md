@@ -26759,6 +26759,55 @@ Next recommended unit of work:
 
 ---
 
+### Session 863 (May 24, 2026)
+- Continued from the Session 862 / Phase 6NJ handoff with normal decompose scheduled completion coverage.
+- Re-read the latest handoff and audited Java `DecomposeAction.act` / scheduled completion behavior: start `SM_ITEM_USAGE_ANIMATION` with `USAGE_DELAY`, post-validate after delay, consume source with `Inventory.decreaseByObjectId`, send success message, add rewards through `ItemService.addItem(... DECOMPOSABLE/INC_ITEM_COLLECT)`, then broadcast final usage animation `end=1`.
+- Performed Parallel Work Discovery across normal decompose completion, inventory-full service coverage, encrypted socket-loop audit, and docs. Implementation stayed single-writer because the selected test touched the shared item-use fixture.
+- Added `HandleUseItemAsync_DecomposeCompletesAndAddsReward`, which sets the connection active player, lets the 3000 ms scheduled decompose complete, and verifies source decrement, reward add, pending-use cleanup, success message/update packet/final animation/reward packet ordering.
+- Updated `WaitUntilAsync` to accept an optional timeout so scheduled 3000 ms item-use tests can wait without changing faster tests.
+- Debug note: the scheduled callback intentionally skips completion unless the connection active player still matches the item-use player. The new test uses the existing dispatch helper to model that active-player lifecycle.
+- Kept the unit deliberately narrow: no inventory-full behavior, no source-delete completion variant, no encrypted socket loop, no Java runtime comparison, and no live-client validation.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionInventoryExpansionUseItemTests"` passes with 22 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1438 tests.
+
+#### Migration Parity Table - Session 863
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.DecomposeAction` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleDecomposeUseItemAsync` / `CompleteDecomposeUseItemAsync` | Item Action / Scheduled Runtime Handler | Partial | Regression Tested | Partial Parity | Normal successful scheduled decompose path is now covered for source decrement, reward add, success message, final animation `end=1`, and pending-use cleanup. Java runtime comparison, source-delete variant, inventory-full branch, and live-client behavior remain unverified. C# preserves a Java breadcrumb for controller task scheduling and uses `ThreadPoolManager` instead of Java's executor. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` | `Aion.GameServer.Network.Aion.ServerPackets.SmItemUsageAnimation` | Packet | Partial | Regression Tested for runtime type/order and selected fields | Partial Parity | Test asserts start animation time `3000`/`end=0` and final animation time `0`/`end=1`. Full byte-for-byte Java packet parity, broadcast fanout, opcode/frame/crypto, and socket visibility remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.DecomposeItemSucceed` | Packet | Partial | Regression Tested for packet type/order | Needs Verification | Test verifies success message is emitted in the completion sequence but does not assert localized message payload bytes or compare against Java output. |
+| `com.aionemu.gameserver.model.gameobjects.player.Inventory.decreaseByObjectId` | `GameServerConnection.ApplySourceItemMutationAsync` / `SmInventoryUpdateItem.DecreaseItemUse` | Inventory Mutation / Source Consume Dependency | Partial | Regression Tested | Partial Parity | Source stack `100 x2` decrements to `100 x1` and emits a decrease update. Source delete when count reaches zero, persistence rollback, Java SQL side effects, and Java runtime output remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemService` / `ItemPacketService.ItemAddType.DECOMPOSABLE` / `ItemUpdateType.INC_ITEM_COLLECT` | `InventoryAddService.CreateAddItemPlan` / `SmInventoryAddItem.CreateDecomposable` | Service / Inventory Reward Dependency | Partial | Regression Tested | Partial Parity | Reward `200 x1` is added as a new inventory row after completion and a reward add packet is emitted. Existing-stack merge has prior coverage; inventory-full, Java DB/runtime comparison, precision/rounding randomness, and live-client behavior remain unverified. |
+| `com.aionemu.gameserver.dataholders.DecomposableItemsData` / reward item template lookup | fixture `DecomposableItemTable` / `DataManager.ItemTemplates` | Static Data / DTO Dependency | Partial | Regression Tested with deterministic fixture data | Partial Parity | Test uses deterministic fixture data for normal item `100` -> reward `200 x1`. Broader chance selection, level filtering, random ranges, missing template behavior, serialization differences, and Java static-data parser comparison remain unverified. |
+| `com.aionemu.gameserver.utils.ThreadPoolManager` | `Aion.GameServer.Utils.ThreadPoolManager` / `SchedulePendingItemUseAsync` | Scheduler / Threading Dependency | Partial | Regression Tested through delayed completion | Needs Verification | Test proves C# scheduled completion runs after the item-use delay when active-player state matches. Java thread/task cancellation semantics, date/time precision, race conditions, and executor behavior remain unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GameServerConnectionInventoryExpansionUseItemTests.HandleUseItemAsync_DecomposeCompletesAndAddsReward` | Runtime / Regression | Java source review of `DecomposeAction.act` normal non-selectable scheduled path | Validates C# scheduled normal decompose completion: start animation, delayed completion, source decrement, success message, inventory update packet, final success animation, reward item add, and pending-use cleanup. | Deterministic C# runtime regression aligned to reviewed Java source ordering and state changes. | Does not run Java, source-delete completion, inventory-full behavior, Java-generated bytes, opcode/frame/crypto, socket fanout, threading race behavior, serialization side effects, or live-client validation. |
+
+Remaining risks:
+- Inventory-full behavior for normal and selectable decompose remains untested.
+- Source-delete scheduled completion for normal decompose needs explicit coverage even though selectable delete has prior coverage.
+- Java runtime behavior under persistence/DAO failure remains unverified and may differ from the C# deferred-mutation transaction-safety boundary.
+- Scheduled completion depends on C# active-player reference checks; Java controller/task lifecycle was source-reviewed but not runtime-compared.
+- Full packet byte parity, opcode/frame/crypto, broadcast fanout, socket visibility, threading/date-time precision, serialization side effects, random reward selection, and live-client validation remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 C# runtime regression slice for normal decompose scheduled successful completion
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 15 blocked/not-started categories, including inventory-full behavior, normal source-delete completion, Java persistence failure comparison, encrypted socket loop, active-player lifecycle comparison, full packet byte parity, opcode/frame/crypto, broadcast fanout, socket visibility, serialization side effects, random reward ranges, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; decompose item-use now covers scheduled normal success plus broad selectable branch coverage, but inventory-full, Java runtime comparison, and live/byte-level parity remain partial.
+
+Next recommended unit of work:
+- Add inventory-full decompose coverage next, preferably at the service or connection-fixture level with a deterministic full cube, and document whether normal and selectable reward planning fail before source consumption, persistence, and packet emission. If full-cube setup becomes too broad, add normal decompose source-delete scheduled completion as the next compact regression.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -26768,4 +26817,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Move to the next decompose completion gap: add a normal decompose successful completion regression if the existing fixture can wait through the scheduler and assert source consume, reward add, success animation `end=1`, and reward packets. If that is too slow/flaky, add selectable/normal inventory-full behavior through `DecomposeService` first.
+8. Add inventory-full decompose coverage next, preferably with deterministic full-cube setup proving reward planning fails before source consumption, persistence, and packet emission. If that setup is too broad, add normal decompose source-delete scheduled completion as the next compact regression.
