@@ -56,7 +56,7 @@ Current C# behavior:
 
 Add an ItemPurification-specific repository method rather than a broad generic inventory transaction.
 
-Implementation status as of UOW-962: the method signature, empty-repository recording stub, MySQL repository method, pure persistence payload mapper, inserted-item `item_stones` row persistence, an explicit opt-in persistent live execution seam, a handler-level opt-in helper, handler-level repository-save failure-ordering coverage, an automatic-dispatch readiness policy, and a Java observer design for future packet/DB capture exist. Automatic `HandleInfrastructurePacketAsync` invocation remains disabled, real DB integration verification is still missing, Java observer artifacts are not generated yet, and quest/AP side-effect execution remains incomplete.
+Implementation status as of UOW-963: the method signature, empty-repository recording stub, MySQL repository method, pure persistence payload mapper, inserted-item `item_stones` row persistence, an explicit opt-in persistent live execution seam, a handler-level opt-in helper, handler-level repository-save failure-ordering coverage, an automatic-dispatch readiness policy, a Java observer design for future packet/DB capture, and an opt-in game-server MySQL integration test exist. The opt-in test passed against a Docker-hosted Java-shaped `aion_gs` schema with `AION_GAMESERVER_DB_INTEGRATION=1`. Automatic `HandleInfrastructurePacketAsync` invocation remains disabled, repository failure/rollback coverage is still missing, Java observer artifacts are not generated yet, and quest/AP side-effect execution remains incomplete.
 
 See `docs/ItemPurification-Automatic-Dispatch-Readiness.md` before considering any production dispatch change.
 See `docs/ItemPurification-Java-Observer-Design.md` before designing Java runtime packet/DB comparison artifacts.
@@ -112,6 +112,7 @@ Recommended focused tests:
 - Regression test: kinah remains unchanged and no kinah repository update is requested for Java's `decreaseKinah(-necessaryKinah)` behavior.
 - Failure-ordering test/design: handler-level coverage now proves live packet send/mutation succeeds before repository persistence failure is reported. Any automatic dispatch path still needs a deliberate runtime policy because no rollback exists.
 - Handler opt-in helper test: explicit callers can invoke mutation+packet+persistence through `GameServerConnection.HandleItemPurificationPersistentLiveExecutionAsync` without enabling automatic packet dispatch.
+- Opt-in game-server MySQL test: `PlayerEnterWorldRepositoryDatabaseIntegrationTests.SaveItemPurificationMutation_WritesInventoryStonesAndAbyssRankAgainstJavaSchema_WhenEnabled` seeds Java-shaped rows and asserts material update/delete, base delete, target insert, inherited `item_stones`, and AP rank writes when `AION_GAMESERVER_DB_INTEGRATION=1`.
 
 ## Open Gaps
 
