@@ -30000,9 +30000,70 @@ Next recommended unit of work:
 
 ---
 
+### Session 922 (May 25, 2026)
+- Continued after UOW-921 by selecting the recommended isolated target-item inheritance planner for Java `ItemPurificationService.upgradeItem`.
+- Parallel Work Discovery considered target inheritance, random bonus equivalence audit, and live purification packet wiring. Live packet work remains unsafe; random bonus runtime selection remains injected.
+- Added `ItemPurificationInheritanceService` to model the non-persistent target item projection created by Java `upgradeItem`.
+- Ported the source-to-target field inheritance rules:
+  - target item id/count/object id from caller projection
+  - optional sockets, creator, enchant bonus, fusion id/fusion random bonus, mana/fusion stones, godstone, tempering, soulbound, and color copied from source
+  - tune count clamped to `[0, target.maxTuneCount]`
+  - enchant level reduced by `5`
+  - amplified state preserved only when source was amplified and target enchant reaches target max enchant
+  - buff skill copied only when target remains amplified and enchant is at least `20`
+  - random bonus preserved when source/target inventory stat-bonus sets match, otherwise replaced by injected reroll id
+- Kept live `ItemFactory`, `ItemSocketService`, `TuningAction` random selection, `ItemRandomBonusData.areBonusSetsEqual`, inventory add, persistence, and packet fanout out of scope.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter ItemPurificationInheritanceServiceTests` passed with 4 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1572 tests.
+
+#### Migration Parity Table - Session 922
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemPurificationService.upgradeItem` | `Aion.GameServer.Services.ItemPurificationInheritanceService.CreateTargetItemPlan` | Service / Item Mutation Planner | Partial | Regression Tested in C# | Partial Parity | C# now models target item inheritance as a pure projection. Live `ItemFactory.newItem`, inventory add, persistence, packet fanout, and failure/no-rollback behavior remain unported. |
+| `com.aionemu.gameserver.model.gameobjects.Item` | `Aion.GameServer.Model.GameObjects.InventoryItem` | Model / Input Projection | Partial | Regression Tested in C# | Needs Verification | C# projection covers fields currently present in `InventoryItem`: sockets, creator, enchant/enchant bonus, fusion id/random bonus, stones, godstone, tempering, soulbound, color, tune count, amplified, and buff skill. Java-specific fusion template object, item template instance, and item color expiration semantics are not fully modeled. |
+| `com.aionemu.gameserver.model.templates.item.ItemTemplate` | `Aion.GameServer.Dataholders.ItemTemplateSummary` | Static Data DTO / Input Projection | Partial | Regression Tested in C# | Needs Verification | Planner consumes target max tune count, max enchant level, and source/target stat-bonus set ids. Full template behavior and item factory defaults are outside this unit. |
+| `com.aionemu.gameserver.dataholders.ItemRandomBonusData.areBonusSetsEqual` | `ItemPurificationInheritanceService` source/target `StatBonusSetId` comparison | Static Data Helper Projection | Partial | Regression Tested in C# | Needs Verification | C# compares projected inventory stat-bonus set ids directly. Java helper also scopes by `StatBonusType.INVENTORY`; broader random-bonus table behavior is not ported here. |
+| `com.aionemu.gameserver.model.templates.item.actions.TuningAction.getRandomStatBonusIdFor` | `ItemPurificationInheritanceService` injected `rerolledRandomBonusId` | Random Selection Projection | Partial | Regression Tested in C# | Needs Verification | Runtime random selection is not implemented; caller supplies the selected id. This avoids assuming parity for RNG/table selection. |
+| `com.aionemu.gameserver.services.item.ItemSocketService.addManaStone` | `InventoryItem.ManaStones` / `FusionStones` copied projection | Service / Socket Mutation Projection | Partial | Regression Tested in C# | Needs Verification | C# copies projected socket lists rather than invoking live socket mutation. Socket validation, packet fanout, and persistence remain missing. |
+| `com.aionemu.gameserver.services.item.ItemFactory.newItem` | Not ported in this unit | Factory | Not Started for purification live path | No Tests in this unit | Unknown | Caller projects target object id; factory defaults, object id allocation, and add-to-inventory behavior remain live work. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_ITEM_PURIFICATION` | Not ported in this unit | Client Packet Handler | Not Started | Manual Analysis | Needs Verification | Live packet remains unported; Java still requires validation, material decrease, AP/kinah/base mutation, and upgrade call ordering. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateTargetItemPlan_CopiesJavaUpgradeStateAndClampsTargetFields` | Regression | Java `ItemPurificationService.upgradeItem` source review | Validates enchant minus 5, tune clamp, amplified/buff preservation, random bonus preservation, source field copies, sockets, stones, godstone, tempering, soulbound, creator, and color. | Deterministic C# regression grounded in Java source. | No live item factory/inventory add/persistence. |
+| `CreateTargetItemPlan_DropsAmplifiedAndBuffSkillWhenTargetEnchantFallsBelowLimits` | Regression | Java amplified/buff guard source review | Validates amplified and buff skill are dropped when target enchant after minus 5 is below target max/20 threshold. | Deterministic C# regression. | No Java runtime comparison. |
+| `CreateTargetItemPlan_RerollsRandomBonusWhenInventoryBonusSetsDiffer` | Regression | Java `areBonusSetsEqual` and `TuningAction.getRandomStatBonusIdFor` branch source review | Validates differing stat-bonus sets use injected rerolled random bonus id and mark reroll. | Deterministic C# regression for branch behavior. | Random selection itself is not implemented. |
+| `CreateTargetItemPlan_ReportsMissingInputs` | Guard Regression | C# planner boundary around Java live inputs | Validates missing projected inputs fail explicitly. | Deterministic C# guard regression. | Java may throw later for some nulls; live exception behavior remains unported. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Planner is a pure projection; it does not allocate via `ItemFactory`, add to inventory, persist target item/stones, send packets, or roll back failed adds.
+- Random bonus reroll selection is injected and not Java-runtime compared.
+- `ItemRandomBonusData.areBonusSetsEqual` is approximated through source/target stat-bonus set id equality for `INVENTORY`; full random-bonus table helper parity is not claimed.
+- Java fusioned item template object and optional socket semantics are represented by current C# scalar/list projections only.
+- Live `CM_ITEM_PURIFICATION`, material/base/target mutation, kinah mutation parity decision, persistence, and packet fanout remain missing.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 target-item inheritance planner slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, live item factory/inventory add, random-bonus selection, socket mutation persistence/fanout, live packet handler, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 68% complete; this unit adds purification target inheritance projection but not live purification behavior.
+
+Next recommended unit of work:
+- Add a pure material/base/kinah mutation planner for `ItemPurificationService.decreaseMaterials`, explicitly documenting Java's partial material-consumption risk and kinah negative-spend behavior.
+- Keep live `CM_ITEM_PURIFICATION` blocked until validation, material/AP/kinah/base mutation, target inheritance, persistence, and packet fanout can be assembled in order.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, and the ItemPurification lookup adapter now consume their configured/fixed/formula AP boundaries at planner/service boundaries. Move next to a target-item inheritance planner, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, and target-item inheritance projection now consume their configured/fixed/formula AP and item-state boundaries at planner/service boundaries. Move next to a material/base/kinah mutation planner, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
