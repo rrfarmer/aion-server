@@ -87,4 +87,4 @@ Known limitations:
 
 ## Next Recommended Unit
 
-Continue with a staged candidate-marker bridge that combines world-instance quest ids with `NearbyQuestTemplateTable` and `NearbyQuestStartConditionService`, without sending `SM_NEARBY_QUESTS`. Keep production startup and nearby-refresh dispatch disabled until predicate parity exists.
+Continue with a read-only Java/C# audit for the future player-controller send boundary, or add a staged real-data marker projection only for templates without unsupported dependencies. Keep production startup and nearby-refresh dispatch disabled until predicate parity exists.

@@ -148,6 +148,8 @@ UOW-993 adds `NearbyQuestTemplateXmlExtractor`, a staged XML extractor for the n
 
 UOW-994 adds a real-data audit for the staged nearby quest-template extractor, pinning current repository counts before production integration. This remains offline: no predicate invocation over live players, player-controller send, or automatic production dispatch is wired.
 
+UOW-995 adds `NearbyQuestMarkerProjectionService`, a staged bridge from world quest ids through the partial nearby predicate into marker DTOs and rejection reasons. This remains offline: no player-controller send, socket packet write, production static-data integration, or automatic production dispatch is wired.
+
 ### 4. AP Side Effects
 
 Required before automatic dispatch:
@@ -214,7 +216,7 @@ Recommended next units:
 
 1. Generate Java runtime observer artifacts for ItemPurification packet/DB capture when Java 25/Maven tooling is available.
 2. Generate Java runtime failure artifacts or deliberately choose a final production failure policy once packet/DB comparison evidence exists.
-3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next adding a staged candidate-marker bridge while preserving the no-op dispatcher seam until quest predicate parity exists.
+3. Add quest get/remove callback strategy or a formally documented staged limitation for ItemPurification, next auditing the player-controller send boundary or adding a staged real-data marker projection while preserving the no-op dispatcher seam until quest predicate parity exists.
 4. Add AP spend packet/side-effect projection tests behind explicit opt-in live execution before production dispatch wiring.
 
 Unsafe next work:

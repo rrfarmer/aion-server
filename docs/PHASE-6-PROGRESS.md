@@ -33953,6 +33953,59 @@ Next recommended unit of work:
 
 ---
 
+### Session 995 (May 25, 2026)
+- Continued after UOW-994 by adding a staged candidate-marker bridge for nearby quest markers.
+- Parallel Work Discovery selected a narrow sequential bridge unit because it consumes the current staged predicate service and returns packet marker DTOs without touching packet sends or production dispatch. No sub-agents were spawned.
+- Added `NearbyQuestMarkerProjectionService`.
+- The bridge consumes:
+  - `Player`
+  - `WorldMapInstanceRuntimeState.QuestIds`
+  - `NearbyQuestTemplateTable`
+  - `NearbyQuestStartConditionService`
+- It returns `NearbyQuestMarker` DTOs for passing quests and rejected quest ids with `NearbyQuestStartConditionFailure` reasons for failing quests.
+- It does not send `SM_NEARBY_QUESTS`, wire `PlayerController.updateNearbyQuests`, preserve Java `HashMap` ordering, or invoke production ItemPurification dispatch.
+- Added focused tests for staged filtering/rejection and positive/negative level-diff marker values.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~NearbyQuestMarkerProjectionServiceTests` passed with 2 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1696 tests.
+
+#### Migration Parity Table - Session 995
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestMarkerProjectionService` | Controller / Quest UI Projection | Partial | Unit Tested | Partial Parity | Stages filtering world quest ids into marker DTOs and rejection reasons. It does not send `SM_NEARBY_QUESTS`, preserve Java `HashMap` ordering, integrate map-region/player-controller lookup, or run unsupported predicate dependencies. |
+| `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `Aion.GameServer.Services.NearbyQuestStartConditionService`; `NearbyQuestMarkerProjectionService` | Service / Quest Predicate | Partial | Unit Tested | Partial Parity | Bridge uses the staged partial predicate. XML start conditions, inventory item checks, combine skill, NPC faction, warning packets, exception/log behavior, and time-based repeat cooldowns remain unsupported. |
+| `com.aionemu.gameserver.services.QuestService.getLevelRequirementDiff` | `Aion.GameServer.Services.NearbyQuestStartConditionService.GetLevelRequirementDiff`; `NearbyQuestMarkerProjectionService` | Utility / Quest Predicate | Partial | Unit Tested | Partial Parity | Bridge projects positive/negative level diff values into marker DTOs for later packet serialization. Production packet send integration remains unwired. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `NearbyQuestMarkerProjectionServiceTests.ProjectMarkers_FiltersWorldQuestIdsThroughStagedNearbyPredicateWithoutSendingPacket` | Unit | Java `PlayerController.updateNearbyQuests` filtering through `QuestService.checkStartConditions` | Validates staged world quest ids are filtered to marker DTOs and rejected ids carry predicate failure reasons. | Deterministic C# test from source-reviewed Java flow. | Does not send packets or run unsupported predicate dependencies. |
+| `NearbyQuestMarkerProjectionServiceTests.ProjectMarkers_PreservesPositiveAndNegativeLevelDiffsForPacketMarkerRule` | Unit | Java `QuestService.getLevelRequirementDiff` and `SM_NEARBY_QUESTS` marker rule | Validates positive and negative level-diff values are projected into marker DTOs for later packet serialization. | Deterministic C# test from source-reviewed Java utility/packet rule. | Packet send/order not wired. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- The marker bridge is not integrated into production `StaticData`, `DataManager`, player-controller refresh, packet sends, or ItemPurification dispatch.
+- Java `HashMap`/set iteration order is not claimed.
+- XML start-condition, inventory item, combine-skill, NPC faction, and repeat-cycle semantics remain unsupported beyond explicit rejection.
+- Real-data marker projection is not pinned yet.
+- Required `docs/commit-conventions.md` is still missing; commit format continues to follow `docs/orchestration-rules.md`.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 in this unit
+- Total artifacts ported: 1 staged marker projection bridge in this unit
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 4 blocked/not-started categories, including production send boundary, XML start conditions, repeat timing, and NPC faction/combine-skill dependencies
+- Estimated overall migration completion: Phase 6 remains about 70% complete; this unit adds staged marker projection without enabling live nearby quest refresh.
+
+Next recommended unit of work:
+- Add a read-only Java/C# audit for the future player-controller send boundary and production safety gates, or add a staged real-data marker projection only for templates without unsupported dependencies. Keep packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.
+- Alternative safe slice: use the sidecar persistence-gap analysis to document or implement the next ItemPurification side-effect persistence prerequisite.
+
+---
+
 ## Next Steps
 
 1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure ItemPurification quest-notification projection, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, the handler-level ItemPurification workflow/application/packet-plan composition bridge, the ItemPurification runtime-input packet bridge, the ItemPurification ready concrete-packet send bridge, the ItemPurification target object-id allocation bridge, the ItemPurification random-bonus selection seam, the ItemPurification non-persistent mutation snapshot preview, the ItemPurification non-persistent handler mutation bridge, the ItemPurification live mutation adapter boundary, the ItemPurification live execution composition seam, the ItemPurification live AP rank-drop metadata regression, the ItemPurification explicit live AP player-packet emission bridge, the ItemPurification explicit live AP rank-update broadcast bridge, the ItemPurification explicit live equipment rank-limit state mutation bridge, the ItemPurification explicit live equipment rank-limit packet fanout bridge, the ItemPurification explicit live abyss skill refresh bridge, the ItemPurification explicit opt-in quest notification no-op seam, the ItemPurification explicit transform-min-rank config plumbing, the ItemPurification quest-update items audit, the ItemPurification quest-update item static-data projection, the ItemPurification no-op nearby-refresh planning seam, the ItemPurification no-op nearby-refresh dispatcher seam, the ItemPurification nearby quest refresh surface audit, the ItemPurification nearby quest packet prerequisite, the ItemPurification nearby quest world-instance registry prerequisite, the ItemPurification nearby quest start-registration table prerequisite, the ItemPurification handler opt-in live execution seam, the ItemPurification persistence plan analysis, the ItemPurification repository contract/payload plumbing, the ItemPurification inserted target item-stone persistence, the ItemPurification opt-in persistent live execution seam, the ItemPurification handler-level opt-in persistent execution helper, the ItemPurification handler-level persistence failure-ordering regression, the ItemPurification automatic-dispatch readiness policy, the ItemPurification staged dispatch-failure policy, the ItemPurification Java observer design, the ItemPurification opt-in DB integration happy path, the ItemPurification opt-in DB rollback path, the ItemPurification AP/quest readiness audit, the pure ItemCharge AP spend guard, and the live ItemCharge selected-item/charge-all AP guard consolidation now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. ItemCharge Kinah payment guard/consolidation, charge-all stale-item payment-before-revalidation hardening, mixed stale/current charge-all AP regression coverage, mixed stale/current charge-all Kinah regression coverage, missing/current charge-all AP approximation coverage, and missing/current charge-all Kinah approximation coverage are now staged for live selected-item/charge-all paths. Move next to Java observer artifact generation when tooling is available, nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another existing planner live adapter when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player/equipment/skill packets, AP/login rank-limited equipment persistence, configured abyss transform skill updates, rank config load, and real quest handler dispatch. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
