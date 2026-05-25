@@ -165,6 +165,7 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 - UOW-1014 adds `docs/QuestFinishOrdering-Audit.md`, documenting Java quest-finish packet, callback, NPC faction completion, nearby-refresh, and deferred persistence ordering. It does not change runtime code.
 - UOW-1015 adds a staged `QuestFinishOperationPlanService` that composes quest-state mutation, optional NPC faction completion, and ordered non-live descriptors for packet update, callback dispatch, nearby refresh, and deferred persistence. It does not send packets or write DAOs.
 - UOW-1016 adds non-sending `SmQuestAction.Update` byte serialization for Java `SM_QUEST_ACTION(ActionType.UPDATE, qs)`, including explicit extra-category body suppression. It is not wired to live quest completion.
+- UOW-1017 adds `docs/QuestFinishRewardWorkItem-Audit.md`, documenting Java reward-group correction, item/non-item rewards, challenge-task notification, and quest work-item removal. It does not change runtime code.
 
 ## Migration Parity Table
 
@@ -188,6 +189,7 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 | `com.aionemu.gameserver.network.aion.serverpackets.SM_QUEST_ACTION`; `QuestEngine.onQuestCompleted`; `PlayerQuestListDAO.store`; `PlayerNpcFactionsDAO.storeNpcFactions` | Future C# quest-finish operation plan / packet / persistence boundaries | Packet / Callback / Repository Dependency | Not Started | Manual Only | Needs Verification | UOW-1014 documents Java ordering: update packet before callbacks, callbacks before NPC faction completion, nearby refresh last, and DAO writes deferred to `PlayerService.storePlayer`. No C# composed operation plan or live side effects exist yet. |
 | `com.aionemu.gameserver.services.QuestService.finishQuest`; `SM_QUEST_ACTION`; `QuestEngine.onQuestCompleted`; `NpcFactions.completeQuest` | `Aion.GameServer.Services.QuestFinishOperationPlanService` | Service / Operation Plan | Partial | Unit Tested | Partial Parity | UOW-1015 composes staged quest-state and NPC faction helpers into Java-ordered descriptors. Reward mutation, work-item removal, live packets, callback runtime, DAO writes, and production nearby refresh remain unported. |
 | `com.aionemu.gameserver.network.aion.serverpackets.SM_QUEST_ACTION` | `Aion.GameServer.Network.Aion.ServerPackets.SmQuestAction` | Packet | Partial | Unit Tested | Partial Parity | UOW-1016 ports the non-sending `UPDATE` body shape and explicit extra-category suppression. Other action types and production static-data suppression lookup remain unported. |
+| `com.aionemu.gameserver.services.QuestService.validateAndFixRewardGroup`; `getRewardItems`; `giveReward`; `removeQuestWorkItems` | Future C# quest reward/work-item plan | Service / Reward and Inventory Dependency | Not Started | Manual Only | Needs Verification | UOW-1017 source-audits reward-group correction, fixed/selectable/extended/bonus item selection, non-item rewards, challenge-task notification, and all-owned-count work-item removal. No C# runtime reward mutation exists. |
 | `com.aionemu.gameserver.model.templates.quest.XMLStartCondition` | Future C# XML start-condition predicate | Dataholder / Predicate | Not Started | Manual Only | Needs Verification | UOW-998 read-only analysis clarifies optional `finished` rows, mandatory non-finished rows, reward-group matching, repeatable prerequisite completion, `acquired` COMPLETE behavior, `equipped` warn gating, and `required_title` enforcement. No C# predicate code added yet. |
 
 ## Tests Added/Updated
@@ -285,4 +287,4 @@ Existing relevant tests remain:
 
 ## Next Recommended Unit Of Work
 
-Audit reward/work-item mutation for `QuestService.finishQuest`, then stage descriptors or pure helpers without live item rewards. Keep packet sends, production integration, DAO writes, live nearby refresh, and production ItemPurification dispatch disabled until each dependency has tests.
+Stage reward/work-item operation descriptors for quest finish, starting with reward-group correction edge cases. Keep packet sends, production integration, DAO writes, live nearby refresh, live inventory mutation, and production ItemPurification dispatch disabled until each dependency has tests.
