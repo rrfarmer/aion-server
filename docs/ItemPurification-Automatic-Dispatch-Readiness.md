@@ -123,6 +123,8 @@ UOW-968 adds focused live-execution regression coverage for a rank-dropping AP s
 
 UOW-969 emits `AbyssPointsAddPlan.PlayerPackets` from the explicit ItemPurification live-execution helper at the existing AP packet-plan slot. This improves the opt-in live path only. Automatic production dispatch remains disabled, and the AP gate is still open for rank-update broadcast execution, rank-limited equipment execution, abyss skill refresh execution, and Java runtime packet comparison.
 
+UOW-970 emits `AbyssPointsAddPlan.RankUpdatePacket` through the visible-player broadcast boundary from explicit ItemPurification live execution, placed after AP owner packets and before later mutation packets. This still affects only the opt-in live path. Automatic production dispatch remains disabled, and the AP gate is still open for rank-limited equipment execution, abyss skill refresh execution, and Java runtime packet comparison.
+
 ### 5. Packet Ordering And Runtime Comparison
 
 Required before automatic dispatch:

@@ -63,13 +63,14 @@ Current C# status:
 - `ItemPurificationLiveMutationService.Apply` calls `AbyssPointsService.AddAp(player, -AbyssPointsToSpend, ...)`.
 - `ItemPurificationLiveExecutionService.ExecuteAsync` sends the success message first, applies live mutation, then sends the concrete mutation packet plan.
 - UOW-968 adds live-execution regression coverage proving a purification AP spend that drops rank still produces `AbyssPointsAddPlan` rank-change metadata (`SmSystemMessage`, `SmAbyssRank`, `SmAbyssRankUpdate`, rank-limit flag, abyss-skill flag).
-- UOW-969 emits `AbyssPointsAddPlan.PlayerPackets` from the explicit live-execution helper at the existing `AbyssPointsUpdate` packet-plan slot. It still does not broadcast rank update packets, execute rank-limited unequip, or refresh abyss skills.
+- UOW-969 emits `AbyssPointsAddPlan.PlayerPackets` from the explicit live-execution helper at the existing `AbyssPointsUpdate` packet-plan slot.
+- UOW-970 broadcasts `AbyssPointsAddPlan.RankUpdatePacket` to visible players from the explicit live-execution helper after the AP player packets and before later mutation packets. It still does not execute rank-limited unequip or refresh abyss skills.
 - `ItemPurificationPersistentLiveExecutionService.ExecuteAsync` persists inventory mutation and updated abyss rank together, but does not execute rank-change side-effect services.
 
 AP parity gaps:
 
 - AP spend player packets are emitted by explicit ItemPurification live execution, but no Java runtime packet-byte/order artifact exists yet.
-- Rank update broadcast is modeled but not emitted from ItemPurification live execution.
+- Rank update broadcast is emitted from explicit ItemPurification live execution, but no Java runtime packet-byte/order artifact exists yet.
 - Equipment rank-limit unequip has a C# service home but is not invoked from ItemPurification AP spend.
 - Abyss skill refresh has a C# service home but is not invoked from ItemPurification AP spend.
 - Legion contribution is correctly absent for spend.
@@ -79,7 +80,7 @@ AP parity gaps:
 Safe AP next tests:
 
 - Add an explicit side-effect executor only behind opt-in live execution, then cover equipment rank-limit and abyss-skill invocation without enabling production dispatch.
-- Add rank-update broadcast coverage once the broadcast boundary is selected for explicit live execution.
+- Add explicit side-effect execution coverage for rank-limited equipment and abyss skill refresh once their persistence/packet boundaries are selected.
 
 ## Quest Callback Side Effects
 
