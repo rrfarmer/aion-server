@@ -28004,6 +28004,57 @@ Next recommended unit of work:
 
 ---
 
+### Session 887 (May 25, 2026)
+- Continued after UOW-886 with the id-mapping support task from the Phase 6OH handoff because live Java captures may need real XML ids instead of the logical C# fixture ids.
+- Performed Parallel Work Discovery across Java proof/runbook execution, Java packet-observer design notes, id-mapping support, and SQL fixture appendix work. Selected id-mapping support because Java tooling remains unavailable locally and the comparison helper currently assumed exact logical item ids.
+- Updated `GameServerConnectionInventoryExpansionUseItemTests` so the guarded Java artifact comparison reads `fixture.id_mapping` from Java JSON artifacts and normalizes declared `java_*` numeric ids to matching `logical_*` ids before comparing decoded fields.
+- Added `CompareSelectableDecomposeJavaArtifacts_WithDeclaredIdMapping_NormalizesMappedIds`.
+- The new test builds a synthetic live-server-shaped Java artifact from the deterministic C# projection, declares:
+  - `logical_source_item_id = 101` / `java_source_item_id = 188052590`
+  - `logical_reward_index_1 = 202` / `java_reward_index_1 = 188052592`
+  - remapped packet `item_id` fields for source usage and reward add
+- The comparison now passes only because the artifact explicitly declares the id mapping. Unmapped Java ids still compare exactly and will fail if they differ.
+- No production Java/C# code changed in this unit.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests --no-restore` passed with 32 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1453 tests.
+
+#### Migration Parity Table - Session 887
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dataholders.DecomposableItemsData` | `Aion.GameServer.Data.StaticData` / decompose artifact comparison helper | Data Holder | Partial | Regression Tested for comparison helper | Needs Verification | Comparison can now normalize explicitly declared Java real XML ids to logical fixture ids. No Java runtime XML capture exists yet, and mappings must be supplied by artifacts. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SELECT_DECOMPOSABLE` | `Aion.GameServer.Network.Aion.ClientPackets.CmSelectDecomposable` / guarded comparison helper | Client Packet Handler | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Selectable artifact comparison can now handle mapped source/reward item ids. Java runtime JSON is still absent, so parity remains unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ITEM_USAGE_ANIMATION` | `Aion.GameServer.Network.Aion.ServerPackets.SmItemUsageAnimation` | Server Packet | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Mapped Java source `item_id` can be normalized before comparing item-use fields. Constructor/default behavior and Java bytes remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_ADD_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryAddItem` | Server Packet | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Mapped Java reward `item_id` can be normalized before comparing reward-add fields. Object ids, full blob fields, and runtime bytes remain unverified. |
+| `com.aionemu.gameserver.network.aion.iteminfo.ItemInfoBlob` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryInfo.WriteItemInfoBlob` | Serialization Utility | Partial | Regression Tested; Java Artifact Comparison Guard Added | Partial Parity | Touched only through mapped reward/source comparison context. Full blob serialization remains shallow and unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CompareSelectableDecomposeJavaArtifacts_WithDeclaredIdMapping_NormalizesMappedIds` | Regression / Comparison Readiness | Java capture contract id-mapping rule and live-server runbook | Proves the guarded comparison accepts different Java item ids only when `fixture.id_mapping` explicitly maps them to logical C# fixture ids. | Synthetic C# JSON artifact shaped like future Java output. | Does not compare real Java runtime artifacts; currently covers item ids only, not object-id allocation or byte fields. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally because Java 25 JDK and Maven are unavailable; `LoopbackCaptureProof` still has not been compiled or run.
+- Java artifact files do not exist yet, so id mapping has not been exercised against Java runtime output.
+- The id-mapping normalization is intentionally numeric and broad; future artifacts should keep mappings precise to avoid masking unrelated id mismatches.
+- Object-id allocation mapping remains unverified because current guarded field list does not compare reward object ids.
+- Byte-level payload/frame parity, full item-info blob parity, and live-client behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5
+- Total artifacts ported: 0 production code artifacts; 1 id-mapping normalization path added to guarded comparison tests
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 5
+- Total blocked artifacts: 8 blocked/not-started categories, including Java loopback proof validation, live Java JSON artifact generation, fixture SQL/script automation, packet observer implementation, byte capture, object-id mapping/comparison, full item-info blob comparison, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit reduces future artifact comparison friction but adds no Java runtime evidence.
+
+Next recommended unit of work:
+- If Java 25/Maven tooling is available, run `LoopbackCaptureProof` or execute the live-server runbook to produce Java JSON artifacts. If tooling remains blocked, draft Java packet-observer design notes for producing Level 2 artifact fields with less manual work, or add object-id mapping/comparison support once the Java artifact format for generated reward object ids is settled.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -28013,4 +28064,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Run and harden `LoopbackCaptureProof` under Java 25/Maven tooling when available; while tooling is blocked locally, draft Java packet-observer design notes for Level 2 artifact generation or add id-mapping support to the guarded C# comparison without claiming Java runtime verification.
+8. Run and harden `LoopbackCaptureProof` under Java 25/Maven tooling when available; while tooling is blocked locally, draft Java packet-observer design notes for Level 2 artifact generation or add object-id mapping/comparison support once the Java artifact format for generated reward object ids is settled, without claiming Java runtime verification.
