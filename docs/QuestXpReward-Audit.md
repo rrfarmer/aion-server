@@ -90,13 +90,20 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - The plan also records `MinNewLevel`, matching Java's `oldLevel < newLevel ? oldLevel + 1 : oldLevel - 1` value used by guide/skill/starter-kit callers.
 - Everything remains metadata only; no live `Player.Exp`, `Player.Level`, repose/salvation, packet send, quest callback, skill, faction, team, legion, guide, custom reward, or persistence side effect is executed.
 
+## C# State After UOW-1049
+
+- Added `SmActionAnimation.LevelUp = 0`, matching Java `ActionAnimation.LEVEL_UP(0)`.
+- Extended the packet regression coverage in `GamePacketTests.CharacterSelectionServerPackets_WriteJavaShapedPayloads` to serialize a level-up animation payload as `targetObjectId`, `LevelUp`, and `newLevel`.
+- Updated the XP execution plan descriptor note to reference the named C# constant instead of documenting it as missing.
+- The level-up animation remains metadata only in XP execution; no live broadcast is wired from XP level changes.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
 - XP live mutation is not wired into quest finish; UOW-1045 only composes non-live operation metadata.
 - `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are ported for the XP reward messages used by `PlayerCommonData.addExp`, and `QuestXpRewardPlan` can now produce ordered non-live packet metadata.
 - `SM_STATUPDATE_EXP` is now represented by staged execution metadata, but no packet instance is created or sent from the XP execution plan.
-- Level-change hooks are represented as Java-order descriptors only. Stat recalculation, nearby quest refresh, quest engine callbacks, skills, guide, starter-kit, NPC faction effects, team/alliance updates, legion updates, and ratio updates remain unported live behavior.
+- Level-change hooks are represented as Java-order descriptors only. The level-up animation packet constant and packet shape now exist, but stat recalculation, nearby quest refresh, quest engine callbacks, skills, guide, starter-kit, NPC faction effects, team/alliance updates, legion updates, ratio updates, and live animation broadcast remain unported behavior.
 - The C# plan uses the current C# `Player.Level` as the previous/display level input. Java derives and updates level through `PlayerCommonData.setExp`; this needs verification before live mutation.
 - No-exp state and Daeva/non-Daeva cap are explicit method inputs because equivalent C# player state is not fully modeled.
 - Repose and salvation formulas are source-reviewed and unit-tested, but edge cases around negative XP, large XP, unusual float rates, and live max-repose updates still need runtime verification.
@@ -115,7 +122,8 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `QuestXpExecutionPlanServiceTests.CreatePlan_StagesJavaLevelChangeSideEffectsBeforeStatAndXpPackets`
 - `QuestXpExecutionPlanServiceTests.CreatePlan_KeepsNoLevelChangePlanInJavaPacketOrder`
 - `QuestXpExecutionPlanServiceTests.CreatePlan_AppendsAscensionWarningAfterXpMessageAndSkipsGuardedPlans`
+- `GamePacketTests.CharacterSelectionServerPackets_WriteJavaShapedPayloads` level-up `SM_ACTION_ANIMATION` assertion
 
 ## Next Recommendation
 
-Add one concrete prerequisite behind the staged execution plan, such as the named `SmActionAnimation.LevelUp` constant/regression or a focused level-change side-effect sub-plan. Keep live XP mutation disabled until stat updates, nearby quest refresh, quest callbacks, skill learning, NPC factions, custom rewards, and persistence behavior are modeled.
+Add a focused non-live side-effect sub-plan behind the staged XP execution plan, such as visual stats/update-player metadata or NPC faction level-up analysis. Keep live XP mutation disabled until stat updates, nearby quest refresh, quest callbacks, skill learning, NPC factions, custom rewards, and persistence behavior are modeled.
