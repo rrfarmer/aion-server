@@ -29056,9 +29056,63 @@ Next recommended unit of work:
 
 ---
 
+### Session 906 (May 25, 2026)
+- Continued after UOW-905 by performing Parallel Work Discovery across remaining Java AP callers, existing C# reward surfaces, Legion groundwork, and Java runtime artifact capture.
+- Selected the NPC solo AP reward slice because `WorldNpcSoloDpRewardService` already owns Java `NpcController.doReward` solo DP parity, while Java NPC solo AP reward is an adjacent AP caller that can use the existing `AbyssPointsService.AddApFromObject` planner.
+- Added `WorldNpcSoloDpRewardService.ApplySoloApReward` and `CalculateSoloApReward` with Java breadcrumbs for `NpcController.doReward`, `AIQuestion.REWARD_AP`, `StatFunctions.calculatePvEApGained`, and `AbyssPointsService.addAp(player, npc, rewardAp)`.
+- Added `WorldNpcSoloApRewardResult` and `WorldNpcSoloApRewardStatus` so callers can inspect missing-player, missing-NPC, dead-player, AI-denied, below-minimum, boundary-skipped, and applied outcomes.
+- Added AP reward regressions for Java float scaling/truncation, AP packet planning, ordinary NPC no-siege behavior, non-peace siege NPC callback intent, AI-denied skip, below-`1`/NaN skip, and missing/dead target guards.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~WorldNpcSoloDpRewardServiceTests --no-restore` passed with 12 tests.
+  - `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed: Commons 57, Chat 29, Login 121, GameServer 1487.
+
+#### Migration Parity Table - Session 906
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.NpcController` | `Aion.GameServer.Services.WorldNpcSoloDpRewardService.ApplySoloApReward` / `CalculateSoloApReward` | Controller Reward Slice / Service | Partial | Regression Tested in C# | Partial Parity | C# now models the solo-player NPC AP branch calculation and AP mutation plan: `rewardAp` starts at `1f`, scales by damage percent and AP multiplier, scales by projected calculated AP, skips when `< 1`, and truncates by Java float-to-int behavior. Full `NpcController.doReward` integration, group/alliance distribution, XP/drop/tap-list side effects, and actual AI/controller invocation remain missing. |
+| `com.aionemu.gameserver.ai2.AIQuestion.REWARD_AP` | `WorldNpcSoloDpRewardService.ApplySoloApReward(bool shouldRewardAp, ...)` | AI Gate / Input Projection | Partial Input Projection | Regression Tested in C# | Needs Verification | C# accepts the Java AI question result as `shouldRewardAp`; the AI subsystem and ask dispatch are not wired. Regression verifies false skips without AP mutation. |
+| `com.aionemu.gameserver.utils.stats.StatFunctions.calculatePvEApGained` | `WorldNpcSoloDpRewardService.ApplySoloApReward(int calculatedAp, ...)` | Utility Dependency / Input Projection | Not Started / Input Projection | Regression Tested in C# at consumer boundary | Needs Verification | This unit does not port PvE AP stat calculation; callers must supply `calculatedAp`. Java NPC level/rank/AP formulas, rates, penalties, and precision need a future dedicated port before controller-level parity can be claimed. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `Aion.GameServer.Services.AbyssPointsService.AddApFromObject` | Service | Partial | Unit + Regression Tested in C# | Partial Parity | NPC solo AP reward now uses the object-source AP planner. Tests validate AP gain message/rank packet intent, player AP mutation, no callback for ordinary NPCs, and callback intent for non-peace siege NPCs. Full Legion fanout, ranking cache, large-AP logging, persistence, and callback execution remain incomplete. |
+| `com.aionemu.gameserver.services.SiegeService.onAbyssPointsAdded` | `Aion.GameServer.Services.AbyssPointsSiegeCallback` | Service Callback / Intent DTO | Partial | Regression Tested in C# | Needs Verification | Regression validates callback intent is created for non-peace siege NPC sources and omitted for ordinary NPCs. There is still no live `SiegeService` execution, fort state update, or Java runtime comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Regression validates AP gain packet intent uses Java message id `1320000` through `AbyssPointsService`. Packet bytes and live delivery ordering were not Java-runtime compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRank` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Regression validates rank packet intent after NPC AP reward. Ranking-position lookup and byte-level Java comparison remain unavailable. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ApplySoloApReward_CalculatesScalesAndAddsApThroughAbyssPlanner` | Regression | Java `NpcController.doReward`, `StatFunctions.calculatePvEApGained`, and `AbyssPointsService.addAp(Player, VisibleObject, int)` source review | Validates damage percent and AP multiplier scaling (`0.5 * 2 * 15 = 15`), AP mutation from `100` to `115`, AP gain message id `1320000`, rank packet intent, and no siege callback for an ordinary NPC. | Deterministic C# regression grounded in Java source. | Uses projected `calculatedAp`; no Java runtime artifact; no live controller integration. |
+| `ApplySoloApReward_SkipsAiDeniedAndBelowJavaMinimumReward` | Regression | Java `AIQuestion.REWARD_AP` gate and `if (rewardAp >= 1)` branch source review | Validates AI-denied reward skips mutation, scaled reward `< 1` skips mutation, and `NaN` damage percent skips mutation through Java-style float handling. | Deterministic C# regression grounded in Java source. | AI subsystem not wired; Java runtime comparison unavailable. |
+| `ApplySoloApReward_CreatesSiegeCallbackForNonPeaceSiegeNpc` | Regression | Java `AbyssPointsService.addAp(Player, VisibleObject, int)` siege callback branch source review | Validates a non-peace siege NPC source creates an `AbyssPointsSiegeCallback` with player object id, source object id, and reward AP. | Deterministic C# callback-intent regression grounded in Java source. | Live `SiegeService.onAbyssPointsAdded` remains unported/unexecuted. |
+| `ApplySoloApReward_SkipsMissingDeadTargets` | Regression | Existing Java reward guard behavior and C# DP reward guard parity | Validates null player, null NPC, and dead player outcomes do not mutate AP or create AP plans. | Deterministic C# guard regression. | Full Java controller/tap-list context not modeled. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- `StatFunctions.calculatePvEApGained` is not ported here; `calculatedAp` is a projected input, so controller-level parity still needs the Java formula and rates.
+- `AIQuestion.REWARD_AP` is represented as a boolean input; the AI subsystem, ask dispatch, and NPC controller invocation remain unwired.
+- Group/alliance reward distribution, PvP/Quest/Trade/AP-purification callers, persistence, packet delivery, ranking cache, full Legion contribution fanout, and live siege callback execution remain incomplete.
+- Packet bytes and runtime ordering were not compared against Java.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 production reward-planning slice plus 1 result DTO/status enum set
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, PvE AP stat calculation, AI ask integration, live NPC controller integration, live siege callback execution, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit advances AP caller convergence for the NPC solo reward path.
+
+Next recommended unit of work:
+- Continue AP caller convergence by porting `StatFunctions.calculatePvEApGained` or wiring another compact AP caller through `AbyssPointsService` where the surrounding C# surface already exists.
+- Good candidates are quest AP reward planning once AP quest rates/config have a C# home, or a focused PvP AP reward/loss slice if the victim/member reward surfaces can stay isolated.
+- If AP caller work becomes too broad, continue isolated Legion domain groundwork or choose another independent non-AP Phase 6 slice.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: inspect C# coverage for Java `TradeService`, `QuestService`, `PvpService`, `NpcController`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: port `StatFunctions.calculatePvEApGained` for NPC AP reward parity, or inspect C# coverage for Java `TradeService`, `QuestService`, `PvpService`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
