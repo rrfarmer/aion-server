@@ -29341,9 +29341,63 @@ Next recommended unit of work:
 
 ---
 
+### Session 911 (May 25, 2026)
+- Continued after UOW-910 by reading the PF handoff, confirming the branch was clean after commit `17874f98e`, and running Parallel Work Discovery around Quest, Dredgion/basic PvP instance, live PvP adapter, Trade, and AP-purification paths.
+- Selected the compact Quest AP reward planner because Java `QuestService.giveReward` isolates AP reward handling to `Rewards.getAp`, `QuestCategory.NON_COUNT`, `Rates.AP_QUEST`, and `AbyssPointsService.addAp`.
+- Extended `QuestRewardService` with injected `GameServerOptions`/`GameServerRateOptions` and `ApplyApReward`.
+- Added Java `Rates.AP_QUEST` membership-rate behavior with empty-rate fallback and long-to-int overflow fallback.
+- Added the Java `QuestCategory.NON_COUNT` bypass so relic-exchange style AP rewards are not multiplied by quest AP rates.
+- Added AP reward result/status records and regressions for configured quest rates, non-count bypass, missing/zero reward guards, membership clamping, empty-rate fallback, and overflow fallback.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~QuestRewardServiceTests --no-restore` passed with 8 tests.
+  - `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed: Commons 57, Chat 29, Login 121, GameServer 1514.
+
+#### Migration Parity Table - Session 911
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.QuestService.giveReward` | `Aion.GameServer.Services.QuestRewardService.ApplyApReward` | Service / Reward Planner | Partial | Regression Tested in C# | Partial Parity | C# now models the quest AP reward branch: zero-skip, quest-rate application for ordinary quests, `NON_COUNT` rate bypass, and AP mutation through `AbyssPointsService`. Full quest completion flow, reward template selection, kinah/XP/title/item/GP/cube/warehouse side effects, and live `QuestEnv` integration remain missing. |
+| `com.aionemu.gameserver.model.gameobjects.player.Rates.AP_QUEST` | `QuestRewardService.ApplyQuestApRate` / `GameServerRateOptions.ApQuestRates` | Rate Calculation / Configuration Consumption | Partial | Regression Tested in C# | Partial Parity | Configured membership rates, membership clamping, empty-rate fallback, and Java long-to-int fallback behavior are covered. No Java runtime comparison. |
+| `com.aionemu.gameserver.model.templates.quest.QuestCategory.NON_COUNT` | `QuestRewardService.ApplyApReward(bool isNonCountQuest)` | Quest Category / Input Projection | Partial Input Projection | Regression Tested in C# | Needs Verification | C# accepts the Java quest category decision as an input and bypasses quest AP rates when true. Quest template lookup through `DataManager.QUEST_DATA.getQuestById(env.getQuestId()).getCategory()` remains unwired. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `Aion.GameServer.Services.AbyssPointsService.AddAp` | Service | Partial | Regression Tested in C# | Partial Parity | Quest AP reward now mutates AP through the existing add-AP planner. Persistence, full Legion contribution fanout, ranking cache, large-AP logging, and live caller side effects remain incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Regression validates AP gain message id `1320000` is planned for quest AP reward. Packet bytes and live ordering were not Java-runtime compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRank` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Regression validates rank packet intent after quest AP reward mutation. Ranking-position lookup and byte-level Java comparison remain unavailable. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ApplyApReward_AppliesConfiguredQuestRateAndAddsApThroughPlanner` | Regression | Java `QuestService.giveReward`, `Rates.AP_QUEST`, and `AbyssPointsService.addAp(Player, int)` source review | Validates configured `ApQuestRates = [1.0, 1.75]` for membership `1` turns reward AP `200` into applied AP `350`, mutates AP `900 -> 1250`, and plans AP gain/rank packets. | Deterministic C# regression grounded in Java source. | No Java runtime artifact; live `QuestEnv`/reward-template integration remains missing. |
+| `ApplyApReward_SkipsQuestRateForJavaNonCountCategory` | Regression | Java `QuestService.giveReward` `QuestCategory.NON_COUNT` branch source review | Validates non-count quest AP reward `200` bypasses configured rate `3.0` and applies exactly `200`. | Deterministic C# regression grounded in Java source. | Quest category is input-projected; template lookup remains unwired. |
+| `ApplyApReward_SkipsMissingPlayerAndZeroApReward` | Guard Regression | Java quest reward branch and C# planner boundary | Validates missing player and zero AP rewards do not mutate AP. | Deterministic C# guard regression. | Java caller normally supplies a player through `QuestEnv`. |
+| `ApplyQuestApRate_MatchesJavaMembershipFallbacksAndOverflowBehavior` | Regression | Java `Rates.AP_QUEST`, `Rates.get`, and `Rates.calcResult(int)` source review | Validates membership clamping, empty-rate fallback to `1`, and overflow fallback to original AP. | Deterministic C# formula regression. | No Java runtime artifact. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- `QuestRewardService.ApplyApReward` is a planner slice; live quest completion, `QuestEnv`, selected reward index, template lookup, reward package selection, and non-AP reward side effects remain incomplete.
+- `QuestCategory.NON_COUNT` is represented by a boolean input until quest template/category lookup has a C# home.
+- Remaining AP callers in Dredgion/basic PvP instances, Trade, item purification, and NPC team/group distribution still need convergence through `AbyssPointsService`.
+- Packet bytes, persistence, ranking cache, Legion contribution fanout, and live siege callback execution remain incomplete.
+
+Summary metrics:
+- Total Java artifacts discovered: 6
+- Total artifacts ported: 1 Quest AP reward planner slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 6
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, live quest completion integration, quest template/category lookup, remaining AP callers, persistence/fanout side effects, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 67% complete; this unit consumes the Quest AP rate array in a C# quest reward planner.
+
+Next recommended unit of work:
+- Continue AP caller convergence with Dredgion/basic PvP instance AP reward analysis and a compact planner if the handler surface is small.
+- Alternatively, add live integration for one existing AP planner only if a narrow caller boundary exists without pulling in broad combat/quest runtime.
+- Trade and item-purification AP paths likely require broader inventory/dialog/action surfaces and should remain analysis-first.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP consumes configured AP PvE rates and the PvP AP gain/loss planner now consumes PvP AP gain/loss rates, so move next to Quest AP, Dredgion/basic PvP instance rewards, NPC team/group AP distribution, or a narrow live PvP adapter when supporting combat/death surfaces are ready. Inspect C# coverage for Java `QuestService`, `TradeService`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, PvP AP gain/loss, and Quest AP now consume their configured AP rates at planner/service boundaries, so move next to Dredgion/basic PvP instance rewards, NPC team/group AP distribution, Trade/AP-purification analysis, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Inspect C# coverage for Java `TradeService` and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
