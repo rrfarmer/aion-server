@@ -28613,9 +28613,67 @@ Next recommended unit of work:
 
 ---
 
+### Session 898 (May 25, 2026)
+- Continued after UOW-897 with the recommended AP extraction caller wiring.
+- Performed Parallel Work Discovery across AP extraction caller wiring, AP cap audit, remaining `SM_LEGION_EDIT` packet types, and Java runtime artifact capture. Selected a sequential orchestrator-owned AP extraction slice because it touches the shared item-use execution path, AP planner, persistence plan, and tests.
+- Reviewed Java `model/templates/item/actions/ApExtractAction`: target deletion, extraction-tool decrement, then `AbyssPointsService.addAp(player, ap)`.
+- Added `AbyssPointsService.CreateAddApPlan` as a non-mutating AP plan path for transaction-bound callers while keeping `AddAp` mutating like Java.
+- Updated `ApExtractService.CreateMutationPlan` to carry an `AbyssPointsAddPlan` instead of directly calculating a rank update.
+- Updated `GameServerConnection.HandleApExtractUseItemAsync` to apply the planned AP rank and send the AP service's player packets only after AP extraction persistence succeeds.
+- Added `HandleUseItemAsync_ApExtractSendsAbyssPointsPlannerPackets` to cover AP extraction through the connection-level item-use path.
+- Updated `CreateMutationPlan_DeletesTargetConsumesToolAndAddsAbyssPoints` to assert planning is non-mutating before persistence.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~ApExtractServiceTests --no-restore` passed with 2 tests.
+  - First parallel run of the use-item focused test collided on `Aion.GameServer.dll` build output; reran sequentially.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests --no-restore` passed with 39 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1467 tests.
+
+#### Migration Parity Table - Session 898
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.ApExtractAction` | `Aion.GameServer.Services.ApExtractService` / `Aion.GameServer.Network.Aion.GameServerConnection.HandleApExtractUseItemAsync` | Item Action / Handler | Partial | Regression Tested in C# | Partial Parity | C# now routes AP extraction AP gain through the shared AP planner and applies packets after DB mutation succeeds. Java audit logging on target-delete failure is still absent, and no Java runtime packet capture exists. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `Aion.GameServer.Services.AbyssPointsService` | Service | Partial | Unit + Regression Tested in C# | Partial Parity | Added a non-mutating `CreateAddApPlan` for transactional C# callers while preserving mutating `AddAp`. This is an intentional C# transaction-bound split; Java mutates directly after inventory mutation. Logging for very large AP, full legion execution, siege execution, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.gameobjects.player.AbyssRank` | `Aion.GameServer.Model.GameObjects.PlayerAbyssRank` | Model | Partial | Regression Tested through AP extraction and existing unit tests | Needs Verification | AP extraction now persists and applies the planned rank update. Java AP-cap config and runtime comparison are still missing. |
+| `com.aionemu.gameserver.model.items.storage.Storage` | `Aion.GameServer.Data.IPlayerEnterWorldRepository.SaveApExtractActionMutationAsync` / runtime inventory mutation | Repository / Runtime Mutation | Partial | Regression Tested in C# | Needs Verification | Existing target delete and extraction-tool decrement behavior is preserved. Transaction ordering is C#-style: plan first, DB mutation, then runtime state/packets. Java source mutates storage first, then calls AP service. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Connection test verifies AP gain message id `1320000` with amount `980` is sent from the AP planner. Packet bytes were not compared against Java runtime. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRank` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Connection test verifies the rank packet is emitted after item-consumption packets. Byte-level Java comparison remains unavailable. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK_UPDATE` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRankUpdate` | Server Packet | Partial | Existing Unit/Regression Tested | Needs Verification | The AP plan can carry rank-change update intent and the connection still invokes existing rank-change side-effect handling. The new AP extraction regression does not cross a rank threshold, so rank-change fanout is not newly covered here. |
+| `com.aionemu.gameserver.model.templates.item.Acquisition` | `Aion.GameServer.Dataholders.ItemTemplateSummary.RequiredAbyssPoints` | Static Data DTO | Partial | Regression Tested with fixture XML | Needs Verification | The connection fixture adds a Java-shaped `<acquisition ap="4900" />` AP extraction target. Broader Java XML loading is already covered elsewhere but no runtime AP extraction artifact exists. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleUseItemAsync_ApExtractSendsAbyssPointsPlannerPackets` | Regression | Java `ApExtractAction.act` and `AbyssPointsService.addAp` source review | Validates AP extraction deletes the target, decrements the tool, updates AP to `980`, sends AP gain system message, and sends `SM_ABYSS_RANK` after persistence succeeds. | Deterministic C# connection-level regression grounded in Java source ordering. | No Java runtime artifact; no legion contribution execution; no rank-threshold side-effect assertion. |
+| `CreateMutationPlan_DeletesTargetConsumesToolAndAddsAbyssPoints` | Unit | Java `ApExtractAction.act` source review plus C# transaction boundary | Validates target/tool mutation planning, AP amount, AP plan added amount, and that planning does not mutate the player before persistence. | Deterministic C# unit test. | Non-mutating planning is an intentional C# persistence-safety split, so Java direct mutation is not byte/runtime compared. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- `ApExtractAction` audit logging for a failed target delete remains unsupported.
+- AP extraction still does not execute full legion contribution persistence/broadcast; `AbyssPointsAddPlan.LegionContribution` is only an intent until the Legion model is ported further.
+- Active siege counter updates are still intent-only and not involved in AP extraction.
+- Java AP-cap config is still not represented in `PlayerAbyssRank.AddAp` or `AbyssPointsService`.
+- Rank-change side effects are still partial and the new AP extraction regression does not cross a rank threshold.
+- Packet bytes were not compared against Java runtime output.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 partial AP extraction caller wiring plus 1 AP service transactional planning refinement
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 7 blocked/not-started categories, including Java runtime artifact generation, AP target-delete audit logging, full Legion contribution execution, active siege counters, Java AP cap config, rank-threshold AP extraction fanout, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit wires the first AP caller but many AP reward/spend callers remain.
+
+Next recommended unit of work:
+- Wire the AP planner into one additional compact AP caller that already mutates AP, preferably AP-based conditioning payment or another existing payment/reward surface, while preserving its persistence boundary.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: wire one additional compact AP payment/reward path, then continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
