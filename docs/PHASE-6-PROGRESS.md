@@ -28776,9 +28776,67 @@ Next recommended unit of work:
 
 ---
 
+### Session 901 (May 25, 2026)
+- Continued after UOW-900 with AP cap config support, as the latest handoff recommended if no compact AP caller was safer.
+- Performed Parallel Work Discovery across AP cap support, remaining AP caller wiring, remaining `SM_LEGION_EDIT` packet types, and Java runtime artifact capture. Selected a sequential orchestrator-owned AP cap slice because rank math is shared by every AP caller.
+- Reviewed Java `model/gameobjects/player/AbyssRank.addAp` and `configs/main/CustomConfig` AP cap keys:
+  - `gameserver.enable.ap.cap`
+  - `gameserver.ap.cap.value`
+- Updated `PlayerAbyssRank.AddAp` to accept Java AP cap options and apply Java's capped-count calculation.
+- Extended `AbyssPointsAddOptions` with AP cap fields and routed them through `AbyssPointsService.CreateAddApPlan`.
+- Routed loaded `GameServerOptions.Custom.EnableApCap` and `ApCapValue` into AP extraction, direct conditioning AP payment, and charge-all AP payment paths.
+- Added AP cap tests for near-cap gain and Java's above-cap clamp behavior.
+- Validation:
+  - First parallel focused run hit a shared build-output file lock; reran the affected focused test sequentially.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~AbyssPointsServiceTests --no-restore` passed with 8 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~ItemChargeServiceTests --no-restore` passed with 8 tests after sequential rerun.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1471 tests.
+
+#### Migration Parity Table - Session 901
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.AbyssRank` | `Aion.GameServer.Model.GameObjects.PlayerAbyssRank` | Model | Partial | Unit Tested | Partial Parity | `AddAp` now supports Java AP cap math, including the above-cap clamp case where a positive gain while already above cap moves current AP back to the cap. Daily/weekly AP still increment by the original positive amount like Java. GP rank thresholds, daily/weekly reset timing, persistent state, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.configs.main.CustomConfig` | `Aion.GameServer.Configuration.GameServerCustomOptions` | Configuration | Partial | Unit Tested through options consumers and existing config tests | Needs Verification | C# already loaded `gameserver.enable.ap.cap` and `gameserver.ap.cap.value`; this unit wires those options into AP planner callers. Environment/property precedence is covered elsewhere, but this unit did not add a config-loading test. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `Aion.GameServer.Services.AbyssPointsService` | Service | Partial | Unit Tested | Partial Parity | AP planner now accepts cap options and reports `Added` as the actual post-cap AP delta, matching Java's packet amount source. Full Legion, siege execution, large-AP logging, and runtime comparison remain missing. |
+| `com.aionemu.gameserver.model.templates.item.actions.ApExtractAction` | `Aion.GameServer.Services.ApExtractService` / `GameServerConnection.HandleApExtractUseItemAsync` | Item Action / Handler | Partial | Regression Tested by existing AP extraction tests | Needs Verification | AP extraction now receives loaded AP cap options via the connection path. No new AP extraction cap-specific regression was added in this unit. |
+| `com.aionemu.gameserver.services.item.ItemChargeService` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleChargeItemAsync` / `HandleChargeAllQuestionResponseAsync` | Service / Handler | Partial | Regression Tested by existing charge AP tests | Needs Verification | Direct and charge-all AP payment paths now pass AP cap options into the shared planner. Negative AP payments are unaffected unless Java's cap condition would clamp an above-cap value. No cap-specific charge regression was added. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Unit Tested through AP planner | Needs Verification | AP gain packet amount now uses capped actual delta in planner tests. Byte-level Java runtime comparison remains unavailable. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRank` | Server Packet | Partial | Unit Tested through AP planner | Needs Verification | Planner still emits rank packet when capped AP changes. Packet bytes were not compared against Java runtime output. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `PlayerAbyssRank_AddApAppliesJavaCapAndAboveCapClamp` | Unit | Java `AbyssRank.addAp` and `CustomConfig` source review | Validates cap-limited gain to `1000`, daily/weekly increments by original positive AP, and Java's above-cap clamp from `1500` down to `1000`. | Deterministic C# unit test grounded in Java source. | No Java runtime artifact; persistent-state and reset timing are not represented. |
+| `AddAp_UsesJavaApCapOptionsForAppliedAmount` | Unit | Java `AbyssPointsService.addAp` uses `AbyssRank.addAp` and sends actual delta | Validates AP planner applies cap options, reports `Added=100`, mutates AP to cap, and emits AP gain/rank packets. | Deterministic C# unit test grounded in Java source. | No byte-level Java comparison; no live config-loading assertion in this unit. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- No AP extraction or conditioning integration regression explicitly enables AP cap; cap flow is covered at rank/planner level and wired through connection options.
+- Java `AbyssRank` persistent-state changes are not modeled in `PlayerAbyssRank`.
+- Java daily/weekly AP reset behavior and `lastUpdate` timing remain outside this slice.
+- Full Legion and siege execution remain incomplete for broader AP callers.
+- Packet bytes were not compared against Java runtime output.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 AP cap rank-math refinement plus AP option wiring for 3 existing AP caller paths
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 6 blocked/not-started categories, including Java runtime artifact generation, cap-enabled caller integration artifacts, persistent-state modeling, daily/weekly reset timing, full Legion/siege execution for other AP callers, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit closes the documented AP cap gap for planner-backed AP callers.
+
+Next recommended unit of work:
+- Continue AP caller convergence by inspecting C# coverage for Java `TradeService`, `QuestService`, `PvpService`, `NpcController`, and `ItemPurificationService` AP usages; wire the smallest already-ported AP reward/spend path through `AbyssPointsService`.
+- If no compact AP caller is available, choose isolated packet work such as remaining `SM_LEGION_EDIT` edit types.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: wire another existing AP payment/reward path or pivot to AP cap config support, then continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: inspect C# coverage for Java `TradeService`, `QuestService`, `PvpService`, `NpcController`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
