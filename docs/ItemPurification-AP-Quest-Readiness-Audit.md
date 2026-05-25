@@ -64,14 +64,15 @@ Current C# status:
 - `ItemPurificationLiveExecutionService.ExecuteAsync` sends the success message first, applies live mutation, then sends the concrete mutation packet plan.
 - UOW-968 adds live-execution regression coverage proving a purification AP spend that drops rank still produces `AbyssPointsAddPlan` rank-change metadata (`SmSystemMessage`, `SmAbyssRank`, `SmAbyssRankUpdate`, rank-limit flag, abyss-skill flag).
 - UOW-969 emits `AbyssPointsAddPlan.PlayerPackets` from the explicit live-execution helper at the existing `AbyssPointsUpdate` packet-plan slot.
-- UOW-970 broadcasts `AbyssPointsAddPlan.RankUpdatePacket` to visible players from the explicit live-execution helper after the AP player packets and before later mutation packets. It still does not execute rank-limited unequip or refresh abyss skills.
+- UOW-970 broadcasts `AbyssPointsAddPlan.RankUpdatePacket` to visible players from the explicit live-execution helper after the AP player packets and before later mutation packets.
+- UOW-971 runs `EquipmentService.CheckRankLimitItems` from the explicit live-execution helper at the AP rank-change point, mutates the player inventory when rank-limited equipment is unequipped, and exposes the `EquipmentChangeResult`. It still does not send the unequip packet fanout, persist the unequipped rows, or refresh abyss skills.
 - `ItemPurificationPersistentLiveExecutionService.ExecuteAsync` persists inventory mutation and updated abyss rank together, but does not execute rank-change side-effect services.
 
 AP parity gaps:
 
 - AP spend player packets are emitted by explicit ItemPurification live execution, but no Java runtime packet-byte/order artifact exists yet.
 - Rank update broadcast is emitted from explicit ItemPurification live execution, but no Java runtime packet-byte/order artifact exists yet.
-- Equipment rank-limit unequip has a C# service home but is not invoked from ItemPurification AP spend.
+- Equipment rank-limit unequip is invoked from explicit ItemPurification live execution and mutates in-memory equipment state, but packet fanout and persistence are not wired in this path.
 - Abyss skill refresh has a C# service home but is not invoked from ItemPurification AP spend.
 - Legion contribution is correctly absent for spend.
 - Siege callback is correctly absent for purification's plain AP spend path.
@@ -80,7 +81,8 @@ AP parity gaps:
 Safe AP next tests:
 
 - Add an explicit side-effect executor only behind opt-in live execution, then cover equipment rank-limit and abyss-skill invocation without enabling production dispatch.
-- Add explicit side-effect execution coverage for rank-limited equipment and abyss skill refresh once their persistence/packet boundaries are selected.
+- Add unequip packet fanout and persistence coverage for rank-limited equipment changes once the explicit live-execution persistence boundary is selected.
+- Add abyss skill refresh execution once skill/effect packet fanout boundaries are ready.
 
 ## Quest Callback Side Effects
 

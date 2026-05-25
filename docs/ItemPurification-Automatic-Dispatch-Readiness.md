@@ -125,6 +125,8 @@ UOW-969 emits `AbyssPointsAddPlan.PlayerPackets` from the explicit ItemPurificat
 
 UOW-970 emits `AbyssPointsAddPlan.RankUpdatePacket` through the visible-player broadcast boundary from explicit ItemPurification live execution, placed after AP owner packets and before later mutation packets. This still affects only the opt-in live path. Automatic production dispatch remains disabled, and the AP gate is still open for rank-limited equipment execution, abyss skill refresh execution, and Java runtime packet comparison.
 
+UOW-971 invokes `EquipmentService.CheckRankLimitItems` from explicit ItemPurification live execution at the AP rank-change point and mutates the player inventory when rank-limited equipment is unequipped. This is still an opt-in live-path step only. Automatic production dispatch remains disabled, and the AP gate is still open for unequip packet fanout, persistence of rank-limited equipment changes, abyss skill refresh execution, and Java runtime packet comparison.
+
 ### 5. Packet Ordering And Runtime Comparison
 
 Required before automatic dispatch:
