@@ -1,7 +1,7 @@
 # Nearby Quest Start Conditions Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-991, updated by UOW-992 through UOW-1000
+Unit of Work: UOW-991, updated by UOW-992 through UOW-1001
 
 ## Purpose
 
@@ -148,15 +148,18 @@ template == null ? 99 : template.getMinlevelPermitted() - playerLevel
 - UOW-999 adds staged XML start-condition DTO/extractor/predicate support for `finished`, `unfinished`, `noacquired`, `acquired`, `equipped` with Java nearby `warn = false` no-op behavior, and `required_title`. Unknown XML start-condition children still fail closed as `UnsupportedXmlStartConditions`.
 - UOW-999 adds nullable reward-group storage to `PlayerQuestState` so `finished reward="..."` can be evaluated. Existing DB loading does not yet hydrate reward groups, so production/runtime reward-group parity still needs repository follow-up before live sends.
 - UOW-1000 extends `MySqlPlayerEnterWorldRepository.LoadPlayerQuestsAsync` to select the nullable Java `player_quests.reward` column into `PlayerQuestState.RewardGroup`, with a gated Java-schema DB integration assertion.
+- UOW-1001 adds staged inventory item precondition support. `NearbyQuestTemplateXmlExtractor` now preserves `<inventory_item item_id="..." count="...">` rows, and `NearbyQuestStartConditionService` matches Java `QuestService.inventoryItemCheck(..., warn=false)` by checking only item-id presence in the player's inventory. The XML `count` value is intentionally parsed for traceability but not enforced in this gate.
+- UOW-1001 read-only repeat-timing analysis confirms the next narrow slice needs `PlayerQuestState.NextRepeatTime`, `CompleteTime`, preserved `repeat_cycle` values, and server-timezone-aware comparisons before replacing `UnsupportedRepeatTiming`.
 
 ## Migration Parity Table
 
 | Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
 |---|---|---|---|---|---|---|
-| `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `Aion.GameServer.Services.NearbyQuestStartConditionService` | Service / Quest Predicate | Partial | Unit Tested | Partial Parity | UOW-992 stages the nearby UI early gates: missing template, started/reward state, conservative repeat-count checks, race, min/max level with allowed diff 2, class, gender, and abyss rank. XML start conditions, inventory item checks, combine-skill checks, NPC faction checks, warning packets, exception/log behavior, and time-based repeat cooldowns remain unsupported. |
+| `com.aionemu.gameserver.services.QuestService.checkStartConditions`; `QuestService.inventoryItemCheck` | `Aion.GameServer.Services.NearbyQuestStartConditionService` | Service / Quest Predicate | Partial | Unit Tested | Partial Parity | Stages nearby UI early gates plus XML subset and UOW-1001 inventory item-id presence checks. Java `inventoryItemCheck` ignores XML counts for this gate, and C# intentionally mirrors that. Combine-skill checks, NPC faction checks, warning packets, exception/log behavior, and time-based repeat cooldowns remain unsupported. |
 | `com.aionemu.gameserver.services.QuestService.getLevelRequirementDiff` | `Aion.GameServer.Services.NearbyQuestStartConditionService.GetLevelRequirementDiff` | Utility / Quest Predicate | Partial | Unit Tested | Partial Parity | UOW-992 tests Java's missing-template `99` and `minlevel_permitted - playerLevel` behavior. Production quest template loading and packet send integration remain unwired. |
-| `com.aionemu.gameserver.model.templates.QuestTemplate`; `com.aionemu.gameserver.dataholders.QuestsData` | `Aion.GameServer.Dataholders.NearbyQuestTemplateSummary`; `Aion.GameServer.Dataholders.NearbyQuestTemplateTable`; `Aion.GameServer.Dataholders.NearbyQuestTemplateXmlExtractor` | Dataholder / DTO / XML Extractor | Partial | Unit Tested | Needs Verification | Staged DTO and extractor cover only early nearby predicate fields and unsupported-dependency flags. Production XML/JAXB loading, enum mapping from real static data, optional condition counting, category defaults, master-crafting adjustment, collect/inventory details, and repeat-cycle timing remain unported. |
-| `com.aionemu.gameserver.model.templates.quest.XMLStartCondition` | `Aion.GameServer.Dataholders.NearbyQuestXmlStartCondition`; `Aion.GameServer.Services.NearbyQuestStartConditionService` | Dataholder / Predicate | Partial | Unit Tested | Partial Parity | UOW-999 implements the nearby `warn = false` supported subset: `finished`, `unfinished`, `noacquired`, `acquired`, ignored `equipped`, and `required_title`, plus mandatory/optional XML block counting. Unknown XML children fail closed. Inventory items, combine skill, NPC faction, master-crafting required-count adjustment, time-based repeat cooldowns, and production static-data loading remain unported. |
+| `com.aionemu.gameserver.model.templates.QuestTemplate`; `com.aionemu.gameserver.dataholders.QuestsData` | `Aion.GameServer.Dataholders.NearbyQuestTemplateSummary`; `Aion.GameServer.Dataholders.NearbyQuestTemplateTable`; `Aion.GameServer.Dataholders.NearbyQuestTemplateXmlExtractor` | Dataholder / DTO / XML Extractor | Partial | Unit Tested | Needs Verification | Staged DTO and extractor cover nearby predicate fields, XML start-condition subset data, and inventory item precondition rows. Production XML/JAXB loading, enum mapping from real static data, optional condition counting, category defaults, master-crafting adjustment, collect item details, and repeat-cycle timing remain unported. |
+| `com.aionemu.gameserver.model.templates.quest.InventoryItems`; `com.aionemu.gameserver.model.templates.quest.InventoryItem` | `Aion.GameServer.Dataholders.NearbyQuestInventoryItem`; `NearbyQuestTemplateXmlExtractor` | DTO / XML Predicate Dependency | Partial | Unit Tested | Partial Parity | UOW-1001 parses `inventory_item.item_id` and optional `count`. The nearby predicate intentionally checks item-id presence only, matching Java `inventoryItemCheck`; count enforcement belongs to other collect-item paths and remains out of scope. Production JAXB/static-data integration remains unwired. |
+| `com.aionemu.gameserver.model.templates.quest.XMLStartCondition` | `Aion.GameServer.Dataholders.NearbyQuestXmlStartCondition`; `Aion.GameServer.Services.NearbyQuestStartConditionService` | Dataholder / Predicate | Partial | Unit Tested | Partial Parity | UOW-999 implements the nearby `warn = false` supported subset: `finished`, `unfinished`, `noacquired`, `acquired`, ignored `equipped`, and `required_title`, plus mandatory/optional XML block counting. Unknown XML children fail closed. Combine skill, NPC faction, master-crafting required-count adjustment, time-based repeat cooldowns, and production static-data loading remain unported. |
 | `com.aionemu.gameserver.model.templates.quest.FinishedQuestCond` | `Aion.GameServer.Dataholders.NearbyQuestFinishedCondition` | DTO / XML Predicate Dependency | Partial | Unit Tested | Partial Parity | UOW-999 parses `quest_id` and default/explicit `reward`. Reward-group matching is unit-tested with staged `PlayerQuestState.RewardGroup`; production quest-state repository hydration is not yet verified. Repeatable prerequisite exact max-complete-count behavior is unit-tested for staged templates. |
 | `com.aionemu.gameserver.model.gameobjects.player.QuestStateList`; `com.aionemu.gameserver.questEngine.model.QuestState` | `Aion.GameServer.Model.GameObjects.PlayerQuestState`; `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository` | Player Quest State / Repository | Partial | Unit Tested; Integration Tested when DB flag enabled | Partial Parity | C# now stores status, vars, flags, complete count, and nullable reward group for staged XML `finished` checks. UOW-1000 hydrates `reward` from the Java-schema `player_quests` table when DB integration is enabled. Next-repeat timing needed by `QuestState.canRepeat()` remains unported. |
 | `com.aionemu.gameserver.network.aion.clientpackets.CM_LEVEL_READY` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleLevelReadyAsync` | Client Packet Handler / Nearby Send Trigger | Partial | Manual Only | Needs Verification | UOW-996 source-audits Java's immediate level-ready call to `updateNearbyQuests`. C# intentionally omits the nearby marker send until production candidate sources and predicates are safe. |
@@ -224,6 +227,8 @@ Existing relevant tests remain:
 - `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_RequiresAllMandatoryAndOneOptionalXmlBlockLikeJava`
 - `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_FailsClosedForUnknownXmlStartConditionChildren`
 - `PlayerEnterWorldRepositoryDatabaseIntegrationTests.LoadPlayerQuests_HydratesRewardGroupAgainstJavaSchema_WhenEnabled`
+- `NearbyQuestStartConditionServiceTests.CheckNearbyStartConditions_AppliesJavaInventoryItemPresenceGate`
+- UOW-1001 read-only repeat-timing sub-agent analysis for `QuestState.canRepeat`, `QuestTemplate.repeat_cycle`, `QuestRepeatCycle`, `PlayerQuestListDAO`, and nearby repeat callers
 
 ## Remaining Risks
 
@@ -231,9 +236,9 @@ Existing relevant tests remain:
 - C# has only a staged partial predicate for nearby `checkStartConditions`; production dispatch remains disabled.
 - Quest template production static data loading for start-condition fields is not ported; only a staged XML extractor and real-data audit exist.
 - Repeatability max-count handling is partial; repeat reset timing and full `QuestState.canRepeat()` are not modeled.
-- XML start-condition semantics are partial: the nearby supported subset is unit-tested, but production static-data loading, unknown future XML children, master-crafting adjustment, inventory/combine/NPC-faction dependencies, and Java runtime comparison remain unverified.
+- XML start-condition semantics are partial: the nearby supported subset is unit-tested, but production static-data loading, unknown future XML children, master-crafting adjustment, combine/NPC-faction dependencies, and Java runtime comparison remain unverified.
 - `PlayerQuestState.RewardGroup` is now hydrated by the MySQL enter-world repository when DB integration is enabled, but broader persistence/update behavior and Java runtime comparison remain unverified.
-- NPC faction, combine-skill, inventory, abyss-rank, title, class/race/gender enum mapping, and exception/log behavior need C# homes before runtime candidate filtering can be claimed.
+- NPC faction, combine-skill, abyss-rank, title, class/race/gender enum mapping, exception/log behavior, and repeat timing need C# homes before runtime candidate filtering can be claimed.
 - Packet sends and production ItemPurification dispatch must remain disabled.
 - Level-ready and NPC-spawn send triggers remain documented only; no C# runtime send path exists.
 - The supported-template real-data audit uses one synthetic player archetype and excludes unsupported dependency categories rather than proving full Java predicate parity.
@@ -243,12 +248,12 @@ Existing relevant tests remain:
 ## Summary Metrics
 
 - Total Java artifacts discovered: 9 in this unit
-- Total artifacts ported: 8 staged partial artifacts across UOW-992 through UOW-1000 (`NearbyQuestTemplateTable`, `NearbyQuestStartConditionService`, `NearbyQuestTemplateXmlExtractor`, `NearbyQuestMarkerProjectionService`, `NearbyQuestRefreshPlanService`, `NearbyQuestXmlStartCondition`, `NearbyQuestFinishedCondition`, and `PlayerQuestState.RewardGroup` hydration)
+- Total artifacts ported: 9 staged partial artifacts across UOW-992 through UOW-1001 (`NearbyQuestTemplateTable`, `NearbyQuestStartConditionService`, `NearbyQuestTemplateXmlExtractor`, `NearbyQuestMarkerProjectionService`, `NearbyQuestRefreshPlanService`, `NearbyQuestXmlStartCondition`, `NearbyQuestFinishedCondition`, `NearbyQuestInventoryItem`, and `PlayerQuestState.RewardGroup` hydration)
 - Total artifacts with verified parity: 0 in this unit
-- Total artifacts needing verification: 10
-- Total blocked artifacts: 5 blocked/not-started categories, including production quest template loading, XML start conditions, repeat timing, NPC faction/combine-skill dependencies, and production send triggers
+- Total artifacts needing verification: 11
+- Total blocked artifacts: 5 blocked/not-started categories, including production quest template loading, repeat timing, NPC faction/combine-skill dependencies, and production send triggers
 - Estimated overall migration completion: Phase 6 remains about 70% complete; this unit clarifies the next predicate blocker without enabling live nearby quest refresh.
 
 ## Next Recommended Unit Of Work
 
-Add the next missing nearby predicate dependency in a narrow slice: inventory item preconditions, combine-skill checks, NPC faction checks, repeat timing, or broader refresh-plan audits across representative player archetypes. Keep packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.
+Add the next missing nearby predicate dependency in a narrow slice: repeat timing, combine-skill checks, NPC faction checks, or broader refresh-plan audits across representative player archetypes. The repeat-timing audit recommends starting with `PlayerQuestState.NextRepeatTime`, `CompleteTime`, preserved `repeat_cycle` values, and server-timezone-aware tests. Keep packet sends, production integration, and production ItemPurification dispatch disabled until each dependency has tests.
