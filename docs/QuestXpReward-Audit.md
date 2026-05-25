@@ -1,4 +1,4 @@
-# Quest XP Reward Audit - UOW-1044
+# Quest XP Reward Audit - UOW-1044/UOW-1045
 
 Date: May 25, 2026
 
@@ -42,10 +42,19 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - The helper does not mutate `Player.Exp`, `Player.Level`, or `Player.ReposeEnergy`.
 - Quest finish still only carries XP as non-item projection metadata; the XP plan is not composed into `QuestFinishOperationPlanService`.
 
+## C# State After UOW-1045
+
+- Added `QuestFinishOperationDescriptor.XpRewardPlan`.
+- Extended `QuestFinishRewardSideEffectContext` with optional XP inputs: `ExperienceTable`, `TargetNpcName`, `NoExp`, `QuestXpBoostStat`, `HasLegionBonus`, `SalvationPercent`, and `IsDaeva`.
+- `QuestFinishOperationPlanService` now emits a non-live `NonItemRewardSideEffectPlan` descriptor immediately after an XP non-item projection when the side-effect context includes a `PlayerExperienceTable`.
+- The descriptor carries `QuestXpRewardPlan` metadata and preserves Java reward order before title, AP, DP, GP, cube, warehouse, and the coarse non-item placeholder.
+- Added `QuestRewardService.CreateXpRewardPlanFromRates` so operation planning can reuse the XP planner without constructing unrelated resource-stat services.
+- Quest finish still does not mutate XP, send packets, run level-change hooks, or persist player state.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
-- XP live mutation is not wired into quest finish.
+- XP live mutation is not wired into quest finish; UOW-1045 only composes non-live operation metadata.
 - `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are not concretely ported in this unit; only message-kind metadata exists.
 - `SM_STATUPDATE_EXP` is represented as a packet intent only; no live send is performed.
 - Level-change hooks are represented as a coarse `LevelChangeSideEffects` intent only. Stat recalculation, nearby quest refresh, quest engine callbacks, skills, guide, starter-kit, and NPC faction effects remain unported.
@@ -61,7 +70,8 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `QuestRewardServiceTests.ApplyQuestXpRate_MatchesJavaFloatRateBoostLegionFallbacksAndOverflow`
 - `GameServerOptionsTests.LoadFromJavaConfig_ReadsCoreAndNetworkDefaults`
 - `GameServerOptionsTests.LoadFromJavaConfig_AppliesMyGsOverridesLast`
+- `QuestFinishOperationPlanServiceTests.CreatePlan_ComposesXpSideEffectPlanAfterMatchingNonItemProjectionWithoutMutatingPlayer`
 
 ## Next Recommendation
 
-Compose `QuestXpRewardPlan` into quest-finish operation descriptors after the XP non-item projection and before title/AP/DP/GP metadata, still without live mutation. Keep live XP execution disabled until concrete system-message packet helpers, level-change side-effect ordering, stat updates, nearby quest refresh, and persistence behavior are modeled.
+Port concrete XP system-message helpers and/or deepen the level-change side-effect audit before enabling live XP execution. Keep live XP mutation disabled until message ids, packet ordering, stat updates, nearby quest refresh, quest callbacks, skill learning, and persistence behavior are modeled.
