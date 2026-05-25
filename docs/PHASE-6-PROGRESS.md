@@ -29838,9 +29838,73 @@ Next recommended unit of work:
 
 ---
 
+### Session 919 (May 25, 2026)
+- Continued after UOW-918 by reading the PN handoff and re-confirming `docs/commit-conventions.md` is still missing.
+- Ran Parallel Work Discovery across pure ItemPurification AP planning, C# purification static-data audit, Trade live adapter work, and ItemCharge AP spend follow-up.
+- Spawned two read-only explorers:
+  - Java ItemPurification analysis confirmed `CM_ITEM_PURIFICATION` ignores `playerObjectId` and all five required-material object ids; validation checks template/result, identified state, enchant, AP, kinah, and material counts; success message is sent before spends; `decreaseMaterials` spends AP only after materials are consumed.
+  - C# item/template audit confirmed there is no C# `item_purifications` static-data holder/parser or live purification packet/action surface yet.
+- Added `ItemPurificationApService` as a pure AP validation/spend planner with Java breadcrumbs for `ItemPurificationService.isPurificationAllowed` and `decreaseMaterials`.
+- Modeled Java AP precheck (`player.ap < necessaryAbyssPoints` rejects before spend), material-count precheck, and AP spend only after caller confirms material decrease success.
+- Modeled zero-AP result behavior by skipping `AbyssPointsService.AddAp` when `necessaryAbyssPoints <= 0`, matching Java's guarded spend.
+- Kept live behavior out of scope: XML `item_purifications` loading, ignored packet material object ids, success/failure system messages, audit logging, material deletion, kinah mutation, base item deletion, target item creation, state copy/reroll, inventory add, persistence, and packet fanout.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter ItemPurificationApServiceTests` passed with 4 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1565 tests.
+
+#### Migration Parity Table - Session 919
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemPurificationService.isPurificationAllowed` | `Aion.GameServer.Services.ItemPurificationApService.ValidatePurificationAllowed` | Service / Validation Planner | Partial | Regression Tested in C# | Partial Parity | C# models identified, enchant, AP, kinah, and required-material prechecks through projected inputs. Missing template/result lookup, Java log/audit branches, success/failure system messages, result item l10n lookup, base-item null NPE behavior, and live packet integration remain unported. |
+| `com.aionemu.gameserver.services.item.ItemPurificationService.decreaseMaterials` | `ItemPurificationApService.CreatePurificationApPlan` | Service / AP Spend Planner | Partial | Regression Tested in C# | Partial Parity | C# models AP spend only after caller confirms materials were decreased and skips AP add for zero AP cost. Material deletion, partial material-consumption failure behavior, Java kinah no-op risk from `decreaseKinah(-necessaryKinah)`, base-item deletion, persistence, and live packet fanout remain missing. |
+| `com.aionemu.gameserver.services.item.ItemPurificationService.upgradeItem` | Not ported in this unit | Service / Item Mutation | Not Started | Manual Analysis | Unknown | Java copies optional sockets, creator, tune count clamp, enchant level minus 5, enchant bonus, amplified/buff skill state, fusion data, stones, godstone, tempering, soulbind, random bonus/color, then adds target item. No C# equivalent yet. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_ITEM_PURIFICATION` | Not ported in this unit | Client Packet Handler | Not Started | Manual Analysis | Needs Verification | Java ignores `playerObjectId` and all five material object ids, resolves base item from active player's inventory, then calls validation/material-decrease/upgrade. No C# packet handler exists. |
+| `com.aionemu.gameserver.dataholders.ItemPurificationData` | Not ported in this unit | Static Data Holder | Not Started | Manual Analysis | Unknown | C# static data has no `item_purifications` holder/parser. This unit uses projected result data only. |
+| `com.aionemu.gameserver.model.templates.item.purification.ItemPurificationTemplate` | Not ported in this unit | Static Data DTO | Not Started | Manual Analysis | Unknown | Java maps `base_item_id` to result maps. No C# DTO/static table exists yet. |
+| `com.aionemu.gameserver.model.templates.item.purification.PurificationResult` | `Aion.GameServer.Services.ItemPurificationResultProjection` | DTO / Input Projection | Partial | Regression Tested in C# | Needs Verification | C# projection includes result id, min enchant, AP, kinah, and required materials. JAXB defaults/null behavior and XML parsing are not ported. |
+| `com.aionemu.gameserver.model.templates.item.purification.RequiredMaterial` | `Aion.GameServer.Services.ItemPurificationMaterialRequirement` | DTO / Input Projection | Partial | Regression Tested in C# | Needs Verification | C# projection models item id/count. Java zero-material/null-list behavior remains uncertain and live XML loading is missing. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService.addAp` | `Aion.GameServer.Services.AbyssPointsService.AddAp` | Service / AP Mutation | Partial | Regression Tested in C# | Partial Parity | Purification AP spend uses existing AP planner for negative AP mutation after material-decrease confirmation. Persistence, ranking cache, Legion contribution fanout, and exact packet bytes remain incomplete. |
+| `com.aionemu.gameserver.model.items.storage.Storage.getItemCountByItemId` | `ItemPurificationApService` inventory count projection | Inventory / Input Projection | Partial | Regression Tested in C# | Needs Verification | C# sums projected inventory items by item id. Java storage location/stack semantics, material object-id ignoring, and multi-stack decrement behavior are not fully ported. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseKinah` | Not ported in this unit | Inventory / Kinah Mutation | Not Started | Manual Analysis | Needs Verification | Java prechecks kinah, then calls `decreaseKinah(-necessaryKinah)`, which appears to risk no actual kinah spend. This is documented for future live parity decision. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePurificationApPlan_SpendsAbyssPointsOnlyAfterMaterialsDecrease` | Regression | Java `ItemPurificationService.isPurificationAllowed` and `decreaseMaterials` source review | Validates no AP spend before material-decrease confirmation, then negative AP mutation through `AbyssPointsService.AddAp`. | Deterministic C# regression grounded in Java source ordering. | Does not mutate/delete materials or compare Java runtime packets. |
+| `ValidatePurificationAllowed_RejectsInsufficientAbyssPointsBeforeSpend` | Regression | Java AP precheck source review | Validates insufficient AP rejects before AP mutation. | Deterministic C# regression grounded in Java source. | Does not validate Java message packet bytes. |
+| `ValidatePurificationAllowed_ChecksIdentifiedEnchantKinahAndMaterials` | Regression | Java validation branch source review | Validates identified, min enchant, kinah, and material count rejection statuses. | Deterministic C# regression for projected validation inputs. | Template lookup, audit/logging, success/failure messages, and zero-material JAXB behavior not covered. |
+| `CreatePurificationApPlan_SkipsAbyssPointSpendWhenJavaCostIsZero` | Regression | Java `if (necessaryAbyssPoints > 0)` guard source review | Validates zero AP cost does not call AP planner and leaves AP unchanged. | Deterministic C# regression grounded in Java source. | No live item mutation coverage. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- C# has no `item_purifications` static-data holder/parser, so this unit uses projected purification result data only.
+- Live `CM_ITEM_PURIFICATION` is unported, including Java's ignored material object ids and its missing base-item null guard.
+- Java sends a success message before resources are spent; C# live behavior must decide whether to preserve that ordering exactly.
+- Java material decrease can partially consume earlier materials if a later `decreaseByItemId` fails; this planner avoids mutation and does not model that destructive edge.
+- Java appears to precheck kinah but call `decreaseKinah(-necessaryKinah)`, which may not actually spend kinah. Future live parity must document whether to preserve or intentionally correct this behavior.
+- `upgradeItem` state-copy/reroll behavior is broad and not ported.
+- Packet bytes, persistence, ranking cache, Legion contribution fanout, and live siege callback execution remain incomplete.
+
+Summary metrics:
+- Total Java artifacts discovered: 11
+- Total artifacts ported: 1 pure ItemPurification AP validation/spend planner slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 11
+- Total blocked artifacts: 8 blocked/not-started categories, including Java runtime artifact generation, item-purification static data, live packet handler, material/base/target item mutation, kinah mutation parity decision, upgrade-item state copy, persistence/fanout, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 68% complete; this unit adds isolated ItemPurification AP precheck/spend coverage but not live purification behavior.
+
+Next recommended unit of work:
+- Add C# `item_purifications` static-data DTO/table/parser with a small XML fixture test, or defer that if static-data parser churn is too broad and instead continue another narrow AP caller such as ItemCharge AP spend hardening.
+- Do not wire live `CM_ITEM_PURIFICATION` until static data, material mutation, kinah parity decision, base-item deletion, target item creation/state copy, persistence, and packet fanout can be scoped together.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, and pure Trade AP formulas now consume their configured/fixed/formula AP boundaries at planner/service boundaries. Move next to a pure ItemPurification AP precheck/spend planner or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, and pure ItemPurification AP precheck/spend planning now consume their configured/fixed/formula AP boundaries at planner/service boundaries. Move next to `item_purifications` static-data DTO/table/parser work, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
