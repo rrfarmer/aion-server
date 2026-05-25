@@ -27198,6 +27198,53 @@ Next recommended unit of work:
 
 ---
 
+### Session 872 (May 25, 2026)
+- Continued from the Session 871 / Phase 6NS handoff with the fallback C# crypt verification unit while the Java runtime harness remains unimplemented.
+- Re-read the latest handoff, confirmed a clean worktree after UOW-871, and audited Java `Crypt` plus `EncryptionKeyPair` against C# `GameCrypt` / `GameEncryptionKeyPair`.
+- Performed Parallel Work Discovery across Java harness feasibility, corrupt encrypted packet behavior, multi-packet key evolution, and docs. Selected a dedicated C# crypto test file because it has isolated ownership and does not touch the shared decompose fixture.
+- Added `GameCryptTests` with Java-derived regression coverage for client-key behavior:
+  - `DecryptClientPayload_AdvancesClientKeyAfterValidPacket`
+  - `DecryptClientPayload_DoesNotAdvanceClientKeyWhenPacketValidationFails`
+- The tests use a deterministic local client encryptor that mirrors Java `EncryptionKeyPair` client encryption/key update math against public `GameCrypt.DecryptClientPayload`.
+- Kept the unit deliberately narrow: no production crypto changes, no Java-generated vectors, no Java runtime harness, no socket-server corrupt-packet threshold coverage, and no server-encryption byte comparison.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameCryptTests --no-restore` passes with 2 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passes with 1447 tests.
+
+#### Migration Parity Table - Session 872
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.Crypt` | `Aion.GameServer.Network.Aion.GameCrypt` | Crypto Utility | Partial | Unit Tested | Partial Parity | C# public decrypt path is now regression-tested for Java-derived client-key update behavior after valid packets and no key advance after validation failure. Java-generated game crypt vectors and live runtime comparison remain missing. |
+| `com.aionemu.gameserver.network.EncryptionKeyPair` | `Aion.GameServer.Network.Aion.GameEncryptionKeyPair` via `GameCrypt` | Crypto Utility | Partial | Unit Tested | Partial Parity | Tests mirror Java `decrypt` validation/update semantics using a local encryptor: packet body decrypt validates static client code/opcode checksum and only valid packets advance the client key. Reflection/private-field behavior, server-key encryption vectors, and Java runtime bytes remain unverified. |
+| `com.aionemu.gameserver.network.aion.AionConnection.processData` | `Aion.GameServer.Network.Aion.GameServerConnection.ReadPacketAsync` | Connection Read / Corrupt Packet Dependency | Partial | No Tests | Needs Verification | This unit tests `GameCrypt` directly, not connection-level corrupt-packet threshold/disconnect behavior. Java `MAX_CORRUPT_PACKETS_BEFORE_DISCONNECT` and skip-before-key behavior remain untested in C#. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GameCryptTests.DecryptClientPayload_AdvancesClientKeyAfterValidPacket` | Unit / Regression | Java source review of `EncryptionKeyPair.decrypt` key update after `validateClientPacket` succeeds | Validates two sequential encrypted client payloads decrypt successfully only when the C# client key advances after the first valid packet. | Deterministic C# unit test aligned to reviewed Java algorithm. | Does not use Java-generated vectors or live Java runtime bytes. |
+| `GameCryptTests.DecryptClientPayload_DoesNotAdvanceClientKeyWhenPacketValidationFails` | Unit / Regression | Java source review of `EncryptionKeyPair.decrypt`, where invalid packets return false before writing the incremented key back | Validates a corrupt encrypted client payload fails validation and does not advance the C# client key, allowing the next valid payload encrypted with the original key to decrypt. | Deterministic C# unit test aligned to reviewed Java invalid-packet key-update behavior. | Does not test `AionConnection` corrupt-packet counter/disconnect threshold or Java runtime bytes. |
+
+Remaining risks:
+- Java runtime comparison remains unimplemented; no artifact currently proves Java-vs-C# packet order or byte parity for decompose.
+- Game crypt tests are source-derived and deterministic but not Java-generated golden vectors.
+- Server encryption key evolution and encrypted server-packet byte parity remain untested.
+- Connection-level corrupt packet threshold, skip-before-key behavior, and disconnect semantics remain untested.
+- Full packet byte parity, opcode/frame/crypto breadth, broadcast fanout, socket visibility, serialization side effects, random reward selection, and live-client validation remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3
+- Total artifacts ported: 1 C# crypto regression test slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 3
+- Total blocked artifacts: 8 blocked/not-started categories, including Java runtime harness, Java-generated game crypt vectors, server encryption byte comparison, connection corrupt-packet threshold, deterministic live packet capture, broadcast fanout, full packet byte parity, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit improves crypt regression coverage but does not establish Java runtime or byte parity.
+
+Next recommended unit of work:
+- Continue the crypt fallback by adding connection-level corrupt encrypted packet threshold coverage in a dedicated socket/read-loop test: send three invalid encrypted frames after `SmKey`, assert the first two are ignored and the third closes the connection, and document the Java `AionConnection.MAX_CORRUPT_PACKETS_BEFORE_DISCONNECT` comparison. If that gets too broad, return to the Java harness spike from `docs/Phase-6-Decompose-Java-Runtime-Comparison-Plan.md`.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -27207,4 +27254,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Start the Java harness spike from `docs/Phase-6-Decompose-Java-Runtime-Comparison-Plan.md`: determine whether `AionConnection`/`Player`/`PacketSendUtility` can be wrapped or subclassed for a selectable-decompose packet-order capture without changing production Java. If that is too broad, switch to the fallback C# verification unit for corrupt encrypted packet threshold and multi-packet key evolution in `GameCrypt`.
+8. Continue the crypt fallback by adding connection-level corrupt encrypted packet threshold coverage in a dedicated socket/read-loop test: send three invalid encrypted frames after `SmKey`, assert the first two are ignored and the third closes the connection, and document the Java `AionConnection.MAX_CORRUPT_PACKETS_BEFORE_DISCONNECT` comparison. If that gets too broad, return to the Java harness spike from `docs/Phase-6-Decompose-Java-Runtime-Comparison-Plan.md`.
