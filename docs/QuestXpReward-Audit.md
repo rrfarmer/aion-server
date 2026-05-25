@@ -1,4 +1,4 @@
-# Quest XP Reward Audit - UOW-1044/UOW-1047
+# Quest XP Reward Audit - UOW-1044/UOW-1048
 
 Date: May 25, 2026
 
@@ -77,13 +77,26 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - It returns no packets for skipped XP plans.
 - The helper is still non-live: it creates packet objects only and does not send them.
 
+## C# State After UOW-1048
+
+- Added non-live `QuestXpExecutionPlanService.CreatePlan(QuestXpRewardPlan)`.
+- The plan stages Java `PlayerCommonData.addExp -> setExp` execution order without mutating the player:
+  1. `PlayerCommonData.setExp`.
+  2. Java-order `PlayerController.onLevelChange` descriptors when the XP plan changes level.
+  3. `SM_STATUPDATE_EXP` descriptor when Java `setExp` would enter its mutation/send branch.
+  4. XP `SM_SYSTEM_MESSAGE` packet metadata.
+  5. Optional `STR_LEVEL_LIMIT_QUEST_NOT_FINISHED1` descriptor after the XP message.
+- Level-change descriptors preserve the reviewed Java order: ratio update, stats template refresh, max repose update, salvation reset, upgrade-player life/stat/team/legion work, level-up animation, NPC faction level-up, quest level-change callbacks, nearby refresh, guide HTML, skill auto-learn, bonus pack, faction pack, and starter kit.
+- The plan also records `MinNewLevel`, matching Java's `oldLevel < newLevel ? oldLevel + 1 : oldLevel - 1` value used by guide/skill/starter-kit callers.
+- Everything remains metadata only; no live `Player.Exp`, `Player.Level`, repose/salvation, packet send, quest callback, skill, faction, team, legion, guide, custom reward, or persistence side effect is executed.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
 - XP live mutation is not wired into quest finish; UOW-1045 only composes non-live operation metadata.
 - `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are ported for the XP reward messages used by `PlayerCommonData.addExp`, and `QuestXpRewardPlan` can now produce ordered non-live packet metadata.
-- `SM_STATUPDATE_EXP` is represented as a packet intent only; no live send is performed.
-- Level-change hooks are represented as a coarse `LevelChangeSideEffects` intent only. Stat recalculation, nearby quest refresh, quest engine callbacks, skills, guide, starter-kit, and NPC faction effects remain unported.
+- `SM_STATUPDATE_EXP` is now represented by staged execution metadata, but no packet instance is created or sent from the XP execution plan.
+- Level-change hooks are represented as Java-order descriptors only. Stat recalculation, nearby quest refresh, quest engine callbacks, skills, guide, starter-kit, NPC faction effects, team/alliance updates, legion updates, and ratio updates remain unported live behavior.
 - The C# plan uses the current C# `Player.Level` as the previous/display level input. Java derives and updates level through `PlayerCommonData.setExp`; this needs verification before live mutation.
 - No-exp state and Daeva/non-Daeva cap are explicit method inputs because equivalent C# player state is not fully modeled.
 - Repose and salvation formulas are source-reviewed and unit-tested, but edge cases around negative XP, large XP, unusual float rates, and live max-repose updates still need runtime verification.
@@ -99,7 +112,10 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `QuestFinishOperationPlanServiceTests.CreatePlan_ComposesXpSideEffectPlanAfterMatchingNonItemProjectionWithoutMutatingPlayer`
 - `GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages`
 - `QuestRewardServiceTests.CreateXpSystemMessagePackets_MapsPlanMessageKindsAndAscensionWarningInJavaOrder`
+- `QuestXpExecutionPlanServiceTests.CreatePlan_StagesJavaLevelChangeSideEffectsBeforeStatAndXpPackets`
+- `QuestXpExecutionPlanServiceTests.CreatePlan_KeepsNoLevelChangePlanInJavaPacketOrder`
+- `QuestXpExecutionPlanServiceTests.CreatePlan_AppendsAscensionWarningAfterXpMessageAndSkipsGuardedPlans`
 
 ## Next Recommendation
 
-Start a staged level-change executor/plan from the UOW-1046 read-only level-change findings. Keep live XP mutation disabled until stat updates, nearby quest refresh, quest callbacks, skill learning, and persistence behavior are modeled.
+Add one concrete prerequisite behind the staged execution plan, such as the named `SmActionAnimation.LevelUp` constant/regression or a focused level-change side-effect sub-plan. Keep live XP mutation disabled until stat updates, nearby quest refresh, quest callbacks, skill learning, NPC factions, custom rewards, and persistence behavior are modeled.

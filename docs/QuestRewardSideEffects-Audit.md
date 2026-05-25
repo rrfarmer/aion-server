@@ -1,7 +1,7 @@
 # Quest Reward Side-Effects Audit
 
 Date: May 25, 2026
-Unit of Work: UOW-1034, updated by UOW-1035, UOW-1037, UOW-1038, UOW-1039, UOW-1040, UOW-1041, UOW-1042, UOW-1043, UOW-1044, UOW-1045, UOW-1046, and UOW-1047
+Unit of Work: UOW-1034, updated by UOW-1035, UOW-1037, UOW-1038, UOW-1039, UOW-1040, UOW-1041, UOW-1042, UOW-1043, UOW-1044, UOW-1045, UOW-1046, UOW-1047, and UOW-1048
 
 ## Purpose
 
@@ -64,6 +64,7 @@ XP:
 - UOW-1045 composes the XP plan into quest-finish operation metadata immediately after the XP non-item projection when `QuestFinishRewardSideEffectContext.ExperienceTable` is supplied.
 - UOW-1046 adds concrete XP reward `SmSystemMessage` helpers for Java `PlayerCommonData.addExp` message variants and the level-9 ascension-limit warning, with packet serialization regression coverage.
 - UOW-1047 adds non-live `QuestRewardService.CreateXpSystemMessagePackets`, which maps XP plan message kinds to the concrete XP packet helpers and appends the ascension-limit warning after the XP gain message.
+- UOW-1048 adds non-live `QuestXpExecutionPlanService.CreatePlan`, which expands the coarse level-change intent into Java-order execution descriptors and places `SM_STATUPDATE_EXP`, XP system-message metadata, and optional ascension-warning metadata after those level-change descriptors.
 - The XP plan intentionally does not mutate player XP/level/repose, send packets, call level-change hooks, update nearby quests, or persist state.
 
 ## Title, Cube, And Warehouse
@@ -158,6 +159,8 @@ GP:
 - Existing non-live XP helper:
   - `QuestRewardService.CreateXpRewardPlan`
   - `QuestRewardService.ApplyQuestXpRate`
+  - `QuestRewardService.CreateXpSystemMessagePackets`
+  - `QuestXpExecutionPlanService.CreatePlan`
 - UOW-1035 staged a non-composed quest kinah planner on `QuestRewardService`; quest finish still does not execute it.
 - UOW-1037 staged title/cube/warehouse reward planners on `QuestRewardSideEffectPlanService`; UOW-1038 composes them into quest-finish metadata but still does not execute them.
 - UOW-1040 adds a quest GP helper and live online GP planner/mutator; UOW-1041 composes non-live GP metadata into quest finish but still does not execute it.
@@ -172,13 +175,13 @@ GP:
 - C# quest finish still does not execute any reward mutation.
 - Title/cube/warehouse planners are now visible in quest-finish operation metadata when a side-effect context is supplied, but remain metadata only; quest title DAO writes, expirable registration, cube update sends, warehouse info sends, and player expansion counter persistence are not live.
 - GP planner metadata is now visible in quest-finish operation metadata when a side-effect context is supplied, but live GP mutation, offline DAO writes, and deferred persistence are not live by default.
-- XP planner metadata is visible in quest-finish operation metadata when an experience table is supplied, but it does not perform live level/packet/persistence side effects. UOW-1046 read-only analysis confirmed the Java live level-up path runs before quest-state completion and includes visual stats, level-up animation, NPC faction level-up, quest level-change callbacks, nearby refresh, skill auto-learn, custom rewards, `SM_STATUPDATE_EXP`, XP gain message, and optional ascension-limit warning.
+- XP planner metadata is visible in quest-finish operation metadata when an experience table is supplied, and UOW-1048 can stage the Java live level-up order as descriptors. It still does not perform live level/packet/persistence side effects. UOW-1046 read-only analysis confirmed the Java live level-up path runs before quest-state completion and includes visual stats, level-up animation, NPC faction level-up, quest level-change callbacks, nearby refresh, skill auto-learn, custom rewards, `SM_STATUPDATE_EXP`, XP gain message, and optional ascension-limit warning.
 - Offline GP repository SQL and the gated execution call are tested in isolation, but no quest-finish gameplay path invokes them yet.
 - Live reward mutation needs an explicit failure-ordering policy before composition.
 - Threading assumptions differ: Java mutates live player state directly; C# must preserve per-player execution order once live execution is enabled.
 
 ## Recommended Next Units
 
-1. Start a staged level-change executor/plan from the UOW-1046 level-change audit.
+1. Add the next concrete prerequisite behind the staged XP execution plan, such as a named level-up animation packet constant/test or a focused side-effect sub-plan for one Java `onLevelChange` dependency.
 2. Add opt-in integration tests/adapter plumbing for the gated offline GP execution path before enabling siege/offline GP callers.
 3. Compose AP/DP/Kinah side-effect metadata only if it remains non-live and preserves Java reward ordering.
