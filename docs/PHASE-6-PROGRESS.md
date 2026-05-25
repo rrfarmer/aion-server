@@ -29775,9 +29775,72 @@ Next recommended unit of work:
 
 ---
 
+### Session 918 (May 25, 2026)
+- Continued after UOW-917 by using the Stonespear handoff and Trade/AP-purification explorer output as the discovery baseline.
+- Selected a pure Trade AP formula planner because live Trade/Purification wiring is still blocked by missing trade/goods/purification static data, packet handlers, inventory mutation surfaces, and item mutation surfaces.
+- Added `TradeApFormulaService` with Java breadcrumbs for:
+  - `TradeList.calculateAbyssRewardBuyList`
+  - `TradeService.performSellForAPToShop`
+  - `TradeService.performBuyFromTradeInTrade`
+- Modeled Java's AP shop-buy cost formula, including double narrowing to `int` before the final integer `/ 100`.
+- Modeled Java's AP resale reward formula, including `Math.round(float)` behavior and Java's `(int) count` cast.
+- Modeled Java's trade-in AP delta as target AP cost minus required trade-in item AP value, spending only positive differences.
+- Kept all live behavior out of scope: acquisition filtering, enough-AP guards, inventory deletion, item grants, system messages, packet handlers, custom sell config, purchase-list validation, and actual `AbyssPointsService.addAp` calls.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter TradeApFormulaServiceTests` passed with 4 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1561 tests.
+
+#### Migration Parity Table - Session 918
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.trade.TradeList.calculateAbyssRewardBuyList` | `Aion.GameServer.Services.TradeApFormulaService.CalculateAbyssBuyRequiredAp` | Utility / Formula Planner | Partial | Regression Tested in C# | Partial Parity | C# models the AP/ABYSS acquisition cost formula and accumulation, including Java double-to-int narrowing before final integer division. Live item acquisition filtering, `requiredItems`, enough-AP guard, error messages, inventory mutation, and packet-handler wiring remain missing. |
+| `com.aionemu.gameserver.services.TradeService.performSellForAPToShop` | `TradeApFormulaService.CalculateApResaleReward` | Service Formula Projection | Partial | Regression Tested in C# | Partial Parity | C# models AP resale reward `Math.round(requiredAp * buyPriceRate / 100F) * (int) count`. Java config gate `SELLING_APITEMS_ENABLED`, purchase-list validation, inventory deletion, and live AP add are not ported in this unit. |
+| `com.aionemu.gameserver.services.TradeService.performBuyFromTradeInTrade` | `TradeApFormulaService.CalculateTradeInApDelta` | Service Formula Projection | Partial | Regression Tested in C# | Partial Parity | C# models the positive AP delta after subtracting required trade-in item AP values. Target item validation, required item validation/counts, old trade-in packet compatibility behavior, inventory removal, item grant, enough-AP guard, and actual AP spend are not wired. |
+| `com.aionemu.gameserver.services.trade.PricesService.getVendorBuyModifier` | `TradeApFormulaService` `vendorBuyModifier` input | Pricing Dependency / Input Projection | Partial | Regression Tested in C# | Needs Verification | Formula accepts the projected vendor modifier. C# does not yet port Java's player/vendor/context calculation for this value. |
+| `com.aionemu.gameserver.model.templates.item.Acquisition` | `Aion.GameServer.Services.TradeApCostComponent` | DTO / Input Projection | Partial | Regression Tested in C# | Needs Verification | C# represents only `requiredAp` and count. Java acquisition type filtering, kinah item price, abyss item price-rate distinction, and required item stacks remain outside this slice. |
+| `com.aionemu.gameserver.model.templates.item.AcquisitionType.AP` / `AcquisitionType.ABYSS` / `AcquisitionType.ABYSS_KINAH` | `TradeApFormulaService` `sellPriceRate` input selection | Enum / Input Projection | Partial | Regression Tested in C# | Needs Verification | Tests cover caller-supplied normal and abyss-kinah rate inputs. The enum/template model and caller selection logic are not yet ported. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService.addAp` | Not invoked in this unit | Service / AP Mutation | Not Started for Trade live path | No Tests in this unit | Needs Verification | Java Trade callers spend or award AP after validation. This unit only computes formula amounts and intentionally does not mutate player AP. Existing AP service parity remains partial from earlier AP units. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM` | Not ported in this unit | Client Packet Handler | Not Started | No Tests | Unknown | Java shop-buy handler supplies trade list context and triggers AP spend. C# has no live handler wiring for this formula slice. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_TRADE_IN_TRADE` | Not ported in this unit | Client Packet Handler | Not Started | No Tests | Unknown | Java trade-in handler and old packet compatibility behavior remain unported. |
+| `com.aionemu.gameserver.services.item.ItemPurificationService` | Not ported in this unit | Service / AP Spend Caller | Not Started | Manual Analysis | Needs Verification | Discovery found AP precheck/spend behavior, but purification static data and item mutation surfaces are missing in C#. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CalculateAbyssBuyRequiredAp_MatchesJavaDoubleNarrowingAndFinalIntegerDivision` | Regression | Java `TradeList.calculateAbyssRewardBuyList` source review | Validates AP shop-buy formula, double narrowing before final integer division, and per-component accumulation. | Deterministic C# regression grounded in Java source arithmetic. | No Java runtime artifact; live acquisition filtering and spend guard not covered. |
+| `CalculateAbyssBuyRequiredAp_UsesAbyssKinahModifierInputLikeJavaCaller` | Regression | Java acquisition rate selection source review | Validates the formula responds to caller-projected normal versus abyss-kinah sell price rate inputs. | Deterministic C# regression for projected inputs. | Java enum/template selection logic is not ported. |
+| `CalculateApResaleReward_MatchesJavaMathRoundAndCountCast` | Regression | Java `TradeService.performSellForAPToShop` source review | Validates Java `Math.round(float)` behavior for AP resale and Java-style count narrowing. | Deterministic C# regression grounded in Java source arithmetic. | Config gate, purchase-list validation, inventory deletion, and live AP reward not covered. |
+| `CalculateTradeInApDelta_SpendsOnlyPositiveDifference` | Regression | Java `TradeService.performBuyFromTradeInTrade` source review | Validates target AP cost minus required trade-in item AP value and zero floor. | Deterministic C# regression grounded in Java source arithmetic. | Required item validation, old packet compatibility, item grant/removal, enough-AP guard, and live AP spend not covered. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- `TradeApFormulaService` is a pure formula planner; live Trade packet handling, static trade/goods data, acquisition templates, purchase-list validation, inventory mutation, item grants, system messages, and AP mutation are not wired.
+- Formula parity is source-reviewed and regression-tested in C#, but not Java-runtime compared.
+- Integer overflow, Java double-to-int saturation, Java float rounding, and Java count narrowing were modeled deliberately; any upstream C# caller must preserve Java input ordering and rate selection to keep parity.
+- Trade-in behavior is surprising because Java applies the same requested target count to required trade-in item AP value; this is preserved in the planner but needs validation when live static data exists.
+- ItemPurification AP precheck/spend remains only manually analyzed.
+- Packet bytes, persistence, ranking cache, Legion contribution fanout, and live siege callback execution remain incomplete.
+
+Summary metrics:
+- Total Java artifacts discovered: 10
+- Total artifacts ported: 1 pure Trade AP formula planner slice
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 10
+- Total blocked artifacts: 7 blocked/not-started categories, including Java runtime artifact generation, live Trade packet wiring, trade/goods static data, acquisition template projection, inventory/item mutation, ItemPurification data/mutation, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 68% complete; this unit adds isolated Trade AP formula coverage but not live Trade behavior.
+
+Next recommended unit of work:
+- Add a pure ItemPurification AP precheck/spend planner from Java `ItemPurificationService` without item mutation wiring, or deepen Trade support only after trade/goods static data and packet-handler surfaces exist.
+- Keep live Trade/Purification AP mutation out of scope until inventory, template, validation, and packet surfaces can be ported together.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, and the narrow Stonespear AP branch now consume their configured/fixed AP boundaries at planner/service boundaries, so move next to pure Trade/AP-purification formula planners or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, and pure Trade AP formulas now consume their configured/fixed/formula AP boundaries at planner/service boundaries. Move next to a pure ItemPurification AP precheck/spend planner or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
