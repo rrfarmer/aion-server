@@ -29902,9 +29902,60 @@ Next recommended unit of work:
 
 ---
 
+### Session 920 (May 25, 2026)
+- Continued after UOW-919 by selecting the recommended `item_purifications` static-data parser slice.
+- Parallel Work Discovery found the implementation was not safe to parallelize because `StaticData.cs` is a shared parser file. The unit was kept sequential and limited to static data.
+- Added `ItemPurificationTable`, `ItemPurificationSummary`, `ItemPurificationResultSummary`, and `ItemPurificationMaterialSummary`.
+- Added parser hooks for Java `item_purifications.xml`: `item_purification base_item_id`, `purification_result result_item_id/min_enchant_count/necessary_abyss_points/necessary_kinah`, and `req_material item_id/item_count`.
+- Added lookup parity helpers matching Java `ItemPurificationData.getItemPurificationTemplate` and `getResultItemMap` shape.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "StaticData_LoadsItemPurificationSummaries|DataManager_LoadsRealJavaStaticDataManifestCounts"` passed with 2 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passed with 1566 tests.
+
+#### Migration Parity Table - Session 920
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dataholders.ItemPurificationData` | `Aion.GameServer.Dataholders.ItemPurificationTable` | Static Data Holder | Partial | Regression Tested in C# | Partial Parity | C# now maps base item ids to template summaries and result item maps. Java JAXB lifecycle/null behavior is not fully modeled, and no live service consumes this table yet. |
+| `com.aionemu.gameserver.model.templates.item.purification.ItemPurificationTemplate` | `Aion.GameServer.Dataholders.ItemPurificationSummary` | Static Data DTO | Partial | Regression Tested in C# | Partial Parity | C# parses `base_item_id` and child result list. XML serialization/writeback is not needed and not ported. |
+| `com.aionemu.gameserver.model.templates.item.purification.PurificationResult` | `Aion.GameServer.Dataholders.ItemPurificationResultSummary` | Static Data DTO | Partial | Regression Tested in C# | Partial Parity | C# parses result item id, min enchant, AP, kinah, and child materials. Default missing `necessary_kinah` is covered as zero. Java zero-material JAXB null-list risk is intentionally normalized to an empty list for C# static data. |
+| `com.aionemu.gameserver.model.templates.item.purification.RequiredMaterial` | `Aion.GameServer.Dataholders.ItemPurificationMaterialSummary` | Static Data DTO | Partial | Regression Tested in C# | Partial Parity | C# parses item id/count and preserves list order. Live material decrement and stack ordering remain outside this data unit. |
+| `game-server/data/static_data/items/item_purifications.xml` | `StaticData.ItemPurifications` | XML Data Source | Partial | Regression Tested in C# | Needs Verification | Real Java static data loads and count checks match element counts for `item_purification` and `purification_result`. No Java runtime DataManager dump was available for byte/object comparison. |
+| `com.aionemu.gameserver.services.item.ItemPurificationService` | Not modified in this unit | Service | Partial from UOW-919 | Regression Tested in C# for AP planner only | Partial Parity | Static data is now available for future service integration, but live validation/material/AP/kinah/item mutation wiring remains incomplete. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_ITEM_PURIFICATION` | Not ported in this unit | Client Packet Handler | Not Started | Manual Analysis | Needs Verification | Packet parsing/wiring remains blocked until mutation/persistence/fanout scope is selected. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `StaticData_LoadsItemPurificationSummaries` | Regression | Java `ItemPurificationData`, `ItemPurificationTemplate`, `PurificationResult`, and `RequiredMaterial` source review | Validates fixture parsing, result lookup, default kinah zero, required material parsing, empty material list, and missing result lookup. | Deterministic C# regression grounded in Java XML shape. | Does not validate Java JAXB null-list behavior by runtime. |
+| `DataManager_LoadsRealJavaStaticDataManifestCounts` | Regression | Real Java static data manifest and XML files | Validates real `item_purifications.xml` loads, `item_purification` count equals table count, `purification_result` count equals result count, and a known AP/material record parses. | Real Java static XML fixture loaded through C# DataManager. | No Java runtime DataManager object dump comparison. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- C# normalizes missing required-material lists to empty lists; Java JAXB may leave them null and cause NPEs in some zero-material results.
+- Live `ItemPurificationService` is not wired to `ItemPurificationTable` yet.
+- Live packet, material deletion, kinah mutation parity decision, base item deletion, target item creation/state copy, persistence, and packet fanout remain missing.
+- Packet bytes, ranking cache, Legion contribution fanout, and live siege callback execution remain incomplete.
+
+Summary metrics:
+- Total Java artifacts discovered: 7
+- Total artifacts ported: 1 static data table/parser slice plus 3 DTO summaries
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 7
+- Total blocked artifacts: 5 blocked/not-started categories, including Java runtime artifact generation, live purification service integration, packet handler, item/inventory mutation, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 68% complete; this unit adds static-data availability for purification but not live purification behavior.
+
+Next recommended unit of work:
+- Wire `ItemPurificationApService` validation to the new `ItemPurificationTable` through a narrow lookup adapter, still without live material/base/target mutation.
+- Alternatively begin an isolated target-item inheritance planner for Java `ItemPurificationService.upgradeItem`, with randomness/stat-bonus reroll injected and documented.
+- Do not wire live `CM_ITEM_PURIFICATION` until mutation/persistence/fanout and kinah parity decisions are scoped.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, and pure ItemPurification AP precheck/spend planning now consume their configured/fixed/formula AP boundaries at planner/service boundaries. Move next to `item_purifications` static-data DTO/table/parser work, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, and `item_purifications` static data now consume their configured/fixed/formula AP boundaries at planner/service boundaries. Move next to an ItemPurification lookup adapter, target-item inheritance planner, ItemCharge AP spend hardening, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
