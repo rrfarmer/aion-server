@@ -110,6 +110,8 @@ UOW-967 adds `ItemPurificationApplicationPlanService.ProjectQuestNotifications`,
 
 UOW-974 adds an explicit opt-in quest-notification seam: `IItemPurificationQuestMutationNotifier` and `NoOpItemPurificationQuestMutationNotifier`. When a notifier is supplied to explicit live execution, the path projects Java-ordered candidates after a successful mutation send and returns a dispatch result. Automatic production dispatch still passes no notifier, so no real quest handler invocation or nearby-quest refresh occurs.
 
+UOW-976 adds `docs/ItemPurification-QuestUpdateItems-Audit.md`, a source audit for Java `QuestEngine.questUpdateItems`. Java builds the update-item membership set from quest XML `<inventory_items><inventory_item item_id=...>` during `QuestEngine.init`; C# currently parses quest drops/collect items but does not expose this set. Automatic production dispatch remains disabled.
+
 ### 4. AP Side Effects
 
 Required before automatic dispatch:
