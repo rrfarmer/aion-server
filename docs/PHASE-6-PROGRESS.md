@@ -28897,6 +28897,59 @@ Next recommended unit of work:
 
 ---
 
+### Session 903 (May 25, 2026)
+- Continued after UOW-902 by re-running Parallel Work Discovery across AP caller convergence, AP cap integration coverage, Legion domain analysis, and Java runtime artifact capture.
+- Selected a compact AP cap integration regression because remaining production AP callers still map to broader unported Trade, Quest, PvP, NPC reward, and purification systems.
+- Added connection-level AP extraction coverage with `GameServerOptions.Custom.EnableApCap=true` and `ApCapValue=1000`.
+- Updated the AP extraction/use-item fixture so the connection and `PlayerEnterWorldService` share the supplied `GameServerOptions`.
+- Extended `EmptyPlayerEnterWorldRepository` with `ApExtractAbyssRank` capture so the regression verifies the capped rank handed to the persistence boundary.
+- Validation:
+  - First focused build failed because `EmptyPlayerEnterWorldRepository` did not expose the captured AP extraction rank; added the test-helper capture and reran.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests --no-restore` passed with 42 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` passed with 1481 tests.
+
+#### Migration Parity Table - Session 903
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.ApExtractAction` | `Aion.GameServer.Services.ApExtractService` / `Aion.GameServer.Network.Aion.GameServerConnection.HandleApExtractUseItemAsync` | Item Action / Handler | Partial | Regression Tested in C# | Partial Parity | AP extraction now has connection-level coverage for Java AP cap option flow. The test validates capped gain amount `100`, target deletion, tool decrease, rank update packet, and capped rank persistence handoff. Java runtime packet/artifact comparison remains unavailable. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `Aion.GameServer.Services.AbyssPointsService` | Service | Partial | Unit + Regression Tested in C# | Partial Parity | Existing planner cap support is now exercised through the AP extraction connection path. Full Legion contribution fanout, siege callback execution, large-AP logging, and other AP callers remain incomplete. |
+| `com.aionemu.gameserver.model.gameobjects.player.AbyssRank` | `Aion.GameServer.Model.GameObjects.PlayerAbyssRank` | Model | Partial | Unit + Regression Tested in C# | Partial Parity | Regression validates AP moves from `900` to cap `1000` for a positive AP extraction gain that would otherwise award `980`. Daily/weekly AP reset timing and persistent-state flags remain unmodeled; no Java runtime comparison. |
+| `com.aionemu.gameserver.configs.main.CustomConfig` | `Aion.GameServer.Configuration.GameServerCustomOptions` / `GameServerOptions` | Configuration | Partial | Regression Tested through connection fixture options | Needs Verification | Test supplies Java-equivalent cap options directly and verifies they reach AP extraction. Config file/environment loading for these keys existed already and was not newly tested in this unit. |
+| `com.aionemu.gameserver.dao.AbyssRankDAO` / `com.aionemu.gameserver.dao.InventoryDAO` | `Aion.GameServer.Data.PlayerEnterWorldRepository.SaveApExtractActionMutationAsync` / `EmptyPlayerEnterWorldRepository.ApExtractAbyssRank` | Repository Boundary / Test Support | Partial | Regression Tested through test double | Needs Verification | Test-helper capture verifies the capped rank handed to the persistence boundary. Live SQL transaction ordering, autocommit behavior, and rollback behavior were not Java-runtime compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Regression validates AP extraction gain message `1320000` uses capped actual delta `100`, not raw extraction value `980`. Packet bytes were not compared with Java runtime. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRank` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Regression validates rank packet emission after capped AP extraction. Ranking-position lookup and byte-level Java comparison remain unavailable. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DELETE_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmDeleteItem` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Regression keeps the AP extraction target deletion packet in the cap-enabled path. Byte-level Java runtime comparison remains unavailable. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryUpdateItem` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Regression keeps the extraction-tool decrease packet in the cap-enabled path. Update-mask byte parity is not Java-runtime compared. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleUseItemAsync_ApExtractHonorsConfiguredAbyssPointCap` | Regression | Java `ApExtractAction.act`, `AbyssPointsService.addAp`, `AbyssRank.addAp`, and `CustomConfig` source review | Validates cap-enabled AP extraction applies only the capped delta (`100`), persists rank AP `1000`, deletes the target item, decreases the tool, and emits AP gain plus rank packets. | Deterministic C# connection-level regression grounded in Java source. | No Java runtime artifact; no byte-level packet comparison; no charge AP cap integration regression. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- Charge AP cap flow is still covered through shared planner/unit coverage and option wiring, not a dedicated connection-level cap regression.
+- Remaining Java AP callers in Trade, Quest, PvP, NPC reward, item purification, and distribution systems still need convergence through `AbyssPointsService`.
+- Java daily/weekly AP reset behavior, persistent-state flags, full Legion contribution fanout, ranking cache, and siege callback execution remain incomplete.
+- Packet bytes were not compared against Java runtime output.
+
+Summary metrics:
+- Total Java artifacts discovered: 9
+- Total artifacts ported: 0 new production gameplay artifacts; 1 AP extraction cap integration regression plus 1 test-helper persistence capture added
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 9
+- Total blocked artifacts: 7 blocked/not-started categories, including Java runtime artifact generation, charge AP cap integration artifact, remaining AP caller convergence, persistent-state/reset timing, full Legion contribution fanout, ranking cache/siege execution, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 66% complete; this unit closes the AP extraction cap integration coverage gap from UOW-901.
+
+Next recommended unit of work:
+- Continue AP caller convergence by inspecting C# coverage for Java `TradeService`, `QuestService`, `PvpService`, `NpcController`, and `ItemPurificationService` AP usages; wire the smallest already-ported AP reward/spend path through `AbyssPointsService` if one is compact.
+- If AP caller work remains too broad, add a dedicated charge AP cap integration regression or continue isolated Legion domain groundwork.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
 1. Continue AP caller convergence on `AbyssPointsService`: inspect C# coverage for Java `TradeService`, `QuestService`, `PvpService`, `NpcController`, and `ItemPurificationService` AP usages, then wire the smallest already-ported AP reward/spend path through the AP planner. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
