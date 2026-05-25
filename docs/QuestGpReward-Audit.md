@@ -1,4 +1,4 @@
-# Quest GP Reward Audit - UOW-1040/UOW-1042
+# Quest GP Reward Audit - UOW-1040/UOW-1043
 
 Date: May 25, 2026
 
@@ -67,6 +67,14 @@ Date: May 25, 2026
 - `MySqlAbyssRankRepository.AddGpAsync` returns true when SQL execution completes, including zero affected rows, matching Java's no row-count check.
 - The repository is not yet wired into `GloryPointsService` or quest-finish execution.
 
+## C# State After UOW-1043
+
+- Added `GloryPointsService.ExecuteOfflineDaoUpdateAsync` as an explicitly gated offline GP execution path.
+- The method executes only `GloryPointsAddPlan` instances whose `RequiresOfflineDaoUpdate` flag is true.
+- It calls `IAbyssRankRepository.AddGpAsync(plan.ObjectId, plan.Amount, plan.AddsDailyWeeklyStats)`, preserving Java `AbyssRankDAO.addGp(playerObjId, amount, addToStats)` arguments.
+- Added `GloryPointsOfflineExecutionResult` and `GloryPointsOfflineExecutionStatus` to expose success, repository failure, and non-offline-plan skip behavior.
+- Existing `GloryPointsService.AddGp` remains unchanged, so quest finish and other live callers still do not automatically execute offline repository writes.
+
 ## Known Gaps
 
 - No Java runtime golden comparison was generated.
@@ -76,7 +84,7 @@ Date: May 25, 2026
 - Positive offline GP SQL overflow/sign behavior is database-dependent and unverified.
 - Siege and fortress GP callers are not wired; siege GP must remain unrated.
 - Quest finish composition carries GP rate/helper metadata only and does not call the live mutating helper.
-- Offline repository execution exists as a boundary but is not called by gameplay.
+- Offline repository execution exists behind an explicit service method but is not automatically called by gameplay.
 
 ## Tests Added Or Updated
 
@@ -96,7 +104,9 @@ Date: May 25, 2026
 - `AbyssRankRepositoryTests.AbyssRankGpUpdatePlan_UsesJavaPositiveStatsSqlAndParameterOrder`
 - `AbyssRankRepositoryTests.AbyssRankGpUpdatePlan_UsesJavaCurrentGpClampSqlWhenStatsAreNotModified`
 - `AbyssRankRepositoryTests.EmptyAbyssRankRepository_ReportsUnavailableMutationBoundary`
+- `GloryPointsServiceTests.ExecuteOfflineDaoUpdateAsync_ExecutesRepositoryWithJavaOfflineBranchArguments`
+- `GloryPointsServiceTests.ExecuteOfflineDaoUpdateAsync_RecordsRepositoryFailureAndSkipsNonOfflinePlans`
 
 ## Next Recommendation
 
-Keep GP live integration out of quest finish until offline DAO execution is explicitly composed, daily/weekly rollover is bounded, and reward failure ordering is settled. The next small unit should either compose the offline repository into a non-live/executor boundary or audit/scaffold quest XP, which has broader level/stat side effects.
+Keep GP live integration out of quest finish until daily/weekly rollover is bounded, DB behavior is integration-tested, and reward failure ordering is settled. The next small unit should either add opt-in offline GP integration tests/adapter plumbing or start the quest XP non-live planner described by the XP explorer.

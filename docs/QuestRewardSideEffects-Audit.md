@@ -118,7 +118,8 @@ GP:
 - UOW-1040 adds `GameServerRateOptions.GpRates`, `GloryPointsService`, `PlayerAbyssRank.AddGp`, GP gain/loss system-message helpers, and `QuestRewardService.ApplyGpReward`.
 - UOW-1041 composes a non-live GP side-effect plan into `QuestFinishOperationPlanService` after the matching GP non-item projection and before the coarse non-item placeholder. It applies `Rates.GP` and uses `GloryPointsService.CreateAddGpPlan` without mutating the player.
 - UOW-1042 adds an offline GP repository boundary and `AbyssRankGpUpdatePlan` for Java `AbyssRankDAO.addGp` SQL/parameter parity.
-- Offline `AbyssRankDAO.addGp` still is not wired into gameplay; `GloryPointsAddPlan.OfflineDaoUpdateRequired` remains metadata until the repository boundary is composed into an execution path.
+- UOW-1043 adds `GloryPointsService.ExecuteOfflineDaoUpdateAsync`, an explicit gated method that executes `GloryPointsAddPlan.OfflineDaoUpdateRequired` through `IAbyssRankRepository` with Java argument ordering.
+- Offline `AbyssRankDAO.addGp` still is not wired into quest finish or automatic gameplay; callers must explicitly opt into the gated execution method.
 
 ## Persistence And Failure Ordering
 
@@ -140,6 +141,7 @@ GP:
   - `QuestRewardService.ApplyGpReward`
   - `AbyssPointsService.AddAp`
   - `GloryPointsService.AddGp`
+  - `GloryPointsService.ExecuteOfflineDaoUpdateAsync`
   - `WorldNpcResourceStatsService.AddPlayerDpAsync`
 - Existing repository boundaries:
   - `IAbyssRankRepository.AddGpAsync`
@@ -162,13 +164,13 @@ GP:
 - Packet masks and packet ordering are incomplete for quest kinah, cube expansion, warehouse expansion, and XP. Quest title and GP now have concrete system-message helpers, but no live quest-finish send or Java golden-byte comparison.
 - C# quest finish still does not execute any reward mutation.
 - Title/cube/warehouse planners are now visible in quest-finish operation metadata when a side-effect context is supplied, but remain metadata only; quest title DAO writes, expirable registration, cube update sends, warehouse info sends, and player expansion counter persistence are not live.
-- GP planner metadata is now visible in quest-finish operation metadata when a side-effect context is supplied, but live GP mutation, offline DAO writes, and deferred persistence are not live.
-- Offline GP repository SQL is tested in isolation, but no gameplay path invokes it yet.
+- GP planner metadata is now visible in quest-finish operation metadata when a side-effect context is supplied, but live GP mutation, offline DAO writes, and deferred persistence are not live by default.
+- Offline GP repository SQL and the gated execution call are tested in isolation, but no quest-finish gameplay path invokes them yet.
 - Live reward mutation needs an explicit failure-ordering policy before composition.
 - Threading assumptions differ: Java mutates live player state directly; C# must preserve per-player execution order once live execution is enabled.
 
 ## Recommended Next Units
 
-1. Compose the offline GP repository boundary into a non-live or explicitly gated execution path before enabling siege/offline GP callers.
+1. Add opt-in integration tests/adapter plumbing for the gated offline GP execution path before enabling siege/offline GP callers.
 2. Add a quest XP helper design or scaffold only after documenting level-up/stat/nearby-refresh side effects.
 3. Compose AP/DP/Kinah side-effect metadata only if it remains non-live and preserves Java reward ordering.
