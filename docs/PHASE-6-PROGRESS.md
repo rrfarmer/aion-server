@@ -26951,6 +26951,54 @@ Next recommended unit of work:
 
 ---
 
+### Session 867 (May 25, 2026)
+- Continued from the Session 866 / Phase 6NN handoff with special-cube inventory-full connection coverage for normal decompose.
+- Re-read the latest handoff and audited Java `DecomposeAction.canAct`, especially `player.getInventory().isFullSpecialCube() && containsSpecialCubeItems(itemsCollections, player)`.
+- Performed Parallel Work Discovery across special-cube full normal decompose, encrypted socket-loop dispatch audit, Java runtime comparison planning, and docs. Implementation stayed single-writer because the selected unit edited the shared item-use fixture and fixture XML.
+- Extended the test fixture static data with normal decompose source item `102`, special-cube reward `204`, and special-cube filler `205`.
+- Added `HandleUseItemAsync_DecomposeSpecialCubeFullDoesNotScheduleOrMutate`, which fills the special cube to 102 used special slots, invokes normal decompose, and verifies C# sends Java message id `1300447` without scheduling, persistence, source mutation, reward mutation, or usage animation.
+- Kept the unit deliberately narrow: no encrypted socket loop, no Java runtime comparison, no random reward/special-cube mix, and no live-client validation.
+- Focused validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "GameServerConnectionInventoryExpansionUseItemTests"` passes with 26 tests.
+- Full validation: `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` passes with 1442 tests.
+
+#### Migration Parity Table - Session 867
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.DecomposeAction.canAct` | `Aion.GameServer.Services.DecomposeService.CanAct` via `GameServerConnection.HandleDecomposeUseItemAsync` | Item Action Guard / Runtime Handler | Partial | Regression Tested | Partial Parity | Special-cube full guard is covered through the connection path: no schedule, no source consume, no reward add, no repository call, and inventory-full system message. Java runtime comparison and live-client behavior remain unverified. |
+| `com.aionemu.gameserver.model.templates.item.actions.DecomposeAction.containsSpecialCubeItems` | `Aion.GameServer.Services.DecomposeService.ContainsSpecialCubeItems` (private helper) | Item Action Guard / Static Data Dependency | Partial | Regression Tested through connection path | Partial Parity | Fixture reward `204` has `ExtraInventoryId=2`, causing the special-cube full branch to reject normal decompose. Mixed random rewards and broader level/race filtering remain unverified. |
+| `com.aionemu.gameserver.model.items.storage.ItemStorage.isFullSpecialCube` / `Player.getInventory().isFullSpecialCube` | `Aion.GameServer.Services.InventoryCapacity.HasFreeSpecialCubeSlot` / `GetUsedSpecialCubeSlots` | Inventory Capacity Dependency | Partial | Regression Tested through connection path | Partial Parity | Test fills 102 special-cube rows with fixture item `205` and verifies rejection. Java expansion/limit constants and live storage behavior are source-reviewed but not runtime-compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_DECOMPOSE_ITEM_INVENTORY_IS_FULL` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.DecomposeItemInventoryFull` | Packet / System Message | Partial | Regression Tested for message id | Partial Parity | Test asserts serialized system-message id `1300447`. Full Java packet byte parity, localization table behavior, opcode/frame/crypto, and live-client output remain unverified. |
+| `com.aionemu.gameserver.controllers.CreatureController.addTask(TaskId.ITEM_USE)` / `ThreadPoolManager.schedule` | `SchedulePendingItemUseAsync` | Scheduler / Threading Dependency | Partial | Regression Tested for non-use on guard failure | Needs Verification | Special-cube full guard returns before scheduling, leaving `UsingItemObjectId` at `0`. Java task lifecycle and cancellation threading remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Inventory.decreaseByObjectId` | `ApplySourceItemMutationAsync` guarded by `CanAct` success | Inventory Mutation / Source Consume Dependency | Partial | Regression Tested for no-op guard | Partial Parity | Test proves source consume is not reached when the special cube is full for a special-cube reward. Java runtime behavior remains unverified. |
+| `com.aionemu.gameserver.services.item.ItemService` / `ItemPacketService.ItemAddType.DECOMPOSABLE` | `InventoryAddService.CreateAddItemPlan` guarded by `CanAct` success | Inventory Reward Dependency | Partial | Regression Tested for no-op guard | Partial Parity | Reward planning/add is not reached on special-cube full normal decompose rejection. Java DB/runtime comparison and live-client behavior remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemService.ItemUpdatePredicate` | `IPlayerEnterWorldRepository.SaveDecomposeActionMutationAsync` / repository call counter | Repository Boundary / Test Support | Partial | Regression Tested for no repository call | Partial Parity | Test asserts persistence is not called on special-cube inventory-full rejection. Live SQL/autocommit behavior remains unverified. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GameServerConnectionInventoryExpansionUseItemTests.HandleUseItemAsync_DecomposeSpecialCubeFullDoesNotScheduleOrMutate` | Runtime / Regression | Java source review of `DecomposeAction.canAct`, `containsSpecialCubeItems`, and `STR_DECOMPOSE_ITEM_INVENTORY_IS_FULL` | Validates C# connection behavior when normal decompose would reward a special-cube item but the special cube is full: send message id `1300447`, do not schedule delayed use, do not call persistence, and do not mutate source/reward inventory. | Deterministic C# runtime regression aligned to reviewed Java source guard and message id. | Does not run Java, random special rewards, Java-generated bytes, opcode/frame/crypto, socket fanout, threading race behavior, serialization side effects, or live-client validation. |
+
+Remaining risks:
+- Java runtime behavior under persistence/DAO failure remains unverified and may differ from the C# deferred-mutation transaction-safety boundary.
+- Decompose coverage is still mostly connection/test-fixture based rather than live Java-vs-C# runtime comparison.
+- Encrypted socket-loop dispatch and active-player lifecycle setup remain only partially covered.
+- Full packet byte parity, opcode/frame/crypto, broadcast fanout, socket visibility, threading/date-time precision, serialization side effects, random reward selection, and live-client validation remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 8
+- Total artifacts ported: 1 C# runtime regression slice for normal decompose special-cube inventory-full connection guard
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 8
+- Total blocked artifacts: 11 blocked/not-started categories, including Java persistence failure comparison, encrypted socket loop, active-player lifecycle comparison, full packet byte parity, opcode/frame/crypto, broadcast fanout, socket visibility, serialization side effects, random reward ranges, and live-client validation
+- Estimated overall migration completion: Phase 6 remains about 66% complete; decompose item-use now covers normal full guards, normal scheduled success/delete, selectable full-cube overflow, and broad selectable branch coverage, but live/byte-level parity remains partial.
+
+Next recommended unit of work:
+- Move from decompose branch coverage to dispatch/read-loop validation: add encrypted or socket-loop coverage for `CM_SELECT_DECOMPOSABLE`/decompose item-use if a compact fixture exists, or perform a read-only audit first to identify the smallest safe socket-loop test. If socket-loop setup expands too much, add a focused Java-runtime comparison plan for decompose packet/order behavior instead.
+
+---
+
 ## Next Steps
 
 1. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load: add legion contribution fanout and `SiegeService.onAbyssPointsAdded` callback coverage once those supporting systems have C# homes.
@@ -26960,4 +27008,4 @@ Next recommended unit of work:
 5. Wire charge, power-shard, and idian burn triggers into the future skill/combat observer paths: `ChargeInfo`, `PolishChargeCondition` invocation plus the new exhausted-idian persistence boundary and packet caller, `PowerShardDamageService` invocation plus the new `Equipment.usePowerShard` persistence boundary and packet caller, `IdianStone.onEquip` attack/defend observers, low-charge update packets, in-memory zero-charge removal, and stat refresh fanout.
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
-8. Add special-cube inventory-full connection coverage for normal decompose by extending the fixture static data with a special-cube reward/filler pair. Assert message id `1300447`, no scheduling, no persistence, no source mutation, and no reward mutation when the special cube is full and the selected normal decompose reward contains a special-cube item.
+8. Move from decompose branch coverage to dispatch/read-loop validation: add encrypted or socket-loop coverage for `CM_SELECT_DECOMPOSABLE`/decompose item-use if a compact fixture exists, or perform a read-only audit first to identify the smallest safe socket-loop test. If socket-loop setup expands too much, add a focused Java-runtime comparison plan for decompose packet/order behavior instead.
