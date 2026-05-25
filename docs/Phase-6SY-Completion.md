@@ -77,4 +77,4 @@ Selected batch: local-only A. No sub-agent was spawned because the unit changed 
 
 ## Next Recommended Unit Of Work
 
-Add the nearby start-condition `questId` guard for assigned NPC faction quests now that `PlayerNpcFactionState.QuestId` can be hydrated, or perform the read-only quest-finish repeat-date calculation audit. Keep live sends, production player-controller refresh, faction mutation/daily assignment, and ItemPurification dispatch disabled.
+Stage the future `QuestService.startQuest` assigned NPC faction `questId` guard now that `PlayerNpcFactionState.QuestId` can be hydrated, or perform the read-only quest-finish repeat-date calculation audit. Keep live sends, production player-controller refresh, faction mutation/daily assignment, and ItemPurification dispatch disabled.
