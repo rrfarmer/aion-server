@@ -56,7 +56,7 @@ Current C# behavior:
 
 Add an ItemPurification-specific repository method rather than a broad generic inventory transaction.
 
-Implementation status as of UOW-957: the method signature, empty-repository recording stub, MySQL repository method, pure persistence payload mapper, inserted-item `item_stones` row persistence, an explicit opt-in persistent live execution seam, and a handler-level opt-in helper exist. Automatic `HandleInfrastructurePacketAsync` invocation remains disabled, real DB integration verification is still missing, and quest/AP side-effect execution remains incomplete.
+Implementation status as of UOW-958: the method signature, empty-repository recording stub, MySQL repository method, pure persistence payload mapper, inserted-item `item_stones` row persistence, an explicit opt-in persistent live execution seam, a handler-level opt-in helper, and handler-level repository-save failure-ordering coverage exist. Automatic `HandleInfrastructurePacketAsync` invocation remains disabled, real DB integration verification is still missing, and quest/AP side-effect execution remains incomplete.
 
 Recommended signature:
 
@@ -107,7 +107,7 @@ Recommended focused tests:
 - Repository unit/integration test: `SaveItemPurificationMutationAsync` calls update/delete/insert/save-rank paths in one transaction and returns false without commit when a required delete fails.
 - Handler guard test: automatic `HandleInfrastructurePacketAsync` remains plan-only until the persistence method is wired and tested.
 - Regression test: kinah remains unchanged and no kinah repository update is requested for Java's `decreaseKinah(-necessaryKinah)` behavior.
-- Failure-ordering test/design: document or test what happens when live packet send/mutation succeeds but repository persistence fails before any automatic dispatch path can use the persistent seam.
+- Failure-ordering test/design: handler-level coverage now proves live packet send/mutation succeeds before repository persistence failure is reported. Any automatic dispatch path still needs a deliberate runtime policy because no rollback exists.
 - Handler opt-in helper test: explicit callers can invoke mutation+packet+persistence through `GameServerConnection.HandleItemPurificationPersistentLiveExecutionAsync` without enabling automatic packet dispatch.
 
 ## Open Gaps
