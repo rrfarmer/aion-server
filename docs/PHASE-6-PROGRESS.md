@@ -29717,9 +29717,67 @@ Next recommended unit of work:
 
 ---
 
+### Session 917 (May 25, 2026)
+- Continued after UOW-916 by confirming branch `4.8` was clean after commit `01a6e13fd` and using the Stonespear explorer findings from UOW-916 as the read-only discovery baseline.
+- Selected a narrow Stonespear AP-only planner because Java `StonespearReachInstance.checkRank` sets AP only when `points > 67000` and `bossKilled == true`, and `reward()` calls `AbyssPointsService.addAp` only when `finalAp > 0`.
+- Added `StonespearReachApRewardService` with Java breadcrumbs for `StonespearReachInstance.checkRank` and `reward`.
+- Added strict Java `>` rank thresholds, boss-killed S-rank AP `points / 10`, positive-only AP application, missing-player guard, and DI registration.
+- Explicitly left Stonespear GP, items, `LegionDominionScore`, score packet fields, finalization, despawn/cancel, and `LegionDominionService.onFinishInstance` out of scope.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter FullyQualifiedName~StonespearReachApRewardServiceTests --no-restore` passed with 12 tests.
+  - `dotnet test dotnetConversion\AionServer.slnx --no-restore` passed: Commons 57, Chat 29, Login 121, GameServer 1557.
+
+#### Migration Parity Table - Session 917
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `instance.StonespearReachInstance` | `Aion.GameServer.Services.StonespearReachApRewardService` | Instance Handler / AP Reward Planner | Partial | Regression Tested in C# | Partial Parity | C# models only the AP branch: strict rank thresholds, S-rank boss-killed AP `points / 10`, and positive-only AP add. GP, items, score packet fields, finalization, despawn/cancel, LegionDominion completion, and live handler integration remain missing. |
+| `instance.StonespearReachInstance.checkRank` | `StonespearReachApRewardService.CalculateFinalRank` / `CalculateFinalAp` | Rank/AP Calculation | Partial | Regression Tested in C# | Partial Parity | Strict `>` rank thresholds and AP branch are covered. GP/item reward table and rank-specific item counts are not ported. |
+| `instance.StonespearReachInstance.reward` | `StonespearReachApRewardService.ApplyFinalApReward` | Reward Application | Partial | Regression Tested in C# | Partial Parity | Java only calls AP add when `finalAp > 0`; C# returns `NoApReward` for non-AP branches. GP/item application remains missing. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService` | `Aion.GameServer.Services.AbyssPointsService.AddAp` | Service | Partial | Regression Tested in C# | Partial Parity | Stonespear AP mutates through existing AP planner. Persistence, Legion contribution fanout, ranking cache, and live caller side effects remain incomplete. |
+| `com.aionemu.gameserver.services.abyss.GloryPointsService` | Not ported in this unit | Service | Not Started | Manual Analysis | Unknown | Java Stonespear awards GP for S/A/B ranks. No C# GP planner exists yet. |
+| `com.aionemu.gameserver.services.item.ItemService` | Not ported in this unit | Service | Not Started | Manual Analysis | Unknown | Java Stonespear awards medals/chests/fragments. Item reward side effects remain unported. |
+| `com.aionemu.gameserver.model.instance.instancescore.LegionDominionScore` | Not ported in this unit | Score / Reward State | Not Started | Manual Analysis | Unknown | Java stores points, rank, AP, GP, and item slots for packet writing. This AP-only unit does not port score state. |
+| `com.aionemu.gameserver.network.aion.instanceinfo.LegionDominionScoreWriter` | Not ported in this unit | Packet Writer | Not Started | Manual Analysis | Unknown | Java score packet includes AP/GP/item fields. Byte-level packet behavior remains unported. |
+| `com.aionemu.gameserver.services.instance.LegionDominionService.onFinishInstance` | Not ported in this unit | Service Callback | Not Started | Manual Analysis | Unknown | Final legion dominion accounting remains unported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Tests validate AP gain message id `1320000` is planned for the AP branch. Packet bytes and live ordering were not Java-runtime compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ABYSS_RANK` | `Aion.GameServer.Network.Aion.ServerPackets.SmAbyssRank` | Server Packet | Partial | Regression Tested in C# | Needs Verification | Tests validate rank packet intent after AP mutation. Ranking-position lookup and byte-level Java comparison remain unavailable. |
+
+Tests added/updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CalculateFinalRankAndAp_MatchesJavaStrictThresholds` | Regression | Java `StonespearReachInstance.checkRank` source review | Validates strict `>` boundaries at `67001`, `67000`, `41001`, `25001`, `8801`, `1001`, `1`, and `0`, plus boss-killed AP branch. | Deterministic C# regression grounded in Java source. | No Java runtime artifact; GP/items not covered. |
+| `ApplyFinalApReward_AddsUnscaledBossKilledSRankApThroughPlanner` | Regression | Java `checkRank` and `reward` AP branch source review | Validates S-rank boss-killed AP `6700`, AP mutation `4000 -> 10700`, AP gain packet intent, and rank packet intent. | Deterministic C# regression through existing AP planner. | Live instance finalization and score packet ordering remain missing. |
+| `ApplyFinalApReward_SkipsSRankWhenBossWasNotKilled` | Regression | Java `bossKilled` branch source review | Validates S-rank without boss kill produces no AP and does not call AP planner. | Deterministic C# regression grounded in Java source. | GP/items for S-rank without boss kill remain missing. |
+| `ApplyFinalApReward_SkipsMissingPlayer` | Guard Regression | C# planner boundary around Java live player iteration | Validates missing player returns calculated rank/AP without mutation. | Deterministic C# guard regression. | Java live caller normally supplies players from `instance.forEachPlayer`. |
+
+Remaining risks:
+- Java runtime capture remains blocked locally by Java 8 and missing Maven.
+- `StonespearReachApRewardService` is an AP-only planner slice; GP, items, score state, packet writer fields, finalization, and live handler integration remain missing.
+- No C# `GloryPointsService` equivalent exists, blocking faithful Stonespear full reward parity.
+- Stonespear item reward behavior depends on `ItemService.addItem` skip semantics for zero item ids/counts and remains unported here.
+- Trade/AP-purification live wiring remains blocked by missing static data and inventory mutation surfaces.
+- Packet bytes, persistence, ranking cache, Legion contribution fanout, and live siege callback execution remain incomplete.
+
+Summary metrics:
+- Total Java artifacts discovered: 11
+- Total artifacts ported: 1 Stonespear AP-only reward planner slice plus 1 DI registration
+- Total artifacts with verified parity: 0
+- Total artifacts needing verification: 11
+- Total blocked artifacts: 8 blocked/not-started categories, including Java runtime artifact generation, live Stonespear integration, GP planner, item reward side effects, LegionDominion score/packet state, Trade/Purification data surfaces, persistence/fanout side effects, and byte-level packet comparison
+- Estimated overall migration completion: Phase 6 remains about 68% complete; this unit adds the Stonespear AP branch but not full Stonespear rewards.
+
+Next recommended unit of work:
+- Move to pure Trade AP formula planners/tests for shop buy AP cost, AP resale reward, and trade-in AP delta, without live packet wiring.
+- Keep ItemPurification AP as a follow-up after deciding whether to build a pure planner or wait for purification static data.
+- If Java 25/Maven tooling becomes available, return to selectable-decompose artifact capture using the projection guide.
+
+---
+
 ## Next Steps
 
-1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, and Eternal Bastion final AP now consume their configured/fixed AP boundaries at planner/service boundaries, so move next to the narrow Stonespear AP branch, pure Trade/AP-purification formula planners, or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
+1. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, and the narrow Stonespear AP branch now consume their configured/fixed AP boundaries at planner/service boundaries, so move next to pure Trade/AP-purification formula planners or a narrow live adapter for an existing planner when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player packets, AP/login rank-limited equipment passes, configured abyss transform skill updates, and rank config load. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
 3. Finish the remaining stigma/effect slice: full `SkillEngine` effect application after temporary skill mutations and the corresponding stat/effect removal fanout.
 4. Continue world-map option and `CM_EMOTION` / `CM_MOVE` zone work by adding one missing support model at a time: continue the kisk lifecycle with remaining kisk revive live no-resurrect-penalty detection, aggro/team cleanup side effects, production socket-order validation of kisk fanout/removal cleanup, kisk save-failure rollback regression, remaining teleport/map-change, generic direct world-removal cleanup audit, and formation-specific PVP/SIEGE route-walker/variant revalidation callbacks feeding `CreaturePvpZoneRevalidationService`, broader socket-order tests for viewer-specific kisk `SmNpcInfo` followed by loot-status/deletion packets, dedicated `KiskController` AI dialog/death hooks beyond the generic death bridge, live group/alliance resolver wiring, resurrection-skill callers for `SmResurrect` after effect runtime support, admin zone-info output, ride dismount-on-enter-zone after general zone membership exists, Java `ZoneInstance.canFly/canGlide` flag precedence, socket-order tests for fly/no-fly zone transition fanout, full audit-system staff/punishment fanout, full FP timers, stance observers, sit observers, quest/summon observers, or deeper reusable stat-speed calculation.
