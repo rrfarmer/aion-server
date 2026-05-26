@@ -81,6 +81,8 @@ Update after UOW-1257: `PlayerKnownListRegionMembershipAdapterService` now adapt
 
 Update after UOW-1258: `PlayerKnownListTwoWayOperationPlanService` now records Java two-way add/remove/clear ordering as descriptors. Live dispatch remains blocked because the planner does not mutate live membership, run range/`canSee`, execute controller packets, or wire scheduled callbacks.
 
+Update after UOW-1259: `PlayerKnownListTwoWayMembershipAdapterService` now applies planned membership steps to non-live metadata only when explicitly enabled. Live dispatch remains blocked because metadata mutation is not Java live world state and packet/controller side effects remain descriptors.
+
 ## Java Live Flow
 
 Java source files:

@@ -79,3 +79,7 @@ Add a disabled two-way membership operation planner for player-player known-list
 ## Update After UOW-1258
 
 `PlayerKnownListTwoWayOperationPlanService` now provides that disabled planner. It records candidate-first add order, owner-first remove/clear order, visibility-driven `see`/`notSee` descriptors, and `notKnow` descriptors without mutating live membership or executing controller packets.
+
+## Update After UOW-1259
+
+`PlayerKnownListTwoWayMembershipAdapterService` now consumes those operation plans and can apply membership metadata only when explicitly enabled. Region snapshot membership remains separate from live world population and still does not execute Java visibility or packet side effects.

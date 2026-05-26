@@ -140,3 +140,7 @@ It is still not Java region known-list parity because no live region object stor
 ## Update After UOW-1258
 
 `PlayerKnownListTwoWayOperationPlanService` now models Java two-way known-list add/remove/clear ordering as non-live metadata. It still does not execute live membership mutation, `canSee`, range checks, region scans, packet side effects, or cross-list locking.
+
+## Update After UOW-1259
+
+`PlayerKnownListTwoWayMembershipAdapterService` now applies operation-plan membership steps to `PlayerKnownListMembershipService` only when explicitly enabled. This still does not create Java live known-list parity because range/visibility, region object storage, controller side effects, and live locking remain missing.

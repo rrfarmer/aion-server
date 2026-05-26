@@ -97,6 +97,10 @@ The region snapshot membership adapter now seeds non-live player membership meta
 
 The two-way operation planner now records Java candidate-first add and owner-first remove/clear ordering before future membership mutation. Bind-point fanout remains non-live because operation plans are descriptors and no live known-list state or socket dispatch path consumes them.
 
+## Update After UOW-1259
+
+The two-way membership adapter can now consume operation plans and mutate non-live membership metadata behind an explicit opt-in flag. Bind-point fanout remains blocked because this metadata is still not live world known-list state and controller side effects are not executed.
+
 ## Next Recommended Unit of Work
 
 Add a non-live known-list-backed fanout plan or expected Java trace model for bind-point broadcasts. It should represent source-first delivery plus known-list-player recipients without using distance-only filtering, and it should remain unwired from `GameServerConnection`.

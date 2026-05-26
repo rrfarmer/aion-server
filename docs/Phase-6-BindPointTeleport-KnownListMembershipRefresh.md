@@ -79,6 +79,10 @@ The next safe executable slice is a disabled region/player snapshot model, not l
 
 `PlayerKnownListTwoWayOperationPlanService` now defines non-live add/remove/clear operation ordering that a future membership adapter can consume. Existing refresh services remain approximations and are not upgraded to Java region parity by this planner.
 
+## Update After UOW-1259
+
+`PlayerKnownListTwoWayMembershipAdapterService` now applies two-way operation plan membership steps behind an explicit opt-in flag. Existing refresh services remain separate approximations and should not use this adapter for live paths until range/`canSee`, world regions, and controller side effects are modeled.
+
 ## Summary Metrics
 
 - Total Java artifacts discovered: 5 grouped artifact rows in this unit

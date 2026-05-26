@@ -94,3 +94,7 @@ Added `dotnetConversion/src/Aion.GameServer/Services/PlayerKnownListTwoWayOperat
 ## Next Recommended Unit of Work
 
 Add a disabled operation-plan-to-membership adapter that consumes `PlayerKnownListTwoWayOperationPlan` values and applies them to `PlayerKnownListMembershipService` only when explicitly requested. Keep it non-live, do not wire sockets or world lifecycle, and document that controller side effects remain descriptors.
+
+## Update After UOW-1259
+
+`PlayerKnownListTwoWayMembershipAdapterService` now provides that explicit opt-in adapter. It applies membership steps from planned add/remove/clear operations to non-live metadata and preserves `see`/`notSee`/`notKnow` steps as descriptors. It remains disabled by default and is not wired to world lifecycle or sockets.
