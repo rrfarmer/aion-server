@@ -71,6 +71,8 @@ Update after UOW-1231: the `ContinueAfterPersistence` decision is now connected 
 
 Update after UOW-1232: packet intent and runtime callback metadata are now composed in staged order. Live action `3` fanout remains blocked until the inventory packet send boundary itself has a supplied-result plan and later a live send adapter.
 
+Update after UOW-1233: the supplied-result send boundary is now modeled. Live action `3` fanout remains blocked until actual send/fanout adapters are deliberately wired and tested.
+
 ## Java Flow
 
 Java source files:

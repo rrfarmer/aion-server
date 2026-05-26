@@ -23,6 +23,8 @@ The bridge proves the staged order:
 
 It does not persist, send packets, mutate runtime cooldown state, broadcast fanout, dispatch from `GameServerConnection`, or move the player.
 
+Update after UOW-1233: `BindPointTeleportKinahInventorySendResultPlanService` now models the supplied inventory packet send result after packet intent. Only `Sent` with `SentPacket=true` can continue to cooldown/action `3` fanout metadata.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -100,3 +102,5 @@ The service returns:
 ## Next Recommended Unit of Work
 
 Add a non-live callback send-result plan that models the actual inventory packet send boundary after packet intent and before cooldown/fanout metadata. It should accept a supplied send result (`Sent`, `MissingConnection`, `Failed`) and prove only `Sent` can continue to cooldown/action `3` fanout metadata. Keep it non-live: no `SendPacketAsync`, no SQL, no `GameServerConnection` dispatch, and no movement.
+
+Update after UOW-1233: the send-result plan is complete. Next, update live-adapter readiness for the complete Kinah metadata chain, then choose the next executable prerequisite.
