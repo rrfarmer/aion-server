@@ -81,3 +81,7 @@ Updated `PlayerKnownListPopulationPacketConstructionDiagnosticService`:
 ## Next Recommended Unit of Work
 
 Audit the remaining Java player-see runtime inputs that are still supplied or blocked, with emphasis on either attack-speed stat resolution for ride packets or `EffectController` abnormal-effect entry/timer hydration. Keep the next slice read-only or metadata-only unless the runtime surface is isolated.
+
+## Update After UOW-1277
+
+The ride attack-speed audit is complete. It confirms Java `SM_EMOTION` reads `PlayerGameStats.getAttackSpeed().getBase()` and `.getCurrent()` at packet construction time, while C# known-list packet fact planning still requires supplied `RideAttackSpeedFacts` until a reusable Java-equivalent stat resolver exists.

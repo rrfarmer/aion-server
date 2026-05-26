@@ -355,3 +355,7 @@ Population packet-construction diagnostics can now report complete/partial/block
 ## Update After UOW-1276
 
 Population diagnostics can now distinguish candidate-consumed request-level packet facts from generated fact-plan facts and generated facts ignored by request precedence. This remains C# staging metadata only; Java has no request/generated distinction because it reads live player/controller/effect/stat state.
+
+## Update After UOW-1277
+
+The ride attack-speed audit confirms known-list ride packet construction should still require supplied or explicitly resolved attack-speed facts. C# has a partial visual-stats approximation, but no reusable Java-equivalent `PlayerGameStats.getAttackSpeed()` resolver for known-list packet facts yet.
