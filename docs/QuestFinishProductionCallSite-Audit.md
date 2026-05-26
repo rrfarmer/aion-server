@@ -172,3 +172,18 @@ Begin a full static `QuestFinishRewardTemplateProjection` extractor for Java que
 ## Recommended Next Small Step After UOW-1085
 
 Compose `QuestFinishRewardTemplateXmlProjectionExtractor` output with the existing non-live guard and operation planners in a focused test, or extend the extractor to parse regular `reward_item` and `selectable_reward_item` lists. Keep production `HandleDialogSelectAsync` live quest finish disabled.
+
+## C# State After UOW-1086
+
+- Added `QuestFinishStaticRewardProjectionCompositionTests.StaticNonItemRewardProjection_ComposesThroughGuardAndOperationPlanWithoutLiveSideEffects`.
+- The regression feeds one Java-shaped quest XML fixture through:
+  1. `NearbyQuestTemplateXmlExtractor`;
+  2. `QuestFinishRewardTemplateXmlProjectionExtractor`;
+  3. `QuestDialogAutoRewardGuardPlanService.CreatePlanFromTemplateSummary`;
+  4. `QuestFinishOperationPlanService.CreatePlan`.
+- The resulting operation plan stays non-live, replaces the coarse reward-mutation placeholder with detailed non-item metadata, surfaces `gold`, `exp`, and `ap` projection descriptors, keeps `extend_stigma` and `ccheck` as ignored-by-Java warning descriptors, and still completes only planned quest-state metadata.
+- No production socket path, live quest finish, reward mutation, XP mutation, custom reward execution, mail execution, object-id allocation, persistence, or packet send was enabled.
+
+## Recommended Next Small Step After UOW-1086
+
+Extend `QuestFinishRewardTemplateXmlProjectionExtractor` to parse regular `reward_item` and `selectable_reward_item` lists for the selected regular reward group, keeping class rewards, extended rewards, bonus handlers, and production wiring disabled.

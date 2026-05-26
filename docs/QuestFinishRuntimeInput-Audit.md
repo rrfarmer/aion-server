@@ -249,3 +249,17 @@ This should be implemented and tested before any production socket/quest handler
 3. Item rewards, selectable rewards, class selectable rewards, extended rewards, bonus handler rewards, quest work items, target NPC context, and production reward-group correction integration remain incomplete.
 4. Java `PlayerCommonData.setExp` live mutation remains absent, so custom rewards must stay disabled.
 5. Custom reward receipt/mail execution, packet ordering, persistence, and Java runtime comparison remain gated and unverified.
+
+## C# State After UOW-1086
+
+- Added a focused non-live composition regression that proves static quest summary data and static default regular non-item reward projection can flow together into quest-finish operation planning.
+- The test uses a single Java-shaped quest XML fixture to avoid hand-built mock projection data for reportability and non-item rewards.
+- The resulting plan carries detailed non-item descriptor metadata and warning metadata, but does not execute any runtime side effects.
+
+## Remaining Runtime Wiring Blockers After UOW-1086
+
+1. Production `GameServerConnection.HandleDialogSelectAsync` still does not call the guard planner.
+2. The composition regression is test-only; no runtime static-data lookup or production operation planning has been wired.
+3. Item rewards, selectable rewards, class selectable rewards, extended rewards, bonus handler rewards, quest work items, target NPC context, and production reward-group correction integration remain incomplete.
+4. Java `PlayerCommonData.setExp` live mutation remains absent, so custom rewards must stay disabled.
+5. Custom reward receipt/mail execution, packet ordering, persistence, and Java runtime comparison remain gated and unverified.

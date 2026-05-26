@@ -477,6 +477,12 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - Real-data regression coverage confirms the current default regular reward-group XP total is 20,544,638,479 across 8,043 Java quest templates.
 - This is static projection only: it does not apply `Rates.XP_QUEST`, resolve target NPC names, call `QuestRewardService.CreateXpRewardPlan`, mutate `PlayerCommonData`, emit XP packets, or execute level-change custom rewards.
 
+## C# State After UOW-1086
+
+- Added a non-live composition regression proving XML-projected `Rewards.exp` metadata can flow through the dialog guard and operation planner.
+- The operation planner surfaces an `Experience` non-item reward descriptor from Java-shaped XML without applying XP rates or mutating player state.
+- XP side-effect plans still require an explicit `QuestFinishRewardSideEffectContext` and are not enabled by this test.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
@@ -586,7 +592,8 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `QuestFinishRewardTemplateXmlProjectionExtractorTests.CreateProjection_UsesRequestedRegularRewardGroupIndexWithoutParsingItemRewards`
 - `QuestFinishRewardTemplateXmlProjectionExtractorTests.CreateProjection_DefaultsMissingAndOutOfRangeRewardsToEmptyJavaRewards`
 - `QuestFinishRewardTemplateXmlProjectionExtractorTests.RealDataAudit_LoadsDefaultRegularNonItemRewardProjectionWithoutProductionWiring`
+- `QuestFinishStaticRewardProjectionCompositionTests.StaticNonItemRewardProjection_ComposesThroughGuardAndOperationPlanWithoutLiveSideEffects`
 
 ## Next Recommendation
 
-Next, compose the static non-item reward projection with the existing non-live dialog guard and operation planners in a focused test, or extend extraction to regular item/selectable rewards. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
+Next, extend static reward extraction to regular item/selectable rewards while keeping class rewards, extended rewards, bonus handlers, and production wiring disabled. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
