@@ -49,6 +49,8 @@ Update after UOW-1220: action `1` can now schedule supplied callback metadata th
 
 Update after UOW-1221: `BindPointTeleportRuntimeCallbackExecutionBridgeService` now bridges supplied Kinah-success callback metadata to runtime cooldown insertion and action `3` source-included fanout. It intentionally keeps live Kinah mutation and final movement disabled.
 
+Update after UOW-1222: `docs/Phase-6-BindPointTeleport-ScheduledKinah-LiveBoundary-Audit.md` documents why live callback action `3` fanout must still wait behind the scheduled Kinah live boundary. Java sends the Kinah inventory update with `DEC_KINAH_FLY` mask `0x4B` before cooldown insertion and action `3` fanout, so C# should not broadcast callback success from live dispatch until that mutation/send boundary is executable or explicitly staged.
+
 ## Java Flow
 
 Java source files:
