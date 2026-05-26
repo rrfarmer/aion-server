@@ -103,3 +103,7 @@ Population packet construction can now consume completed per-direction fact plan
 ## Update After UOW-1275
 
 `PlayerKnownListPopulationPacketConstructionDiagnosticService` now summarizes population packet-construction metadata across candidate plans. It preserves candidate ordering, fact-plan direction ordering, and operation-step result ordering while reporting complete, partial, blocked, and missing metadata counts. It remains disabled/non-live and does not send packets.
+
+## Update After UOW-1276
+
+Population candidate plans now expose packet-construction fact source metadata. Diagnostics can distinguish request-level facts, generated fact-plan facts, and generated facts ignored by request precedence while preserving the existing request-authoritative merge rule.

@@ -92,3 +92,7 @@ Parallel work discovery was performed before implementation.
 ## Next Recommended Unit of Work
 
 Add a small metadata source-origin diagnostic for population packet construction facts: distinguish request-level facts from generated fact-plan facts in population packet construction so future diagnostics can report which packet facts came from explicit caller input versus supplied-snapshot fact planning. Keep it non-live and do not send packets.
+
+## Update After UOW-1276
+
+Population packet-construction diagnostics now include source-origin metadata. They distinguish request-level packet facts, generated fact-plan facts that were accepted, and generated fact-plan facts ignored because request-level facts for the same subject remained authoritative. Request-level source rows are candidate-consumed diagnostics, so unrelated request-wide facts are not counted for candidates whose attached side effects did not use them.

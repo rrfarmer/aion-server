@@ -351,3 +351,7 @@ Population fact-plan composition now preserves per-direction blocked fact metada
 ## Update After UOW-1275
 
 Population packet-construction diagnostics can now report complete/partial/blocked metadata across candidate plans. This improves readiness visibility only; live bind-point fanout remains disabled because the diagnostic projection does not hydrate runtime facts, execute `KnownList`/`PlayerController`, send sockets, model pet visibility, or validate Java runtime packet order.
+
+## Update After UOW-1276
+
+Population diagnostics can now distinguish candidate-consumed request-level packet facts from generated fact-plan facts and generated facts ignored by request precedence. This remains C# staging metadata only; Java has no request/generated distinction because it reads live player/controller/effect/stat state.

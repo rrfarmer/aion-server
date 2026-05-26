@@ -95,3 +95,7 @@ Add a disabled population packet-construction summary/diagnostic projection that
 ## Update After UOW-1275
 
 The disabled diagnostic projection now exists as `PlayerKnownListPopulationPacketConstructionDiagnosticService`. It aggregates fact-plan, blocker, operation packet-construction, operation-result, player-packet-result, and constructed descriptor-kind counts without live dispatch.
+
+## Update After UOW-1276
+
+Fact-plan composition now records whether completed generated facts were accepted or ignored because request-level packet construction facts for the same subject were already present. Blocked fact plans remain represented through fact-plan blockers rather than source rows.
