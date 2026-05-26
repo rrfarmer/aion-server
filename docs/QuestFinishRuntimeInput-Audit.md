@@ -119,3 +119,23 @@ This should be implemented and tested before any production socket/quest handler
 2. Java `PlayerCommonData.setExp` live mutation is still absent, so custom reward level checks must not be enabled from stale pre-mutation player snapshots.
 3. Transaction/failure ordering between custom reward receipt writes and system-mail persistence is still unresolved.
 4. The account-creation retention path is unit tested at the state-applier level only; end-to-end login-server auth, reconnect, and enter-world socket ordering still need integration coverage.
+
+## C# State After UOW-1078
+
+- Added `QuestFinishCustomRewardSessionRuntimeInputAdapterService`.
+- The adapter bridges active player/session-shaped state into `QuestFinishCustomRewardRuntimeInputAssemblerService` without invoking quest finish, repositories, system mail, or socket sends.
+- Disabled input returns inert assembler options without requiring a player, `IDFactory`, or item templates, and tests confirm it does not allocate object ids while disabled.
+- Enabled input reads:
+  1. `Player.AccountCreationEpochMillis`;
+  2. `IDFactory.NextId` as the future Java `IDFactory.nextId` source;
+  3. caller-supplied item templates intended to be `runtimeContext.DataManager.StaticData.ItemTemplates`.
+- Enabled input still stops before executable options when account creation milliseconds, id factory, or item templates are missing.
+- Tests cover missing dependencies and a created options path using the retained account creation timestamp, but no production quest-finish/socket path calls the adapter.
+
+## Remaining Runtime Wiring Blockers After UOW-1078
+
+1. Production quest-finish reward mutation remains non-live; no socket or quest handler invokes the session adapter or side-effect adapter.
+2. Java `PlayerCommonData.setExp` live mutation is still absent, so custom reward level checks must not be enabled from stale pre-mutation player snapshots.
+3. Transaction/failure ordering between custom reward receipt writes and system-mail persistence is still unresolved.
+4. The item-template source is represented as an explicit input for testability; production wiring must pass `runtimeContext.DataManager.StaticData.ItemTemplates` and stay guarded when static data is unavailable.
+5. End-to-end login-server auth/reconnect/enter-world socket ordering still needs integration coverage before claiming runtime parity.

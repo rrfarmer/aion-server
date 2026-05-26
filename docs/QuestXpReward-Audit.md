@@ -426,6 +426,12 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - Added nullable `Player.AccountCreationEpochMillis`, `PlayerAccountRuntimeStateService`, and `GameServerConnection` propagation from positive login-server `AccountAuthResult.CreationDate` to the active player after enter-world.
 - Missing or fake-auth creation time remains `null`, so future custom reward assembly can still treat it as a missing Java dependency instead of using Unix epoch zero.
 
+## C# State After UOW-1078
+
+- Added `QuestFinishCustomRewardSessionRuntimeInputAdapterService`, a disabled-by-default bridge from active player/session-shaped runtime inputs to `QuestFinishCustomRewardRuntimeInputAssemblerService`.
+- The adapter carries `Player.AccountCreationEpochMillis`, `IDFactory.NextId`, received time, and item templates into assembler options, but does not execute repositories, mail persistence, level-change side effects, or quest-finish gameplay.
+- Tests confirm the disabled gate does not consume ids, enabled input reports missing account creation/id-factory/item-template dependencies, and the created path preserves the Java-shaped account-creation local time.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
@@ -501,6 +507,9 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `QuestFinishCustomRewardRuntimeInputAssemblerServiceTests.ConvertEpochMillisToServerLocalTime_MatchesJavaServerTimeOfEpochMilliAcrossOffsets`
 - `PlayerAccountRuntimeStateServiceTests.ApplyLoginAccountState_CarriesLoginServerCreationMillisToActivePlayer`
 - `PlayerAccountRuntimeStateServiceTests.ApplyLoginAccountState_PreservesMissingCreationMillisAsNull`
+- `QuestFinishCustomRewardSessionRuntimeInputAdapterServiceTests.CreateOptions_DisabledGateDoesNotRequireSessionDependenciesOrAllocateIds`
+- `QuestFinishCustomRewardSessionRuntimeInputAdapterServiceTests.CreateOptions_EnabledGateRequiresPlayerIdFactoryAndStaticItemTemplates`
+- `QuestFinishCustomRewardSessionRuntimeInputAdapterServiceTests.CreateOptions_CreatesAssemblerOptionsFromActivePlayerAndRuntimeDependencies`
 - `GamePacketTests.CharacterSelectionServerPackets_WriteJavaShapedPayloads` level-up `SM_ACTION_ANIMATION` assertion
 - `PlayerLevelChangeUpgradePlanServiceTests.CreatePlan_StagesJavaUpgradePlayerOrderWithTeamAndLegionDependencies`
 - `PlayerLevelChangeUpgradePlanServiceTests.CreatePlan_RecordsMissingMaxStatsDeadAndNoTeamLegionBranches`
@@ -524,4 +533,4 @@ Level-change side effects include stat template refresh, max repose recalculatio
 
 ## Next Recommendation
 
-Next, add a disabled quest-finish/session assembly adapter that reads `Player.AccountCreationEpochMillis`, `IDFactory.NextId`, and static item templates into `QuestFinishCustomRewardRuntimeInputAssemblerService` without invoking production custom reward execution. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
+Next, add a non-live composition test or helper that feeds session-assembled disabled options into `QuestFinishCustomRewardRuntimeSideEffectAdapterService` and confirms quest-finish XP metadata remains disabled by default. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
