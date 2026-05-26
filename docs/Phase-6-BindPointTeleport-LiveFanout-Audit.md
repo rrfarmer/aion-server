@@ -29,6 +29,8 @@ Update after UOW-1210: `docs/Phase-6-BindPointTeleport-TeleportTo-Audit.md` now 
 
 Update after UOW-1211: C# now has a non-live `BindPointTeleportTeleportToSideEffectPlanService` that models the audited `TeleportAnimation.NONE` path as ordered side-effect metadata. It covers blocked final movement, same-instance `spawnOnSameMap` owner packet order, map/instance-change `SM_CHANNEL_INFO` + `SM_PLAYER_SPAWN` order, optional instance-opened message, and explicit gap flags for unsupported Java side effects. Live bind-point movement remains disabled.
 
+Update after UOW-1212: `BindPointTeleportScheduledCallbackPlanService` can now carry the non-live teleport side-effect plan after the final movement intent. This composes scheduled Kinah success, cooldown insert, action `3` fanout, final movement gate, and concrete `TeleportService.teleportTo` side-effect metadata in Java order without enabling scheduler execution, packet sends, or movement.
+
 ## Java Flow
 
 Java source files:
@@ -80,7 +82,7 @@ Observed C# state:
 - `ThreadPoolManager` and `ScheduledTask` can represent delayed work, and `BindPointTeleportRuntimeStatePlanService` now records the bind-point-specific `TaskId.SKILL_USE` state boundary, but no live task slot is wired.
 - `IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync` can approximate Java `PacketSendUtility.broadcastPacket(..., true)` for visible-player fanout, but Java `broadcastPacketAndReceive` source-player inclusion semantics must be explicitly mapped before live use.
 - `SmBindPointTeleport` exists and is source-derived unit tested for opcode `296` and action payloads.
-- Price, requirements, operation, control, client action, fanout, request-composition, runtime-state, scheduled-Kinah, final-movement, scheduled-callback, and teleport side-effect planners exist and remain non-live.
+- Price, requirements, operation, control, client action, fanout, request-composition, runtime-state, scheduled-Kinah, final-movement, scheduled-callback, and teleport side-effect planners exist; scheduled callback composition can carry side-effect metadata and remains non-live.
 
 ## Recommended Live Insertion Order
 

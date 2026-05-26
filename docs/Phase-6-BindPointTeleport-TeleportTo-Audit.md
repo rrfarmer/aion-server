@@ -13,6 +13,8 @@ This unit adds no live behavior. It documents the exact Java ordering so the nex
 
 Update after UOW-1211: C# now has `BindPointTeleportTeleportToSideEffectPlanService`, a non-live side-effect planner for the audited Java `TeleportAnimation.NONE` path. It emits ordered same-instance and map/instance-change steps, explicitly records that no `SM_TELEPORT_LOC` should be sent, and flags the remaining unsupported Java dependencies. Live movement remains disabled.
 
+Update after UOW-1212: `BindPointTeleportScheduledCallbackPlanService` can now compose an optional `BindPointTeleportTeleportToSideEffectPlan` after the final movement intent, preserving Java callback order while still doing no live movement.
+
 ## Java Hotspot Flow
 
 Java source files:
