@@ -90,3 +90,5 @@ New C# artifacts:
 ## Next Recommended Unit of Work
 
 Add a send-before-runtime callback ordering adapter or design note that removes the current metadata-ordering wrinkle before any live send/fanout path is enabled. Keep it non-live and prove that inventory update send success gates cooldown/action `3` fanout and final movement metadata in Java order.
+
+Update after UOW-1243: `BindPointTeleportKinahSendBeforeRuntimeOrderingService` now records the Java-required metadata order: persistence success, packet intent, packet send success, cooldown storage, action `3` fanout, and final movement metadata. The next safe seam is a live-adapter readiness audit before any `GameServerConnection` execution is enabled.
