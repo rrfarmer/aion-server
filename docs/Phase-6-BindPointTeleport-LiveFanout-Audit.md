@@ -23,6 +23,8 @@ Update after UOW-1207: C# now has a non-live `BindPointTeleportScheduledKinahPla
 
 Update after UOW-1208: C# now has a non-live `BindPointTeleportFinalMovementPlanService` that models Java's final delayed movement gate: `!player.getLifeStats().isAboutToDie() && !player.isDead()` before `TeleportService.teleportTo(player, hotspot.worldId, hotspot.x, hotspot.y, hotspot.z)`. It records same-world/current-instance versus cross-world/instance-`1` target selection without moving the player.
 
+Update after UOW-1209: C# now has a non-live `BindPointTeleportScheduledCallbackPlanService` that composes the Java delayed `TaskId.SKILL_USE` callback order: Kinah decrement failure returns before cooldown/fanout/movement; Kinah success adds cooldown intent, cooldown fanout intent, schedules the final movement gate, and only includes movement intent when the final gate passes. It still performs no live scheduler, inventory, cooldown-map, packet-send, or movement side effects.
+
 ## Java Flow
 
 Java source files:
@@ -61,6 +63,7 @@ C# surfaces reviewed:
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportRuntimeStatePlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportScheduledKinahPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportFinalMovementPlanService.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportScheduledCallbackPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmBindPointTeleport.cs`
 
 Observed C# state:
@@ -72,7 +75,7 @@ Observed C# state:
 - `ThreadPoolManager` and `ScheduledTask` can represent delayed work, and `BindPointTeleportRuntimeStatePlanService` now records the bind-point-specific `TaskId.SKILL_USE` state boundary, but no live task slot is wired.
 - `IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync` can approximate Java `PacketSendUtility.broadcastPacket(..., true)` for visible-player fanout, but Java `broadcastPacketAndReceive` source-player inclusion semantics must be explicitly mapped before live use.
 - `SmBindPointTeleport` exists and is source-derived unit tested for opcode `296` and action payloads.
-- Price, requirements, operation, control, client action, fanout, request-composition, runtime-state, scheduled-Kinah, and final-movement planners exist and remain non-live.
+- Price, requirements, operation, control, client action, fanout, request-composition, runtime-state, scheduled-Kinah, final-movement, and scheduled-callback planners exist and remain non-live.
 
 ## Recommended Live Insertion Order
 
