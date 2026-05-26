@@ -47,6 +47,8 @@ Update after UOW-1219: `BindPointTeleportRuntimeFanoutService` can now execute t
 
 Update after UOW-1220: action `1` can now schedule supplied callback metadata through `BindPointTeleportRuntimeScheduledCallbackBridgeService`, but that scheduled metadata does not yet execute action `3` cooldown fanout. Future work must explicitly bridge callback-side cooldown/fanout/movement side effects before live dispatch.
 
+Update after UOW-1221: `BindPointTeleportRuntimeCallbackExecutionBridgeService` now bridges supplied Kinah-success callback metadata to runtime cooldown insertion and action `3` source-included fanout. It intentionally keeps live Kinah mutation and final movement disabled.
+
 ## Java Flow
 
 Java source files:
