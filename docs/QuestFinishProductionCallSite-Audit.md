@@ -130,3 +130,17 @@ Add a static-data projection prerequisite for the C# side of Java `QuestTemplate
 ## Recommended Next Small Step After UOW-1082
 
 Add a static-data projection prerequisite for Java `QuestTemplate.can_report` and reward metadata so the C# guard planner can eventually consume real static quest data. Keep production `HandleDialogSelectAsync` live quest finish disabled.
+
+## C# State After UOW-1083
+
+- Extended `NearbyQuestTemplateSummary` and `NearbyQuestTemplateXmlExtractor` with a small Java `QuestTemplate` projection prerequisite:
+  - `can_report`;
+  - `reward_repeat_count`;
+  - direct child presence for `rewards`, `extended_rewards`, `bonus`, and `quest_work_items`.
+- Updated `NearbyQuestTemplateXmlExtractorTests` to verify the fields on fixture XML, defaults when attributes/children are absent, and real Java XML counts.
+- Real-data regression counts now confirm 8,043 quest templates, 64 reportable templates, 241 reward-repeat templates, 7,935 templates with direct `rewards`, 235 with `extended_rewards`, 782 with `bonus`, and 1,630 with `quest_work_items`.
+- This is still only a static summary prerequisite. It does not build a full `QuestFinishRewardTemplateProjection`, parse reward items/non-item values, wire `GameServerConnection.HandleDialogSelectAsync`, call quest finish, mutate rewards/XP, execute custom rewards, persist mail, or send packets.
+
+## Recommended Next Small Step After UOW-1083
+
+Add a narrow adapter from `NearbyQuestTemplateSummary` into guard/planner prerequisite metadata so `QuestDialogAutoRewardGuardPlanService` can consume real `CanReport` and the operation planner can report missing full reward projection data without enabling live quest finish.

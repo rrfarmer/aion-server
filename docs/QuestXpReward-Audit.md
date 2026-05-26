@@ -457,6 +457,13 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - The test composes a planned dialog auto-reward guard intent with explicit XP reward projection metadata and confirms the resulting quest-finish operation plan remains non-live.
 - XP live mutation and level-change custom reward execution remain disabled.
 
+## C# State After UOW-1083
+
+- Extended the nearby quest static summary projection with Java `QuestTemplate.can_report`, `reward_repeat_count`, and direct child presence for `rewards`, `extended_rewards`, `bonus`, and `quest_work_items`.
+- The extractor/test update gives the future quest-finish guard path a real static-data prerequisite for reportability and coarse reward/work availability.
+- The new projection does not expose XP amounts, reward item rows, class/race reward filtering, reward-group selection, custom reward execution data, or live `PlayerCommonData.addExp/setExp` behavior.
+- Focused real-data assertions validate current XML counts only; no Java runtime XP mutation or packet-order parity is claimed.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
@@ -556,7 +563,10 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `CustomLevelRewardPlanServiceTests.CreateBonusPackPlan_RecordsJavaGuardBranches`
 - `CustomLevelRewardPlanServiceTests.CreateFactionPackPlan_StagesWindowAndOppositeRaceTemplateFiltering`
 - `CustomLevelRewardPlanServiceTests.CreateFactionPackPlan_RecordsCreationWindowDaoAndCapacityBranches`
+- `NearbyQuestTemplateXmlExtractorTests.Extract_ReadsNearbyPredicateQuestTemplateFieldsLikeJavaQuestTemplate`
+- `NearbyQuestTemplateXmlExtractorTests.Extract_AppliesJavaQuestTemplateDefaultsForMissingOptionalFields`
+- `NearbyQuestTemplateXmlExtractorTests.RealDataAudit_LoadsNearbyQuestTemplateSummariesWithoutProductionWiring`
 
 ## Next Recommendation
 
-Next, add a static-data projection prerequisite for Java `QuestTemplate.can_report` and reward metadata so the C# guard planner can eventually consume real quest data. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
+Next, add a narrow adapter from `NearbyQuestTemplateSummary` into the dialog guard/planner prerequisite metadata so real `CanReport` and coarse reward/work availability can replace explicit mock inputs while full reward projection remains blocked. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.

@@ -204,3 +204,18 @@ This should be implemented and tested before any production socket/quest handler
 3. The composition test uses explicit mock projections and does not read live XML/static data.
 4. Java `PlayerCommonData.setExp` live mutation remains absent, so custom rewards must stay disabled.
 5. Custom reward receipt/mail execution, packet ordering, and persistence remain gated and unverified.
+
+## C# State After UOW-1083
+
+- Added a static-data prerequisite on `NearbyQuestTemplateSummary` for Java `QuestTemplate.can_report`, `reward_repeat_count`, and direct reward/work child presence.
+- `NearbyQuestTemplateXmlExtractor` now reads those fields from Java quest XML without invoking any runtime quest-finish path.
+- Real-data audit coverage confirms the projection loads across the current Java XML set while preserving the existing 8,043-template count.
+- The projection is intentionally coarse: it records presence flags only for reward/work child elements and does not parse reward groups, reward items, selectable rewards, item checks, non-item reward values, target NPC context, JAXB list defaults, serialization behavior, or threading behavior.
+
+## Remaining Runtime Wiring Blockers After UOW-1083
+
+1. Production `GameServerConnection.HandleDialogSelectAsync` still does not call the guard planner.
+2. The guard planner still consumes explicit inputs; it is not wired to `NearbyQuestTemplateTable`.
+3. Full `QuestFinishRewardTemplateProjection` construction from Java static data remains missing.
+4. Java `PlayerCommonData.setExp` live mutation remains absent, so custom rewards must stay disabled.
+5. Custom reward receipt/mail execution, packet ordering, persistence, and Java runtime comparison remain gated and unverified.
