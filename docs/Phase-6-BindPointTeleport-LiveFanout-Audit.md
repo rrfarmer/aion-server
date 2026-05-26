@@ -37,6 +37,8 @@ Update after UOW-1214: `SmSystemMessage` now has named helpers and packet tests 
 
 Update after UOW-1215: C# now has a non-live `BindPointTeleportHandlerCompositionPlanService` that composes parsed bind-point packet values with supplied operation/control/callback facts. It produces existing request/fanout/callback metadata without sending packets or mutating state. `GameServerConnection` remains unwired.
 
+Update after UOW-1216: `docs/Phase-6-BindPointTeleport-RuntimeOwner-Design.md` documents the runtime owner required before live bind-point fanout can be wired. Action `2` fanout still depends on Java `hasTask(TaskId.SKILL_USE)` / `cancelTask(TaskId.SKILL_USE)` semantics, and action `3` login/callback fanout still depends on a shared cooldown owner.
+
 ## Java Flow
 
 Java source files:
@@ -96,7 +98,7 @@ Observed C# state:
 
 1. Add `CmBindPointTeleport` parser and opcode `244` registration, with packet-read tests for action `1`, action `2`, dead-player no-op metadata, and unknown-action no-op behavior. Done non-live in UOW-1202/UOW-1203.
 2. Add a handler-level non-live composition bridge that consumes `CmBindPointTeleport` and produces existing planner/control outputs without changing world state. Request-level composition is staged in UOW-1205; live `GameServerConnection` dispatch remains unwired.
-3. Add an explicit bind-point runtime state owner for cooldowns and the cancellable `TaskId.SKILL_USE` task equivalent. Non-live state semantics are staged in UOW-1206; live ownership remains unwired.
+3. Add an explicit bind-point runtime state owner for cooldowns and the cancellable `TaskId.SKILL_USE` task equivalent. Non-live state semantics are staged in UOW-1206, and UOW-1216 documents the owner design; live ownership remains unwired.
 4. Wire fanout only after packet parser, planner composition, cooldown state, and task ownership are independently tested.
 5. Add live Kinah mutation and final movement as separate units because both affect inventory persistence, packet order, and movement/known-list fanout.
 6. Before final movement, add a non-live `TeleportService.teleportTo` side-effect planner for the bind-point hotspot `TeleportAnimation.NONE` path using `docs/Phase-6-BindPointTeleport-TeleportTo-Audit.md`.

@@ -15,6 +15,8 @@ Update after UOW-1214: C# now has named `SmSystemMessage` helpers and packet tes
 
 Update after UOW-1215: C# now has `BindPointTeleportHandlerCompositionPlanService`, a non-live handler-level composition bridge that consumes parsed `CmBindPointTeleport` scalar values plus supplied operation/control/callback facts and returns existing request/callback metadata. It still sends no packets, schedules no tasks, mutates no state, and does not touch `GameServerConnection`.
 
+Update after UOW-1216: `docs/Phase-6-BindPointTeleport-RuntimeOwner-Design.md` now pins the live runtime owner requirements for Java `TaskId.SKILL_USE` and the static bind-point cooldown map. It confirms the next code slice should be an isolated singleton owner, keyed by player object id, before any `GameServerConnection` dispatch or live scheduler callback is wired.
+
 ## Java Live Flow
 
 Java source files:
@@ -102,7 +104,7 @@ Java bind-point teleport uses these concrete system message IDs:
 
 ## Recommended Non-Live Insertion Order
 
-1. Add a runtime state owner for `TaskId.SKILL_USE` and cooldowns, still tested without `GameServerConnection` dispatch.
+1. Add a runtime state owner for `TaskId.SKILL_USE` and cooldowns, still tested without `GameServerConnection` dispatch. UOW-1216 completed the design audit; the next unit should implement the isolated owner.
 2. Add live fanout tests for `SM_BIND_POINT_TELEPORT` action `1`, `2`, and `3` using source-included registry behavior.
 3. Add scheduled Kinah mutation/persistence only after item update packet ordering is concrete.
 4. Add live final movement only after action abort/despawn/spawn/pet/zone/legion gaps are either implemented or explicitly staged out with tests.
