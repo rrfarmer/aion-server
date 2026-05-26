@@ -371,3 +371,7 @@ Known-list fact planning can now consume an explicit disabled attack-speed resol
 ## Update After UOW-1280
 
 Population planning can now opt into disabled attack-speed resolver auto-composition from supplied subject snapshots plus item templates. Live bind-point fanout remains blocked because the composition is still snapshot/static-data based, current-speed stat parity is missing, and no live socket dispatch or Java packet capture has been performed.
+
+## Update After UOW-1281
+
+Population packet-construction diagnostics now report ride attack-speed fact source and resolver status. Live bind-point fanout remains blocked because this is diagnostic metadata only; Java-equivalent current-stat calculation, live stat hydration, socket dispatch, and Java packet capture are still missing.

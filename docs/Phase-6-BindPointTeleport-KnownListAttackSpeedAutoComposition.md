@@ -85,3 +85,7 @@ Updated `PlayerKnownListPopulationPlanService`:
 ## Next Recommended Unit of Work
 
 Add source/status diagnostics for generated attack-speed resolver composition in population packet construction diagnostics, or move to the next hydration prerequisite such as abnormal-effect entry/timer resolution. Keep live dispatch disabled.
+
+## Update After UOW-1281
+
+Population packet-construction diagnostics now expose ride attack-speed fact source and resolver status per fact plan, plus aggregate counts. This makes supplied, resolved approximation, and missing/none attack-speed paths visible without changing packet construction or live dispatch.
