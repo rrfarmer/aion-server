@@ -104,7 +104,7 @@ Design constraints:
 - Store one `TaskId.SKILL_USE` task per player.
 - Replacement must cancel the old task before storing the new task, matching Java observable intent.
 - Cancellation must remove the task entry before cancellation is requested.
-- Completed task cleanup should remove only the exact scheduled task instance to avoid deleting a newer replacement.
+- Completed tasks should keep the slot present until cancel, replace, or player cleanup, because Java `hasTask(TaskId.SKILL_USE)` checks map presence and `CreatureController.addTask` does not remove the `Future` after completion.
 - Cooldown lookup must preserve Java whole-second truncation and keep expired entries unless a later cleanup unit intentionally documents a difference.
 - Date/time input should be injectable for tests; production can use Unix epoch milliseconds.
 - Threading should use a lock or `ConcurrentDictionary` compare/remove pattern. This is an intentional C# implementation safety choice because Java's reviewed `HashMap` cooldown storage is not synchronized, while the C# server can execute scheduled callbacks concurrently.
@@ -157,6 +157,8 @@ Tests added:
 ## Next Recommended Unit of Work
 
 Implement `BindPointTeleportRuntimeStateOwner` as an isolated service/test pair. Do not wire it into `GameServerConnection` yet. The implementation should cover per-player `TaskId.SKILL_USE` schedule/replace/cancel semantics, exact-instance cleanup, cooldown add/lookup, Java whole-second time-left truncation, and player cleanup.
+
+Update after UOW-1217: `BindPointTeleportRuntimeStateOwner` now exists as an isolated service with tests. It keeps completed task slots present until cancel/replace/clear to match Java `hasTask` map-presence behavior. Live dispatch remains disabled.
 
 ## Summary Metrics
 

@@ -17,6 +17,8 @@ Update after UOW-1215: C# now has `BindPointTeleportHandlerCompositionPlanServic
 
 Update after UOW-1216: `docs/Phase-6-BindPointTeleport-RuntimeOwner-Design.md` now pins the live runtime owner requirements for Java `TaskId.SKILL_USE` and the static bind-point cooldown map. It confirms the next code slice should be an isolated singleton owner, keyed by player object id, before any `GameServerConnection` dispatch or live scheduler callback is wired.
 
+Update after UOW-1217: C# now has `BindPointTeleportRuntimeStateOwner`, an isolated live-capable owner for per-player `TaskId.SKILL_USE` schedule/replace/cancel/clear operations and player-id keyed cooldown facts. It is not wired into `GameServerConnection`, sends no packets, mutates no inventory, and does not execute bind-point teleport callbacks from the network path.
+
 ## Java Live Flow
 
 Java source files:
@@ -85,8 +87,8 @@ Java login flow:
 | Handler boundary | A handler or adapter that consumes `CmBindPointTeleport` and assembles facts without side effects | Non-live bridge added in UOW-1215 | Keep dispatch disabled; bridge still requires supplied facts and no live adapters. |
 | Static hotspot facts | Adapter from `DataManager.HOTSPOT_DATA` equivalent to planner facts | Missing/partial | Add fact assembler from loaded hotspot static data when owned exclusively. |
 | Failure system messages | Concrete `SmSystemMessage` helpers for Java bind-point failures | Helpers/tests added in UOW-1214 | Use helpers from future non-live/live adapters; do not add dispatch yet. |
-| Runtime task owner | Per-player `TaskId.SKILL_USE` task slot with replace/cancel semantics | Planner only | Add explicit state owner before scheduling. |
-| Cooldown owner | Player-id keyed cooldown storage with Java whole-second time-left behavior | Planner only | Add explicit owner/concurrency policy before onLogin/live requirements. |
+| Runtime task owner | Per-player `TaskId.SKILL_USE` task slot with replace/cancel semantics | Isolated owner added in UOW-1217 | Keep unwired until live callback, inventory, fanout, and movement gates are ready. |
+| Cooldown owner | Player-id keyed cooldown storage with Java whole-second time-left behavior | Isolated owner added in UOW-1217 | Keep unwired until login/requirements bridges can use it safely. |
 | Inventory mutation | `tryDecreaseKinah(price, DEC_KINAH_FLY)` with persistence and packet order | Planner only | Defer until update packet and persistence path are isolated. |
 | Fanout | Source-included visible-player broadcast matching Java known-list semantics | Planner only; registry approximation exists | Add live fanout tests only after task/cooldown/message prerequisites. |
 | Final movement | Java `TeleportAnimation.NONE` side effects and owner packet order | Planner only | Defer live adapter until action abort/despawn/spawn/pet/callback gaps are owned. |
@@ -104,7 +106,7 @@ Java bind-point teleport uses these concrete system message IDs:
 
 ## Recommended Non-Live Insertion Order
 
-1. Add a runtime state owner for `TaskId.SKILL_USE` and cooldowns, still tested without `GameServerConnection` dispatch. UOW-1216 completed the design audit; the next unit should implement the isolated owner.
+1. Add a runtime state owner for `TaskId.SKILL_USE` and cooldowns, still tested without `GameServerConnection` dispatch. Done in UOW-1217 as an isolated owner.
 2. Add live fanout tests for `SM_BIND_POINT_TELEPORT` action `1`, `2`, and `3` using source-included registry behavior.
 3. Add scheduled Kinah mutation/persistence only after item update packet ordering is concrete.
 4. Add live final movement only after action abort/despawn/spawn/pet/zone/legion gaps are either implemented or explicitly staged out with tests.
