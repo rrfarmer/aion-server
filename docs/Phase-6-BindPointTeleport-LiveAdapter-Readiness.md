@@ -407,3 +407,7 @@ A non-live pet visibility/order planner now captures Java's dependent pet visibi
 ## Update After UOW-1289
 
 A pet packet field audit now scopes the minimal known-list serializer prerequisite to `SM_PET` spawn/dismiss and `SM_PET_EMOTE` fly-start, while documenting broader Java pet action layouts as out of scope for the first slice. Live bind-point fanout remains blocked because no C# pet packet serializers, pet snapshot DTOs, golden vectors, live pet visibility integration, socket dispatch, or Java runtime packet capture exist yet.
+
+## Update After UOW-1290
+
+Minimal C# packet prerequisites now exist for known-list pet visibility: `SmPet` can serialize Java-shaped spawn/dismiss payloads from supplied snapshots, `SmPetEmote` can serialize the fly-start/default branch, and `PetAction`/`PetEmote` ids preserve Java unknown fallback behavior. Live bind-point fanout remains blocked because packet construction is not bridged from pet visibility descriptors, live pet/common-data hydration is missing, full pet packet coverage is incomplete, socket dispatch is disabled, and no Java runtime packet capture has been performed.
