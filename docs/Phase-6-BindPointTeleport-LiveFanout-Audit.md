@@ -27,6 +27,8 @@ Update after UOW-1209: C# now has a non-live `BindPointTeleportScheduledCallback
 
 Update after UOW-1210: `docs/Phase-6-BindPointTeleport-TeleportTo-Audit.md` now maps Java `TeleportService.teleportTo(player, worldId, x, y, z)` side effects for hotspot final movement. The audit confirms bind-point live movement must still wait for an explicit `TeleportAnimation.NONE` side-effect plan because Java also performs action aborts, world despawn/spawn, same-instance versus map-load packet branching, pet movement, protection/effect/zone callbacks, leave-map/instance callbacks, and legion refresh.
 
+Update after UOW-1211: C# now has a non-live `BindPointTeleportTeleportToSideEffectPlanService` that models the audited `TeleportAnimation.NONE` path as ordered side-effect metadata. It covers blocked final movement, same-instance `spawnOnSameMap` owner packet order, map/instance-change `SM_CHANNEL_INFO` + `SM_PLAYER_SPAWN` order, optional instance-opened message, and explicit gap flags for unsupported Java side effects. Live bind-point movement remains disabled.
+
 ## Java Flow
 
 Java source files:
@@ -66,6 +68,7 @@ C# surfaces reviewed:
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportScheduledKinahPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportFinalMovementPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportScheduledCallbackPlanService.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportTeleportToSideEffectPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmBindPointTeleport.cs`
 
 Observed C# state:
@@ -77,7 +80,7 @@ Observed C# state:
 - `ThreadPoolManager` and `ScheduledTask` can represent delayed work, and `BindPointTeleportRuntimeStatePlanService` now records the bind-point-specific `TaskId.SKILL_USE` state boundary, but no live task slot is wired.
 - `IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync` can approximate Java `PacketSendUtility.broadcastPacket(..., true)` for visible-player fanout, but Java `broadcastPacketAndReceive` source-player inclusion semantics must be explicitly mapped before live use.
 - `SmBindPointTeleport` exists and is source-derived unit tested for opcode `296` and action payloads.
-- Price, requirements, operation, control, client action, fanout, request-composition, runtime-state, scheduled-Kinah, final-movement, and scheduled-callback planners exist and remain non-live.
+- Price, requirements, operation, control, client action, fanout, request-composition, runtime-state, scheduled-Kinah, final-movement, scheduled-callback, and teleport side-effect planners exist and remain non-live.
 
 ## Recommended Live Insertion Order
 

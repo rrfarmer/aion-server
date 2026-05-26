@@ -11,6 +11,8 @@ Live bind-point final movement should remain disabled until a focused C# side-ef
 
 This unit adds no live behavior. It documents the exact Java ordering so the next unit can model these effects without wiring `GameServerConnection` to `CmBindPointTeleport` yet.
 
+Update after UOW-1211: C# now has `BindPointTeleportTeleportToSideEffectPlanService`, a non-live side-effect planner for the audited Java `TeleportAnimation.NONE` path. It emits ordered same-instance and map/instance-change steps, explicitly records that no `SM_TELEPORT_LOC` should be sent, and flags the remaining unsupported Java dependencies. Live movement remains disabled.
+
 ## Java Hotspot Flow
 
 Java source files:
@@ -75,6 +77,7 @@ Observed C# state:
 - `QueueDelayedTeleportAsync` models `SM_TELEPORT_LOC` delayed animation paths, but bind-point hotspot final movement uses `TeleportAnimation.NONE`, so that packet must not be emitted for the hotspot final movement path.
 - `SendDelayedTeleportCompletionPacketsAsync` models same-instance and map/instance-change owner packet branches, including instance-opened self message, but it is tied to pending teleport completion rather than bind-point immediate movement.
 - Kisk revive sends `SM_PLAYER_SPAWN` before same-world `SM_PLAYER_INFO`/`SM_STATS_INFO`/`SM_MOTION`, while Java `spawnOnSameMap` sends `SM_CHANNEL_INFO`, `SM_PLAYER_INFO`, `SM_STATS_INFO`, and `SM_MOTION` before `World.spawn`. Do not reuse kisk ordering blindly for bind-point same-instance movement.
+- `BindPointTeleportTeleportToSideEffectPlanService` now models the same-instance and map/instance-change ordering as non-live metadata and keeps unsupported side effects explicit.
 - Live bind-point dispatch remains unwired in `GameServerConnection`.
 
 ## Gap Matrix
