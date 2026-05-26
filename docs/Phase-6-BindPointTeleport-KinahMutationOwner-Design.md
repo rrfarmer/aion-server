@@ -13,6 +13,8 @@ Update after UOW-1225: C# now has a non-live `BindPointTeleportScheduledKinahMut
 
 Update after UOW-1226: `BindPointTeleportScheduledCallbackPlanService` can now carry supplied mutation-plan metadata, including updated Kinah item and `DecreaseKinahFly` packet intent, before cooldown/fanout metadata. This remains non-live.
 
+Update after UOW-1227: `BindPointTeleportRuntimeCallbackExecutionBridgeService` now carries the callback Kinah update metadata into runtime execution results without sending packets or persisting. The live owner/persistence/send boundary remains blocked.
+
 ## Java Source Facts
 
 Java source files:
@@ -132,3 +134,5 @@ Implement a non-live `BindPointTeleportScheduledKinahMutationPlanService` that c
 Update after UOW-1225: this non-live planner is implemented and tested. The next recommended unit is to compose this mutation planner into `BindPointTeleportScheduledCallbackPlanService` metadata, still without live persistence or packet sends.
 
 Update after UOW-1226: callback metadata composition is complete. The next recommended unit is to compose that mutation metadata into the runtime callback execution result as a non-sending packet intent, still without persistence or live inventory mutation.
+
+Update after UOW-1227: runtime non-sending carry-through is complete. The next recommended unit is a persistence/send policy audit or repository contract plan for this exact callback boundary.

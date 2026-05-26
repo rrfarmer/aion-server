@@ -59,6 +59,8 @@ Update after UOW-1225: the non-live scheduled Kinah mutation planner can now pro
 
 Update after UOW-1226: scheduled callback metadata now preserves the Java order by carrying Kinah update intent before cooldown/action `3` fanout metadata. Live action `3` fanout remains blocked until runtime execution handles or explicitly stages the inventory update intent.
 
+Update after UOW-1227: runtime callback execution now preserves the supplied Kinah update intent in its result before/alongside cooldown fanout metadata, but still does not emit the inventory update packet. Live action `3` fanout remains blocked on the future persistence/send boundary.
+
 ## Java Flow
 
 Java source files:

@@ -17,6 +17,8 @@ Update after UOW-1225: `BindPointTeleportScheduledKinahMutationPlanService` now 
 
 Update after UOW-1226: scheduled callback plans now carry optional mutation-plan metadata. Success places the Kinah update/packet intent before cooldown/fanout metadata; failure still stops before cooldown/fanout/movement. Live mutation, persistence, and packet sends remain disabled.
 
+Update after UOW-1227: runtime callback execution results now surface the supplied Kinah update/packet-intent metadata before cooldown/action `3` fanout completes. This is still non-sending metadata only.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -133,3 +135,5 @@ Update after UOW-1224: the owner design audit is complete. Next, add a non-live 
 Update after UOW-1225: the non-live mutation planner exists. Next, compose it into scheduled callback metadata or add the persistence-boundary contract before live mutation.
 
 Update after UOW-1226: mutation metadata is composed into scheduled callback plans. Next, carry it through runtime callback execution as a non-sending inventory-update intent, then design persistence/send boundaries.
+
+Update after UOW-1227: runtime callback execution now carries the non-sending inventory-update intent. Next, design the persistence/send boundary and rollback policy before live mutation.
