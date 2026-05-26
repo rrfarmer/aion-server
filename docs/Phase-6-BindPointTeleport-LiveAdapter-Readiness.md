@@ -65,6 +65,8 @@ Update after UOW-1239: `docs/Phase-6-BindPointTeleport-KinahComposedCallback-Rea
 
 Update after UOW-1240: `BindPointTeleportKinahInventoryOwnerService` now provides an in-memory scheduled Kinah owner with apply/rollback under a per-player C# lock. It is not wired into callbacks and does not execute SQL, send packets, fanout, or move.
 
+Update after UOW-1241: `BindPointTeleportKinahInventoryOwnerCallbackBridgeService` now adapts in-memory owner mutation results into scheduled callback mutation and persistence-operation metadata. Live callback execution remains disabled.
+
 ## Java Live Flow
 
 Java source files:
@@ -185,6 +187,8 @@ Update after UOW-1238: the non-live scheduled Kinah callback outcome composer is
 Update after UOW-1239: composed-chain readiness audit is complete. The next safe executable prerequisite is a pure in-memory Kinah owner contract for apply/rollback semantics, with SQL adapter and live send still disabled.
 
 Update after UOW-1240: the in-memory Kinah owner contract is complete. The next safe prerequisite is a bridge from owner mutation/rollback results into the existing callback outcome chain, still non-live.
+
+Update after UOW-1241: owner-result callback bridge is complete. The next safe prerequisite is a full non-live outcome integration slice proving owner results feed persistence decision, packet intent, send decision, rollback, and callback outcome.
 
 ## Do Not Wire Yet
 

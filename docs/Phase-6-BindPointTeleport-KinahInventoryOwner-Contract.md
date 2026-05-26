@@ -82,3 +82,5 @@ New C# artifacts:
 ## Next Recommended Unit of Work
 
 Add a non-live bridge that adapts `BindPointTeleportKinahInventoryOwnerService` mutation results into the existing scheduled Kinah callback outcome chain. It should consume owner mutation/rollback results and existing persistence/send decisions, but still avoid SQL execution, packet sends, `GameServerConnection`, fanout, and movement.
+
+Update after UOW-1241: `BindPointTeleportKinahInventoryOwnerCallbackBridgeService` now adapts owner mutation results into scheduled mutation and persistence-operation metadata. The next safe seam is a full non-live outcome integration test/bridge over owner, persistence decision, packet intent, send decision, rollback, and callback outcome.
