@@ -219,3 +219,18 @@ This should be implemented and tested before any production socket/quest handler
 3. Full `QuestFinishRewardTemplateProjection` construction from Java static data remains missing.
 4. Java `PlayerCommonData.setExp` live mutation remains absent, so custom rewards must stay disabled.
 5. Custom reward receipt/mail execution, packet ordering, persistence, and Java runtime comparison remain gated and unverified.
+
+## C# State After UOW-1084
+
+- Added a non-live adapter from `NearbyQuestTemplateSummary?` into `QuestDialogAutoRewardGuardPlanService`.
+- The adapter removes the mock `QuestTemplateCanReport` input from this path and derives template existence/reportability from the real static summary projection added in UOW-1083.
+- It can attach coarse reward/work metadata to the guard plan for later prerequisite checks, but it does not parse or execute rewards.
+- Tests cover planned reportable templates, missing template order, non-reportable order, and non-self target returning before static metadata is used.
+
+## Remaining Runtime Wiring Blockers After UOW-1084
+
+1. Production `GameServerConnection.HandleDialogSelectAsync` still does not call the guard planner.
+2. The adapter accepts a supplied `NearbyQuestTemplateSummary`; no production runtime context lookup has been wired.
+3. Full `QuestFinishRewardTemplateProjection` construction from Java static data remains missing.
+4. Java `PlayerCommonData.setExp` live mutation remains absent, so custom rewards must stay disabled.
+5. Custom reward receipt/mail execution, packet ordering, persistence, and Java runtime comparison remain gated and unverified.

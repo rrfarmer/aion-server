@@ -144,3 +144,18 @@ Add a static-data projection prerequisite for Java `QuestTemplate.can_report` an
 ## Recommended Next Small Step After UOW-1083
 
 Add a narrow adapter from `NearbyQuestTemplateSummary` into guard/planner prerequisite metadata so `QuestDialogAutoRewardGuardPlanService` can consume real `CanReport` and the operation planner can report missing full reward projection data without enabling live quest finish.
+
+## C# State After UOW-1084
+
+- Added `QuestDialogAutoRewardGuardPlanService.CreatePlanFromTemplateSummary`.
+- The adapter accepts `NearbyQuestTemplateSummary?`, derives Java guard inputs from real static summary data, and keeps Java guard order:
+  1. non-self target returns before using static metadata;
+  2. missing quest template returns before reportable/action checks;
+  3. non-reportable quest returns before auto-reward action checks;
+  4. reportable auto-reward actions produce a non-live planned intent.
+- Planned/self reportable paths can now carry coarse static metadata: `RewardRepeatCount`, `HasRewards`, `HasExtendedRewards`, `HasBonus`, and `HasQuestWorkItems`.
+- The adapter still does not build a full `QuestFinishRewardTemplateProjection`, call production socket handling, mutate rewards/XP/quest state, execute custom rewards, persist mail, allocate ids, or send packets.
+
+## Recommended Next Small Step After UOW-1084
+
+Begin a full static `QuestFinishRewardTemplateProjection` extractor for Java quest reward XML, starting with non-item reward fields only and keeping operation-planner composition non-live.

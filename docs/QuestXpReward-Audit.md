@@ -464,6 +464,12 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - The new projection does not expose XP amounts, reward item rows, class/race reward filtering, reward-group selection, custom reward execution data, or live `PlayerCommonData.addExp/setExp` behavior.
 - Focused real-data assertions validate current XML counts only; no Java runtime XP mutation or packet-order parity is claimed.
 
+## C# State After UOW-1084
+
+- `QuestDialogAutoRewardGuardPlanService.CreatePlanFromTemplateSummary` now consumes the UOW-1083 summary projection directly.
+- The guard path can carry coarse reward/work presence metadata forward without enabling XP reward projection or live XP mutation.
+- This still does not parse Java `Rewards.exp`, apply `Rates.XP_QUEST`, create `QuestXpRewardPlan`, or invoke `PlayerCommonData.addExp/setExp`.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
@@ -566,7 +572,10 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `NearbyQuestTemplateXmlExtractorTests.Extract_ReadsNearbyPredicateQuestTemplateFieldsLikeJavaQuestTemplate`
 - `NearbyQuestTemplateXmlExtractorTests.Extract_AppliesJavaQuestTemplateDefaultsForMissingOptionalFields`
 - `NearbyQuestTemplateXmlExtractorTests.RealDataAudit_LoadsNearbyQuestTemplateSummariesWithoutProductionWiring`
+- `QuestDialogAutoRewardGuardPlanServiceTests.CreatePlanFromTemplateSummary_UsesRealCanReportAndStaticRewardMetadataWithoutLiveSideEffects`
+- `QuestDialogAutoRewardGuardPlanServiceTests.CreatePlanFromTemplateSummary_RejectsMissingAndNonReportableTemplatesInJavaOrder`
+- `QuestDialogAutoRewardGuardPlanServiceTests.CreatePlanFromTemplateSummary_RejectsNonSelfTargetBeforeUsingStaticMetadata`
 
 ## Next Recommendation
 
-Next, add a narrow adapter from `NearbyQuestTemplateSummary` into the dialog guard/planner prerequisite metadata so real `CanReport` and coarse reward/work availability can replace explicit mock inputs while full reward projection remains blocked. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
+Next, begin a full static `QuestFinishRewardTemplateProjection` extractor for Java quest reward XML, starting with non-item reward fields only and keeping operation-planner composition non-live. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
