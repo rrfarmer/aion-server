@@ -359,3 +359,7 @@ Population diagnostics can now distinguish candidate-consumed request-level pack
 ## Update After UOW-1277
 
 The ride attack-speed audit confirms known-list ride packet construction should still require supplied or explicitly resolved attack-speed facts. C# has a partial visual-stats approximation, but no reusable Java-equivalent `PlayerGameStats.getAttackSpeed()` resolver for known-list packet facts yet.
+
+## Update After UOW-1278
+
+`PlayerKnownListAttackSpeedFactResolverService` can now produce disabled approximate attack-speed facts from supplied player inventory and item templates. Live bind-point fanout remains blocked because the resolver is not Java stat parity, is not wired into live known-list packet planning, and does not model `Stat2`, effects, caps, duplicate modifiers, or live stat invalidation.

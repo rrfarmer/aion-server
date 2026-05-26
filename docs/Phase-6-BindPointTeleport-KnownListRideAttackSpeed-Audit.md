@@ -85,3 +85,7 @@ This unit is documentation-only. No production code changed, no live dispatch wa
 ## Next Recommended Unit of Work
 
 Add a small disabled attack-speed fact resolver that reuses the existing C# static item-template attack-speed approximation from `PlayerVisualStatsUpdateService` and returns explicit `NeedsJavaStatParity` metadata. Keep it non-live and do not wire it into packet dispatch until Java duplicate-stat modifier behavior is modeled or intentionally blocked. The resolver should be documented as normal player attack-speed resolution, not ride-derived speed.
+
+## Update After UOW-1278
+
+`PlayerKnownListAttackSpeedFactResolverService` now exists as a disabled approximation resolver. It returns `PlayerKnownListPacketConstructionAttackSpeedFacts` plus explicit `NeedsJavaStatParity` metadata for default, main-hand, and off-hand-quarter attack-speed cases, but it is not wired into known-list packet fact planning yet.
