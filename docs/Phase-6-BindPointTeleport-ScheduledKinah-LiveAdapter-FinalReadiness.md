@@ -115,3 +115,7 @@ The disabled/opt-in known-list socket executor boundary now exists as `BindPoint
 ## Update After UOW-1253
 
 `PlayerKnownListMembershipRefreshService` can now seed known-list membership metadata from supplied online players using current `WorldVisibility`, but this remains an approximation. Live scheduled Kinah dispatch is still blocked on Java-equivalent known-list population, live callback wiring, final movement, `GameServerConnection`, and runtime validation.
+
+## Update After UOW-1254
+
+`PlayerKnownListMembershipRegistryRefreshAdapterService` can now read online player snapshots through `IGameClientConnectionRegistry.ForEachOnlinePlayer` when explicitly enabled and feed the refresh approximation. It is disabled/unwired and does not unblock live scheduled Kinah dispatch.

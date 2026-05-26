@@ -55,6 +55,12 @@ This is intentionally not full Java known-list parity. It is a safe prerequisite
 
 Add a documentation/design audit for full Java-equivalent player known-list population requirements, or add a disabled adapter that converts `IGameClientConnectionRegistry.ForEachOnlinePlayer` snapshots into refresh inputs without wiring live dispatch.
 
+## Update After UOW-1254
+
+`PlayerKnownListMembershipRegistryRefreshAdapterService` now adapts `IGameClientConnectionRegistry.ForEachOnlinePlayer` snapshots into `PlayerKnownListMembershipRefreshService`. It remains disabled by default and unwired from `GameClientSocketServer` and `GameServerConnection`.
+
+The adapter preserves the approximation flags: registry snapshots plus `WorldVisibility` are not Java `MapRegion` known-list parity.
+
 ## Summary Metrics
 
 - Total Java artifacts discovered: 5 grouped artifact rows in this unit

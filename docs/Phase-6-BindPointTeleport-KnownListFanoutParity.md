@@ -347,3 +347,46 @@ Summary metrics:
 Next recommended unit of work:
 
 - Add a documentation/design audit for full Java-equivalent player known-list population requirements, or add a disabled adapter that converts `IGameClientConnectionRegistry.ForEachOnlinePlayer` snapshots into `PlayerKnownListMembershipRefreshService` inputs without wiring live dispatch.
+
+## Update After UOW-1254
+
+UOW-1254 adds `PlayerKnownListMembershipRegistryRefreshAdapterService`, a disabled-by-default adapter from `IGameClientConnectionRegistry.ForEachOnlinePlayer` snapshots into the existing membership refresh approximation.
+
+## Migration Parity Table - UOW-1254
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.World` / `WorldMapInstance` player storage | `Aion.GameServer.Network.Aion.IGameClientConnectionRegistry.ForEachOnlinePlayer`; `PlayerKnownListMembershipRegistryRefreshAdapterService` | Registry / Player Snapshot Adapter | Partial | Unit Tested | Intentional Difference | C# adapter reads online connection registry snapshots, not Java world/map-region object storage. This is a disabled approximation seam, not live parity. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.update` | `PlayerKnownListMembershipRegistryRefreshAdapterService` -> `PlayerKnownListMembershipRefreshService` | Known-List Refresh Adapter | Partial | Unit Tested | Partial Parity | Adapter can refresh one owner or all supplied online players through current-distance approximation. It does not perform region-neighbor scan or controller side effects. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.findVisibleObjects` | registry snapshot plus `WorldVisibility` refresh | Known-List Population | Partial | Unit Tested | Needs Verification | Uses online registry snapshot and 95m same-world visibility. No Java `MapRegion` lifecycle, `canSee`, or object visible-distance negotiation. |
+| `com.aionemu.gameserver.services.teleport.BindPointTeleportService.teleport` scheduled action `3` fanout | registry refresh adapter plus known-list fanout metadata stack | Service / Fanout Prerequisite | Partial | Regression Tested | Needs Verification | Registry snapshots can now seed approximate membership metadata when explicitly enabled. Live scheduled callback dispatch and Java-equivalent known-list population remain disabled. |
+
+Tests added:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `RefreshOwner_DisabledAdapterDoesNotReadRegistry` | Unit / Adapter Guard | C# live-safety gate | Disabled default does not call `ForEachOnlinePlayer`. | C# safety guard. | Java has no disabled equivalent. |
+| `RefreshOwner_EnabledUsesRegistrySnapshotAndWorldVisibilityApproximation` | Unit / Adapter | Java `KnownList.update` approximation | Enabled owner refresh reads registry snapshot and seeds near candidate only. | Source-derived approximation. | No Java world/region scan. |
+| `RefreshAll_EnabledRefreshesBidirectionalSnapshotApproximation` | Unit / Adapter | Java two-way known-list relation | Enabled all-player refresh creates bidirectional distance approximation. | Approximation only. | No Java two-way add order/concurrency parity. |
+| `RefreshAll_EnabledWithoutRegistryReturnsMissingRegistry` | Unit / Adapter Guard | C# runtime boundary | Enabled adapter without registry reports missing registry and does not refresh. | C# safety guard. | Java always has world storage context. |
+
+Remaining risks:
+
+- Adapter remains disabled/unwired.
+- Registry snapshots are not Java region known-list storage.
+- Hidden/invisible-but-known state, controller packets, region lifecycle, and concurrency remain missing.
+- Live scheduled callback dispatch, movement, `GameServerConnection`, and Java runtime capture remain disabled.
+- Reflection behavior did not change. Date/time behavior did not change. Serialization, threading, packet-order, dirty-state persistence, live known-list membership, and movement parity remain `Needs Verification`.
+
+Summary metrics:
+
+- Total Java artifacts discovered: 4 grouped artifact rows in this unit
+- Total artifacts ported: 1 disabled registry refresh adapter service plus 4 focused tests
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 3 grouped rows
+- Total blocked artifacts: 1 Java-equivalent region known-list population path, 1 live enter/move/logout wiring path, 1 controller see/notSee/notKnow side-effect path, 1 live scheduled callback dispatch path, 1 live movement adapter, and 1 Java runtime capture path
+- Estimated overall migration completion: Phase 6 remains about 71% complete
+
+Next recommended unit of work:
+
+- Add a documentation/design audit for full Java-equivalent player known-list population requirements before wiring registry snapshot refresh or socket executor paths into live server flows.

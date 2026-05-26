@@ -220,6 +220,8 @@ Update after UOW-1252: C# now has `BindPointTeleportKnownListFanoutSocketExecuto
 
 Update after UOW-1253: C# now has `PlayerKnownListMembershipRefreshService`, which can seed player known-list metadata from supplied online players and `WorldVisibility`. This is only a distance-based approximation; Java-equivalent region known-list population, controller side effects, and live wiring remain blocked.
 
+Update after UOW-1254: C# now has `PlayerKnownListMembershipRegistryRefreshAdapterService`, a disabled adapter from online connection-registry snapshots into the refresh approximation. It remains unwired and is not Java world/region known-list parity.
+
 ## Do Not Wire Yet
 
 - Do not add a live `GameServerConnection` branch for `CmBindPointTeleport` in the next unit.
