@@ -399,3 +399,7 @@ A deterministic helper now models Java `Effect.getRemainingTimeToDisplay()` from
 ## Update After UOW-1287
 
 A snapshot-entry factory can now create abnormal-effect packet entries from supplied packet-facing fields, preserving explicit remaining-time values or computing them from deterministic timing snapshots. A read-only packet-order audit also confirmed Java sends player info/motion/ride/stance, then abnormal effects, then dependent pet visibility retry. Live bind-point fanout remains blocked because live `EffectController` hydration, full `SkillTargetSlot` mapping, `SM_PET`/`SM_PET_EMOTE` serializers, pet visibility side effects, socket dispatch, and Java runtime packet capture are still missing.
+
+## Update After UOW-1288
+
+A non-live pet visibility/order planner now captures Java's dependent pet visibility retry after the master player visibility callback, including pet spawn, optional flying emote, pet dismiss, and viewer-unspawned skip metadata. Live bind-point fanout remains blocked because `SM_PET`/`SM_PET_EMOTE` serializers, pet object/common-data models, full pet visibility predicates, live known-list pet update integration, socket dispatch, and Java runtime packet capture are still missing.
