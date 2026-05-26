@@ -11,6 +11,8 @@ C# now has a non-sending `BindPointTeleportKinahInventoryUpdatePacketPlanService
 
 This keeps the UOW-1228/UOW-1229/UOW-1230 gate intact: persistence must be reported as `Saved` before the Kinah inventory update packet can even be planned.
 
+Update after UOW-1232: `BindPointTeleportKinahCallbackResultCompositionService` now composes saved persistence, packet intent, cooldown/action `3` fanout metadata, and final movement metadata in staged order without live sends.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -81,3 +83,5 @@ The service returns:
 ## Next Recommended Unit of Work
 
 Add a non-live callback result composition bridge that combines the persistence decision and packet plan with the existing runtime callback execution metadata, proving the staged order `Saved persistence -> packet intent -> cooldown/action 3 fanout metadata -> final movement metadata` without sending packets or dispatching from `GameServerConnection`.
+
+Update after UOW-1232: the callback result composition bridge is complete. Next, add a non-live send-result plan for the inventory packet boundary before cooldown/fanout metadata.

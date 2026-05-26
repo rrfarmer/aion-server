@@ -69,6 +69,8 @@ Update after UOW-1230: supplied persistence results are now composed by `BindPoi
 
 Update after UOW-1231: the `ContinueAfterPersistence` decision is now connected to a non-sending inventory update packet adapter. Live action `3` fanout remains blocked until packet intent and runtime callback metadata are composed in order, still without live send.
 
+Update after UOW-1232: packet intent and runtime callback metadata are now composed in staged order. Live action `3` fanout remains blocked until the inventory packet send boundary itself has a supplied-result plan and later a live send adapter.
+
 ## Java Flow
 
 Java source files:

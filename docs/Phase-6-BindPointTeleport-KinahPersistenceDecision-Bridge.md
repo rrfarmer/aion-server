@@ -20,6 +20,8 @@ The bridge enforces the policy from UOW-1228/UOW-1229:
 
 Update after UOW-1231: `BindPointTeleportKinahInventoryUpdatePacketPlanService` now consumes `ContinueAfterPersistence` decisions and creates a concrete non-sending `SmInventoryUpdateItem` packet intent with mask `0x4B`. Stopped decisions still produce no packet.
 
+Update after UOW-1232: `BindPointTeleportKinahCallbackResultCompositionService` now composes the saved persistence decision, packet intent, runtime cooldown/action `3` metadata, and final movement metadata in staged order. It still does not send or persist.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -100,3 +102,5 @@ The bridge is pure/non-live:
 Add a non-sending inventory update packet adapter that consumes `BindPointTeleportKinahPersistenceDecisionStatus.ContinueAfterPersistence` and produces a concrete `SmInventoryUpdateItem` packet intent only after the decision bridge reports `Saved`. Keep it non-live: no `SendPacketAsync`, no SQL, no `GameServerConnection` dispatch, and no movement.
 
 Update after UOW-1231: the non-sending packet adapter is complete. Next, compose the persistence decision and packet plan with runtime callback metadata so the full staged order is represented without live sends.
+
+Update after UOW-1232: the composition bridge is complete. Next, model a supplied inventory packet send result so failed sends cannot continue to cooldown/action `3` fanout.
