@@ -53,6 +53,17 @@ UOW-1249 adds a small C# membership metadata layer for Java `KnownList.forEachPl
 
 Add a non-live source-online and per-recipient exception policy model for bind-point known-list fanout, or design a disabled source-first fanout executor that consumes membership snapshots without wiring live dispatch.
 
+## Update After UOW-1250
+
+`BindPointTeleportKnownListFanoutSendPolicyService` now consumes the source-first trace produced from membership snapshots and models Java send-time policy:
+
+- source and known recipients are gated by supplied online-player facts;
+- offline recipients are skipped;
+- recipient failures are marked `FailedAndContinued`;
+- traversal is documented as `KnownList.forEachPlayer -> CollectionUtil.forEach`.
+
+The metadata store still does not populate from live world known-list updates, and the policy still does not execute socket sends.
+
 ## Summary Metrics
 
 - Total Java artifacts discovered: 5 grouped artifact rows in this unit

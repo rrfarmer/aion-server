@@ -150,3 +150,53 @@ Summary metrics:
 Next recommended unit of work:
 
 - Add a non-live source-online and per-recipient exception policy model for bind-point known-list fanout, or start an isolated source-first fanout executor design that remains disabled and consumes the new membership snapshots without wiring `GameServerConnection`.
+
+## Update After UOW-1250
+
+UOW-1250 adds `BindPointTeleportKnownListFanoutSendPolicyService`, a metadata-only model for the remaining Java send-policy details around known-list fanout:
+
+- `PacketSendUtility.sendPacket` gates each source/known-list recipient on `player.isOnline()`.
+- Offline recipients are modeled as skipped, not failed.
+- Recipient send failures are modeled as `FailedAndContinued` because known-list traversal is wrapped by `CollectionUtil.forEach`.
+- The policy consumes the existing source-first trace and remains non-live.
+
+This still does not send packets, replace the registry fanout, execute Java logging, or wire `GameServerConnection`.
+
+## Migration Parity Table - UOW-1250
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket(Player,AionServerPacket)` | `Aion.GameServer.Services.BindPointTeleportKnownListFanoutSendPolicyService` | Packet Utility / Send Policy | Partial | Unit Tested | Needs Verification | C# now models the Java online gate as metadata: online recipients would send, offline recipients are skipped. No socket send or Java runtime comparison occurs. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.isOnline` | `BindPointTeleportKnownListFanoutRecipientSendPolicy.UsesPlayerIsOnlineGate`; supplied online-player facts | Runtime State / Online Gate | Partial | Unit Tested | Needs Verification | Online state is supplied as test metadata. It is not read from live `Player` or connection state. |
+| `com.aionemu.gameserver.utils.collections.CollectionUtil.forEach` | `BindPointTeleportKnownListFanoutSendPolicyService` failure projection | Utility / Exception Policy | Partial | Unit Tested | Needs Verification | Per-recipient failures are modeled as `FailedAndContinued`. Java logging text and real exception handling are not executed. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.forEachPlayer` | `BindPointTeleportKnownListFanoutTraceService`; `BindPointTeleportKnownListFanoutSendPolicyService` | Known-List Traversal / Send Policy | Partial | Regression Tested | Needs Verification | Source-first trace plus send policy now records traversal continuation semantics. Live known-list population and runtime ordering remain unverified. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.broadcastPacket(Player,AionServerPacket,boolean)` | `BindPointTeleportKnownListFanoutTraceService`; `BindPointTeleportKnownListFanoutSendPolicyService` | Network Utility / Expected Fanout Policy | Partial | Regression Tested | Needs Verification | Expected source-first recipients plus online/failure policy are represented. No live executor or packet send was added. |
+
+Tests added:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePolicy_UsesOnlineGateForSourceAndKnownListRecipients` | Unit / Send Policy | `PacketSendUtility.sendPacket`; `Player.isOnline` | Online source/known recipients would send, offline known recipient is skipped. | Source-derived metadata assertion. | Online state is supplied; no live connection lookup. |
+| `CreatePolicy_ModelsKnownListRecipientFailureAsLogAndContinue` | Unit / Send Policy | `KnownList.forEachPlayer`; `CollectionUtil.forEach` | A failing known recipient is marked failed-and-continued and later recipients still project as sendable. | Source-derived metadata assertion. | Does not execute Java logging or real send exceptions. |
+| `CreatePolicy_NoPacketTraceDoesNotProjectRecipientSends` | Unit / Send Policy | C# staging guard | No-packet trace produces no recipient sends and stays non-live. | C# safety guard. | Java helper requires a packet. |
+
+Remaining risks:
+
+- Send policy is metadata only and does not call sockets.
+- Online facts are supplied, not read from live `Player`/connection state.
+- Java logging and real exception handling are not executed.
+- Live known-list population, source-first executor, scheduled callback dispatch, final movement, and Java runtime fanout capture remain disabled or missing.
+- Reflection behavior did not change. Date/time behavior did not change. Serialization, threading, packet-order, dirty-state persistence, live known-list membership, and movement parity remain `Needs Verification`.
+
+Summary metrics:
+
+- Total Java artifacts discovered: 5 grouped artifact rows in this unit
+- Total artifacts ported: 1 metadata send-policy service plus 3 focused tests
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 5 grouped rows
+- Total blocked artifacts: 1 live world known-list population path, 1 disabled source-first fanout executor, 1 live socket send adapter, 1 live movement adapter, 1 `GameServerConnection` dispatch path, and 1 Java runtime capture path
+- Estimated overall migration completion: Phase 6 remains about 71% complete
+
+Next recommended unit of work:
+
+- Add a disabled source-first known-list fanout executor design that composes membership snapshots and send-policy projections, but still does not call sockets or wire `GameServerConnection`.

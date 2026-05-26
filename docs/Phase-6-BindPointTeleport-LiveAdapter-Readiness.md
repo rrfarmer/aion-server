@@ -212,6 +212,8 @@ Update after UOW-1248: expected Java source-first plus known-list-recipient fano
 
 Update after UOW-1249: C# now has `PlayerKnownListMembershipService` and `BindPointTeleportKnownListFanoutMembershipAdapterService` as metadata-only prerequisites for Java known-list fanout. They model owner/source exclusion, object-id deduplication, and invisible known-player retention, but they are not populated by live world visibility and do not execute socket sends, source-online checks, or per-recipient exception handling.
 
+Update after UOW-1250: C# now has `BindPointTeleportKnownListFanoutSendPolicyService`, which models Java `PacketSendUtility.sendPacket` online gating and `CollectionUtil.forEach` log-and-continue behavior as metadata. Live socket sends, live online-state lookup, Java logging, and `GameServerConnection` dispatch remain disabled.
+
 ## Do Not Wire Yet
 
 - Do not add a live `GameServerConnection` branch for `CmBindPointTeleport` in the next unit.

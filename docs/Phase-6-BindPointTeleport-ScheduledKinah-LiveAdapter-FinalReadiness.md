@@ -99,3 +99,7 @@ The C# port now has a metadata-only known-list membership prerequisite:
 - `BindPointTeleportKnownListFanoutMembershipAdapterService`
 
 This reduces the known-list blocker from "no membership representation" to "no live population/execution." Live scheduled Kinah dispatch remains blocked because source-online gating, per-recipient exception handling, socket send ordering, and `GameServerConnection` wiring are still absent.
+
+## Update After UOW-1250
+
+Source-online gating and per-recipient log-and-continue behavior are now represented as non-live metadata by `BindPointTeleportKnownListFanoutSendPolicyService`. Live scheduled Kinah dispatch is still blocked on a disabled source-first executor, live known-list population, socket sends, movement, and Java runtime validation.
