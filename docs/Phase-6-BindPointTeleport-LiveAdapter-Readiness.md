@@ -53,6 +53,8 @@ Update after UOW-1233: `BindPointTeleportKinahInventorySendResultPlanService` no
 
 Update after UOW-1234: `docs/Phase-6-BindPointTeleport-KinahMetadataChain-Readiness.md` now summarizes the completed non-live Kinah metadata chain. The next preferred prerequisite is owner/rollback refinement before any no-op or live send seam.
 
+Update after UOW-1235: `BindPointTeleportKinahOwnerRollbackPlanService` now records original/updated Kinah snapshots plus rollback/commit policy for staged persistence/send outcomes. Live inventory owner/lock is still not implemented.
+
 ## Java Live Flow
 
 Java source files:
@@ -161,6 +163,8 @@ The scheduled Kinah metadata chain is complete enough to stop adding more packet
 | Send-result gate | `BindPointTeleportKinahInventorySendResultPlanService` | Unit tested with supplied results | Needs live send adapter and owner rollback response. |
 
 Next preferred prerequisite: refine the live owner/rollback contract before adding a send seam. The future owner must know how to restore the original Kinah item when persistence or send fails, and must block cooldown/action `3` fanout/movement on every failure status.
+
+Update after UOW-1235: owner/rollback planning is now represented by `BindPointTeleportKinahOwnerRollbackPlanService`. The next safe prerequisite is a disabled no-op send adapter seam that returns the existing send-result shape without calling `SendPacketAsync`.
 
 ## Do Not Wire Yet
 
