@@ -136,3 +136,7 @@ It is still not Java region known-list parity because no live region object stor
 ## Update After UOW-1257
 
 `PlayerKnownListRegionMembershipAdapterService` now adapts a supplied region snapshot into non-live membership metadata. This reduces the gap between region-shaped candidate projection and bind-point known-list fanout metadata, but full Java parity still requires two-way membership mutation, live region object ownership, visibility recomputation, and controller packet side effects.
+
+## Update After UOW-1258
+
+`PlayerKnownListTwoWayOperationPlanService` now models Java two-way known-list add/remove/clear ordering as non-live metadata. It still does not execute live membership mutation, `canSee`, range checks, region scans, packet side effects, or cross-list locking.

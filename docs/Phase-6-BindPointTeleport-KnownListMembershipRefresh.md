@@ -75,6 +75,10 @@ The next safe executable slice is a disabled region/player snapshot model, not l
 
 `PlayerKnownListRegionMembershipAdapterService` now provides that non-live bridge from region snapshots into membership metadata. It is intentionally separate from `PlayerKnownListMembershipRefreshService` and remains disabled/unwired from registry, world movement, sockets, and live bind-point callbacks.
 
+## Update After UOW-1258
+
+`PlayerKnownListTwoWayOperationPlanService` now defines non-live add/remove/clear operation ordering that a future membership adapter can consume. Existing refresh services remain approximations and are not upgraded to Java region parity by this planner.
+
 ## Summary Metrics
 
 - Total Java artifacts discovered: 5 grouped artifact rows in this unit

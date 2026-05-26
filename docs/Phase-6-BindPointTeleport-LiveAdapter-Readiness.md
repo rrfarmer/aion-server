@@ -79,6 +79,8 @@ Update after UOW-1256: `PlayerKnownListRegionSnapshotService` now provides a dis
 
 Update after UOW-1257: `PlayerKnownListRegionMembershipAdapterService` now adapts region snapshots into non-live membership metadata. Live dispatch remains blocked because it is owner-side metadata only and still lacks Java two-way `KnownList.add`, live region storage, visibility recomputation, and packet side effects.
 
+Update after UOW-1258: `PlayerKnownListTwoWayOperationPlanService` now records Java two-way add/remove/clear ordering as descriptors. Live dispatch remains blocked because the planner does not mutate live membership, run range/`canSee`, execute controller packets, or wire scheduled callbacks.
+
 ## Java Live Flow
 
 Java source files:

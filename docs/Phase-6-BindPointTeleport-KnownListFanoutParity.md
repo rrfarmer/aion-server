@@ -93,6 +93,10 @@ The disabled region/player snapshot model now exists. It improves future members
 
 The region snapshot membership adapter now seeds non-live player membership metadata from modeled region candidates. Bind-point fanout remains blocked because Java action `3` still depends on live known-list state, two-way add/remove, and controller packet side effects rather than precomputed metadata alone.
 
+## Update After UOW-1258
+
+The two-way operation planner now records Java candidate-first add and owner-first remove/clear ordering before future membership mutation. Bind-point fanout remains non-live because operation plans are descriptors and no live known-list state or socket dispatch path consumes them.
+
 ## Next Recommended Unit of Work
 
 Add a non-live known-list-backed fanout plan or expected Java trace model for bind-point broadcasts. It should represent source-first delivery plus known-list-player recipients without using distance-only filtering, and it should remain unwired from `GameServerConnection`.

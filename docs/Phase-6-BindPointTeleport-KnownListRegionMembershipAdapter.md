@@ -75,3 +75,7 @@ Updated `PlayerKnownListMembershipUpdateReason` with `RegionSnapshotRefresh`.
 ## Next Recommended Unit of Work
 
 Add a disabled two-way membership operation planner for player-player known-list add/remove semantics. It should plan Java's `newObject.getKnownList().add(owner)` before owner-side add, remain non-live, and document that actual live object ownership and locking are still missing.
+
+## Update After UOW-1258
+
+`PlayerKnownListTwoWayOperationPlanService` now provides that disabled planner. It records candidate-first add order, owner-first remove/clear order, visibility-driven `see`/`notSee` descriptors, and `notKnow` descriptors without mutating live membership or executing controller packets.

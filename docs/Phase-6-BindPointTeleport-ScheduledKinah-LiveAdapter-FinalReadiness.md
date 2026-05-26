@@ -90,6 +90,10 @@ The known-list blocker now has a dedicated design audit in `docs/Phase-6-BindPoi
 
 `PlayerKnownListRegionMembershipAdapterService` can seed non-live membership metadata from region snapshots. Scheduled Kinah action `3` execution remains disabled because the adapter is not live, not two-way, and not connected to socket fanout or movement.
 
+## Update After UOW-1258
+
+`PlayerKnownListTwoWayOperationPlanService` now describes Java known-list add/remove/clear ordering for future live work. Scheduled Kinah action `3` execution remains disabled because the planner is metadata only and no live socket, cooldown, movement, or membership mutation path consumes it.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:
