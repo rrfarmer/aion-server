@@ -78,3 +78,7 @@ Existing test retained:
 ## Next Recommended Unit of Work
 
 Add a focused `SmPlayerInfo` viewer-context race projection audit/model, or move to `SmPlayerStance` serializer prerequisite if viewer context is judged too broad for the next safe slice.
+
+## Update After UOW-1266
+
+`SmPlayerInfo` now accepts a scalar `SmPlayerInfoViewerContext` so source-derived packet tests can cover Java's active-viewer race projection and neutral-to-all-player override. The context is still supplied metadata: C# does not yet compute `Player.isEnemy`, custom player-state masks, duel/PvP/FFA logic, or live active-player state from `GameServerConnection`.

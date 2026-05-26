@@ -99,3 +99,7 @@ Add a disabled composition step that attaches `PlayerKnownListPlayerSideEffectPl
 ## Update After UOW-1265
 
 `SmPlayerInfo` now has a focused C# constructor path for Java's `enemy` flag and writes the attackable creature-type byte `0x00` when requested. The player side-effect planner note has been updated, but viewer-sensitive race projection remains unverified and live packet sends remain disabled.
+
+## Update After UOW-1266
+
+`SmPlayerInfo` now has a focused viewer-context input model for Java's active-viewer race projection and neutral-to-all-player override. The known-list side-effect planner remains descriptor-only and does not compute or pass live viewer context yet, so future dispatch work still needs an explicit descriptor-to-packet input bridge before any socket sends.

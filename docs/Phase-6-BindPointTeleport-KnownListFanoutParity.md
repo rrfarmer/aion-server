@@ -432,3 +432,7 @@ Summary metrics:
 Next recommended unit of work:
 
 - Add a documentation/design audit for full Java-equivalent player known-list population requirements before wiring registry snapshot refresh or socket executor paths into live server flows.
+
+## Update After UOW-1266
+
+The player-info packet prerequisite now covers Java's enemy creature-type flag plus scalar viewer-race projection and neutral override inputs. Known-list fanout parity is still blocked on live region population, controller side-effect execution, active-player context computation, `SmPlayerStance`, `SmAbnormalEffect`, and Java runtime packet-order validation.

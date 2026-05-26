@@ -168,3 +168,7 @@ It is still not Java region known-list parity because no live region object stor
 ## Update After UOW-1265
 
 `SmPlayerInfo` now supports Java's enemy/aggro creature-type flag as a focused packet prerequisite for future player `see` dispatch. Full player-info parity still needs active-viewer race projection, neutral custom-state handling, and live controller packet execution.
+
+## Update After UOW-1266
+
+`SmPlayerInfo` now models Java's viewer-sensitive race byte from supplied scalar facts: active-player race, active-player-is-enemy-to-visible-player, and neutral-to-all override. Population planning still carries only descriptors and supplied packet facts; it does not hydrate live active-player context, custom player states, or controller sends.

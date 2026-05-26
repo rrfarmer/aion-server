@@ -315,3 +315,7 @@ Keep the unit small: packet helpers/tests only, no `GameServerConnection` dispat
 - Total artifacts needing verification: 7 grouped rows
 - Total blocked artifacts: 6 grouped categories: live dispatch, runtime task/cooldown ownership, system-message helper coverage, inventory mutation/persistence, known-list fanout, and live movement adapter
 - Estimated overall migration completion: Phase 6 remains about 71% complete
+
+## Update After UOW-1266
+
+`SmPlayerInfo` now has both Java's enemy creature-type flag and a scalar viewer race projection model. Live bind-point fanout remains blocked because the live adapter still needs runtime active-player facts, controller packet construction, `SmPlayerStance`, `SmAbnormalEffect`, socket dispatch ordering, scheduled task ownership, and Java runtime packet validation.

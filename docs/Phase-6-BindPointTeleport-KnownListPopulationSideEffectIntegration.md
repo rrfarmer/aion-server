@@ -80,3 +80,7 @@ Start a focused `SmPlayerInfo(enemy)` serializer parity audit and test slice, or
 ## Update After UOW-1265
 
 The focused `SmPlayerInfo(enemy)` slice is now present for the Java creature-type byte. Population-side descriptors can eventually target a packet constructor that accepts the enemy flag, but population composition still does not instantiate or send live packets and still lacks viewer-sensitive race projection.
+
+## Update After UOW-1266
+
+`SmPlayerInfo` now also accepts supplied viewer-context metadata for Java's enemy/opposite-race projection and neutral-to-all-player override. Population-side descriptors still do not hydrate those metadata inputs, so a future descriptor-to-packet bridge must provide active viewer race, computed enemy state, and neutral-state facts before live sends.
