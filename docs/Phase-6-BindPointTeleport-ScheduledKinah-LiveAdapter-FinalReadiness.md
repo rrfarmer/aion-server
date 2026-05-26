@@ -103,3 +103,7 @@ This reduces the known-list blocker from "no membership representation" to "no l
 ## Update After UOW-1250
 
 Source-online gating and per-recipient log-and-continue behavior are now represented as non-live metadata by `BindPointTeleportKnownListFanoutSendPolicyService`. Live scheduled Kinah dispatch is still blocked on a disabled source-first executor, live known-list population, socket sends, movement, and Java runtime validation.
+
+## Update After UOW-1251
+
+The disabled source-first known-list fanout executor composition now exists as `BindPointTeleportKnownListFanoutExecutionPlanService`. It still does not send packets. Live scheduled Kinah dispatch remains blocked on real known-list population, opt-in socket execution, movement, `GameServerConnection` dispatch, and Java runtime validation.

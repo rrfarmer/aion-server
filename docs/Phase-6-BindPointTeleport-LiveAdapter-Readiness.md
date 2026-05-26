@@ -214,6 +214,8 @@ Update after UOW-1249: C# now has `PlayerKnownListMembershipService` and `BindPo
 
 Update after UOW-1250: C# now has `BindPointTeleportKnownListFanoutSendPolicyService`, which models Java `PacketSendUtility.sendPacket` online gating and `CollectionUtil.forEach` log-and-continue behavior as metadata. Live socket sends, live online-state lookup, Java logging, and `GameServerConnection` dispatch remain disabled.
 
+Update after UOW-1251: C# now has `BindPointTeleportKnownListFanoutExecutionPlanService`, a disabled source-first executor composition. It proves membership snapshots, trace metadata, and send-policy metadata compose without sending packets. Live known-list population, socket execution, movement, and dispatch remain blocked.
+
 ## Do Not Wire Yet
 
 - Do not add a live `GameServerConnection` branch for `CmBindPointTeleport` in the next unit.

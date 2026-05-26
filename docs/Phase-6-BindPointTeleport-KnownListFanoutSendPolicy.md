@@ -53,6 +53,10 @@ UOW-1250 adds `BindPointTeleportKnownListFanoutSendPolicyService`. It consumes t
 
 Add a disabled source-first known-list fanout executor composition that consumes membership snapshots and send-policy projections without actually sending packets.
 
+## Update After UOW-1251
+
+`BindPointTeleportKnownListFanoutExecutionPlanService` now composes membership snapshots, source-first trace metadata, and send-policy projections into one disabled execution plan. It keeps `SendsPackets=false` and does not call sockets or registry APIs.
+
 ## Summary Metrics
 
 - Total Java artifacts discovered: 5 grouped artifact rows in this unit
