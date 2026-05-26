@@ -103,3 +103,7 @@ Add a disabled composition step that attaches `PlayerKnownListPlayerSideEffectPl
 ## Update After UOW-1266
 
 `SmPlayerInfo` now has a focused viewer-context input model for Java's active-viewer race projection and neutral-to-all-player override. The known-list side-effect planner remains descriptor-only and does not compute or pass live viewer context yet, so future dispatch work still needs an explicit descriptor-to-packet input bridge before any socket sends.
+
+## Update After UOW-1267
+
+`SmPlayerStance` now exists as a concrete C# packet serializer and the stance descriptor reports available C# support with state `1`. The planner still does not instantiate or send the packet, does not compute live `isUnderStance`, and `SmAbnormalEffect` remains missing.

@@ -172,3 +172,7 @@ It is still not Java region known-list parity because no live region object stor
 ## Update After UOW-1266
 
 `SmPlayerInfo` now models Java's viewer-sensitive race byte from supplied scalar facts: active-player race, active-player-is-enemy-to-visible-player, and neutral-to-all override. Population planning still carries only descriptors and supplied packet facts; it does not hydrate live active-player context, custom player states, or controller sends.
+
+## Update After UOW-1267
+
+`SmPlayerStance` now covers Java's object-id plus one-byte state payload and the player side-effect descriptor marks stance support available. Population planning is still metadata-only and does not hydrate live stance controller state or send packets.

@@ -319,3 +319,7 @@ Keep the unit small: packet helpers/tests only, no `GameServerConnection` dispat
 ## Update After UOW-1266
 
 `SmPlayerInfo` now has both Java's enemy creature-type flag and a scalar viewer race projection model. Live bind-point fanout remains blocked because the live adapter still needs runtime active-player facts, controller packet construction, `SmPlayerStance`, `SmAbnormalEffect`, socket dispatch ordering, scheduled task ownership, and Java runtime packet validation.
+
+## Update After UOW-1267
+
+`SmPlayerStance` is now available as a focused packet serializer and the known-list stance descriptor references it. Live bind-point fanout remains blocked because the live adapter still needs runtime active-player facts, descriptor-to-packet construction, `SmAbnormalEffect`, socket dispatch ordering, scheduled task ownership, and Java runtime packet validation.

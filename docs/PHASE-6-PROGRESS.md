@@ -49722,6 +49722,71 @@ Next recommended unit of work:
 
 ---
 
+### Session 1267 (May 26, 2026)
+- Continued after UOW-1266 with a focused `SM_PLAYER_STANCE` packet serializer prerequisite.
+- Audited Java `SM_PLAYER_STANCE.writeImpl` and `PlayerController` stance call sites:
+  - `sendPlayerInfoPackets` sends state `1` for already-under-stance visible players;
+  - `startStance` broadcasts state `1`;
+  - `stopStance` broadcasts state `0` after observer/effect cleanup.
+- Added `SmPlayerStance`:
+  - opcode `31`;
+  - `Player` and explicit object-id constructors;
+  - payload writes player object id as `D`, then state as `C`.
+- Updated `PlayerKnownListPlayerSideEffectPlanService`:
+  - stance descriptors now reference `SmPlayerStance`;
+  - stance C# support is now `Available`;
+  - descriptor remains non-live and does not instantiate/send packets.
+- Added `docs/Phase-6-BindPointTeleport-SmPlayerStance.md`.
+- Updated known-list/fanout/readiness docs to show that `SmPlayerStance` is no longer a missing serializer while `SmAbnormalEffect` remains missing.
+- Validation:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "SmPlayerStance|PlayerKnownListPlayerSideEffectPlanServiceTests" --nologo` passed 8 tests.
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "CharacterSelectionServerPackets_WriteJavaShapedPayloads|BindPointTeleport|CmBindPointTeleport|SmBindPointTeleport|PlayerKnownList|SmPlayerInfo|SmPlayerStance" --nologo` passed 268 tests.
+  - No Java runtime packet capture was executed.
+  - No live `GameServerConnection` dispatch was enabled.
+
+#### Migration Parity Table - Session 1267
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_STANCE` | `Aion.GameServer.Network.Aion.ServerPackets.SmPlayerStance` | Packet / Serialization | Complete | Unit Tested | Partial Parity | C# writes object id then state and uses opcode 31. No Java runtime golden-byte capture was executed, so parity is source-derived but not verified parity. |
+| `com.aionemu.gameserver.controllers.PlayerController.sendPlayerInfoPackets` | `PlayerKnownListPlayerSideEffectPlanService` stance descriptor | Controller Packet Intent / Packet Dependency | Partial | Unit Tested | Partial Parity | Descriptor support now points to concrete `SmPlayerStance` and preserves Java state `1` ordering. It still does not instantiate/send packets or compute live `isUnderStance`. |
+| `com.aionemu.gameserver.controllers.PlayerController.startStance` | `SmPlayerStance(player, 1)` packet prerequisite only | Controller / Broadcast Dependency | Partial | Unit Tested | Needs Verification | Packet can represent the broadcast payload, but stance observer registration, effect handling, and live broadcast are not ported in this unit. |
+| `com.aionemu.gameserver.controllers.PlayerController.stopStance` | `SmPlayerStance(player, 0)` packet prerequisite only | Controller / Broadcast Dependency | Partial | Unit Tested | Needs Verification | Packet can represent the broadcast payload, but stance observer removal, effect removal, and live broadcast are not ported in this unit. |
+| `com.aionemu.gameserver.services.teleport.BindPointTeleportService.teleport` action `3` fanout | player known-list descriptor stack with `SmPlayerStance` packet support | Service / Fanout Prerequisite | Partial | Regression Tested | Needs Verification | Future known-list fanout has one fewer packet serializer blocker. Live scheduled callbacks, sockets, movement, cooldown, and dispatch remain disabled. |
+
+Tests added:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SmPlayerStance_WritesObjectIdAndStateLikeJava` | Unit / Packet | `SM_PLAYER_STANCE.writeImpl` | State `1` and state `0` payloads write object id followed by one-byte state. | Source-derived byte assertion. | No Java runtime packet capture or live broadcast comparison. |
+
+Tests updated:
+
+| Test Name | Type | What Changed | Gaps |
+|---|---|---|---|
+| `PlanSee_RideAndStanceAppendAfterMotionInJavaOrder` | Unit / Planner | Stance descriptor now expects `SmPlayerStance` and `Available` C# support. | Descriptor is still non-live and does not send packets. |
+
+Remaining risks:
+- `SmPlayerStance` has no Java runtime golden-byte validation.
+- Live `PlayerController.startStance` / `stopStance` observer registration, effect removal, and broadcast ordering are not ported.
+- Known-list `sendPlayerInfoPackets` remains descriptor-only.
+- `SmAbnormalEffect` remains missing.
+- `SmPlayerInfo` still needs live active-player context computation before real player-see sends.
+- Threading, reflection, date/time, precision/rounding, and broader live packet ordering remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped artifact rows in this unit
+- Total artifacts ported: 1 focused packet serializer plus 1 focused packet test theory and 1 descriptor support update
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4 grouped rows
+- Total blocked artifacts: 1 live stance observer/broadcast path, 1 live controller side-effect dispatcher, 1 `SmAbnormalEffect` packet, 1 active-player context computation path, and 1 Java runtime capture path
+- Estimated overall migration completion: Phase 6 remains about 71% complete
+
+Next recommended unit of work:
+- Add a focused `SmAbnormalEffect` packet serializer audit or add a non-live player-info/stance descriptor-to-packet input bridge. Prefer an audit first if the effect model is broad; do not wire live known-list sends until abnormal-effect packet readiness and Java runtime validation strategy are clearer.
+
+---
+
 ## Next Steps
 
 1. Continue nearby-refresh prerequisite work now that staged NPC faction static-data, enter-world hydration, the future quest-start assigned-faction guard, configured repeat-date calculator, staged quest-finish state mutation, staged NPC faction completion, quest-finish ordering audit, staged operation plan, non-sending quest update packet, reward/work-item audit, non-live reward/work-item descriptor planner, operation-plan composition, callback dispatch audit, persistence contract audit, non-live quest persistence operation planning, non-live NPC-faction persistence operation planning, non-live quest-finish persistence composition, non-live completion callback dispatch planning, non-live quest-finish callback composition, non-live follow-up quest callback result planning, non-live callback follow-up result composition, nested callback follow-up operation-plan regression coverage, non-live reward item XML projection scaffolding, detailed reward item operation-plan composition, non-live non-item reward projection metadata, detailed non-item operation-plan composition, extended non-item reward projection metadata, regular/extended non-item source labeling, XML-derived class reward warning composition coverage, static quest bonus metadata projection, supported quest bonus item-group projection, reward side-effect live-boundary audit, non-composed quest kinah helper, full quest-finish failure-ordering regression, non-live title/cube/warehouse reward side-effect plans, composed title/cube/warehouse side-effect operation metadata, concrete quest-title reward system-message support, quest GP helper/config/packet scaffolding, non-live quest-finish GP side-effect metadata composition, offline GP DAO SQL/repository boundary, gated offline GP repository execution, quest XP rate/config/planner scaffolding, composed non-live quest XP reward metadata, concrete quest XP reward system-message helpers, non-live XP plan-to-message packet metadata bridge, staged XP execution/level-change descriptor plan, level-up action-animation packet prerequisite, non-live upgrade-player side-effect sub-plan, non-live NPC faction level-up sub-plan, non-live QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent parity, non-live guide HTML level-change planning, non-live skill auto-learn planning, non-live starter-kit level-change planning, non-live bonus/faction custom reward planning, non-live XP level-change sub-plan composition metadata, non-live XP level-change context factory, quest-finish XP execution metadata composition, custom reward receipt repository SQL, system-mail reward payload planning, opt-in custom reward execution planning, supplied custom reward execution-result XP metadata, non-live system-mail persistence/fanout operation metadata, disabled-by-default system-mail persistence execution boundary, and concrete opt-in system-mail persistence operation executor exist: model deterministic quest bonus candidate filtering or concrete guide/skill/mail packet/repository prerequisites before enabling live callbacks, reward mutation, or DAO writes. Keep live `SM_NEARBY_QUESTS` sends, live guide `SM_QUESTIONNAIRE` sends, live skill auto-learn mutation/effects/recipes, live starter-kit/custom reward mail sends, guide persistence, production player-controller refresh, faction write paths, XP level-change hooks, custom reward DAO writes, and ItemPurification automatic dispatch disabled until those gates are satisfied. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure ItemPurification quest-notification projection, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, the handler-level ItemPurification workflow/application/packet-plan composition bridge, the ItemPurification runtime-input packet bridge, the ItemPurification ready concrete-packet send bridge, the ItemPurification target object-id allocation bridge, the ItemPurification random-bonus selection seam, the ItemPurification non-persistent mutation snapshot preview, the ItemPurification non-persistent handler mutation bridge, the ItemPurification live mutation adapter boundary, the ItemPurification live execution composition seam, the ItemPurification live AP rank-drop metadata regression, the ItemPurification explicit live AP player-packet emission bridge, the ItemPurification explicit live AP rank-update broadcast bridge, the ItemPurification explicit live equipment rank-limit state mutation bridge, the ItemPurification explicit live equipment rank-limit packet fanout bridge, the ItemPurification explicit live abyss skill refresh bridge, the ItemPurification explicit opt-in quest notification no-op seam, the ItemPurification explicit transform-min-rank config plumbing, the ItemPurification quest-update items audit, the ItemPurification quest-update item static-data projection, the ItemPurification no-op nearby-refresh planning seam, the ItemPurification no-op nearby-refresh dispatcher seam, the ItemPurification nearby quest refresh surface audit, the ItemPurification nearby quest packet prerequisite, the ItemPurification nearby quest world-instance registry prerequisite, the ItemPurification nearby quest start-registration table prerequisite, the ItemPurification handler opt-in live execution seam, the ItemPurification persistence plan analysis, the ItemPurification repository contract/payload plumbing, the ItemPurification inserted target item-stone persistence, the ItemPurification opt-in persistent live execution seam, the ItemPurification handler-level opt-in persistent execution helper, the ItemPurification handler-level persistence failure-ordering regression, the ItemPurification automatic-dispatch readiness policy, the ItemPurification staged dispatch-failure policy, the ItemPurification Java observer design, the ItemPurification opt-in DB integration happy path, the ItemPurification opt-in DB rollback path, the ItemPurification AP/quest readiness audit, the pure ItemCharge AP spend guard, and the live ItemCharge selected-item/charge-all AP guard consolidation now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. ItemCharge Kinah payment guard/consolidation, charge-all stale-item payment-before-revalidation hardening, mixed stale/current charge-all AP regression coverage, mixed stale/current charge-all Kinah regression coverage, missing/current charge-all AP approximation coverage, and missing/current charge-all Kinah approximation coverage are now staged for live selected-item/charge-all paths. Move next to Java observer artifact generation when tooling is available, nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another existing planner live adapter when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player/equipment/skill packets, AP/login rank-limited equipment persistence, configured abyss transform skill updates, rank config load, and real quest handler dispatch. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.

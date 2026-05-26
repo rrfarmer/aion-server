@@ -436,3 +436,7 @@ Next recommended unit of work:
 ## Update After UOW-1266
 
 The player-info packet prerequisite now covers Java's enemy creature-type flag plus scalar viewer-race projection and neutral override inputs. Known-list fanout parity is still blocked on live region population, controller side-effect execution, active-player context computation, `SmPlayerStance`, `SmAbnormalEffect`, and Java runtime packet-order validation.
+
+## Update After UOW-1267
+
+`SmPlayerStance` now exists as a focused C# packet serializer and the descriptor stack records it as available. Known-list fanout parity is still blocked on live region population, controller side-effect execution, active-player context computation, `SmAbnormalEffect`, descriptor-to-packet construction, and Java runtime packet-order validation.

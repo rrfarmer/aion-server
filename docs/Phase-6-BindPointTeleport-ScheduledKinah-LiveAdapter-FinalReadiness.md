@@ -126,6 +126,10 @@ Population composition now carries operation side-effect attachments per candida
 
 `SmPlayerInfo` now supports a supplied viewer race projection context for Java's active-player race byte and neutral override. Scheduled Kinah action `3` remains disabled because live known-list fanout still cannot compute active viewer facts, instantiate/send the full Java packet sequence, or cover missing `SmPlayerStance` and `SmAbnormalEffect`.
 
+## Update After UOW-1267
+
+`SmPlayerStance` packet serialization is now available, reducing one player-see packet prerequisite. Scheduled Kinah action `3` remains disabled because live known-list fanout still cannot compute active viewer facts, instantiate/send the full Java packet sequence, or cover missing `SmAbnormalEffect`.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:

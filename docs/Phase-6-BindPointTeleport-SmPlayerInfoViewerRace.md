@@ -73,3 +73,7 @@ Updated `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmPlaye
 ## Next Recommended Unit of Work
 
 Add a focused `SmPlayerStance` packet serializer prerequisite, or add a non-live player-info descriptor-to-packet input bridge that carries enemy/viewer-context metadata without sending packets.
+
+## Update After UOW-1267
+
+The `SmPlayerStance` packet serializer now exists and supports Java's object-id/state payload. Full player-see dispatch still needs active-player context hydration, descriptor-to-packet construction, `SmAbnormalEffect`, and runtime packet validation.

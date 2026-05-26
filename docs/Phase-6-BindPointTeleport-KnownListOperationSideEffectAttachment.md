@@ -85,3 +85,7 @@ Add a disabled integration composition that carries operation side-effect attach
 ## Update After UOW-1264
 
 `PlayerKnownListPopulationPlanService` now carries operation side-effect attachment plans per candidate. The next safe blocker is packet serializer readiness, especially `SmPlayerInfo(enemy)`, `SmPlayerStance`, and `SmAbnormalEffect`, before any live known-list controller dispatcher can be considered.
+
+## Update After UOW-1267
+
+`SmPlayerStance` packet serialization is now available and player side-effect descriptors point to the concrete C# packet type. Operation side-effect attachment remains non-live and still cannot instantiate/send packets or cover `SmAbnormalEffect`.
