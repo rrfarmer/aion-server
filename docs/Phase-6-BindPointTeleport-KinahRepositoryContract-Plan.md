@@ -11,6 +11,8 @@ Do not add a live repository method or wire SQL for scheduled bind-point Kinah p
 
 The next live implementation should introduce a narrow bind-point persistence boundary, owner-checked by player id and item object id, then adapt that boundary to MySQL only after the scheduled inventory owner can roll back or suppress packet/fanout side effects on failure.
 
+Update after UOW-1230: `BindPointTeleportKinahPersistenceDecisionBridgeService` now consumes supplied persistence results and gates callback continuation. It is non-live and uses supplied `Saved`/`MissingRow`/`Failed` statuses only; no SQL adapter was added.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -142,3 +144,5 @@ Tests added:
 ## Next Recommended Unit of Work
 
 Add a non-live persistence result composition bridge that consumes scheduled Kinah mutation metadata plus a supplied persistence result and produces the exact next callback decision: rollback/stop on missing row or failure, and only allow inventory update packet metadata plus cooldown/action `3` fanout metadata on `Saved`. Keep it test-only/non-live: no SQL, no packet send, no `GameServerConnection` dispatch, and no movement.
+
+Update after UOW-1230: the persistence result decision bridge is implemented and tested. Next, add a non-sending inventory update packet adapter that only produces a concrete packet intent after `Saved`.

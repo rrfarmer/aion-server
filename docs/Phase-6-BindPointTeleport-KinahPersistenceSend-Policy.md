@@ -19,6 +19,8 @@ Recommended C# policy for the first live adapter:
 
 Update after UOW-1229: `docs/Phase-6-BindPointTeleport-KinahRepositoryContract-Plan.md` now pins a narrow owner-checked repository contract plan. No live SQL method was added; future C# work should first consume a supplied persistence result in a non-live callback decision bridge before wiring a MySQL adapter.
 
+Update after UOW-1230: `BindPointTeleportKinahPersistenceDecisionBridgeService` now applies that supplied persistence-result gate. `Saved` can continue to packet/fanout metadata, while `MissingRow`, `Failed`, and missing result stop before packet send, cooldown/action `3` fanout, and movement.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -142,3 +144,5 @@ Tests added:
 Add a non-live repository contract plan for the scheduled Kinah persistence boundary, preferably a small interface/result DTO or doc-only contract that can be implemented later by an owner-checked SQL adapter. Keep `GameServerConnection`, packet sends, and live mutation disabled.
 
 Update after UOW-1229: the repository contract plan is complete. Next, add a non-live persistence result composition bridge that proves persistence failure stops before inventory packet send, cooldown/action `3` fanout, and movement.
+
+Update after UOW-1230: the persistence result decision bridge is complete. Next, add a non-sending inventory update packet adapter gated by `ContinueAfterPersistence`.

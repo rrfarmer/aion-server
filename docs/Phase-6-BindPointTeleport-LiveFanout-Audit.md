@@ -65,6 +65,8 @@ Update after UOW-1228: persistence/send policy is documented. Live action `3` fa
 
 Update after UOW-1229: the repository contract plan is documented. Live action `3` fanout remains blocked until `Saved` persistence results are composed ahead of packet send and fanout, with `MissingRow`/`Failed` results stopping before any success broadcast.
 
+Update after UOW-1230: supplied persistence results are now composed by `BindPointTeleportKinahPersistenceDecisionBridgeService`. Live action `3` fanout remains blocked until the `ContinueAfterPersistence` decision is connected to a non-sending packet adapter and later a live send path.
+
 ## Java Flow
 
 Java source files:
