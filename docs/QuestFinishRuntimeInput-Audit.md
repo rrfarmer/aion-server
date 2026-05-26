@@ -85,3 +85,22 @@ Add a small, test-only or disabled-by-default runtime input assembler that:
 5. does not call repositories or mutate player state.
 
 This should be implemented and tested before any production socket/quest handler calls `QuestFinishCustomRewardRuntimeSideEffectAdapterService`.
+
+## C# State After UOW-1076
+
+- Added `QuestFinishCustomRewardRuntimeInputAssemblerService`.
+- The assembler creates `QuestXpCustomRewardRuntimeInputAdapterOptions` without calling repositories, mutating player state, or invoking quest-finish gameplay.
+- Disabled input returns `QuestXpCustomRewardRuntimeInputAdapterOptions.Disabled` without requiring account creation time, object-id allocation, or item templates.
+- Enabled input stops before adapter execution when any required runtime dependency is missing:
+  1. `accountCreationEpochMillis`;
+  2. `nextObjectId`;
+  3. `itemTemplates`.
+- The assembler converts login-server account creation epoch milliseconds to a local `DateTime` through `GameServerOptions.Core.GetTimeZone()`, mirroring Java `ServerTime.ofEpochMilli(...).toLocalDateTime()` for future faction-pack window checks.
+- Tests cover the UTC Asmodian window-start timestamp and a fixed-offset server-time conversion, but no production account/session wiring was added.
+
+## Remaining Runtime Wiring Blockers After UOW-1076
+
+1. Active C# account/session state still does not retain login-server account creation time after `CM_L2AUTH_LOGIN_CHECK`.
+2. Production quest-finish reward mutation remains non-live; no socket or quest handler invokes the assembler.
+3. Java `PlayerCommonData.setExp` live mutation is still absent, so custom reward level checks must not be enabled from stale pre-mutation player snapshots.
+4. Transaction/failure ordering between custom reward receipt writes and system-mail persistence is still unresolved.
