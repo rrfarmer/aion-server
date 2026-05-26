@@ -210,6 +210,8 @@ Update after UOW-1247: current C# action `3` fanout approximation is characteriz
 
 Update after UOW-1248: expected Java source-first plus known-list-recipient fanout is modeled as non-live trace metadata. Live known-list membership storage/execution remains blocked, so `GameServerConnection` dispatch should still stay disabled.
 
+Update after UOW-1249: C# now has `PlayerKnownListMembershipService` and `BindPointTeleportKnownListFanoutMembershipAdapterService` as metadata-only prerequisites for Java known-list fanout. They model owner/source exclusion, object-id deduplication, and invisible known-player retention, but they are not populated by live world visibility and do not execute socket sends, source-online checks, or per-recipient exception handling.
+
 ## Do Not Wire Yet
 
 - Do not add a live `GameServerConnection` branch for `CmBindPointTeleport` in the next unit.
@@ -217,6 +219,7 @@ Update after UOW-1248: expected Java source-first plus known-list-recipient fano
 - Do not mutate Kinah from bind-point callbacks until failure messages, persistence, and update packets are tested.
 - Do not call live `PlayerTeleportService` for final movement until the `TeleportAnimation.NONE` packet order has an executable adapter.
 - Do not claim Java known-list parity from distance-based registry fanout.
+- Do not claim Java known-list parity from the new metadata store until live population, source-online gating, and per-recipient send behavior are executed or objectively compared.
 
 ## Parallel Work Discovery
 

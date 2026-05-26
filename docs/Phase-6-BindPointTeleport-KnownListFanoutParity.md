@@ -95,3 +95,58 @@ UOW-1248 adds `BindPointTeleportKnownListFanoutTraceService`, a non-live expecte
 - known-list recipient ordering marked unspecified because Java iterates `ConcurrentHashMap.values()`.
 
 This model does not call `IGameClientConnectionRegistry`, does not send packets, and does not implement persistent known-list membership. It is an executable Java expectation for a future fanout executor.
+
+## Update After UOW-1249
+
+UOW-1249 adds a metadata-only player known-list membership prerequisite for bind-point fanout:
+
+- `PlayerKnownListMembershipService` records owner-player to known-player membership snapshots.
+- Membership explicitly excludes the owner/source through the normal Java add/update path.
+- Duplicate known-player object ids collapse to one entry, matching Java object-id keyed map behavior.
+- Known-but-not-visible players remain members and can still be projected into bind-point fanout traces.
+- `TrySetKnownPlayerVisibility` updates cached visibility without removing membership, mirroring `KnownList.updateVisibility` metadata behavior.
+- `BindPointTeleportKnownListFanoutMembershipAdapterService` projects membership snapshots into the existing source-first trace model.
+
+This is still not live fanout. It does not register C# players into a shared world known-list, does not call socket sends, does not enforce Java `player.isOnline()` at send time, and does not implement per-recipient log-and-continue exception behavior.
+
+## Migration Parity Table - UOW-1249
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.knownlist.KnownList.knownObjects` | `Aion.GameServer.Services.PlayerKnownListMembershipService` | Known-List Membership / Metadata Store | Partial | Unit Tested | Needs Verification | C# now records owner-player to known-player membership snapshots and collapses duplicate known-player ids. It is metadata-only, not integrated with world add/remove/update flows or two-way known-list maintenance. |
+| `com.aionemu.gameserver.world.knownlist.KnownObject.isVisible` and `KnownList.sees` | `PlayerKnownListMembershipEntry.IsVisibleToOwner`; `PlayerKnownListMembershipService.GetKnownPlayerObjectIds(..., includeInvisible)` | Known-List Visibility Metadata | Partial | Unit Tested | Needs Verification | Visibility is stored separately from membership, and invisible known players remain in default fanout projection. No live `owner.canSee(object)` recomputation or sighted-player broadcast behavior is implemented. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.isAwareOf` | `PlayerKnownListMembershipService.UpsertKnownPlayers` owner/source exclusion | Known-List Guard | Partial | Unit Tested | Needs Verification | Normal add/update path excludes the owner/source. Corrupt/manual Java states where the owner is already present are not modeled. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.forEachPlayer` | `BindPointTeleportKnownListFanoutMembershipAdapterService` -> `BindPointTeleportKnownListFanoutTraceService` | Known-List Traversal Adapter | Partial | Unit Tested | Needs Verification | Adapter projects membership entries into source-first trace recipients, including invisible members. It does not execute live sends, online gating, exception handling, or Java `ConcurrentHashMap` runtime ordering. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.broadcastPacket(Player,AionServerPacket,boolean)` | `BindPointTeleportKnownListFanoutTraceService`; `BindPointTeleportKnownListFanoutMembershipAdapterService` | Network Utility / Expected Trace | Partial | Regression Tested | Needs Verification | Source-first expected trace now has a membership metadata source. No socket send, registry replacement, Java runtime capture, or `GameServerConnection` dispatch was added. |
+
+Tests added:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `UpsertKnownPlayers_ExcludesOwnerAndDeduplicatesKnownPlayerObjectIds` | Unit | `KnownList.isAwareOf`; `ConcurrentHashMap` object-id keys | Owner/source candidate is skipped and duplicate known-player ids collapse with the latest metadata. | Source-derived metadata assertion. | No live world known-list integration or Java runtime comparison. |
+| `GetKnownPlayerObjectIds_IncludesInvisibleByDefaultAndCanFilterVisibleOnly` | Unit | `KnownList.forEachPlayer`; `KnownObject.isVisible` | Default membership projection includes invisible known players, while explicit visible-only filtering can exclude them for future sighted-player surfaces. | Source-derived metadata assertion. | No `owner.canSee(object)` recomputation. |
+| `TrySetKnownPlayerVisibility_UpdatesExistingMembershipWithoutDroppingInvisibleEntry` | Unit | `KnownList.updateVisibility` | Visibility changes do not remove known-list membership. | Source-derived metadata assertion. | Does not send Java see/notSee packets. |
+| `RemoveAndClearKnownPlayers_RemoveMembershipEntries` | Unit | `KnownList.del`; known-list cleanup | Remove/clear operations drop membership metadata. | Source-derived metadata assertion. | Does not execute two-way removal, `notKnow`, or `notSee` behavior. |
+| `CreateTrace_ProjectsMembershipSnapshotIntoSourceFirstKnownListTrace` | Unit / Expected Trace | `PacketSendUtility.broadcastPacket(..., true)`; `KnownList.forEachPlayer` | Membership snapshot projects source first, then visible and invisible known players. | Source-derived deterministic C# trace. | No online gate, socket send, exception policy, or Java runtime capture. |
+| `CreateTrace_WithoutMembershipSnapshotReturnsSourceOnlyProjectedTrace` | Unit / Expected Trace | C# staging guard | Missing membership snapshot still produces source-only expected metadata when a packet plan exists. | C# safety guard. | Java would use the owner's actual live known list. |
+
+Remaining risks:
+
+- C# membership metadata is isolated and not populated by live world visibility/add/remove flows.
+- Java two-way known-list maintenance, `sendSee`, `notSee`, `notKnow`, and out-of-range cleanup remain unimplemented.
+- Source-online gating and per-recipient exception log-and-continue behavior remain documented but not executed.
+- Live scheduled callback dispatch, source-first socket fanout, final movement, and Java runtime fanout capture remain disabled or missing.
+- Reflection behavior did not change. Date/time behavior did not change. Serialization, threading, packet-order, dirty-state persistence, live known-list membership, and movement parity remain `Needs Verification`.
+
+Summary metrics:
+
+- Total Java artifacts discovered: 5 grouped artifact rows in this unit
+- Total artifacts ported: 2 metadata services plus 6 focused tests
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 5 grouped rows
+- Total blocked artifacts: 1 live world known-list population path, 1 source-online send gate executor, 1 per-recipient exception policy executor, 1 live movement adapter, 1 `GameServerConnection` dispatch path, and 1 Java runtime capture path
+- Estimated overall migration completion: Phase 6 remains about 71% complete
+
+Next recommended unit of work:
+
+- Add a non-live source-online and per-recipient exception policy model for bind-point known-list fanout, or start an isolated source-first fanout executor design that remains disabled and consumes the new membership snapshots without wiring `GameServerConnection`.

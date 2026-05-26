@@ -90,3 +90,12 @@ It consumes existing packet intent and can call `IGameClientConnectionRegistry.S
 ## Update After UOW-1248
 
 The expected Java known-list fanout shape is now modeled as non-live metadata, but live known-list membership and a source-first executor are still missing. The known-list blocker remains active for live scheduled Kinah dispatch.
+
+## Update After UOW-1249
+
+The C# port now has a metadata-only known-list membership prerequisite:
+
+- `PlayerKnownListMembershipService`
+- `BindPointTeleportKnownListFanoutMembershipAdapterService`
+
+This reduces the known-list blocker from "no membership representation" to "no live population/execution." Live scheduled Kinah dispatch remains blocked because source-online gating, per-recipient exception handling, socket send ordering, and `GameServerConnection` wiring are still absent.
