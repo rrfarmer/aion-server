@@ -175,3 +175,18 @@ This should be implemented and tested before any production socket/quest handler
 3. Java `PlayerCommonData.setExp` live mutation remains absent, so custom rewards must stay disabled.
 4. Custom reward receipt store-before-mail ordering and system-mail persistence/fanout remain gated behind explicit opt-in boundaries.
 5. Per-player ordering, live packet ordering, and Java runtime comparison remain unverified.
+
+## C# State After UOW-1081
+
+- Added `QuestDialogAutoRewardGuardPlanService`.
+- The planner creates a non-live planned intent for Java `CM_DIALOG_SELECT.runImpl` self/player-target reportable quest auto-reward actions.
+- It does not call `QuestFinishOperationPlanService`, mutate quest state, mutate XP, execute custom rewards, allocate ids, persist mail, or send packets.
+- Tests verify Java's guard order and action id set: `108` plus `110..124`, with `109`, normal reward ids, and out-of-range values rejected.
+
+## Remaining Runtime Wiring Blockers After UOW-1081
+
+1. Production `GameServerConnection.HandleDialogSelectAsync` still does not call the guard planner.
+2. C# static quest data still does not expose a full `QuestTemplate.can_report`/reward projection surface for production quest-finish planning.
+3. The planner returns only a disabled intent; no `QuestFinishRewardTemplateProjection` or `QuestFinishRewardSideEffectContext` is built from live static data.
+4. Java `PlayerCommonData.setExp` live mutation remains absent, so custom rewards must stay disabled.
+5. Custom reward receipt/mail execution and per-player live ordering remain gated and unverified.

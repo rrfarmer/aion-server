@@ -103,3 +103,19 @@ The future production implementation should be staged in separate units, in this
 ## Recommended Next Small Step
 
 Add a non-live `CM_DIALOG_SELECT` self auto-reward guard planner or test helper that detects Java's reportable auto-reward dialog branch and returns a disabled quest-finish planning intent. Keep it separate from live `HandleDialogSelectAsync` mutation until quest template projection and XP mutation are ready.
+
+## C# State After UOW-1081
+
+- Added `QuestDialogAutoRewardGuardPlanService`.
+- The planner detects Java's self/player-target reportable quest auto-reward guard without mutating live gameplay.
+- It treats dialog action `108` and `110..124` as Java auto-reward actions and deliberately rejects `109`, normal selected reward ids `8..23`, and values outside the Java switch.
+- It preserves Java guard order:
+  1. non-self target returns before quest template checks;
+  2. missing quest template returns before reportable/action checks;
+  3. non-reportable quest returns before action switch;
+  4. matching auto-reward action returns a non-live planned intent.
+- Tests cover the guard order and constants. The planner is not wired into `GameServerConnection.HandleDialogSelectAsync`.
+
+## Recommended Next Small Step After UOW-1081
+
+Add a static-data projection prerequisite for the C# side of Java `QuestTemplate.can_report` and reward metadata, or add a non-live composition test that feeds the guard planner's planned intent into existing quest-finish operation planning with explicit mock projections. Keep production `HandleDialogSelectAsync` live quest finish disabled.
