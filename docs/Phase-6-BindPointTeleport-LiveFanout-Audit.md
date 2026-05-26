@@ -35,6 +35,8 @@ Update after UOW-1213: `docs/Phase-6-BindPointTeleport-LiveAdapter-Readiness.md`
 
 Update after UOW-1214: `SmSystemMessage` now has named helpers and packet tests for Java bind-point failure messages `STR_CANNOT_MOVE_TO_AIRPORT_NOT_ENOUGH_FEE` (`1300689`), `STR_CANNOT_MOVE_TO_AIRPORT_NO_ROUTE` (`1300691`), and `STR_FLYING_TIME_NOT_READY` (`1300961`). Live dispatch remains disabled.
 
+Update after UOW-1215: C# now has a non-live `BindPointTeleportHandlerCompositionPlanService` that composes parsed bind-point packet values with supplied operation/control/callback facts. It produces existing request/fanout/callback metadata without sending packets or mutating state. `GameServerConnection` remains unwired.
+
 ## Java Flow
 
 Java source files:
@@ -75,6 +77,7 @@ C# surfaces reviewed:
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportFinalMovementPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportScheduledCallbackPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportTeleportToSideEffectPlanService.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportHandlerCompositionPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmBindPointTeleport.cs`
 - `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmSystemMessage.cs`
 

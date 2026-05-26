@@ -13,6 +13,8 @@ Do not wire `GameServerConnection` to execute bind-point teleport yet. The next 
 
 Update after UOW-1214: C# now has named `SmSystemMessage` helpers and packet tests for the three bind-point failure messages. Live dispatch remains blocked on handler composition, runtime task/cooldown ownership, inventory mutation/persistence, source-included fanout execution, and movement side-effect execution.
 
+Update after UOW-1215: C# now has `BindPointTeleportHandlerCompositionPlanService`, a non-live handler-level composition bridge that consumes parsed `CmBindPointTeleport` scalar values plus supplied operation/control/callback facts and returns existing request/callback metadata. It still sends no packets, schedules no tasks, mutates no state, and does not touch `GameServerConnection`.
+
 ## Java Live Flow
 
 Java source files:
@@ -78,7 +80,7 @@ Java login flow:
 
 | Gate | Required Before Live Dispatch | Current Status | Recommended Next Step |
 |---|---|---|---|
-| Handler boundary | A handler or adapter that consumes `CmBindPointTeleport` and assembles facts without side effects | Missing | Add no-op handler composition bridge or keep dispatch disabled. |
+| Handler boundary | A handler or adapter that consumes `CmBindPointTeleport` and assembles facts without side effects | Non-live bridge added in UOW-1215 | Keep dispatch disabled; bridge still requires supplied facts and no live adapters. |
 | Static hotspot facts | Adapter from `DataManager.HOTSPOT_DATA` equivalent to planner facts | Missing/partial | Add fact assembler from loaded hotspot static data when owned exclusively. |
 | Failure system messages | Concrete `SmSystemMessage` helpers for Java bind-point failures | Helpers/tests added in UOW-1214 | Use helpers from future non-live/live adapters; do not add dispatch yet. |
 | Runtime task owner | Per-player `TaskId.SKILL_USE` task slot with replace/cancel semantics | Planner only | Add explicit state owner before scheduling. |
@@ -100,12 +102,11 @@ Java bind-point teleport uses these concrete system message IDs:
 
 ## Recommended Non-Live Insertion Order
 
-1. Add a no-op handler-level composition bridge that consumes `CmBindPointTeleport` values plus supplied facts and returns existing non-live request/callback plans.
-2. Add a runtime state owner for `TaskId.SKILL_USE` and cooldowns, still tested without `GameServerConnection` dispatch.
-3. Add live fanout tests for `SM_BIND_POINT_TELEPORT` action `1`, `2`, and `3` using source-included registry behavior.
-4. Add scheduled Kinah mutation/persistence only after item update packet ordering is concrete.
-5. Add live final movement only after action abort/despawn/spawn/pet/zone/legion gaps are either implemented or explicitly staged out with tests.
-6. Only then wire `GameServerConnection` to dispatch `CmBindPointTeleport`.
+1. Add a runtime state owner for `TaskId.SKILL_USE` and cooldowns, still tested without `GameServerConnection` dispatch.
+2. Add live fanout tests for `SM_BIND_POINT_TELEPORT` action `1`, `2`, and `3` using source-included registry behavior.
+3. Add scheduled Kinah mutation/persistence only after item update packet ordering is concrete.
+4. Add live final movement only after action abort/despawn/spawn/pet/zone/legion gaps are either implemented or explicitly staged out with tests.
+5. Only then wire `GameServerConnection` to dispatch `CmBindPointTeleport`.
 
 ## Do Not Wire Yet
 
@@ -121,8 +122,8 @@ Java bind-point teleport uses these concrete system message IDs:
 |---|---|---|---|---|
 | A | Live-adapter readiness checklist | new doc plus shared docs | Low/Medium | Completed in UOW-1213. |
 | B | Concrete bind-point system-message helpers/tests | `SmSystemMessage.cs`, `GamePacketTests.cs` | Low/Medium | Completed in UOW-1214. |
-| C | Handler-level no-op composition bridge | new service/test pair | Medium | Safe next candidate; must stay non-live. |
-| D | Runtime `TaskId.SKILL_USE` owner | new service/test pair, possible player/connection state | Medium/High | Defer until ownership design is explicit. |
+| C | Handler-level no-op composition bridge | new service/test pair | Medium | Completed in UOW-1215. |
+| D | Runtime `TaskId.SKILL_USE` owner | new service/test pair, possible player/connection state | Medium/High | Recommended next design/code slice; keep isolated from dispatch. |
 | E | Live `GameServerConnection` dispatch | shared connection file | High | Blocked; do not start yet. |
 
 File ownership for this unit:
