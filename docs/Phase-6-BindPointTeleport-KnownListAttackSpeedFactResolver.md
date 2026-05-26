@@ -89,3 +89,7 @@ It is not wired into live dispatch or the known-list fact planner yet. Missing p
 ## Next Recommended Unit of Work
 
 Add a disabled fact-planner resolver-consumption bridge: allow `PlayerKnownListPacketConstructionFactPlanService` to consume an explicit resolved attack-speed fact result, or compose the new resolver in a separate adapter, while preserving existing supplied `RideAttackSpeedFacts` precedence. Keep it non-live and do not send packets.
+
+## Update After UOW-1279
+
+`PlayerKnownListPacketConstructionFactPlanService` can now consume an explicit `PlayerKnownListAttackSpeedFactResolution` when supplied ride attack-speed facts are absent. Supplied `RideAttackSpeedFacts` remain authoritative, blocked resolver results still produce `MissingRideAttackSpeedFacts`, and no resolver is auto-invoked by the fact planner.

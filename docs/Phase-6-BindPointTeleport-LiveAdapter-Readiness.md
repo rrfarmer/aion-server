@@ -363,3 +363,7 @@ The ride attack-speed audit confirms known-list ride packet construction should 
 ## Update After UOW-1278
 
 `PlayerKnownListAttackSpeedFactResolverService` can now produce disabled approximate attack-speed facts from supplied player inventory and item templates. Live bind-point fanout remains blocked because the resolver is not Java stat parity, is not wired into live known-list packet planning, and does not model `Stat2`, effects, caps, duplicate modifiers, or live stat invalidation.
+
+## Update After UOW-1279
+
+Known-list fact planning can now consume an explicit disabled attack-speed resolver result while preserving supplied fact precedence. Live bind-point fanout remains blocked because no live stat hydration, resolver auto-composition from runtime state, socket dispatch, Java packet capture, or Java `Stat2`/modifier parity exists yet.
