@@ -152,3 +152,7 @@ It is still not Java region known-list parity because no live region object stor
 ## Update After UOW-1261
 
 `PlayerKnownListPopulationPlanService` now provides that disabled composition layer. It remains non-live and makes the next blocker clearer: packet/controller side-effect descriptors for player `see` and `notSee` transitions.
+
+## Update After UOW-1262
+
+`PlayerKnownListPlayerSideEffectPlanService` now models player-player `see` and `notSee` packet side effects as descriptors: `SM_PLAYER_INFO`, `SM_MOTION`, optional ride `SM_EMOTION`, optional `SM_PLAYER_STANCE`, optional `SM_ABNORMAL_EFFECT`, and spawned-viewer `SM_DELETE`. It remains non-live. The planner also records that `SmPlayerInfo` lacks Java enemy/aggro flag behavior and that `SmPlayerStance` and `SmAbnormalEffect` are missing C# packet classes.

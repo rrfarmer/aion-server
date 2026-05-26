@@ -86,3 +86,7 @@ Added `dotnetConversion/src/Aion.GameServer/Services/PlayerKnownListPopulationPl
 ## Next Recommended Unit of Work
 
 Add a disabled packet side-effect plan for player-player known-list `see` and `notSee` transitions. It should model Java `PlayerController.see(Player)` packet ordering (`SM_PLAYER_INFO`, `SM_MOTION`, ride emotion, stance) and `notSee` delete behavior as descriptors only.
+
+## Update After UOW-1262
+
+`PlayerKnownListPlayerSideEffectPlanService` now supplies those descriptor-only player side-effect plans. The next safe step is to attach those packet descriptors to existing two-way operation-plan `see`/`notSee` steps without executing live packet sends or world lifecycle callbacks.

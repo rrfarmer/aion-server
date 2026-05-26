@@ -88,3 +88,7 @@ Add a disabled composition service that consumes region snapshot candidates, vis
 ## Update After UOW-1261
 
 `PlayerKnownListPopulationPlanService` now provides that disabled composition layer. It connects region snapshot candidates, visibility/range plans, two-way operation plans, and the membership adapter, while preserving the default no-mutation behavior and keeping side effects descriptor-only.
+
+## Update After UOW-1262
+
+`PlayerKnownListPlayerSideEffectPlanService` now expands those side-effect descriptors into Java packet-intent metadata for player see/notSee transitions. Range planning remains non-live and still depends on caller-supplied `canSee` and known-state facts.

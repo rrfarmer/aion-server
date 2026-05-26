@@ -106,6 +106,10 @@ The known-list blocker now has a dedicated design audit in `docs/Phase-6-BindPoi
 
 `PlayerKnownListPopulationPlanService` now composes non-live known-list population metadata. Scheduled Kinah action `3` remains disabled because the composition is not live and does not execute socket fanout, movement, cooldown, or callback dispatch.
 
+## Update After UOW-1262
+
+`PlayerKnownListPlayerSideEffectPlanService` now models player-player known-list `see` and `notSee` packet side effects as non-live descriptors. Scheduled Kinah action `3` remains disabled because no live known-list dispatcher consumes those descriptors, and `SmPlayerInfo` enemy/aggro behavior plus `SmPlayerStance`/`SmAbnormalEffect` packet serializers are still incomplete or missing.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:

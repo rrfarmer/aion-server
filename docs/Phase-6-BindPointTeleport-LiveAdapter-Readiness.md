@@ -87,6 +87,8 @@ Update after UOW-1260: `PlayerKnownListVisibilityRangePlanService` now models Ja
 
 Update after UOW-1261: `PlayerKnownListPopulationPlanService` now composes region snapshot candidates, range plans, operation plans, and optional metadata mutation. Live dispatch remains blocked because it is not wired to world lifecycle, sockets, scheduler callbacks, movement, or controller packet execution.
 
+Update after UOW-1262: `PlayerKnownListPlayerSideEffectPlanService` now records descriptor-only player `see`/`notSee` packet intent. Live dispatch remains blocked because descriptors are not sent, `SmPlayerInfo` lacks Java enemy/aggro flag behavior, `SmPlayerStance` and `SmAbnormalEffect` are missing, and no controller known-list callback dispatcher is wired.
+
 ## Java Live Flow
 
 Java source files:

@@ -109,6 +109,10 @@ The visibility/range planner now provides Java-shaped range inputs before member
 
 The known-list population composition service can now seed non-live membership metadata from region snapshot/range/operation plans. Bind-point fanout remains blocked because no live scheduled action `3` path consumes that metadata and controller side effects remain descriptors.
 
+## Update After UOW-1262
+
+The player side-effect planner now records descriptor-only packet intent for player-player known-list `see` and `notSee` transitions. Bind-point fanout remains blocked because these descriptors are not attached to a live known-list callback dispatcher, and `SmPlayerInfo` enemy/aggro behavior plus `SmPlayerStance`/`SmAbnormalEffect` packet classes still need dedicated parity work.
+
 ## Next Recommended Unit of Work
 
 Add a non-live known-list-backed fanout plan or expected Java trace model for bind-point broadcasts. It should represent source-first delivery plus known-list-player recipients without using distance-only filtering, and it should remain unwired from `GameServerConnection`.
