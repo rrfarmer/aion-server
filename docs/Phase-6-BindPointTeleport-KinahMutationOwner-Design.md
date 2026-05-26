@@ -11,6 +11,8 @@ Do not implement live bind-point Kinah mutation by copying one of the existing h
 
 Update after UOW-1225: C# now has a non-live `BindPointTeleportScheduledKinahMutationPlanService` that models the future in-memory mutation result and packet intent without persistence, packet sends, or live dispatch. The live owner/persistence boundary remains blocked.
 
+Update after UOW-1226: `BindPointTeleportScheduledCallbackPlanService` can now carry supplied mutation-plan metadata, including updated Kinah item and `DecreaseKinahFly` packet intent, before cooldown/fanout metadata. This remains non-live.
+
 ## Java Source Facts
 
 Java source files:
@@ -128,3 +130,5 @@ Tests added:
 Implement a non-live `BindPointTeleportScheduledKinahMutationPlanService` that consumes a `Player` inventory snapshot and returns the exact future mutation result without persistence or packet sends. Cover missing Kinah, insufficient Kinah, exact Kinah to zero, positive decrement, unrelated inventory preservation, and `SmInventoryUpdateItem.DecreaseKinahFly` packet intent metadata. Keep it non-live and do not wire `GameServerConnection`.
 
 Update after UOW-1225: this non-live planner is implemented and tested. The next recommended unit is to compose this mutation planner into `BindPointTeleportScheduledCallbackPlanService` metadata, still without live persistence or packet sends.
+
+Update after UOW-1226: callback metadata composition is complete. The next recommended unit is to compose that mutation metadata into the runtime callback execution result as a non-sending packet intent, still without persistence or live inventory mutation.

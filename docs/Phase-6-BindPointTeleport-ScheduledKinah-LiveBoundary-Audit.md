@@ -15,6 +15,8 @@ Update after UOW-1224: `docs/Phase-6-BindPointTeleport-KinahMutationOwner-Design
 
 Update after UOW-1225: `BindPointTeleportScheduledKinahMutationPlanService` now models missing/insufficient Kinah, exact Kinah to zero, positive decrement, non-positive no-mutation success, unrelated inventory preservation, and `DecreaseKinahFly` packet intent metadata. It remains non-live and does not persist or send packets.
 
+Update after UOW-1226: scheduled callback plans now carry optional mutation-plan metadata. Success places the Kinah update/packet intent before cooldown/fanout metadata; failure still stops before cooldown/fanout/movement. Live mutation, persistence, and packet sends remain disabled.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -129,3 +131,5 @@ Update after UOW-1223: this packet-level prerequisite is complete. The next reco
 Update after UOW-1224: the owner design audit is complete. Next, add a non-live mutation planner that produces future packet/persistence intent metadata without touching live inventory from `GameServerConnection`.
 
 Update after UOW-1225: the non-live mutation planner exists. Next, compose it into scheduled callback metadata or add the persistence-boundary contract before live mutation.
+
+Update after UOW-1226: mutation metadata is composed into scheduled callback plans. Next, carry it through runtime callback execution as a non-sending inventory-update intent, then design persistence/send boundaries.

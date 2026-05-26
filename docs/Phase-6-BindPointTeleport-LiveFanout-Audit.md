@@ -57,6 +57,8 @@ Update after UOW-1224: the Kinah mutation owner design audit confirms action `3`
 
 Update after UOW-1225: the non-live scheduled Kinah mutation planner can now produce success/failure and `DecreaseKinahFly` packet-intent metadata, but it is not yet composed into callback execution and does not unblock live action `3` fanout.
 
+Update after UOW-1226: scheduled callback metadata now preserves the Java order by carrying Kinah update intent before cooldown/action `3` fanout metadata. Live action `3` fanout remains blocked until runtime execution handles or explicitly stages the inventory update intent.
+
 ## Java Flow
 
 Java source files:
