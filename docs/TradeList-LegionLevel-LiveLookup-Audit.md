@@ -126,3 +126,15 @@ Before live `BUY` send wiring, require:
 ## Next Recommended Unit
 
 Implement the narrow C# `Player.LegionLevel` hydration and adapter handoff, while keeping `IsLive = false` and all trade packet sends disabled. Alternatively, audit vendor-buy modifier live ownership if the next session stays docs-only.
+
+## UOW-1170 Implementation Update
+
+UOW-1170 implemented the narrow hydration path identified by this audit:
+
+- `Player.LegionLevel` now exists as a projected player field.
+- `PlayerEnterWorldRepository` selects `l.level AS legion_level`.
+- `PlayerEnterWorldRepository` hydrates `Player.LegionLevel`.
+- `GameServerConnection.CreateNonLiveTradeDialogSelectPlan` passes `PlayerLegionLevel` only when `player.LegionId != 0`; no-legion players still use the explicit Java fallback level `0`.
+- `HandleDialogSelectAsync_BuyRestrictedGoodsUsesHydratedLegionLevelWithoutSending` verifies that a level-5 legion player can pass the staged restricted-goods filter while packets remain unsent and the runtime fact plan remains `IsLive = false`.
+
+This update does not add a live legion service/cache, does not verify Java runtime vectors, and does not enable live trade packet sends.
