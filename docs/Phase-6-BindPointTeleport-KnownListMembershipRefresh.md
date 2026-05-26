@@ -61,6 +61,12 @@ Add a documentation/design audit for full Java-equivalent player known-list popu
 
 The adapter preserves the approximation flags: registry snapshots plus `WorldVisibility` are not Java `MapRegion` known-list parity.
 
+## Update After UOW-1255
+
+`docs/Phase-6-BindPointTeleport-PlayerKnownListPopulation-Design.md` now records the full Java player known-list population requirements before live wiring. The audit confirms that registry snapshots and `WorldVisibility` are only an approximation and cannot replace Java `World.spawn`, `World.updatePosition`, `World.despawn`, `MapRegion` neighbor scans, bidirectional `KnownList` mutation, cached `KnownObject.visible`, or controller `see`/`notSee`/`notKnow` packet side effects.
+
+The next safe executable slice is a disabled region/player snapshot model, not live bind-point fanout dispatch.
+
 ## Summary Metrics
 
 - Total Java artifacts discovered: 5 grouped artifact rows in this unit

@@ -78,6 +78,10 @@ The disabled/opt-in owner-checked SQL repository adapter seam now exists:
 
 It remains unwired from `GameServerConnection` and is not registered as a live scheduled Kinah path. The SQL blocker is reduced from "no executable seam" to "no opt-in live wiring or DB integration validation." The next safe blocker is a disabled/opt-in inventory packet send adapter.
 
+## Update After UOW-1255
+
+The known-list blocker now has a dedicated design audit in `docs/Phase-6-BindPointTeleport-PlayerKnownListPopulation-Design.md`. Live scheduled Kinah callback dispatch must still remain disabled because action `3` Java fanout is self-first plus `KnownList.forEachPlayer`, and C# still has only registry/distance approximations and disabled metadata executors.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:

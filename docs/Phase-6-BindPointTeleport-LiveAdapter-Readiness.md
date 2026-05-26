@@ -73,6 +73,8 @@ Update after UOW-1243: `BindPointTeleportKinahSendBeforeRuntimeOrderingService` 
 
 Update after UOW-1244: `docs/Phase-6-BindPointTeleport-ScheduledKinah-LiveAdapter-FinalReadiness.md` now summarizes satisfied non-live gates and remaining live blockers. Live `GameServerConnection` dispatch remains disabled; the next safe executable seam is a disabled/opt-in SQL repository adapter.
 
+Update after UOW-1255: `docs/Phase-6-BindPointTeleport-PlayerKnownListPopulation-Design.md` now documents full Java player known-list population requirements. Live bind-point teleport dispatch remains blocked because C# still lacks Java-equivalent region-backed `World.spawn`/`updatePosition`/`despawn`, bidirectional `KnownList` population, cached visibility transitions, and controller `see`/`notSee`/`notKnow` packet side effects.
+
 ## Java Live Flow
 
 Java source files:

@@ -79,6 +79,12 @@ The new test uses a fake registry to characterize the approximation:
 - Total blocked artifacts: 1 known-list membership model, 1 self-first fanout executor, 1 live movement adapter, 1 `GameServerConnection` dispatch path, and 1 Java runtime capture path
 - Estimated overall migration completion: Phase 6 remains about 71% complete
 
+## Update After UOW-1255
+
+The player known-list population design audit confirms that the fanout blocker is larger than recipient selection. Java bind-point action `3` depends on known-list membership created by world spawn/update/despawn lifecycle hooks and region-neighbor scans. Current C# registry/distance fanout and precomputed metadata snapshots must remain non-live until region-backed membership and controller packet side-effect dispatch exist.
+
+Next recommended work: add a disabled region/player snapshot model that can feed future known-list membership population without using flat online registry scans as a parity substitute.
+
 ## Next Recommended Unit of Work
 
 Add a non-live known-list-backed fanout plan or expected Java trace model for bind-point broadcasts. It should represent source-first delivery plus known-list-player recipients without using distance-only filtering, and it should remain unwired from `GameServerConnection`.
