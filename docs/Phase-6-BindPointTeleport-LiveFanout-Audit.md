@@ -15,6 +15,8 @@ Update after UOW-1203: C# now has a non-live `BindPointTeleportClientActionPlanS
 
 Update after UOW-1204: C# now has a non-live `BindPointTeleportFanoutPlanService` that records Java bind-point hotspot packet fanout semantics: `broadcastPacket(player, packet, true)` and `broadcastPacketAndReceive(player, packet)` both include the source player, then Java known-list players. C# live wiring should use `BroadcastToVisiblePlayersAsync(..., includeSourcePlayer: true)` while documenting that distance-based visibility is still an approximation until persistent known-list membership is ported.
 
+Update after UOW-1205: C# now has a non-live `BindPointTeleportRequestPlanService` that composes `CM_BIND_POINT_TELEPORT.runImpl` action planning with staged operation/control and fanout planners. It preserves Java request branching for dead players, unknown actions, action `1` teleport readiness/blocking, and action `2` cancel readiness/no-op without enabling live packet sends, scheduler callbacks, cooldown map mutation, Kinah mutation, or movement.
+
 ## Java Flow
 
 Java source files:
@@ -47,23 +49,26 @@ C# surfaces reviewed:
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportRequirementsPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportOperationPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportControlPlanService.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportClientActionPlanService.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportFanoutPlanService.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportRequestPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmBindPointTeleport.cs`
 
 Observed C# state:
 
-- `GameClientPacketFactory` has no opcode `244` registration.
-- There is no `CmBindPointTeleport` client packet class.
+- `GameClientPacketFactory` registers opcode `244` for parser-only `CmBindPointTeleport`.
+- `CmBindPointTeleport` reads Java action `1` fields and leaves action `2`/unknown fields at Java defaults.
 - `GameServerConnection` has no bind-point teleport handler branch.
 - `PlayerTeleportService` supports immediate/pending teleport helpers, but no hotspot/cooldown/task/Kinah mutation ownership.
 - `ThreadPoolManager` and `ScheduledTask` can represent delayed work, but no bind-point-specific `TaskId.SKILL_USE` live task slot exists.
 - `IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync` can approximate Java `PacketSendUtility.broadcastPacket(..., true)` for visible-player fanout, but Java `broadcastPacketAndReceive` source-player inclusion semantics must be explicitly mapped before live use.
 - `SmBindPointTeleport` exists and is source-derived unit tested for opcode `296` and action payloads.
-- Price, requirements, operation, and control planners exist and remain non-live.
+- Price, requirements, operation, control, client action, fanout, and request-composition planners exist and remain non-live.
 
 ## Recommended Live Insertion Order
 
-1. Add `CmBindPointTeleport` parser and opcode `244` registration, with packet-read tests for action `1`, action `2`, dead-player no-op metadata, and unknown-action no-op behavior.
-2. Add a handler-level non-live composition bridge that consumes `CmBindPointTeleport` and produces existing planner/control outputs without changing world state.
+1. Add `CmBindPointTeleport` parser and opcode `244` registration, with packet-read tests for action `1`, action `2`, dead-player no-op metadata, and unknown-action no-op behavior. Done non-live in UOW-1202/UOW-1203.
+2. Add a handler-level non-live composition bridge that consumes `CmBindPointTeleport` and produces existing planner/control outputs without changing world state. Request-level composition is staged in UOW-1205; live `GameServerConnection` dispatch remains unwired.
 3. Add an explicit bind-point runtime state owner for cooldowns and the cancellable `TaskId.SKILL_USE` task equivalent. Prefer one service over scattered fields in `GameServerConnection`.
 4. Wire fanout only after packet parser, planner composition, cooldown state, and task ownership are independently tested.
 5. Add live Kinah mutation and final movement as separate units because both affect inventory persistence, packet order, and movement/known-list fanout.
