@@ -98,6 +98,10 @@ The known-list blocker now has a dedicated design audit in `docs/Phase-6-BindPoi
 
 `PlayerKnownListTwoWayMembershipAdapterService` can explicitly apply two-way operation plans to non-live membership metadata. Scheduled Kinah action `3` remains disabled because this path is not live world state and does not execute socket fanout, movement, cooldown, or controller side effects.
 
+## Update After UOW-1260
+
+`PlayerKnownListVisibilityRangePlanService` now provides Java-shaped range and `canSee` metadata for future known-list population. Scheduled Kinah action `3` remains disabled because no live known-list, socket fanout, movement, cooldown, or callback path consumes it.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:

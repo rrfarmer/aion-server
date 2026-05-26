@@ -144,3 +144,7 @@ It is still not Java region known-list parity because no live region object stor
 ## Update After UOW-1259
 
 `PlayerKnownListTwoWayMembershipAdapterService` now applies operation-plan membership steps to `PlayerKnownListMembershipService` only when explicitly enabled. This still does not create Java live known-list parity because range/visibility, region object storage, controller side effects, and live locking remain missing.
+
+## Update After UOW-1260
+
+`PlayerKnownListVisibilityRangePlanService` now models Java max visible-distance range and caller-supplied `canSee` inputs as non-live metadata. The next safe step is a disabled composition layer over region snapshots, visibility/range plans, two-way operation plans, and membership application.

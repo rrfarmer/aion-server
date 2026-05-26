@@ -71,3 +71,7 @@ Added `dotnetConversion/src/Aion.GameServer/Services/PlayerKnownListTwoWayMember
 ## Next Recommended Unit of Work
 
 Add a disabled visibility/range operation planner for player-player known-list population. It should model Java's max visible-distance range rule and caller-supplied `canSee` results as metadata, then feed the two-way operation planner without executing live world visibility.
+
+## Update After UOW-1260
+
+`PlayerKnownListVisibilityRangePlanService` now models Java range and caller-supplied `canSee` metadata before producing two-way operation plans. It uses strict Java range comparison and max visible-distance metadata, but remains non-live and does not execute subclass visibility logic.

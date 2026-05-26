@@ -101,6 +101,10 @@ The two-way operation planner now records Java candidate-first add and owner-fir
 
 The two-way membership adapter can now consume operation plans and mutate non-live membership metadata behind an explicit opt-in flag. Bind-point fanout remains blocked because this metadata is still not live world known-list state and controller side effects are not executed.
 
+## Update After UOW-1260
+
+The visibility/range planner now provides Java-shaped range inputs before membership operation planning. Bind-point fanout remains blocked because these are still non-live descriptors and no scheduled action `3` path consumes them.
+
 ## Next Recommended Unit of Work
 
 Add a non-live known-list-backed fanout plan or expected Java trace model for bind-point broadcasts. It should represent source-first delivery plus known-list-player recipients without using distance-only filtering, and it should remain unwired from `GameServerConnection`.

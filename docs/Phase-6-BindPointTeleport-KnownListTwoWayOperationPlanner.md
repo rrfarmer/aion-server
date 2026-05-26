@@ -98,3 +98,7 @@ Add a disabled operation-plan-to-membership adapter that consumes `PlayerKnownLi
 ## Update After UOW-1259
 
 `PlayerKnownListTwoWayMembershipAdapterService` now provides that explicit opt-in adapter. It applies membership steps from planned add/remove/clear operations to non-live metadata and preserves `see`/`notSee`/`notKnow` steps as descriptors. It remains disabled by default and is not wired to world lifecycle or sockets.
+
+## Update After UOW-1260
+
+`PlayerKnownListVisibilityRangePlanService` now feeds the two-way operation planner from Java-shaped range and `canSee` metadata, including strict range boundary behavior and max visible-distance selection.
