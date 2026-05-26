@@ -25,7 +25,7 @@ This map records every Java caller found in the Phase 6 price scan so future uni
 | `com.aionemu.gameserver.services.teleport.TeleportService` | `getPriceForService(basePrice, race)` | `Aion.GameServer.Services.PlayerTeleportService` and connection teleport handlers | Partial | Medium/High | Audit paid teleport request path before implementation. | Current C# teleport work focuses movement/spawn, not paid transport price deduction. Packet/order and map-change side effects are broad. |
 | `com.aionemu.gameserver.services.craft.RelinquishCraftStatus` | `getPriceForService(basePrice, race)` | `CraftSkillUpdateService` and future relinquish plan | Partial / Not Started | Medium | Candidate if relinquish-specific planner exists or can be added cleanly. | Existing craft-skill learn kinah path is not the same Java relinquish flow. |
 | `com.aionemu.gameserver.services.LegionService` | `getPriceForService(LEGION_EMBLEM_REQUIRED_KINAH, race)` | Legion DB/hydration surfaces; no focused emblem price planner found | Partial / Not Started | High | Defer until legion emblem workflow surface is isolated. | Legion contribution, ranking, emblem persistence, and packet fanout are broad. |
-| `com.aionemu.gameserver.services.BrokerService` | `getPriceForService(registrationCommission, race)` | `BrokerRepository`; `GameServerConnection` broker handlers | Partial | High | Create non-live commission calculator/plan before touching live registration handler. | C# has baseline comment noting broker commission price modifiers are currently 100/100/100. Persistence and packet order make this high conflict. |
+| `com.aionemu.gameserver.services.BrokerService` | `getPriceForService(registrationCommission, race)` | `Aion.GameServer.Services.BrokerRegistrationCommissionPlanService`; `BrokerRepository`; `GameServerConnection` broker handlers | Partial | High | Keep persistence/packet ordering staged; later wire live config/influence facts into broker registration. | UOW-1192 extracted Java registration commission rates, minimum commission branch, and central price formula into a pure planner used by `HandleBrokerRegisterItemAsync`. Persistence and packet order remain high conflict. |
 | `com.aionemu.gameserver.services.mail.MailService` | `getPriceForService(baseCost + commissions, race)` | `Aion.GameServer.Services.MailSendCostPlanService`; `MailRepository`; `GameServerConnection` mail handlers | Partial | High | Keep persistence/fanout staged; later wire live config/influence facts into send-mail handler. | UOW-1191 extracted Java base-cost, commission, item-quality rate, and central price formula into a pure planner used by `HandleSendMailAsync`. Courier pass handling, persistence, and recipient fanout remain broader live risks. |
 
 ## Migration Parity Table - PricesService Consumer Map
@@ -44,7 +44,7 @@ This map records every Java caller found in the Phase 6 price scan so future uni
 | `com.aionemu.gameserver.services.teleport.TeleportService` | `Aion.GameServer.Services.PlayerTeleportService` / `Aion.GameServer.Network.Aion.GameServerConnection` | Service / Movement | Partial | Unit Tested | Needs Verification | Existing C# teleport work focuses movement/spawn. Paid transport price deduction is not ported. |
 | `com.aionemu.gameserver.services.craft.RelinquishCraftStatus` | future C# relinquish craft-status planner | Service | Not Started | No Tests | Unknown | Existing C# craft-skill kinah learn flow is separate from Java relinquish craft status. |
 | `com.aionemu.gameserver.services.LegionService` | future C# legion emblem workflow | Service | Partial / Not Started | No Tests | Unknown | Legion data hydration exists elsewhere, but emblem price workflow is not isolated. |
-| `com.aionemu.gameserver.services.BrokerService` | `Aion.GameServer.Data.BrokerRepository` / `Aion.GameServer.Network.Aion.GameServerConnection` | Service / Repository / Connection Handler | Partial | Manual Only | Needs Verification | Broker persistence and packet handlers exist. Registration commission currently remains baseline and should be isolated into a non-live calculator before live changes. |
+| `com.aionemu.gameserver.services.BrokerService` | `Aion.GameServer.Services.BrokerRegistrationCommissionPlanService` / `Aion.GameServer.Data.BrokerRepository` / `Aion.GameServer.Network.Aion.GameServerConnection` | Service / Repository / Connection Handler | Partial | Unit Tested | Needs Verification | Registration commission rates, minimum-fee branch, and central `PricesService.getPriceForService` call are staged and used by the broker registration handler with default price facts. Live config/influence sourcing, persistence, and packet-order parity remain partial. |
 | `com.aionemu.gameserver.services.mail.MailService` | `Aion.GameServer.Services.MailSendCostPlanService` / `Aion.GameServer.Network.Aion.GameServerConnection` | Service / Repository / Connection Handler | Partial | Unit Tested | Needs Verification | Send-cost base fee, attached-kinah commission, item-quality commission, and `PricesService.getPriceForService` are staged and used by the send-mail handler with default price facts. Live config/influence sourcing, courier pass behavior, persistence rollback, and recipient fanout remain partial. |
 | `com.aionemu.gameserver.model.siege.Influence` | `Aion.GameServer.Services.PriceInfluenceRates` | Runtime Fact Input | Not Started | Unit Tested | Needs Verification | Every live price consumer still depends on this missing runtime source for true Java parity. |
 
@@ -67,6 +67,9 @@ This map records every Java caller found in the Phase 6 price scan so future uni
 | `MailSendCostPlanServiceTests.GetQualityPriceRate_UsesJavaMailQualityMapping` | Java mail item-quality commission rates. | Source-derived only. |
 | `MailSendCostPlanServiceTests.CreatePlan_UsesJavaMailCommissionsAndPricesService` | Java mail base cost, commission, central price formula, and attached-kinah final total. | Source-derived only. |
 | `MailSendCostPlanServiceTests.CreatePlan_DefaultNormalLetterMatchesJavaBaseline` | Default normal no-attachment mail cost remains `10`. | Source-derived only. |
+| `BrokerRegistrationCommissionPlanServiceTests.CreatePlan_UsesJavaRegisteredItemCountRate` | Java broker registration commission rate threshold at registered item count `10`. | Source-derived only. |
+| `BrokerRegistrationCommissionPlanServiceTests.CreatePlan_AppliesJavaMinimumBeforePriceService` | Java minimum broker commission branch bypasses price service. | Source-derived only. |
+| `BrokerRegistrationCommissionPlanServiceTests.CreatePlan_UsesJavaPricesServiceForNonMinimumCommission` | Java broker commission central price formula application. | Source-derived only. |
 
 ## Remaining Risks
 
@@ -81,7 +84,7 @@ This map records every Java caller found in the Phase 6 price scan so future uni
 
 Prefer one of these:
 
-1. Keep mail persistence/fanout staged and add live config/influence sourcing only after price fact plumbing exists.
-2. Add a pure broker-registration commission calculator before touching the live broker registration handler.
+1. Add an `SM_SELL_ITEM` packet plan and byte tests before any live sell-window routing.
+2. Keep broker persistence/packet ordering staged and add live config/influence sourcing only after price fact plumbing exists.
 3. Add a pure broker-registration commission calculator before touching the live broker registration handler.
 4. Add a focused `SM_SELL_ITEM` packet plan and byte tests before any live sell-window routing.
