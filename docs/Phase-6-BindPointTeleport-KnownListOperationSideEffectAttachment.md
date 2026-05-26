@@ -89,3 +89,7 @@ Add a disabled integration composition that carries operation side-effect attach
 ## Update After UOW-1267
 
 `SmPlayerStance` packet serialization is now available and player side-effect descriptors point to the concrete C# packet type. Operation side-effect attachment remains non-live and still cannot instantiate/send packets or cover `SmAbnormalEffect`.
+
+## Update After UOW-1268
+
+`SmAbnormalEffect` packet serialization is now partially available from supplied effect facts. Operation side-effect attachment still carries descriptors only and cannot hydrate effect-controller facts or instantiate/send concrete packets.

@@ -83,3 +83,7 @@ Tests updated:
 ## Next Recommended Unit of Work
 
 Add a focused `SmAbnormalEffect` packet serializer audit or add a non-live player-info/stance descriptor-to-packet input bridge. Prefer an audit first if the effect model is broad; do not wire live known-list sends until abnormal-effect packet readiness and Java runtime validation strategy are clearer.
+
+## Update After UOW-1268
+
+`SmAbnormalEffect` now exists as a supplied-facts serializer with focused player/non-player payload tests. The next safe player-see step is a descriptor-to-packet metadata bridge that stays non-live and does not send through `GameServerConnection`.

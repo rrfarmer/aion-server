@@ -88,3 +88,7 @@ The focused `SmPlayerInfo(enemy)` slice is now present for the Java creature-typ
 ## Update After UOW-1267
 
 `SmPlayerStance` packet serialization is now available for stance descriptors carried by population-side attachment metadata. Population composition remains disabled from live world lifecycle and socket dispatch, and `SmAbnormalEffect` remains the next missing packet serializer in the player-see sequence.
+
+## Update After UOW-1268
+
+`SmAbnormalEffect` packet serialization is now partially available for supplied abnormal-effect facts. Population composition still cannot hydrate live effect-controller data or construct/send packets, so the next safe bridge is descriptor-to-packet metadata without live socket dispatch.

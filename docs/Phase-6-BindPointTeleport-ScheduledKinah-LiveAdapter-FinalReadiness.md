@@ -130,6 +130,10 @@ Population composition now carries operation side-effect attachments per candida
 
 `SmPlayerStance` packet serialization is now available, reducing one player-see packet prerequisite. Scheduled Kinah action `3` remains disabled because live known-list fanout still cannot compute active viewer facts, instantiate/send the full Java packet sequence, or cover missing `SmAbnormalEffect`.
 
+## Update After UOW-1268
+
+`SmAbnormalEffect` packet serialization is now partially available from supplied effect facts. Scheduled Kinah action `3` remains disabled because live known-list fanout still cannot compute active viewer facts, hydrate effect-controller data, instantiate/send the full Java packet sequence, or validate Java runtime packet ordering.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:

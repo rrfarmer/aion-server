@@ -107,3 +107,7 @@ Add a disabled composition step that attaches `PlayerKnownListPlayerSideEffectPl
 ## Update After UOW-1267
 
 `SmPlayerStance` now exists as a concrete C# packet serializer and the stance descriptor reports available C# support with state `1`. The planner still does not instantiate or send the packet, does not compute live `isUnderStance`, and `SmAbnormalEffect` remains missing.
+
+## Update After UOW-1268
+
+`SmAbnormalEffect` now exists as a supplied-facts packet serializer and the abnormal-effect descriptor reports partial C# support. The planner still does not hydrate live `EffectController` data, compute abnormal masks/effect timers, instantiate packets, or send them.
