@@ -347,3 +347,7 @@ The packet fact hydration audit confirms live bind-point fanout should remain di
 ## Update After UOW-1274
 
 Population fact-plan composition now preserves per-direction blocked fact metadata and packet construction metadata, but live bind-point fanout remains disabled. The live adapter still lacks active viewer context, stat/effect hydration, Java-equivalent known-list population, socket execution, and runtime packet validation.
+
+## Update After UOW-1275
+
+Population packet-construction diagnostics can now report complete/partial/blocked metadata across candidate plans. This improves readiness visibility only; live bind-point fanout remains disabled because the diagnostic projection does not hydrate runtime facts, execute `KnownList`/`PlayerController`, send sockets, model pet visibility, or validate Java runtime packet order.

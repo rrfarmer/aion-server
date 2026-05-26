@@ -91,3 +91,7 @@ Parallel work discovery was performed before and during implementation.
 ## Next Recommended Unit of Work
 
 Add a disabled population packet-construction summary/diagnostic projection that aggregates completed, partial, and blocked fact-plan/packet-construction results across candidate plans. Keep it metadata-only and do not send packets.
+
+## Update After UOW-1275
+
+The disabled diagnostic projection now exists as `PlayerKnownListPopulationPacketConstructionDiagnosticService`. It aggregates fact-plan, blocker, operation packet-construction, operation-result, player-packet-result, and constructed descriptor-kind counts without live dispatch.

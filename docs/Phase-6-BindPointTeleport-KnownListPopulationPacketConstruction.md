@@ -99,3 +99,7 @@ The runtime fact hydration audit is complete. It confirms the operation packet c
 ## Update After UOW-1274
 
 Population packet construction can now consume completed per-direction fact plans as supplemental packet construction facts while preserving existing request-level facts as authoritative. Candidate plans also expose blocked fact-plan metadata, so missing ride/stat/effect inputs remain visible instead of being hidden behind packet construction gaps.
+
+## Update After UOW-1275
+
+`PlayerKnownListPopulationPacketConstructionDiagnosticService` now summarizes population packet-construction metadata across candidate plans. It preserves candidate ordering, fact-plan direction ordering, and operation-step result ordering while reporting complete, partial, blocked, and missing metadata counts. It remains disabled/non-live and does not send packets.

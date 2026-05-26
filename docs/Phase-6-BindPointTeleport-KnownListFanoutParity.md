@@ -121,6 +121,10 @@ The operation side-effect attachment service now joins player packet descriptors
 
 Population composition now carries side-effect attachments through candidate results. Bind-point fanout remains blocked because the runtime fanout path still does not consume population results or execute source-first known-list socket sends.
 
+## Update After UOW-1275
+
+Population packet-construction diagnostics now expose which candidate packet metadata is complete, partial, blocked, or absent. This gives future fanout/live-adapter work a clearer readiness surface, but it still does not execute source-first fanout, live known-list socket sends, or Java runtime comparison.
+
 ## Next Recommended Unit of Work
 
 Add a non-live known-list-backed fanout plan or expected Java trace model for bind-point broadcasts. It should represent source-first delivery plus known-list-player recipients without using distance-only filtering, and it should remain unwired from `GameServerConnection`.
