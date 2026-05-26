@@ -61,6 +61,8 @@ Update after UOW-1237: `BindPointTeleportKinahPersistenceOperationPlanService` n
 
 Update after UOW-1238: `BindPointTeleportKinahCallbackOutcomePlanService` now provides a pure scheduled Kinah callback verdict that composes mutation, persistence, disabled send, and rollback metadata. Live callback execution remains blocked on owner/lock, SQL adapter, live send, fanout, and movement work.
 
+Update after UOW-1239: `docs/Phase-6-BindPointTeleport-KinahComposedCallback-Readiness.md` now audits the fully composed non-live scheduled Kinah callback chain. Read-only analysis confirmed Java has no explicit Kinah mutation lock, Java dirty `InventoryDAO` persistence ignores affected rows, and Java bind-point fanout is self-first plus known-list membership rather than C# registry/distance visibility.
+
 ## Java Live Flow
 
 Java source files:
@@ -177,6 +179,8 @@ Update after UOW-1236: disabled no-op send adapter seam is complete. The next sa
 Update after UOW-1237: the pure owner-checked persistence operation contract is complete. The next safe prerequisite is a non-live scheduled Kinah callback outcome composer joining mutation, persistence, disabled send, and rollback metadata.
 
 Update after UOW-1238: the non-live scheduled Kinah callback outcome composer is complete. The next safe prerequisite is a readiness audit for the composed chain before choosing live owner/lock design or SQL adapter readiness.
+
+Update after UOW-1239: composed-chain readiness audit is complete. The next safe executable prerequisite is a pure in-memory Kinah owner contract for apply/rollback semantics, with SQL adapter and live send still disabled.
 
 ## Do Not Wire Yet
 
