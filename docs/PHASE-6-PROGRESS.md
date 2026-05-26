@@ -44248,6 +44248,65 @@ Next recommended unit of work:
 
 ---
 
+### Session 1172 (May 26, 2026)
+- Continued after UOW-1171 by auditing Java vector generator skeleton feasibility for trade-list runtime artifacts.
+- Parallel Work Discovery reviewed:
+  1. Java generator skeleton feasibility;
+  2. C# vector verifier artifact reader design;
+  3. DB integration proof for `Player.LegionLevel` hydration;
+  4. broader `PricesService` parity audit.
+- Selected generator skeleton feasibility because Java runtime vectors remain the primary gate before enabling live trade-list sends.
+- File ownership map:
+  - Orchestrator: `docs/TradeList-Java-Vector-Generator-Skeleton-Feasibility.md`, `docs/PHASE-6-PROGRESS.md`, and Phase 6 handoff.
+  - No sub-agents spawned: this docs-only unit touched shared migration docs and required local tooling checks.
+- Added `TradeList-Java-Vector-Generator-Skeleton-Feasibility.md`.
+- Documented the root and game-server Maven layout: root `maven.compiler.release=25`, `maven.test.skip=true`, and game-server `sourceDirectory=src` / `testSourceDirectory=test`.
+- Documented existing `game-server/test` precedent files, especially standalone `LoopbackCaptureProof.java`.
+- Checked local tooling:
+  - `mvn -v` failed because Maven is unavailable.
+  - `java -version` reported Java `1.8.0_491`.
+  - `javac -version` failed because `javac` is unavailable.
+- Concluded that a trade-list generator skeleton is feasible in the repo layout, but not safe to add locally until Java 25 JDK and Maven are available.
+- No Java code, C# runtime code, generated artifacts, or live socket behavior changed in this unit.
+- Validation:
+  - `git diff --check` passed with existing line-ending warnings only.
+
+#### Migration Parity Table - Session 1172
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| root Maven `aion-server` build (`pom.xml`) | future Java vector generator compile/run path | Build / Tooling | Partial | Manual Only | Needs Verification | Root build requires Java 25 and skips tests by default. Local Maven/JDK tooling is insufficient, so no generator skeleton was compiled. |
+| `game-server/pom.xml` | future Java trade vector generator test-source package | Build / Tooling | Partial | Manual Only | Needs Verification | Game-server already supports `testSourceDirectory=test`, making a test-only package feasible once tooling exists. No code added. |
+| `com.aionemu.gameserver.network.aion.LoopbackCaptureProof` | future trade vector generator precedent | Test Utility / Runtime Capture Precedent | Partial | Manual Only | Needs Verification | Existing standalone proof utility under `game-server/test` remains the nearest precedent. It is still uncompiled/unrun locally due tooling blockers. |
+| future `com.aionemu.gameserver.parity.trade.TradeListVectorGenerator` | future C# artifact verifier | Test Utility / Tooling | Not Started | No Tests | Needs Verification | Feasible package and command shape documented, but generator classes and artifacts do not exist yet. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| None | Manual / Docs Only | root `pom.xml`; `game-server/pom.xml`; `LoopbackCaptureProof` | No executable tests were added; this unit documents build/test layout feasibility and local tooling blockers. | Source/build files inspected; local `mvn`, `java`, and `javac` checks recorded; `git diff --check` passed. | No Java 25/Maven compile, no generator skeleton, no runtime artifacts. |
+
+Remaining risks:
+- Java 25 JDK and Maven are unavailable locally.
+- Existing `LoopbackCaptureProof` still has not been compiled or run.
+- Trade-list Java generator classes do not exist yet.
+- Java runtime vectors for all trade-list/trade-in scenarios remain missing.
+- C# vector verifier artifacts are still missing.
+- Live `SM_TRADELIST`, `SM_TRADE_IN_LIST`, and no-sell sends remain disabled.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped artifact rows in this unit
+- Total artifacts ported: 0 code artifacts; 1 generator skeleton feasibility document added
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4 grouped rows
+- Total blocked artifacts: 5 blocked/partial categories: Java 25/Maven tooling, generator skeleton compile, Java runtime artifacts, C# verifier, and live packet sends
+- Estimated overall migration completion: Phase 6 remains about 71% complete; this unit clarifies the Java tooling blocker and safe skeleton path without changing runtime behavior.
+
+Next recommended unit of work:
+- Design the C# vector verifier artifact reader while Java generator execution remains blocked, or rerun this feasibility unit under Java 25 JDK and Maven and then add the smallest compiling Java skeleton.
+
+---
+
 ## Next Steps
 
 1. Continue nearby-refresh prerequisite work now that staged NPC faction static-data, enter-world hydration, the future quest-start assigned-faction guard, configured repeat-date calculator, staged quest-finish state mutation, staged NPC faction completion, quest-finish ordering audit, staged operation plan, non-sending quest update packet, reward/work-item audit, non-live reward/work-item descriptor planner, operation-plan composition, callback dispatch audit, persistence contract audit, non-live quest persistence operation planning, non-live NPC-faction persistence operation planning, non-live quest-finish persistence composition, non-live completion callback dispatch planning, non-live quest-finish callback composition, non-live follow-up quest callback result planning, non-live callback follow-up result composition, nested callback follow-up operation-plan regression coverage, non-live reward item XML projection scaffolding, detailed reward item operation-plan composition, non-live non-item reward projection metadata, detailed non-item operation-plan composition, extended non-item reward projection metadata, regular/extended non-item source labeling, XML-derived class reward warning composition coverage, static quest bonus metadata projection, supported quest bonus item-group projection, reward side-effect live-boundary audit, non-composed quest kinah helper, full quest-finish failure-ordering regression, non-live title/cube/warehouse reward side-effect plans, composed title/cube/warehouse side-effect operation metadata, concrete quest-title reward system-message support, quest GP helper/config/packet scaffolding, non-live quest-finish GP side-effect metadata composition, offline GP DAO SQL/repository boundary, gated offline GP repository execution, quest XP rate/config/planner scaffolding, composed non-live quest XP reward metadata, concrete quest XP reward system-message helpers, non-live XP plan-to-message packet metadata bridge, staged XP execution/level-change descriptor plan, level-up action-animation packet prerequisite, non-live upgrade-player side-effect sub-plan, non-live NPC faction level-up sub-plan, non-live QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent parity, non-live guide HTML level-change planning, non-live skill auto-learn planning, non-live starter-kit level-change planning, non-live bonus/faction custom reward planning, non-live XP level-change sub-plan composition metadata, non-live XP level-change context factory, quest-finish XP execution metadata composition, custom reward receipt repository SQL, system-mail reward payload planning, opt-in custom reward execution planning, supplied custom reward execution-result XP metadata, non-live system-mail persistence/fanout operation metadata, disabled-by-default system-mail persistence execution boundary, and concrete opt-in system-mail persistence operation executor exist: model deterministic quest bonus candidate filtering or concrete guide/skill/mail packet/repository prerequisites before enabling live callbacks, reward mutation, or DAO writes. Keep live `SM_NEARBY_QUESTS` sends, live guide `SM_QUESTIONNAIRE` sends, live skill auto-learn mutation/effects/recipes, live starter-kit/custom reward mail sends, guide persistence, production player-controller refresh, faction write paths, XP level-change hooks, custom reward DAO writes, and ItemPurification automatic dispatch disabled until those gates are satisfied. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure ItemPurification quest-notification projection, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, the handler-level ItemPurification workflow/application/packet-plan composition bridge, the ItemPurification runtime-input packet bridge, the ItemPurification ready concrete-packet send bridge, the ItemPurification target object-id allocation bridge, the ItemPurification random-bonus selection seam, the ItemPurification non-persistent mutation snapshot preview, the ItemPurification non-persistent handler mutation bridge, the ItemPurification live mutation adapter boundary, the ItemPurification live execution composition seam, the ItemPurification live AP rank-drop metadata regression, the ItemPurification explicit live AP player-packet emission bridge, the ItemPurification explicit live AP rank-update broadcast bridge, the ItemPurification explicit live equipment rank-limit state mutation bridge, the ItemPurification explicit live equipment rank-limit packet fanout bridge, the ItemPurification explicit live abyss skill refresh bridge, the ItemPurification explicit opt-in quest notification no-op seam, the ItemPurification explicit transform-min-rank config plumbing, the ItemPurification quest-update items audit, the ItemPurification quest-update item static-data projection, the ItemPurification no-op nearby-refresh planning seam, the ItemPurification no-op nearby-refresh dispatcher seam, the ItemPurification nearby quest refresh surface audit, the ItemPurification nearby quest packet prerequisite, the ItemPurification nearby quest world-instance registry prerequisite, the ItemPurification nearby quest start-registration table prerequisite, the ItemPurification handler opt-in live execution seam, the ItemPurification persistence plan analysis, the ItemPurification repository contract/payload plumbing, the ItemPurification inserted target item-stone persistence, the ItemPurification opt-in persistent live execution seam, the ItemPurification handler-level opt-in persistent execution helper, the ItemPurification handler-level persistence failure-ordering regression, the ItemPurification automatic-dispatch readiness policy, the ItemPurification staged dispatch-failure policy, the ItemPurification Java observer design, the ItemPurification opt-in DB integration happy path, the ItemPurification opt-in DB rollback path, the ItemPurification AP/quest readiness audit, the pure ItemCharge AP spend guard, and the live ItemCharge selected-item/charge-all AP guard consolidation now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. ItemCharge Kinah payment guard/consolidation, charge-all stale-item payment-before-revalidation hardening, mixed stale/current charge-all AP regression coverage, mixed stale/current charge-all Kinah regression coverage, missing/current charge-all AP approximation coverage, and missing/current charge-all Kinah approximation coverage are now staged for live selected-item/charge-all paths. Move next to Java observer artifact generation when tooling is available, nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another existing planner live adapter when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player/equipment/skill packets, AP/login rank-limited equipment persistence, configured abyss transform skill updates, rank config load, and real quest handler dispatch. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
