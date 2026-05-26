@@ -23,6 +23,8 @@ Update after UOW-1218: C# now has `BindPointTeleportRuntimeControlBridgeService`
 
 Update after UOW-1219: C# now has `BindPointTeleportRuntimeFanoutService`, an isolated adapter that can broadcast runtime control bridge packet intents through `IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync(..., includeSourcePlayer: true)`. Tests cover no-packet, action `2`, and login action `3` fanout calls. Full `GameServerConnection` dispatch remains disabled, and C# visible-distance fanout is still only an approximation of Java persistent known-list membership.
 
+Update after UOW-1220: C# now has `BindPointTeleportRuntimeScheduledCallbackBridgeService`, a metadata-only action `1` bridge that schedules supplied callback metadata through `BindPointTeleportRuntimeStateOwner` using Java `TaskId.SKILL_USE` timing/replacement semantics. It deliberately does not mutate Kinah, insert cooldowns, broadcast action `3`, or move the player.
+
 ## Java Live Flow
 
 Java source files:
@@ -88,10 +90,10 @@ Java login flow:
 
 | Gate | Required Before Live Dispatch | Current Status | Recommended Next Step |
 |---|---|---|---|
-| Handler boundary | A handler or adapter that consumes `CmBindPointTeleport` and assembles facts without side effects | Non-live bridge added in UOW-1215; runtime control bridge added in UOW-1218 | Keep dispatch disabled; action `1` still requires live hotspot/inventory/fanout/movement adapters. |
+| Handler boundary | A handler or adapter that consumes `CmBindPointTeleport` and assembles facts without side effects | Non-live bridge added in UOW-1215; runtime control bridge added in UOW-1218; action `1` scheduler bridge added in UOW-1220 | Keep dispatch disabled; action `1` still requires live hotspot/inventory/fanout/movement adapters. |
 | Static hotspot facts | Adapter from `DataManager.HOTSPOT_DATA` equivalent to planner facts | Missing/partial | Add fact assembler from loaded hotspot static data when owned exclusively. |
 | Failure system messages | Concrete `SmSystemMessage` helpers for Java bind-point failures | Helpers/tests added in UOW-1214 | Use helpers from future non-live/live adapters; do not add dispatch yet. |
-| Runtime task owner | Per-player `TaskId.SKILL_USE` task slot with replace/cancel semantics | Isolated owner added in UOW-1217 | Keep unwired until live callback, inventory, fanout, and movement gates are ready. |
+| Runtime task owner | Per-player `TaskId.SKILL_USE` task slot with replace/cancel semantics | Isolated owner added in UOW-1217; metadata scheduler bridge added in UOW-1220 | Keep callback side effects disabled until inventory, cooldown, fanout, and movement gates are ready. |
 | Cooldown owner | Player-id keyed cooldown storage with Java whole-second time-left behavior | Isolated owner added in UOW-1217 | Keep unwired until login/requirements bridges can use it safely. |
 | Inventory mutation | `tryDecreaseKinah(price, DEC_KINAH_FLY)` with persistence and packet order | Planner only | Defer until update packet and persistence path are isolated. |
 | Fanout | Source-included visible-player broadcast matching Java known-list semantics | Runtime control fanout adapter added in UOW-1219; registry approximation exists | Known-list parity remains unverified; action `1` scheduled callback fanout is still unwired. |

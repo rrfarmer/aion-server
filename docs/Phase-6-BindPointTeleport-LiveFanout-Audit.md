@@ -45,6 +45,8 @@ Update after UOW-1218: `BindPointTeleportRuntimeControlBridgeService` now consum
 
 Update after UOW-1219: `BindPointTeleportRuntimeFanoutService` can now execute the runtime control bridge packet intents through `IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync` with `includeSourcePlayer: true`. This covers action `2` cancel and login action `3` source-inclusion tests, but it still uses the C# visible-player registry approximation rather than Java's persistent `KnownList`.
 
+Update after UOW-1220: action `1` can now schedule supplied callback metadata through `BindPointTeleportRuntimeScheduledCallbackBridgeService`, but that scheduled metadata does not yet execute action `3` cooldown fanout. Future work must explicitly bridge callback-side cooldown/fanout/movement side effects before live dispatch.
+
 ## Java Flow
 
 Java source files:
