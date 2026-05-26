@@ -154,3 +154,24 @@ This should be implemented and tested before any production socket/quest handler
 3. Transaction/failure ordering between custom reward receipt writes and system-mail persistence is still unresolved.
 4. End-to-end login-server auth/reconnect/enter-world socket ordering still needs integration coverage before claiming runtime parity.
 5. Java runtime comparison remains unavailable locally, so date/time and custom reward execution ordering stay source-derived only.
+
+## C# State After UOW-1080
+
+- Added `docs/QuestFinishProductionCallSite-Audit.md`.
+- The audit maps the future production chain from Java `CM_DIALOG_SELECT.runImpl` self/reportable auto-reward handling through `QuestService.finishQuest`, `QuestService.giveReward`, `PlayerCommonData.addExp/setExp`, `PlayerController.onLevelChange`, bonus/faction custom reward services, and `SystemMailService.sendMail`.
+- The audit identifies `GameServerConnection.HandleDialogSelectAsync` as the future C# socket entry point, but confirms it currently does not implement the Java self auto-reward branch or call `QuestFinishOperationPlanService`.
+- The audit documents the future context assembly points for:
+  1. `QuestFinishRewardTemplateProjection`;
+  2. `QuestFinishRewardSideEffectContext`;
+  3. `QuestFinishCustomRewardSessionRuntimeInputAdapterService`;
+  4. disabled options for `QuestFinishCustomRewardRuntimeSideEffectAdapterService`;
+  5. `QuestFinishOperationPlanService.CreatePlan`.
+- No production code was changed and no live execution was enabled.
+
+## Remaining Runtime Wiring Blockers After UOW-1080
+
+1. Production `CM_DIALOG_SELECT` still does not detect Java's self/reportable auto-reward branch in C#.
+2. Quest reward template projection from live static quest data is not wired into a socket path.
+3. Java `PlayerCommonData.setExp` live mutation remains absent, so custom rewards must stay disabled.
+4. Custom reward receipt store-before-mail ordering and system-mail persistence/fanout remain gated behind explicit opt-in boundaries.
+5. Per-player ordering, live packet ordering, and Java runtime comparison remain unverified.

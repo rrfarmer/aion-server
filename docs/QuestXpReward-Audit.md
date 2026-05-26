@@ -438,6 +438,13 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - The test confirms disabled-by-default custom reward input assembly does not call repositories, does not consume object ids, and does not turn custom reward XP sub-plan metadata into live `CustomLevelRewardExecutionService` work.
 - This is still a non-live metadata test; production quest-finish and live XP mutation remain disabled.
 
+## C# State After UOW-1080
+
+- Added `docs/QuestFinishProductionCallSite-Audit.md`.
+- The audit maps the future C# production call site from Java `CM_DIALOG_SELECT.runImpl` self/reportable auto-reward handling through quest finish, XP mutation, level-change custom reward hooks, and system-mail send dependencies.
+- The audit identifies the future disabled composition order for `QuestFinishRewardSideEffectContext`, `QuestFinishCustomRewardSessionRuntimeInputAdapterService`, `QuestFinishCustomRewardRuntimeSideEffectAdapterService`, and `QuestFinishOperationPlanService.CreatePlan`.
+- This is source-reviewed planning only; production quest-finish and live XP/custom reward execution remain disabled.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
@@ -540,4 +547,4 @@ Level-change side effects include stat template refresh, max repose recalculatio
 
 ## Next Recommendation
 
-Next, add a guarded production-call-site analysis for where a future socket/quest-finish path could build `QuestFinishRewardSideEffectContext` and session runtime options, without enabling execution. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
+Next, add a non-live `CM_DIALOG_SELECT` self auto-reward guard planner or test helper that recognizes Java's reportable auto-reward branch and returns a disabled quest-finish planning intent. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
