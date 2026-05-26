@@ -452,3 +452,7 @@ Descriptor-to-packet construction metadata now exists for an individual player s
 ## Update After UOW-1270
 
 Operation attachment packet-construction metadata now exists for directional side effects. Known-list fanout parity is still blocked on population-level composition, live runtime fact hydration, live region population, controller execution, socket dispatch, and Java runtime packet-order validation.
+
+## Update After UOW-1271
+
+Population-level packet-construction metadata now exists for known-list candidate plans when supplied per-subject facts are available. Known-list fanout parity is still blocked on live runtime fact hydration, live region population, controller execution, socket dispatch, scheduled callback wiring, and Java runtime packet-order validation.

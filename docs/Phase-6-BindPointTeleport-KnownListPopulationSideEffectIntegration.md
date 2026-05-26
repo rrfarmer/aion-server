@@ -100,3 +100,7 @@ The descriptor-to-packet metadata bridge now exists for individual player side-e
 ## Update After UOW-1270
 
 Operation-level side-effect attachments can now carry packet construction metadata when supplied per-subject facts are available. Population candidate plans still do not compose those operation-level packet construction results end to end.
+
+## Update After UOW-1271
+
+Population candidate plans can now carry operation-level side-effect packet construction metadata when `PacketConstructionFactsByPlayerObjectId` is supplied on the population request. This preserves candidate and operation-step ordering without sending packets. Live runtime fact hydration, controller dispatch, socket sends, Java runtime packet capture, and world known-list mutation remain blocked.

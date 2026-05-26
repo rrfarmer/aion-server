@@ -118,3 +118,7 @@ Tests updated:
 ## Next Recommended Unit of Work
 
 Add a population-side packet-construction metadata composition layer that carries operation-level packet construction results into `PlayerKnownListPopulationPlanService` candidate plans. Keep it disabled/non-live and continue requiring supplied per-player facts.
+
+## Update After UOW-1271
+
+Population-side packet-construction composition is now present on `PlayerKnownListPopulationPlanService`. Candidate plans can carry `SideEffectPacketConstructionPlan` when supplied per-subject facts are provided, but live fact hydration and socket dispatch remain disabled.

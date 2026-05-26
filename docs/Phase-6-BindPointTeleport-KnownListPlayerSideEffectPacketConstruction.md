@@ -123,3 +123,7 @@ Add a non-live population-side packet-construction attachment bridge that consum
 ## Update After UOW-1270
 
 `PlayerKnownListOperationSideEffectPacketConstructionService` now applies player side-effect packet construction to operation attachment plans per direction. The bridge also accepts supplied ride movement/stat facts and passes ride movement speed into `SmEmotion`; live stat hydration and population-level composition remain pending.
+
+## Update After UOW-1271
+
+`PlayerKnownListPopulationPlanService` now composes operation-level packet construction metadata per population candidate when supplied subject facts are available. The individual player packet construction bridge remains non-live and still depends on supplied active motions, viewer context, ride facts, and abnormal-effect facts.

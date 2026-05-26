@@ -142,6 +142,10 @@ The C# port can now create non-live packet construction metadata from supplied p
 
 The C# port can now create non-live packet construction metadata for operation side-effect attachments. Scheduled Kinah action `3` remains disabled because population plans do not carry packet construction metadata end to end and live socket dispatch/runtime fact hydration are still missing.
 
+## Update After UOW-1271
+
+Population candidate plans can now carry operation-level packet construction metadata when supplied subject facts are available. Scheduled Kinah action `3` remains disabled because no live known-list fanout dispatcher consumes the metadata, runtime player/motion/effect/ride facts are not hydrated, and Java runtime packet ordering is unverified.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:

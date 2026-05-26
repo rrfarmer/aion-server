@@ -335,3 +335,7 @@ Descriptor-to-packet construction metadata now exists for player `see`/`notSee` 
 ## Update After UOW-1270
 
 Operation attachment packet-construction metadata now exists and can preserve directional operation-step order. Live bind-point fanout remains blocked because population plans do not carry this metadata end to end, runtime facts are supplied, and no socket dispatch or Java runtime validation occurs.
+
+## Update After UOW-1271
+
+Population plans can now carry operation-level packet construction metadata per candidate when supplied subject facts are available. Live bind-point fanout remains blocked because runtime player/motion/effect/ride fact hydration, live known-list population, controller execution, socket dispatch, scheduled callback wiring, and Java runtime validation are still missing.
