@@ -91,3 +91,7 @@ Add a read-only or metadata-only runtime fact hydration audit for population pac
 ## Update After UOW-1272
 
 The runtime fact hydration audit is complete. It confirms the operation packet construction facts record is correctly shaped, but automatic hydration should remain disabled until active viewer context, attack-speed stat resolution, live motion timing, ride stat hydration, stance observer lifecycle, and abnormal-effect entry/timer sources are explicitly modeled.
+
+## Update After UOW-1273
+
+`PlayerKnownListPacketConstructionFactPlanService` can now create non-live operation packet construction facts from supplied viewer/subject snapshots or return explicit blockers. Population packet construction still consumes already-built facts; a future composition slice should join fact plans to population candidate directions without enabling live dispatch.

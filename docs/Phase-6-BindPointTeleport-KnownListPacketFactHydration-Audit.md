@@ -95,3 +95,7 @@ The next executable slice should be a disabled, supplied-player snapshot adapter
 ## Next Recommended Unit of Work
 
 Add a disabled `PlayerKnownListPacketConstructionFactPlanService` that consumes supplied viewer/subject `Player` snapshots and returns either complete `PlayerKnownListOperationSideEffectPacketConstructionFacts` or explicit blocked metadata for missing viewer context, ride stats, attack speed, and abnormal-effect entries. Keep it non-live and do not send packets.
+
+## Update After UOW-1273
+
+`PlayerKnownListPacketConstructionFactPlanService` now exists as a disabled supplied-snapshot fact planner. It blocks missing viewer/subject players, ride info, ride attack-speed facts, and abnormal-effect facts rather than hydrating live state. The next safe step is composing these fact plans with population packet construction metadata.
