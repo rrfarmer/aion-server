@@ -82,3 +82,5 @@ New C# artifacts:
 ## Next Recommended Unit of Work
 
 Add a no-op live send adapter seam design or pure service that consumes packet intent and returns the supplied send-result shape without calling `SendPacketAsync`. Keep it disabled from `GameServerConnection`; do not wire live dispatch, SQL, fanout, or movement.
+
+Update after UOW-1236: `BindPointTeleportKinahInventorySendAdapterPlanService` now provides the disabled no-op send seam and proves a supplied registry is not called. Next, prefer a repository SQL adapter design or pure owner-checked persistence contract before any live SQL or packet send implementation.

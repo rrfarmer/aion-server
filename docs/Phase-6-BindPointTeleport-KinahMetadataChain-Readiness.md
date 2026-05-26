@@ -100,3 +100,5 @@ Tests added:
 Add a non-live owner/rollback contract refinement for scheduled bind-point Kinah mutation. Prefer docs-only or a pure planner/test that records original Kinah, updated Kinah, rollback requirement, and stop/continue policy for persistence and send failures. Keep live SQL, send, dispatch, fanout, and movement disabled.
 
 Update after UOW-1235: `BindPointTeleportKinahOwnerRollbackPlanService` now records original/updated Kinah snapshots and rollback/commit policy for supplied persistence/send outcomes. Next, add a disabled no-op send adapter seam or design before any live `SendPacketAsync` call.
+
+Update after UOW-1236: `BindPointTeleportKinahInventorySendAdapterPlanService` now consumes packet intent and returns existing send-result metadata while disabled, with tests proving `SendPacketAsync` is not called. Next, prefer owner-checked repository persistence contract work before any live send/persist callback wiring.
