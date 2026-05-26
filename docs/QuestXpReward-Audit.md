@@ -470,6 +470,13 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - The guard path can carry coarse reward/work presence metadata forward without enabling XP reward projection or live XP mutation.
 - This still does not parse Java `Rewards.exp`, apply `Rates.XP_QUEST`, create `QuestXpRewardPlan`, or invoke `PlayerCommonData.addExp/setExp`.
 
+## C# State After UOW-1085
+
+- Added `QuestFinishRewardTemplateXmlProjectionExtractor`.
+- The extractor reads default regular reward-group `Rewards.exp` values into `QuestFinishRewardNonItemTemplateProjection.Experience`.
+- Real-data regression coverage confirms the current default regular reward-group XP total is 20,544,638,479 across 8,043 Java quest templates.
+- This is static projection only: it does not apply `Rates.XP_QUEST`, resolve target NPC names, call `QuestRewardService.CreateXpRewardPlan`, mutate `PlayerCommonData`, emit XP packets, or execute level-change custom rewards.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
@@ -575,7 +582,11 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `QuestDialogAutoRewardGuardPlanServiceTests.CreatePlanFromTemplateSummary_UsesRealCanReportAndStaticRewardMetadataWithoutLiveSideEffects`
 - `QuestDialogAutoRewardGuardPlanServiceTests.CreatePlanFromTemplateSummary_RejectsMissingAndNonReportableTemplatesInJavaOrder`
 - `QuestDialogAutoRewardGuardPlanServiceTests.CreatePlanFromTemplateSummary_RejectsNonSelfTargetBeforeUsingStaticMetadata`
+- `QuestFinishRewardTemplateXmlProjectionExtractorTests.ExtractDefaultRegularNonItemProjections_ReadsJavaRewardsAttributes`
+- `QuestFinishRewardTemplateXmlProjectionExtractorTests.CreateProjection_UsesRequestedRegularRewardGroupIndexWithoutParsingItemRewards`
+- `QuestFinishRewardTemplateXmlProjectionExtractorTests.CreateProjection_DefaultsMissingAndOutOfRangeRewardsToEmptyJavaRewards`
+- `QuestFinishRewardTemplateXmlProjectionExtractorTests.RealDataAudit_LoadsDefaultRegularNonItemRewardProjectionWithoutProductionWiring`
 
 ## Next Recommendation
 
-Next, begin a full static `QuestFinishRewardTemplateProjection` extractor for Java quest reward XML, starting with non-item reward fields only and keeping operation-planner composition non-live. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
+Next, compose the static non-item reward projection with the existing non-live dialog guard and operation planners in a focused test, or extend extraction to regular item/selectable rewards. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.

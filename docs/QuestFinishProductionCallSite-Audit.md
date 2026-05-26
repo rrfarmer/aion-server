@@ -159,3 +159,16 @@ Add a narrow adapter from `NearbyQuestTemplateSummary` into guard/planner prereq
 ## Recommended Next Small Step After UOW-1084
 
 Begin a full static `QuestFinishRewardTemplateProjection` extractor for Java quest reward XML, starting with non-item reward fields only and keeping operation-planner composition non-live.
+
+## C# State After UOW-1085
+
+- Added `QuestFinishRewardTemplateXmlProjectionExtractor`.
+- The extractor reads Java quest XML and creates default regular reward-group `QuestFinishRewardTemplateProjection` data for non-item reward attributes:
+  - `gold`, `exp`, `ap`, `dp`, `gp`, `title`, `extend_inventory`, `extend_stigma`, `ccheck`, and `icheck`.
+- It records `RewardGroupCount`, `RewardRepeatCount`, `IsChallengeTask`, and `HasNonItemRewards`, but intentionally leaves `HasItemRewards` false and does not parse `reward_item`, `selectable_reward_item`, class selectable rewards, extended rewards, bonus handlers, quest work items, target NPC context, or production socket/runtime lookup.
+- Real-data regression coverage confirms the default regular reward group projection over 8,043 current Java quest templates, including 6,832 templates with default regular non-item fields and totals for default-group kinah/XP.
+- No production socket path, guard-to-operation planner wiring, reward mutation, XP mutation, custom reward execution, mail execution, object-id allocation, persistence, or packet send was enabled.
+
+## Recommended Next Small Step After UOW-1085
+
+Compose `QuestFinishRewardTemplateXmlProjectionExtractor` output with the existing non-live guard and operation planners in a focused test, or extend the extractor to parse regular `reward_item` and `selectable_reward_item` lists. Keep production `HandleDialogSelectAsync` live quest finish disabled.

@@ -234,3 +234,18 @@ This should be implemented and tested before any production socket/quest handler
 3. Full `QuestFinishRewardTemplateProjection` construction from Java static data remains missing.
 4. Java `PlayerCommonData.setExp` live mutation remains absent, so custom rewards must stay disabled.
 5. Custom reward receipt/mail execution, packet ordering, persistence, and Java runtime comparison remain gated and unverified.
+
+## C# State After UOW-1085
+
+- Added a first static reward XML projection extractor for Java `Rewards` non-item attributes.
+- `QuestFinishRewardTemplateXmlProjectionExtractor` can build default regular reward-group projections from Java quest XML without touching session/player/runtime state.
+- The extractor exposes ignored-by-`giveReward` XML fields (`extend_stigma`, `ccheck`, and `icheck`) through the existing non-item projection record so downstream planners can continue warning about them.
+- Tests include fixture coverage for Java-shaped attributes, requested reward-group selection, missing/out-of-range reward defaults, and real-data counts.
+
+## Remaining Runtime Wiring Blockers After UOW-1085
+
+1. Production `GameServerConnection.HandleDialogSelectAsync` still does not call the guard planner.
+2. The new extractor is not wired to runtime static-data services or operation planning.
+3. Item rewards, selectable rewards, class selectable rewards, extended rewards, bonus handler rewards, quest work items, target NPC context, and production reward-group correction integration remain incomplete.
+4. Java `PlayerCommonData.setExp` live mutation remains absent, so custom rewards must stay disabled.
+5. Custom reward receipt/mail execution, packet ordering, persistence, and Java runtime comparison remain gated and unverified.
