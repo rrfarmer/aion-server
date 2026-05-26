@@ -41,6 +41,8 @@ Update after UOW-1216: `docs/Phase-6-BindPointTeleport-RuntimeOwner-Design.md` d
 
 Update after UOW-1217: C# now has an isolated `BindPointTeleportRuntimeStateOwner` that can supply the Java `hasTask`/`cancelTask` and cooldown facts required by future action `2` and action `3` fanout bridges. Fanout remains unwired, and Java known-list/source-inclusion parity remains unverified.
 
+Update after UOW-1218: `BindPointTeleportRuntimeControlBridgeService` now consumes the runtime owner for action `2` cancel and action `3` login cooldown packet intents. It does not send packets; future fanout work can use its `ShouldSendPacket` and `SmBindPointTeleport` intent without duplicating task/cooldown lookup logic.
+
 ## Java Flow
 
 Java source files:
