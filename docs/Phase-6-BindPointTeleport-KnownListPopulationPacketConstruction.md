@@ -95,3 +95,7 @@ The runtime fact hydration audit is complete. It confirms the operation packet c
 ## Update After UOW-1273
 
 `PlayerKnownListPacketConstructionFactPlanService` can now create non-live operation packet construction facts from supplied viewer/subject snapshots or return explicit blockers. Population packet construction still consumes already-built facts; a future composition slice should join fact plans to population candidate directions without enabling live dispatch.
+
+## Update After UOW-1274
+
+Population packet construction can now consume completed per-direction fact plans as supplemental packet construction facts while preserving existing request-level facts as authoritative. Candidate plans also expose blocked fact-plan metadata, so missing ride/stat/effect inputs remain visible instead of being hidden behind packet construction gaps.

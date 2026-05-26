@@ -92,3 +92,7 @@ The planner:
 ## Next Recommended Unit of Work
 
 Compose `PlayerKnownListPacketConstructionFactPlanService` with population packet construction as metadata: allow callers to supply per-direction viewer/subject fact-plan requests, build the per-subject facts dictionary for each candidate, and keep all blocked fact plans explicit. Do not wire live dispatch.
+
+## Update After UOW-1274
+
+Population fact-plan composition is now present. `PlayerKnownListPopulationCandidateFact` can carry per-direction fact-plan requests, candidate plans expose `SideEffectFactPlans`, and completed fact plans supplement packet construction facts without overriding request-level explicit facts. Blocked fact plans remain visible as metadata.

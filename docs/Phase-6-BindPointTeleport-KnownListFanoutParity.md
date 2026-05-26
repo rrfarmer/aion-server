@@ -460,3 +460,7 @@ Population-level packet-construction metadata now exists for known-list candidat
 ## Update After UOW-1272
 
 The runtime packet fact hydration audit identifies why known-list fanout cannot yet execute the population packet metadata live: viewer-sensitive `SmPlayerInfo` context, attack-speed/stat facts, motion timing, ride stat facts, stance observer lifecycle, abnormal-effect entries/timers, and Java runtime packet ordering still need focused parity slices.
+
+## Update After UOW-1274
+
+Population candidate plans can now expose both fact-plan blockers and packet construction metadata per direction. Known-list fanout parity remains blocked on live fact hydration, live region known-list population, socket dispatch, scheduled callback wiring, and Java runtime packet-order validation.

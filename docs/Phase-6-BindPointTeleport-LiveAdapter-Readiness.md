@@ -343,3 +343,7 @@ Population plans can now carry operation-level packet construction metadata per 
 ## Update After UOW-1272
 
 The packet fact hydration audit confirms live bind-point fanout should remain disabled. C# has partial scalar sources for motions, ride info, stance, and abnormal masks, but still lacks a Java-equivalent active viewer context adapter, reusable attack-speed stat resolver for known-list packet construction, live effect-entry/timer hydration, socket dispatch ordering, and Java runtime validation.
+
+## Update After UOW-1274
+
+Population fact-plan composition now preserves per-direction blocked fact metadata and packet construction metadata, but live bind-point fanout remains disabled. The live adapter still lacks active viewer context, stat/effect hydration, Java-equivalent known-list population, socket execution, and runtime packet validation.
