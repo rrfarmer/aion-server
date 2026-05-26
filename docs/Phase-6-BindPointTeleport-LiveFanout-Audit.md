@@ -53,6 +53,8 @@ Update after UOW-1222: `docs/Phase-6-BindPointTeleport-ScheduledKinah-LiveBounda
 
 Update after UOW-1223: the `DEC_KINAH_FLY` packet mask prerequisite is now named and tested in C#. Live callback fanout is still blocked on the actual scheduled Kinah mutation/persistence boundary and Java-order failure handling.
 
+Update after UOW-1224: the Kinah mutation owner design audit confirms action `3` fanout should remain behind a scheduled Kinah mutation result that has explicit owner/lock, persistence, and inventory-update packet policy.
+
 ## Java Flow
 
 Java source files:

@@ -11,6 +11,8 @@ Do not enable live bind-point scheduled Kinah mutation in the next `GameServerCo
 
 Update after UOW-1223: C# now has named packet-level `SmInventoryUpdateItem.DecreaseKinahFly = 0x4B` coverage and a source-derived packet test proving the trailing update mask can be emitted for a Kinah item. This only satisfies the packet-mask prerequisite; live inventory mutation, failure-message send, persistence, and callback dispatch remain disabled.
 
+Update after UOW-1224: `docs/Phase-6-BindPointTeleport-KinahMutationOwner-Design.md` now pins the future live owner/boundary shape for scheduled Kinah mutation. It recommends a non-live mutation planner next, before any live persistence or packet send is wired.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -121,3 +123,5 @@ Tests added:
 Add the smallest executable prerequisite for the audited boundary: introduce a named `SmInventoryUpdateItem.DecreaseKinahFly` constant and a packet/unit test proving that C# can serialize a Kinah inventory update with mask `0x4B`. Keep it packet-level only: no live inventory mutation, no repository write, no `GameServerConnection` dispatch, and no movement.
 
 Update after UOW-1223: this packet-level prerequisite is complete. The next recommended unit is a shared/live Kinah mutation owner design audit for the scheduled callback path, including threading, persistence failure policy, and Java packet ordering.
+
+Update after UOW-1224: the owner design audit is complete. Next, add a non-live mutation planner that produces future packet/persistence intent metadata without touching live inventory from `GameServerConnection`.
