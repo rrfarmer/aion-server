@@ -104,3 +104,18 @@ This should be implemented and tested before any production socket/quest handler
 2. Production quest-finish reward mutation remains non-live; no socket or quest handler invokes the assembler.
 3. Java `PlayerCommonData.setExp` live mutation is still absent, so custom reward level checks must not be enabled from stale pre-mutation player snapshots.
 4. Transaction/failure ordering between custom reward receipt writes and system-mail persistence is still unresolved.
+
+## C# State After UOW-1077
+
+- Added `Player.AccountCreationEpochMillis` as a nullable runtime field.
+- Added `PlayerAccountRuntimeStateService` to apply authenticated account access level, membership, and login-server account creation milliseconds to the active `Player`.
+- `GameServerConnection` now retains positive `AccountAuthResult.CreationDate` after `CM_L2AUTH_LOGIN_CHECK` and copies it to the active player after successful enter-world.
+- Missing or fake-auth account creation remains `null` instead of silently becoming Unix epoch zero; this keeps `QuestFinishCustomRewardRuntimeInputAssemblerService` able to refuse enabled execution when the Java account-creation dependency is absent.
+- Tests cover the state applier only. They do not perform an encrypted socket login/enter-world integration run or compare against a Java runtime capture.
+
+## Remaining Runtime Wiring Blockers After UOW-1077
+
+1. Production quest-finish reward mutation remains non-live; no socket or quest handler invokes the assembler.
+2. Java `PlayerCommonData.setExp` live mutation is still absent, so custom reward level checks must not be enabled from stale pre-mutation player snapshots.
+3. Transaction/failure ordering between custom reward receipt writes and system-mail persistence is still unresolved.
+4. The account-creation retention path is unit tested at the state-applier level only; end-to-end login-server auth, reconnect, and enter-world socket ordering still need integration coverage.

@@ -421,6 +421,11 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - The assembler converts login-server account creation epoch milliseconds through `GameServerOptions.Core.GetTimeZone()` and returns a local `DateTime` for faction-pack window comparison, following Java `ServerTime.ofEpochMilli(...).toLocalDateTime()`.
 - Tests cover the UTC Asmodian faction-window start and a fixed-offset server timezone conversion.
 
+## C# State After UOW-1077
+
+- Added nullable `Player.AccountCreationEpochMillis`, `PlayerAccountRuntimeStateService`, and `GameServerConnection` propagation from positive login-server `AccountAuthResult.CreationDate` to the active player after enter-world.
+- Missing or fake-auth creation time remains `null`, so future custom reward assembly can still treat it as a missing Java dependency instead of using Unix epoch zero.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
@@ -494,6 +499,8 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `QuestFinishCustomRewardRuntimeInputAssemblerServiceTests.CreateOptions_EnabledGateRequiresRuntimeInputsBeforeAdapterExecution`
 - `QuestFinishCustomRewardRuntimeInputAssemblerServiceTests.CreateOptions_CreatesAdapterOptionsWithJavaServerTimeEpochMillisConversion`
 - `QuestFinishCustomRewardRuntimeInputAssemblerServiceTests.ConvertEpochMillisToServerLocalTime_MatchesJavaServerTimeOfEpochMilliAcrossOffsets`
+- `PlayerAccountRuntimeStateServiceTests.ApplyLoginAccountState_CarriesLoginServerCreationMillisToActivePlayer`
+- `PlayerAccountRuntimeStateServiceTests.ApplyLoginAccountState_PreservesMissingCreationMillisAsNull`
 - `GamePacketTests.CharacterSelectionServerPackets_WriteJavaShapedPayloads` level-up `SM_ACTION_ANIMATION` assertion
 - `PlayerLevelChangeUpgradePlanServiceTests.CreatePlan_StagesJavaUpgradePlayerOrderWithTeamAndLegionDependencies`
 - `PlayerLevelChangeUpgradePlanServiceTests.CreatePlan_RecordsMissingMaxStatsDeadAndNoTeamLegionBranches`
@@ -517,4 +524,4 @@ Level-change side effects include stat template refresh, max repose recalculatio
 
 ## Next Recommendation
 
-Next, preserve login-server account creation time on active C# account/session state without enabling custom reward execution, or add focused tests around the assembler's missing-account-time behavior from a connection/session-shaped input. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
+Next, add a disabled quest-finish/session assembly adapter that reads `Player.AccountCreationEpochMillis`, `IDFactory.NextId`, and static item templates into `QuestFinishCustomRewardRuntimeInputAssemblerService` without invoking production custom reward execution. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
