@@ -395,3 +395,7 @@ Population planning can now opt into disabled abnormal-effect resolver auto-comp
 ## Update After UOW-1286
 
 A deterministic helper now models Java `Effect.getRemainingTimeToDisplay()` from explicit duration/end-time/current-time snapshots, including permanent, NPC 24h, upper-overflow, and expired negative cases. Live bind-point fanout remains blocked because duration/end-time production is not wired to live effects, resolver callers still supply remaining-time values, live `EffectController` hydration is missing, socket dispatch is disabled, and no Java runtime packet capture has been performed.
+
+## Update After UOW-1287
+
+A snapshot-entry factory can now create abnormal-effect packet entries from supplied packet-facing fields, preserving explicit remaining-time values or computing them from deterministic timing snapshots. A read-only packet-order audit also confirmed Java sends player info/motion/ride/stance, then abnormal effects, then dependent pet visibility retry. Live bind-point fanout remains blocked because live `EffectController` hydration, full `SkillTargetSlot` mapping, `SM_PET`/`SM_PET_EMOTE` serializers, pet visibility side effects, socket dispatch, and Java runtime packet capture are still missing.
