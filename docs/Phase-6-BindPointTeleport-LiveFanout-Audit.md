@@ -73,6 +73,8 @@ Update after UOW-1232: packet intent and runtime callback metadata are now compo
 
 Update after UOW-1233: the supplied-result send boundary is now modeled. Live action `3` fanout remains blocked until actual send/fanout adapters are deliberately wired and tested.
 
+Update after UOW-1234: the completed Kinah metadata chain readiness refresh recommends owner/rollback refinement before live fanout or send wiring. Live action `3` fanout remains blocked.
+
 ## Java Flow
 
 Java source files:

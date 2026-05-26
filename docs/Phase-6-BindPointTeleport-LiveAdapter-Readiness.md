@@ -51,6 +51,8 @@ Update after UOW-1232: `BindPointTeleportKinahCallbackResultCompositionService` 
 
 Update after UOW-1233: `BindPointTeleportKinahInventorySendResultPlanService` now models a supplied inventory packet send result. Only `Sent` with `SentPacket=true` can continue to cooldown/action `3` fanout metadata; live `SendPacketAsync` remains disabled.
 
+Update after UOW-1234: `docs/Phase-6-BindPointTeleport-KinahMetadataChain-Readiness.md` now summarizes the completed non-live Kinah metadata chain. The next preferred prerequisite is owner/rollback refinement before any no-op or live send seam.
+
 ## Java Live Flow
 
 Java source files:
@@ -143,6 +145,22 @@ Java bind-point teleport uses these concrete system message IDs:
 3. Add scheduled Kinah mutation/persistence only after item update packet ordering is concrete.
 4. Add live final movement only after action abort/despawn/spawn/pet/zone/legion gaps are either implemented or explicitly staged out with tests.
 5. Only then wire `GameServerConnection` to dispatch `CmBindPointTeleport`.
+
+## Kinah Metadata Chain Readiness - UOW-1234
+
+The scheduled Kinah metadata chain is complete enough to stop adding more packet/order-only bridges for now:
+
+| Stage | Artifact | Status | Remaining Gate |
+|---|---|---|---|
+| Mutation metadata | `BindPointTeleportScheduledKinahMutationPlanService` | Non-live unit tested | Needs owner/lock and rollback. |
+| Callback metadata | `BindPointTeleportScheduledCallbackPlanService` | Non-live unit tested | Needs live owner result input. |
+| Runtime carry-through | `BindPointTeleportRuntimeCallbackExecutionBridgeService` | Unit tested; can execute supplied cooldown/fanout metadata | Still not connected to inventory packet send or movement. |
+| Persistence decision | `BindPointTeleportKinahPersistenceDecisionBridgeService` | Unit tested with supplied results | Needs SQL adapter and rollback policy. |
+| Packet intent | `BindPointTeleportKinahInventoryUpdatePacketPlanService` | Unit tested, serializes mask `0x4B` | Needs live send adapter. |
+| Callback composition | `BindPointTeleportKinahCallbackResultCompositionService` | Unit tested | Supplied metadata only. |
+| Send-result gate | `BindPointTeleportKinahInventorySendResultPlanService` | Unit tested with supplied results | Needs live send adapter and owner rollback response. |
+
+Next preferred prerequisite: refine the live owner/rollback contract before adding a send seam. The future owner must know how to restore the original Kinah item when persistence or send fails, and must block cooldown/action `3` fanout/movement on every failure status.
 
 ## Do Not Wire Yet
 

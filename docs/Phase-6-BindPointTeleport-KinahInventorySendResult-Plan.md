@@ -86,3 +86,5 @@ The service returns:
 ## Next Recommended Unit of Work
 
 Add a non-live live-adapter readiness update for the now-complete Kinah metadata chain, then choose the next executable prerequisite: either an owner/rollback design refinement for live mutation or a no-op live send adapter seam that consumes the send-result planner without calling `SendPacketAsync`.
+
+Update after UOW-1234: the readiness refresh is complete in `docs/Phase-6-BindPointTeleport-KinahMetadataChain-Readiness.md`. Next, refine the owner/rollback contract before a send seam.
