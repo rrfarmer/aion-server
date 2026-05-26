@@ -146,3 +146,5 @@ Tests added:
 Add a non-live persistence result composition bridge that consumes scheduled Kinah mutation metadata plus a supplied persistence result and produces the exact next callback decision: rollback/stop on missing row or failure, and only allow inventory update packet metadata plus cooldown/action `3` fanout metadata on `Saved`. Keep it test-only/non-live: no SQL, no packet send, no `GameServerConnection` dispatch, and no movement.
 
 Update after UOW-1230: the persistence result decision bridge is implemented and tested. Next, add a non-sending inventory update packet adapter that only produces a concrete packet intent after `Saved`.
+
+Update after UOW-1237: `BindPointTeleportKinahPersistenceOperationPlanService` now implements the pure owner-checked count-update contract and supplied result mapper. It still does not execute SQL; live repository execution remains blocked on an explicit adapter and owner/rollback wiring.

@@ -80,3 +80,5 @@ The disabled adapter accepts an optional `IGameClientConnectionRegistry` only to
 ## Next Recommended Unit of Work
 
 Add a repository SQL adapter design or pure contract for owner-checked Kinah count persistence. Keep it disabled from live callbacks and prove it does not mutate or write SQL unless explicitly supplied/executed in tests. Do not wire `GameServerConnection`, live packet sends, cooldown/action `3` fanout, or movement.
+
+Update after UOW-1237: `BindPointTeleportKinahPersistenceOperationPlanService` now provides the pure owner-checked persistence operation contract. Next, compose mutation, persistence result, disabled send result, and rollback metadata into one non-live scheduled callback outcome before any live adapter work.
