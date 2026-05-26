@@ -26,7 +26,7 @@ This map records every Java caller found in the Phase 6 price scan so future uni
 | `com.aionemu.gameserver.services.craft.RelinquishCraftStatus` | `getPriceForService(basePrice, race)` | `CraftSkillUpdateService` and future relinquish plan | Partial / Not Started | Medium | Candidate if relinquish-specific planner exists or can be added cleanly. | Existing craft-skill learn kinah path is not the same Java relinquish flow. |
 | `com.aionemu.gameserver.services.LegionService` | `getPriceForService(LEGION_EMBLEM_REQUIRED_KINAH, race)` | Legion DB/hydration surfaces; no focused emblem price planner found | Partial / Not Started | High | Defer until legion emblem workflow surface is isolated. | Legion contribution, ranking, emblem persistence, and packet fanout are broad. |
 | `com.aionemu.gameserver.services.BrokerService` | `getPriceForService(registrationCommission, race)` | `BrokerRepository`; `GameServerConnection` broker handlers | Partial | High | Create non-live commission calculator/plan before touching live registration handler. | C# has baseline comment noting broker commission price modifiers are currently 100/100/100. Persistence and packet order make this high conflict. |
-| `com.aionemu.gameserver.services.mail.MailService` | `getPriceForService(baseCost + commissions, race)` | `MailRepository`; `GameServerConnection` mail handlers; `SystemMailReward*` for system mail only | Partial | High | Create pure send-cost planner before live send-mail changes. | Player mail send cost combines base cost, attached kinah commission, item quality commission, courier pass handling, persistence, and recipient fanout. |
+| `com.aionemu.gameserver.services.mail.MailService` | `getPriceForService(baseCost + commissions, race)` | `Aion.GameServer.Services.MailSendCostPlanService`; `MailRepository`; `GameServerConnection` mail handlers | Partial | High | Keep persistence/fanout staged; later wire live config/influence facts into send-mail handler. | UOW-1191 extracted Java base-cost, commission, item-quality rate, and central price formula into a pure planner used by `HandleSendMailAsync`. Courier pass handling, persistence, and recipient fanout remain broader live risks. |
 
 ## Migration Parity Table - PricesService Consumer Map
 
@@ -45,7 +45,7 @@ This map records every Java caller found in the Phase 6 price scan so future uni
 | `com.aionemu.gameserver.services.craft.RelinquishCraftStatus` | future C# relinquish craft-status planner | Service | Not Started | No Tests | Unknown | Existing C# craft-skill kinah learn flow is separate from Java relinquish craft status. |
 | `com.aionemu.gameserver.services.LegionService` | future C# legion emblem workflow | Service | Partial / Not Started | No Tests | Unknown | Legion data hydration exists elsewhere, but emblem price workflow is not isolated. |
 | `com.aionemu.gameserver.services.BrokerService` | `Aion.GameServer.Data.BrokerRepository` / `Aion.GameServer.Network.Aion.GameServerConnection` | Service / Repository / Connection Handler | Partial | Manual Only | Needs Verification | Broker persistence and packet handlers exist. Registration commission currently remains baseline and should be isolated into a non-live calculator before live changes. |
-| `com.aionemu.gameserver.services.mail.MailService` | `Aion.GameServer.Data.MailRepository` / `Aion.GameServer.Network.Aion.GameServerConnection` | Service / Repository / Connection Handler | Partial | Manual Only | Needs Verification | Player mail persistence/packet surfaces exist. Send-cost price formula and commission logic need a pure planner before live changes. |
+| `com.aionemu.gameserver.services.mail.MailService` | `Aion.GameServer.Services.MailSendCostPlanService` / `Aion.GameServer.Network.Aion.GameServerConnection` | Service / Repository / Connection Handler | Partial | Unit Tested | Needs Verification | Send-cost base fee, attached-kinah commission, item-quality commission, and `PricesService.getPriceForService` are staged and used by the send-mail handler with default price facts. Live config/influence sourcing, courier pass behavior, persistence rollback, and recipient fanout remain partial. |
 | `com.aionemu.gameserver.model.siege.Influence` | `Aion.GameServer.Services.PriceInfluenceRates` | Runtime Fact Input | Not Started | Unit Tested | Needs Verification | Every live price consumer still depends on this missing runtime source for true Java parity. |
 
 ## Tests Referenced
@@ -64,6 +64,9 @@ This map records every Java caller found in the Phase 6 price scan so future uni
 | `ArmsfusionPricePlanServiceTests.CreateFusionPlan_FollowsJavaFailureOrder` | Java armsfusion failure ordering through missing/equipped, fusibility, kinah, temporary exchange, fused state, type, level, and improvement checks. | Source-derived only. |
 | `ArmsfusionPricePlanServiceTests.CreateBreakPlan_SucceedsWithJavaSetFusionedItemNullMutations` | Java armsfusion decompose success-side fused item clearing and fusion-stone removal. | Source-derived only. |
 | `ArmsfusionPricePlanServiceTests.CreateBreakPlan_FollowsJavaFailureOrder` | Java armsfusion decompose missing-target and not-fused failure ordering. | Source-derived only. |
+| `MailSendCostPlanServiceTests.GetQualityPriceRate_UsesJavaMailQualityMapping` | Java mail item-quality commission rates. | Source-derived only. |
+| `MailSendCostPlanServiceTests.CreatePlan_UsesJavaMailCommissionsAndPricesService` | Java mail base cost, commission, central price formula, and attached-kinah final total. | Source-derived only. |
+| `MailSendCostPlanServiceTests.CreatePlan_DefaultNormalLetterMatchesJavaBaseline` | Default normal no-attachment mail cost remains `10`. | Source-derived only. |
 
 ## Remaining Risks
 
@@ -78,7 +81,7 @@ This map records every Java caller found in the Phase 6 price scan so future uni
 
 Prefer one of these:
 
-1. Keep armsfusion non-live and add DAO/packet/audit execution boundaries only after repository and packet-order prerequisites are isolated.
-2. Add a pure mail-send cost planner for `MailService.sendMail` before touching `GameServerConnection`.
+1. Keep mail persistence/fanout staged and add live config/influence sourcing only after price fact plumbing exists.
+2. Add a pure broker-registration commission calculator before touching the live broker registration handler.
 3. Add a pure broker-registration commission calculator before touching the live broker registration handler.
 4. Add a focused `SM_SELL_ITEM` packet plan and byte tests before any live sell-window routing.
