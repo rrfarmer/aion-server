@@ -391,3 +391,7 @@ Population packet-construction diagnostics now report abnormal-effect fact sourc
 ## Update After UOW-1285
 
 Population planning can now opt into disabled abnormal-effect resolver auto-composition from supplied subject snapshots and supplied abnormal-effect snapshot entries. Live bind-point fanout remains blocked because this is still snapshot based, live `EffectController` hydration/ordering/no-show classification/timer calculation are missing, pet visibility and full packet-order validation are incomplete, socket dispatch is disabled, and no Java runtime packet capture has been performed.
+
+## Update After UOW-1286
+
+A deterministic helper now models Java `Effect.getRemainingTimeToDisplay()` from explicit duration/end-time/current-time snapshots, including permanent, NPC 24h, upper-overflow, and expired negative cases. Live bind-point fanout remains blocked because duration/end-time production is not wired to live effects, resolver callers still supply remaining-time values, live `EffectController` hydration is missing, socket dispatch is disabled, and no Java runtime packet capture has been performed.
