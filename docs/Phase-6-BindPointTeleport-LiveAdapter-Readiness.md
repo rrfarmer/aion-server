@@ -383,3 +383,7 @@ Population packet-construction diagnostics now report ride attack-speed fact sou
 ## Update After UOW-1283
 
 Known-list fact planning can now consume an explicit disabled abnormal-effect resolver result while preserving supplied fact precedence. Live bind-point fanout remains blocked because population planning does not auto-attach abnormal-effect resolver results, diagnostics do not yet surface abnormal-effect source/status counts, live `EffectController` hydration and timer calculation remain missing, socket dispatch is disabled, and no Java runtime packet capture has been performed.
+
+## Update After UOW-1284
+
+Population packet-construction diagnostics now report abnormal-effect fact source and resolver status. This improves readiness visibility only; live bind-point fanout remains blocked because population planning still does not auto-attach abnormal-effect resolver results, live `EffectController` hydration and Java remaining-time calculation are missing, socket dispatch is disabled, and no Java runtime packet capture has been performed.
