@@ -9,6 +9,8 @@ Source of truth: Java project.
 
 Live bind-point teleport wiring should remain disabled until the client packet boundary is ported. Java registers `CM_BIND_POINT_TELEPORT` at opcode `244`, but C# currently has no opcode `244` registration and no `CmBindPointTeleport` client packet class. The existing C# bind-point work is therefore correctly staged as planners plus `SmBindPointTeleport` serialization only.
 
+Update after UOW-1202: C# now has parser-only `CmBindPointTeleport` coverage and opcode `244` registration. Live handler composition, dead-player guard execution, cooldown/task ownership, fanout, Kinah mutation, and movement remain disabled.
+
 ## Java Flow
 
 Java source files:
