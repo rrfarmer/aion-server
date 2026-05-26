@@ -13,6 +13,8 @@ Update after UOW-1223: C# now has named packet-level `SmInventoryUpdateItem.Decr
 
 Update after UOW-1224: `docs/Phase-6-BindPointTeleport-KinahMutationOwner-Design.md` now pins the future live owner/boundary shape for scheduled Kinah mutation. It recommends a non-live mutation planner next, before any live persistence or packet send is wired.
 
+Update after UOW-1225: `BindPointTeleportScheduledKinahMutationPlanService` now models missing/insufficient Kinah, exact Kinah to zero, positive decrement, non-positive no-mutation success, unrelated inventory preservation, and `DecreaseKinahFly` packet intent metadata. It remains non-live and does not persist or send packets.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -125,3 +127,5 @@ Add the smallest executable prerequisite for the audited boundary: introduce a n
 Update after UOW-1223: this packet-level prerequisite is complete. The next recommended unit is a shared/live Kinah mutation owner design audit for the scheduled callback path, including threading, persistence failure policy, and Java packet ordering.
 
 Update after UOW-1224: the owner design audit is complete. Next, add a non-live mutation planner that produces future packet/persistence intent metadata without touching live inventory from `GameServerConnection`.
+
+Update after UOW-1225: the non-live mutation planner exists. Next, compose it into scheduled callback metadata or add the persistence-boundary contract before live mutation.

@@ -55,6 +55,8 @@ Update after UOW-1223: the `DEC_KINAH_FLY` packet mask prerequisite is now named
 
 Update after UOW-1224: the Kinah mutation owner design audit confirms action `3` fanout should remain behind a scheduled Kinah mutation result that has explicit owner/lock, persistence, and inventory-update packet policy.
 
+Update after UOW-1225: the non-live scheduled Kinah mutation planner can now produce success/failure and `DecreaseKinahFly` packet-intent metadata, but it is not yet composed into callback execution and does not unblock live action `3` fanout.
+
 ## Java Flow
 
 Java source files:

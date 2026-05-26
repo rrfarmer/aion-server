@@ -9,6 +9,8 @@ Source of truth: Java project.
 
 Do not implement live bind-point Kinah mutation by copying one of the existing handler-local item-count updates. C# needs an explicit owner/boundary for this path because Java performs the scheduled payment as a single storage operation whose success controls every later callback side effect. The C# boundary should serialize per-player inventory mutation, update the in-memory Kinah item, persist the item count with owner checking, emit `SmInventoryUpdateItem.DecreaseKinahFly`, and then return a result that the existing runtime callback bridge can use before cooldown/fanout.
 
+Update after UOW-1225: C# now has a non-live `BindPointTeleportScheduledKinahMutationPlanService` that models the future in-memory mutation result and packet intent without persistence, packet sends, or live dispatch. The live owner/persistence boundary remains blocked.
+
 ## Java Source Facts
 
 Java source files:
@@ -124,3 +126,5 @@ Tests added:
 ## Next Recommended Unit of Work
 
 Implement a non-live `BindPointTeleportScheduledKinahMutationPlanService` that consumes a `Player` inventory snapshot and returns the exact future mutation result without persistence or packet sends. Cover missing Kinah, insufficient Kinah, exact Kinah to zero, positive decrement, unrelated inventory preservation, and `SmInventoryUpdateItem.DecreaseKinahFly` packet intent metadata. Keep it non-live and do not wire `GameServerConnection`.
+
+Update after UOW-1225: this non-live planner is implemented and tested. The next recommended unit is to compose this mutation planner into `BindPointTeleportScheduledCallbackPlanService` metadata, still without live persistence or packet sends.
