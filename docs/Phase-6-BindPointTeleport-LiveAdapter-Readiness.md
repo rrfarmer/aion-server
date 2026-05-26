@@ -387,3 +387,7 @@ Known-list fact planning can now consume an explicit disabled abnormal-effect re
 ## Update After UOW-1284
 
 Population packet-construction diagnostics now report abnormal-effect fact source and resolver status. This improves readiness visibility only; live bind-point fanout remains blocked because population planning still does not auto-attach abnormal-effect resolver results, live `EffectController` hydration and Java remaining-time calculation are missing, socket dispatch is disabled, and no Java runtime packet capture has been performed.
+
+## Update After UOW-1285
+
+Population planning can now opt into disabled abnormal-effect resolver auto-composition from supplied subject snapshots and supplied abnormal-effect snapshot entries. Live bind-point fanout remains blocked because this is still snapshot based, live `EffectController` hydration/ordering/no-show classification/timer calculation are missing, pet visibility and full packet-order validation are incomplete, socket dispatch is disabled, and no Java runtime packet capture has been performed.
