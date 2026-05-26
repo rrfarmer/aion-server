@@ -75,3 +75,7 @@ Default behavior remains disabled and non-sending. The adapter is not wired into
 ## Next Recommended Unit of Work
 
 Add a known-list fanout parity design or characterization slice for bind-point action `3` before any live scheduled callback dispatch. It should distinguish Java self-first known-list broadcast behavior from the current C# registry/distance fanout approximation.
+
+## Update After UOW-1247
+
+The current C# visible-distance fanout approximation is now executable as a characterization test. It confirms source inclusion plus same-world/95m filtering, and it explicitly remains `Needs Verification` against Java known-list behavior.

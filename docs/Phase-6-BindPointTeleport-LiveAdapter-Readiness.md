@@ -206,6 +206,8 @@ Update after UOW-1245: disabled/opt-in owner-checked SQL repository adapter seam
 
 Update after UOW-1246: disabled/opt-in inventory packet send adapter seam is complete and remains unwired from dispatch. The next safe prerequisite is known-list fanout parity design or characterization before any scheduled Kinah callback can broadcast action `3` live.
 
+Update after UOW-1247: current C# action `3` fanout approximation is characterized with concrete same-world/95m recipients, but Java known-list parity is still not achieved. The next safe prerequisite is a non-live known-list-backed fanout plan or expected Java trace model.
+
 ## Do Not Wire Yet
 
 - Do not add a live `GameServerConnection` branch for `CmBindPointTeleport` in the next unit.
