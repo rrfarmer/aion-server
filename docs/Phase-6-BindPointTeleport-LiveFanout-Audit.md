@@ -11,6 +11,8 @@ Live bind-point teleport wiring should remain disabled until the client packet b
 
 Update after UOW-1202: C# now has parser-only `CmBindPointTeleport` coverage and opcode `244` registration. Live handler composition, dead-player guard execution, cooldown/task ownership, fanout, Kinah mutation, and movement remain disabled.
 
+Update after UOW-1203: C# now has a non-live `BindPointTeleportClientActionPlanService` that models Java `CM_BIND_POINT_TELEPORT.runImpl` dispatch selection. It records dead-player no-op, action `1` teleport intent, action `2` cancel intent, and unknown-action no-op without executing live side effects.
+
 ## Java Flow
 
 Java source files:
