@@ -25,6 +25,8 @@ Update after UOW-1208: C# now has a non-live `BindPointTeleportFinalMovementPlan
 
 Update after UOW-1209: C# now has a non-live `BindPointTeleportScheduledCallbackPlanService` that composes the Java delayed `TaskId.SKILL_USE` callback order: Kinah decrement failure returns before cooldown/fanout/movement; Kinah success adds cooldown intent, cooldown fanout intent, schedules the final movement gate, and only includes movement intent when the final gate passes. It still performs no live scheduler, inventory, cooldown-map, packet-send, or movement side effects.
 
+Update after UOW-1210: `docs/Phase-6-BindPointTeleport-TeleportTo-Audit.md` now maps Java `TeleportService.teleportTo(player, worldId, x, y, z)` side effects for hotspot final movement. The audit confirms bind-point live movement must still wait for an explicit `TeleportAnimation.NONE` side-effect plan because Java also performs action aborts, world despawn/spawn, same-instance versus map-load packet branching, pet movement, protection/effect/zone callbacks, leave-map/instance callbacks, and legion refresh.
+
 ## Java Flow
 
 Java source files:
@@ -84,6 +86,7 @@ Observed C# state:
 3. Add an explicit bind-point runtime state owner for cooldowns and the cancellable `TaskId.SKILL_USE` task equivalent. Non-live state semantics are staged in UOW-1206; live ownership remains unwired.
 4. Wire fanout only after packet parser, planner composition, cooldown state, and task ownership are independently tested.
 5. Add live Kinah mutation and final movement as separate units because both affect inventory persistence, packet order, and movement/known-list fanout.
+6. Before final movement, add a non-live `TeleportService.teleportTo` side-effect planner for the bind-point hotspot `TeleportAnimation.NONE` path using `docs/Phase-6-BindPointTeleport-TeleportTo-Audit.md`.
 
 ## Do Not Wire Yet
 
@@ -91,6 +94,7 @@ Observed C# state:
 - Do not schedule the 10 second task until cancellation ownership is tested.
 - Do not mutate Kinah from a scheduled callback until the failure packet and inventory update behavior are modeled.
 - Do not call `PlayerTeleportService` for the final movement until Java same-world/world-change packet order is selected for hotspot teleport.
+- Do not reuse delayed `SM_TELEPORT_LOC` paths for hotspot final movement; Java bind-point movement uses `TeleportAnimation.NONE` and runs `SpawnTask` immediately.
 
 ## Migration Parity Table - UOW-1201
 
