@@ -21,6 +21,8 @@ Update after UOW-1206: C# now has a non-live `BindPointTeleportRuntimeStatePlanS
 
 Update after UOW-1207: C# now has a non-live `BindPointTeleportScheduledKinahPlanService` that models the first branch inside Java's delayed `TaskId.SKILL_USE` callback: `tryDecreaseKinah(price, DEC_KINAH_FLY)` succeeds and continues, or fails and sends `STR_CANNOT_MOVE_TO_AIRPORT_NOT_ENOUGH_FEE` before returning. It records the Java item update mask `0x4B` without mutating inventory or sending packets.
 
+Update after UOW-1208: C# now has a non-live `BindPointTeleportFinalMovementPlanService` that models Java's final delayed movement gate: `!player.getLifeStats().isAboutToDie() && !player.isDead()` before `TeleportService.teleportTo(player, hotspot.worldId, hotspot.x, hotspot.y, hotspot.z)`. It records same-world/current-instance versus cross-world/instance-`1` target selection without moving the player.
+
 ## Java Flow
 
 Java source files:
@@ -58,6 +60,7 @@ C# surfaces reviewed:
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportRequestPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportRuntimeStatePlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportScheduledKinahPlanService.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportFinalMovementPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmBindPointTeleport.cs`
 
 Observed C# state:
@@ -69,7 +72,7 @@ Observed C# state:
 - `ThreadPoolManager` and `ScheduledTask` can represent delayed work, and `BindPointTeleportRuntimeStatePlanService` now records the bind-point-specific `TaskId.SKILL_USE` state boundary, but no live task slot is wired.
 - `IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync` can approximate Java `PacketSendUtility.broadcastPacket(..., true)` for visible-player fanout, but Java `broadcastPacketAndReceive` source-player inclusion semantics must be explicitly mapped before live use.
 - `SmBindPointTeleport` exists and is source-derived unit tested for opcode `296` and action payloads.
-- Price, requirements, operation, control, client action, fanout, request-composition, runtime-state, and scheduled-Kinah planners exist and remain non-live.
+- Price, requirements, operation, control, client action, fanout, request-composition, runtime-state, scheduled-Kinah, and final-movement planners exist and remain non-live.
 
 ## Recommended Live Insertion Order
 
