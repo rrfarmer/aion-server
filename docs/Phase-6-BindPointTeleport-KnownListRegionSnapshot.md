@@ -84,3 +84,7 @@ Added `dotnetConversion/src/Aion.GameServer/Services/PlayerKnownListRegionSnapsh
 ## Next Recommended Unit of Work
 
 Add a disabled adapter that converts `PlayerKnownListRegionSnapshot` candidate ids into `PlayerKnownListMembershipService` metadata. Keep it non-live and explicit that it still lacks Java range/can-see/two-way world-object mutation parity.
+
+## Update After UOW-1257
+
+`PlayerKnownListRegionMembershipAdapterService` now converts supplied region snapshot candidate ids into non-live `PlayerKnownListMembershipService` metadata with a new `RegionSnapshotRefresh` update reason. It preserves existing membership by default and can optionally remove missing snapshot candidates, but it remains an approximation without live region storage, range/can-see parity, two-way add order, or controller packet side effects.

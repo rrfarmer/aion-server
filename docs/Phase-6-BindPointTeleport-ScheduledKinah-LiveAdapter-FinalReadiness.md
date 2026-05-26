@@ -86,6 +86,10 @@ The known-list blocker now has a dedicated design audit in `docs/Phase-6-BindPoi
 
 `PlayerKnownListRegionSnapshotService` now models Java-shaped region candidate inputs for future known-list population, but it is still non-live and not connected to membership refresh, fanout, cooldown, movement, or scheduled Kinah callback execution.
 
+## Update After UOW-1257
+
+`PlayerKnownListRegionMembershipAdapterService` can seed non-live membership metadata from region snapshots. Scheduled Kinah action `3` execution remains disabled because the adapter is not live, not two-way, and not connected to socket fanout or movement.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:

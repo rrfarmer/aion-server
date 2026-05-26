@@ -77,6 +77,8 @@ Update after UOW-1255: `docs/Phase-6-BindPointTeleport-PlayerKnownListPopulation
 
 Update after UOW-1256: `PlayerKnownListRegionSnapshotService` now provides a disabled prerequisite model for owner-region plus neighbor-region player candidate selection. Live dispatch remains blocked because the model does not mutate known-list membership, compute range/`canSee`, perform two-way add/remove, or send controller packets.
 
+Update after UOW-1257: `PlayerKnownListRegionMembershipAdapterService` now adapts region snapshots into non-live membership metadata. Live dispatch remains blocked because it is owner-side metadata only and still lacks Java two-way `KnownList.add`, live region storage, visibility recomputation, and packet side effects.
+
 ## Java Live Flow
 
 Java source files:

@@ -132,3 +132,7 @@ Add a small, test-first region/player snapshot model for Java known-list populat
 `PlayerKnownListRegionSnapshotService` now provides that disabled prerequisite model. It can project player candidate ids from an owner region plus supplied neighbor regions while preserving owner exclusion, same-world/instance filtering, spawned filtering, deduplication, and first-seen region ordering metadata.
 
 It is still not Java region known-list parity because no live region object store, distance/range check, `canSee` visibility recomputation, already-known check, two-way add/remove, flag-NPC scan, or controller packet side effects execute.
+
+## Update After UOW-1257
+
+`PlayerKnownListRegionMembershipAdapterService` now adapts a supplied region snapshot into non-live membership metadata. This reduces the gap between region-shaped candidate projection and bind-point known-list fanout metadata, but full Java parity still requires two-way membership mutation, live region object ownership, visibility recomputation, and controller packet side effects.

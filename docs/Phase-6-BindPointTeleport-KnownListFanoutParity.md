@@ -89,6 +89,10 @@ Next recommended work: add a disabled region/player snapshot model that can feed
 
 The disabled region/player snapshot model now exists. It improves future membership inputs by carrying modeled world id, instance id, owner region, neighbor regions, and candidate player object ids, but bind-point action `3` fanout remains non-live because the model does not yet mutate known-list membership or execute Java controller side effects.
 
+## Update After UOW-1257
+
+The region snapshot membership adapter now seeds non-live player membership metadata from modeled region candidates. Bind-point fanout remains blocked because Java action `3` still depends on live known-list state, two-way add/remove, and controller packet side effects rather than precomputed metadata alone.
+
 ## Next Recommended Unit of Work
 
 Add a non-live known-list-backed fanout plan or expected Java trace model for bind-point broadcasts. It should represent source-first delivery plus known-list-player recipients without using distance-only filtering, and it should remain unwired from `GameServerConnection`.
