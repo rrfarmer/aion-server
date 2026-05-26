@@ -379,3 +379,7 @@ Population packet-construction diagnostics now report ride attack-speed fact sou
 ## Update After UOW-1282
 
 `PlayerKnownListAbnormalEffectFactResolverService` can normalize supplied abnormal-effect snapshots into packet-construction facts with no-show toggle and slot filtering metadata. Live bind-point fanout remains blocked because the resolver does not hydrate live `EffectController` maps, compute Java remaining-time values, consume resolver facts in fact planning, send sockets, or validate Java runtime packet output.
+
+## Update After UOW-1283
+
+Known-list fact planning can now consume an explicit disabled abnormal-effect resolver result while preserving supplied fact precedence. Live bind-point fanout remains blocked because population planning does not auto-attach abnormal-effect resolver results, diagnostics do not yet surface abnormal-effect source/status counts, live `EffectController` hydration and timer calculation remain missing, socket dispatch is disabled, and no Java runtime packet capture has been performed.
