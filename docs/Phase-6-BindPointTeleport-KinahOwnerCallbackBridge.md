@@ -71,3 +71,5 @@ New C# artifacts:
 ## Next Recommended Unit of Work
 
 Add a non-live outcome integration test or bridge that proves the owner callback bridge can feed the full persistence-decision, packet-intent, send-decision, rollback, and callback-outcome chain for failure and success cases. Keep it pure and supplied-result based; do not execute SQL, send packets, dispatch, fanout, or move.
+
+Update after UOW-1242: `BindPointTeleportKinahOwnerCallbackOutcomeIntegrationService` now composes the owner result through persistence decision, packet intent, supplied/disabled send result, owner rollback, and final callback outcome metadata. The next safe seam is a send-before-runtime ordering adapter/design that removes the remaining metadata-ordering wrinkle before any live send/fanout path is enabled.
