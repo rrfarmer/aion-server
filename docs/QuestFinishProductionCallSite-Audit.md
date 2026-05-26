@@ -119,3 +119,14 @@ Add a non-live `CM_DIALOG_SELECT` self auto-reward guard planner or test helper 
 ## Recommended Next Small Step After UOW-1081
 
 Add a static-data projection prerequisite for the C# side of Java `QuestTemplate.can_report` and reward metadata, or add a non-live composition test that feeds the guard planner's planned intent into existing quest-finish operation planning with explicit mock projections. Keep production `HandleDialogSelectAsync` live quest finish disabled.
+
+## C# State After UOW-1082
+
+- Added a non-live composition regression in `QuestFinishOperationPlanServiceTests`.
+- The test creates a planned `QuestDialogAutoRewardGuardPlanService` intent for Java action `108`, then feeds its dialog action id into `QuestFinishOperationPlanService.CreatePlan` with explicit mock reward projection data.
+- The composed operation plan remains fully non-live, includes non-item reward projection metadata, the coarse non-item placeholder, and quest-state mutation metadata, and completes the in-memory planned quest state.
+- No production socket path, static-data lookup, reward mutation, XP mutation, custom reward execution, or mail execution was enabled.
+
+## Recommended Next Small Step After UOW-1082
+
+Add a static-data projection prerequisite for Java `QuestTemplate.can_report` and reward metadata so the C# guard planner can eventually consume real static quest data. Keep production `HandleDialogSelectAsync` live quest finish disabled.

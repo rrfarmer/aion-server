@@ -451,6 +451,12 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - The planner can recognize Java's self/player-target reportable auto-reward dialog branch and return a non-live intent before future quest-finish XP metadata composition.
 - It does not mutate XP/level, build a level-change context, execute custom rewards, or call production socket code.
 
+## C# State After UOW-1082
+
+- Added `QuestFinishOperationPlanServiceTests.CreatePlan_ComposesDialogAutoRewardGuardIntentWithExplicitProjectionWithoutLiveSideEffects`.
+- The test composes a planned dialog auto-reward guard intent with explicit XP reward projection metadata and confirms the resulting quest-finish operation plan remains non-live.
+- XP live mutation and level-change custom reward execution remain disabled.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
@@ -553,4 +559,4 @@ Level-change side effects include stat template refresh, max repose recalculatio
 
 ## Next Recommendation
 
-Next, add a static-data projection prerequisite for Java `QuestTemplate.can_report` and reward metadata, or compose the new non-live dialog auto-reward guard intent with explicit mock quest-finish projections. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
+Next, add a static-data projection prerequisite for Java `QuestTemplate.can_report` and reward metadata so the C# guard planner can eventually consume real quest data. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.

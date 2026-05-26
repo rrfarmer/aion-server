@@ -190,3 +190,17 @@ This should be implemented and tested before any production socket/quest handler
 3. The planner returns only a disabled intent; no `QuestFinishRewardTemplateProjection` or `QuestFinishRewardSideEffectContext` is built from live static data.
 4. Java `PlayerCommonData.setExp` live mutation remains absent, so custom rewards must stay disabled.
 5. Custom reward receipt/mail execution and per-player live ordering remain gated and unverified.
+
+## C# State After UOW-1082
+
+- Added a focused operation-plan composition regression that uses `QuestDialogAutoRewardGuardPlanService` output as the dialog-action input for explicit mock `QuestFinishRewardTemplateProjection` data.
+- The regression proves the new guard intent can feed existing non-live quest-finish planning without enabling production socket handling, reward mutation, XP mutation, custom rewards, mail execution, or packet sends.
+- Static quest data remains explicit mock data in this unit.
+
+## Remaining Runtime Wiring Blockers After UOW-1082
+
+1. Production `GameServerConnection.HandleDialogSelectAsync` still does not call the guard planner.
+2. C# static quest data still does not expose a full Java `QuestTemplate.can_report`/reward projection surface.
+3. The composition test uses explicit mock projections and does not read live XML/static data.
+4. Java `PlayerCommonData.setExp` live mutation remains absent, so custom rewards must stay disabled.
+5. Custom reward receipt/mail execution, packet ordering, and persistence remain gated and unverified.
