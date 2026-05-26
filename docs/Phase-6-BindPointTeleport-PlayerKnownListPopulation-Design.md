@@ -160,3 +160,7 @@ It is still not Java region known-list parity because no live region object stor
 ## Update After UOW-1263
 
 `PlayerKnownListOperationSideEffectAttachmentService` now attaches those player packet descriptors to two-way known-list operation steps. This reduces the gap between membership operation planning and controller packet intent, but live known-list callbacks remain blocked on packet serializer gaps, runtime player facts, and `GameServerConnection` dispatch.
+
+## Update After UOW-1264
+
+`PlayerKnownListPopulationPlanService` now preserves operation side-effect attachments in its candidate results. The end-to-end non-live population chain can now carry region, range, operation, membership, and controller packet-intent metadata, but it remains disabled from live world lifecycle and socket dispatch.

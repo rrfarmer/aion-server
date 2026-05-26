@@ -114,6 +114,10 @@ The known-list blocker now has a dedicated design audit in `docs/Phase-6-BindPoi
 
 `PlayerKnownListOperationSideEffectAttachmentService` now attaches those player packet descriptors to operation-plan side-effect steps. Scheduled Kinah action `3` remains disabled because runtime fanout still does not consume operation attachments, send packets, move players, or dispatch scheduled callbacks.
 
+## Update After UOW-1264
+
+Population composition now carries operation side-effect attachments per candidate. Scheduled Kinah action `3` remains disabled because callback execution still cannot consume live population results or execute known-list packet side effects.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:

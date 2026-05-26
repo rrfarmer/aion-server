@@ -91,6 +91,8 @@ Update after UOW-1262: `PlayerKnownListPlayerSideEffectPlanService` now records 
 
 Update after UOW-1263: `PlayerKnownListOperationSideEffectAttachmentService` now attaches player packet descriptors to operation-plan `see`/`notSee` steps. Live dispatch remains blocked because the attachments are still metadata only and population/fanout/runtime callbacks do not execute them.
 
+Update after UOW-1264: `PlayerKnownListPopulationPlanService` now carries operation side-effect attachments per candidate. Live dispatch remains blocked because the population chain still uses supplied facts, does not send packets, and still lacks packet serializer parity for `SmPlayerInfo(enemy)`, `SmPlayerStance`, and `SmAbnormalEffect`.
+
 ## Java Live Flow
 
 Java source files:

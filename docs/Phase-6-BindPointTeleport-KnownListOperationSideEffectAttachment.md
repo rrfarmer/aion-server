@@ -81,3 +81,7 @@ Added `dotnetConversion/src/Aion.GameServer/Services/PlayerKnownListOperationSid
 ## Next Recommended Unit of Work
 
 Add a disabled integration composition that carries operation side-effect attachments through `PlayerKnownListPopulationPlanService` results, or start a focused `SmPlayerInfo(enemy)` serializer parity audit before any live player-see dispatch work.
+
+## Update After UOW-1264
+
+`PlayerKnownListPopulationPlanService` now carries operation side-effect attachment plans per candidate. The next safe blocker is packet serializer readiness, especially `SmPlayerInfo(enemy)`, `SmPlayerStance`, and `SmAbnormalEffect`, before any live known-list controller dispatcher can be considered.

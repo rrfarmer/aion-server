@@ -94,3 +94,7 @@ Add a disabled packet side-effect plan for player-player known-list `see` and `n
 ## Update After UOW-1263
 
 `PlayerKnownListOperationSideEffectAttachmentService` now attaches player packet side-effect descriptors to two-way operation-plan `see`/`notSee` steps. Population composition still does not carry those attachments in its result; that is the next safe non-live integration step.
+
+## Update After UOW-1264
+
+`PlayerKnownListPopulationPlanService` now carries those operation side-effect attachments through each candidate plan. It still does not execute controller callbacks, send packets, mutate live world known-lists, or wire bind-point scheduled callback dispatch.
