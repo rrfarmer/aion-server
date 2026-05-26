@@ -202,6 +202,8 @@ Update after UOW-1243: send-before-runtime ordering gate is complete. The next s
 
 Update after UOW-1244: final scheduled Kinah live-adapter readiness audit is complete. The next safe prerequisite is a disabled/opt-in owner-checked SQL repository adapter seam, still unwired from dispatch.
 
+Update after UOW-1245: disabled/opt-in owner-checked SQL repository adapter seam is complete and remains unwired from dispatch. The next safe prerequisite is a disabled/opt-in inventory packet send adapter that consumes existing packet intent/send-result policy without enabling live movement or `GameServerConnection`.
+
 ## Do Not Wire Yet
 
 - Do not add a live `GameServerConnection` branch for `CmBindPointTeleport` in the next unit.

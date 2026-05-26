@@ -66,3 +66,14 @@ Do not wire live action `1` scheduled Kinah execution yet.
 ## Next Recommended Unit of Work
 
 Add the bind-point Kinah SQL repository adapter seam as disabled/opt-in metadata execution. It should consume `BindPointTeleportKinahPersistenceOperationPlan`, map affected rows and exceptions through the existing result statuses, and remain unwired from `GameServerConnection`.
+
+## Update After UOW-1245
+
+The disabled/opt-in owner-checked SQL repository adapter seam now exists:
+
+- `BindPointTeleportKinahSqlPersistenceAdapterService`
+- `IBindPointTeleportKinahPersistenceRepository`
+- `EmptyBindPointTeleportKinahPersistenceRepository`
+- `MySqlBindPointTeleportKinahPersistenceRepository`
+
+It remains unwired from `GameServerConnection` and is not registered as a live scheduled Kinah path. The SQL blocker is reduced from "no executable seam" to "no opt-in live wiring or DB integration validation." The next safe blocker is a disabled/opt-in inventory packet send adapter.
