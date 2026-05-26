@@ -41,6 +41,8 @@ Update after UOW-1227: runtime callback execution results now carry Kinah update
 
 Update after UOW-1228: `docs/Phase-6-BindPointTeleport-KinahPersistenceSend-Policy.md` now records that Java sends during mutation and persists dirty items later. C# live wiring should wait for an owner-checked persistence contract and explicit rollback/send policy.
 
+Update after UOW-1229: `docs/Phase-6-BindPointTeleport-KinahRepositoryContract-Plan.md` now records the owner-checked persistence contract plan and `Saved`/`MissingRow`/`Failed` result statuses. Live wiring should still wait for a non-live bridge that consumes those statuses before packet send, cooldown/fanout, or movement.
+
 ## Java Live Flow
 
 Java source files:
@@ -111,7 +113,7 @@ Java login flow:
 | Failure system messages | Concrete `SmSystemMessage` helpers for Java bind-point failures | Helpers/tests added in UOW-1214 | Use helpers from future non-live/live adapters; do not add dispatch yet. |
 | Runtime task owner | Per-player `TaskId.SKILL_USE` task slot with replace/cancel semantics | Isolated owner added in UOW-1217; metadata scheduler bridge added in UOW-1220 | Keep callback side effects disabled until inventory, cooldown, fanout, and movement gates are ready. |
 | Cooldown owner | Player-id keyed cooldown storage with Java whole-second time-left behavior | Isolated owner added in UOW-1217; callback insertion bridge added in UOW-1221 | Live Kinah mutation and final movement remain disabled. |
-| Inventory mutation | `tryDecreaseKinah(price, DEC_KINAH_FLY)` with persistence and packet order | Non-live mutation planner added in UOW-1225; callback metadata composition added in UOW-1226; runtime non-sending metadata carry-through added in UOW-1227; persistence/send policy audit added in UOW-1228; UOW-1222 audit completed; UOW-1223 packet mask coverage added; UOW-1224 owner design completed | Add owner-checked repository contract and owner/lock before dispatch. |
+| Inventory mutation | `tryDecreaseKinah(price, DEC_KINAH_FLY)` with persistence and packet order | Non-live mutation planner added in UOW-1225; callback metadata composition added in UOW-1226; runtime non-sending metadata carry-through added in UOW-1227; persistence/send policy audit added in UOW-1228; repository contract plan added in UOW-1229; UOW-1222 audit completed; UOW-1223 packet mask coverage added; UOW-1224 owner design completed | Add a non-live persistence-result decision bridge, then owner/lock and SQL adapter before dispatch. |
 | Fanout | Source-included visible-player broadcast matching Java known-list semantics | Runtime control fanout adapter added in UOW-1219; registry approximation exists | Known-list parity remains unverified; action `1` scheduled callback fanout is still unwired. |
 | Final movement | Java `TeleportAnimation.NONE` side effects and owner packet order | Planner only | Defer live adapter until action abort/despawn/spawn/pet/callback gaps are owned. |
 | Java comparison | Runtime or golden comparison for live packet/order behavior | Missing | Do not mark Verified Parity. |

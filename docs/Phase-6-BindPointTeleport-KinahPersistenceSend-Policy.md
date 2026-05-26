@@ -17,6 +17,8 @@ Recommended C# policy for the first live adapter:
 4. If C# persists before packet send, document it as an intentional difference from Java's dirty-state lifecycle and test the failure branch.
 5. Never continue to cooldown/action `3` fanout when the selected persistence policy reports failure.
 
+Update after UOW-1229: `docs/Phase-6-BindPointTeleport-KinahRepositoryContract-Plan.md` now pins a narrow owner-checked repository contract plan. No live SQL method was added; future C# work should first consume a supplied persistence result in a non-live callback decision bridge before wiring a MySQL adapter.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -138,3 +140,5 @@ Tests added:
 ## Next Recommended Unit of Work
 
 Add a non-live repository contract plan for the scheduled Kinah persistence boundary, preferably a small interface/result DTO or doc-only contract that can be implemented later by an owner-checked SQL adapter. Keep `GameServerConnection`, packet sends, and live mutation disabled.
+
+Update after UOW-1229: the repository contract plan is complete. Next, add a non-live persistence result composition bridge that proves persistence failure stops before inventory packet send, cooldown/action `3` fanout, and movement.

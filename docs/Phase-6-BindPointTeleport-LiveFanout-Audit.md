@@ -63,6 +63,8 @@ Update after UOW-1227: runtime callback execution now preserves the supplied Kin
 
 Update after UOW-1228: persistence/send policy is documented. Live action `3` fanout should remain blocked until the selected C# policy can prove the inventory update was persisted/sent or intentionally staged before fanout.
 
+Update after UOW-1229: the repository contract plan is documented. Live action `3` fanout remains blocked until `Saved` persistence results are composed ahead of packet send and fanout, with `MissingRow`/`Failed` results stopping before any success broadcast.
+
 ## Java Flow
 
 Java source files:

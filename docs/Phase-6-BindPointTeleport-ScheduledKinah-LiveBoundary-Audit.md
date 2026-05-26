@@ -19,6 +19,10 @@ Update after UOW-1226: scheduled callback plans now carry optional mutation-plan
 
 Update after UOW-1227: runtime callback execution results now surface the supplied Kinah update/packet-intent metadata before cooldown/action `3` fanout completes. This is still non-sending metadata only.
 
+Update after UOW-1228: `docs/Phase-6-BindPointTeleport-KinahPersistenceSend-Policy.md` documents the future send/persistence order and the likely C# intentional difference if we persist before sending the inventory update.
+
+Update after UOW-1229: `docs/Phase-6-BindPointTeleport-KinahRepositoryContract-Plan.md` now defines the future owner-checked persistence result statuses. The next safe slice is non-live composition of those statuses into callback stop/continue decisions.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -139,3 +143,5 @@ Update after UOW-1226: mutation metadata is composed into scheduled callback pla
 Update after UOW-1227: runtime callback execution now carries the non-sending inventory-update intent. Next, design the persistence/send boundary and rollback policy before live mutation.
 
 Update after UOW-1228: `docs/Phase-6-BindPointTeleport-KinahPersistenceSend-Policy.md` documents the future send/persistence order and the likely C# intentional difference if we persist before sending the inventory update.
+
+Update after UOW-1229: the repository contract plan is complete. Next, add non-live persistence-result composition before any SQL, packet send, or live dispatch.
