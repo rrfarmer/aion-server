@@ -11,6 +11,8 @@ Live bind-point teleport dispatch is not ready. The C# port has strong non-live 
 
 Do not wire `GameServerConnection` to execute bind-point teleport yet. The next safest implementation work is a small prerequisite slice, not live dispatch: either add concrete system-message helpers/packet tests for bind-point failure messages or add a handler-level no-op composition bridge that consumes parsed `CmBindPointTeleport` and returns non-live plans without sending packets or mutating state.
 
+Update after UOW-1214: C# now has named `SmSystemMessage` helpers and packet tests for the three bind-point failure messages. Live dispatch remains blocked on handler composition, runtime task/cooldown ownership, inventory mutation/persistence, source-included fanout execution, and movement side-effect execution.
+
 ## Java Live Flow
 
 Java source files:
@@ -70,7 +72,7 @@ Java login flow:
 | Scheduled callback composition | `BindPointTeleportScheduledCallbackPlanService` | Unit tested | Partially | Carries side-effect metadata but does not execute. |
 | Final movement gate | `BindPointTeleportFinalMovementPlanService` | Unit tested | Partially | Non-live gate and target intent only. |
 | `TeleportService.teleportTo` side effects | `BindPointTeleportTeleportToSideEffectPlanService` | Unit tested | Not ready | Side-effect metadata only; no live action abort, despawn/spawn, packet send, or movement. |
-| System messages | `SmSystemMessage` | Generic constructor exists; helpers missing | Not ready | Missing helper methods/tests for `1300689`, `1300691`, and `1300961`. |
+| System messages | `SmSystemMessage` | Named helpers and packet tests exist for `1300689`, `1300691`, and `1300961` | Partially | Helpers are ready for future live failure sends, but no live bind-point send path exists. |
 
 ## Live Adapter Gates
 
@@ -78,7 +80,7 @@ Java login flow:
 |---|---|---|---|
 | Handler boundary | A handler or adapter that consumes `CmBindPointTeleport` and assembles facts without side effects | Missing | Add no-op handler composition bridge or keep dispatch disabled. |
 | Static hotspot facts | Adapter from `DataManager.HOTSPOT_DATA` equivalent to planner facts | Missing/partial | Add fact assembler from loaded hotspot static data when owned exclusively. |
-| Failure system messages | Concrete `SmSystemMessage` helpers for Java bind-point failures | Missing helpers | Add helper methods and packet tests before live sends. |
+| Failure system messages | Concrete `SmSystemMessage` helpers for Java bind-point failures | Helpers/tests added in UOW-1214 | Use helpers from future non-live/live adapters; do not add dispatch yet. |
 | Runtime task owner | Per-player `TaskId.SKILL_USE` task slot with replace/cancel semantics | Planner only | Add explicit state owner before scheduling. |
 | Cooldown owner | Player-id keyed cooldown storage with Java whole-second time-left behavior | Planner only | Add explicit owner/concurrency policy before onLogin/live requirements. |
 | Inventory mutation | `tryDecreaseKinah(price, DEC_KINAH_FLY)` with persistence and packet order | Planner only | Defer until update packet and persistence path are isolated. |
@@ -92,19 +94,18 @@ Java bind-point teleport uses these concrete system message IDs:
 
 | Java Helper | Message ID | Current C# State | Readiness |
 |---|---:|---|---|
-| `SM_SYSTEM_MESSAGE.STR_CANNOT_MOVE_TO_AIRPORT_NOT_ENOUGH_FEE()` | `1300689` | no named helper found; generic `new SmSystemMessage(id)` is possible | Add helper/test before live send |
-| `SM_SYSTEM_MESSAGE.STR_CANNOT_MOVE_TO_AIRPORT_NO_ROUTE()` | `1300691` | no named helper found; generic `new SmSystemMessage(id)` is possible | Add helper/test before live send |
-| `SM_SYSTEM_MESSAGE.STR_FLYING_TIME_NOT_READY()` | `1300961` | no named helper found; generic `new SmSystemMessage(id)` is possible | Add helper/test before live send |
+| `SM_SYSTEM_MESSAGE.STR_CANNOT_MOVE_TO_AIRPORT_NOT_ENOUGH_FEE()` | `1300689` | `SmSystemMessage.CannotMoveToAirportNotEnoughFee()` | Ready as named packet helper; live send remains unwired |
+| `SM_SYSTEM_MESSAGE.STR_CANNOT_MOVE_TO_AIRPORT_NO_ROUTE()` | `1300691` | `SmSystemMessage.CannotMoveToAirportNoRoute()` | Ready as named packet helper; live send remains unwired |
+| `SM_SYSTEM_MESSAGE.STR_FLYING_TIME_NOT_READY()` | `1300961` | `SmSystemMessage.FlyingTimeNotReady()` | Ready as named packet helper; live send remains unwired |
 
 ## Recommended Non-Live Insertion Order
 
-1. Add concrete `SmSystemMessage` helpers and packet tests for the three bind-point failure messages.
-2. Add a no-op handler-level composition bridge that consumes `CmBindPointTeleport` values plus supplied facts and returns existing non-live request/callback plans.
-3. Add a runtime state owner for `TaskId.SKILL_USE` and cooldowns, still tested without `GameServerConnection` dispatch.
-4. Add live fanout tests for `SM_BIND_POINT_TELEPORT` action `1`, `2`, and `3` using source-included registry behavior.
-5. Add scheduled Kinah mutation/persistence only after failure messages and item update packet ordering are concrete.
-6. Add live final movement only after action abort/despawn/spawn/pet/zone/legion gaps are either implemented or explicitly staged out with tests.
-7. Only then wire `GameServerConnection` to dispatch `CmBindPointTeleport`.
+1. Add a no-op handler-level composition bridge that consumes `CmBindPointTeleport` values plus supplied facts and returns existing non-live request/callback plans.
+2. Add a runtime state owner for `TaskId.SKILL_USE` and cooldowns, still tested without `GameServerConnection` dispatch.
+3. Add live fanout tests for `SM_BIND_POINT_TELEPORT` action `1`, `2`, and `3` using source-included registry behavior.
+4. Add scheduled Kinah mutation/persistence only after item update packet ordering is concrete.
+5. Add live final movement only after action abort/despawn/spawn/pet/zone/legion gaps are either implemented or explicitly staged out with tests.
+6. Only then wire `GameServerConnection` to dispatch `CmBindPointTeleport`.
 
 ## Do Not Wire Yet
 
@@ -118,9 +119,9 @@ Java bind-point teleport uses these concrete system message IDs:
 
 | Candidate | Scope | Files | Risk | Decision |
 |---|---|---|---|---|
-| A | Live-adapter readiness checklist | new doc plus shared docs | Low/Medium | Selected for UOW-1213. |
-| B | Concrete bind-point system-message helpers/tests | `SmSystemMessage.cs`, `GamePacketTests.cs` | Low/Medium | Safe next code unit; avoid parallel with checklist docs. |
-| C | Handler-level no-op composition bridge | new service/test pair | Medium | Safe after checklist or messages; must stay non-live. |
+| A | Live-adapter readiness checklist | new doc plus shared docs | Low/Medium | Completed in UOW-1213. |
+| B | Concrete bind-point system-message helpers/tests | `SmSystemMessage.cs`, `GamePacketTests.cs` | Low/Medium | Completed in UOW-1214. |
+| C | Handler-level no-op composition bridge | new service/test pair | Medium | Safe next candidate; must stay non-live. |
 | D | Runtime `TaskId.SKILL_USE` owner | new service/test pair, possible player/connection state | Medium/High | Defer until ownership design is explicit. |
 | E | Live `GameServerConnection` dispatch | shared connection file | High | Blocked; do not start yet. |
 

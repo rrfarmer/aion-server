@@ -33,6 +33,8 @@ Update after UOW-1212: `BindPointTeleportScheduledCallbackPlanService` can now c
 
 Update after UOW-1213: `docs/Phase-6-BindPointTeleport-LiveAdapter-Readiness.md` now records the live-adapter gates before `GameServerConnection` dispatch. It keeps live bind-point teleport blocked until concrete failure system-message helpers, a no-op handler composition bridge, runtime task/cooldown ownership, live Kinah mutation/persistence, source-included fanout, and live movement side effects are independently handled.
 
+Update after UOW-1214: `SmSystemMessage` now has named helpers and packet tests for Java bind-point failure messages `STR_CANNOT_MOVE_TO_AIRPORT_NOT_ENOUGH_FEE` (`1300689`), `STR_CANNOT_MOVE_TO_AIRPORT_NO_ROUTE` (`1300691`), and `STR_FLYING_TIME_NOT_READY` (`1300961`). Live dispatch remains disabled.
+
 ## Java Flow
 
 Java source files:
