@@ -1,0 +1,105 @@
+# Phase 6 Bind-Point Teleport Live Fanout Audit
+
+Date: May 26, 2026
+Unit of Work: UOW-1201
+Scope: Read-only insertion audit for Java `CM_BIND_POINT_TELEPORT` / `BindPointTeleportService` live fanout.
+Source of truth: Java project.
+
+## Audit Result
+
+Live bind-point teleport wiring should remain disabled until the client packet boundary is ported. Java registers `CM_BIND_POINT_TELEPORT` at opcode `244`, but C# currently has no opcode `244` registration and no `CmBindPointTeleport` client packet class. The existing C# bind-point work is therefore correctly staged as planners plus `SmBindPointTeleport` serialization only.
+
+## Java Flow
+
+Java source files:
+
+- `game-server/src/com/aionemu/gameserver/network/aion/AionClientPacketFactory.java`
+- `game-server/src/com/aionemu/gameserver/network/aion/clientpackets/CM_BIND_POINT_TELEPORT.java`
+- `game-server/src/com/aionemu/gameserver/services/teleport/BindPointTeleportService.java`
+- `game-server/src/com/aionemu/gameserver/network/aion/serverpackets/SM_BIND_POINT_TELEPORT.java`
+
+Observed Java behavior:
+
+1. `AionClientPacketFactory` registers opcode `244` as `CM_BIND_POINT_TELEPORT` for `State.IN_GAME`.
+2. `CM_BIND_POINT_TELEPORT.readImpl` reads `action` as `readC()`.
+3. Only action `1` reads `locId` with `readD()` and `kinah` with `readQ()`.
+4. `runImpl` returns immediately if `player.isDead()`.
+5. Action `1` calls `BindPointTeleportService.teleport(player, locId, kinah)`.
+6. Action `2` calls `BindPointTeleportService.cancelTeleport(player, locId)`.
+7. `BindPointTeleportService.teleport` performs hotspot lookup, price reconciliation, requirement checks, start broadcast, a 10 second `TaskId.SKILL_USE` task, scheduled Kinah decrement, cooldown insertion, cooldown broadcast, and a final 1 second delayed `TeleportService.teleportTo` if the player is not dead or about to die.
+8. `cancelTeleport` only broadcasts action `2` if the player controller has `TaskId.SKILL_USE`.
+9. `onLogin` uses the static cooldown map and sends action `3` through `broadcastPacketAndReceive` when time remains.
+
+## Current C# State
+
+C# surfaces reviewed:
+
+- `dotnetConversion/src/Aion.GameServer/Network/Aion/GameClientPacketFactory.cs`
+- `dotnetConversion/src/Aion.GameServer/Network/Aion/GameServerConnection.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/PlayerTeleportService.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportPricePlanService.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportRequirementsPlanService.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportOperationPlanService.cs`
+- `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportControlPlanService.cs`
+- `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmBindPointTeleport.cs`
+
+Observed C# state:
+
+- `GameClientPacketFactory` has no opcode `244` registration.
+- There is no `CmBindPointTeleport` client packet class.
+- `GameServerConnection` has no bind-point teleport handler branch.
+- `PlayerTeleportService` supports immediate/pending teleport helpers, but no hotspot/cooldown/task/Kinah mutation ownership.
+- `ThreadPoolManager` and `ScheduledTask` can represent delayed work, but no bind-point-specific `TaskId.SKILL_USE` live task slot exists.
+- `IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync` can approximate Java `PacketSendUtility.broadcastPacket(..., true)` for visible-player fanout, but Java `broadcastPacketAndReceive` source-player inclusion semantics must be explicitly mapped before live use.
+- `SmBindPointTeleport` exists and is source-derived unit tested for opcode `296` and action payloads.
+- Price, requirements, operation, and control planners exist and remain non-live.
+
+## Recommended Live Insertion Order
+
+1. Add `CmBindPointTeleport` parser and opcode `244` registration, with packet-read tests for action `1`, action `2`, dead-player no-op metadata, and unknown-action no-op behavior.
+2. Add a handler-level non-live composition bridge that consumes `CmBindPointTeleport` and produces existing planner/control outputs without changing world state.
+3. Add an explicit bind-point runtime state owner for cooldowns and the cancellable `TaskId.SKILL_USE` task equivalent. Prefer one service over scattered fields in `GameServerConnection`.
+4. Wire fanout only after packet parser, planner composition, cooldown state, and task ownership are independently tested.
+5. Add live Kinah mutation and final movement as separate units because both affect inventory persistence, packet order, and movement/known-list fanout.
+
+## Do Not Wire Yet
+
+- Do not register opcode `244` directly to live teleport side effects in the same unit as parser creation.
+- Do not schedule the 10 second task until cancellation ownership is tested.
+- Do not mutate Kinah from a scheduled callback until the failure packet and inventory update behavior are modeled.
+- Do not call `PlayerTeleportService` for the final movement until Java same-world/world-change packet order is selected for hotspot teleport.
+
+## Migration Parity Table - UOW-1201
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BIND_POINT_TELEPORT` | future `Aion.GameServer.Network.Aion.ClientPackets.CmBindPointTeleport` | Client Packet / Parser | Not Started | No Tests | Unknown | Java opcode `244` reads action byte, and only action `1` reads `locId` and `kinah`. C# has no parser or packet-factory registration. Missing methods: parser, state registration, handler dispatch, dead-player guard, action no-op behavior. Serialization is not applicable because this is a client packet. |
+| `com.aionemu.gameserver.services.teleport.BindPointTeleportService.teleport` | `Aion.GameServer.Services.BindPointTeleportOperationPlanService`; future live handler/service | Service / Movement | Partial | Unit Tested | Needs Verification | Staged price, requirements, operation order, and packet intents exist. Live hotspot lookup, packet fanout, `TaskId.SKILL_USE` scheduling, Kinah mutation, cooldown map, death/about-to-die recheck, and final movement remain unported. Threading behavior is unverified. |
+| `com.aionemu.gameserver.services.teleport.BindPointTeleportService.cancelTeleport` | `Aion.GameServer.Services.BindPointTeleportControlPlanService`; future live handler/service | Service / Control Flow | Partial | Unit Tested | Needs Verification | Non-live cancel intent exists. Live task lookup/cancel and action `2` visible fanout remain unported. Threading/cancellation behavior is unverified. |
+| `com.aionemu.gameserver.services.teleport.BindPointTeleportService.onLogin` | `Aion.GameServer.Services.BindPointTeleportControlPlanService`; future enter-world cooldown bridge | Service / Login Control Flow | Partial | Unit Tested | Needs Verification | Non-live login cooldown packet intent exists. Static cooldown ownership, date/time-left calculation, and `broadcastPacketAndReceive` source-player inclusion remain unported. Date/time and threading behavior are unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_BIND_POINT_TELEPORT` | `Aion.GameServer.Network.Aion.ServerPackets.SmBindPointTeleport` | Server Packet / Serialization | Partial | Unit Tested | Needs Verification | Opcode `296` and action payload branches are source-derived unit tested. No Java runtime packet capture or live broadcast comparison was run. |
+| `com.aionemu.gameserver.utils.PacketSendUtility` | `Aion.GameServer.Network.Aion.IGameClientConnectionRegistry`; `GameServerConnection.SendPacketAsync` | Fanout Utility Dependency | Partial | Manual Only | Needs Verification | Existing C# fanout helpers can send to visible players and specific players, but Java `broadcastPacket(..., true)` and `broadcastPacketAndReceive` semantics need explicit source-inclusion and visibility tests for hotspot packets. |
+| `com.aionemu.gameserver.model.TaskId.SKILL_USE` | future bind-point runtime task owner using `Aion.GameServer.Utils.ScheduledTask` | Scheduler Dependency | Partial | Manual Only | Needs Verification | C# has general scheduling primitives and unrelated pending item-use task patterns, but no bind-point `TaskId.SKILL_USE` slot. Cancellation and callback ordering remain unported. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.teleportTo` | `Aion.GameServer.Services.PlayerTeleportService` | Movement Dependency | Partial | Manual Only | Needs Verification | C# has immediate and pending teleport helpers, but no bind-point final movement path. Java death/about-to-die recheck, same-world/world-change behavior, known-list packet order, and persistence side effects remain unverified. |
+
+## Remaining Risks
+
+- Parser parity is currently blocked by the missing `CmBindPointTeleport` class and opcode `244` registration.
+- Live fanout semantics need source-player inclusion tests before Java `broadcastPacket(..., true)` or `broadcastPacketAndReceive` can be claimed.
+- Cooldown storage is a static Java map keyed by player object id; C# needs an explicit owner and concurrency policy.
+- Scheduled Kinah decrement can fail after initial requirement checks; this race is still only metadata in C#.
+- Death/about-to-die recheck occurs after the final 1 second delay, not at request time only.
+- No Java runtime comparison was executed. Reflection behavior did not change; serialization remains source-derived for `SmBindPointTeleport`; date/time, threading, movement, and persistence parity are unverified.
+
+## Next Recommended Unit of Work
+
+Add `CmBindPointTeleport` parser coverage and opcode `244` registration without live side effects. The parser unit should prove Java field reads for action `1`, action `2`, and unknown/no-op actions, then route only to a non-live handler/composition placeholder or leave dispatch documented until the next unit.
+
+## Summary Metrics
+
+- Total Java artifacts discovered: 8 grouped artifact rows in this unit
+- Total artifacts ported: 0 live artifacts; 1 read-only insertion audit completed
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 7 grouped rows
+- Total blocked artifacts: 5 grouped categories: client parser/registration, live fanout, cooldown/task state, Kinah mutation, and final movement/death checks
+- Estimated overall migration completion: Phase 6 remains about 71% complete
