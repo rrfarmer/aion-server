@@ -71,6 +71,8 @@ Update after UOW-1242: `BindPointTeleportKinahOwnerCallbackOutcomeIntegrationSer
 
 Update after UOW-1243: `BindPointTeleportKinahSendBeforeRuntimeOrderingService` now explicitly gates cooldown/action `3` runtime metadata behind inventory update packet send success, matching Java ordering as non-live metadata.
 
+Update after UOW-1244: `docs/Phase-6-BindPointTeleport-ScheduledKinah-LiveAdapter-FinalReadiness.md` now summarizes satisfied non-live gates and remaining live blockers. Live `GameServerConnection` dispatch remains disabled; the next safe executable seam is a disabled/opt-in SQL repository adapter.
+
 ## Java Live Flow
 
 Java source files:
@@ -197,6 +199,8 @@ Update after UOW-1241: owner-result callback bridge is complete. The next safe p
 Update after UOW-1242: full non-live owner outcome integration is complete. The next safe prerequisite is a send-before-runtime ordering adapter/design to remove the current metadata-ordering wrinkle before live packet send and cooldown/action `3` fanout are connected.
 
 Update after UOW-1243: send-before-runtime ordering gate is complete. The next safe prerequisite is a live-adapter readiness audit for scheduled Kinah execution before enabling any `GameServerConnection` path.
+
+Update after UOW-1244: final scheduled Kinah live-adapter readiness audit is complete. The next safe prerequisite is a disabled/opt-in owner-checked SQL repository adapter seam, still unwired from dispatch.
 
 ## Do Not Wire Yet
 
