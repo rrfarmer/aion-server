@@ -309,3 +309,9 @@ The C# verifier should consume the JSON artifacts and compare:
 | `decoded.limitedItems` | `NpcDialogLimitedItemFactAdapterService` |
 
 Parity remains Partial or Needs Verification until the artifact generator exists, artifacts are checked in or reproducibly generated, and C# tests compare against them.
+
+## UOW-1168 Implementation Plan Link
+
+The follow-up implementation plan lives in `docs/TradeList-Java-Vector-Generator-Implementation-Plan.md`.
+
+That plan covers the proposed Java test-only runner package, CLI contract, scenario fixture strategy, capture-point options, canonical byte writer, artifact output layout, C# verifier follow-up, readiness gates, and known risks. It remains documentation only; no Java vectors have been generated yet.
