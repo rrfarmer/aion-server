@@ -90,3 +90,7 @@ Updated `dotnetConversion/tests/Aion.GameServer.Tests/PlayerKnownListPacketConst
 ## Next Recommended Unit of Work
 
 Add a non-live resolver auto-composition adapter that can create `RideAttackSpeedResolution` from a supplied subject player plus `ItemTemplateTable`, then attach that result to generated fact-plan requests while preserving explicit `RideAttackSpeedFacts` precedence. Keep it disabled and do not send packets.
+
+## Update After UOW-1280
+
+`PlayerKnownListAttackSpeedFactPlanRequestAdapterService` now exists and `PlayerKnownListPopulationPlanService` can optionally attach disabled resolver results to generated fact-plan requests when `ItemTemplates` are supplied. Supplied facts and explicit resolver results remain authoritative, and live dispatch remains disabled.
