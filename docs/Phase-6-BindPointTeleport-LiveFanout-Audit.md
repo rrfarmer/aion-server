@@ -13,6 +13,8 @@ Update after UOW-1202: C# now has parser-only `CmBindPointTeleport` coverage and
 
 Update after UOW-1203: C# now has a non-live `BindPointTeleportClientActionPlanService` that models Java `CM_BIND_POINT_TELEPORT.runImpl` dispatch selection. It records dead-player no-op, action `1` teleport intent, action `2` cancel intent, and unknown-action no-op without executing live side effects.
 
+Update after UOW-1204: C# now has a non-live `BindPointTeleportFanoutPlanService` that records Java bind-point hotspot packet fanout semantics: `broadcastPacket(player, packet, true)` and `broadcastPacketAndReceive(player, packet)` both include the source player, then Java known-list players. C# live wiring should use `BroadcastToVisiblePlayersAsync(..., includeSourcePlayer: true)` while documenting that distance-based visibility is still an approximation until persistent known-list membership is ported.
+
 ## Java Flow
 
 Java source files:
