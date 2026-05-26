@@ -148,3 +148,7 @@ It is still not Java region known-list parity because no live region object stor
 ## Update After UOW-1260
 
 `PlayerKnownListVisibilityRangePlanService` now models Java max visible-distance range and caller-supplied `canSee` inputs as non-live metadata. The next safe step is a disabled composition layer over region snapshots, visibility/range plans, two-way operation plans, and membership application.
+
+## Update After UOW-1261
+
+`PlayerKnownListPopulationPlanService` now provides that disabled composition layer. It remains non-live and makes the next blocker clearer: packet/controller side-effect descriptors for player `see` and `notSee` transitions.

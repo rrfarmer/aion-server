@@ -75,3 +75,7 @@ Add a disabled visibility/range operation planner for player-player known-list p
 ## Update After UOW-1260
 
 `PlayerKnownListVisibilityRangePlanService` now models Java range and caller-supplied `canSee` metadata before producing two-way operation plans. It uses strict Java range comparison and max visible-distance metadata, but remains non-live and does not execute subclass visibility logic.
+
+## Update After UOW-1261
+
+`PlayerKnownListPopulationPlanService` now composes range plans and the membership adapter for supplied region snapshot candidates. The adapter remains opt-in and non-live inside that composition.

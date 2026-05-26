@@ -84,3 +84,7 @@ Added `dotnetConversion/src/Aion.GameServer/Services/PlayerKnownListVisibilityRa
 ## Next Recommended Unit of Work
 
 Add a disabled composition service that consumes region snapshot candidates, visibility/range plans, two-way operation plans, and the membership adapter into one non-live known-list population plan. Keep it explicitly disabled and do not wire live server flows.
+
+## Update After UOW-1261
+
+`PlayerKnownListPopulationPlanService` now provides that disabled composition layer. It connects region snapshot candidates, visibility/range plans, two-way operation plans, and the membership adapter, while preserving the default no-mutation behavior and keeping side effects descriptor-only.

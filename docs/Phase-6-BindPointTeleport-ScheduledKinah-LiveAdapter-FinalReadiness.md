@@ -102,6 +102,10 @@ The known-list blocker now has a dedicated design audit in `docs/Phase-6-BindPoi
 
 `PlayerKnownListVisibilityRangePlanService` now provides Java-shaped range and `canSee` metadata for future known-list population. Scheduled Kinah action `3` remains disabled because no live known-list, socket fanout, movement, cooldown, or callback path consumes it.
 
+## Update After UOW-1261
+
+`PlayerKnownListPopulationPlanService` now composes non-live known-list population metadata. Scheduled Kinah action `3` remains disabled because the composition is not live and does not execute socket fanout, movement, cooldown, or callback dispatch.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:

@@ -87,6 +87,10 @@ The next safe executable slice is a disabled region/player snapshot model, not l
 
 `PlayerKnownListVisibilityRangePlanService` now models Java range and supplied `canSee` inputs before producing operation plans. Existing refresh services still remain approximations until a composition layer replaces flat registry/distance refresh inputs.
 
+## Update After UOW-1261
+
+`PlayerKnownListPopulationPlanService` now provides that composition layer for supplied region snapshots and candidate facts. Existing registry/distance refresh remains an approximation and should not be treated as upgraded live parity.
+
 ## Summary Metrics
 
 - Total Java artifacts discovered: 5 grouped artifact rows in this unit

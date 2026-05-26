@@ -85,6 +85,8 @@ Update after UOW-1259: `PlayerKnownListTwoWayMembershipAdapterService` now appli
 
 Update after UOW-1260: `PlayerKnownListVisibilityRangePlanService` now models Java range and caller-supplied `canSee` metadata before producing known-list operation plans. Live dispatch remains blocked because this is still descriptor-only and does not execute live region storage or controller side effects.
 
+Update after UOW-1261: `PlayerKnownListPopulationPlanService` now composes region snapshot candidates, range plans, operation plans, and optional metadata mutation. Live dispatch remains blocked because it is not wired to world lifecycle, sockets, scheduler callbacks, movement, or controller packet execution.
+
 ## Java Live Flow
 
 Java source files:

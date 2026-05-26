@@ -105,6 +105,10 @@ The two-way membership adapter can now consume operation plans and mutate non-li
 
 The visibility/range planner now provides Java-shaped range inputs before membership operation planning. Bind-point fanout remains blocked because these are still non-live descriptors and no scheduled action `3` path consumes them.
 
+## Update After UOW-1261
+
+The known-list population composition service can now seed non-live membership metadata from region snapshot/range/operation plans. Bind-point fanout remains blocked because no live scheduled action `3` path consumes that metadata and controller side effects remain descriptors.
+
 ## Next Recommended Unit of Work
 
 Add a non-live known-list-backed fanout plan or expected Java trace model for bind-point broadcasts. It should represent source-first delivery plus known-list-player recipients without using distance-only filtering, and it should remain unwired from `GameServerConnection`.
