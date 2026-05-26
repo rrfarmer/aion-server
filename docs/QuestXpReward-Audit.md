@@ -309,13 +309,24 @@ Level-change side effects include stat template refresh, max repose recalculatio
   3. Non-critical fanout operation failures are recorded without changing the already-executed DAO ordering metadata.
 - No default runtime caller or live repository executor is registered; this remains an explicit boundary for future wiring.
 
+## C# State After UOW-1067
+
+- Added `SystemMailRewardPersistenceOperationExecutor`, a concrete opt-in executor for staged system-mail persistence operations.
+- Extended `IMailRepository` / `MySqlMailRepository` with system-mail-specific methods:
+  1. `StoreSystemMailLetterAsync` for Java `MailDAO.storeLetter` / `saveLetter` style mail inserts.
+  2. `StoreSystemMailAttachedItemAsync` for Java `InventoryDAO.store(attachedItem, recipientId)` style mailbox item inserts.
+  3. `UpdateOfflineMailboxCounterAsync` for Java `MailDAO.updateOfflineMailCounter`.
+- Staged operations now carry mail/item payloads needed by the executor while retaining Java SQL/parameter metadata.
+- The executor delegates online mailbox fanout to the existing `IGameClientConnectionRegistry.NotifyMailReceivedAsync` aggregate, which performs mailbox insertion, `SM_MAIL_SERVICE`, open-mailbox list refresh, and express postman notification in one call.
+- Registered `SystemMailRewardPersistenceExecutionService` and `ISystemMailRewardPersistenceOperationExecutor` in game-server DI. This does not enable automatic reward mail delivery because callers still need the explicit execution option from UOW-1066.
+
 ## Known Gaps
 
 - No Java runtime comparison was generated because local Java tooling is still blocked.
 - XP live mutation is not wired into quest finish; UOW-1045 only composes non-live operation metadata.
 - `SM_SYSTEM_MESSAGE` XP helper ids and parameter order are ported for the XP reward messages used by `PlayerCommonData.addExp`, and `QuestXpRewardPlan` can now produce ordered non-live packet metadata.
 - `SM_STATUPDATE_EXP` is now represented by staged execution metadata, but no packet instance is created or sent from the XP execution plan.
-- Level-change hooks are represented as Java-order descriptors, optional non-live sub-plan metadata, a non-live context factory, optional quest-finish XP operation metadata, a custom reward receipt repository prerequisite, non-live system-mail payload plans, an opt-in custom reward execution boundary, XP metadata for explicitly supplied custom execution results, non-live system-mail persistence/fanout operation metadata, and a disabled-by-default system-mail persistence execution boundary. The level-up animation packet constant, upgrade-player sub-plan, NPC faction level-up sub-plan, QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent, guide HTML sub-plan, skill auto-learn sub-plan, starter-kit sub-plan, and custom bonus/faction reward sub-plan now exist, but stat recalculation, max-stat calculation, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML packets/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
+- Level-change hooks are represented as Java-order descriptors, optional non-live sub-plan metadata, a non-live context factory, optional quest-finish XP operation metadata, a custom reward receipt repository prerequisite, non-live system-mail payload plans, an opt-in custom reward execution boundary, XP metadata for explicitly supplied custom execution results, non-live system-mail persistence/fanout operation metadata, a disabled-by-default system-mail persistence execution boundary, and a concrete opt-in mail persistence operation executor. The level-up animation packet constant, upgrade-player sub-plan, NPC faction level-up sub-plan, QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent, guide HTML sub-plan, skill auto-learn sub-plan, starter-kit sub-plan, and custom bonus/faction reward sub-plan now exist, but stat recalculation, max-stat calculation, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML packets/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, live team/alliance updates, live legion updates, ratio updates, and live animation broadcast remain unported behavior.
 - The C# plan uses the current C# `Player.Level` as the previous/display level input. Java derives and updates level through `PlayerCommonData.setExp`; this needs verification before live mutation.
 - No-exp state and Daeva/non-Daeva cap are explicit method inputs because equivalent C# player state is not fully modeled.
 - Repose and salvation formulas are source-reviewed and unit-tested, but edge cases around negative XP, large XP, unusual float rates, and live max-repose updates still need runtime verification.
@@ -358,6 +369,10 @@ Level-change side effects include stat template refresh, max repose recalculatio
 - `SystemMailRewardPersistenceExecutionServiceTests.ExecuteAsync_StopsAfterJavaStoreLetterFailure`
 - `SystemMailRewardPersistenceExecutionServiceTests.ExecuteAsync_StopsAfterJavaAttachedItemStoreFailureBeforeMailboxFanout`
 - `SystemMailRewardPersistenceExecutionServiceTests.ExecuteAsync_CompletesAllOperationsWhenEnabledAndExecutorSucceeds`
+- `SystemMailRewardPersistenceOperationExecutorTests.ExecuteAsync_StoresSystemMailLetterThroughMailRepository`
+- `SystemMailRewardPersistenceOperationExecutorTests.ExecuteAsync_StoresSystemMailAttachedItemThroughMailRepository`
+- `SystemMailRewardPersistenceOperationExecutorTests.ExecuteAsync_UpdatesOfflineMailboxCounterThroughMailRepository`
+- `SystemMailRewardPersistenceOperationExecutorTests.ExecuteAsync_UsesConnectionRegistryForOnlineMailboxFanoutOnlyOnce`
 - `GamePacketTests.CharacterSelectionServerPackets_WriteJavaShapedPayloads` level-up `SM_ACTION_ANIMATION` assertion
 - `PlayerLevelChangeUpgradePlanServiceTests.CreatePlan_StagesJavaUpgradePlayerOrderWithTeamAndLegionDependencies`
 - `PlayerLevelChangeUpgradePlanServiceTests.CreatePlan_RecordsMissingMaxStatsDeadAndNoTeamLegionBranches`
@@ -381,4 +396,4 @@ Level-change side effects include stat template refresh, max repose recalculatio
 
 ## Next Recommendation
 
-Next, add a concrete opt-in executor for `SystemMailRewardPersistenceExecutionService` that bridges `MailDAO`/`InventoryDAO` SQL and online mailbox fanout, or add a disabled-by-default runtime adapter that gathers custom reward execution inputs for XP level-change composition. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
+Next, add opt-in integration coverage for the system-mail repository executor or add a disabled-by-default runtime adapter that gathers custom reward execution inputs for XP level-change composition. Keep live XP mutation disabled until stat updates, live nearby quest refresh, live quest handler execution, live skill mutation/effects/recipe learning, live guide HTML send/persistence, live starter-kit/custom reward mail sends, live NPC faction mutation, custom reward DAO writes, and persistence behavior are modeled.
