@@ -403,3 +403,7 @@ A snapshot-entry factory can now create abnormal-effect packet entries from supp
 ## Update After UOW-1288
 
 A non-live pet visibility/order planner now captures Java's dependent pet visibility retry after the master player visibility callback, including pet spawn, optional flying emote, pet dismiss, and viewer-unspawned skip metadata. Live bind-point fanout remains blocked because `SM_PET`/`SM_PET_EMOTE` serializers, pet object/common-data models, full pet visibility predicates, live known-list pet update integration, socket dispatch, and Java runtime packet capture are still missing.
+
+## Update After UOW-1289
+
+A pet packet field audit now scopes the minimal known-list serializer prerequisite to `SM_PET` spawn/dismiss and `SM_PET_EMOTE` fly-start, while documenting broader Java pet action layouts as out of scope for the first slice. Live bind-point fanout remains blocked because no C# pet packet serializers, pet snapshot DTOs, golden vectors, live pet visibility integration, socket dispatch, or Java runtime packet capture exist yet.
