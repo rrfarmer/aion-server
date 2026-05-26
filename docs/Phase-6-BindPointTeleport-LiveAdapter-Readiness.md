@@ -375,3 +375,7 @@ Population planning can now opt into disabled attack-speed resolver auto-composi
 ## Update After UOW-1281
 
 Population packet-construction diagnostics now report ride attack-speed fact source and resolver status. Live bind-point fanout remains blocked because this is diagnostic metadata only; Java-equivalent current-stat calculation, live stat hydration, socket dispatch, and Java packet capture are still missing.
+
+## Update After UOW-1282
+
+`PlayerKnownListAbnormalEffectFactResolverService` can normalize supplied abnormal-effect snapshots into packet-construction facts with no-show toggle and slot filtering metadata. Live bind-point fanout remains blocked because the resolver does not hydrate live `EffectController` maps, compute Java remaining-time values, consume resolver facts in fact planning, send sockets, or validate Java runtime packet output.
