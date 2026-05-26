@@ -146,3 +146,5 @@ Safe follow-up candidates:
 | B | Bind-point SQL repository adapter seam | new repository/test pair | Medium | Use only after owner contract or keep disabled; Java affected-row behavior differs. |
 | C | Registry/visibility characterization tests | existing/new fanout tests only | Low/Medium | Documents current C# distance approximation before true known-list parity. |
 | D | Known-list-backed fanout design | docs only | Low | Do before replacing registry/distance fanout. |
+
+Update after UOW-1240: `BindPointTeleportKinahInventoryOwnerService` now applies and rolls back scheduled Kinah mutation in memory under a per-player C# lock. The next safe seam is an owner-result bridge into the existing callback outcome chain; live SQL, send, fanout, movement, and dispatch remain disabled.
