@@ -93,3 +93,7 @@ Add a disabled integration composition that carries operation side-effect attach
 ## Update After UOW-1268
 
 `SmAbnormalEffect` packet serialization is now partially available from supplied effect facts. Operation side-effect attachment still carries descriptors only and cannot hydrate effect-controller facts or instantiate/send concrete packets.
+
+## Update After UOW-1269
+
+Player side-effect descriptor plans can now be converted into non-live packet construction metadata by `PlayerKnownListPlayerSideEffectPacketConstructionService`. Operation side-effect attachment is not yet wired to that bridge, so attached directional plans still do not construct or send packets.

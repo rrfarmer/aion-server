@@ -444,3 +444,7 @@ The player-info packet prerequisite now covers Java's enemy creature-type flag p
 ## Update After UOW-1268
 
 `SmAbnormalEffect` now exists as a partial C# serializer for supplied abnormal-effect facts. Known-list fanout parity is still blocked on live region population, controller side-effect execution, active-player context computation, live effect-controller hydration, descriptor-to-packet construction, and Java runtime packet-order validation.
+
+## Update After UOW-1269
+
+Descriptor-to-packet construction metadata now exists for an individual player side-effect plan. Known-list fanout parity is still blocked on applying that bridge across population attachments, hydrating live runtime facts, live region population, controller side-effect execution, socket dispatch, and Java runtime packet-order validation.

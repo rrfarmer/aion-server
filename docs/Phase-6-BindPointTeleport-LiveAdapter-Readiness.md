@@ -327,3 +327,7 @@ Keep the unit small: packet helpers/tests only, no `GameServerConnection` dispat
 ## Update After UOW-1268
 
 `SmAbnormalEffect` is now partially available as a supplied-facts serializer. Live bind-point fanout remains blocked because the live adapter still needs runtime active-player facts, effect-controller hydration, descriptor-to-packet construction, socket dispatch ordering, scheduled task ownership, and Java runtime packet validation.
+
+## Update After UOW-1269
+
+Descriptor-to-packet construction metadata now exists for player `see`/`notSee` side-effect plans. Live bind-point fanout remains blocked because this bridge is non-live, requires supplied runtime facts, does not send packets, and is not yet applied across population-side attachment plans.

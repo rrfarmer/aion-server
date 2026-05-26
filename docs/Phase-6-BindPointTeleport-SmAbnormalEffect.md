@@ -107,3 +107,7 @@ Tests updated:
 ## Next Recommended Unit of Work
 
 Add a non-live player `see` descriptor-to-packet input bridge that can convert supplied `SM_PLAYER_INFO`, `SM_MOTION`, optional ride, stance, and abnormal-effect descriptor facts into concrete packet construction metadata without sending packets. Keep live `GameServerConnection` dispatch disabled.
+
+## Update After UOW-1269
+
+`PlayerKnownListPlayerSideEffectPacketConstructionService` now performs that non-live conversion for individual player side-effect plans and blocks abnormal-effect construction when effect facts are missing. It does not hydrate live `EffectController` data or send packets.

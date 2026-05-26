@@ -134,6 +134,10 @@ Population composition now carries operation side-effect attachments per candida
 
 `SmAbnormalEffect` packet serialization is now partially available from supplied effect facts. Scheduled Kinah action `3` remains disabled because live known-list fanout still cannot compute active viewer facts, hydrate effect-controller data, instantiate/send the full Java packet sequence, or validate Java runtime packet ordering.
 
+## Update After UOW-1269
+
+The C# port can now create non-live packet construction metadata from supplied player side-effect descriptor facts. Scheduled Kinah action `3` remains disabled because no population-level construction bridge or live socket dispatcher consumes that metadata, and runtime fact hydration is still missing.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:

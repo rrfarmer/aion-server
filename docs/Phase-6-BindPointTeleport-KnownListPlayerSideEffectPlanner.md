@@ -111,3 +111,7 @@ Add a disabled composition step that attaches `PlayerKnownListPlayerSideEffectPl
 ## Update After UOW-1268
 
 `SmAbnormalEffect` now exists as a supplied-facts packet serializer and the abnormal-effect descriptor reports partial C# support. The planner still does not hydrate live `EffectController` data, compute abnormal masks/effect timers, instantiate packets, or send them.
+
+## Update After UOW-1269
+
+`PlayerKnownListPlayerSideEffectPacketConstructionService` can now convert player `see`/`notSee` descriptor plans into concrete packet construction metadata from supplied facts. This remains non-live: missing ride NPC ids, abnormal-effect facts, or mismatched subject players produce blocked metadata rather than socket sends.

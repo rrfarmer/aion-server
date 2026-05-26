@@ -180,3 +180,7 @@ It is still not Java region known-list parity because no live region object stor
 ## Update After UOW-1268
 
 `SmAbnormalEffect` now covers Java-shaped player and non-player abnormal-effect payloads from supplied facts, including slot filtering. Population planning remains metadata-only and does not hydrate live effect-controller masks/effects or send packets.
+
+## Update After UOW-1269
+
+`PlayerKnownListPlayerSideEffectPacketConstructionService` can construct packet metadata for one supplied player side-effect plan. Population planning still needs a separate attachment-level bridge before candidate side-effect plans can carry packet construction metadata end to end.
