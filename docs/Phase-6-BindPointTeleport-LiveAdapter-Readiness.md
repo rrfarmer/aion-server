@@ -21,6 +21,8 @@ Update after UOW-1217: C# now has `BindPointTeleportRuntimeStateOwner`, an isola
 
 Update after UOW-1218: C# now has `BindPointTeleportRuntimeControlBridgeService`, a non-sending bridge that consumes `BindPointTeleportRuntimeStateOwner` facts for action `2` cancel and action `3` login cooldown plans. It can cancel the owner task slot and produce existing `SmBindPointTeleport` packet intents, but it still does not send packets or wire live client dispatch.
 
+Update after UOW-1219: C# now has `BindPointTeleportRuntimeFanoutService`, an isolated adapter that can broadcast runtime control bridge packet intents through `IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync(..., includeSourcePlayer: true)`. Tests cover no-packet, action `2`, and login action `3` fanout calls. Full `GameServerConnection` dispatch remains disabled, and C# visible-distance fanout is still only an approximation of Java persistent known-list membership.
+
 ## Java Live Flow
 
 Java source files:
@@ -92,7 +94,7 @@ Java login flow:
 | Runtime task owner | Per-player `TaskId.SKILL_USE` task slot with replace/cancel semantics | Isolated owner added in UOW-1217 | Keep unwired until live callback, inventory, fanout, and movement gates are ready. |
 | Cooldown owner | Player-id keyed cooldown storage with Java whole-second time-left behavior | Isolated owner added in UOW-1217 | Keep unwired until login/requirements bridges can use it safely. |
 | Inventory mutation | `tryDecreaseKinah(price, DEC_KINAH_FLY)` with persistence and packet order | Planner only | Defer until update packet and persistence path are isolated. |
-| Fanout | Source-included visible-player broadcast matching Java known-list semantics | Planner plus runtime control packet intents; registry approximation exists | Add live fanout tests only after packet-source inclusion and known-list limitations are isolated. |
+| Fanout | Source-included visible-player broadcast matching Java known-list semantics | Runtime control fanout adapter added in UOW-1219; registry approximation exists | Known-list parity remains unverified; action `1` scheduled callback fanout is still unwired. |
 | Final movement | Java `TeleportAnimation.NONE` side effects and owner packet order | Planner only | Defer live adapter until action abort/despawn/spawn/pet/callback gaps are owned. |
 | Java comparison | Runtime or golden comparison for live packet/order behavior | Missing | Do not mark Verified Parity. |
 

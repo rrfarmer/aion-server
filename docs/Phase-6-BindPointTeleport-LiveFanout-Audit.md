@@ -43,6 +43,8 @@ Update after UOW-1217: C# now has an isolated `BindPointTeleportRuntimeStateOwne
 
 Update after UOW-1218: `BindPointTeleportRuntimeControlBridgeService` now consumes the runtime owner for action `2` cancel and action `3` login cooldown packet intents. It does not send packets; future fanout work can use its `ShouldSendPacket` and `SmBindPointTeleport` intent without duplicating task/cooldown lookup logic.
 
+Update after UOW-1219: `BindPointTeleportRuntimeFanoutService` can now execute the runtime control bridge packet intents through `IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync` with `includeSourcePlayer: true`. This covers action `2` cancel and login action `3` source-inclusion tests, but it still uses the C# visible-player registry approximation rather than Java's persistent `KnownList`.
+
 ## Java Flow
 
 Java source files:
@@ -95,6 +97,7 @@ Observed C# state:
 - `PlayerTeleportService` supports immediate/pending teleport helpers, but no hotspot/cooldown/task/Kinah mutation ownership.
 - `ThreadPoolManager` and `ScheduledTask` can represent delayed work, and `BindPointTeleportRuntimeStatePlanService` now records the bind-point-specific `TaskId.SKILL_USE` state boundary, but no live task slot is wired.
 - `IGameClientConnectionRegistry.BroadcastToVisiblePlayersAsync` can approximate Java `PacketSendUtility.broadcastPacket(..., true)` for visible-player fanout, but Java `broadcastPacketAndReceive` source-player inclusion semantics must be explicitly mapped before live use.
+- `BindPointTeleportRuntimeFanoutService` now maps action `2` and login action `3` runtime control bridge packet intents to `BroadcastToVisiblePlayersAsync(..., includeSourcePlayer: true)`. Known-list membership parity remains unverified.
 - `SmBindPointTeleport` exists and is source-derived unit tested for opcode `296` and action payloads.
 - Price, requirements, operation, control, client action, fanout, request-composition, runtime-state, scheduled-Kinah, final-movement, scheduled-callback, and teleport side-effect planners exist; scheduled callback composition can carry side-effect metadata and remains non-live.
 
