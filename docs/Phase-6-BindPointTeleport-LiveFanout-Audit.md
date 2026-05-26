@@ -31,6 +31,8 @@ Update after UOW-1211: C# now has a non-live `BindPointTeleportTeleportToSideEff
 
 Update after UOW-1212: `BindPointTeleportScheduledCallbackPlanService` can now carry the non-live teleport side-effect plan after the final movement intent. This composes scheduled Kinah success, cooldown insert, action `3` fanout, final movement gate, and concrete `TeleportService.teleportTo` side-effect metadata in Java order without enabling scheduler execution, packet sends, or movement.
 
+Update after UOW-1213: `docs/Phase-6-BindPointTeleport-LiveAdapter-Readiness.md` now records the live-adapter gates before `GameServerConnection` dispatch. It keeps live bind-point teleport blocked until concrete failure system-message helpers, a no-op handler composition bridge, runtime task/cooldown ownership, live Kinah mutation/persistence, source-included fanout, and live movement side effects are independently handled.
+
 ## Java Flow
 
 Java source files:
@@ -72,6 +74,7 @@ C# surfaces reviewed:
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportScheduledCallbackPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Services/BindPointTeleportTeleportToSideEffectPlanService.cs`
 - `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmBindPointTeleport.cs`
+- `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmSystemMessage.cs`
 
 Observed C# state:
 
@@ -100,6 +103,7 @@ Observed C# state:
 - Do not mutate Kinah from a scheduled callback until the failure packet and inventory update behavior are modeled.
 - Do not call `PlayerTeleportService` for the final movement until Java same-world/world-change packet order is selected for hotspot teleport.
 - Do not reuse delayed `SM_TELEPORT_LOC` paths for hotspot final movement; Java bind-point movement uses `TeleportAnimation.NONE` and runs `SpawnTask` immediately.
+- Do not add live `GameServerConnection` dispatch until the live-adapter readiness gates in `docs/Phase-6-BindPointTeleport-LiveAdapter-Readiness.md` are satisfied or intentionally staged with tests.
 
 ## Migration Parity Table - UOW-1201
 

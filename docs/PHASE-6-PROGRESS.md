@@ -46513,6 +46513,7 @@ Next recommended unit of work:
 - Kept live behavior out of scope: no `GameServerConnection` bind-point dispatch, no scheduler execution, no inventory/cooldown mutation, no packet send, and no movement.
 - Validation:
   - Documentation/source-audit unit; no product code changed and no new tests were added.
+  - `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "BindPointTeleport|CmBindPointTeleport|SmBindPointTeleport" --nologo` passed 63 tests.
   - `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "BindPointTeleport|CmBindPointTeleport|SmBindPointTeleport" --nologo` passed 58 tests.
 
 #### Migration Parity Table - Session 1210
@@ -46658,6 +46659,59 @@ Summary metrics:
 
 Next recommended unit of work:
 - Add a live-adapter readiness checklist for bind-point teleport now that non-live request, scheduler, Kinah, cooldown, fanout, final movement, side-effect, and callback composition metadata exists. Keep it read-only unless the checklist identifies a narrow prerequisite, such as system-message packet support for failure branches or a no-op handler-level composition bridge that still does not execute side effects.
+
+---
+
+### Session 1213 (May 26, 2026)
+- Continued after UOW-1212 with a read-only live-adapter readiness checklist for bind-point teleport.
+- Parallel Work Discovery reviewed Java `CM_BIND_POINT_TELEPORT`, `BindPointTeleportService`, `TeleportService`, Java `SM_SYSTEM_MESSAGE`, current C# parser/planner/packet surfaces, and current `SmSystemMessage` helpers.
+- File ownership map:
+  - Orchestrator: `docs/Phase-6-BindPointTeleport-LiveAdapter-Readiness.md`, `docs/Phase-6-BindPointTeleport-LiveFanout-Audit.md`, `docs/Phase-6-PricesService-Consumer-Map.md`, `docs/PHASE-6-PROGRESS.md`, and Phase 6 handoff.
+  - No sub-agents spawned: the chosen unit is documentation plus shared migration state; no unused agents existed to despawn.
+- Added `docs/Phase-6-BindPointTeleport-LiveAdapter-Readiness.md`:
+  - records current C# coverage for parser, action selection, price/requirements, operation, request composition, packets, fanout, runtime task/cooldown facts, scheduled Kinah, callback composition, final movement, side-effect metadata, and system messages;
+  - identifies live gates before dispatch: handler boundary, hotspot fact assembly, concrete failure messages, runtime task owner, cooldown owner, inventory mutation, fanout, final movement, and Java comparison;
+  - confirms `GameServerConnection` dispatch must remain disabled;
+  - identifies the next smallest prerequisite as concrete `SmSystemMessage` helpers/tests for `STR_CANNOT_MOVE_TO_AIRPORT_NOT_ENOUGH_FEE` (`1300689`), `STR_CANNOT_MOVE_TO_AIRPORT_NO_ROUTE` (`1300691`), and `STR_FLYING_TIME_NOT_READY` (`1300961`).
+- Kept live behavior out of scope: no production C# files changed, no tests changed, no dispatch, scheduler, inventory, cooldown, packet send, or movement side effects.
+- Validation:
+  - Documentation/source-audit unit; no product code changed and no new tests were added.
+
+#### Migration Parity Table - Session 1213
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BIND_POINT_TELEPORT` | `Aion.GameServer.Network.Aion.ClientPackets.CmBindPointTeleport`; future live adapter | Client Packet / Handler Boundary | Partial | Unit Tested | Needs Verification | Parser/opcode coverage exists, but live `runImpl` dispatch is not wired. Handler-level no-op composition bridge is recommended before live side effects. |
+| `com.aionemu.gameserver.services.teleport.BindPointTeleportService.teleport` | existing bind-point planner stack; future live service/adapter | Service / Movement | Partial | Unit Tested | Needs Verification | Non-live metadata covers price, requirements, operation, scheduler/cooldown facts, scheduled Kinah, callback, final movement, and side effects. Live hotspot lookup, task execution, Kinah mutation, cooldown mutation, fanout, and movement remain unported. |
+| `com.aionemu.gameserver.services.teleport.BindPointTeleportService.cancelTeleport` | `BindPointTeleportControlPlanService`; future task owner/live adapter | Service / Control Flow | Partial | Unit Tested | Needs Verification | Non-live cancel intent exists. Live `TaskId.SKILL_USE` lookup/cancel and action `2` fanout remain blocked on runtime task owner. |
+| `com.aionemu.gameserver.services.teleport.BindPointTeleportService.onLogin` | `BindPointTeleportControlPlanService`; future cooldown owner/login bridge | Service / Login Control Flow | Partial | Unit Tested | Needs Verification | Non-live cooldown packet intent exists. Static cooldown ownership and login broadcast remain unported. Date/time and threading behavior are unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` bind-point failure helpers | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Packet / System Message | Partial | Manual Only | Needs Verification | Generic constructor can emit IDs, but named helpers/tests are missing for `1300689`, `1300691`, and `1300961`. Add before live failure sends. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_BIND_POINT_TELEPORT` | `Aion.GameServer.Network.Aion.ServerPackets.SmBindPointTeleport` | Packet / Serialization | Partial | Unit Tested | Needs Verification | Source-derived packet tests exist for action payloads. Live fanout and Java runtime capture remain missing. |
+| `com.aionemu.gameserver.services.teleport.TeleportService.teleportTo(Player,int,float,float,float)` | `BindPointTeleportTeleportToSideEffectPlanService`; future live movement adapter | Service / Movement Dependency | Partial | Unit Tested | Needs Verification | Side-effect metadata is composed into callback planning, but live action abort, despawn/spawn, packet sends, pet move, callbacks, and movement remain unported. |
+
+Tests added:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| None in UOW-1213 | Documentation/readiness audit | Java `CM_BIND_POINT_TELEPORT`, `BindPointTeleportService`, `TeleportService`, `SM_SYSTEM_MESSAGE` | Identifies live adapter gates and recommended prerequisite order. | Manual source/C# inspection only. | No executable code or Java runtime comparison in this unit. |
+
+Remaining risks:
+- Live `GameServerConnection` dispatch remains disabled and should stay disabled until prerequisites are satisfied.
+- The readiness checklist is manual evidence, not executable parity.
+- Missing system-message helpers could cause live failure branches to use ad hoc IDs unless fixed first.
+- Runtime task/cooldown ownership, Kinah mutation/persistence, known-list fanout, and movement execution remain unported.
+- Reflection behavior did not change. Serialization, threading, date/time, movement, known-list, and persistence parity remain unverified for live bind-point teleport.
+
+Summary metrics:
+- Total Java artifacts discovered: 7 grouped artifact rows in this unit
+- Total artifacts ported: 0 live artifacts; 1 read-only readiness checklist completed
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 7 grouped rows
+- Total blocked artifacts: 6 grouped categories: live dispatch, runtime task/cooldown ownership, system-message helper coverage, inventory mutation/persistence, known-list fanout, and live movement adapter
+- Estimated overall migration completion: Phase 6 remains about 71% complete; this unit clarifies the remaining gates before live bind-point adapter work.
+
+Next recommended unit of work:
+- Add concrete `SmSystemMessage` helpers and packet tests for the bind-point failure messages: `STR_CANNOT_MOVE_TO_AIRPORT_NOT_ENOUGH_FEE` (`1300689`), `STR_CANNOT_MOVE_TO_AIRPORT_NO_ROUTE` (`1300691`), and `STR_FLYING_TIME_NOT_READY` (`1300961`). Keep the unit to packet helpers/tests only; do not add `GameServerConnection` dispatch.
 
 ---
 
