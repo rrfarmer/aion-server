@@ -75,6 +75,8 @@ Update after UOW-1244: `docs/Phase-6-BindPointTeleport-ScheduledKinah-LiveAdapte
 
 Update after UOW-1255: `docs/Phase-6-BindPointTeleport-PlayerKnownListPopulation-Design.md` now documents full Java player known-list population requirements. Live bind-point teleport dispatch remains blocked because C# still lacks Java-equivalent region-backed `World.spawn`/`updatePosition`/`despawn`, bidirectional `KnownList` population, cached visibility transitions, and controller `see`/`notSee`/`notKnow` packet side effects.
 
+Update after UOW-1256: `PlayerKnownListRegionSnapshotService` now provides a disabled prerequisite model for owner-region plus neighbor-region player candidate selection. Live dispatch remains blocked because the model does not mutate known-list membership, compute range/`canSee`, perform two-way add/remove, or send controller packets.
+
 ## Java Live Flow
 
 Java source files:

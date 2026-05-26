@@ -85,6 +85,10 @@ The player known-list population design audit confirms that the fanout blocker i
 
 Next recommended work: add a disabled region/player snapshot model that can feed future known-list membership population without using flat online registry scans as a parity substitute.
 
+## Update After UOW-1256
+
+The disabled region/player snapshot model now exists. It improves future membership inputs by carrying modeled world id, instance id, owner region, neighbor regions, and candidate player object ids, but bind-point action `3` fanout remains non-live because the model does not yet mutate known-list membership or execute Java controller side effects.
+
 ## Next Recommended Unit of Work
 
 Add a non-live known-list-backed fanout plan or expected Java trace model for bind-point broadcasts. It should represent source-first delivery plus known-list-player recipients without using distance-only filtering, and it should remain unwired from `GameServerConnection`.

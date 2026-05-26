@@ -67,6 +67,10 @@ The adapter preserves the approximation flags: registry snapshots plus `WorldVis
 
 The next safe executable slice is a disabled region/player snapshot model, not live bind-point fanout dispatch.
 
+## Update After UOW-1256
+
+`PlayerKnownListRegionSnapshotService` now exists as a disabled, pure prerequisite model for owner-region plus neighbor-region player candidate selection. `PlayerKnownListMembershipRefreshService` is not yet wired to consume it, but the next safe slice is a non-live adapter from region snapshot candidate ids into membership metadata.
+
 ## Summary Metrics
 
 - Total Java artifacts discovered: 5 grouped artifact rows in this unit

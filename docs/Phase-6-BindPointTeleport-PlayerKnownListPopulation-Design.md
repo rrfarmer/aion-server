@@ -126,3 +126,9 @@ No tests were added in UOW-1255. This unit intentionally produced the design aud
 ## Next Recommended Unit of Work
 
 Add a small, test-first region/player snapshot model for Java known-list population prerequisites. Keep it disabled/unwired, but make it capable of representing world id, instance id, region id, owner exclusion, neighbor candidate ordering, and player object ids so `PlayerKnownListMembershipRefreshService` can later move away from flat registry snapshots.
+
+## Update After UOW-1256
+
+`PlayerKnownListRegionSnapshotService` now provides that disabled prerequisite model. It can project player candidate ids from an owner region plus supplied neighbor regions while preserving owner exclusion, same-world/instance filtering, spawned filtering, deduplication, and first-seen region ordering metadata.
+
+It is still not Java region known-list parity because no live region object store, distance/range check, `canSee` visibility recomputation, already-known check, two-way add/remove, flag-NPC scan, or controller packet side effects execute.

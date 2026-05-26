@@ -82,6 +82,10 @@ It remains unwired from `GameServerConnection` and is not registered as a live s
 
 The known-list blocker now has a dedicated design audit in `docs/Phase-6-BindPointTeleport-PlayerKnownListPopulation-Design.md`. Live scheduled Kinah callback dispatch must still remain disabled because action `3` Java fanout is self-first plus `KnownList.forEachPlayer`, and C# still has only registry/distance approximations and disabled metadata executors.
 
+## Update After UOW-1256
+
+`PlayerKnownListRegionSnapshotService` now models Java-shaped region candidate inputs for future known-list population, but it is still non-live and not connected to membership refresh, fanout, cooldown, movement, or scheduled Kinah callback execution.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:
