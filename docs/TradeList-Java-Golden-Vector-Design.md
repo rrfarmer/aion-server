@@ -148,3 +148,164 @@ If byte serialization is difficult to extract at `PacketSendUtility`, record pac
 - C# price config and live legion-level lookup are staged and non-live.
 - C# limited-item lifecycle does not yet include Java cron resets, sell-limit mutation, or per-player buy-count mutation.
 - NPC AI/controller routing is not live-wired into the production socket handler for `BUY`.
+
+---
+
+## UOW-1165 Runtime Vector Artifact Design
+
+Date: May 26, 2026
+
+This section refines the artifact contract for a future Java runtime capture tool covering both `SM_TRADELIST` and `SM_TRADE_IN_LIST`.
+
+It is a tooling design only. It does not claim runtime parity and does not enable C# live sends.
+
+### Expanded Java Source Breadcrumbs
+
+- `game-server/src/com/aionemu/gameserver/network/aion/AionServerPacket.java`
+- `game-server/src/com/aionemu/gameserver/utils/PacketSendUtility.java`
+- `game-server/src/com/aionemu/gameserver/network/aion/serverpackets/SM_TRADELIST.java`
+- `game-server/src/com/aionemu/gameserver/network/aion/serverpackets/SM_TRADE_IN_LIST.java`
+- `game-server/src/com/aionemu/gameserver/network/aion/serverpackets/SM_SYSTEM_MESSAGE.java`
+- `game-server/src/com/aionemu/gameserver/services/DialogService.java`
+- `game-server/src/com/aionemu/gameserver/services/LimitedItemTradeService.java`
+- `game-server/src/com/aionemu/gameserver/model/templates/tradelist/TradeListTemplate.java`
+- `game-server/src/com/aionemu/gameserver/model/templates/goods/GoodsList.java`
+
+### Serialization Capture Boundary
+
+Java `AionServerPacket.write(AionConnection, ByteBuffer)` writes this frame shape:
+
+1. two-byte packet length placeholder
+2. obfuscated opcode from `Crypt.encodeServerPacketOpcode(getOpCode())`
+3. `Crypt.staticServerPacketCode`
+4. bitwise complement of the obfuscated opcode
+5. packet body from `writeImpl`
+6. final length patched into the first two bytes
+7. encryption over the slice after the length
+
+For parity vectors, the preferred artifact should record two payload forms:
+
+| Field | Meaning | Why It Matters |
+|---|---|---|
+| `wireFrameHex` | The Java bytes after `AionServerPacket.write` and encryption for a deterministic test connection. | Useful only when the capture fixture can fix the crypt seed/key and C# reproduces the same encrypted frame. |
+| `canonicalPayloadHex` | A stable test-only reconstruction of opcode plus `writeImpl` body before encryption, using the same little-endian packet-buffer convention as C# packet tests. | Preferred for serializer parity because it avoids Java runtime encryption state and socket timing. |
+| `bodyHex` | The `writeImpl` body without opcode/framing. | Useful to localize opcode/framing mismatches from body serialization mismatches. |
+
+If only one byte form is feasible, capture `canonicalPayloadHex` first. Do not compare encrypted socket frames unless crypt setup is deterministic and documented.
+
+### Artifact JSON Shape
+
+The future tool should emit one JSON file per scenario:
+
+```json
+{
+  "schemaVersion": 1,
+  "javaCommit": "<git sha>",
+  "scenario": "buy-sellable-normal",
+  "input": {
+    "dialogActionId": 2,
+    "targetObjectId": 9001,
+    "playerObjectId": 1001,
+    "npcId": 203060,
+    "questId": 0,
+    "lastPage": 0,
+    "extendedRewardIndex": 0
+  },
+  "runtimeFacts": {
+    "playerLegionLevel": 0,
+    "vendorBuyModifier": 100,
+    "tradeSellPriceRate": 80,
+    "buyPriceModifier": 80,
+    "npcCanSell": true,
+    "npcCanBuy": true
+  },
+  "packets": [
+    {
+      "sequence": 0,
+      "packetClass": "SM_TRADELIST",
+      "opcode": 149,
+      "semanticKey": "trade-list",
+      "canonicalPayloadHex": "<hex>",
+      "bodyHex": "<hex>",
+      "wireFrameHex": null,
+      "decoded": {
+        "targetObjId": 9001,
+        "tradeNpcTypeIndex": 1,
+        "buyPriceModifier": 80,
+        "fixedClientModifier": 100,
+        "showBuyTab": true,
+        "showSellTab": true,
+        "tradeTabIds": [129],
+        "limitedItems": [
+          { "itemId": 186000001, "buyCount": 0, "sellLimit": 5 }
+        ]
+      }
+    }
+  ],
+  "notes": []
+}
+```
+
+For `TRADE_IN`, use `dialogActionId = 78`, `packetClass = "SM_TRADE_IN_LIST"`, `semanticKey = "trade-in-list"`, and include decoded fields:
+
+| Decoded Field | Java Source |
+|---|---|
+| `targetObjId` | `npc.getObjectId()` |
+| `tradeNpcTypeIndex` | `tlist.getTradeNpcType().index()` |
+| `buyPriceModifier` | fixed `100` passed by `DialogService` |
+| `fixedClientModifier` | literal `100` |
+| `tradeTabIds` | raw `TradeListTemplate.getTradeTablist()` order |
+
+For no-sell scenarios, use `packetClass = "SM_SYSTEM_MESSAGE"` and include:
+
+| Decoded Field | Java Source |
+|---|---|
+| `messageId` | `STR_BUY_SELL_HE_DOES_NOT_SELL_ITEM` |
+| `npcNameParam` | `npc.getObjectTemplate().getL10n()` |
+| `semanticKey` | `buy-no-trade-list`, `buy-no-sellable-goods`, or `trade-in-no-template` |
+
+### Minimum Scenario Matrix
+
+Before enabling C# live sends, capture at least:
+
+| Scenario | Dialog Action | Expected Packet | Required Runtime Facts |
+|---|---|---|---|
+| `buy-sellable-normal` | `BUY` / `2` | `SM_TRADELIST` | one allowed goods tab, no limited rows |
+| `buy-limited-items` | `BUY` / `2` | `SM_TRADELIST` | limited rows from `LimitedItemTradeService`, player buy count defaults |
+| `buy-no-template` | `BUY` / `2` | `SM_SYSTEM_MESSAGE` | missing `TradeListData.getTradeListTemplate` |
+| `buy-all-goods-missing` | `BUY` / `2` | `SM_SYSTEM_MESSAGE` | template exists, referenced goods absent |
+| `buy-legion-restricted` | `BUY` / `2` | `SM_SYSTEM_MESSAGE` | template exists, goods legion level exceeds player level |
+| `buy-mixed-legion-tabs` | `BUY` / `2` | `SM_TRADELIST` | filtered tab order preserves source order |
+| `buy-non-default-price` | `BUY` / `2` | `SM_TRADELIST` | non-default vendor modifier and source sell price rate |
+| `trade-in-sellable` | `TRADE_IN` / `78` | `SM_TRADE_IN_LIST` | fixed modifier `100`, raw tab ids, no limited rows |
+| `trade-in-no-template` | `TRADE_IN` / `78` | `SM_SYSTEM_MESSAGE` | missing `TradeListData.getTradeInListTemplate` |
+
+### Suggested Implementation Shape
+
+Prefer a Java test utility or standalone debug runner that stays out of production runtime:
+
+1. Build deterministic player and NPC fixtures with fixed object ids.
+2. Load the same Java static-data files used by the server.
+3. For each scenario, call the Java `DialogService.onDialogSelect` path or the nearest stable wrapper that still executes Java's branch logic.
+4. Intercept `PacketSendUtility.sendPacket(Player, AionServerPacket)` or the player's `AionConnection.sendPacket` call.
+5. For each packet, capture packet class and semantic facts.
+6. Serialize canonical bytes with a test-only buffer that writes opcode/body before encryption.
+7. Optionally serialize wire bytes with deterministic `AionConnection` crypt state.
+8. Emit one JSON artifact per scenario under a future `parity-artifacts/trade-list/java/` directory.
+
+Avoid editing production packet classes for instrumentation if a test-only wrapper can reflect packet fields or intercept after construction. If reflection is used, document every private field name because field renames would invalidate the artifact generator.
+
+### C# Comparison Targets
+
+The C# verifier should consume the JSON artifacts and compare:
+
+| Java Artifact Field | C# Source |
+|---|---|
+| `canonicalPayloadHex` for `SM_TRADELIST` | `SmTradeList` serialized from `SmTradeListPacketPlan` |
+| `canonicalPayloadHex` for `SM_TRADE_IN_LIST` | `SmTradeInList` serialized from `SmTradeInListPacketPlan` |
+| `SM_SYSTEM_MESSAGE` no-sell payload | future concrete no-sell packet test or existing system-message serializer once scoped |
+| `runtimeFacts.buyPriceModifier` | `NpcDialogTradeRuntimeFactAdapterService` and `SmTradeListPacketPlanService` |
+| `decoded.tradeTabIds` | `NpcDialogTradeListFactAdapterService` / packet plan |
+| `decoded.limitedItems` | `NpcDialogLimitedItemFactAdapterService` |
+
+Parity remains Partial or Needs Verification until the artifact generator exists, artifacts are checked in or reproducibly generated, and C# tests compare against them.
