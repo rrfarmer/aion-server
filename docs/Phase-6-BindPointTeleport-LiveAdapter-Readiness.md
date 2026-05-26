@@ -59,6 +59,8 @@ Update after UOW-1236: `BindPointTeleportKinahInventorySendAdapterPlanService` n
 
 Update after UOW-1237: `BindPointTeleportKinahPersistenceOperationPlanService` now models the owner-checked SQL contract and supplied row-count/exception mapping without executing SQL. Live bind-point persistence remains blocked on a real repository adapter and owner/rollback execution.
 
+Update after UOW-1238: `BindPointTeleportKinahCallbackOutcomePlanService` now provides a pure scheduled Kinah callback verdict that composes mutation, persistence, disabled send, and rollback metadata. Live callback execution remains blocked on owner/lock, SQL adapter, live send, fanout, and movement work.
+
 ## Java Live Flow
 
 Java source files:
@@ -173,6 +175,8 @@ Update after UOW-1235: owner/rollback planning is now represented by `BindPointT
 Update after UOW-1236: disabled no-op send adapter seam is complete. The next safe prerequisite is an owner-checked repository persistence contract or SQL adapter design; keep live sends and `GameServerConnection` dispatch disabled.
 
 Update after UOW-1237: the pure owner-checked persistence operation contract is complete. The next safe prerequisite is a non-live scheduled Kinah callback outcome composer joining mutation, persistence, disabled send, and rollback metadata.
+
+Update after UOW-1238: the non-live scheduled Kinah callback outcome composer is complete. The next safe prerequisite is a readiness audit for the composed chain before choosing live owner/lock design or SQL adapter readiness.
 
 ## Do Not Wire Yet
 

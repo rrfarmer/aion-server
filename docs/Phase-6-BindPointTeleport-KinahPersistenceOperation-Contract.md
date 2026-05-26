@@ -90,3 +90,5 @@ Result mapping:
 ## Next Recommended Unit of Work
 
 Add a non-live composition bridge that consumes mutation, persistence operation/result, disabled send, and owner rollback metadata into one scheduled Kinah callback outcome. Keep it pure and disabled; do not execute SQL, send packets, wire `GameServerConnection`, broadcast fanout, or move the player.
+
+Update after UOW-1238: `BindPointTeleportKinahCallbackOutcomePlanService` now composes mutation, owner-checked persistence metadata, disabled send metadata, and owner rollback metadata into one stop/rollback/continue outcome. Next, prefer a readiness audit before choosing live owner/lock or SQL adapter work.
