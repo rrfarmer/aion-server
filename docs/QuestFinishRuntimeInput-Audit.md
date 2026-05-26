@@ -139,3 +139,18 @@ This should be implemented and tested before any production socket/quest handler
 3. Transaction/failure ordering between custom reward receipt writes and system-mail persistence is still unresolved.
 4. The item-template source is represented as an explicit input for testability; production wiring must pass `runtimeContext.DataManager.StaticData.ItemTemplates` and stay guarded when static data is unavailable.
 5. End-to-end login-server auth/reconnect/enter-world socket ordering still needs integration coverage before claiming runtime parity.
+
+## C# State After UOW-1079
+
+- Added a non-live composition regression test for session-assembled disabled custom reward options.
+- The test feeds `QuestFinishCustomRewardSessionRuntimeInputAdapterService` disabled options into `QuestFinishCustomRewardRuntimeSideEffectAdapterService`, then into quest-finish XP metadata composition.
+- The disabled path keeps the original `QuestFinishRewardSideEffectContext`, does not call custom reward repositories, does not allocate object ids, and leaves custom reward sub-plan metadata non-live/default.
+- This proves the new runtime-input bridge remains inert by default when composed with the existing quest-finish XP metadata path.
+
+## Remaining Runtime Wiring Blockers After UOW-1079
+
+1. Production quest-finish reward mutation remains non-live; no socket or quest handler invokes the session adapter or side-effect adapter.
+2. Java `PlayerCommonData.setExp` live mutation is still absent, so custom reward level checks must not be enabled from stale pre-mutation player snapshots.
+3. Transaction/failure ordering between custom reward receipt writes and system-mail persistence is still unresolved.
+4. End-to-end login-server auth/reconnect/enter-world socket ordering still needs integration coverage before claiming runtime parity.
+5. Java runtime comparison remains unavailable locally, so date/time and custom reward execution ordering stay source-derived only.
