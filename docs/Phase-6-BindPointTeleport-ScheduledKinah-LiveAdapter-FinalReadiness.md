@@ -86,3 +86,7 @@ The disabled/opt-in inventory packet send adapter seam now exists:
 - extended `BindPointTeleportKinahInventorySendAdapterStatus` for `MissingConnection`, `Sent`, and `Failed`
 
 It consumes existing packet intent and can call `IGameClientConnectionRegistry.SendPacketToPlayerAsync` only when explicitly enabled. It remains unwired from `GameServerConnection`. The packet-send blocker is reduced from "no executable seam" to "no live dispatch wiring and no Java packet capture validation."
+
+## Update After UOW-1248
+
+The expected Java known-list fanout shape is now modeled as non-live metadata, but live known-list membership and a source-first executor are still missing. The known-list blocker remains active for live scheduled Kinah dispatch.

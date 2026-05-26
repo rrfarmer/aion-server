@@ -82,3 +82,16 @@ The new test uses a fake registry to characterize the approximation:
 ## Next Recommended Unit of Work
 
 Add a non-live known-list-backed fanout plan or expected Java trace model for bind-point broadcasts. It should represent source-first delivery plus known-list-player recipients without using distance-only filtering, and it should remain unwired from `GameServerConnection`.
+
+## Update After UOW-1248
+
+UOW-1248 adds `BindPointTeleportKnownListFanoutTraceService`, a non-live expected Java fanout trace model. It represents:
+
+- source-player send first,
+- known-list player recipients after source,
+- known-but-not-visible recipients retained as represented known-list members,
+- duplicate known-list object ids collapsed to mirror `ConcurrentHashMap` object-id keys,
+- owner/source exclusion as a normal Java known-list add/update invariant,
+- known-list recipient ordering marked unspecified because Java iterates `ConcurrentHashMap.values()`.
+
+This model does not call `IGameClientConnectionRegistry`, does not send packets, and does not implement persistent known-list membership. It is an executable Java expectation for a future fanout executor.

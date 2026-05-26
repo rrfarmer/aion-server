@@ -208,6 +208,8 @@ Update after UOW-1246: disabled/opt-in inventory packet send adapter seam is com
 
 Update after UOW-1247: current C# action `3` fanout approximation is characterized with concrete same-world/95m recipients, but Java known-list parity is still not achieved. The next safe prerequisite is a non-live known-list-backed fanout plan or expected Java trace model.
 
+Update after UOW-1248: expected Java source-first plus known-list-recipient fanout is modeled as non-live trace metadata. Live known-list membership storage/execution remains blocked, so `GameServerConnection` dispatch should still stay disabled.
+
 ## Do Not Wire Yet
 
 - Do not add a live `GameServerConnection` branch for `CmBindPointTeleport` in the next unit.
