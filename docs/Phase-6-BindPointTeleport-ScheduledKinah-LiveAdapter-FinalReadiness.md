@@ -77,3 +77,12 @@ The disabled/opt-in owner-checked SQL repository adapter seam now exists:
 - `MySqlBindPointTeleportKinahPersistenceRepository`
 
 It remains unwired from `GameServerConnection` and is not registered as a live scheduled Kinah path. The SQL blocker is reduced from "no executable seam" to "no opt-in live wiring or DB integration validation." The next safe blocker is a disabled/opt-in inventory packet send adapter.
+
+## Update After UOW-1246
+
+The disabled/opt-in inventory packet send adapter seam now exists:
+
+- `BindPointTeleportKinahInventorySendAdapterService`
+- extended `BindPointTeleportKinahInventorySendAdapterStatus` for `MissingConnection`, `Sent`, and `Failed`
+
+It consumes existing packet intent and can call `IGameClientConnectionRegistry.SendPacketToPlayerAsync` only when explicitly enabled. It remains unwired from `GameServerConnection`. The packet-send blocker is reduced from "no executable seam" to "no live dispatch wiring and no Java packet capture validation."

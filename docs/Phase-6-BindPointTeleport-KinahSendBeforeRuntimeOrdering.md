@@ -18,6 +18,8 @@ C# now has `BindPointTeleportKinahSendBeforeRuntimeOrderingService`, a pure orde
 
 This service does not execute SQL, send packets, broadcast fanout, dispatch from `GameServerConnection`, or move the player.
 
+Update after UOW-1246: `BindPointTeleportKinahInventorySendAdapterService` can now provide an opt-in send result for this ordering gate. The gate itself remains the authority for blocking cooldown/action `3` fanout and final movement unless the inventory packet send result is `Sent` with `SentPacket=true`.
+
 ## Java Facts
 
 Java source files reviewed:

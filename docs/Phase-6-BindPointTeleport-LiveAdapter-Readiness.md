@@ -204,6 +204,8 @@ Update after UOW-1244: final scheduled Kinah live-adapter readiness audit is com
 
 Update after UOW-1245: disabled/opt-in owner-checked SQL repository adapter seam is complete and remains unwired from dispatch. The next safe prerequisite is a disabled/opt-in inventory packet send adapter that consumes existing packet intent/send-result policy without enabling live movement or `GameServerConnection`.
 
+Update after UOW-1246: disabled/opt-in inventory packet send adapter seam is complete and remains unwired from dispatch. The next safe prerequisite is known-list fanout parity design or characterization before any scheduled Kinah callback can broadcast action `3` live.
+
 ## Do Not Wire Yet
 
 - Do not add a live `GameServerConnection` branch for `CmBindPointTeleport` in the next unit.
