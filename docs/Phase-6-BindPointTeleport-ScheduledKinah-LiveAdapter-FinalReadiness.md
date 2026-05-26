@@ -107,3 +107,7 @@ Source-online gating and per-recipient log-and-continue behavior are now represe
 ## Update After UOW-1251
 
 The disabled source-first known-list fanout executor composition now exists as `BindPointTeleportKnownListFanoutExecutionPlanService`. It still does not send packets. Live scheduled Kinah dispatch remains blocked on real known-list population, opt-in socket execution, movement, `GameServerConnection` dispatch, and Java runtime validation.
+
+## Update After UOW-1252
+
+The disabled/opt-in known-list socket executor boundary now exists as `BindPointTeleportKnownListFanoutSocketExecutorService`. It can send only when explicitly enabled by a caller, but no live caller exists. Live scheduled Kinah dispatch remains blocked on real known-list population, final movement, `GameServerConnection` dispatch, and Java runtime validation.

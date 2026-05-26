@@ -216,6 +216,8 @@ Update after UOW-1250: C# now has `BindPointTeleportKnownListFanoutSendPolicySer
 
 Update after UOW-1251: C# now has `BindPointTeleportKnownListFanoutExecutionPlanService`, a disabled source-first executor composition. It proves membership snapshots, trace metadata, and send-policy metadata compose without sending packets. Live known-list population, socket execution, movement, and dispatch remain blocked.
 
+Update after UOW-1252: C# now has `BindPointTeleportKnownListFanoutSocketExecutorService`, a disabled-by-default opt-in socket boundary that consumes the known-list execution plan. It is not wired into `GameServerConnection`; live known-list population and scheduled callback dispatch remain blocked.
+
 ## Do Not Wire Yet
 
 - Do not add a live `GameServerConnection` branch for `CmBindPointTeleport` in the next unit.

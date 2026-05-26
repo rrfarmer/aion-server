@@ -37,6 +37,10 @@ The plan proves the Java-shaped pieces now fit together, but it still does not s
 
 Audit live C# world/player state to identify the safest future source for real known-list population, or add a disabled opt-in socket executor boundary that consumes the execution plan but remains unwired from `GameServerConnection`.
 
+## Update After UOW-1252
+
+`BindPointTeleportKnownListFanoutSocketExecutorService` now consumes the execution plan and records a disabled-by-default socket boundary. The enabled path can call `SendPacketToPlayerAsync` in source-first order, but it remains unwired from `GameServerConnection` and is not a live bind-point path.
+
 ## Summary Metrics
 
 - Total Java artifacts discovered: 4 grouped artifact rows in this unit
