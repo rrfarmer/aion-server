@@ -9,6 +9,8 @@ Source of truth: Java project.
 
 Do not enable live bind-point scheduled Kinah mutation in the next `GameServerConnection` dispatch slice. Java `tryDecreaseKinah(price, ItemPacketService.ItemUpdateType.DEC_KINAH_FLY)` is a storage mutation, packet-send, and persistence-state boundary, not only a scalar affordability check. C# currently has source-derived planners for the branch and generic packet support for inventory updates, but no shared live inventory owner that can atomically decrement the Kinah item, persist the item count, emit the fly/teleport inventory update mask, and then hand control to cooldown/fanout in the same Java order.
 
+Update after UOW-1223: C# now has named packet-level `SmInventoryUpdateItem.DecreaseKinahFly = 0x4B` coverage and a source-derived packet test proving the trailing update mask can be emitted for a Kinah item. This only satisfies the packet-mask prerequisite; live inventory mutation, failure-message send, persistence, and callback dispatch remain disabled.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -51,7 +53,7 @@ Observed C# state:
 
 - `BindPointTeleportScheduledKinahPlanService` records `ItemPacketService.ItemUpdateType.DEC_KINAH_FLY` and mask `0x4B`, but `IsLive` remains `false`.
 - `BindPointTeleportRuntimeCallbackExecutionBridgeService` consumes supplied Kinah-success/failure metadata and only performs cooldown/fanout when metadata already indicates success.
-- `SmInventoryUpdateItem` has constants for several Java masks, but no named `DecreaseKinahFly` constant yet.
+- `SmInventoryUpdateItem` now has constants for several Java masks, including named `DecreaseKinahFly = 0x4B`.
 - `SmInventoryUpdateItem` serializes the full item info blob plus the supplied update type, matching the Java normal sendable update-type shape in source-derived form.
 - Existing live or semi-live Kinah consumers copy/update `InventoryItem` values locally and emit `SmInventoryUpdateItem` in some handlers, but the repository persistence surfaces are feature-specific and not a reusable Java `Storage.tryDecreaseKinah` equivalent.
 - Repository code has inventory upsert/update helpers in broker, housing, and mail areas, but there is no audited bind-point-specific transaction or shared inventory repository method guaranteeing the Java callback order.
@@ -63,7 +65,7 @@ A live bind-point scheduled Kinah mutation should be added only after these cont
 1. Locate the player's cube Kinah item by Java Kinah item id `182400001` and cube storage id `0`.
 2. Treat missing Kinah item or count below price as Java failure: send `SmSystemMessage.CannotMoveToAirportNotEnoughFee()` and stop before cooldown/fanout/movement.
 3. On success, decrease the in-memory Kinah count without deleting the Kinah item when it reaches zero.
-4. Emit `SmInventoryUpdateItem` with a named `DecreaseKinahFly` mask `0x4B` after the mutation.
+4. Emit `SmInventoryUpdateItem` with named `DecreaseKinahFly` mask `0x4B` after the mutation.
 5. Persist the updated Kinah item count or explicitly stage persistence as blocked with rollback/failure ordering documented.
 6. Only after the Kinah success boundary continue to `AddCooldown`, action `3` fanout, and final movement scheduling.
 7. Keep the final movement side effect disabled until the existing movement audit gates are satisfied.
@@ -72,7 +74,7 @@ A live bind-point scheduled Kinah mutation should be added only after these cont
 
 - Threading: Java storage mutation happens inside the scheduled task against the player inventory. C# needs an owner/lock policy so the delayed callback cannot race other inventory payments.
 - Persistence: Java marks storage `PersistentState.UPDATE_REQUIRED`; C# currently has feature-specific SQL helpers, so live bind-point persistence needs a clear transaction boundary and failure policy.
-- Serialization: `SmInventoryUpdateItem` can carry arbitrary update masks, but `DecreaseKinahFly` is not named in C# yet; use a constant rather than raw `0x4B`.
+- Serialization: `SmInventoryUpdateItem` can carry named `DecreaseKinahFly = 0x4B`, but no Java runtime byte capture has verified the full Kinah item blob.
 - Packet order: Java sends the inventory update during the Kinah decrement before cooldown/action `3` fanout.
 - Date/time: no new date/time behavior in this audit, but the callback still depends on the previously staged cooldown clock.
 - Reflection: no reflection behavior is involved.
@@ -117,3 +119,5 @@ Tests added:
 ## Next Recommended Unit of Work
 
 Add the smallest executable prerequisite for the audited boundary: introduce a named `SmInventoryUpdateItem.DecreaseKinahFly` constant and a packet/unit test proving that C# can serialize a Kinah inventory update with mask `0x4B`. Keep it packet-level only: no live inventory mutation, no repository write, no `GameServerConnection` dispatch, and no movement.
+
+Update after UOW-1223: this packet-level prerequisite is complete. The next recommended unit is a shared/live Kinah mutation owner design audit for the scheduled callback path, including threading, persistence failure policy, and Java packet ordering.

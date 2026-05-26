@@ -51,6 +51,8 @@ Update after UOW-1221: `BindPointTeleportRuntimeCallbackExecutionBridgeService` 
 
 Update after UOW-1222: `docs/Phase-6-BindPointTeleport-ScheduledKinah-LiveBoundary-Audit.md` documents why live callback action `3` fanout must still wait behind the scheduled Kinah live boundary. Java sends the Kinah inventory update with `DEC_KINAH_FLY` mask `0x4B` before cooldown insertion and action `3` fanout, so C# should not broadcast callback success from live dispatch until that mutation/send boundary is executable or explicitly staged.
 
+Update after UOW-1223: the `DEC_KINAH_FLY` packet mask prerequisite is now named and tested in C#. Live callback fanout is still blocked on the actual scheduled Kinah mutation/persistence boundary and Java-order failure handling.
+
 ## Java Flow
 
 Java source files:
