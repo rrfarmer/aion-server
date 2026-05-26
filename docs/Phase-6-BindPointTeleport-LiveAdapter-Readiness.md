@@ -339,3 +339,7 @@ Operation attachment packet-construction metadata now exists and can preserve di
 ## Update After UOW-1271
 
 Population plans can now carry operation-level packet construction metadata per candidate when supplied subject facts are available. Live bind-point fanout remains blocked because runtime player/motion/effect/ride fact hydration, live known-list population, controller execution, socket dispatch, scheduled callback wiring, and Java runtime validation are still missing.
+
+## Update After UOW-1272
+
+The packet fact hydration audit confirms live bind-point fanout should remain disabled. C# has partial scalar sources for motions, ride info, stance, and abnormal masks, but still lacks a Java-equivalent active viewer context adapter, reusable attack-speed stat resolver for known-list packet construction, live effect-entry/timer hydration, socket dispatch ordering, and Java runtime validation.

@@ -87,3 +87,7 @@ Parallel work discovery was performed before implementation.
 ## Next Recommended Unit of Work
 
 Add a read-only or metadata-only runtime fact hydration audit for population packet construction: identify the safest future sources for active viewer context, active motions, ride movement/stat facts, stance state, and abnormal-effect facts before any live socket dispatch is attempted.
+
+## Update After UOW-1272
+
+The runtime fact hydration audit is complete. It confirms the operation packet construction facts record is correctly shaped, but automatic hydration should remain disabled until active viewer context, attack-speed stat resolution, live motion timing, ride stat hydration, stance observer lifecycle, and abnormal-effect entry/timer sources are explicitly modeled.

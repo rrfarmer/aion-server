@@ -192,3 +192,7 @@ It is still not Java region known-list parity because no live region object stor
 ## Update After UOW-1271
 
 `PlayerKnownListPopulationPlanService` now composes the attachment-level packet construction bridge per candidate when supplied subject facts are available. Candidate plans can expose `SideEffectPacketConstructionPlan`, and the top-level plan records `ConstructedControllerSideEffectPackets`. This is still not live Java known-list parity because the service does not hydrate live player/motion/effect/ride facts, execute Java controller callbacks, send packets, or mutate region-backed known-list state.
+
+## Update After UOW-1272
+
+The packet fact hydration audit confirms the next code slice should be a disabled fact-plan service rather than live known-list dispatch. C# has partial player snapshot fields for motions, ride info, stance, and abnormal masks, but no complete Java-equivalent active viewer context, attack-speed stat source, effect-controller entry/timer source, or runtime packet-order validation.

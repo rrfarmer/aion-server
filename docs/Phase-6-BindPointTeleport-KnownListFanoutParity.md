@@ -456,3 +456,7 @@ Operation attachment packet-construction metadata now exists for directional sid
 ## Update After UOW-1271
 
 Population-level packet-construction metadata now exists for known-list candidate plans when supplied per-subject facts are available. Known-list fanout parity is still blocked on live runtime fact hydration, live region population, controller execution, socket dispatch, scheduled callback wiring, and Java runtime packet-order validation.
+
+## Update After UOW-1272
+
+The runtime packet fact hydration audit identifies why known-list fanout cannot yet execute the population packet metadata live: viewer-sensitive `SmPlayerInfo` context, attack-speed/stat facts, motion timing, ride stat facts, stance observer lifecycle, abnormal-effect entries/timers, and Java runtime packet ordering still need focused parity slices.

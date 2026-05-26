@@ -146,6 +146,10 @@ The C# port can now create non-live packet construction metadata for operation s
 
 Population candidate plans can now carry operation-level packet construction metadata when supplied subject facts are available. Scheduled Kinah action `3` remains disabled because no live known-list fanout dispatcher consumes the metadata, runtime player/motion/effect/ride facts are not hydrated, and Java runtime packet ordering is unverified.
 
+## Update After UOW-1272
+
+The packet fact hydration audit confirms scheduled Kinah action `3` still must not dispatch known-list player packets live. Active viewer context, attack-speed stat resolution, live motion/effect timing, ride stat hydration, stance observer lifecycle, and Java runtime packet ordering remain unresolved.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:
