@@ -91,3 +91,7 @@ Added `dotnetConversion/src/Aion.GameServer/Services/PlayerKnownListPlayerSideEf
 ## Next Recommended Unit of Work
 
 Add a disabled composition step that attaches `PlayerKnownListPlayerSideEffectPlanService` descriptors to `PlayerKnownListTwoWayOperationPlanService` see/notSee steps. Keep it descriptor-only and do not wire `GameServerConnection`, live socket sends, world lifecycle mutation, or bind-point scheduled callbacks.
+
+## Update After UOW-1263
+
+`PlayerKnownListOperationSideEffectAttachmentService` now performs that descriptor-only attachment. It maps owner/candidate `see` and `notSee` operation steps to directional player packet side-effect plans while deriving viewer/subject ids from the operation plan.

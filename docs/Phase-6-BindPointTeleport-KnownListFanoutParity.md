@@ -113,6 +113,10 @@ The known-list population composition service can now seed non-live membership m
 
 The player side-effect planner now records descriptor-only packet intent for player-player known-list `see` and `notSee` transitions. Bind-point fanout remains blocked because these descriptors are not attached to a live known-list callback dispatcher, and `SmPlayerInfo` enemy/aggro behavior plus `SmPlayerStance`/`SmAbnormalEffect` packet classes still need dedicated parity work.
 
+## Update After UOW-1263
+
+The operation side-effect attachment service now joins player packet descriptors to two-way known-list `see`/`notSee` operation steps. Bind-point fanout remains blocked because action `3` does not consume these attachments and live socket dispatch remains disabled.
+
 ## Next Recommended Unit of Work
 
 Add a non-live known-list-backed fanout plan or expected Java trace model for bind-point broadcasts. It should represent source-first delivery plus known-list-player recipients without using distance-only filtering, and it should remain unwired from `GameServerConnection`.

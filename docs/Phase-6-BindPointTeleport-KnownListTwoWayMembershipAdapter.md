@@ -83,3 +83,7 @@ Add a disabled visibility/range operation planner for player-player known-list p
 ## Update After UOW-1262
 
 `PlayerKnownListPlayerSideEffectPlanService` now provides concrete descriptor payloads for the `see` and `notSee` steps preserved by this adapter. The adapter still does not execute them; the next safe work is a composition layer that attaches these packet descriptors to operation-plan side-effect steps.
+
+## Update After UOW-1263
+
+`PlayerKnownListOperationSideEffectAttachmentService` now attaches those descriptor payloads to operation-plan side-effect steps. The membership adapter remains metadata-only and still does not execute the attached packet descriptors.

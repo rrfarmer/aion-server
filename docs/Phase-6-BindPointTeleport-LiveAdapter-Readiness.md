@@ -89,6 +89,8 @@ Update after UOW-1261: `PlayerKnownListPopulationPlanService` now composes regio
 
 Update after UOW-1262: `PlayerKnownListPlayerSideEffectPlanService` now records descriptor-only player `see`/`notSee` packet intent. Live dispatch remains blocked because descriptors are not sent, `SmPlayerInfo` lacks Java enemy/aggro flag behavior, `SmPlayerStance` and `SmAbnormalEffect` are missing, and no controller known-list callback dispatcher is wired.
 
+Update after UOW-1263: `PlayerKnownListOperationSideEffectAttachmentService` now attaches player packet descriptors to operation-plan `see`/`notSee` steps. Live dispatch remains blocked because the attachments are still metadata only and population/fanout/runtime callbacks do not execute them.
+
 ## Java Live Flow
 
 Java source files:
