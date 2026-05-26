@@ -61,6 +61,8 @@ Update after UOW-1226: scheduled callback metadata now preserves the Java order 
 
 Update after UOW-1227: runtime callback execution now preserves the supplied Kinah update intent in its result before/alongside cooldown fanout metadata, but still does not emit the inventory update packet. Live action `3` fanout remains blocked on the future persistence/send boundary.
 
+Update after UOW-1228: persistence/send policy is documented. Live action `3` fanout should remain blocked until the selected C# policy can prove the inventory update was persisted/sent or intentionally staged before fanout.
+
 ## Java Flow
 
 Java source files:

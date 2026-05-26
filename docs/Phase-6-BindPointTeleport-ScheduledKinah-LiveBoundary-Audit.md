@@ -137,3 +137,5 @@ Update after UOW-1225: the non-live mutation planner exists. Next, compose it in
 Update after UOW-1226: mutation metadata is composed into scheduled callback plans. Next, carry it through runtime callback execution as a non-sending inventory-update intent, then design persistence/send boundaries.
 
 Update after UOW-1227: runtime callback execution now carries the non-sending inventory-update intent. Next, design the persistence/send boundary and rollback policy before live mutation.
+
+Update after UOW-1228: `docs/Phase-6-BindPointTeleport-KinahPersistenceSend-Policy.md` documents the future send/persistence order and the likely C# intentional difference if we persist before sending the inventory update.

@@ -15,6 +15,8 @@ Update after UOW-1226: `BindPointTeleportScheduledCallbackPlanService` can now c
 
 Update after UOW-1227: `BindPointTeleportRuntimeCallbackExecutionBridgeService` now carries the callback Kinah update metadata into runtime execution results without sending packets or persisting. The live owner/persistence/send boundary remains blocked.
 
+Update after UOW-1228: `docs/Phase-6-BindPointTeleport-KinahPersistenceSend-Policy.md` now pins the persistence/send policy. Java sends the inventory update during mutation and persists dirty items later; the recommended first C# live policy is owner-checked persist-before-send as an intentional difference unless a Java-like dirty-state lifecycle is introduced.
+
 ## Java Source Facts
 
 Java source files:
@@ -136,3 +138,5 @@ Update after UOW-1225: this non-live planner is implemented and tested. The next
 Update after UOW-1226: callback metadata composition is complete. The next recommended unit is to compose that mutation metadata into the runtime callback execution result as a non-sending packet intent, still without persistence or live inventory mutation.
 
 Update after UOW-1227: runtime non-sending carry-through is complete. The next recommended unit is a persistence/send policy audit or repository contract plan for this exact callback boundary.
+
+Update after UOW-1228: the persistence/send policy audit is complete. Next, add a non-live repository contract plan for owner-checked Kinah count persistence.
