@@ -111,3 +111,7 @@ Add a non-live player `see` descriptor-to-packet input bridge that can convert s
 ## Update After UOW-1269
 
 `PlayerKnownListPlayerSideEffectPacketConstructionService` now performs that non-live conversion for individual player side-effect plans and blocks abnormal-effect construction when effect facts are missing. It does not hydrate live `EffectController` data or send packets.
+
+## Update After UOW-1270
+
+Operation-level packet construction propagates partial abnormal-effect construction results when effect facts are missing. Live `EffectController` hydration remains the blocker before any real abnormal-effect fanout.

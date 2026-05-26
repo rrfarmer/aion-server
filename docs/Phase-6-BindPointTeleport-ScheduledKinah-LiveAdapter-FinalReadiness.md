@@ -138,6 +138,10 @@ Population composition now carries operation side-effect attachments per candida
 
 The C# port can now create non-live packet construction metadata from supplied player side-effect descriptor facts. Scheduled Kinah action `3` remains disabled because no population-level construction bridge or live socket dispatcher consumes that metadata, and runtime fact hydration is still missing.
 
+## Update After UOW-1270
+
+The C# port can now create non-live packet construction metadata for operation side-effect attachments. Scheduled Kinah action `3` remains disabled because population plans do not carry packet construction metadata end to end and live socket dispatch/runtime fact hydration are still missing.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:

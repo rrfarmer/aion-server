@@ -97,3 +97,7 @@ Add a disabled integration composition that carries operation side-effect attach
 ## Update After UOW-1269
 
 Player side-effect descriptor plans can now be converted into non-live packet construction metadata by `PlayerKnownListPlayerSideEffectPacketConstructionService`. Operation side-effect attachment is not yet wired to that bridge, so attached directional plans still do not construct or send packets.
+
+## Update After UOW-1270
+
+`PlayerKnownListOperationSideEffectPacketConstructionService` now applies the packet construction bridge across attached directional operation side effects. It remains non-live, requires supplied subject facts, and does not mutate/send through live known-list callbacks.

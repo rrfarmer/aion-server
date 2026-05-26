@@ -119,3 +119,7 @@ The service explicitly does not send packets and marks `ExecutesLivePackets`, `I
 ## Next Recommended Unit of Work
 
 Add a non-live population-side packet-construction attachment bridge that consumes `PlayerKnownListOperationSideEffectAttachmentPlan` / `PlayerKnownListPopulationPlanService` side-effect plans and applies the packet construction bridge per attached direction. Keep it metadata-only and do not send packets.
+
+## Update After UOW-1270
+
+`PlayerKnownListOperationSideEffectPacketConstructionService` now applies player side-effect packet construction to operation attachment plans per direction. The bridge also accepts supplied ride movement/stat facts and passes ride movement speed into `SmEmotion`; live stat hydration and population-level composition remain pending.

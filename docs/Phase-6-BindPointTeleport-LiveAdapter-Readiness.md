@@ -331,3 +331,7 @@ Keep the unit small: packet helpers/tests only, no `GameServerConnection` dispat
 ## Update After UOW-1269
 
 Descriptor-to-packet construction metadata now exists for player `see`/`notSee` side-effect plans. Live bind-point fanout remains blocked because this bridge is non-live, requires supplied runtime facts, does not send packets, and is not yet applied across population-side attachment plans.
+
+## Update After UOW-1270
+
+Operation attachment packet-construction metadata now exists and can preserve directional operation-step order. Live bind-point fanout remains blocked because population plans do not carry this metadata end to end, runtime facts are supplied, and no socket dispatch or Java runtime validation occurs.

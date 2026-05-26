@@ -96,3 +96,7 @@ The focused `SmPlayerInfo(enemy)` slice is now present for the Java creature-typ
 ## Update After UOW-1269
 
 The descriptor-to-packet metadata bridge now exists for individual player side-effect plans. Population composition still does not invoke it per candidate/direction, does not hydrate live facts, and does not send packets.
+
+## Update After UOW-1270
+
+Operation-level side-effect attachments can now carry packet construction metadata when supplied per-subject facts are available. Population candidate plans still do not compose those operation-level packet construction results end to end.

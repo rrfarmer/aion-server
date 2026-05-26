@@ -448,3 +448,7 @@ The player-info packet prerequisite now covers Java's enemy creature-type flag p
 ## Update After UOW-1269
 
 Descriptor-to-packet construction metadata now exists for an individual player side-effect plan. Known-list fanout parity is still blocked on applying that bridge across population attachments, hydrating live runtime facts, live region population, controller side-effect execution, socket dispatch, and Java runtime packet-order validation.
+
+## Update After UOW-1270
+
+Operation attachment packet-construction metadata now exists for directional side effects. Known-list fanout parity is still blocked on population-level composition, live runtime fact hydration, live region population, controller execution, socket dispatch, and Java runtime packet-order validation.

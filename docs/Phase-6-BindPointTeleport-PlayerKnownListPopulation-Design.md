@@ -184,3 +184,7 @@ It is still not Java region known-list parity because no live region object stor
 ## Update After UOW-1269
 
 `PlayerKnownListPlayerSideEffectPacketConstructionService` can construct packet metadata for one supplied player side-effect plan. Population planning still needs a separate attachment-level bridge before candidate side-effect plans can carry packet construction metadata end to end.
+
+## Update After UOW-1270
+
+`PlayerKnownListOperationSideEffectPacketConstructionService` now provides the attachment-level bridge for directional operation side effects. Population planning still needs a candidate-level composition layer to carry those packet construction results on `PlayerKnownListPopulationCandidatePlan`.
