@@ -118,6 +118,10 @@ The known-list blocker now has a dedicated design audit in `docs/Phase-6-BindPoi
 
 Population composition now carries operation side-effect attachments per candidate. Scheduled Kinah action `3` remains disabled because callback execution still cannot consume live population results or execute known-list packet side effects.
 
+## Update After UOW-1265
+
+`SmPlayerInfo` now supports the Java enemy creature-type byte. Scheduled Kinah action `3` remains disabled because known-list fanout still cannot execute live player-info sends, and viewer-sensitive race projection plus stance/abnormal-effect packets remain incomplete.
+
 ## Update After UOW-1246
 
 The disabled/opt-in inventory packet send adapter seam now exists:

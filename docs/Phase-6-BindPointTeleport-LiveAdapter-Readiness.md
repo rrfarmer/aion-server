@@ -93,6 +93,8 @@ Update after UOW-1263: `PlayerKnownListOperationSideEffectAttachmentService` now
 
 Update after UOW-1264: `PlayerKnownListPopulationPlanService` now carries operation side-effect attachments per candidate. Live dispatch remains blocked because the population chain still uses supplied facts, does not send packets, and still lacks packet serializer parity for `SmPlayerInfo(enemy)`, `SmPlayerStance`, and `SmAbnormalEffect`.
 
+Update after UOW-1265: `SmPlayerInfo` now supports Java's enemy creature-type byte (`0x00` vs `0x26`) behind an explicit constructor flag. Live dispatch remains blocked because active-viewer race projection, `SmPlayerStance`, `SmAbnormalEffect`, and controller packet execution are still missing.
+
 ## Java Live Flow
 
 Java source files:

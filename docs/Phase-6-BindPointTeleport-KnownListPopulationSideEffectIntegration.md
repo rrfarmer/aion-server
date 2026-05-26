@@ -76,3 +76,7 @@ Updated `dotnetConversion/src/Aion.GameServer/Services/PlayerKnownListPopulation
 ## Next Recommended Unit of Work
 
 Start a focused `SmPlayerInfo(enemy)` serializer parity audit and test slice, or add a non-live fanout trace bridge that can consume population candidate side-effect descriptors without sending packets. Prefer the packet audit before any live player-see dispatch work.
+
+## Update After UOW-1265
+
+The focused `SmPlayerInfo(enemy)` slice is now present for the Java creature-type byte. Population-side descriptors can eventually target a packet constructor that accepts the enemy flag, but population composition still does not instantiate or send live packets and still lacks viewer-sensitive race projection.

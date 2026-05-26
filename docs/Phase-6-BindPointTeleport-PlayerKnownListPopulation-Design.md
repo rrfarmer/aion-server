@@ -164,3 +164,7 @@ It is still not Java region known-list parity because no live region object stor
 ## Update After UOW-1264
 
 `PlayerKnownListPopulationPlanService` now preserves operation side-effect attachments in its candidate results. The end-to-end non-live population chain can now carry region, range, operation, membership, and controller packet-intent metadata, but it remains disabled from live world lifecycle and socket dispatch.
+
+## Update After UOW-1265
+
+`SmPlayerInfo` now supports Java's enemy/aggro creature-type flag as a focused packet prerequisite for future player `see` dispatch. Full player-info parity still needs active-viewer race projection, neutral custom-state handling, and live controller packet execution.

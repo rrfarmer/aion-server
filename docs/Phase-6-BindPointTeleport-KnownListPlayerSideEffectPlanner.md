@@ -95,3 +95,7 @@ Add a disabled composition step that attaches `PlayerKnownListPlayerSideEffectPl
 ## Update After UOW-1263
 
 `PlayerKnownListOperationSideEffectAttachmentService` now performs that descriptor-only attachment. It maps owner/candidate `see` and `notSee` operation steps to directional player packet side-effect plans while deriving viewer/subject ids from the operation plan.
+
+## Update After UOW-1265
+
+`SmPlayerInfo` now has a focused C# constructor path for Java's `enemy` flag and writes the attackable creature-type byte `0x00` when requested. The player side-effect planner note has been updated, but viewer-sensitive race projection remains unverified and live packet sends remain disabled.
