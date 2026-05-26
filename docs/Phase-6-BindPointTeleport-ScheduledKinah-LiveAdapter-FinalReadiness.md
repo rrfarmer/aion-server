@@ -111,3 +111,7 @@ The disabled source-first known-list fanout executor composition now exists as `
 ## Update After UOW-1252
 
 The disabled/opt-in known-list socket executor boundary now exists as `BindPointTeleportKnownListFanoutSocketExecutorService`. It can send only when explicitly enabled by a caller, but no live caller exists. Live scheduled Kinah dispatch remains blocked on real known-list population, final movement, `GameServerConnection` dispatch, and Java runtime validation.
+
+## Update After UOW-1253
+
+`PlayerKnownListMembershipRefreshService` can now seed known-list membership metadata from supplied online players using current `WorldVisibility`, but this remains an approximation. Live scheduled Kinah dispatch is still blocked on Java-equivalent known-list population, live callback wiring, final movement, `GameServerConnection`, and runtime validation.

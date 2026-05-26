@@ -218,6 +218,8 @@ Update after UOW-1251: C# now has `BindPointTeleportKnownListFanoutExecutionPlan
 
 Update after UOW-1252: C# now has `BindPointTeleportKnownListFanoutSocketExecutorService`, a disabled-by-default opt-in socket boundary that consumes the known-list execution plan. It is not wired into `GameServerConnection`; live known-list population and scheduled callback dispatch remain blocked.
 
+Update after UOW-1253: C# now has `PlayerKnownListMembershipRefreshService`, which can seed player known-list metadata from supplied online players and `WorldVisibility`. This is only a distance-based approximation; Java-equivalent region known-list population, controller side effects, and live wiring remain blocked.
+
 ## Do Not Wire Yet
 
 - Do not add a live `GameServerConnection` branch for `CmBindPointTeleport` in the next unit.

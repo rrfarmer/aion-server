@@ -64,6 +64,20 @@ Add a non-live source-online and per-recipient exception policy model for bind-p
 
 The metadata store still does not populate from live world known-list updates, and the policy still does not execute socket sends.
 
+## Update After UOW-1253
+
+`PlayerKnownListMembershipRefreshService` now seeds the membership store from supplied online-player candidates using `WorldVisibility`. This is a current-distance approximation, not Java region-backed known-list parity.
+
+The refresh service can:
+
+- exclude the owner/source;
+- upsert same-world candidates within the current C# visibility distance;
+- remove stale out-of-range entries;
+- refresh all supplied online players bidirectionally as an approximation;
+- clear an owner snapshot and remove a departing player from supplied remaining owner snapshots.
+
+Remaining Java gaps are explicit: no region-neighbor scan, no `canSee` hidden-state cache, no controller `see/notSee/notKnow` packets, and no live wiring.
+
 ## Summary Metrics
 
 - Total Java artifacts discovered: 5 grouped artifact rows in this unit

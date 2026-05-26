@@ -301,3 +301,49 @@ Summary metrics:
 Next recommended unit of work:
 
 - Add a small, test-first `PlayerKnownListMembershipRefreshService` that uses supplied online player candidates and `WorldVisibility` to seed approximate player-player membership metadata, while explicitly documenting that this is not full Java region/known-list parity.
+
+## Update After UOW-1253
+
+UOW-1253 adds `PlayerKnownListMembershipRefreshService`, a test-first approximation seam for player-player membership refresh. It uses supplied online `Player` candidates and `WorldVisibility` to populate `PlayerKnownListMembershipService`.
+
+This reduces the blocker from "no population seam" to "only distance-based approximation exists." It does not implement Java's region-neighbor scan or controller side effects.
+
+## Migration Parity Table - UOW-1253
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.knownlist.KnownList.update` | `Aion.GameServer.Services.PlayerKnownListMembershipRefreshService` | Known-List Refresh / Approximation | Partial | Unit Tested | Partial Parity | C# refreshes from supplied online players and current `WorldVisibility`, removes stale out-of-range entries, and excludes owner. It does not perform Java region-neighbor scans, synchronized update, two-way atomic-ish add/remove, or controller packet side effects. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.findVisibleObjects` | `PlayerKnownListMembershipRefreshService.RefreshOwnerFromOnlinePlayers` | Known-List Population | Partial | Unit Tested | Partial Parity | Uses supplied candidates plus 95m same-world visibility only. No Java `MapRegion` scan, object visible distance negotiation, or `canSee` state. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.forgetObjectsOrUpdateVisibility` | `RefreshOwnerFromOnlinePlayers` stale removal | Known-List Cleanup | Partial | Unit Tested | Needs Verification | Removes entries absent from current distance-visible candidate set. Does not distinguish out-of-range removal from in-range invisible visibility changes; Java hidden known objects can remain known with `visible=false`. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.clear` | `ClearOwnerForLogout`; `RemoveDepartingPlayerFromKnownLists` | Known-List Cleanup / Logout Metadata | Partial | Unit Tested | Needs Verification | Clears owner metadata and removes departing player from supplied owners. Does not send Java `notSee`/`notKnow`, does not walk all world objects automatically, and remains unwired from logout. |
+| `com.aionemu.gameserver.services.teleport.BindPointTeleportService.teleport` scheduled action `3` fanout | membership refresh plus known-list fanout metadata stack | Service / Fanout Prerequisite | Partial | Regression Tested | Needs Verification | Fanout can now be seeded from an approximate membership refresh in tests. Live bind-point dispatch still uses no Java-equivalent known-list population. |
+
+Tests added:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `RefreshOwnerFromOnlinePlayers_UsesWorldVisibilityApproximationAndExcludesOwner` | Unit / Membership Refresh | `KnownList.isAwareOf`; `findVisibleObjects` | Owner excluded, near same-world candidate added, far/different-world skipped, approximation flags false for Java parity. | Source-derived approximation assertion. | No region scan or Java runtime comparison. |
+| `RefreshOwnerFromOnlinePlayers_RemovesStaleOutOfRangeMembership` | Unit / Membership Refresh | `forgetObjectsOrUpdateVisibility` | Previously known out-of-range entry is removed during refresh. | Source-derived cleanup approximation. | Does not model hidden-but-known visibility changes. |
+| `RefreshAllFromOnlinePlayers_ProducesBidirectionalDistanceApproximation` | Unit / Membership Refresh | Java two-way known-list add relation | Supplied online players near each other become known to each other. | Approximation only. | Java two-way add order and concurrency are not implemented. |
+| `ClearOwnerForLogoutAndRemoveDepartingPlayerFromKnownLists_RemoveMembershipMetadata` | Unit / Membership Cleanup | `KnownList.clear`; despawn/remove behavior | Owner snapshot is cleared and departing player is removed from supplied remaining owners. | Source-derived metadata cleanup. | No `SM_DELETE`, `notKnow`, or global world scan. |
+
+Remaining risks:
+
+- This service is an approximation and is explicitly not Java region known-list parity.
+- It is not registered or wired into enter/move/logout.
+- Hidden/invisible-but-known Java behavior is not modeled; C# distance refresh can remove entries Java might retain as invisible.
+- Java controller packet side effects, ordering, synchronization, and region lifecycle remain missing.
+- Reflection behavior did not change. Date/time behavior did not change. Serialization, threading, packet-order, dirty-state persistence, live known-list membership, and movement parity remain `Needs Verification`.
+
+Summary metrics:
+
+- Total Java artifacts discovered: 5 grouped artifact rows in this unit
+- Total artifacts ported: 1 membership refresh approximation service plus 4 focused tests
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4 grouped rows
+- Total blocked artifacts: 1 Java-equivalent region known-list population path, 1 live enter/move/logout wiring path, 1 controller see/notSee/notKnow packet side-effect path, 1 live scheduled callback dispatch path, 1 live movement adapter, and 1 Java runtime capture path
+- Estimated overall migration completion: Phase 6 remains about 71% complete
+
+Next recommended unit of work:
+
+- Add a documentation/design audit for full Java-equivalent player known-list population requirements, or add a disabled adapter that converts `IGameClientConnectionRegistry.ForEachOnlinePlayer` snapshots into `PlayerKnownListMembershipRefreshService` inputs without wiring live dispatch.
