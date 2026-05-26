@@ -18,6 +18,8 @@ The bridge enforces the policy from UOW-1228/UOW-1229:
 - `Saved` is the only persistence status that allows inventory update packet metadata plus cooldown/fanout/movement metadata to continue;
 - non-positive price/no mutation can continue without persistence or packet metadata, matching Java's `amount > 0` guard.
 
+Update after UOW-1231: `BindPointTeleportKinahInventoryUpdatePacketPlanService` now consumes `ContinueAfterPersistence` decisions and creates a concrete non-sending `SmInventoryUpdateItem` packet intent with mask `0x4B`. Stopped decisions still produce no packet.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -96,3 +98,5 @@ The bridge is pure/non-live:
 ## Next Recommended Unit of Work
 
 Add a non-sending inventory update packet adapter that consumes `BindPointTeleportKinahPersistenceDecisionStatus.ContinueAfterPersistence` and produces a concrete `SmInventoryUpdateItem` packet intent only after the decision bridge reports `Saved`. Keep it non-live: no `SendPacketAsync`, no SQL, no `GameServerConnection` dispatch, and no movement.
+
+Update after UOW-1231: the non-sending packet adapter is complete. Next, compose the persistence decision and packet plan with runtime callback metadata so the full staged order is represented without live sends.

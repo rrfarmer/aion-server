@@ -67,6 +67,8 @@ Update after UOW-1229: the repository contract plan is documented. Live action `
 
 Update after UOW-1230: supplied persistence results are now composed by `BindPointTeleportKinahPersistenceDecisionBridgeService`. Live action `3` fanout remains blocked until the `ContinueAfterPersistence` decision is connected to a non-sending packet adapter and later a live send path.
 
+Update after UOW-1231: the `ContinueAfterPersistence` decision is now connected to a non-sending inventory update packet adapter. Live action `3` fanout remains blocked until packet intent and runtime callback metadata are composed in order, still without live send.
+
 ## Java Flow
 
 Java source files:

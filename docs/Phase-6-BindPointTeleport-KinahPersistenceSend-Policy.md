@@ -21,6 +21,8 @@ Update after UOW-1229: `docs/Phase-6-BindPointTeleport-KinahRepositoryContract-P
 
 Update after UOW-1230: `BindPointTeleportKinahPersistenceDecisionBridgeService` now applies that supplied persistence-result gate. `Saved` can continue to packet/fanout metadata, while `MissingRow`, `Failed`, and missing result stop before packet send, cooldown/action `3` fanout, and movement.
 
+Update after UOW-1231: `BindPointTeleportKinahInventoryUpdatePacketPlanService` now creates a concrete non-sending `SmInventoryUpdateItem` intent only after a `ContinueAfterPersistence` decision. Live send remains disabled.
+
 ## Java Facts
 
 Java source files reviewed:
@@ -146,3 +148,5 @@ Add a non-live repository contract plan for the scheduled Kinah persistence boun
 Update after UOW-1229: the repository contract plan is complete. Next, add a non-live persistence result composition bridge that proves persistence failure stops before inventory packet send, cooldown/action `3` fanout, and movement.
 
 Update after UOW-1230: the persistence result decision bridge is complete. Next, add a non-sending inventory update packet adapter gated by `ContinueAfterPersistence`.
+
+Update after UOW-1231: the non-sending packet adapter is complete. Next, compose persistence decision plus packet intent into callback result metadata before live send/dispatch.
