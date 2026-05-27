@@ -2,7 +2,7 @@
 
 Date: May 27, 2026
 Completed Unit of Work: UOW-1342
-Latest Commit: pending UOW-1342 unit commit
+Latest Commit: e0fd1a9bd `[Phase 6][UOW-1342] Add guarded unusual storage unlock metadata`
 Status: Guarded non-live unusual-storage rejected-food unlock metadata is implemented for representative ids; live unusual-storage unlock dispatch remains disabled.
 
 ## What Changed
