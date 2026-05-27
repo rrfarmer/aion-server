@@ -531,3 +531,7 @@ A non-live C# `PetFeedCalculator` helper now preserves Java feed-point table mat
 ## Update After UOW-1320
 
 `PetFeedCalculator` now has a non-live reward-selection helper with supplied point tables, reward item levels, and loved-reward selector injection, preserving Java guard/null behavior, normal reward threshold indexing, rounding clamps, loved singleton short-circuit, and highest-allowed-level filtering. Live bind-point fanout remains blocked because static feed XML full-count loading, `PetFlavour.processFeedResult`, food group lookup, live item-template lookup, Java RNG runtime comparison, live feed mutation, DAO writes, scheduler behavior, Java runtime comparison, and socket dispatch remain disabled.
+
+## Update After UOW-1321
+
+A non-live C# `PetFeedPlanner` helper now preserves supplied-data `PetFlavour.processFeedResult` behavior, including reward-group lookup by food type, normal-feed progress mutation and not-full null return, reward return after the calculator reaches `FULL`, loved-feed state marking, loved-limit no-op behavior, and `isLovedFood` predicate behavior. Live bind-point fanout remains blocked because `PetFlavour.getFoodType`, `DataManager.ITEM_GROUPS_DATA` lookup, XML/JAXB static data, live item-template lookup, Java RNG runtime comparison, live feed mutation, DAO writes, scheduler behavior, and socket dispatch remain disabled.
