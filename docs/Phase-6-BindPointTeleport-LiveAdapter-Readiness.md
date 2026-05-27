@@ -467,3 +467,7 @@ The checked-in pet static data was structurally audited: 218 pet templates, max 
 ## Update After UOW-1304
 
 `SmPet.Adopt(SmPetDataSnapshot)` now exposes the Java `SM_PET(PetCommonData, true)` packet shape using the deterministic `writePetData` helper. Live bind-point fanout remains blocked because live adoption runtime, inventory mutation, pet list insertion, DAO persistence, expiration timer registration, Java runtime vectors, full `CM_PET`, and socket dispatch remain unported.
+
+## Update After UOW-1305
+
+`SmPet.LoadPets(...)` now exposes the Java `SM_PET(Collection<PetCommonData>)` packet shape from supplied ordered pet-data snapshots. Live bind-point fanout remains blocked because live pet-list hydration/DAO reads, Java collection-order confirmation, feed/doping/timing projection, Java runtime vectors, full `CM_PET`, and socket dispatch remain unported.
