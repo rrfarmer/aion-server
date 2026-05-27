@@ -61618,6 +61618,69 @@ Next recommended unit of work:
 
 ---
 
+### Session 1475 (May 27, 2026)
+- Continued after UOW-1474 with runtime kisk removal packet-order coverage.
+- Re-used the existing `HandleDeathAsync_RemovesRuntimeKiskAndRunsMemberCleanup` workflow test, which already removes a runtime kisk whose creator and dead member are online.
+- Added packet ordering assertions to the captured connection registry deliveries.
+- The test now confirms the Java `KiskService.removeKisk` order at the runtime boundary: creator `SmKiskUpdate` first, creator bind-point reset, dead member bind-point reset, then dead-member `SmDie` resurrection option refresh.
+- Kept production code unchanged.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --filter "FullyQualifiedName~WorldNpcDeathDropWorkflowServiceTests.HandleDeathAsync_RemovesRuntimeKiskAndRunsMemberCleanup"`.
+  - Result: passed 1 test.
+
+#### Parallel Work Discovery - Session 1475
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Runtime kisk removal packet order | `KiskService.removeKisk`, `TeleportService.sendKiskBindPoint`, `PlayerController.showResurrectionOptions` | `WorldNpcDeathDropWorkflowServiceTests.cs` | Regression Test | No | Low | Existing workflow fixture already captures packet sends and state cleanup. |
+| B | Offline login restore packet order | `KiskService.onLogin`, `PlayerEnterWorldService`, `TeleportService.sendKiskBindPoint` | enter-world connection tests | Later | Medium | Separate login path and likely broader fixture work. |
+| C | Duplicate bind socket response audit | `Kisk.addPlayer` duplicate branch, `SM_KISK_UPDATE` | bind response tests | Later | Medium | Separate interactive bind path. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add runtime kisk removal packet-order assertion | Regression Test / Documentation | `WorldNpcDeathDropWorkflowServiceTests.cs`, progress/handoff docs | production cleanup services, unrelated workflow tests | Existing kisk removal workflow fixture | Passing regression proving C# runtime cleanup emits creator update before bind-point reset and dead-member revive refresh packets. |
+
+No subagent was spawned because the selected unit was a narrow assertion change in an existing workflow test.
+
+#### Migration Parity Table - Session 1475
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.KiskService` | `PlayerKiskRemovalRuntimeCleanupService` / `WorldNpcDeathDropWorkflowService` | Service / Workflow | Partial | Regression Tested | Partial Parity | Runtime workflow test now asserts final creator `SmKiskUpdate` precedes member bind-point resets and dead-member revive refresh, matching Java `removeKisk` source order. |
+| `com.aionemu.gameserver.services.teleport.TeleportService` | `SmBindPointInfo` send path in `PlayerKiskRemovalRuntimeCleanupService` | Service / Packet Adapter | Partial | Regression Tested | Partial Parity | Test verifies bind-point reset packet recipients and order after creator update. Packet payload remains C# static-data based and not Java-runtime compared. |
+| `com.aionemu.gameserver.controllers.PlayerController` | `SmDie` refresh in `PlayerKiskRemovalRuntimeCleanupService` | Controller / Packet Adapter | Partial | Regression Tested | Partial Parity | Test verifies dead member receives `SmDie` after bind-point reset, matching Java `member.getController().showResurrectionOptions()` after `member.setKisk(null)`. |
+| `com.aionemu.gameserver.model.gameobjects.Kisk` | `PlayerKiskRuntimeState` / `PlayerKiskDespawnResult` | Runtime State / World Object | Partial | Regression Tested | Partial Parity | Runtime test uses removed kisk member ids and owner id to drive cleanup. Java synchronized collection semantics and live object references remain broader. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_KISK_UPDATE` | `SmKiskUpdate` | Packet | Partial | Regression Tested | Needs Verification | Runtime send order is covered, but packet bytes were not compared to Java runtime output in this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DIE` | `SmDie` | Packet | Partial | Regression Tested | Needs Verification | Packet type and order covered; full resurrection-option payload parity remains broader. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleDeathAsync_RemovesRuntimeKiskAndRunsMemberCleanup` | Regression / workflow | `KiskService.removeKisk`, `TeleportService.sendKiskBindPoint`, `PlayerController.showResurrectionOptions` | Runtime kisk removal sends creator update first, then creator/member bind-point resets, then dead-member `SmDie`; existing state cleanup counts remain covered. | Deterministic packet-order assertion against the C# runtime workflow from Java source audit. | Does not compare Java-generated packet bytes or real socket timing. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Packet byte parity for `SmKiskUpdate`, `SmBindPointInfo`, and `SmDie` was not compared to Java output in this unit.
+- C# defensive cleanup still includes players bound by object id even if absent from removed kisk member ids.
+- Java direct `Player.kisk` object references differ from C# `BoundKiskObjectId` cleanup.
+- Offline login restore and duplicate bind socket behavior remain separate kisk lifecycle slices.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped artifact rows in this unit
+- Total artifacts ported: 0 production artifacts in this unit; 1 workflow packet-order regression strengthened
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 6 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, packet byte comparison, direct Java object-reference semantics, offline restore/duplicate bind socket slices
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Continue kisk lifecycle with offline login restore packet-order audit, especially `KiskService.onLogin` plus `PlayerEnterWorldService` / `TeleportService.sendKiskBindPoint` ordering around `SM_KISK_UPDATE` and bind-point packets.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
