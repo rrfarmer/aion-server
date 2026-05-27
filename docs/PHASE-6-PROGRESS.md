@@ -61243,6 +61243,70 @@ Next recommended unit of work:
 
 ---
 
+### Session 1469 (May 27, 2026)
+- Continued after UOW-1468 with a disabled/observational revive cleanup adapter.
+- Added `PlayerReviveCleanupAdapterService`.
+- Added `PlayerReviveCleanupAdapterRequest`, `PlayerReviveCleanupAdapterResult`, and `PlayerReviveCleanupAdapterStatus`.
+- Added `PlayerReviveCleanupAdapterServiceTests`.
+- Disabled mode exposes the non-live `PlayerReviveCleanupPlan` for kisk revive without mutating live aggro state.
+- An explicit live-mutation request reports `BlockedMissingLiveAggroList` so the port does not silently pretend to clear aggro before a real C# player-owned aggro list exists.
+- Kept live `GameServerConnection.HandleReviveAsync` unchanged.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --filter "FullyQualifiedName~PlayerReviveCleanupAdapterServiceTests"`.
+  - Result: passed 2 tests.
+
+#### Parallel Work Discovery - Session 1469
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Disabled revive cleanup adapter | `PlayerReviveService.kiskRevive`, `PlayerReviveService.revive`, `PlayerAggroList` | `PlayerReviveCleanupAdapterService.cs`, `PlayerReviveCleanupAdapterServiceTests.cs` | Adapter / Unit Test | No | Medium | New adapter depends on UOW-1468 planner and should be committed atomically. |
+| B | Live revive workflow observation seam | `PlayerReviveService.revive` | `GameServerConnection.cs`, revive workflow tests | Later | High | More invasive; current unit deliberately avoids live connection changes. |
+| C | Kisk bind/member cleanup review | `KiskService.removeKisk` | kisk cleanup tests/docs | Later | Medium | Separate lane with independent files. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add disabled revive cleanup adapter and tests | Adapter / Unit Test / Documentation | `PlayerReviveCleanupAdapterService.cs`, `PlayerReviveCleanupAdapterServiceTests.cs`, progress/handoff docs | `GameServerConnection.cs`, live combat mutation, socket fixtures | UOW-1468 cleanup plan | Passing tests proving the adapter exposes a plan when disabled and blocks live mutation when no C# `PlayerAggroList` exists. |
+
+No subagent was spawned because the selected unit was a compact new adapter/test pair.
+
+#### Migration Parity Table - Session 1469
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerReviveService` | `PlayerReviveCleanupAdapterService` | Adapter / Service Boundary | Partial | Unit Tested | Partial Parity | Adapter exposes the non-live kisk revive cleanup plan in disabled mode. It is not wired into live `HandleReviveAsync`; this is intentional until live aggro state exists. |
+| `com.aionemu.gameserver.controllers.attack.PlayerAggroList` | `PlayerReviveCleanupAdapterResult` / `PlayerReviveCleanupAdapterStatus.BlockedMissingLiveAggroList` | Adapter / Aggro Boundary | Partial | Unit Tested | Needs Verification | Adapter explicitly blocks live aggro mutation because there is no executable C# player-owned aggro list. Java player aggro awareness and clear planning are represented by prior non-live planners only. |
+| `com.aionemu.gameserver.controllers.attack.AggroList` | `PlayerReviveCleanupPlan.AggroClearPlan` | Planner / Aggro | Partial | Unit Tested | Partial Parity | Adapter surfaces the `AggroList.clear` plan but does not execute clear-all or hate-reduction cancellation against live state. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_REVIVE` | `GameServerConnection.HandleReviveAsync` / `PlayerReviveCleanupAdapterService` | Handler Boundary | Partial | Unit Tested | Needs Verification | Live handler remains unchanged. Adapter is observational and not yet connected to packet handling to avoid unsupported live mutation. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `Apply_DisabledExposesKiskReviveCleanupPlanWithoutLiveAggroMutation` | Unit / adapter | `PlayerReviveService.kiskRevive`, `PlayerReviveService.revive` | Disabled adapter returns `DisabledPlanned`, exposes the kisk revive cleanup plan, includes `ClearPlayerAggro`, and does not mutate live aggro. | Deterministic adapter status and plan assertions with Java source breadcrumb. | Does not execute live `HandleReviveAsync` or mutate aggro. |
+| `Apply_LiveAggroMutationRequestReportsMissingLivePlayerAggroList` | Unit / adapter | `PlayerAggroList`, `AggroList.clear` | Explicit live mutation request returns `BlockedMissingLiveAggroList` while still exposing the plan for observation. | Deterministic blocker status and Java source assertion. | Live player aggro list implementation remains missing. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Adapter is not wired into live kisk revive handling.
+- C# still lacks a live player-owned aggro list to mutate.
+- Broader Java revive side effects remain queued: soul sickness, protection tasks, full teleport despawn/spawn ownership, instance/legion callbacks, and exact socket ordering.
+- Kisk bind/member cleanup and aggro cleanup are still separate lanes.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped artifact rows in this unit
+- Total artifacts ported: 1 disabled adapter service plus DTOs
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, live player aggro mutation, live revive adapter integration, broader revive/teleport side effects
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Either add a test-only observation seam in the kisk revive workflow tests that uses the disabled adapter without changing live behavior, or return to kisk bind/member cleanup review.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
