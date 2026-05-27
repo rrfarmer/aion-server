@@ -611,3 +611,7 @@ A docs-only warehouse live-adapter capture design now defines the future rejecte
 ## Update After UOW-1340
 
 `SmCubeUpdate.ZeroSizeForJavaStorageOrdinal` now provides a non-live packet helper for Java unusual-storage cube-update metadata: action `0`, supplied Java ordinal action value, and zero count/expand fields. Focused tests cover pet bag ordinals `4` through `15`, house storage ordinals `16` through `35`, broker ordinal `36`, mailbox ordinal `37`, and byte-range guards. Live bind-point fanout remains blocked because the helper does not resolve storage ids, construct unusual `SM_WAREHOUSE_ADD_ITEM` metadata, hydrate pet/house/broker/mailbox ownership, dispatch packets, compare Java runtime bytes, or mutate storage.
+
+## Update After UOW-1341
+
+`SmCubeUpdate.TryGetJavaStorageOrdinal` and `ZeroSizeForJavaStorageId` now resolve Java storage ids to Java enum ordinals before constructing zero-count cube-update metadata. Tests cover cube/warehouse ids `0` through `3`, pet bag ids `32` through `43`, house storage ids `60` through `79`, broker `126`, mailbox `127`, and unknown-id guards. Live bind-point fanout remains blocked because unusual `SM_WAREHOUSE_ADD_ITEM` metadata, pet/house/broker/mailbox ownership, storage mutation, packet dispatch, Java runtime bytes, scheduler execution, reward creation, DAO writes, and socket dispatch remain disabled.
