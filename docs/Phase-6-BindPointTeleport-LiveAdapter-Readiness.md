@@ -439,3 +439,7 @@ A Java pet golden-vector design note now scopes the first runtime capture batch 
 ## Update After UOW-1297
 
 A guarded C# schema-v1 pet vector artifact reader/comparator now exists for future known-list pet Java runtime outputs. When artifacts are present under `parity-artifacts/known-list-pet/java`, it compares Java body/canonical payload hex for spawn, dismiss, fly-start, move-stop, and move-to packet scenarios against `SmPet` / `SmPetEmote`; when artifacts are absent it reports the gap without claiming parity. Live bind-point fanout remains blocked because Maven is unavailable locally for Java artifact generation, live pet/common-data/template/move-controller hydration is missing, `CM_PET_EMOTE` parser/runtime side effects are unported, full `SM_PET` action coverage is incomplete, socket dispatch is disabled, and no Java runtime packet captures have been generated.
+
+## Update After UOW-1298
+
+`SmPet` now supports the selected Java `SM_PET(PetAction)` action-only packets for merchant, minder, house adopt, and house abandon, with tests confirming that each writes only the action id. Live bind-point fanout remains blocked because Java runtime vectors are still missing, `EXTEND_EXPIRATION` call-site behavior is unverified, broader `SM_PET` branches still need common-data/template/feed/mood/doping snapshots, live pet management dispatch is absent, and socket dispatch remains disabled.
