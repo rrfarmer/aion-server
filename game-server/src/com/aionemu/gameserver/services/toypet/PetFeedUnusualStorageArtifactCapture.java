@@ -338,8 +338,8 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		Map<String, Object> packetDto = orderedMap();
 		packetDto.put("javaClass", packet == null ? null : packet.packetClassName);
 		packetDto.put("opcode", packet == null ? 0 : packet.encodedOpcode);
-		packetDto.put("bodyHex", "");
-		packetDto.put("canonicalPayloadHex", "");
+		packetDto.put("bodyHex", packet == null ? "" : packet.bodyHex);
+		packetDto.put("canonicalPayloadHex", packet == null ? "" : packet.canonicalPayloadHex);
 		packetDto.put("decoded", buildPacketDecodedDto(packet, snapshot));
 		return packetDto;
 	}
@@ -460,6 +460,26 @@ public final class PetFeedUnusualStorageArtifactCapture {
 
 	private static boolean isSafeFileNameChar(char c) {
 		return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-';
+	}
+
+	private static String compactHex(ByteBuffer buffer, int start, int end) {
+		if (buffer == null || start >= end)
+			return "";
+		int safeStart = Math.max(0, start);
+		int safeEnd = Math.min(end, buffer.limit());
+		if (safeStart >= safeEnd)
+			return "";
+		StringBuilder hex = new StringBuilder((safeEnd - safeStart) * 2);
+		for (int i = safeStart; i < safeEnd; i++) {
+			int b = buffer.get(i) & 0xFF;
+			appendHexNibble(hex, b >>> 4);
+			appendHexNibble(hex, b & 0x0F);
+		}
+		return hex.toString();
+	}
+
+	private static void appendHexNibble(StringBuilder hex, int nibble) {
+		hex.append((char) (nibble < 10 ? '0' + nibble : 'A' + nibble - 10));
 	}
 
 	private static void startWriterWorker() {
@@ -854,16 +874,23 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private final int clearFrameLength;
 		private final int encodedOpcode;
 		private final int remainingBytesAtObserver;
+		private final String clearFrameHex;
+		private final String bodyHex;
+		private final String canonicalPayloadHex;
 		private final ItemBlobSnapshot observedItemBlob;
 		private final EncodeTimeItemSnapshot observedItem;
 
 		private PacketSnapshot(int packetIndex, String packetClassName, int clearFrameLength, int encodedOpcode,
-			int remainingBytesAtObserver, ItemBlobSnapshot observedItemBlob, EncodeTimeItemSnapshot observedItem) {
+			int remainingBytesAtObserver, String clearFrameHex, String bodyHex, String canonicalPayloadHex, ItemBlobSnapshot observedItemBlob,
+			EncodeTimeItemSnapshot observedItem) {
 			this.packetIndex = packetIndex;
 			this.packetClassName = packetClassName;
 			this.clearFrameLength = clearFrameLength;
 			this.encodedOpcode = encodedOpcode;
 			this.remainingBytesAtObserver = remainingBytesAtObserver;
+			this.clearFrameHex = clearFrameHex;
+			this.bodyHex = bodyHex;
+			this.canonicalPayloadHex = canonicalPayloadHex;
 			this.observedItemBlob = observedItemBlob;
 			this.observedItem = observedItem;
 		}
@@ -871,6 +898,8 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private static PacketSnapshot from(int packetIndex, AionServerPacket packet, ByteBuffer clearFrame) {
 			int clearFrameLength = clearFrame.limit() >= 2 ? clearFrame.getShort(0) & 0xFFFF : 0;
 			int encodedOpcode = clearFrame.limit() >= 4 ? clearFrame.getShort(2) & 0xFFFF : 0;
+			String clearFrameHex = compactHex(clearFrame, 0, clearFrame.limit());
+			String bodyHex = compactHex(clearFrame, 7, clearFrame.limit());
 			ItemBlobSnapshot observedItemBlob = null;
 			EncodeTimeItemSnapshot observedItem = null;
 			if (packet instanceof SM_WAREHOUSE_ADD_ITEM) {
@@ -880,7 +909,7 @@ public final class PetFeedUnusualStorageArtifactCapture {
 				observedItem = EncodeTimeItemSnapshot.from(item);
 			}
 			return new PacketSnapshot(packetIndex, packet.getClass().getName(), clearFrameLength, encodedOpcode, clearFrame.remaining(),
-				observedItemBlob, observedItem);
+				clearFrameHex, bodyHex, bodyHex, observedItemBlob, observedItem);
 		}
 	}
 
