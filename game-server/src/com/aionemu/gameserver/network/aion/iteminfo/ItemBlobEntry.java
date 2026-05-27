@@ -25,6 +25,10 @@ public abstract class ItemBlobEntry extends PacketWriteHelper {
 		this.type = type;
 	}
 
+	public ItemBlobType getType() {
+		return type;
+	}
+
 	void setOwner(Player owner, Item item, IStatFunction modifier) {
 		this.owner = owner;
 		this.ownerItem = item;

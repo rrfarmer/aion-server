@@ -2,7 +2,10 @@ package com.aionemu.gameserver.services.toypet;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.aionemu.gameserver.configs.main.PetFeedUnusualStorageArtifactCaptureConfig;
@@ -12,6 +15,8 @@ import com.aionemu.gameserver.model.items.storage.StorageType;
 import com.aionemu.gameserver.network.aion.AionConnection;
 import com.aionemu.gameserver.network.aion.AionServerPacket;
 import com.aionemu.gameserver.network.aion.capture.ServerPacketCaptureObserver;
+import com.aionemu.gameserver.network.aion.iteminfo.ItemInfoBlob;
+import com.aionemu.gameserver.network.aion.iteminfo.ItemInfoBlob.ItemBlobEntryMetadata;
 import com.aionemu.gameserver.network.aion.serverpackets.SM_CUBE_UPDATE;
 import com.aionemu.gameserver.network.aion.serverpackets.SM_WAREHOUSE_ADD_ITEM;
 import com.aionemu.gameserver.services.item.ItemPacketService.ItemAddType;
@@ -66,7 +71,8 @@ public final class PetFeedUnusualStorageArtifactCapture {
 			while (contexts.size() >= maxContexts)
 				contexts.removeFirst();
 			contexts.addLast(new CaptureContext(storageType.getId(), storageType.ordinal(), item.getObjectId(), now,
-				PetFeedUnusualStorageArtifactCaptureConfig.ALLOWED_SCENARIO, PetFeedUnusualStorageArtifactCaptureConfig.OUTPUT_DIR));
+				PetFeedUnusualStorageArtifactCaptureConfig.ALLOWED_SCENARIO, PetFeedUnusualStorageArtifactCaptureConfig.OUTPUT_DIR,
+				ItemBlobSnapshot.from(player, item)));
 		}
 	}
 
@@ -130,17 +136,19 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private final long registeredAtMillis;
 		private final String scenarioName;
 		private final String outputDirectory;
+		private final ItemBlobSnapshot constructionTimeItemBlob;
 		private final PacketSnapshot[] packets = new PacketSnapshot[2];
 		private int nextPacketIndex;
 
 		private CaptureContext(int storageTypeId, int storageTypeOrdinal, int itemObjectId, long registeredAtMillis, String scenarioName,
-			String outputDirectory) {
+			String outputDirectory, ItemBlobSnapshot constructionTimeItemBlob) {
 			this.storageTypeId = storageTypeId;
 			this.storageTypeOrdinal = storageTypeOrdinal;
 			this.itemObjectId = itemObjectId;
 			this.registeredAtMillis = registeredAtMillis;
 			this.scenarioName = scenarioName;
 			this.outputDirectory = outputDirectory;
+			this.constructionTimeItemBlob = constructionTimeItemBlob;
 		}
 
 		private boolean advance(AionServerPacket packet, ByteBuffer clearFrame) {
@@ -167,7 +175,7 @@ public final class PetFeedUnusualStorageArtifactCapture {
 
 		private ArtifactSnapshot toSnapshot(long completedAtMillis) {
 			return new ArtifactSnapshot(scenarioName, outputDirectory, storageTypeId, storageTypeOrdinal, itemObjectId, registeredAtMillis,
-				completedAtMillis, packets[0], packets[1]);
+				completedAtMillis, constructionTimeItemBlob, packets[0], packets[1]);
 		}
 	}
 
@@ -180,11 +188,13 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private final int itemObjectId;
 		private final long registeredAtMillis;
 		private final long completedAtMillis;
+		private final ItemBlobSnapshot constructionTimeItemBlob;
 		private final PacketSnapshot warehouseAddPacket;
 		private final PacketSnapshot cubeUpdatePacket;
 
 		private ArtifactSnapshot(String scenarioName, String outputDirectory, int storageTypeId, int storageTypeOrdinal, int itemObjectId,
-			long registeredAtMillis, long completedAtMillis, PacketSnapshot warehouseAddPacket, PacketSnapshot cubeUpdatePacket) {
+			long registeredAtMillis, long completedAtMillis, ItemBlobSnapshot constructionTimeItemBlob, PacketSnapshot warehouseAddPacket,
+			PacketSnapshot cubeUpdatePacket) {
 			this.scenarioName = scenarioName;
 			this.outputDirectory = outputDirectory;
 			this.storageTypeId = storageTypeId;
@@ -192,8 +202,41 @@ public final class PetFeedUnusualStorageArtifactCapture {
 			this.itemObjectId = itemObjectId;
 			this.registeredAtMillis = registeredAtMillis;
 			this.completedAtMillis = completedAtMillis;
+			this.constructionTimeItemBlob = constructionTimeItemBlob;
 			this.warehouseAddPacket = warehouseAddPacket;
 			this.cubeUpdatePacket = cubeUpdatePacket;
+		}
+	}
+
+	private static final class ItemBlobSnapshot {
+
+		private final int totalPayloadSize;
+		private final List<ItemBlobEntrySnapshot> entries;
+
+		private ItemBlobSnapshot(int totalPayloadSize, List<ItemBlobEntrySnapshot> entries) {
+			this.totalPayloadSize = totalPayloadSize;
+			this.entries = Collections.unmodifiableList(entries);
+		}
+
+		private static ItemBlobSnapshot from(Player player, Item item) {
+			ItemInfoBlob blob = ItemInfoBlob.getFullBlob(player, item);
+			List<ItemBlobEntrySnapshot> entries = new ArrayList<>();
+			for (ItemBlobEntryMetadata metadata : blob.getBlobEntryMetadata())
+				entries.add(new ItemBlobEntrySnapshot(metadata.getEntryName(), metadata.getEntryId(), metadata.getPayloadSize()));
+			return new ItemBlobSnapshot(blob.size(), entries);
+		}
+	}
+
+	private static final class ItemBlobEntrySnapshot {
+
+		private final String entryName;
+		private final int entryId;
+		private final int payloadSize;
+
+		private ItemBlobEntrySnapshot(String entryName, int entryId, int payloadSize) {
+			this.entryName = entryName;
+			this.entryId = entryId;
+			this.payloadSize = payloadSize;
 		}
 	}
 

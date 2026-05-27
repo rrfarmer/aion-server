@@ -671,3 +671,7 @@ A disabled Java config shell for unusual-storage artifact capture is now registe
 ## Update After UOW-1355
 
 A read-only item-blob decoded-entry audit now maps Java `ItemInfoBlob.getFullBlob` entry order/ids and aligns them with the existing C# known serializer gaps for future unusual-storage warehouse-add artifacts. Live bind-point fanout remains blocked because no Java artifact writer, item-blob decoder, warehouse-add byte comparison, raw byte retention, or C# live adapter hydration/mutation/dispatch/runtime comparison exists.
+
+## Update After UOW-1356
+
+The disabled Java capture registry now carries a no-output construction-time `ItemInfoBlob` metadata snapshot with total blob payload size, ordered entry names, entry ids, and entry payload sizes. Live bind-point fanout remains blocked because encode-time item-blob metadata, artifact writing, byte copying, Java runtime artifacts, warehouse-add byte comparison, C# serializer gap closure, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.

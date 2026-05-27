@@ -120,6 +120,17 @@ public class ItemInfoBlob extends PacketWriteHelper {
 		return itemBlobEntries;
 	}
 
+	public List<ItemBlobEntryMetadata> getBlobEntryMetadata() {
+		List<ItemBlobEntryMetadata> metadata = new ArrayList<>();
+		for (ItemBlobEntry ent : itemBlobEntries)
+			metadata.add(new ItemBlobEntryMetadata(ent.getType().name(), ent.getType().getEntryId(), ent.getSize()));
+		return metadata;
+	}
+
+	public static List<ItemBlobEntryMetadata> getFullBlobEntryMetadata(Player player, Item item) {
+		return getFullBlob(player, item).getBlobEntryMetadata();
+	}
+
 	public int size() {
 		int totalSize = 0;
 		for (ItemBlobEntry ent : itemBlobEntries)
@@ -271,5 +282,30 @@ public class ItemInfoBlob extends PacketWriteHelper {
 		}
 
 		abstract ItemBlobEntry newBlobEntry();
+	}
+
+	public static final class ItemBlobEntryMetadata {
+
+		private final String entryName;
+		private final int entryId;
+		private final int payloadSize;
+
+		private ItemBlobEntryMetadata(String entryName, int entryId, int payloadSize) {
+			this.entryName = entryName;
+			this.entryId = entryId;
+			this.payloadSize = payloadSize;
+		}
+
+		public String getEntryName() {
+			return entryName;
+		}
+
+		public int getEntryId() {
+			return entryId;
+		}
+
+		public int getPayloadSize() {
+			return payloadSize;
+		}
 	}
 }
