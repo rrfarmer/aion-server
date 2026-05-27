@@ -779,3 +779,7 @@ A read-only fastjson activation audit now confirms the schema DTO shell contains
 ## Update After UOW-1382
 
 `PetFeedUnusualStorageArtifactCapture.writeArtifact(...)` now has disabled guarded JSON/file output: it serializes the existing schema DTO with fastjson2, writes explicit UTF-8 to a same-directory temp file, moves atomically when supported, falls back to a regular same-directory move, and best-effort cleans up temp files while swallowing writer failures. Capture remains disabled by default and requires explicit config opt-in. Live bind-point fanout remains blocked because Java compile validation, runtime artifact validation, C# artifact reader/schema validation, warehouse-add byte comparison, runtime lifecycle validation, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.
+
+## Update After UOW-1383
+
+A read-only runtime activation plan now documents the local Java config overrides, rejected-food pet-feed scenario, output filename shape, and required artifact field checks for unusual-storage artifact generation. The first Java artifact must show non-empty packet/body/blob hex and `itemBlob.packetBodyVerification=matched` before C# reader byte-comparison work starts. Live bind-point fanout remains blocked because Java compile/runtime validation, runtime artifact generation, C# artifact reader/schema validation, warehouse-add byte comparison, runtime lifecycle validation, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.
