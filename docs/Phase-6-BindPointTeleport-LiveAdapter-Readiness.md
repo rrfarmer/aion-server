@@ -735,3 +735,7 @@ The no-op unusual-storage artifact writer boundary now invokes `buildArtifactPat
 ## Update After UOW-1371
 
 A read-only JSON DTO audit now confirms the current nested capture snapshots should not be serialized directly. Future output needs dedicated schema-v1 DTO/build methods in stable field order, with route facts, timing facts, construction snapshot, encode snapshot, packet decoded fields, and explicit byte fields separated before fastjson2 is used. Live bind-point fanout remains blocked because no schema DTOs, field-order validation, JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, warehouse-add byte comparison, runtime lifecycle validation, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
+
+## Update After UOW-1372
+
+`PetFeedUnusualStorageArtifactCapture` now has a disabled schema-v1 DTO shell built from ordered `LinkedHashMap` sections inside the no-op writer boundary. It maps known scenario, source, storage, timing, construction, encode snapshot, packet decoded metadata, and notes fields while keeping byte hex and unavailable item/template fields as explicit placeholders. Live bind-point fanout remains blocked because no Java compile validation, DTO runtime validation, fastjson2 serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, warehouse-add byte comparison, runtime lifecycle validation, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.

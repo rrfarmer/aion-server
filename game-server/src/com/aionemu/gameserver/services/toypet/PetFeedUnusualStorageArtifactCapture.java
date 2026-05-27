@@ -6,7 +6,9 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -184,10 +186,241 @@ public final class PetFeedUnusualStorageArtifactCapture {
 	private static void writeArtifact(ArtifactSnapshot snapshot) {
 		try {
 			buildArtifactPath(snapshot);
+			buildSchemaV1Artifact(snapshot);
 		} catch (RuntimeException e) {
-			// Capture artifact path validation must never affect packet dispatch or writer lifecycle.
+			// Capture artifact validation must never affect packet dispatch or writer lifecycle.
 		}
 		// Future JSON/file writer boundary. Intentionally no-op.
+	}
+
+	private static Map<String, Object> buildSchemaV1Artifact(ArtifactSnapshot snapshot) {
+		Map<String, Object> artifact = orderedMap();
+		artifact.put("schemaVersion", 1);
+		artifact.put("scenario", snapshot.scenarioName);
+		artifact.put("javaSources", List.of("com.aionemu.gameserver.services.toypet.PetService.checkFeeding",
+			"com.aionemu.gameserver.services.item.ItemPacketService.sendStorageUpdatePacket",
+			"com.aionemu.gameserver.network.aion.serverpackets.SM_WAREHOUSE_ADD_ITEM",
+			"com.aionemu.gameserver.network.aion.serverpackets.SM_CUBE_UPDATE"));
+		artifact.put("storage", buildStorageDto(snapshot));
+		artifact.put("timing", buildTimingDto());
+		artifact.put("constructionSnapshot", buildConstructionSnapshotDto(snapshot));
+		artifact.put("encodeSnapshot", buildEncodeSnapshotDto(snapshot));
+		artifact.put("packets", List.of(buildPacketDto(snapshot.warehouseAddPacket, snapshot), buildPacketDto(snapshot.cubeUpdatePacket, snapshot)));
+		artifact.put("notes", List.of("bodyHex and canonicalPayloadHex are placeholders until raw/canonical byte retention is implemented.",
+			"JSON serialization and file output are intentionally disabled."));
+		return artifact;
+	}
+
+	private static Map<String, Object> buildStorageDto(ArtifactSnapshot snapshot) {
+		Map<String, Object> storage = orderedMap();
+		storage.put("storageId", snapshot.storageTypeId);
+		storage.put("storageTypeName", null);
+		storage.put("storageTypeOrdinal", snapshot.storageTypeOrdinal);
+		storage.put("expectedReachability", "delayed-mutable-item-reference");
+		storage.put("normalUiFlow", false);
+		return storage;
+	}
+
+	private static Map<String, Object> buildTimingDto() {
+		Map<String, Object> timing = orderedMap();
+		timing.put("feedItemLookupPhase", "pre-delay-cube-inventory");
+		timing.put("unlockDecisionPhase", "post-delay-rejected-food");
+		timing.put("packetConstructionPhase", "sendItemUnlockPacket/sendStorageUpdatePacket");
+		timing.put("packetSerializationPhase", "AionConnection.writeData/AionServerPacket.write");
+		timing.put("itemReferenceIsMutable", true);
+		return timing;
+	}
+
+	private static Map<String, Object> buildConstructionSnapshotDto(ArtifactSnapshot snapshot) {
+		Map<String, Object> construction = orderedMap();
+		construction.put("warehouseType", snapshot.storageTypeId);
+		construction.put("addType", ItemAddType.ALL_SLOT.name());
+		construction.put("addTypeMask", ItemAddType.ALL_SLOT.getMask());
+		construction.put("packetOrder", List.of("SM_WAREHOUSE_ADD_ITEM", "SM_CUBE_UPDATE"));
+		return construction;
+	}
+
+	private static Map<String, Object> buildEncodeSnapshotDto(ArtifactSnapshot snapshot) {
+		Map<String, Object> encode = orderedMap();
+		encode.put("item", buildItemDto(snapshot));
+		encode.put("itemBlob", buildItemBlobDto(getEncodeTimeItemBlob(snapshot)));
+		return encode;
+	}
+
+	private static Map<String, Object> buildItemDto(ArtifactSnapshot snapshot) {
+		Map<String, Object> item = orderedMap();
+		item.put("objectId", snapshot.itemObjectId);
+		item.put("itemId", null);
+		item.put("count", null);
+		item.put("itemLocation", snapshot.storageTypeId);
+		item.put("equipmentSlot", null);
+		item.put("itemTemplateId", null);
+		item.put("localizedName", null);
+		item.put("packCount", getPackCount(getEncodeTimeItemBlob(snapshot)));
+		item.put("expireTime", null);
+		item.put("temporaryExchangeTime", getTemporaryExchangeTime(getEncodeTimeItemBlob(snapshot)));
+		item.put("charge", getChargePoints(getEncodeTimeItemBlob(snapshot)));
+		item.put("enchantLevel", getEnchantLevel(getEncodeTimeItemBlob(snapshot)));
+		item.put("itemMask", getItemMask(getEncodeTimeItemBlob(snapshot)));
+		item.put("color", getDyeColor(getEncodeTimeItemBlob(snapshot)));
+		return item;
+	}
+
+	private static Map<String, Object> buildItemBlobDto(ItemBlobSnapshot itemBlob) {
+		Map<String, Object> blob = orderedMap();
+		blob.put("hex", "");
+		blob.put("size", itemBlob == null ? 0 : itemBlob.totalPayloadSize);
+		blob.put("entryIds", buildEntryIds(itemBlob));
+		blob.put("decodedEntries", buildDecodedEntries(itemBlob));
+		blob.put("templateDerivedInputs", buildTemplateDerivedInputs(itemBlob));
+		blob.put("dynamicInputs", buildDynamicInputs(itemBlob));
+		blob.put("timeNormalization", buildTimeNormalization(itemBlob));
+		return blob;
+	}
+
+	private static List<Integer> buildEntryIds(ItemBlobSnapshot itemBlob) {
+		if (itemBlob == null)
+			return List.of();
+		List<Integer> entryIds = new ArrayList<>();
+		for (ItemBlobEntrySnapshot entry : itemBlob.entries)
+			entryIds.add(entry.entryId);
+		return entryIds;
+	}
+
+	private static List<Map<String, Object>> buildDecodedEntries(ItemBlobSnapshot itemBlob) {
+		if (itemBlob == null)
+			return List.of();
+		List<Map<String, Object>> decodedEntries = new ArrayList<>();
+		for (ItemBlobEntrySnapshot entry : itemBlob.entries) {
+			Map<String, Object> decodedEntry = orderedMap();
+			decodedEntry.put("entryName", entry.entryName);
+			decodedEntry.put("entryId", entry.entryId);
+			decodedEntry.put("payloadSize", entry.payloadSize);
+			decodedEntries.add(decodedEntry);
+		}
+		return decodedEntries;
+	}
+
+	private static Map<String, Object> buildTemplateDerivedInputs(ItemBlobSnapshot itemBlob) {
+		Map<String, Object> templateInputs = orderedMap();
+		templateInputs.put("itemMask", getItemMask(itemBlob));
+		templateInputs.put("slotGroup", null);
+		templateInputs.put("polishEligible", getPolishCharge(itemBlob) > 0);
+		templateInputs.put("conditionable", getConditioningInfoPresent(itemBlob));
+		templateInputs.put("bonusStatModifiers", List.of());
+		return templateInputs;
+	}
+
+	private static Map<String, Object> buildDynamicInputs(ItemBlobSnapshot itemBlob) {
+		Map<String, Object> dynamicInputs = orderedMap();
+		dynamicInputs.put("fusionRandomBonusStatsId", getFusionedItemBonusStatsId(itemBlob));
+		dynamicInputs.put("temporaryExchangeTime", getTemporaryExchangeTime(itemBlob));
+		dynamicInputs.put("cleanupSealFlag", getWarehouseRestrictionFlag(itemBlob));
+		dynamicInputs.put("accountLegionWarehouseRestrictionFlag", getWarehouseRestrictionFlag(itemBlob));
+		dynamicInputs.put("unsealTime", 0);
+		dynamicInputs.put("conditioningInfoPresent", getConditioningInfoPresent(itemBlob));
+		dynamicInputs.put("plumeTemperingStats", getPlumeTemperingStats(itemBlob));
+		return dynamicInputs;
+	}
+
+	private static Map<String, Object> buildTimeNormalization(ItemBlobSnapshot itemBlob) {
+		Map<String, Object> timeNormalization = orderedMap();
+		timeNormalization.put("capturedAtEpochSeconds", 0);
+		timeNormalization.put("expirationRemainingSeconds", getSecondsUntilExpiration(itemBlob));
+		timeNormalization.put("dyeRemainingSeconds", getDyeTimeLeft(itemBlob));
+		return timeNormalization;
+	}
+
+	private static Map<String, Object> buildPacketDto(PacketSnapshot packet, ArtifactSnapshot snapshot) {
+		Map<String, Object> packetDto = orderedMap();
+		packetDto.put("javaClass", packet == null ? null : packet.packetClassName);
+		packetDto.put("opcode", packet == null ? 0 : packet.encodedOpcode);
+		packetDto.put("bodyHex", "");
+		packetDto.put("canonicalPayloadHex", "");
+		packetDto.put("decoded", buildPacketDecodedDto(packet, snapshot));
+		return packetDto;
+	}
+
+	private static Map<String, Object> buildPacketDecodedDto(PacketSnapshot packet, ArtifactSnapshot snapshot) {
+		Map<String, Object> decoded = orderedMap();
+		if (packet == null)
+			return decoded;
+		if (packet.packetIndex == 0) {
+			decoded.put("warehouseType", snapshot.storageTypeId);
+			decoded.put("addTypeMask", ItemAddType.ALL_SLOT.getMask());
+			decoded.put("itemCount", 1);
+		} else {
+			decoded.put("action", 0);
+			decoded.put("actionValue", snapshot.storageTypeOrdinal);
+			decoded.put("itemsCount", 0);
+			decoded.put("npcExpands", 0);
+			decoded.put("questExpands", 0);
+			decoded.put("itemExpands", 0);
+		}
+		return decoded;
+	}
+
+	private static ItemBlobSnapshot getEncodeTimeItemBlob(ArtifactSnapshot snapshot) {
+		return snapshot.warehouseAddPacket != null && snapshot.warehouseAddPacket.observedItemBlob != null ? snapshot.warehouseAddPacket.observedItemBlob
+			: snapshot.constructionTimeItemBlob;
+	}
+
+	private static int getItemMask(ItemBlobSnapshot itemBlob) {
+		return itemBlob != null && itemBlob.payload != null && itemBlob.payload.general != null ? itemBlob.payload.general.itemMask : 0;
+	}
+
+	private static int getSecondsUntilExpiration(ItemBlobSnapshot itemBlob) {
+		return itemBlob != null && itemBlob.payload != null && itemBlob.payload.general != null ? itemBlob.payload.general.secondsUntilExpiration : 0;
+	}
+
+	private static int getTemporaryExchangeTime(ItemBlobSnapshot itemBlob) {
+		return itemBlob != null && itemBlob.payload != null && itemBlob.payload.general != null
+			? itemBlob.payload.general.temporaryExchangeTimeRemaining : 0;
+	}
+
+	private static int getWarehouseRestrictionFlag(ItemBlobSnapshot itemBlob) {
+		return itemBlob != null && itemBlob.payload != null && itemBlob.payload.general != null ? itemBlob.payload.general.warehouseRestrictionFlag : 0;
+	}
+
+	private static int getFusionedItemBonusStatsId(ItemBlobSnapshot itemBlob) {
+		return itemBlob != null && itemBlob.payload != null && itemBlob.payload.composite != null ? itemBlob.payload.composite.fusionedItemBonusStatsId : 0;
+	}
+
+	private static int getEnchantLevel(ItemBlobSnapshot itemBlob) {
+		return itemBlob != null && itemBlob.payload != null && itemBlob.payload.enchant != null ? itemBlob.payload.enchant.enchantLevel : 0;
+	}
+
+	private static Integer getDyeColor(ItemBlobSnapshot itemBlob) {
+		return itemBlob != null && itemBlob.payload != null && itemBlob.payload.enchant != null ? itemBlob.payload.enchant.dyeColor : null;
+	}
+
+	private static int getDyeTimeLeft(ItemBlobSnapshot itemBlob) {
+		return itemBlob != null && itemBlob.payload != null && itemBlob.payload.enchant != null ? itemBlob.payload.enchant.dyeTimeLeft : 0;
+	}
+
+	private static List<Integer> getPlumeTemperingStats(ItemBlobSnapshot itemBlob) {
+		return itemBlob != null && itemBlob.payload != null && itemBlob.payload.enchant != null ? itemBlob.payload.enchant.plumeTemperingStats : List.of();
+	}
+
+	private static boolean getConditioningInfoPresent(ItemBlobSnapshot itemBlob) {
+		return itemBlob != null && itemBlob.payload != null && itemBlob.payload.conditioning != null
+			&& itemBlob.payload.conditioning.conditioningInfoPresent;
+	}
+
+	private static int getChargePoints(ItemBlobSnapshot itemBlob) {
+		return itemBlob != null && itemBlob.payload != null && itemBlob.payload.conditioning != null ? itemBlob.payload.conditioning.chargePoints : 0;
+	}
+
+	private static int getPolishCharge(ItemBlobSnapshot itemBlob) {
+		return itemBlob != null && itemBlob.payload != null && itemBlob.payload.polish != null ? itemBlob.payload.polish.polishCharge : 0;
+	}
+
+	private static int getPackCount(ItemBlobSnapshot itemBlob) {
+		return itemBlob != null && itemBlob.payload != null && itemBlob.payload.wrap != null ? itemBlob.payload.wrap.packCount : 0;
+	}
+
+	private static Map<String, Object> orderedMap() {
+		return new LinkedHashMap<>();
 	}
 
 	private static Path buildArtifactPath(ArtifactSnapshot snapshot) {
