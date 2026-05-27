@@ -683,3 +683,7 @@ The disabled Java capture registry now carries a no-output construction-time `It
 ## Update After UOW-1358
 
 A read-only key blob payload audit now maps Java `GeneralInfoBlobEntry`, `CompositeItemBlobEntry`, and `EnchantInfoBlobEntry` dynamic fields against current C# serializer gaps. Live bind-point fanout remains blocked because no decoded payload DTOs, Java artifact writer, raw/canonical bytes, cleanup/seal static-data projection, C# serializer gap closure, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
+
+## Update After UOW-1359
+
+A read-only small blob payload audit now maps Java conditioning, premium-option, polish, and wrap payload fields against current C# serializer behavior. Live bind-point fanout remains blocked because runtime conditioning presence, decoded payload DTOs, Java artifact writer, raw/canonical bytes, C# serializer verification, warehouse-add byte comparison, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.
