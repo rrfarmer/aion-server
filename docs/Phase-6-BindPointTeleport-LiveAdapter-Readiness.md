@@ -519,3 +519,7 @@ A non-live C# `PlayerPetRowProjection` helper now models the deterministic row-m
 ## Update After UOW-1317
 
 A standalone C# `PetDopingBag` helper now preserves Java food/drink defaults, dynamic slot expansion, dirty flag behavior, scroll-slot views, invalid-slot rejection, and scroll-only switch semantics. Live bind-point fanout remains blocked because the helper is not yet wired into `PlayerPetRowProjection`, live pet common data, live `PetService.useDoping`, dirty-flag persistence triggers, item lookup/cooldown/skill use, Java runtime vectors, DB comparisons, or socket dispatch.
+
+## Update After UOW-1318
+
+`PlayerPetRowProjection` now hydrates Java `dopings` CSV into the standalone `PetDopingBag` helper, including Java `SetItem` slot order, non-zero load-time dirty behavior, and all-zero slot expansion without dirtying. Live bind-point fanout remains blocked because live pet repository execution, Java `DataManager` template lookup, full `PetCommonData`, dirty-flag persistence triggers, live `PetService.useDoping`, Java runtime DB comparison, and socket dispatch remain disabled.
