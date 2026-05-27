@@ -559,3 +559,7 @@ A non-sending C# `PetFeedPacketMetadataBridge` now converts packet-facing feed o
 ## Update After UOW-1327
 
 `PetFeedPacketMetadataBridge` can now consume supplied supplemental context to construct non-sending end-feeding `SmEmotion` metadata and rejected-food `SmSystemMessage(1400618, petName, itemName)` metadata, while preserving blocked metadata when that context is absent. Live bind-point fanout remains blocked because item unlock storage packets, live player/pet/item hydration, localization, inventory mutation, reward creation, scheduler execution, DAO writes, Java runtime packet comparison, and socket dispatch remain disabled.
+
+## Update After UOW-1328
+
+`PetFeedPacketMetadataBridge` can now consume supplied normal-cube unlock context to construct the rejected-food unlock metadata pair Java sends before `SM_PET(5)`: `SmInventoryAddItem` with `ALL_SLOT = 0x13`, followed by `SmCubeUpdate`. Live bind-point fanout remains blocked because warehouse unlock packets, live storage/item/template/player hydration, inventory mutation, packet dispatch, scheduler execution, reward creation, DAO writes, Java runtime packet comparison, and socket dispatch remain disabled.
