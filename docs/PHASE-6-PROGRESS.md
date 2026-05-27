@@ -62206,6 +62206,68 @@ Next recommended unit of work:
 
 ---
 
+### Session 1484 (May 27, 2026)
+- Continued after UOW-1483 with the recommended death-side flying flag transition.
+- Re-audited Java `PlayerController.onDie`, `CreatureController.onDie`, and current C# player state/death surfaces.
+- Added `PlayerDeathStateTransitionService` to model the player state portion of Java death handling.
+- The service records `IsFlyingBeforeDeath` when the player is in `FLYING`, clears ride/rest/floating/flying/gliding state, clears fly-state flags, and then applies Java `CreatureController.onDie` state behavior: `FLOATING_CORPSE` for flying-before-death players, otherwise `DEAD`.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --no-restore --filter "FullyQualifiedName~PlayerDeathStateTransitionServiceTests|FullyQualifiedName~PlayerStateTests|FullyQualifiedName~PlayerReviveRestoreServiceTests"`.
+  - Result: passed 31 tests.
+
+#### Parallel Work Discovery - Session 1484
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Death-side flying flag transition | `PlayerController.onDie`, `CreatureController.onDie`, `Player` | new death transition service/test | Service / Test Creation | Yes in theory | Medium | New files only, but player state semantics are shared and docs remain orchestrator-owned. |
+| B | Protection packet fanout bridge analysis | `SM_PLAYER_STATE`, `PacketSendUtility.broadcastToSightedPlayers` | read-only initially | Java Analysis | Yes | Low | Can be analysis-only before touching shared connection registry. |
+| C | Inventory cleanup-seal failure triage | inventory item-use tests/services | existing inventory files | Later | Medium | Independent current full-suite blocker. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add player death state transition service | Service / Unit Test / Documentation | `PlayerDeathStateTransitionService.cs`, `PlayerDeathStateTransitionServiceTests.cs`, progress/handoff docs | production damage/death packet fanout, shared fixtures | Java death-state audit | Passing tests for flying-before-death and ordinary death state transitions. |
+
+No subagent was spawned because the selected state transition is shared enough that the orchestrator kept it sequential.
+
+#### Migration Parity Table - Session 1484
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController` | `PlayerDeathStateTransitionService` | Controller / State Service | Partial | Unit Tested | Partial Parity | Models the state portion of `onDie`: flying-before-death flag, ride/rest/floating/flying/gliding cleanup. Missing cancel-current-skill, rebirth info, duel handling, summon release, effect cleanup, resurrection option scheduling, instance/zone callbacks, rewards, XP loss, and quest callbacks. |
+| `com.aionemu.gameserver.controllers.CreatureController` | `PlayerDeathStateTransitionService` | Controller / State Service | Partial | Unit Tested | Partial Parity | Models `CreatureController.onDie` state branch for `FLOATING_CORPSE` versus `DEAD`. Missing movement abort, casting clear, effect removal, death observers, `SM_EMOTION(DIE)` broadcast, and aggro `stopHating` cleanup. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Aion.GameServer.Model.GameObjects.Player` | Model | Partial | Unit Tested | Partial Parity | Uses existing `IsFlyingBeforeDeath`, `CreatureState`, `FlyState`, ride state, and visual state helpers. Java live `PlayerMode`, summon, controller task, known-list, and effect-controller ownership remain broader. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `Apply_FlyingPlayerSetsFlyingBeforeDeathAndFloatingCorpseLikeJava` | Unit / state transition | `PlayerController.onDie`, `CreatureController.onDie` | Flying player death sets `IsFlyingBeforeDeath`, clears ride/rest/fly/glide state, clears active, and sets `FloatingCorpse` rather than `Dead`. | Deterministic C# state assertion from Java source audit. | No packet fanout, observers, effect removal, summon release, or known-list aggro cleanup. |
+| `Apply_NonFlyingPlayerSetsDeadState` | Unit / state transition | `CreatureController.onDie` | Non-flying player death sets Java `DEAD` state while preserving unrelated flags. | Deterministic Java branch assertion. | Does not cover Java death side effects beyond state. |
+| `Apply_PreviouslyFlyingBeforeDeathUsesFloatingCorpseEvenAfterFlyingStateWasCleared` | Unit / state transition | `CreatureController.onDie` | Existing flying-before-death flag still drives `FloatingCorpse` branch even if flying state is already cleared. | Deterministic Java branch assertion. | Runtime reachability depends on caller ordering. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Full game-server test suite is still known to have two unrelated stable failures in `GameServerConnectionInventoryExpansionUseItemTests`: `ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate` and `HandleUseItemAsync_ExpExtractMergesRestrictedRewardWithCleanupSealFlag`.
+- Service is not wired into production player damage/death flow.
+- Packet fanout (`SM_EMOTION DIE`, `SM_DIE` resurrection options), observer callbacks, effect removal, movement abort, casting clear, known-list aggro cleanup, summon release, duel branches, instance/zone callbacks, rewards, XP loss, and quest callbacks remain unsupported.
+- Java state flag composition still needs runtime comparison, especially around exact `DEAD`, `ACTIVE`, and `FLOATING_CORPSE` combinations.
+- Ride cleanup is modeled by clearing C# ride state, but Java `PlayerMode.RIDE` side effects and packet fanout are broader.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped artifact rows in this unit
+- Total artifacts ported: 1 death state transition service and 1 focused test suite
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 3 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, production death wiring, death packet fanout, observers/effects/known-list cleanup, duel/summon/reward/quest branches, unrelated full-suite cleanup-seal failures
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Add a non-live player death workflow planner that composes the state transition with planned missing side effects in Java order: cancel current skill, rebirth info, duel/summon branches, transition state, schedule resurrection options, instance/zone callbacks, reward/XP-loss, and quest callbacks.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
