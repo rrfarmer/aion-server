@@ -64,6 +64,6 @@ Recommended future ownership:
 ## Remaining Questions
 
 - Which C# repository/load paths should hydrate `TemporaryExchangeTime` once the database column/source is identified?
-- Should cleanup data live in `StaticData` beside item templates, or in a dedicated `ItemRestrictionCleanupTable` consumed by packet construction?
+- UOW-1392 recommends a dedicated `ItemRestrictionCleanupTable` exposed by `StaticData`, with packet construction passing an explicit cleanup/seal flag or boolean into `WriteGeneralInfoBlob` rather than letting the serializer read global data.
 - Should packet constructors carry a resolved cleanup flag snapshot to avoid adding static-data lookups inside shared packet serializers?
 - How should deterministic tests inject capture/replay time without changing packet APIs too broadly?
