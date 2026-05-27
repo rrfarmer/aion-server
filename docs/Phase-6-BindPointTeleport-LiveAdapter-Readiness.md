@@ -523,3 +523,7 @@ A standalone C# `PetDopingBag` helper now preserves Java food/drink defaults, dy
 ## Update After UOW-1318
 
 `PlayerPetRowProjection` now hydrates Java `dopings` CSV into the standalone `PetDopingBag` helper, including Java `SetItem` slot order, non-zero load-time dirty behavior, and all-zero slot expansion without dirtying. Live bind-point fanout remains blocked because live pet repository execution, Java `DataManager` template lookup, full `PetCommonData`, dirty-flag persistence triggers, live `PetService.useDoping`, Java runtime DB comparison, and socket dispatch remain disabled.
+
+## Update After UOW-1319
+
+A non-live C# `PetFeedCalculator` helper now preserves Java feed-point table math, five-level item buckets, normal feed progress mutation, strict threshold switching, loved-feed full transition, and loved-limit no-op behavior. Live bind-point fanout remains blocked because reward selection, `PetFlavour.processFeedResult`, static data full-count generation, item-template lookup, random reward choice, live feed service mutation, DAO writes, scheduler behavior, Java runtime comparison, and socket dispatch remain disabled.
