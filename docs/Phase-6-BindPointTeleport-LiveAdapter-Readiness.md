@@ -431,3 +431,7 @@ Population pet diagnostics can now consume optional provider inputs, count provi
 ## Update After UOW-1295
 
 A Java pet golden-vector design note now scopes the first runtime capture batch to known-list `SM_PET` spawn, `SM_PET_EMOTE` fly-start, and `SM_PET` dismiss packets, with movement-emote and full toy-pet management packets split into later batches. Live bind-point fanout remains blocked because no Java runtime vectors were generated, C# still lacks live pet/common-data/template/move-controller hydration, movement emote serializers are incomplete, socket dispatch is disabled, and full pet packet coverage remains out of scope.
+
+## Update After UOW-1296
+
+`SmPetEmote` now serializes Java-shaped `MOVE_STOP` and `MOVETO` payload branches from supplied movement snapshots, while preserving the existing default branch for fly-start. Live bind-point fanout remains blocked because no Java runtime vectors were generated, C# still lacks live pet/move-controller hydration, `CM_PET_EMOTE` parser/runtime side effects are unported, and socket dispatch remains disabled.

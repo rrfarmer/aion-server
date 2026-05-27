@@ -123,7 +123,7 @@ Reasons:
 | Pet snapshot input | `SmPetSpawnSnapshot`; `PlayerKnownListPetSpawnSnapshotProviderInput` | Partial supplied metadata. |
 | Provider blockers | `PlayerKnownListPetSpawnSnapshotProviderService`; population diagnostics | Partial non-live diagnostics. |
 | Live pet/common-data/template hydration | None | Blocked. |
-| Movement emote serializers | `SmPetEmote` lacks movement branches | Blocked. |
+| Movement emote serializers | `SmPetEmote` `MOVE_STOP` / `MOVETO` branches | Partial, source-derived tests only after UOW-1296. |
 | Java runtime golden vectors | None | Blocked by missing harness/run. |
 
 ## Migration Parity Table - UOW-1295
@@ -168,4 +168,3 @@ Implement the next smallest executable pet packet prerequisite:
 - build the Java packet golden-vector harness if Java tooling/static-data fixture setup is ready.
 
 Keep live known-list dispatch disabled in either path.
-
