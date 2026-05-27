@@ -507,3 +507,7 @@ A standalone C# `PetFeedProgress` helper and `PetHungryLevel` enum now preserve 
 ## Update After UOW-1314
 
 A standalone C# `PetCommonDataTiming` helper now preserves Java birthday epoch conversion, refeed delay mutation, mood-point lazy start and packet cap, Java-style millisecond-to-second rounding, mood/gift cooldown remaining-time resets, shuggle counter increment gating, and mood-stat reset behavior from supplied time inputs. Live bind-point fanout remains blocked because the helper is not yet wired to a live pet common-data model, `ThreadPoolManager`-style refeed scheduling, feed/doping template initialization, pet DAO load/save, expirable callbacks, packet dispatch, Java runtime vectors, or socket dispatch.
+
+## Update After UOW-1315
+
+Non-executing C# `PlayerPetsRepositoryPlan` command plans now preserve Java `PlayerPetsDAO` SQL text and positional parameter order for feed status, doping CSV, reuse time, insert, delete, load, rename, mood save, and used-id load. Live bind-point fanout remains blocked because no live repository execution, row materialization, timestamp binding verification, exception fallback behavior, doping CSV load parsing, transaction/autocommit validation, Java runtime DB comparison, or socket dispatch was enabled.
