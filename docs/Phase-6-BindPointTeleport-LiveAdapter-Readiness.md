@@ -463,3 +463,7 @@ The checked-in pet static data was structurally audited: 218 pet templates, max 
 ## Update After UOW-1303
 
 `SmPet` now has an internal deterministic `writePetData` helper with packet-facing snapshots and source-derived tests for no, one, and two writable function cases, including Java order and doping slot padding. Public `LOAD_PETS` and `ADOPT` constructors remain disabled. Live bind-point fanout remains blocked because Java runtime vectors are still missing, live pet common-data/template/feed/doping hydration is absent, full `CM_PET` parser/runtime remains unported, and socket dispatch remains disabled.
+
+## Update After UOW-1304
+
+`SmPet.Adopt(SmPetDataSnapshot)` now exposes the Java `SM_PET(PetCommonData, true)` packet shape using the deterministic `writePetData` helper. Live bind-point fanout remains blocked because live adoption runtime, inventory mutation, pet list insertion, DAO persistence, expiration timer registration, Java runtime vectors, full `CM_PET`, and socket dispatch remain unported.
