@@ -2,7 +2,7 @@
 
 Date: May 27, 2026
 Completed Unit of Work: UOW-1346
-Latest Commit: pending `[Phase 6][UOW-1346] Document unusual storage Java observer placement`
+Latest Commit: 1e7fa0efc `[Phase 6][UOW-1346] Document unusual storage Java observer placement`
 Status: Docs-only Java observer placement audit is complete; no Java network-core hook or artifact writer was implemented.
 
 ## What Changed

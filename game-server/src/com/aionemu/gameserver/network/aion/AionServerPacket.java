@@ -4,6 +4,8 @@ import java.nio.ByteBuffer;
 
 import com.aionemu.commons.network.packet.BaseServerPacket;
 import com.aionemu.gameserver.network.Crypt;
+import com.aionemu.gameserver.network.aion.capture.NoOpServerPacketCaptureObserver;
+import com.aionemu.gameserver.network.aion.capture.ServerPacketCaptureObserver;
 
 /**
  * Base class for every GS -> Aion Server Packet.
@@ -14,6 +16,7 @@ public abstract class AionServerPacket extends BaseServerPacket {
 
 	public static final int MAX_CLIENT_SUPPORTED_PACKET_SIZE = 8192;
 	public static final int MAX_USABLE_PACKET_BODY_SIZE = MAX_CLIENT_SUPPORTED_PACKET_SIZE - 7; // 8192 - 2 (body length) - 2 (opCode) - 1 (staticServerPacketCode) - 2 (opCode flipped bits)
+	private static volatile ServerPacketCaptureObserver captureObserver = NoOpServerPacketCaptureObserver.INSTANCE;
 
 	public static int byteLengthForString(String text) {
 		if (text == null || text.isEmpty())
@@ -35,6 +38,10 @@ public abstract class AionServerPacket extends BaseServerPacket {
 
 	protected AionServerPacket(int opCode) {
 		super(opCode);
+	}
+
+	public static void setCaptureObserver(ServerPacketCaptureObserver observer) {
+		captureObserver = observer == null ? NoOpServerPacketCaptureObserver.INSTANCE : observer;
 	}
 
 	/**
@@ -63,6 +70,9 @@ public abstract class AionServerPacket extends BaseServerPacket {
 		writeImpl(con);
 		buf.flip();
 		buf.putShort((short) buf.limit());
+		ServerPacketCaptureObserver observer = captureObserver;
+		if (observer.isEnabled())
+			observer.onPacketSerialized(con, this, buf.asReadOnlyBuffer());
 		ByteBuffer b = buf.slice();
 		buf.position(0);
 		con.encrypt(b);
