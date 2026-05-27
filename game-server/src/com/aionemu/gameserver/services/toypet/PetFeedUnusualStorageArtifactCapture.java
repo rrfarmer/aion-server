@@ -207,7 +207,7 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		artifact.put("constructionSnapshot", buildConstructionSnapshotDto(snapshot));
 		artifact.put("encodeSnapshot", buildEncodeSnapshotDto(snapshot));
 		artifact.put("packets", List.of(buildPacketDto(snapshot.warehouseAddPacket, snapshot), buildPacketDto(snapshot.cubeUpdatePacket, snapshot)));
-		artifact.put("notes", List.of("bodyHex and canonicalPayloadHex are placeholders until raw/canonical byte retention is implemented.",
+		artifact.put("notes", List.of("itemBlob.hex is observer-time reserialization until a future packet-body slice verifier is added.",
 			"JSON serialization and file output are intentionally disabled."));
 		return artifact;
 	}
@@ -271,7 +271,7 @@ public final class PetFeedUnusualStorageArtifactCapture {
 
 	private static Map<String, Object> buildItemBlobDto(ItemBlobSnapshot itemBlob) {
 		Map<String, Object> blob = orderedMap();
-		blob.put("hex", "");
+		blob.put("hex", itemBlob == null ? "" : itemBlob.hex);
 		blob.put("size", itemBlob == null ? 0 : itemBlob.totalPayloadSize);
 		blob.put("entryIds", buildEntryIds(itemBlob));
 		blob.put("decodedEntries", buildDecodedEntries(itemBlob));
@@ -612,11 +612,13 @@ public final class PetFeedUnusualStorageArtifactCapture {
 	private static final class ItemBlobSnapshot {
 
 		private final int totalPayloadSize;
+		private final String hex;
 		private final List<ItemBlobEntrySnapshot> entries;
 		private final ItemBlobPayloadSnapshot payload;
 
-		private ItemBlobSnapshot(int totalPayloadSize, List<ItemBlobEntrySnapshot> entries, ItemBlobPayloadSnapshot payload) {
+		private ItemBlobSnapshot(int totalPayloadSize, String hex, List<ItemBlobEntrySnapshot> entries, ItemBlobPayloadSnapshot payload) {
 			this.totalPayloadSize = totalPayloadSize;
+			this.hex = hex;
 			this.entries = Collections.unmodifiableList(entries);
 			this.payload = payload;
 		}
@@ -635,7 +637,14 @@ public final class PetFeedUnusualStorageArtifactCapture {
 			List<ItemBlobEntrySnapshot> entries = new ArrayList<>();
 			for (ItemBlobEntryMetadata metadata : blob.getBlobEntryMetadata())
 				entries.add(new ItemBlobEntrySnapshot(metadata.getEntryName(), metadata.getEntryId(), metadata.getPayloadSize()));
-			return new ItemBlobSnapshot(blob.size(), entries, item == null ? null : ItemBlobPayloadSnapshot.from(item));
+			return new ItemBlobSnapshot(blob.size(), serializeBlobHex(blob), entries, item == null ? null : ItemBlobPayloadSnapshot.from(item));
+		}
+
+		private static String serializeBlobHex(ItemInfoBlob blob) {
+			ByteBuffer serializedBlob = ByteBuffer.allocate(2 + blob.size());
+			blob.writeMe(serializedBlob);
+			serializedBlob.flip();
+			return compactHex(serializedBlob, 0, serializedBlob.limit());
 		}
 	}
 
