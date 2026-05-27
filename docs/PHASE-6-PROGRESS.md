@@ -62141,6 +62141,71 @@ Next recommended unit of work:
 
 ---
 
+### Session 1483 (May 27, 2026)
+- Continued after UOW-1482 with the recommended opt-in protection visual-state adapter.
+- Added `PlayerProtectionActiveTaskAdapterService` to apply only the live-safe visual-state subset of Java protection start/stop behavior.
+- Live start can set `PlayerVisualStates.Blinking` when explicitly requested; live stop can call `Player.StopProtectionActive()` only when the caller supplies `isSpawned = true`.
+- The adapter intentionally leaves scheduler mutation, `SM_PLAYER_STATE` fanout, cast cancellation, target removal, and AI move notification as planned metadata.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --no-restore --filter "FullyQualifiedName~PlayerProtectionActiveTaskAdapterServiceTests|FullyQualifiedName~PlayerProtectionActiveTaskPlanServiceTests|FullyQualifiedName~PlayerStateTests"`.
+  - Result: passed 32 tests.
+
+#### Parallel Work Discovery - Session 1483
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Protection visual-state adapter | `PlayerController.startProtectionActiveTask`, `PlayerController.stopProtectionActiveTask`, `Player` visual state | new adapter service/test | Service / Test Creation | Yes in theory | Low | New files only; no production scheduler or connection flow. |
+| B | Death-side flying flag transition | `PlayerController.onDie`, `CreatureController.onDie` | future player death model/tests | Later | Medium | Requires death packet/fanout audit and likely shared fixtures. |
+| C | Protection packet fanout bridge | `SM_PLAYER_STATE`, `PacketSendUtility.broadcastToSightedPlayers` | connection registry / visibility tests | Later | Medium | Needs shared broadcast/visibility ownership and packet-order care. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add opt-in protection visual-state adapter | Service / Unit Test / Documentation | `PlayerProtectionActiveTaskAdapterService.cs`, `PlayerProtectionActiveTaskAdapterServiceTests.cs`, progress/handoff docs | production `GameServerConnection`, scheduler/task ownership, packet fanout | UOW-1482 planner | Passing tests showing visual mutation is separated from unsupported scheduler/fanout side effects. |
+
+No subagent was spawned because the selected work was small and shared docs remained orchestrator-owned.
+
+#### Migration Parity Table - Session 1483
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController` | `PlayerProtectionActiveTaskAdapterService` / `PlayerProtectionActiveTaskPlanService` | Controller / Adapter Service | Partial | Unit Tested | Partial Parity | Adapter can opt-in to Java visual-state mutation for start/stop protection, while preserving planner metadata for scheduler, cast/target cancellation, packet fanout, and AI notification gaps. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Aion.GameServer.Model.GameObjects.Player` | Model | Partial | Unit Tested | Partial Parity | Live adapter uses existing `SetVisualState(BLINKING)` and `StopProtectionActive()` helpers. C# still lacks live `isSpawned` ownership and full controller task map. |
+| `com.aionemu.gameserver.model.TaskId` | `PlayerProtectionActiveTaskPlanService` / adapter result metadata | Enum / Task Metadata | Partial | Unit Tested | Needs Verification | Adapter explicitly reports `MutatedScheduler = false`; `TaskId.PROTECTION_ACTIVE` is still metadata only. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_STATE` | `SmPlayerState` / adapter result metadata | Packet / Fanout Boundary | Partial | Unit Tested | Needs Verification | Adapter reports `SentPackets = false`; fanout remains planned and byte/runtime comparison was not performed. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `Apply_DisabledExposesStartPlanWithoutVisualMutation` | Unit / adapter | `PlayerController.startProtectionActiveTask` | Disabled adapter exposes a start plan without mutating visual state. | Deterministic adapter assertion from Java source audit and C# planner. | No live scheduler/fanout. |
+| `Apply_LiveStartSetsBlinkingButLeavesSchedulerAndPacketsPlanned` | Unit / adapter | `PlayerController.startProtectionActiveTask` | Opt-in live start sets blinking while scheduler and packet sends remain false/planned. | Deterministic C# state mutation plus planner metadata. | Does not cancel casts or remove targets. |
+| `Apply_LiveStartAlreadyProtectedDoesNotMutate` | Unit / adapter | `PlayerController.startProtectionActiveTask` | Already blinking start remains a no-op. | Deterministic Java branch assertion. | No concurrency coverage. |
+| `Apply_LiveStopClearsBlinkingButLeavesSchedulerAndPacketsPlanned` | Unit / adapter | `PlayerController.stopProtectionActiveTask` | Opt-in spawned stop clears blinking while scheduler and packet sends remain false/planned. | Deterministic C# state mutation plus planner metadata. | Does not send `SM_PLAYER_STATE` or notify AI. |
+| `Apply_LiveStopUnspawnedDoesNotClearBlinking` | Unit / adapter | `PlayerController.stopProtectionActiveTask` | Unspawned stop leaves visual state unchanged while preserving task-cancel metadata. | Deterministic Java spawned-branch assertion. | C# lacks live `Player.isSpawned`. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Full game-server test suite is still known to have two unrelated stable failures in `GameServerConnectionInventoryExpansionUseItemTests`: `ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate` and `HandleUseItemAsync_ExpExtractMergesRestrictedRewardWithCleanupSealFlag`.
+- Adapter is opt-in and not wired into production revive/teleport paths.
+- Scheduler mutation is explicitly not live; there is no `TaskId.PROTECTION_ACTIVE` runtime owner yet.
+- `SM_PLAYER_STATE` fanout, sighted-player recipient selection, cast cancellation, target removal, and `notifyAIOnMove` remain planned metadata only.
+- Spawned-state handling is caller-supplied because C# does not yet model Java `Player.isSpawned`.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped artifact rows in this unit
+- Total artifacts ported: 1 opt-in visual-state adapter and 1 focused test suite
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, live task owner, `SM_PLAYER_STATE` fanout, cast/target cancellation, AI notification, spawned-state model, unrelated full-suite cleanup-seal failures
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Move to the death-side flying flag transition: audit the current C# death bridge and add a non-live or opt-in model that mirrors Java `PlayerController.onDie` setting `IsFlyingBeforeDeath` and Java `CreatureController.onDie` using `FLOATING_CORPSE` instead of `DEAD` for flying-before-death players.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
