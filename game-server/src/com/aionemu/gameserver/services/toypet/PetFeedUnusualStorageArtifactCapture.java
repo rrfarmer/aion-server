@@ -44,6 +44,9 @@ public final class PetFeedUnusualStorageArtifactCapture {
 	private static volatile boolean writerWorkerRunning;
 	private static Thread writerWorker;
 	private static long droppedArtifactCount;
+	private static final String ITEM_BLOB_PACKET_BODY_MATCHED = "matched";
+	private static final String ITEM_BLOB_PACKET_BODY_MISMATCHED = "mismatched";
+	private static final String ITEM_BLOB_PACKET_BODY_UNAVAILABLE = "unavailable";
 	private static final ServerPacketCaptureObserver observer = new ServerPacketCaptureObserver() {
 
 		@Override
@@ -244,7 +247,7 @@ public final class PetFeedUnusualStorageArtifactCapture {
 	private static Map<String, Object> buildEncodeSnapshotDto(ArtifactSnapshot snapshot) {
 		Map<String, Object> encode = orderedMap();
 		encode.put("item", buildItemDto(snapshot));
-		encode.put("itemBlob", buildItemBlobDto(getEncodeTimeItemBlob(snapshot)));
+		encode.put("itemBlob", buildItemBlobDto(getEncodeTimeItemBlob(snapshot), getItemBlobPacketBodyVerification(snapshot)));
 		return encode;
 	}
 
@@ -269,10 +272,11 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		return item;
 	}
 
-	private static Map<String, Object> buildItemBlobDto(ItemBlobSnapshot itemBlob) {
+	private static Map<String, Object> buildItemBlobDto(ItemBlobSnapshot itemBlob, String packetBodyVerification) {
 		Map<String, Object> blob = orderedMap();
 		blob.put("hex", itemBlob == null ? "" : itemBlob.hex);
 		blob.put("size", itemBlob == null ? 0 : itemBlob.totalPayloadSize);
+		blob.put("packetBodyVerification", packetBodyVerification == null ? ITEM_BLOB_PACKET_BODY_UNAVAILABLE : packetBodyVerification);
 		blob.put("entryIds", buildEntryIds(itemBlob));
 		blob.put("decodedEntries", buildDecodedEntries(itemBlob));
 		blob.put("templateDerivedInputs", buildTemplateDerivedInputs(itemBlob));
@@ -370,6 +374,11 @@ public final class PetFeedUnusualStorageArtifactCapture {
 
 	private static EncodeTimeItemSnapshot getEncodeTimeItemSnapshot(ArtifactSnapshot snapshot) {
 		return snapshot.warehouseAddPacket == null ? null : snapshot.warehouseAddPacket.observedItem;
+	}
+
+	private static String getItemBlobPacketBodyVerification(ArtifactSnapshot snapshot) {
+		return snapshot.warehouseAddPacket == null ? ITEM_BLOB_PACKET_BODY_UNAVAILABLE
+			: snapshot.warehouseAddPacket.itemBlobPacketBodyVerification;
 	}
 
 	private static int getItemMask(ItemBlobSnapshot itemBlob) {
@@ -478,8 +487,64 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		return hex.toString();
 	}
 
+	private static String verifyItemBlobPacketBody(String bodyHex, ItemBlobSnapshot itemBlob, EncodeTimeItemSnapshot item) {
+		try {
+			if (bodyHex == null || itemBlob == null || item == null || itemBlob.hex == null || itemBlob.hex.isEmpty() || !isCompactHex(bodyHex)
+				|| !isCompactHex(itemBlob.hex))
+				return ITEM_BLOB_PACKET_BODY_UNAVAILABLE;
+			int bodyLength = bodyHex.length() / 2;
+			if (bodyLength < 16 || readUnsignedShort(bodyHex, 3) != 1)
+				return ITEM_BLOB_PACKET_BODY_UNAVAILABLE;
+			int nameBytes = ((item.localizedName == null ? 0 : item.localizedName.length()) + 1) * 2;
+			int blobStart = 14 + nameBytes;
+			if (blobStart + 2 > bodyLength)
+				return ITEM_BLOB_PACKET_BODY_UNAVAILABLE;
+			int payloadSize = readUnsignedShort(bodyHex, blobStart);
+			int blobEnd = blobStart + 2 + payloadSize;
+			if (blobEnd + 2 > bodyLength)
+				return ITEM_BLOB_PACKET_BODY_UNAVAILABLE;
+			int blobHexStart = blobStart * 2;
+			int blobHexEnd = blobEnd * 2;
+			if (itemBlob.hex.length() != blobHexEnd - blobHexStart)
+				return ITEM_BLOB_PACKET_BODY_MISMATCHED;
+			return bodyHex.substring(blobHexStart, blobHexEnd).equals(itemBlob.hex) ? ITEM_BLOB_PACKET_BODY_MATCHED
+				: ITEM_BLOB_PACKET_BODY_MISMATCHED;
+		} catch (RuntimeException e) {
+			return ITEM_BLOB_PACKET_BODY_UNAVAILABLE;
+		}
+	}
+
+	private static boolean isCompactHex(String hex) {
+		if (hex == null || hex.length() % 2 != 0)
+			return false;
+		for (int i = 0; i < hex.length(); i++) {
+			if (hexNibble(hex.charAt(i)) < 0)
+				return false;
+		}
+		return true;
+	}
+
+	private static int readUnsignedShort(String hex, int byteOffset) {
+		return readUnsignedByte(hex, byteOffset) << 8 | readUnsignedByte(hex, byteOffset + 1);
+	}
+
+	private static int readUnsignedByte(String hex, int byteOffset) {
+		int hexOffset = byteOffset * 2;
+		return hexNibble(hex.charAt(hexOffset)) << 4 | hexNibble(hex.charAt(hexOffset + 1));
+	}
+
 	private static void appendHexNibble(StringBuilder hex, int nibble) {
 		hex.append((char) (nibble < 10 ? '0' + nibble : 'A' + nibble - 10));
+	}
+
+	private static int hexNibble(char c) {
+		if (c >= '0' && c <= '9')
+			return c - '0';
+		if (c >= 'A' && c <= 'F')
+			return c - 'A' + 10;
+		if (c >= 'a' && c <= 'f')
+			return c - 'a' + 10;
+		return -1;
 	}
 
 	private static void startWriterWorker() {
@@ -886,12 +951,13 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private final String clearFrameHex;
 		private final String bodyHex;
 		private final String canonicalPayloadHex;
+		private final String itemBlobPacketBodyVerification;
 		private final ItemBlobSnapshot observedItemBlob;
 		private final EncodeTimeItemSnapshot observedItem;
 
 		private PacketSnapshot(int packetIndex, String packetClassName, int clearFrameLength, int encodedOpcode,
-			int remainingBytesAtObserver, String clearFrameHex, String bodyHex, String canonicalPayloadHex, ItemBlobSnapshot observedItemBlob,
-			EncodeTimeItemSnapshot observedItem) {
+			int remainingBytesAtObserver, String clearFrameHex, String bodyHex, String canonicalPayloadHex,
+			String itemBlobPacketBodyVerification, ItemBlobSnapshot observedItemBlob, EncodeTimeItemSnapshot observedItem) {
 			this.packetIndex = packetIndex;
 			this.packetClassName = packetClassName;
 			this.clearFrameLength = clearFrameLength;
@@ -900,6 +966,7 @@ public final class PetFeedUnusualStorageArtifactCapture {
 			this.clearFrameHex = clearFrameHex;
 			this.bodyHex = bodyHex;
 			this.canonicalPayloadHex = canonicalPayloadHex;
+			this.itemBlobPacketBodyVerification = itemBlobPacketBodyVerification;
 			this.observedItemBlob = observedItemBlob;
 			this.observedItem = observedItem;
 		}
@@ -909,6 +976,7 @@ public final class PetFeedUnusualStorageArtifactCapture {
 			int encodedOpcode = clearFrame.limit() >= 4 ? clearFrame.getShort(2) & 0xFFFF : 0;
 			String clearFrameHex = compactHex(clearFrame, 0, clearFrame.limit());
 			String bodyHex = compactHex(clearFrame, 7, clearFrame.limit());
+			String itemBlobPacketBodyVerification = ITEM_BLOB_PACKET_BODY_UNAVAILABLE;
 			ItemBlobSnapshot observedItemBlob = null;
 			EncodeTimeItemSnapshot observedItem = null;
 			if (packet instanceof SM_WAREHOUSE_ADD_ITEM) {
@@ -916,9 +984,10 @@ public final class PetFeedUnusualStorageArtifactCapture {
 				Item item = warehouseAddItem.getFirstItem();
 				observedItemBlob = ItemBlobSnapshot.from(warehouseAddItem.getFirstItemInfoBlob(), item);
 				observedItem = EncodeTimeItemSnapshot.from(item);
+				itemBlobPacketBodyVerification = verifyItemBlobPacketBody(bodyHex, observedItemBlob, observedItem);
 			}
 			return new PacketSnapshot(packetIndex, packet.getClass().getName(), clearFrameLength, encodedOpcode, clearFrame.remaining(),
-				clearFrameHex, bodyHex, bodyHex, observedItemBlob, observedItem);
+				clearFrameHex, bodyHex, bodyHex, itemBlobPacketBodyVerification, observedItemBlob, observedItem);
 		}
 	}
 
