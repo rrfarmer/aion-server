@@ -583,3 +583,7 @@ Non-live rejected-food metadata composition tests now prove the supplied operati
 ## Update After UOW-1333
 
 A Java runtime-vector design now scopes the pet feed rewarded `SM_PET` FOOD subtype `7` ambiguity: Java queues the packet before reward item add, refeed scheduling, `setRefeedTime`, DAO persistence, and `PetFeedProgress.reset`, but the packet serializes mutable `PetCommonData` fields when written. Live bind-point fanout remains blocked because no Java subtype `7` runtime artifacts, packet observer hook, deterministic feed fixture, live common-data timing, scheduler execution, reward creation, DAO writes, inventory mutation, or socket dispatch exists.
+
+## Update After UOW-1334
+
+A guarded C# artifact reader now validates the future Java pet feed subtype `7` schema and can compare generated `SM_PET` body/canonical payload hex against `SmPet.Food(...)` when artifacts appear under `parity-artifacts/pet-feed-subtype7/java`. Live bind-point fanout remains blocked because no Java artifacts exist yet, `SM_EMOTION` byte comparison remains out of scope, and live scheduler execution, reward creation, DAO writes, inventory mutation, common-data serialization timing, and socket dispatch remain disabled.
