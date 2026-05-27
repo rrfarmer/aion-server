@@ -2,7 +2,7 @@
 
 Date: 2026-05-27
 Unit of Work: UOW-1392
-Status: Read-only cleanup/seal static-data ownership audit complete. UOW-1393 implemented the C# static-data projection; UOW-1394 through UOW-1398 added serializer, warehouse-add, pet-feed metadata, inventory add/update, and mail attached-item wrapper plumbing for the covered paths. UOW-1399 wired the live read-mail caller and UOW-1400 wired the live broker-buy caller to compute/pass the flag from `StaticData.ItemRestrictionCleanups`.
+Status: Read-only cleanup/seal static-data ownership audit complete. UOW-1393 implemented the C# static-data projection; UOW-1394 through UOW-1398 added serializer, warehouse-add, pet-feed metadata, inventory add/update, and mail attached-item wrapper plumbing for the covered paths. UOW-1399 wired the live read-mail caller, UOW-1400 wired the live broker-buy caller, and UOW-1401 wired the live broker cancel-return caller to compute/pass the flag from `StaticData.ItemRestrictionCleanups`.
 
 ## Scope
 
@@ -46,7 +46,7 @@ Add a small C# dataholder rather than deriving this flag from `ItemTemplateSumma
 
 ## Implementation Follow-Up
 
-UOW-1393 added `ItemRestrictionCleanupTable`, `ItemRestrictionCleanupSummary`, `StaticData.ItemRestrictionCleanups`, loader parsing, and focused tests for Java defaults plus the `awh == 0 || lwh == 0` predicate. UOW-1394 then added an explicit cleanup/seal flag input to the item-blob serializer and wired enter-world inventory/warehouse login packet construction through the cleanup table. UOW-1395 added explicit `SmWarehouseAddItem` flag input and packet coverage. UOW-1396 passed precomputed cleanup/seal flag context through pet-feed warehouse-add metadata paths. UOW-1397 added explicit `SmInventoryAddItem` and `SmInventoryUpdateItem` wrapper flag input plus focused packet coverage. UOW-1398 added explicit `SmMailService` read-letter attached-item flag input plus focused packet coverage. UOW-1399 added a live `GameServerConnection` read-mail flag source. UOW-1400 added live broker-buy inventory-add flag sourcing. Remaining runtime callers still need flag source plumbing.
+UOW-1393 added `ItemRestrictionCleanupTable`, `ItemRestrictionCleanupSummary`, `StaticData.ItemRestrictionCleanups`, loader parsing, and focused tests for Java defaults plus the `awh == 0 || lwh == 0` predicate. UOW-1394 then added an explicit cleanup/seal flag input to the item-blob serializer and wired enter-world inventory/warehouse login packet construction through the cleanup table. UOW-1395 added explicit `SmWarehouseAddItem` flag input and packet coverage. UOW-1396 passed precomputed cleanup/seal flag context through pet-feed warehouse-add metadata paths. UOW-1397 added explicit `SmInventoryAddItem` and `SmInventoryUpdateItem` wrapper flag input plus focused packet coverage. UOW-1398 added explicit `SmMailService` read-letter attached-item flag input plus focused packet coverage. UOW-1399 added a live `GameServerConnection` read-mail flag source. UOW-1400 added live broker-buy inventory-add flag sourcing. UOW-1401 added live broker cancel-return inventory-add flag sourcing. Remaining runtime callers still need flag source plumbing.
 
 ## Suggested Implementation Sequence
 
