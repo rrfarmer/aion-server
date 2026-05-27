@@ -643,3 +643,7 @@ The generic Java packet serialization observer shell now exists in `AionServerPa
 ## Update After UOW-1348
 
 The Java unusual-storage construction context seam now exists at `ItemPacketService.sendStorageUpdatePacket`, guarded by disabled-by-default `PetFeedUnusualStorageArtifactCapture`. It identifies Java pet bag, house warehouse, broker, and mailbox storage ids but intentionally performs no artifact writing or live behavior while disabled. Live bind-point fanout remains blocked because Java compile validation is unavailable locally, capture enable/config is missing, context-to-byte correlation is missing, artifact writing and item-blob decoding are missing, and the C# live adapter still does not hydrate, mutate, dispatch, or runtime-compare unusual storage.
+
+## Update After UOW-1349
+
+`PetFeedUnusualStorageArtifactCapture` now has a disabled bounded correlation registry and future observer accessor that can advance pending unusual-storage contexts across serialized `SM_WAREHOUSE_ADD_ITEM` then `SM_CUBE_UPDATE` packet observations. Live bind-point fanout remains blocked because the registry is not installed or enabled, Java compile validation is unavailable locally, file output and byte copying are missing, route/packet field validation is missing, and the C# live adapter still does not hydrate, mutate, dispatch, or runtime-compare unusual storage.
