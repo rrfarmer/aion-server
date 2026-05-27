@@ -595,3 +595,7 @@ The guarded subtype `7` artifact reader can now validate and compare future end-
 ## Update After UOW-1336
 
 A docs-only Java observer implementation plan now scopes the safest future subtype `7` capture hook: a no-op-by-default serialization observer around `AionServerPacket.write` clear bytes after `writeImpl` and length stamping but before encryption, with `AionConnection.writeData` as an optional wire-byte capture point. Live bind-point fanout remains blocked because the Java hook, deterministic pet-feed fixture, generated artifacts, live scheduler execution, reward creation, DAO writes, inventory mutation, mutable common-data timing, and socket dispatch remain disabled.
+
+## Update After UOW-1337
+
+Rejected-food unlock context tests now explicitly preserve the conservative boundary for known but unsupported Java storage ids: pet bags, representative house cabinets, broker, and mailbox locations return `UnsupportedStorageLocation` instead of guessing generic warehouse packet shape. Live bind-point fanout remains blocked because pet/house/broker/mailbox ownership, live storage hydration, storage mutation, packet dispatch, Java runtime bytes, scheduler execution, reward creation, DAO writes, and socket dispatch remain disabled.
