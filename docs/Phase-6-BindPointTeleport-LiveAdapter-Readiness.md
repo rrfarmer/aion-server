@@ -667,3 +667,7 @@ A disabled Java config shell for unusual-storage artifact capture is now registe
 ## Update After UOW-1354
 
 `PetFeedUnusualStorageArtifactCapture` now consumes the registered disabled config for its enabled flag, pending-context bound, scenario name, and output directory while still avoiding observer installation, file output, and byte copying. Live bind-point fanout remains blocked because Java compile validation is unavailable locally, no writer or item/blob decoded fields exist, and the C# live adapter still does not hydrate, mutate, dispatch, or runtime-compare unusual storage.
+
+## Update After UOW-1355
+
+A read-only item-blob decoded-entry audit now maps Java `ItemInfoBlob.getFullBlob` entry order/ids and aligns them with the existing C# known serializer gaps for future unusual-storage warehouse-add artifacts. Live bind-point fanout remains blocked because no Java artifact writer, item-blob decoder, warehouse-add byte comparison, raw byte retention, or C# live adapter hydration/mutation/dispatch/runtime comparison exists.
