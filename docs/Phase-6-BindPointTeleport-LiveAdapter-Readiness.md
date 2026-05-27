@@ -471,3 +471,7 @@ The checked-in pet static data was structurally audited: 218 pet templates, max 
 ## Update After UOW-1305
 
 `SmPet.LoadPets(...)` now exposes the Java `SM_PET(Collection<PetCommonData>)` packet shape from supplied ordered pet-data snapshots. Live bind-point fanout remains blocked because live pet-list hydration/DAO reads, Java collection-order confirmation, feed/doping/timing projection, Java runtime vectors, full `CM_PET`, and socket dispatch remain unported.
+
+## Update After UOW-1306
+
+`CmPet` now parses Java opcode `22` metadata for `ADOPT`, `SURRENDER`, `SPAWN`, `DISMISS`, `FOOD`, `RENAME`, and `MOOD`, and the client packet factory registers it as in-game only. Live bind-point fanout remains blocked because `CM_PET.runImpl` side effects, `EXTEND_EXPIRATION`, pet service/adoption/spawn/mood runtime behavior, live pet common-data hydration, Java runtime vectors, and socket dispatch remain unported.
