@@ -2,7 +2,7 @@
 
 Date: 2026-05-27
 Unit of Work: UOW-1392
-Status: Read-only cleanup/seal static-data ownership audit complete. UOW-1393 implemented the C# static-data projection; UOW-1394 through UOW-1397 added serializer, warehouse-add, pet-feed metadata, and inventory add/update wrapper plumbing for the covered paths.
+Status: Read-only cleanup/seal static-data ownership audit complete. UOW-1393 implemented the C# static-data projection; UOW-1394 through UOW-1398 added serializer, warehouse-add, pet-feed metadata, inventory add/update, and mail attached-item wrapper plumbing for the covered paths.
 
 ## Scope
 
@@ -46,7 +46,7 @@ Add a small C# dataholder rather than deriving this flag from `ItemTemplateSumma
 
 ## Implementation Follow-Up
 
-UOW-1393 added `ItemRestrictionCleanupTable`, `ItemRestrictionCleanupSummary`, `StaticData.ItemRestrictionCleanups`, loader parsing, and focused tests for Java defaults plus the `awh == 0 || lwh == 0` predicate. UOW-1394 then added an explicit cleanup/seal flag input to the item-blob serializer and wired enter-world inventory/warehouse login packet construction through the cleanup table. UOW-1395 added explicit `SmWarehouseAddItem` flag input and packet coverage. UOW-1396 passed precomputed cleanup/seal flag context through pet-feed warehouse-add metadata paths. UOW-1397 added explicit `SmInventoryAddItem` and `SmInventoryUpdateItem` wrapper flag input plus focused packet coverage. Mail attachment paths still need focused flag plumbing.
+UOW-1393 added `ItemRestrictionCleanupTable`, `ItemRestrictionCleanupSummary`, `StaticData.ItemRestrictionCleanups`, loader parsing, and focused tests for Java defaults plus the `awh == 0 || lwh == 0` predicate. UOW-1394 then added an explicit cleanup/seal flag input to the item-blob serializer and wired enter-world inventory/warehouse login packet construction through the cleanup table. UOW-1395 added explicit `SmWarehouseAddItem` flag input and packet coverage. UOW-1396 passed precomputed cleanup/seal flag context through pet-feed warehouse-add metadata paths. UOW-1397 added explicit `SmInventoryAddItem` and `SmInventoryUpdateItem` wrapper flag input plus focused packet coverage. UOW-1398 added explicit `SmMailService` read-letter attached-item flag input plus focused packet coverage. Runtime callers still need flag source plumbing.
 
 ## Suggested Implementation Sequence
 
@@ -54,7 +54,7 @@ UOW-1393 added `ItemRestrictionCleanupTable`, `ItemRestrictionCleanupSummary`, `
 2. Add `StaticData.ItemRestrictionCleanups` and wire the loader.
 3. Add focused tests proving missing `awh`/`lwh` default to `-1`, either `awh="0"` or `lwh="0"` triggers the flag, and `trade`/`sell`/`wh` alone do not trigger the general-info flag.
 4. Extend remaining packet call sites to pass the explicit flag when a dataholder or precomputed context is available.
-5. Add focused mail attachment general-info blob tests for item id `188053996` expecting cleanup/seal field `3`.
+5. Wire runtime callers to compute/pass the explicit flag from `StaticData.ItemRestrictionCleanups` where that dependency is available.
 
 ## Migration Parity Table - UOW-1392
 
