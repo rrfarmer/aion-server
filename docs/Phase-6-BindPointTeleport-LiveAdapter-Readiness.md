@@ -483,3 +483,7 @@ The checked-in pet static data was structurally audited: 218 pet templates, max 
 ## Update After UOW-1308
 
 `SmPet` now supports the Java `SPECIAL_FUNCTION` autoloot/autosell activation packet shapes and autoloot NPC notification shape from supplied snapshots, plus a C# `PetSpecialFunction` id resolver. Live bind-point fanout remains blocked because live pet service mutation, pet common-data state, NPC loot state, autosell item filtering, the dedicated doping packet branch, Java runtime vectors, and socket dispatch remain unported.
+
+## Update After UOW-1309
+
+`SmPet` now supports the Java dedicated doping `SPECIAL_FUNCTION` constructor shape for dope actions add, remove, switch, and use from supplied snapshots. Live bind-point fanout remains blocked because live `PetService.useDoping`, pet doping bag state, inventory lookup/mutation, cooldown/buff behavior, persistence, Java runtime vectors, and socket dispatch remain unported.
