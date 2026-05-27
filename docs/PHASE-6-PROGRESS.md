@@ -61555,6 +61555,69 @@ Next recommended unit of work:
 
 ---
 
+### Session 1474 (May 27, 2026)
+- Continued after UOW-1473 with online kisk removal packet/order planning.
+- Re-read Java `KiskService.removeKisk` and the existing C# removal cleanup planner/runtime cleanup services.
+- Added `CreatePlanIncludesCreatorMemberBindPointResetLikeJavaRemoveKisk` to `PlayerKiskRemovalCleanupServiceTests`.
+- The test covers the creator-as-member case: Java sends the creator a final `SM_KISK_UPDATE`, then iterates current members to send obelisk bind-point info and clear the kisk reference. The C# plan now has regression coverage that the creator receives both cleanup intents when present in the removed kisk's member ids.
+- Kept production code unchanged; the existing planner already emitted both intents.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --filter "FullyQualifiedName~PlayerKiskRemovalCleanupServiceTests"`.
+  - Result: passed 3 tests.
+
+#### Parallel Work Discovery - Session 1474
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Creator-as-member removal cleanup | `KiskService.removeKisk`, `Kisk.getCurrentMemberList` | `PlayerKiskRemovalCleanupServiceTests.cs` | Unit Test | No | Low | Compact planner regression in one test file. |
+| B | Runtime cleanup packet ordering | `PacketSendUtility.sendPacket`, `TeleportService.sendKiskBindPoint`, `PlayerController.showResurrectionOptions` | runtime cleanup / workflow tests | Later | Medium | Needs fake registry ordering assertions. |
+| C | Offline login restore socket order | `KiskService.onLogin`, `PlayerEnterWorldService`, `TeleportService.sendKiskBindPoint` | enter-world connection tests | Later | Medium | Separate fixture-heavy login path. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add creator-as-member kisk removal cleanup regression | Unit Test / Documentation | `PlayerKiskRemovalCleanupServiceTests.cs`, progress/handoff docs | production cleanup services, shared connection fixtures | Java `KiskService.removeKisk` audit | Passing regression proving the removed kisk creator can receive both final kisk update and bind-point reset cleanup intents. |
+
+No subagent was spawned because the selected unit was a narrow single-test change.
+
+#### Migration Parity Table - Session 1474
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.KiskService` | `PlayerKiskRemovalCleanupService` / `PlayerKiskRemovalRuntimeCleanupService` | Service / Cleanup Planner | Partial | Unit Tested | Partial Parity | Test covers `removeKisk` creator-as-member cleanup intent: final creator update plus current-member bind-point reset/clear intent. Runtime send order is implemented but not newly asserted here. |
+| `com.aionemu.gameserver.model.gameobjects.Kisk` | `PlayerKiskRuntimeState` / `PlayerKiskDespawnResult` | Runtime State / World Object | Partial | Unit Tested | Partial Parity | Test uses `CurrentMemberIds` captured into despawn result, matching Java `kisk.getCurrentMemberList()` iteration source. Java synchronized set/list behavior and live world object state remain broader. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Player.BoundKiskObjectId` / `PendingKiskBindRequest` | Model / Bind State | Partial | Unit Tested | Needs Verification | Test asserts creator member bound state is included in clear/bind-point-reset intents. Java clears direct `Player.kisk` references; C# clears object ids during runtime cleanup. |
+| `com.aionemu.gameserver.services.teleport.TeleportService` | `SmBindPointInfo` creation inside `PlayerKiskRemovalRuntimeCleanupService` | Service / Packet Adapter | Partial | Unit Tested | Needs Verification | Planner coverage proves the reset recipient; actual bind-point packet payload/order and Java runtime output are not compared in this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_KISK_UPDATE` | `SmKiskUpdate` | Packet | Partial | Regression Tested | Needs Verification | Creator update intent is covered by planner field; no new serialization or live socket send assertion. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlanIncludesCreatorMemberBindPointResetLikeJavaRemoveKisk` | Unit / cleanup planner | `KiskService.removeKisk` | A removed-kisk creator who is also a current member gets creator update, bound-kisk clear, and bind-point reset cleanup intents. | Deterministic planner regression from reviewed Java source. | Does not execute socket sends or compare Java packet output/order. |
+| Existing `PlayerKiskRemovalCleanupServiceTests` | Existing Unit | `KiskService.removeKisk` | Existing creator update, member bind-point reset, dead-member revive refresh, pending-request clear, and no-removed-kisk tests remained stable. | Focused 3-test suite passed. | C# includes defensive bound-object-id cleanup for online players not in Java's current member list. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Runtime cleanup packet order should still be asserted at the fake connection registry level: final creator `SmKiskUpdate` before creator/member bind-point reset and `SmDie` refresh.
+- C# defensive cleanup includes players bound by object id even if they are absent from removed kisk member ids; this is a deliberate safety behavior but remains an intentional difference candidate until live state is verified.
+- Java clears direct `Player.kisk` references; C# clears `BoundKiskObjectId` and pending request state.
+- Live socket packet ordering for offline login restore and duplicate bind remains broader.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped artifact rows in this unit
+- Total artifacts ported: 0 production artifacts in this unit; 1 cleanup planner regression added
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 5 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, live cleanup socket order comparison, direct Java object-reference semantics, defensive C# bound-id cleanup difference
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Add runtime cleanup packet-order coverage for kisk removal using a fake connection registry, or continue offline login restore packet-order audit if connection fixture work becomes too broad.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
