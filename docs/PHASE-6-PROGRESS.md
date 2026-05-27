@@ -61369,6 +61369,67 @@ Next recommended unit of work:
 
 ---
 
+### Session 1471 (May 27, 2026)
+- Continued after UOW-1470 with kisk bind/member cleanup review.
+- Audited Java `KiskService.removeKisk`, which removes offline bind entries for `kisk.getCurrentMemberIds()` before clearing online members and sending bind-point/death-option updates.
+- Added `TryRemoveKiskRemovesOfflineBindingsForCurrentMembersOnlyLikeJavaRemoveKisk` to `PlayerKiskRegistryTests`.
+- The test registers offline bindings for two current members and one stale nonmember, removes the kisk, and verifies current-member offline bindings are removed while the stale nonmember binding expires on restore after the kisk is gone.
+- Kept production code unchanged; the registry already matched the audited Java member-id cleanup behavior.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --filter "FullyQualifiedName~PlayerKiskRegistryTests"`.
+  - Result: passed 6 tests.
+
+#### Parallel Work Discovery - Session 1471
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Offline bind cleanup for removed kisk members | `KiskService.removeKisk`, `Kisk.getCurrentMemberIds` | `PlayerKiskRegistryTests.cs` | Unit Test | No | Low | Compact registry regression in one test file. |
+| B | Online member cleanup packet/fanout review | `KiskService.removeKisk`, `TeleportService.sendKiskBindPoint`, `PlayerController.showResurrectionOptions` | runtime cleanup tests | Later | Medium | Broader packet/order coverage, separate from registry state. |
+| C | Kisk bind add/remove fanout | `Kisk.addPlayer`, `Kisk.removePlayer`, `broadcastKiskUpdate` | kisk dialog/update tests | Later | Medium | Separate workstream. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add offline bind cleanup registry regression | Unit Test / Documentation | `PlayerKiskRegistryTests.cs`, progress/handoff docs | production registry, runtime cleanup service, revive workflow fixture | Java `KiskService.removeKisk` audit | Passing regression proving removed kisk current-member offline bindings are cleared. |
+
+No subagent was spawned because the selected unit was a narrow single-test change.
+
+#### Migration Parity Table - Session 1471
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.KiskService` | `PlayerKiskRegistry.TryRemoveKisk` | Service / Registry | Partial | Unit Tested | Partial Parity | Test covers `removeKisk` offline-bind cleanup for current member ids. C# stale nonmember offline bindings expire on later restore because the removed kisk no longer resolves; Java's map would only remove entries for current members. |
+| `com.aionemu.gameserver.model.gameobjects.Kisk` | `PlayerKiskRuntimeState` | Runtime State / World Object | Partial | Unit Tested | Partial Parity | Test uses current member ids as the source of offline-bind cleanup, matching Java `kisk.getCurrentMemberIds()`. Other kisk behaviors such as broadcast update, use-mask binding, and live packets remain broader. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Player.BoundKiskObjectId` / `PlayerKiskOfflineBindingRestoreResult` | Model / Bind State | Partial | Unit Tested | Needs Verification | Offline restore state is modeled by object ids rather than Java direct `Kisk` references. Live login/logout persistence and packet fanout remain separate. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `TryRemoveKiskRemovesOfflineBindingsForCurrentMembersOnlyLikeJavaRemoveKisk` | Unit / registry | `KiskService.removeKisk`, `Kisk.getCurrentMemberIds` | Removing a kisk clears offline bindings for current member ids and leaves a stale nonmember binding to expire when restored. | Deterministic registry state regression based on Java source audit. | Does not execute online packet fanout or Java runtime comparison. |
+| Existing `PlayerKiskRegistryTests` | Existing Unit | `KiskService.regKisk`, `haveKisk`, `onLogin`, `onLogout`, `Kisk.resurrectionUsed` slices | Existing owner lookup, runtime state, offline restore, and removed-kisk restore tests remained stable. | Focused 6-test suite passed. | Full Java `Kisk` object reference behavior remains broader. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Online member bind-point reset and death-option packet fanout are covered elsewhere but not by this registry test.
+- C# offline binding uses kisk object ids instead of Java direct `Kisk` references.
+- Kisk `addPlayer` / `removePlayer` broadcast update nuances remain broader.
+- Live player aggro mutation remains blocked by the missing C# player-owned aggro list.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped artifact rows in this unit
+- Total artifacts ported: 0 production artifacts in this unit; 1 registry regression added
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 3 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, full live kisk packet fanout, direct Java object-reference semantics, live player aggro mutation
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Continue kisk bind/member cleanup with online member packet/order fanout review, or move to kisk add/remove member update fanout.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
