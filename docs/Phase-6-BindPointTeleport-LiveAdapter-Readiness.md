@@ -675,3 +675,7 @@ A read-only item-blob decoded-entry audit now maps Java `ItemInfoBlob.getFullBlo
 ## Update After UOW-1356
 
 The disabled Java capture registry now carries a no-output construction-time `ItemInfoBlob` metadata snapshot with total blob payload size, ordered entry names, entry ids, and entry payload sizes. Live bind-point fanout remains blocked because encode-time item-blob metadata, artifact writing, byte copying, Java runtime artifacts, warehouse-add byte comparison, C# serializer gap closure, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.
+
+## Update After UOW-1357
+
+`SM_WAREHOUSE_ADD_ITEM` now exposes a passive first-item `ItemInfoBlob` metadata projection, and the disabled observer-side packet snapshot can recompute warehouse-add entry metadata when serialized packets are observed. Live bind-point fanout remains blocked because this is still metadata-only: no raw/canonical bytes, payload-field decoder, artifact writer, Java runtime artifacts, C# serializer gap closure, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.

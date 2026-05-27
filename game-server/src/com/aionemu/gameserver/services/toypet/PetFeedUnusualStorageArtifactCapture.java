@@ -219,7 +219,12 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		}
 
 		private static ItemBlobSnapshot from(Player player, Item item) {
-			ItemInfoBlob blob = ItemInfoBlob.getFullBlob(player, item);
+			return from(ItemInfoBlob.getFullBlob(player, item));
+		}
+
+		private static ItemBlobSnapshot from(ItemInfoBlob blob) {
+			if (blob == null)
+				return null;
 			List<ItemBlobEntrySnapshot> entries = new ArrayList<>();
 			for (ItemBlobEntryMetadata metadata : blob.getBlobEntryMetadata())
 				entries.add(new ItemBlobEntrySnapshot(metadata.getEntryName(), metadata.getEntryId(), metadata.getPayloadSize()));
@@ -247,20 +252,26 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private final int clearFrameLength;
 		private final int encodedOpcode;
 		private final int remainingBytesAtObserver;
+		private final ItemBlobSnapshot observedItemBlob;
 
 		private PacketSnapshot(int packetIndex, String packetClassName, int clearFrameLength, int encodedOpcode,
-			int remainingBytesAtObserver) {
+			int remainingBytesAtObserver, ItemBlobSnapshot observedItemBlob) {
 			this.packetIndex = packetIndex;
 			this.packetClassName = packetClassName;
 			this.clearFrameLength = clearFrameLength;
 			this.encodedOpcode = encodedOpcode;
 			this.remainingBytesAtObserver = remainingBytesAtObserver;
+			this.observedItemBlob = observedItemBlob;
 		}
 
 		private static PacketSnapshot from(int packetIndex, AionServerPacket packet, ByteBuffer clearFrame) {
 			int clearFrameLength = clearFrame.limit() >= 2 ? clearFrame.getShort(0) & 0xFFFF : 0;
 			int encodedOpcode = clearFrame.limit() >= 4 ? clearFrame.getShort(2) & 0xFFFF : 0;
-			return new PacketSnapshot(packetIndex, packet.getClass().getName(), clearFrameLength, encodedOpcode, clearFrame.remaining());
+			ItemBlobSnapshot observedItemBlob = null;
+			if (packet instanceof SM_WAREHOUSE_ADD_ITEM)
+				observedItemBlob = ItemBlobSnapshot.from(((SM_WAREHOUSE_ADD_ITEM) packet).getFirstItemInfoBlob());
+			return new PacketSnapshot(packetIndex, packet.getClass().getName(), clearFrameLength, encodedOpcode, clearFrame.remaining(),
+				observedItemBlob);
 		}
 	}
 }
