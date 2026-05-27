@@ -68,6 +68,22 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		return observer;
 	}
 
+	public static void installIfEnabled() {
+		if (!isEnabled())
+			return;
+		// Java parity artifact seam: future GameServer startup may install this after Config.load()
+		// and before NIO startup. This method is intentionally not called by production startup yet.
+		AionServerPacket.setCaptureObserver(observer());
+		startWriterWorker();
+	}
+
+	public static void shutdown() {
+		// Java parity artifact seam: future ShutdownHook wiring should reset the global packet observer
+		// before NIO shutdown can emit disconnect/save packet fanout.
+		AionServerPacket.setCaptureObserver(null);
+		stopWriterWorker();
+	}
+
 	public static void registerStorageUpdate(Player player, StorageType storageType, Item item, ItemAddType addType) {
 		if (!isEnabled() || player == null || item == null || addType != ItemAddType.ALL_SLOT || !isUnusualStorage(storageType))
 			return;

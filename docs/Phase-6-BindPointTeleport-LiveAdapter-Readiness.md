@@ -711,3 +711,7 @@ The disabled Java capture registry now has private writer worker lifecycle hooks
 ## Update After UOW-1365
 
 A read-only Java lifecycle audit now identifies the future disabled activation boundary for unusual-storage artifact capture: config is loaded before NIO startup in `GameServer`, `AionServerPacket` exposes a process-wide clear-byte observer after length stamping and before encryption, and shutdown should reset the observer/stop the worker before or at the beginning of NIO shutdown. Live bind-point fanout remains blocked because no public capture lifecycle API, observer install, worker start/stop wiring, JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
+
+## Update After UOW-1366
+
+`PetFeedUnusualStorageArtifactCapture` now has a disabled public lifecycle API shell: `installIfEnabled()` is config-gated and can install the existing packet observer/start the private worker only when explicitly called in a future unit, while `shutdown()` resets the global observer and stops the worker. The API is not wired into `GameServer` or `ShutdownHook`, and `ENABLED` remains false by default. Live bind-point fanout remains blocked because no lifecycle caller, JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
