@@ -2,7 +2,7 @@
 
 Date: 2026-05-27
 Unit of Work: UOW-1392
-Status: Read-only cleanup/seal static-data ownership audit complete. No serializer code changed.
+Status: Read-only cleanup/seal static-data ownership audit complete. UOW-1393 subsequently implemented the C# static-data projection; serializer plumbing remains pending.
 
 ## Scope
 
@@ -43,6 +43,10 @@ Add a small C# dataholder rather than deriving this flag from `ItemTemplateSumma
 - `ItemRestrictionCleanupSummary`: keep `ItemId`, `Trade`, `Sell`, `Warehouse`, `AccountWarehouse`, and `LegionWarehouse`.
 - `StaticData.ItemRestrictionCleanups`: populate it in `LoadFromCacheAsync` beside existing item-related tables.
 - Packet boundary: pass an explicit `generalInfoWarehouseRestrictionFlag` or bool into `WriteItemInfoBlob` / `WriteGeneralInfoBlob`; keep packet serialization deterministic and avoid global static-data reads inside encoding.
+
+## Implementation Follow-Up
+
+UOW-1393 added `ItemRestrictionCleanupTable`, `ItemRestrictionCleanupSummary`, `StaticData.ItemRestrictionCleanups`, loader parsing, and focused tests for Java defaults plus the `awh == 0 || lwh == 0` predicate. The packet boundary recommendation is still pending: `WriteGeneralInfoBlob` continues to write zero until a future unit passes an explicit cleanup/seal flag.
 
 ## Suggested Implementation Sequence
 
