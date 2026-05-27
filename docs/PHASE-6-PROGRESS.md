@@ -61179,6 +61179,70 @@ Next recommended unit of work:
 
 ---
 
+### Session 1468 (May 27, 2026)
+- Continued after UOW-1467 by composing the new player aggro clear plan into a non-live revive cleanup order.
+- Added `PlayerReviveCleanupPlanService`.
+- Added `PlayerReviveCleanupPlanStep` and `PlayerReviveCleanupPlan`.
+- Added `PlayerReviveCleanupPlanServiceTests`.
+- The new test asserts the Java revive cleanup order: clear known player targets, apply HP/MP/DP/resurrection state, clear player aggro, call on-before-spawn, send group/alliance movement updates, then broadcast resurrect emotion.
+- Kept live `GameServerConnection.HandleReviveAsync` unchanged.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --filter "FullyQualifiedName~PlayerReviveCleanupPlanServiceTests"`.
+  - Result: passed 1 test.
+
+#### Parallel Work Discovery - Session 1468
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Non-live revive cleanup composition | `PlayerReviveService.revive`, `PlayerAggroList`, `AggroList.clear` | `PlayerReviveCleanupPlanService.cs`, `PlayerReviveCleanupPlanServiceTests.cs` | Planner / Unit Test | No | Medium | New composition service depends on UOW-1467 planner and should stay atomic. |
+| B | Live revive adapter | `PlayerReviveService.revive` | `GameServerConnection.cs`, revive workflow tests | Later | High | Needs explicit decision because C# still has no live player aggro list. |
+| C | Kisk bind/member cleanup review | `KiskService.removeKisk` | kisk cleanup tests/docs | Later | Medium | Separate lane. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live revive cleanup composition planner | Planner / Unit Test / Documentation | `PlayerReviveCleanupPlanService.cs`, `PlayerReviveCleanupPlanServiceTests.cs`, progress/handoff docs | live revive wiring, combat mutation, socket fixture | UOW-1467 player aggro cleanup planner | Passing composition test proving aggro clear placement in Java revive order. |
+
+No subagent was spawned because the selected unit was a compact new service/test pair.
+
+#### Migration Parity Table - Session 1468
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerReviveService` | `PlayerReviveCleanupPlanService` / `PlayerReviveCleanupPlan` | Planner / Service Boundary | Partial | Unit Tested | Partial Parity | Non-live planner captures revive cleanup ordering around target cleanup, resource/resurrection state, aggro clear, on-before-spawn, movement updates, and resurrect emotion. Live revive execution is unchanged. |
+| `com.aionemu.gameserver.controllers.attack.AggroList` | `PlayerAggroClearPlan` within `PlayerReviveCleanupPlan` | Planner / Aggro | Partial | Unit Tested | Partial Parity | Composition includes `AggroList.clear` after restore and before spawn, including clear-all metadata. No live aggro mutation exists yet. |
+| `com.aionemu.gameserver.controllers.attack.PlayerAggroList` | `PlayerAggroCleanupPlanService` | Planner / Aggro | Partial | Unit Tested | Partial Parity | Reuses UOW-1467 player-owned aggro planner; still non-live and lacks damage/target selection. |
+| `com.aionemu.gameserver.controllers.PlayerController` | `PlayerReviveCleanupPlanStep.OnBeforeSpawn` | Controller Boundary | Partial | Unit Tested | Needs Verification | Step ordering records Java `onBeforeSpawn`; C# live revive currently applies state restoration but broader controller spawn lifecycle remains queued. |
+| `com.aionemu.gameserver.services.player.PlayerGroupService` / `PlayerAllianceService` | `PlayerReviveCleanupPlanStep.GroupAllianceMovementUpdate` | Team Fanout Boundary | Partial | Unit Tested | Needs Verification | Step ordering records Java movement update placement. Existing workflow tests cover current packet order, but this planner does not execute fanout. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_EMOTION` | `PlayerReviveCleanupPlanStep.BroadcastResurrectEmotion` | Packet Boundary | Partial | Unit Tested | Needs Verification | Planner records resurrect emotion after movement updates. Packet serialization remains covered elsewhere; Java runtime comparison remains blocked. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateKiskReviveCleanupPlan_ComposesAggroClearInJavaReviveOrder` | Unit / planner | `PlayerReviveService.kiskRevive`, `PlayerReviveService.revive`, `AggroList.clear` | Kisk revive cleanup plan places aggro clear after restore and before on-before-spawn, preserving the overall Java revive cleanup order. | Deterministic step-order assertion plus embedded aggro clear plan assertion. | Non-live planner only; no live combat aggro list or Java runtime comparison. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- C# live revive path does not yet call the non-live cleanup plan.
+- C# still lacks a live player-owned aggro list to mutate.
+- Broader Java revive side effects remain queued: soul sickness, protection tasks, full teleport despawn/spawn ownership, instance/legion callbacks, and exact socket ordering.
+- Kisk bind/member cleanup and aggro cleanup are still separate lanes.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped artifact rows in this unit
+- Total artifacts ported: 1 non-live planner service plus DTOs
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 6 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, live player aggro mutation, live revive adapter, broader revive/teleport side effects
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Decide the next smallest live-safe step: either add a disabled revive cleanup adapter that exposes `PlayerReviveCleanupPlan` from `HandleReviveAsync` tests without mutating combat state, or return to kisk bind/member cleanup review.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
