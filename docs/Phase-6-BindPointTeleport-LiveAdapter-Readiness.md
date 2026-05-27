@@ -527,3 +527,7 @@ A standalone C# `PetDopingBag` helper now preserves Java food/drink defaults, dy
 ## Update After UOW-1319
 
 A non-live C# `PetFeedCalculator` helper now preserves Java feed-point table math, five-level item buckets, normal feed progress mutation, strict threshold switching, loved-feed full transition, and loved-limit no-op behavior. Live bind-point fanout remains blocked because reward selection, `PetFlavour.processFeedResult`, static data full-count generation, item-template lookup, random reward choice, live feed service mutation, DAO writes, scheduler behavior, Java runtime comparison, and socket dispatch remain disabled.
+
+## Update After UOW-1320
+
+`PetFeedCalculator` now has a non-live reward-selection helper with supplied point tables, reward item levels, and loved-reward selector injection, preserving Java guard/null behavior, normal reward threshold indexing, rounding clamps, loved singleton short-circuit, and highest-allowed-level filtering. Live bind-point fanout remains blocked because static feed XML full-count loading, `PetFlavour.processFeedResult`, food group lookup, live item-template lookup, Java RNG runtime comparison, live feed mutation, DAO writes, scheduler behavior, Java runtime comparison, and socket dispatch remain disabled.
