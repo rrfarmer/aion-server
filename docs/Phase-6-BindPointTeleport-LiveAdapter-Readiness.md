@@ -423,3 +423,7 @@ Population diagnostics can now carry optional non-sending dependent pet packet-c
 ## Update After UOW-1293
 
 A disabled/non-live pet spawn snapshot provider shape now validates the Java-required `SM_PET(Pet)` spawn fields before producing `SmPetSpawnSnapshot` and preserves `Player.isInFlyingState()` metadata for fly-start planning. Live bind-point fanout remains blocked because the provider consumes supplied metadata rather than active pet/common-data/template/move-controller state, full pet packet coverage is incomplete, socket dispatch is disabled, and no Java runtime packet capture has been performed.
+
+## Update After UOW-1294
+
+Population pet diagnostics can now consume optional provider inputs, count provider results/statuses, and surface provider blockers such as missing move-controller targets alongside blocked pet packet construction. Live bind-point fanout remains blocked because provider inputs are still supplied metadata, live pet/common-data/template/move-controller hydration is missing, full pet packet coverage is incomplete, socket dispatch is disabled, and no Java runtime packet capture has been performed.
