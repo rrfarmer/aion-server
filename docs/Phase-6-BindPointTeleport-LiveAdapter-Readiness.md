@@ -415,3 +415,7 @@ Minimal C# packet prerequisites now exist for known-list pet visibility: `SmPet`
 ## Update After UOW-1291
 
 Pet visibility descriptors can now be bridged to non-sending packet-construction metadata for `SmPet` spawn/dismiss and `SmPetEmote` fly-start using supplied snapshots. Live bind-point fanout remains blocked because the bridge is not attached to population/operation diagnostics, live pet/common-data hydration is missing, full pet packet coverage is incomplete, socket dispatch is disabled, and no Java runtime packet capture has been performed.
+
+## Update After UOW-1292
+
+Population diagnostics can now carry optional non-sending dependent pet packet-construction metadata and count constructed or blocked pet packets from supplied pet spawn snapshots. Live bind-point fanout remains blocked because active pet/common-data hydration is missing, full pet packet coverage is incomplete, live known-list pet retry execution and socket dispatch are disabled, and no Java runtime packet capture has been performed.
