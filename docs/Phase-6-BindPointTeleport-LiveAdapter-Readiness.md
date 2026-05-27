@@ -783,3 +783,7 @@ A read-only fastjson activation audit now confirms the schema DTO shell contains
 ## Update After UOW-1383
 
 A read-only runtime activation plan now documents the local Java config overrides, rejected-food pet-feed scenario, output filename shape, and required artifact field checks for unusual-storage artifact generation. The first Java artifact must show non-empty packet/body/blob hex and `itemBlob.packetBodyVerification=matched` before C# reader byte-comparison work starts. Live bind-point fanout remains blocked because Java compile/runtime validation, runtime artifact generation, C# artifact reader/schema validation, warehouse-add byte comparison, runtime lifecycle validation, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.
+
+## Update After UOW-1384
+
+The guarded C# unusual-storage artifact reader tests now understand the current Java schema-v1 shape: full Java packet class names, blob hex with the two-byte Java size prefix, `itemBlob.packetBodyVerification`, packet body hex, and canonical hex equal to body hex for this artifact family. The focused reader tests pass with a synthetic artifact, while generated Java runtime artifacts and warehouse-add byte comparison remain blocked. Live bind-point fanout remains blocked because Java compile/runtime validation, runtime artifact generation, warehouse-add byte comparison, item-blob serializer gap closure, runtime lifecycle validation, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.
