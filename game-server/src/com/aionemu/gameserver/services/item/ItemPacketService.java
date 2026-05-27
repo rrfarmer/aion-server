@@ -8,6 +8,7 @@ import com.aionemu.gameserver.model.gameobjects.player.Player;
 import com.aionemu.gameserver.model.items.storage.StorageType;
 import com.aionemu.gameserver.network.aion.serverpackets.*;
 import com.aionemu.gameserver.questEngine.model.QuestStatus;
+import com.aionemu.gameserver.services.toypet.PetFeedUnusualStorageArtifactCapture;
 import com.aionemu.gameserver.utils.PacketSendUtility;
 
 /**
@@ -212,6 +213,7 @@ public class ItemPacketService {
 	 */
 	@SuppressWarnings("fallthrough")
 	public static void sendStorageUpdatePacket(Player player, StorageType storageType, Item item, ItemAddType addType) {
+		PetFeedUnusualStorageArtifactCapture.registerStorageUpdate(player, storageType, item, addType);
 		switch (storageType) {
 			case CUBE:
 				PacketSendUtility.sendPacket(player, new SM_INVENTORY_ADD_ITEM(Collections.singletonList(item), player, addType));
