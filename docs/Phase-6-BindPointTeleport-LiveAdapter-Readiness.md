@@ -691,3 +691,7 @@ A read-only small blob payload audit now maps Java conditioning, premium-option,
 ## Update After UOW-1360
 
 The disabled Java capture snapshot now has schema-only payload DTOs for audited item-blob fields, covering general, composite, enchant, conditioning, premium-option, polish, and wrap payload inputs. Live bind-point fanout remains blocked because no JSON artifact writer, raw/canonical bytes, C# artifact reader/schema validation, C# serializer gap closure, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
+
+## Update After UOW-1361
+
+A read-only fastjson2 writer audit now documents deterministic artifact output prerequisites: dedicated DTOs, stable field ordering, explicit UTF-8, safe filenames, atomic output, and bounded non-blocking writer queue behavior. Live bind-point fanout remains blocked because no writer queue, JSON output, raw/canonical bytes, C# artifact reader/schema validation, C# serializer gap closure, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
