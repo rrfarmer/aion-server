@@ -34,6 +34,9 @@ public final class PetFeedUnusualStorageArtifactCapture {
 
 	private static final long MAX_PENDING_CONTEXT_AGE_MILLIS = 30000;
 	private static final ConcurrentHashMap<Integer, Deque<CaptureContext>> pendingContexts = new ConcurrentHashMap<>();
+	private static final Object artifactQueueLock = new Object();
+	private static final Deque<ArtifactSnapshot> queuedArtifacts = new ArrayDeque<>();
+	private static long droppedArtifactCount;
 	private static final ServerPacketCaptureObserver observer = new ServerPacketCaptureObserver() {
 
 		@Override
@@ -102,6 +105,10 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		return Math.max(1, PetFeedUnusualStorageArtifactCaptureConfig.MAX_PENDING_CONTEXTS_PER_PLAYER);
 	}
 
+	private static int getMaxQueuedArtifacts() {
+		return Math.max(1, PetFeedUnusualStorageArtifactCaptureConfig.MAX_QUEUED_ARTIFACTS);
+	}
+
 	private static void observePacketSerialized(AionConnection con, AionServerPacket packet, ByteBuffer clearFrame) {
 		if (!isEnabled() || con == null || packet == null || clearFrame == null)
 			return;
@@ -131,6 +138,15 @@ public final class PetFeedUnusualStorageArtifactCapture {
 	}
 
 	private static void onSnapshotReady(ArtifactSnapshot snapshot) {
+		if (snapshot == null)
+			return;
+		synchronized (artifactQueueLock) {
+			if (queuedArtifacts.size() >= getMaxQueuedArtifacts()) {
+				droppedArtifactCount++;
+				return;
+			}
+			queuedArtifacts.addLast(snapshot);
+		}
 		// Future artifact writer boundary. Intentionally no-op while capture remains disabled.
 	}
 

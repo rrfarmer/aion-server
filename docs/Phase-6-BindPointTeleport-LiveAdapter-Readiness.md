@@ -695,3 +695,7 @@ The disabled Java capture snapshot now has schema-only payload DTOs for audited 
 ## Update After UOW-1361
 
 A read-only fastjson2 writer audit now documents deterministic artifact output prerequisites: dedicated DTOs, stable field ordering, explicit UTF-8, safe filenames, atomic output, and bounded non-blocking writer queue behavior. Live bind-point fanout remains blocked because no writer queue, JSON output, raw/canonical bytes, C# artifact reader/schema validation, C# serializer gap closure, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
+
+## Update After UOW-1362
+
+The disabled Java capture registry now has a bounded metadata-only writer queue shell using the configured max queued artifact bound and newest-drop tracking. Live bind-point fanout remains blocked because no writer worker, JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, C# serializer gap closure, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
