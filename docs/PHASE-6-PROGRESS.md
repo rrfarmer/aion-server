@@ -62075,6 +62075,72 @@ Next recommended unit of work:
 
 ---
 
+### Session 1482 (May 27, 2026)
+- Continued after UOW-1481 with the recommended non-live `PlayerController.startProtectionActiveTask` / `stopProtectionActiveTask` planner slice.
+- Re-audited Java `PlayerController.startProtectionActiveTask`, `PlayerController.stopProtectionActiveTask`, `TaskId.PROTECTION_ACTIVE`, `SM_PLAYER_STATE`, and current C# protection/visual state helpers.
+- Added `PlayerProtectionActiveTaskPlanService` to model Java protection start and stop side-effect metadata without live scheduling.
+- The start plan records: no-op when already blinking; otherwise set `BLINKING`, cancel casts on the player, remove the player from targets, broadcast `SM_PLAYER_STATE`, schedule `TaskId.PROTECTION_ACTIVE`, and store the task with a 60000 ms delay.
+- The stop plan records Java's unconditional task-cancel attempt and spawned-only visual-state clear, `SM_PLAYER_STATE` fanout, and AI move notification.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --no-restore --filter "FullyQualifiedName~PlayerProtectionActiveTaskPlanServiceTests|FullyQualifiedName~PlayerStateTests|FullyQualifiedName~GameServerConnectionKiskReviveWorkflowTests"`.
+  - Result: passed 38 tests.
+
+#### Parallel Work Discovery - Session 1482
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Protection active task planner | `PlayerController.startProtectionActiveTask`, `PlayerController.stopProtectionActiveTask`, `TaskId.PROTECTION_ACTIVE`, `SM_PLAYER_STATE` | new planner service/test | Service / Test Creation | Yes in theory | Low | New files only, but docs/commit stay orchestrator-owned. |
+| B | Death-side flying flag transition | `PlayerController.onDie`, `CreatureController.onDie` | future player death model/tests | Later | Medium | Requires auditing death bridge and packet fanout; separate from planner. |
+| C | Inventory cleanup-seal failure triage | inventory item-use tests/services | Separate existing tests/services | Later | Medium | Independent from revive/protection but a broader full-suite blocker. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live protection active task planner | Service / Unit Test / Documentation | `PlayerProtectionActiveTaskPlanService.cs`, `PlayerProtectionActiveTaskPlanServiceTests.cs`, progress/handoff docs | production scheduler/connection fanout, existing shared fixtures | Java protection task audit | Passing tests and documented planner metadata without live scheduling claims. |
+
+No subagent was spawned because the selected implementation was small and the orchestrator had to own shared docs.
+
+#### Migration Parity Table - Session 1482
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController` | `Aion.GameServer.Services.PlayerProtectionActiveTaskPlanService` | Controller / Planner Service | Partial | Unit Tested | Partial Parity | Start/stop protection task side-effect order is modeled as non-live metadata. Live `ThreadPoolManager` scheduling, `AttackUtil.cancelCastOn`, `AttackUtil.removeTargetFrom`, broadcast delivery, and `notifyAIOnMove` execution remain unsupported. |
+| `com.aionemu.gameserver.model.TaskId` | `PlayerProtectionActiveTaskPlanService` constants | Enum / Task Metadata | Partial | Unit Tested | Partial Parity | Captures `TaskId.PROTECTION_ACTIVE` ordinal `3` and 60000 ms delay. C# does not yet have a general Java `TaskId` enum or live task owner for this slot. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PLAYER_STATE` | `Aion.GameServer.Network.Aion.ServerPackets.SmPlayerState` / planner metadata | Packet / Fanout Metadata | Partial | Unit Tested | Needs Verification | Planner records `SmPlayerState` as the broadcast packet type for start/stop while spawned. Packet serialization exists elsewhere; this unit did not compare Java packet bytes or broadcast recipient lists. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Aion.GameServer.Model.GameObjects.Player` | Model | Partial | Unit Tested | Needs Verification | Existing `VisualState`, `IsProtectionActive`, and `StopProtectionActive` support the modeled blinking state. Planner does not mutate live player state in this unit. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateStartPlan_ModelsJavaProtectionTaskStart` | Unit / planner | `PlayerController.startProtectionActiveTask` | Start plan records blinking visual state, cast cancellation, target removal, `SM_PLAYER_STATE` broadcast, `TaskId.PROTECTION_ACTIVE`, and 60000 ms scheduling. | Deterministic planner assertion from Java source audit. | No live task scheduling, cast cancellation, target removal, or packet fanout. |
+| `CreateStartPlan_NoOpsWhenPlayerAlreadyBlinking` | Unit / planner | `PlayerController.startProtectionActiveTask` | Already protected players produce a no-op plan. | Deterministic Java branch assertion. | Does not inspect concurrent state changes. |
+| `CreateStopPlan_ModelsJavaSpawnedStopAndBroadcast` | Unit / planner | `PlayerController.stopProtectionActiveTask` | Spawned stop records task cancel, blinking clear, `SM_PLAYER_STATE`, and AI move notification. | Deterministic planner assertion from Java source audit. | No live scheduler or broadcast delivery. |
+| `CreateStopPlan_UnspawnedOnlyCancelsRepresentedTask` | Unit / planner | `PlayerController.stopProtectionActiveTask` | Unspawned stop records only represented task cancellation. | Deterministic Java branch assertion. | C# lacks a live `isSpawned` player model. |
+| `CreateStopPlan_SpawnedStillBroadcastsWhenTaskOrBlinkingIsAlreadyMissing` | Unit / planner | `PlayerController.stopProtectionActiveTask` | Spawned stop still records Java's broadcast/AI-notify branch even when represented task/blinking is absent. | Conservative Java source audit. | Runtime relevance depends on caller reachability. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Full game-server test suite is still known to have two unrelated stable failures in `GameServerConnectionInventoryExpansionUseItemTests`: `ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate` and `HandleUseItemAsync_ExpExtractMergesRestrictedRewardWithCleanupSealFlag`.
+- Planner-only metadata does not execute live `ThreadPoolManager` scheduling or task cancellation.
+- `AttackUtil.cancelCastOn`, `AttackUtil.removeTargetFrom`, broadcast-to-sighted-player recipient selection, and `notifyAIOnMove` are not live.
+- C# does not yet have a general `TaskId.PROTECTION_ACTIVE` runtime owner or player `isSpawned` property equivalent.
+- `SM_PLAYER_STATE` byte parity and broadcast ordering were not compared against Java runtime output in this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped artifact rows in this unit
+- Total artifacts ported: 1 non-live protection active task planner and 1 focused test suite
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, live protection task scheduling/cancellation, cast/target cancellation execution, broadcast recipient fanout, AI move notification, missing player spawned state, unrelated full-suite cleanup-seal failures
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Continue protection parity by adding a live-safe bridge or adapter that can apply the non-scheduling state portion (`SetVisualState(BLINKING)` / `StopProtectionActive`) only when explicitly requested, while keeping scheduler and broadcast fanout disabled until task ownership and sighted-player broadcast surfaces are ready.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
