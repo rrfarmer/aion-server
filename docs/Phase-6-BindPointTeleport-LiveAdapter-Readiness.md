@@ -451,3 +451,7 @@ A guarded C# schema-v1 pet vector artifact reader/comparator now exists for futu
 ## Update After UOW-1300
 
 `SmPet` now supports the Java `SM_PET(PetCommonData, false)` surrender packet shape from a supplied `SmPetSurrenderSnapshot`, writing template id, object id, and the two Java zero placeholders. Live bind-point fanout remains blocked because Java runtime vectors are still missing, the unsafe-looking Java `SM_PET(int,int)` overload needs call-site audit, live surrender validation/persistence/dispatch is absent, `writePetData` is still unported for load/adopt, and socket dispatch remains disabled.
+
+## Update After UOW-1301
+
+Read-only audits confirm `SM_PET(int,int)` should remain unported because it has no direct in-repo call site and would likely fail during Java surrender serialization, while `EXTEND_EXPIRATION` should remain out of the action-only response allow-list because Java `CM_PET` handles action `15` as a silent no-op with no `SM_PET` response. A `writePetData` design audit now identifies the required future snapshot inputs for list/adopt packets. Live bind-point fanout remains blocked because Java runtime vectors are still missing, `writePetData` is unimplemented, pet common-data/template/feed/doping projections are missing, full `CM_PET` runtime behavior is unported, and socket dispatch remains disabled.
