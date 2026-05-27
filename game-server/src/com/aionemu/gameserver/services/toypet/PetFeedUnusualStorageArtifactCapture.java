@@ -150,6 +150,21 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		// Future artifact writer boundary. Intentionally no-op while capture remains disabled.
 	}
 
+	private static boolean drainQueuedArtifact() {
+		ArtifactSnapshot snapshot;
+		synchronized (artifactQueueLock) {
+			snapshot = queuedArtifacts.pollFirst();
+		}
+		if (snapshot == null)
+			return false;
+		writeArtifact(snapshot);
+		return true;
+	}
+
+	private static void writeArtifact(ArtifactSnapshot snapshot) {
+		// Future JSON/file writer boundary. Intentionally no-op.
+	}
+
 	private static final class CaptureContext {
 
 		private final int storageTypeId;

@@ -699,3 +699,7 @@ A read-only fastjson2 writer audit now documents deterministic artifact output p
 ## Update After UOW-1362
 
 The disabled Java capture registry now has a bounded metadata-only writer queue shell using the configured max queued artifact bound and newest-drop tracking. Live bind-point fanout remains blocked because no writer worker, JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, C# serializer gap closure, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
+
+## Update After UOW-1363
+
+The disabled Java capture registry now has a private queue drain method and no-op writer boundary, but no worker invokes it and no JSON or file output exists. Live bind-point fanout remains blocked because no writer worker lifecycle, JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, C# serializer gap closure, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
