@@ -511,3 +511,7 @@ A standalone C# `PetCommonDataTiming` helper now preserves Java birthday epoch c
 ## Update After UOW-1315
 
 Non-executing C# `PlayerPetsRepositoryPlan` command plans now preserve Java `PlayerPetsDAO` SQL text and positional parameter order for feed status, doping CSV, reuse time, insert, delete, load, rename, mood save, and used-id load. Live bind-point fanout remains blocked because no live repository execution, row materialization, timestamp binding verification, exception fallback behavior, doping CSV load parsing, transaction/autocommit validation, Java runtime DB comparison, or socket dispatch was enabled.
+
+## Update After UOW-1316
+
+A non-live C# `PlayerPetRowProjection` helper now models the deterministic row-materialization portion of Java `PlayerPetsDAO.getPlayerPets`, including supplied template-function gates, feed-progress hydration, mood/refeed timing transfer, null despawn-time fallback, and doping CSV slot projection. Live bind-point fanout remains blocked because SQL execution, Java `DataManager` template lookup, live `PetCommonData`, Java DAO outer-catch partial-list behavior, live `PetDopingBag` synchronized mutation/dirty flag, timestamp DB binding verification, Java runtime DB comparison, and socket dispatch remain disabled.
