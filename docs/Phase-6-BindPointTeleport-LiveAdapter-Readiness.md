@@ -587,3 +587,7 @@ A Java runtime-vector design now scopes the pet feed rewarded `SM_PET` FOOD subt
 ## Update After UOW-1334
 
 A guarded C# artifact reader now validates the future Java pet feed subtype `7` schema and can compare generated `SM_PET` body/canonical payload hex against `SmPet.Food(...)` when artifacts appear under `parity-artifacts/pet-feed-subtype7/java`. Live bind-point fanout remains blocked because no Java artifacts exist yet, `SM_EMOTION` byte comparison remains out of scope, and live scheduler execution, reward creation, DAO writes, inventory mutation, common-data serialization timing, and socket dispatch remain disabled.
+
+## Update After UOW-1335
+
+The guarded subtype `7` artifact reader can now validate and compare future end-feeding `SM_EMOTION` body/canonical payload hex alongside the `SM_PET` feed packets. A read-only Java send-timing audit also confirmed `PacketSendUtility.sendPacket` is queue-time only and actual serialization occurs later through `AionConnection.writeData` and `AionServerPacket.write`, so subtype `7` runtime artifacts must hook send-time serialization below `PacketSendUtility`. Live bind-point fanout remains blocked because no Java artifacts or observer hook exist yet, and scheduler execution, reward creation, DAO writes, inventory mutation, mutable common-data timing, and socket dispatch remain disabled.
