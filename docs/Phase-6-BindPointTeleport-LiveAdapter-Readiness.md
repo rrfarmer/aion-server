@@ -659,3 +659,7 @@ The disabled unusual-storage capture registry now prunes pending contexts older 
 ## Update After UOW-1352
 
 A read-only Java writer/config audit now identifies the future unusual-storage artifact writer prerequisites: existing `fastjson2` dependency, static `@Property` config registration through `Config.CONFIGS`, a configurable safe output path outside production data/logs, and a dedicated bounded writer queue rather than inline packet-serialization file writes. Live bind-point fanout remains blocked because no config key, observer install, writer, byte copy, Java runtime artifact, item/blob decoder, or C# unusual-storage live adapter was enabled.
+
+## Update After UOW-1353
+
+A disabled Java config shell for unusual-storage artifact capture is now registered in `Config.CONFIGS`, with safe defaults for enabled=false, output directory, pending-context bounds, queued-artifact bounds, and allowed scenario. Live bind-point fanout remains blocked because the config is not consumed by capture code yet, no observer is installed, no writer or byte copy exists, Java compile validation is unavailable locally, and the C# live adapter still does not hydrate, mutate, dispatch, or runtime-compare unusual storage.

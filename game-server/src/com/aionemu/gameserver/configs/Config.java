@@ -37,8 +37,9 @@ public class Config {
 		AutoGroupConfig.class, CommonsConfig.class, CleaningConfig.class, CraftConfig.class, CustomConfig.class, DropConfig.class, EventsConfig.class,
 		FallDamageConfig.class, GSConfig.class, GeoDataConfig.class, GroupConfig.class, HousingConfig.class, HTMLConfig.class, InGameShopConfig.class,
 		InstanceConfig.class, LegionConfig.class, LoggingConfig.class, MembershipConfig.class, NameConfig.class, PeriodicSaveConfig.class,
-		PlayerTransferConfig.class, PricesConfig.class, PunishmentConfig.class, RankingConfig.class, RatesConfig.class, SecurityConfig.class,
-		ShutdownConfig.class, SiegeConfig.class, ThreadConfig.class, WorldConfig.class, DatabaseConfig.class, NetworkConfig.class, PffConfig.class);
+		PetFeedUnusualStorageArtifactCaptureConfig.class, PlayerTransferConfig.class, PricesConfig.class, PunishmentConfig.class, RankingConfig.class,
+		RatesConfig.class, SecurityConfig.class, ShutdownConfig.class, SiegeConfig.class, ThreadConfig.class, WorldConfig.class, DatabaseConfig.class,
+		NetworkConfig.class, PffConfig.class);
 
 	/**
 	 * Load configs of the given classes or all if allowedConfigs is empty.
