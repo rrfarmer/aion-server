@@ -2,7 +2,7 @@
 
 Date: May 27, 2026
 Completed Unit of Work: UOW-1344
-Latest Commit: pending `[Phase 6][UOW-1344] Document unusual storage runtime artifact schema`
+Latest Commit: 574db9121 `[Phase 6][UOW-1344] Document unusual storage runtime artifact schema`
 Status: Docs-only schema-v1 for unusual-storage rejected-food runtime artifacts is ready; no Java artifacts, C# reader, or live dispatch was enabled.
 
 ## What Changed
