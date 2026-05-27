@@ -2,7 +2,7 @@
 
 Date: 2026-05-27
 Unit of Work: UOW-1390
-Status: Read-only audit complete. No serializer code changed.
+Status: Read-only audit complete. UOW-1391 subsequently implemented the serializer path.
 
 ## Scope
 
@@ -78,6 +78,10 @@ Add two focused blob tests:
   - assert first pair `(42, 750)` and second pair `(35, 108)`.
 
 Keep generated Java runtime artifact comparison guarded until actual Java artifacts exist.
+
+## Implementation Follow-Up
+
+UOW-1391 implemented this recommendation in `SmInventoryInfo.WritePlumeTemperingStatPairs` and added focused packet coverage for physical plume, magical plume, and non-plume zero behavior. Full parity still needs generated Java packet-byte comparison, and broker direct enchant-info call sites still need template-context review.
 
 ## Remaining Risks
 
