@@ -707,3 +707,7 @@ The disabled Java capture registry now has a private queue drain method and no-o
 ## Update After UOW-1364
 
 The disabled Java capture registry now has private writer worker lifecycle hooks around the queue drain boundary, but the worker is not started automatically and `writeArtifact(...)` remains no-op. Live bind-point fanout remains blocked because no observer install, active worker lifecycle, JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, C# serializer gap closure, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
+
+## Update After UOW-1365
+
+A read-only Java lifecycle audit now identifies the future disabled activation boundary for unusual-storage artifact capture: config is loaded before NIO startup in `GameServer`, `AionServerPacket` exposes a process-wide clear-byte observer after length stamping and before encryption, and shutdown should reset the observer/stop the worker before or at the beginning of NIO shutdown. Live bind-point fanout remains blocked because no public capture lifecycle API, observer install, worker start/stop wiring, JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
