@@ -731,3 +731,7 @@ A read-only output-path audit now defines safety rules for the future unusual-st
 ## Update After UOW-1370
 
 The no-op unusual-storage artifact writer boundary now invokes `buildArtifactPath(...)` and swallows validation failures so capture path checks cannot affect packet dispatch or writer lifecycle. It still creates no directories, writes no JSON, retains no raw/canonical bytes, and has no Java runtime validation. Live bind-point fanout remains blocked because no path helper tests, directory creation, JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, warehouse-add byte comparison, runtime lifecycle validation, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
+
+## Update After UOW-1371
+
+A read-only JSON DTO audit now confirms the current nested capture snapshots should not be serialized directly. Future output needs dedicated schema-v1 DTO/build methods in stable field order, with route facts, timing facts, construction snapshot, encode snapshot, packet decoded fields, and explicit byte fields separated before fastjson2 is used. Live bind-point fanout remains blocked because no schema DTOs, field-order validation, JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, warehouse-add byte comparison, runtime lifecycle validation, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
