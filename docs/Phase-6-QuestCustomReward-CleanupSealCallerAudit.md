@@ -2,7 +2,7 @@
 
 Date: 2026-05-27
 Unit of Work: UOW-1410
-Status: read-only audit complete; no runtime packet behavior changed.
+Status: read-only audit complete; no runtime packet behavior changed. UOW-1411 implemented the pet-feed normal-cube unlock metadata follow-up identified by this audit.
 
 ## Scope
 
@@ -62,4 +62,4 @@ Existing relevant coverage:
 
 ## Next Recommended Unit Of Work
 
-Wire `PetFeedPacketMetadataBridge.ConstructFoodItemUnlock` normal-cube unlock metadata to pass `context.GeneralInfoWarehouseRestrictionFlag` into `SmInventoryAddItem.CreateAllSlot`, then add a focused pet-feed metadata bridge test that asserts a restricted normal-cube unlock packet carries nested `GENERAL_INFO` cleanup/seal flag `3`.
+UOW-1411 completed the immediate pet-feed normal-cube unlock metadata follow-up. The next cleanup/seal unit should search remaining `SmInventoryAddItem.CreateItemCollect` / `CreateAllSlot` and `SmInventoryUpdateItem` full-blob callers for default flag paths, then wire the smallest remaining caller with deterministic static-data or precomputed flag access.
