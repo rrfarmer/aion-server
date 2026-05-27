@@ -54760,6 +54760,7 @@ Next recommended unit of work:
   - Ran `git diff --check`.
   - Attempted `mvn -pl game-server -am -DskipTests compile`.
   - Java validation remains blocked because `mvn` is not available on PATH and no Maven wrapper exists in the repository.
+  - Attempted to inspect `JSONWriter.Feature.WriteMapNullValue` with `javap`; local validation is blocked because `javap` is not available on PATH.
   - No enabled observer install, artifact writer, file output, byte copying, encode-time item/blob decoder, warehouse-add byte comparison, live storage lookup, inventory mutation, packet send, or Java runtime packet comparison was enabled.
 
 #### Migration Parity Table - Session 1356
@@ -56005,6 +56006,57 @@ Summary metrics:
 
 Next recommended unit of work:
 - Add disabled JSON/file writer implementation inside `PetFeedUnusualStorageArtifactCapture.writeArtifact(...)`: serialize the existing schema DTO with fastjson2, write explicit UTF-8 to a same-directory temp file, and move it into place atomically when supported. Keep capture disabled by default and preserve the catch-all writer safety boundary.
+
+---
+
+### Session 1382 (May 27, 2026)
+- Continued after UOW-1381 by adding disabled guarded JSON/file output to `PetFeedUnusualStorageArtifactCapture.writeArtifact`.
+- Added `writeJsonArtifact(...)`, which rejects missing-parent and existing-target paths, creates the output directory, writes UTF-8 JSON to a same-directory temporary file, moves atomically when supported, falls back to a regular same-directory move, and cleans up the temp file in `finally`.
+- The writer serializes the existing schema DTO through fastjson2 with `JSONWriter.Feature.WriteMapNullValue`.
+- Writer failures remain swallowed by the writer boundary so artifact output cannot affect packet dispatch or writer lifecycle.
+- Updated schema notes to state that capture remains disabled by default and artifact output requires explicit config opt-in.
+- No live storage mutation, packet send, C# reader/schema behavior, or warehouse-add byte comparison was enabled.
+- Added `docs/Phase-6-BindPointTeleport-PetFeedUnusualStorageJsonWriterImplementation.md`.
+- Updated live-adapter readiness and created the next handoff.
+- Validation:
+  - Ran `git diff --check`.
+  - Attempted `mvn -pl game-server -am -DskipTests compile`.
+  - Java validation remains blocked because `mvn` is not available on PATH and no Maven wrapper exists in the repository.
+
+#### Migration Parity Table - Session 1382
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.toypet.PetFeedUnusualStorageArtifactCapture` | future C# artifact/schema reader | Utility / Capture Context | Partial | Manual Only | Needs Verification | Adds guarded JSON/file writer output using existing schema DTO and path helper. Capture is disabled by default; no runtime artifact, C# reader validation, or Java/C# byte comparison exists. Threading remains queue/worker-based with writer exceptions swallowed. |
+| `com.aionemu.gameserver.configs.main.PetFeedUnusualStorageArtifactCaptureConfig` | future C# artifact fixture path/config | Config | Partial | Manual Only | Needs Verification | Existing config controls opt-in enablement, output directory, and queue bounds. No config defaults changed; output remains disabled unless explicitly enabled. |
+| `com.alibaba.fastjson2.JSON` / `JSONWriter.Feature` | C# JSON artifact reader/schema validator | Dependency / Serialization Utility | Partial | Manual Only | Needs Verification | Uses `JSON.toJSONString(..., WriteMapNullValue)` and explicit UTF-8 bytes. fastjson2 feature behavior and field order still need runtime validation. |
+| `java.nio.file.Files` output boundary | future C# artifact fixture ingestion | Filesystem Utility | Partial | Manual Only | Needs Verification | Creates directories, writes a sibling temp file, atomically moves when supported, falls back to regular move, and cleans up temp files. File collision behavior is fail-closed; no runtime filesystem validation yet. |
+
+Tests added:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| None | Implementation / Compile Attempt | Java capture/config/writer-source review | Adds disabled guarded JSON/file output with explicit UTF-8 and atomic-move fallback. | Source implementation only. | Maven/Java 25 compile unavailable locally; no runtime artifact, no C# reader validation, and no Java/C# byte comparison. |
+
+Remaining risks:
+- Java compile validation remains blocked locally by missing Maven/Java 25 tooling.
+- Local fastjson2 feature disassembly remains blocked because `javap` is not available on PATH.
+- fastjson2 `WriteMapNullValue` behavior and `LinkedHashMap` field order are source-assumed until runtime validation.
+- Atomic move fallback is source-reviewed only and not filesystem-tested locally.
+- Existing target collision fails closed and drops the artifact through the writer catch; this is safe but not surfaced in metrics yet.
+- JSON output can expose player/item identifiers and remains opt-in only.
+- C# artifact reader/schema validation, runtime artifact generation, and warehouse-add byte comparison remain missing.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped artifact rows in this unit
+- Total artifacts ported: 1 disabled JSON/file writer implementation
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4 grouped rows
+- Total blocked artifacts: Java compile validation, runtime artifact validation, C# artifact reader/schema validation, warehouse-add byte comparison
+- Estimated overall migration completion: Phase 6 remains about 71% complete
+
+Next recommended unit of work:
+- Add a read-only Java runtime activation plan for unusual-storage artifact generation: define how to run the disabled writer with `gameserver.petfeed.unusual_storage_artifacts.enabled=true` in a local Java 25/Maven environment, which scenario to trigger, where output should land, and what artifact fields must be checked before C# reader work starts.
 
 ---
 

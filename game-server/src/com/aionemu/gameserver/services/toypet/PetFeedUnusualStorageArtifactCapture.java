@@ -1,7 +1,12 @@
 package com.aionemu.gameserver.services.toypet;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -12,6 +17,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONWriter;
 import com.aionemu.gameserver.configs.main.PetFeedUnusualStorageArtifactCaptureConfig;
 import com.aionemu.gameserver.dataholders.DataManager;
 import com.aionemu.gameserver.model.gameobjects.Item;
@@ -189,12 +196,31 @@ public final class PetFeedUnusualStorageArtifactCapture {
 
 	private static void writeArtifact(ArtifactSnapshot snapshot) {
 		try {
-			buildArtifactPath(snapshot);
-			buildSchemaV1Artifact(snapshot);
-		} catch (RuntimeException e) {
+			writeJsonArtifact(buildArtifactPath(snapshot), buildSchemaV1Artifact(snapshot));
+		} catch (Exception e) {
 			// Capture artifact validation must never affect packet dispatch or writer lifecycle.
 		}
-		// Future JSON/file writer boundary. Intentionally no-op.
+	}
+
+	private static void writeJsonArtifact(Path target, Map<String, Object> artifact) throws IOException {
+		Path parent = target.getParent();
+		if (parent == null)
+			throw new IllegalStateException("Unusual-storage artifact target has no parent: " + target);
+		if (Files.exists(target))
+			throw new IllegalStateException("Unusual-storage artifact target already exists: " + target);
+		Files.createDirectories(parent);
+		Path temp = Files.createTempFile(parent, target.getFileName().toString() + ".", ".tmp");
+		try {
+			byte[] json = JSON.toJSONString(artifact, JSONWriter.Feature.WriteMapNullValue).getBytes(StandardCharsets.UTF_8);
+			Files.write(temp, json);
+			try {
+				Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);
+			} catch (AtomicMoveNotSupportedException e) {
+				Files.move(temp, target);
+			}
+		} finally {
+			Files.deleteIfExists(temp);
+		}
 	}
 
 	private static Map<String, Object> buildSchemaV1Artifact(ArtifactSnapshot snapshot) {
@@ -211,7 +237,7 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		artifact.put("encodeSnapshot", buildEncodeSnapshotDto(snapshot));
 		artifact.put("packets", List.of(buildPacketDto(snapshot.warehouseAddPacket, snapshot), buildPacketDto(snapshot.cubeUpdatePacket, snapshot)));
 		artifact.put("notes", List.of("itemBlob.hex is observer-time reserialization until a future packet-body slice verifier is added.",
-			"JSON serialization and file output are intentionally disabled."));
+			"Capture remains disabled by default and artifact output requires explicit config opt-in."));
 		return artifact;
 	}
 
