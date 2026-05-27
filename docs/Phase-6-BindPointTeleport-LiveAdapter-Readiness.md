@@ -715,3 +715,7 @@ A read-only Java lifecycle audit now identifies the future disabled activation b
 ## Update After UOW-1366
 
 `PetFeedUnusualStorageArtifactCapture` now has a disabled public lifecycle API shell: `installIfEnabled()` is config-gated and can install the existing packet observer/start the private worker only when explicitly called in a future unit, while `shutdown()` resets the global observer and stops the worker. The API is not wired into `GameServer` or `ShutdownHook`, and `ENABLED` remains false by default. Live bind-point fanout remains blocked because no lifecycle caller, JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
+
+## Update After UOW-1367
+
+Disabled lifecycle wiring is now present: `GameServer` calls `PetFeedUnusualStorageArtifactCapture.installIfEnabled()` after config/service initialization and before NIO startup, while `ShutdownHook` calls `PetFeedUnusualStorageArtifactCapture.shutdown()` at shutdown start. Because `ENABLED` remains false by default, startup remains no-op and shutdown only resets the observer/worker shell. Live bind-point fanout remains blocked because no JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, warehouse-add byte comparison, runtime lifecycle validation, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.

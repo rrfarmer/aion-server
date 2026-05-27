@@ -14,6 +14,7 @@ import com.aionemu.gameserver.services.GameTimeService;
 import com.aionemu.gameserver.services.PeriodicSaveService;
 import com.aionemu.gameserver.services.cron.CronService;
 import com.aionemu.gameserver.services.cron.CurrentThreadRunnableRunner;
+import com.aionemu.gameserver.services.toypet.PetFeedUnusualStorageArtifactCapture;
 import com.aionemu.gameserver.utils.PacketSendUtility;
 import com.aionemu.gameserver.utils.ThreadPoolManager;
 import com.aionemu.gameserver.world.World;
@@ -44,6 +45,7 @@ public class ShutdownHook extends Thread {
 	@Override
 	public void run() {
 		// this method is run when System.exit is triggered, or via other external events like console CTRL+C
+		PetFeedUnusualStorageArtifactCapture.shutdown(); // reset disabled capture observer before shutdown packet fanout
 		remainingSeconds.compareAndSet(UNSET_DELAY, ShutdownConfig.DELAY);
 		for (int announceInterval = 1, expectedSeconds = remainingSeconds.get(); remainingSeconds.get() > 0;) {
 			try {
