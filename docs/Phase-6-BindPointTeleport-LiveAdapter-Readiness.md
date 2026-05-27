@@ -515,3 +515,7 @@ Non-executing C# `PlayerPetsRepositoryPlan` command plans now preserve Java `Pla
 ## Update After UOW-1316
 
 A non-live C# `PlayerPetRowProjection` helper now models the deterministic row-materialization portion of Java `PlayerPetsDAO.getPlayerPets`, including supplied template-function gates, feed-progress hydration, mood/refeed timing transfer, null despawn-time fallback, and doping CSV slot projection. Live bind-point fanout remains blocked because SQL execution, Java `DataManager` template lookup, live `PetCommonData`, Java DAO outer-catch partial-list behavior, live `PetDopingBag` synchronized mutation/dirty flag, timestamp DB binding verification, Java runtime DB comparison, and socket dispatch remain disabled.
+
+## Update After UOW-1317
+
+A standalone C# `PetDopingBag` helper now preserves Java food/drink defaults, dynamic slot expansion, dirty flag behavior, scroll-slot views, invalid-slot rejection, and scroll-only switch semantics. Live bind-point fanout remains blocked because the helper is not yet wired into `PlayerPetRowProjection`, live pet common data, live `PetService.useDoping`, dirty-flag persistence triggers, item lookup/cooldown/skill use, Java runtime vectors, DB comparisons, or socket dispatch.
