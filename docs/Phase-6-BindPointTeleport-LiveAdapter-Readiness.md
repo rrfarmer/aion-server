@@ -771,3 +771,7 @@ A read-only packet-body blob-slice audit now maps exact `SM_WAREHOUSE_ADD_ITEM.b
 ## Update After UOW-1380
 
 `PetFeedUnusualStorageArtifactCapture` now records a disabled fail-closed `itemBlob.packetBodyVerification` diagnostic with `matched`, `mismatched`, or `unavailable` values by comparing observer-time `itemBlob.hex` against the authoritative `SM_WAREHOUSE_ADD_ITEM.bodyHex` slice. This is only a Java self-check and does not verify C# parity. Live bind-point fanout remains blocked because Java compile validation, runtime artifact validation, fastjson2 serialization, file output, C# artifact reader/schema validation, warehouse-add byte comparison, runtime lifecycle validation, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.
+
+## Update After UOW-1381
+
+A read-only fastjson activation audit now confirms the schema DTO shell contains the first-output byte fields: packet body/canonical hex, item-blob hex, and packet-body self-check metadata. The next writer step should serialize the DTO with an explicit fastjson2 feature set, write UTF-8 bytes to a same-directory temp file, and atomically move when supported while preserving the catch-all writer safety boundary. Live bind-point fanout remains blocked because Java compile validation, runtime artifact validation, JSON writer implementation, file output, C# artifact reader/schema validation, warehouse-add byte comparison, runtime lifecycle validation, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.
