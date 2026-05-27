@@ -61054,6 +61054,67 @@ Next recommended unit of work:
 
 ---
 
+### Session 1466 (May 27, 2026)
+- Continued after UOW-1465 with the Java `KnownObject.visible` removal distinction.
+- Added `Plan_OutOfRangeExistingInvisibleMembershipSkipsNotSeeSideEffects` to `PlayerKnownListVisibilityRangePlanServiceTests`.
+- The test models two players that still know each other but no longer see each other, then moves them out of Java visible range and verifies the planned removal contains membership removal plus `notKnow` descriptors without `notSee` descriptors.
+- Kept production code unchanged; the existing planner already preserved the Java visible-vs-known distinction.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --filter "FullyQualifiedName~PlayerKnownListVisibilityRangePlanServiceTests"`.
+  - Result: passed 6 tests.
+
+#### Parallel Work Discovery - Session 1466
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Known-but-invisible removal planner regression | `KnownList.del`, `KnownObject.visible`, `PositionUtil.isInRange` | `PlayerKnownListVisibilityRangePlanServiceTests.cs` | Unit Test | No | Low | Compact planner regression in one test file. |
+| B | Active socket equivalent for invisible state | `PlayerController.notSee`, `KnownList.del` | socket visibility tests | Later | Medium | Current socket NPC service does not model invisible-but-known state. |
+| C | Player-owned aggro model design | `PlayerAggroList`, `AggroList` | future design/model files | Later | High | Separate blocker for revive aggro cleanup. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add known-but-invisible removal planner regression | Unit Test / Documentation | `PlayerKnownListVisibilityRangePlanServiceTests.cs`, progress/handoff docs | production code, socket fixture | Existing visibility range planner | Passing regression proving invisible known membership removal skips `notSee` side-effect descriptors. |
+
+No subagent was spawned because the selected unit was a narrow single-file planner regression.
+
+#### Migration Parity Table - Session 1466
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.knownlist.KnownList` | `PlayerKnownListVisibilityRangePlanService` / `PlayerKnownListTwoWayOperationPlanService` | Planner / Known List | Partial | Unit Tested | Partial Parity | Regression proves removal of a known but invisible pair schedules membership removal and `notKnow`, but omits `notSee`, matching Java `KnownList.del` only notifying not-see when the stored known object was visible. Planner is non-live. |
+| `com.aionemu.gameserver.world.knownlist.KnownObject` | `PlayerKnownListVisibilityRangeObject` / `PlayerKnownListTwoWayOperationState` | DTO / State | Partial | Unit Tested | Needs Verification | C# models visible state with `CanSeeOther`; Java stores this as `KnownObject.visible`. No live Java runtime artifact comparison. |
+| `com.aionemu.gameserver.controllers.PlayerController` | `PlayerKnownListTwoWayOperationStepKind.OwnerNotSeesCandidate` / `CandidateNotSeesOwner` | Controller Side-Effect Descriptor | Partial | Unit Tested | Partial Parity | Test asserts no `notSee` descriptor is produced for already invisible known objects. Actual packet sending remains disabled and unverified in this planner path. |
+| `com.aionemu.gameserver.utils.PositionUtil` / `KnownList.isInRange` | `PlayerKnownListVisibilityRangePlanService` | Utility / Visibility Predicate | Partial | Unit Tested | Needs Verification | Uses existing strict range planner. Exact Java geometry/region interaction and runtime map-region traversal remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `Plan_OutOfRangeExistingInvisibleMembershipSkipsNotSeeSideEffects` | Unit / planner | `KnownList.del`, `KnownObject.visible`, `KnownList.forgetObjectsOrUpdateVisibility` | A known but already invisible pair that falls out of range plans removal and `notKnow` steps without `notSee` steps. | Deterministic planner output with explicit step sequence and negative assertion for `OwnerNotSeesCandidate` / `CandidateNotSeesOwner`. | Non-live planner only; no socket packet emission or Java runtime comparison. |
+| Existing `PlayerKnownListVisibilityRangePlanServiceTests` | Existing Unit | `KnownList.isInRange`, `PositionUtil.isInRange` | Existing strict range, max visible distance, instance mismatch, visible add, and visible removal tests remained stable. | Focused 6-test suite passed. | Exact map-region traversal and full known-list mutation execution remain broader. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- This is a planner-only regression; it does not execute live C# known-list mutation or controller packet fanout.
+- C# socket NPC visibility still uses snapshot/delta object ids and does not model invisible-but-known NPC state.
+- Exact Java map-region visibility and lock ordering remain unverified.
+- Player-owned aggro cleanup remains blocked by the missing C# `PlayerAggroList` equivalent.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped artifact rows in this unit
+- Total artifacts ported: 0 production artifacts in this unit; 1 planner regression added
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, live known-list mutation execution, socket NPC invisible-known state, player-owned aggro model
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Switch to the dedicated player-owned aggro model design UOW to unblock revive aggro cleanup, or continue kisk lifecycle with bind/member cleanup review if staying in the kisk lane.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
