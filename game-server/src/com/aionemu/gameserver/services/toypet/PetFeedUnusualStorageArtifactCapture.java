@@ -36,6 +36,9 @@ public final class PetFeedUnusualStorageArtifactCapture {
 	private static final ConcurrentHashMap<Integer, Deque<CaptureContext>> pendingContexts = new ConcurrentHashMap<>();
 	private static final Object artifactQueueLock = new Object();
 	private static final Deque<ArtifactSnapshot> queuedArtifacts = new ArrayDeque<>();
+	private static final Object writerWorkerLock = new Object();
+	private static volatile boolean writerWorkerRunning;
+	private static Thread writerWorker;
 	private static long droppedArtifactCount;
 	private static final ServerPacketCaptureObserver observer = new ServerPacketCaptureObserver() {
 
@@ -163,6 +166,49 @@ public final class PetFeedUnusualStorageArtifactCapture {
 
 	private static void writeArtifact(ArtifactSnapshot snapshot) {
 		// Future JSON/file writer boundary. Intentionally no-op.
+	}
+
+	private static void startWriterWorker() {
+		synchronized (writerWorkerLock) {
+			if (writerWorker != null)
+				return;
+			writerWorkerRunning = true;
+			writerWorker = new Thread(PetFeedUnusualStorageArtifactCapture::runWriterWorker, "PetFeedUnusualStorageArtifactWriter");
+			writerWorker.setDaemon(true);
+			writerWorker.start();
+		}
+	}
+
+	private static void stopWriterWorker() {
+		Thread worker;
+		synchronized (writerWorkerLock) {
+			writerWorkerRunning = false;
+			worker = writerWorker;
+		}
+		if (worker != null)
+			worker.interrupt();
+	}
+
+	private static void runWriterWorker() {
+		try {
+			while (writerWorkerRunning && isEnabled()) {
+				if (!drainQueuedArtifact()) {
+					try {
+						Thread.sleep(100);
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+						return;
+					}
+				}
+			}
+		} finally {
+			synchronized (writerWorkerLock) {
+				if (Thread.currentThread() == writerWorker) {
+					writerWorker = null;
+					writerWorkerRunning = false;
+				}
+			}
+		}
 	}
 
 	private static final class CaptureContext {
