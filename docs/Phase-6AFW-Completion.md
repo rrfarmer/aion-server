@@ -2,7 +2,7 @@
 
 Date: May 27, 2026
 Completed Unit of Work: UOW-1343
-Latest Commit: pending UOW-1343 unit commit
+Latest Commit: b2019ee18 `[Phase 6][UOW-1343] Cover unusual storage bridge ids`
 Status: Guarded unusual-storage rejected-food bridge tests now cover every known Java pet bag, house storage, broker, and mailbox id; live unusual-storage unlock dispatch remains disabled.
 
 ## What Changed
