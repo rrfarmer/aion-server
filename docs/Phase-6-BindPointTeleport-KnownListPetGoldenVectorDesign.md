@@ -124,7 +124,8 @@ Reasons:
 | Provider blockers | `PlayerKnownListPetSpawnSnapshotProviderService`; population diagnostics | Partial non-live diagnostics. |
 | Live pet/common-data/template hydration | None | Blocked. |
 | Movement emote serializers | `SmPetEmote` `MOVE_STOP` / `MOVETO` branches | Partial, source-derived tests only after UOW-1296. |
-| Java runtime golden vectors | None | Blocked by missing harness/run. |
+| Java runtime golden vectors | `PetJavaVectorArtifactReaderTests` guarded reader/comparator | Blocked by missing Java artifact generation; C# can now consume schema-v1 artifacts under `parity-artifacts/known-list-pet/java`. |
+| Artifact payload comparison | `PetJavaVectorArtifactReaderTests` against `SmPet` / `SmPetEmote` | Guarded; compares body/canonical payloads only when Java files exist. |
 
 ## Migration Parity Table - UOW-1295
 
