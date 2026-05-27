@@ -663,3 +663,7 @@ A read-only Java writer/config audit now identifies the future unusual-storage a
 ## Update After UOW-1353
 
 A disabled Java config shell for unusual-storage artifact capture is now registered in `Config.CONFIGS`, with safe defaults for enabled=false, output directory, pending-context bounds, queued-artifact bounds, and allowed scenario. Live bind-point fanout remains blocked because the config is not consumed by capture code yet, no observer is installed, no writer or byte copy exists, Java compile validation is unavailable locally, and the C# live adapter still does not hydrate, mutate, dispatch, or runtime-compare unusual storage.
+
+## Update After UOW-1354
+
+`PetFeedUnusualStorageArtifactCapture` now consumes the registered disabled config for its enabled flag, pending-context bound, scenario name, and output directory while still avoiding observer installation, file output, and byte copying. Live bind-point fanout remains blocked because Java compile validation is unavailable locally, no writer or item/blob decoded fields exist, and the C# live adapter still does not hydrate, mutate, dispatch, or runtime-compare unusual storage.

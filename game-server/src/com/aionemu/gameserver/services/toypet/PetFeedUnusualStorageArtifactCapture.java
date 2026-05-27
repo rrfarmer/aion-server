@@ -5,6 +5,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.aionemu.gameserver.configs.main.PetFeedUnusualStorageArtifactCaptureConfig;
 import com.aionemu.gameserver.model.gameobjects.Item;
 import com.aionemu.gameserver.model.gameobjects.player.Player;
 import com.aionemu.gameserver.model.items.storage.StorageType;
@@ -20,7 +21,6 @@ import com.aionemu.gameserver.services.item.ItemPacketService.ItemAddType;
  */
 public final class PetFeedUnusualStorageArtifactCapture {
 
-	private static final int MAX_PENDING_CONTEXTS_PER_PLAYER = 4;
 	private static final long MAX_PENDING_CONTEXT_AGE_MILLIS = 30000;
 	private static final ConcurrentHashMap<Integer, Deque<CaptureContext>> pendingContexts = new ConcurrentHashMap<>();
 	private static final ServerPacketCaptureObserver observer = new ServerPacketCaptureObserver() {
@@ -40,13 +40,11 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		}
 	};
 
-	private static volatile boolean enabled;
-
 	private PetFeedUnusualStorageArtifactCapture() {
 	}
 
 	public static boolean isEnabled() {
-		return enabled;
+		return PetFeedUnusualStorageArtifactCaptureConfig.ENABLED;
 	}
 
 	public static ServerPacketCaptureObserver observer() {
@@ -54,7 +52,7 @@ public final class PetFeedUnusualStorageArtifactCapture {
 	}
 
 	public static void registerStorageUpdate(Player player, StorageType storageType, Item item, ItemAddType addType) {
-		if (!enabled || player == null || item == null || addType != ItemAddType.ALL_SLOT || !isUnusualStorage(storageType))
+		if (!isEnabled() || player == null || item == null || addType != ItemAddType.ALL_SLOT || !isUnusualStorage(storageType))
 			return;
 
 		// Java parity: ItemPacketService.sendStorageUpdatePacket chooses SM_WAREHOUSE_ADD_ITEM
@@ -64,9 +62,11 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		long now = System.currentTimeMillis();
 		synchronized (contexts) {
 			removeExpiredContexts(contexts, now);
-			while (contexts.size() >= MAX_PENDING_CONTEXTS_PER_PLAYER)
+			int maxContexts = getMaxPendingContextsPerPlayer();
+			while (contexts.size() >= maxContexts)
 				contexts.removeFirst();
-			contexts.addLast(new CaptureContext(storageType.getId(), storageType.ordinal(), item.getObjectId(), now));
+			contexts.addLast(new CaptureContext(storageType.getId(), storageType.ordinal(), item.getObjectId(), now,
+				PetFeedUnusualStorageArtifactCaptureConfig.ALLOWED_SCENARIO, PetFeedUnusualStorageArtifactCaptureConfig.OUTPUT_DIR));
 		}
 	}
 
@@ -86,8 +86,12 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		return existingContexts == null ? newContexts : existingContexts;
 	}
 
+	private static int getMaxPendingContextsPerPlayer() {
+		return Math.max(1, PetFeedUnusualStorageArtifactCaptureConfig.MAX_PENDING_CONTEXTS_PER_PLAYER);
+	}
+
 	private static void observePacketSerialized(AionConnection con, AionServerPacket packet, ByteBuffer clearFrame) {
-		if (!enabled || con == null || packet == null || clearFrame == null)
+		if (!isEnabled() || con == null || packet == null || clearFrame == null)
 			return;
 		Player player = con.getActivePlayer();
 		if (player == null)
@@ -124,14 +128,19 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private final int storageTypeOrdinal;
 		private final int itemObjectId;
 		private final long registeredAtMillis;
+		private final String scenarioName;
+		private final String outputDirectory;
 		private final PacketSnapshot[] packets = new PacketSnapshot[2];
 		private int nextPacketIndex;
 
-		private CaptureContext(int storageTypeId, int storageTypeOrdinal, int itemObjectId, long registeredAtMillis) {
+		private CaptureContext(int storageTypeId, int storageTypeOrdinal, int itemObjectId, long registeredAtMillis, String scenarioName,
+			String outputDirectory) {
 			this.storageTypeId = storageTypeId;
 			this.storageTypeOrdinal = storageTypeOrdinal;
 			this.itemObjectId = itemObjectId;
 			this.registeredAtMillis = registeredAtMillis;
+			this.scenarioName = scenarioName;
+			this.outputDirectory = outputDirectory;
 		}
 
 		private boolean advance(AionServerPacket packet, ByteBuffer clearFrame) {
@@ -157,13 +166,15 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		}
 
 		private ArtifactSnapshot toSnapshot(long completedAtMillis) {
-			return new ArtifactSnapshot(storageTypeId, storageTypeOrdinal, itemObjectId, registeredAtMillis, completedAtMillis, packets[0],
-				packets[1]);
+			return new ArtifactSnapshot(scenarioName, outputDirectory, storageTypeId, storageTypeOrdinal, itemObjectId, registeredAtMillis,
+				completedAtMillis, packets[0], packets[1]);
 		}
 	}
 
 	private static final class ArtifactSnapshot {
 
+		private final String scenarioName;
+		private final String outputDirectory;
 		private final int storageTypeId;
 		private final int storageTypeOrdinal;
 		private final int itemObjectId;
@@ -172,8 +183,10 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private final PacketSnapshot warehouseAddPacket;
 		private final PacketSnapshot cubeUpdatePacket;
 
-		private ArtifactSnapshot(int storageTypeId, int storageTypeOrdinal, int itemObjectId, long registeredAtMillis, long completedAtMillis,
-			PacketSnapshot warehouseAddPacket, PacketSnapshot cubeUpdatePacket) {
+		private ArtifactSnapshot(String scenarioName, String outputDirectory, int storageTypeId, int storageTypeOrdinal, int itemObjectId,
+			long registeredAtMillis, long completedAtMillis, PacketSnapshot warehouseAddPacket, PacketSnapshot cubeUpdatePacket) {
+			this.scenarioName = scenarioName;
+			this.outputDirectory = outputDirectory;
 			this.storageTypeId = storageTypeId;
 			this.storageTypeOrdinal = storageTypeOrdinal;
 			this.itemObjectId = itemObjectId;
