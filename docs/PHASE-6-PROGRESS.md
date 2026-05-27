@@ -60927,6 +60927,68 @@ Next recommended unit of work:
 
 ---
 
+### Session 1464 (May 27, 2026)
+- Continued after UOW-1463 with the kisk/NPC visibility delete skip branch.
+- Re-read Java `PlayerController.notSee`, which skips deletion packets when the receiving player is not spawned, and `KnownList.del`, which only calls `notSee` when the object was visible.
+- Added `RefreshNpcVisibilityAsync_SkipsDeleteWhenRegisteredConnectionHasNoActivePlayer`.
+- The test primes a registered active connection with a known kisk/NPC, clears the active player on the registered connection, refreshes with an empty NPC snapshot, and asserts no `SmDelete` is sent.
+- Kept production code unchanged; this covers the current C# socket-server no-active-player guard, which is narrower than Java's full spawned/teleporting-state check.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --filter "FullyQualifiedName~GameClientSocketServerNpcVisibilityTests"`.
+  - Result: passed 7 tests.
+
+#### Parallel Work Discovery - Session 1464
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Active connection no-send delete skip | `PlayerController.notSee`, `KnownList.del` | `GameClientSocketServerNpcVisibilityTests.cs` | Integration Test | No | Low-Medium | Reuses shared active connection fixture. |
+| B | Multi-viewer known-list cleanup regression | `KnownList.clear`, `PlayerController.notSee` | socket visibility tests | Later | Medium | Same fixture, should remain sequential. |
+| C | Player-owned aggro model design | `PlayerAggroList`, `AggroList` | future design/model files | Later | High | Independent but broader; do not mix with fixture edits. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add no-active-player delete skip regression | Integration Test / Documentation | `GameClientSocketServerNpcVisibilityTests.cs`, progress/handoff docs | production code, unrelated fixtures | UOW-1463 active removal fixture | Passing regression proving C# socket refresh does not emit delete packets when a registered connection has no active player. |
+
+No subagent was spawned because the work was a compact edit to a shared active-connection fixture.
+
+#### Migration Parity Table - Session 1464
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController` | `GameClientSocketServer.RefreshNpcVisibilityAsync` | Controller / Packet Fanout | Partial | Integration Tested | Partial Parity | Test covers the C# no-active-player guard as an approximation of Java `PlayerController.notSee` skipping deletion packets when the owner is not spawned. C# does not yet model a dedicated player spawned flag in this socket refresh path. |
+| `com.aionemu.gameserver.world.knownlist.KnownList` | `NpcVisibilityService` | Service / Known List | Partial | Integration Tested | Partial Parity | Known-list state can be primed while active and later not flushed to packets when the registered connection has no active player. Java `KnownList.del` still clears visibility state and calls `notKnow`; C# no-active-player skip does not exercise peer known-list cleanup callbacks. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DELETE` | `SmDelete` | Packet | Partial | Integration Tested | Partial Parity | Test asserts no delete packet is emitted in the no-active-player branch. It does not compare Java runtime output or cover all object delete packet variants. |
+| `com.aionemu.gameserver.model.gameobjects.Kisk` | `WorldNpc` / `PlayerKiskRuntimeState` | Runtime State / World Object | Partial | Integration Tested | Partial Parity | Test uses a kisk NPC id as the known object. Kisk-specific runtime registry cleanup is not part of this skip-branch unit. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `RefreshNpcVisibilityAsync_SkipsDeleteWhenRegisteredConnectionHasNoActivePlayer` | Integration / socket-server | `PlayerController.notSee`, `KnownList.del` | A registered connection that had known the kisk/NPC but no longer has an active player receives no `SmDelete` when the visibility snapshot is empty. | Deterministic C# active-connection packet capture informed by Java spawned-player no-send guard. | C# active-player null is not identical to Java `!player.isSpawned()`; full teleporting/unspawned state remains unmodeled. |
+| Existing `GameClientSocketServerNpcVisibilityTests` | Existing Unit / Integration | `PlayerController.see/notSee`, kisk `SM_NPC_INFO`, `SM_DELETE` | Existing kisk creature-type, appeared/delete ordering, removal delete, and payload assertions remained stable. | Focused 7-test suite passed. | Multi-viewer cleanup and exact Java runtime artifacts remain broader. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- C# no-active-player skip is a narrower approximation of Java `!getOwner().isSpawned()`; there is no explicit spawned/teleporting flag in this socket-server refresh branch.
+- Java `KnownList.del` also calls `notifyNotKnow`; C# NPC visibility service only tracks object ids and packet deltas.
+- Multi-viewer cleanup and objects known but not visible remain partially covered at service level, not full active socket integration.
+- Player-owned aggro cleanup remains blocked by the missing C# `PlayerAggroList` equivalent.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped artifact rows in this unit
+- Total artifacts ported: 0 production artifacts in this unit; 1 no-send integration regression added
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, explicit spawned/teleporting state in socket visibility refresh, full Java known-list callback lifecycle, player-owned aggro model
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Continue kisk visibility/deletion parity with multi-viewer known-list cleanup or objects-known-but-not-visible active integration coverage, or switch to the dedicated player-owned aggro model design UOW.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
