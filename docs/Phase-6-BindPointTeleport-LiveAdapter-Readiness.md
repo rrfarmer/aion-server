@@ -535,3 +535,7 @@ A non-live C# `PetFeedCalculator` helper now preserves Java feed-point table mat
 ## Update After UOW-1321
 
 A non-live C# `PetFeedPlanner` helper now preserves supplied-data `PetFlavour.processFeedResult` behavior, including reward-group lookup by food type, normal-feed progress mutation and not-full null return, reward return after the calculator reaches `FULL`, loved-feed state marking, loved-limit no-op behavior, and `isLovedFood` predicate behavior. Live bind-point fanout remains blocked because `PetFlavour.getFoodType`, `DataManager.ITEM_GROUPS_DATA` lookup, XML/JAXB static data, live item-template lookup, Java RNG runtime comparison, live feed mutation, DAO writes, scheduler behavior, and socket dispatch remain disabled.
+
+## Update After UOW-1322
+
+A non-live C# `PetFoodTypeLookup` helper now preserves supplied-data `PetFlavour.getFoodType` and `ItemGroupsData.isFood` behavior, including ordered reward-group scanning, `EXCLUDES`/`STINKY` rejection before type checks, direct type membership, Java `MISCELLANEOUS` junk-group matching, and null result when no reward group matches. Live bind-point fanout remains blocked because XML pet food loading, `DataManager.ITEM_GROUPS_DATA`, `ItemRaceEntry` validation, live item lookup, live feed mutation, DAO writes, scheduler behavior, Java runtime comparison, and socket dispatch remain disabled.
