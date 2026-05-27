@@ -60989,6 +60989,71 @@ Next recommended unit of work:
 
 ---
 
+### Session 1465 (May 27, 2026)
+- Continued after UOW-1464 with multi-viewer kisk/NPC visibility deletion fanout.
+- Expanded `GameClientSocketServerNpcVisibilityTests` loopback fixture so it can create multiple active `GameServerConnection` instances while preserving the existing single-connection path.
+- Added connection-indexed packet observation to prove which viewer received each visibility packet.
+- Added `RefreshNpcVisibilityAsync_DeletesRemovedKiskOnlyForViewerThatKnewIt`.
+- The test registers a near viewer and a far viewer, primes visibility with one kisk NPC, verifies only the near viewer receives `SmNpcInfo`, removes the kisk from the snapshot, and verifies only that same near viewer receives the serialized `SmDelete`.
+- Kept production code unchanged.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --filter "FullyQualifiedName~GameClientSocketServerNpcVisibilityTests"`.
+  - Result: passed 8 tests.
+
+#### Parallel Work Discovery - Session 1465
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Multi-viewer kisk visibility delete fanout | `KnownList.clear`, `KnownList.del`, `PlayerController.see/notSee` | `GameClientSocketServerNpcVisibilityTests.cs` | Integration Test | No | Medium | Required shared fixture expansion and active socket packet capture. |
+| B | Known-but-not-visible service regression | `KnownList.del` | `NpcVisibilityServiceTests.cs` | Unit Test | Later | Low | Independent from active socket fixture, but less valuable than full socket fanout in this unit. |
+| C | Player-owned aggro model design | `PlayerAggroList`, `AggroList` | future design/model files | Later | High | Separate blocker; do not combine with visibility fixture edits. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add multi-viewer kisk delete fanout regression | Integration Test / Documentation | `GameClientSocketServerNpcVisibilityTests.cs`, progress/handoff docs | production socket server, unrelated fixtures | UOW-1464 active socket fixture | Passing regression proving delete packets are emitted only to active viewers that previously knew the removed kisk/NPC. |
+
+No subagent was spawned because the selected work changed a shared active-connection fixture.
+
+#### Migration Parity Table - Session 1465
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.knownlist.KnownList` | `NpcVisibilityService` / `GameClientSocketServer.RefreshNpcVisibilityAsync` | Service / Known List | Partial | Integration Tested | Partial Parity | Active socket regression now proves a disappeared kisk/NPC delete is viewer-specific: only the player that previously knew the visible object receives `SmDelete`. Java also calls `notifyNotKnow` and manages bidirectional known-list state; C# still tracks NPC object-id deltas only. |
+| `com.aionemu.gameserver.controllers.PlayerController` | `GameClientSocketServer.RefreshNpcVisibilityAsync` | Controller / Packet Fanout | Partial | Integration Tested | Partial Parity | Test covers per-player `see`/`notSee` fanout through active registered connections. Java spawned-state, teleport, and controller callback branches remain broader than the C# active-player guard. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NPC_INFO` | `SmNpcInfo` | Packet | Partial | Integration Tested | Partial Parity | Test asserts only the near viewer receives appeared NPC info before later deletion. Byte-level Java artifact comparison remains blocked. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_DELETE` | `SmDelete` | Packet | Partial | Integration Tested | Partial Parity | Test serializes the emitted delete packet and validates removed object id plus fade-out animation for the viewer that previously knew the kisk. Java runtime packet bytes remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.Kisk` | `WorldNpc` / `PlayerKiskRuntimeState` | Runtime State / World Object | Partial | Integration Tested | Partial Parity | Kisk is represented by the kisk NPC id in visibility refresh. Kisk bind/member cleanup and Java `KiskService.removeKisk` side effects are not part of this fanout unit. |
+| `com.aionemu.gameserver.world.World` / visibility range dependencies | `WorldVisibility` | Utility / Visibility Predicate | Partial | Integration Tested | Needs Verification | Test depends on deterministic near/far visibility filtering. Java region visibility, map-region locks, and exact distance/region interaction are not fully modeled here. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `RefreshNpcVisibilityAsync_DeletesRemovedKiskOnlyForViewerThatKnewIt` | Integration / socket-server | `KnownList.clear`, `KnownList.del`, `PlayerController.see`, `PlayerController.notSee` | Two active registered viewers are refreshed against one kisk; only the near viewer receives `SmNpcInfo`, and after removal only that near viewer receives `SmDelete`. | Deterministic C# loopback packet capture with per-connection observation and serialized delete payload inspection. | Does not compare Java runtime output, exact region locks, spawned/teleport state, or Java bidirectional `notifyNotKnow` callbacks. |
+| Existing `GameClientSocketServerNpcVisibilityTests` | Existing Unit / Integration | Kisk `SM_NPC_INFO`, `SM_DELETE`, known-list deltas | Existing kisk creature-type, order, removal, and no-active-player regressions remained stable. | Focused 8-test suite passed. | Full Java lifecycle and runtime packet artifacts remain broader. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- C# multi-viewer visibility uses snapshot/delta state, while Java clears retained object known-lists during world despawn.
+- Java bidirectional known-list callbacks and `notifyNotKnow` are not modeled by this socket-level test.
+- Exact Java map-region visibility and lock ordering remain unverified.
+- Player-owned aggro cleanup remains blocked by the missing C# `PlayerAggroList` equivalent.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped artifact rows in this unit
+- Total artifacts ported: 0 production artifacts in this unit; 1 multi-viewer active socket regression added
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 6 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, full Java known-list callback lifecycle, exact map-region visibility, player-owned aggro model
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Continue kisk visibility/deletion parity with an objects-known-but-not-visible regression, or switch to the dedicated player-owned aggro model design UOW to unblock revive aggro cleanup.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
