@@ -475,3 +475,7 @@ The checked-in pet static data was structurally audited: 218 pet templates, max 
 ## Update After UOW-1306
 
 `CmPet` now parses Java opcode `22` metadata for `ADOPT`, `SURRENDER`, `SPAWN`, `DISMISS`, `FOOD`, `RENAME`, and `MOOD`, and the client packet factory registers it as in-game only. Live bind-point fanout remains blocked because `CM_PET.runImpl` side effects, `EXTEND_EXPIRATION`, pet service/adoption/spawn/mood runtime behavior, live pet common-data hydration, Java runtime vectors, and socket dispatch remain unported.
+
+## Update After UOW-1307
+
+`CmPetEmote` now parses Java opcode `21` metadata for functional-pet movement/default emotes, including `MOVE_STOP`, `MOVE_POSITION_UPDATE`, `MOVETO`, default emotion-style branches, and unknown-emote fallback. Live bind-point fanout remains blocked because `CM_PET_EMOTE.runImpl`, active-pet lookup, negative-coordinate rejection, pet world position mutation, move-controller target updates, visible-player broadcast predicates, Java runtime vectors, and socket dispatch remain unported.
