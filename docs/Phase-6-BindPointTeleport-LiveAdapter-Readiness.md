@@ -655,3 +655,7 @@ The disabled unusual-storage capture registry now creates an internal no-output 
 ## Update After UOW-1351
 
 The disabled unusual-storage capture registry now prunes pending contexts older than 30 seconds and records registration/completion timestamps in the no-output snapshot shape. Live bind-point fanout remains blocked because capture is still not installed or enabled, the age bound is a capture safety choice rather than verified gameplay parity, no bytes or files are retained, Java compile validation is unavailable locally, item/blob decoded fields are missing, and the C# live adapter still does not hydrate, mutate, dispatch, or runtime-compare unusual storage.
+
+## Update After UOW-1352
+
+A read-only Java writer/config audit now identifies the future unusual-storage artifact writer prerequisites: existing `fastjson2` dependency, static `@Property` config registration through `Config.CONFIGS`, a configurable safe output path outside production data/logs, and a dedicated bounded writer queue rather than inline packet-serialization file writes. Live bind-point fanout remains blocked because no config key, observer install, writer, byte copy, Java runtime artifact, item/blob decoder, or C# unusual-storage live adapter was enabled.
