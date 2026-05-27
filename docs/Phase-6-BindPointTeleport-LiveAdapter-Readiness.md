@@ -555,3 +555,7 @@ A non-live C# `PetFeedServiceOperationPlanner` now records Java `PetService.chec
 ## Update After UOW-1326
 
 A non-sending C# `PetFeedPacketMetadataBridge` now converts packet-facing feed operation intents into concrete `SmPet.Food(...)` metadata for Java FOOD subtypes `2`, `5`, `6`, and `7`, while explicitly marking item unlock, end-feeding emotion context, and rejected-food system-message context as blocked gaps. Live bind-point fanout remains blocked because packet dispatch, item unlock packet construction, emotion/player hydration, localization, inventory mutation, reward creation, scheduler execution, DAO writes, Java runtime packet comparison, and socket dispatch remain disabled.
+
+## Update After UOW-1327
+
+`PetFeedPacketMetadataBridge` can now consume supplied supplemental context to construct non-sending end-feeding `SmEmotion` metadata and rejected-food `SmSystemMessage(1400618, petName, itemName)` metadata, while preserving blocked metadata when that context is absent. Live bind-point fanout remains blocked because item unlock storage packets, live player/pet/item hydration, localization, inventory mutation, reward creation, scheduler execution, DAO writes, Java runtime packet comparison, and socket dispatch remain disabled.
