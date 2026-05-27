@@ -539,3 +539,7 @@ A non-live C# `PetFeedPlanner` helper now preserves supplied-data `PetFlavour.pr
 ## Update After UOW-1322
 
 A non-live C# `PetFoodTypeLookup` helper now preserves supplied-data `PetFlavour.getFoodType` and `ItemGroupsData.isFood` behavior, including ordered reward-group scanning, `EXCLUDES`/`STINKY` rejection before type checks, direct type membership, Java `MISCELLANEOUS` junk-group matching, and null result when no reward group matches. Live bind-point fanout remains blocked because XML pet food loading, `DataManager.ITEM_GROUPS_DATA`, `ItemRaceEntry` validation, live item lookup, live feed mutation, DAO writes, scheduler behavior, Java runtime comparison, and socket dispatch remain disabled.
+
+## Update After UOW-1323
+
+A non-live C# `PetFeedXmlProjection` helper now projects Java `pet_feed.xml` into id-keyed flavour data, preserving Java class defaults, reward groups, loved flags, duplicate-id replacement, sorted positive full-count discovery, and checked-in XML shape counts. Live bind-point fanout remains blocked because Java JAXB/schema validation, global `DataManager.PET_FEED_DATA`, item-template lookup, item-group lookup, live feed mutation, DAO writes, scheduler behavior, Java runtime comparison, and socket dispatch remain disabled.
