@@ -571,3 +571,7 @@ A non-sending C# `PetFeedPacketMetadataBridge` now converts packet-facing feed o
 ## Update After UOW-1330
 
 `PetFeedPacketMetadataBridge` can now consume supplied legion warehouse unlock context for both Java branches: ordinary items construct `SmWarehouseAddItem` type `3` followed by legion warehouse `SmCubeUpdate`, while kinah constructs `SmLegionEdit.WarehouseKinah(...)` followed by the same cube update. Live bind-point fanout remains blocked because live storage location mapping, item-template/legion hydration, inventory mutation, packet dispatch, scheduler execution, reward creation, DAO writes, Java runtime packet comparison, and socket dispatch remain disabled.
+
+## Update After UOW-1331
+
+`PetFeedUnlockPacketContextAssembler` can now map supplied item location/storage snapshots into non-live unlock packet context for cube, regular warehouse, account warehouse, and legion warehouse storage ids, while preserving Java's unknown-storage no-send boundary and blocking unmodeled pet/house storage ids. Live bind-point fanout remains blocked because live item-template/player/account/legion storage hydration, inventory mutation, packet dispatch, scheduler execution, reward creation, DAO writes, Java runtime packet comparison, and socket dispatch remain disabled.
