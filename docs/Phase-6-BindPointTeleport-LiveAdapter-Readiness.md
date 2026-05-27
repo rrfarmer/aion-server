@@ -503,3 +503,7 @@ A read-only pet runtime dependency map now captures the Java service/model/repos
 ## Update After UOW-1313
 
 A standalone C# `PetFeedProgress` helper and `PetHungryLevel` enum now preserve Java feed-progress bit packing, saved-data decode, total-point masking, unsigned regular-count view, loved-feed reset behavior, and hungry-level cycling. Live bind-point fanout remains blocked because the helper is not yet wired to live pet common data, feed calculator thresholds, DAO load/save, scheduled feed/refeed behavior, inventory mutation, Java runtime vectors, or socket dispatch.
+
+## Update After UOW-1314
+
+A standalone C# `PetCommonDataTiming` helper now preserves Java birthday epoch conversion, refeed delay mutation, mood-point lazy start and packet cap, Java-style millisecond-to-second rounding, mood/gift cooldown remaining-time resets, shuggle counter increment gating, and mood-stat reset behavior from supplied time inputs. Live bind-point fanout remains blocked because the helper is not yet wired to a live pet common-data model, `ThreadPoolManager`-style refeed scheduling, feed/doping template initialization, pet DAO load/save, expirable callbacks, packet dispatch, Java runtime vectors, or socket dispatch.
