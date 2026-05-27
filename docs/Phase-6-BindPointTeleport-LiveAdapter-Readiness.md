@@ -551,3 +551,7 @@ A non-live C# `PetFeedEvaluation` helper now composes projected feed data, suppl
 ## Update After UOW-1325
 
 A non-live C# `PetFeedServiceOperationPlanner` now records Java `PetService.checkFeeding` feed-side operation order around the evaluator, including rejected-food unlock/end/system-message intent, accepted-food decrement intent, repeat-feed scheduling intent, reward packet/add-item/refeed/DAO/reset intent, and cancel no-op behavior. Live bind-point fanout remains blocked because these are operation intents only; concrete packet dispatch, inventory mutation, reward item creation, scheduler execution, DAO writes, localization, Java runtime packet comparison, and socket dispatch remain disabled.
+
+## Update After UOW-1326
+
+A non-sending C# `PetFeedPacketMetadataBridge` now converts packet-facing feed operation intents into concrete `SmPet.Food(...)` metadata for Java FOOD subtypes `2`, `5`, `6`, and `7`, while explicitly marking item unlock, end-feeding emotion context, and rejected-food system-message context as blocked gaps. Live bind-point fanout remains blocked because packet dispatch, item unlock packet construction, emotion/player hydration, localization, inventory mutation, reward creation, scheduler execution, DAO writes, Java runtime packet comparison, and socket dispatch remain disabled.
