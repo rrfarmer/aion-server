@@ -21,6 +21,7 @@ import com.aionemu.gameserver.services.item.ItemPacketService.ItemAddType;
 public final class PetFeedUnusualStorageArtifactCapture {
 
 	private static final int MAX_PENDING_CONTEXTS_PER_PLAYER = 4;
+	private static final long MAX_PENDING_CONTEXT_AGE_MILLIS = 30000;
 	private static final ConcurrentHashMap<Integer, Deque<CaptureContext>> pendingContexts = new ConcurrentHashMap<>();
 	private static final ServerPacketCaptureObserver observer = new ServerPacketCaptureObserver() {
 
@@ -60,10 +61,12 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		// followed by SM_CUBE_UPDATE.cubeSize(storageType, player). Future artifact capture will
 		// record the construction context here and pair it with AionServerPacket serialization bytes.
 		Deque<CaptureContext> contexts = getPendingContexts(player.getObjectId());
+		long now = System.currentTimeMillis();
 		synchronized (contexts) {
+			removeExpiredContexts(contexts, now);
 			while (contexts.size() >= MAX_PENDING_CONTEXTS_PER_PLAYER)
 				contexts.removeFirst();
-			contexts.addLast(new CaptureContext(storageType.getId(), storageType.ordinal(), item.getObjectId()));
+			contexts.addLast(new CaptureContext(storageType.getId(), storageType.ordinal(), item.getObjectId(), now));
 		}
 	}
 
@@ -93,16 +96,22 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		if (contexts == null)
 			return;
 		synchronized (contexts) {
+			removeExpiredContexts(contexts, System.currentTimeMillis());
 			CaptureContext context = contexts.peekFirst();
 			if (context == null)
 				return;
 			if (context.advance(packet, clearFrame) && context.isComplete()) {
 				contexts.removeFirst();
-				onSnapshotReady(context.toSnapshot());
+				onSnapshotReady(context.toSnapshot(System.currentTimeMillis()));
 			}
 			if (contexts.isEmpty())
 				pendingContexts.remove(player.getObjectId(), contexts);
 		}
+	}
+
+	private static void removeExpiredContexts(Deque<CaptureContext> contexts, long now) {
+		while (!contexts.isEmpty() && contexts.peekFirst().isExpired(now))
+			contexts.removeFirst();
 	}
 
 	private static void onSnapshotReady(ArtifactSnapshot snapshot) {
@@ -114,13 +123,15 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private final int storageTypeId;
 		private final int storageTypeOrdinal;
 		private final int itemObjectId;
+		private final long registeredAtMillis;
 		private final PacketSnapshot[] packets = new PacketSnapshot[2];
 		private int nextPacketIndex;
 
-		private CaptureContext(int storageTypeId, int storageTypeOrdinal, int itemObjectId) {
+		private CaptureContext(int storageTypeId, int storageTypeOrdinal, int itemObjectId, long registeredAtMillis) {
 			this.storageTypeId = storageTypeId;
 			this.storageTypeOrdinal = storageTypeOrdinal;
 			this.itemObjectId = itemObjectId;
+			this.registeredAtMillis = registeredAtMillis;
 		}
 
 		private boolean advance(AionServerPacket packet, ByteBuffer clearFrame) {
@@ -141,8 +152,13 @@ public final class PetFeedUnusualStorageArtifactCapture {
 			return nextPacketIndex >= 2;
 		}
 
-		private ArtifactSnapshot toSnapshot() {
-			return new ArtifactSnapshot(storageTypeId, storageTypeOrdinal, itemObjectId, packets[0], packets[1]);
+		private boolean isExpired(long now) {
+			return now >= registeredAtMillis && now - registeredAtMillis > MAX_PENDING_CONTEXT_AGE_MILLIS;
+		}
+
+		private ArtifactSnapshot toSnapshot(long completedAtMillis) {
+			return new ArtifactSnapshot(storageTypeId, storageTypeOrdinal, itemObjectId, registeredAtMillis, completedAtMillis, packets[0],
+				packets[1]);
 		}
 	}
 
@@ -151,14 +167,18 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private final int storageTypeId;
 		private final int storageTypeOrdinal;
 		private final int itemObjectId;
+		private final long registeredAtMillis;
+		private final long completedAtMillis;
 		private final PacketSnapshot warehouseAddPacket;
 		private final PacketSnapshot cubeUpdatePacket;
 
-		private ArtifactSnapshot(int storageTypeId, int storageTypeOrdinal, int itemObjectId, PacketSnapshot warehouseAddPacket,
-			PacketSnapshot cubeUpdatePacket) {
+		private ArtifactSnapshot(int storageTypeId, int storageTypeOrdinal, int itemObjectId, long registeredAtMillis, long completedAtMillis,
+			PacketSnapshot warehouseAddPacket, PacketSnapshot cubeUpdatePacket) {
 			this.storageTypeId = storageTypeId;
 			this.storageTypeOrdinal = storageTypeOrdinal;
 			this.itemObjectId = itemObjectId;
+			this.registeredAtMillis = registeredAtMillis;
+			this.completedAtMillis = completedAtMillis;
 			this.warehouseAddPacket = warehouseAddPacket;
 			this.cubeUpdatePacket = cubeUpdatePacket;
 		}

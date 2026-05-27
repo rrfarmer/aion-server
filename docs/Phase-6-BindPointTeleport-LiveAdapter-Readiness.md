@@ -651,3 +651,7 @@ The Java unusual-storage construction context seam now exists at `ItemPacketServ
 ## Update After UOW-1350
 
 The disabled unusual-storage capture registry now creates an internal no-output snapshot shape after the correlated warehouse-add/cube-update packet pair, recording storage id, storage ordinal, item object id, packet class names, clear-frame length, encoded opcode, and observer remaining-byte metadata. Live bind-point fanout remains blocked because no observer is installed or enabled, no bytes or files are retained, Java compile validation is unavailable locally, item/blob decoded fields are missing, and the C# live adapter still does not hydrate, mutate, dispatch, or runtime-compare unusual storage.
+
+## Update After UOW-1351
+
+The disabled unusual-storage capture registry now prunes pending contexts older than 30 seconds and records registration/completion timestamps in the no-output snapshot shape. Live bind-point fanout remains blocked because capture is still not installed or enabled, the age bound is a capture safety choice rather than verified gameplay parity, no bytes or files are retained, Java compile validation is unavailable locally, item/blob decoded fields are missing, and the C# live adapter still does not hydrate, mutate, dispatch, or runtime-compare unusual storage.
