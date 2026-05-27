@@ -579,3 +579,7 @@ A non-sending C# `PetFeedPacketMetadataBridge` now converts packet-facing feed o
 ## Update After UOW-1332
 
 Non-live rejected-food metadata composition tests now prove the supplied operation plan, unlock context assembler, supplemental context, and packet metadata bridge compose modeled cube/warehouse/legion unlock packet families before `SmPet`, `SmEmotion`, and rejected-food `SmSystemMessage` metadata. Live bind-point fanout remains blocked because live storage ownership/hydration, inventory mutation, packet dispatch, scheduler execution, reward creation, DAO writes, Java runtime packet comparison, and socket dispatch remain disabled.
+
+## Update After UOW-1333
+
+A Java runtime-vector design now scopes the pet feed rewarded `SM_PET` FOOD subtype `7` ambiguity: Java queues the packet before reward item add, refeed scheduling, `setRefeedTime`, DAO persistence, and `PetFeedProgress.reset`, but the packet serializes mutable `PetCommonData` fields when written. Live bind-point fanout remains blocked because no Java subtype `7` runtime artifacts, packet observer hook, deterministic feed fixture, live common-data timing, scheduler execution, reward creation, DAO writes, inventory mutation, or socket dispatch exists.
