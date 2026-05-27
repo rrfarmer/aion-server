@@ -61430,6 +61430,68 @@ Next recommended unit of work:
 
 ---
 
+### Session 1472 (May 27, 2026)
+- Continued after UOW-1471 with kisk add/remove member update fanout.
+- Re-read Java `Kisk.addPlayer`, `Kisk.removePlayer`, and `Kisk.broadcastKiskUpdate`.
+- Added `CreatePlanSkipsKnownDifferentRaceMemberLikeJavaBroadcastKiskUpdate` to `PlayerKiskUpdateFanoutServiceTests`.
+- The test covers the Java two-stage fanout nuance: direct member updates are skipped for members already in the kisk known-list, and the visible broadcast stage only targets same-race players.
+- For an unrestricted kisk, a different-race member that already knows the kisk receives no update, while a same-race known member receives the visible same-race update.
+- Kept production code unchanged; the existing fanout planner already matched this audited behavior.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --filter "FullyQualifiedName~PlayerKiskUpdateFanoutServiceTests"`.
+  - Result: passed 5 tests.
+
+#### Parallel Work Discovery - Session 1472
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Known different-race kisk member fanout | `Kisk.broadcastKiskUpdate`, `Kisk.addPlayer`, `Kisk.removePlayer` | `PlayerKiskUpdateFanoutServiceTests.cs` | Unit Test | No | Low | Compact fanout regression in one test file. |
+| B | Online removal packet/order fanout | `KiskService.removeKisk`, `TeleportService.sendKiskBindPoint`, `PlayerController.showResurrectionOptions` | runtime cleanup tests | Later | Medium | Broader packet/order work. |
+| C | Bind duplicate/direct-only update modeling | `Kisk.addPlayer` duplicate branch | bind workflow tests/planner | Later | Medium | Needs careful comparison with C# dialog/authorization flow. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add known different-race kisk member fanout regression | Unit Test / Documentation | `PlayerKiskUpdateFanoutServiceTests.cs`, progress/handoff docs | production fanout service, revive workflow fixture, runtime cleanup tests | Java `Kisk.broadcastKiskUpdate` audit | Passing regression proving known different-race members are skipped by both Java fanout stages. |
+
+No subagent was spawned because the selected unit was a narrow single-test change.
+
+#### Migration Parity Table - Session 1472
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.Kisk` | `PlayerKiskUpdateFanoutService` | Service / Fanout Planner | Partial | Unit Tested | Partial Parity | Test covers `broadcastKiskUpdate` direct-member skip for known members plus same-race visible broadcast filtering. No live packet send or Java runtime packet comparison. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Player` / `WorldVisibility` | Model / Visibility Input | Partial | Unit Tested | Needs Verification | Test uses race and position inputs to model Java same-race visible broadcast filtering. Full Java known-list and `PacketSendUtility.broadcastPacket` behavior remain broader. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_KISK_UPDATE` | `SmKiskUpdate` / `PlayerKiskUpdateFanoutPlan` | Packet Boundary / Planner | Partial | Unit Tested | Partial Parity | Fanout recipient planning is covered; actual packet serialization is covered elsewhere and Java runtime fanout output is not compared. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlanSkipsKnownDifferentRaceMemberLikeJavaBroadcastKiskUpdate` | Unit / fanout planner | `Kisk.broadcastKiskUpdate` | A different-race kisk member that already knows the kisk is skipped by direct member updates and by same-race visible broadcast, while a same-race known member is included in visible fanout. | Deterministic fanout plan regression from reviewed Java source. | No live socket packet send or Java runtime comparison. |
+| Existing `PlayerKiskUpdateFanoutServiceTests` | Existing Unit | `Kisk.broadcastKiskUpdate` | Existing direct member, visible same-race, unavailable known-list, and NPC visibility known-list tests remained stable. | Focused 5-test suite passed. | Full Java `PacketSendUtility.broadcastPacket` and known-list internals remain broader. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Fanout planner tests do not execute real socket sends or compare Java packet output.
+- C# uses `NpcVisibilityService.IsKnownNpc` as the known-list callback rather than Java direct `Kisk.getKnownList().knows`.
+- Java duplicate `Kisk.addPlayer` branch sends `SM_KISK_UPDATE` only to the player; C# bind dialog/authorization flow still needs a dedicated comparison before changing behavior.
+- Live player aggro mutation remains blocked by the missing C# player-owned aggro list.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped artifact rows in this unit
+- Total artifacts ported: 0 production artifacts in this unit; 1 fanout regression added
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 3 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, live socket fanout comparison, Java known-list callback internals, duplicate add-player branch comparison
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Continue kisk add/remove member parity with the Java duplicate `Kisk.addPlayer` direct-only update branch, or move to online kisk removal packet/order fanout review.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
