@@ -791,3 +791,7 @@ The guarded C# unusual-storage artifact reader tests now understand the current 
 ## Update After UOW-1385
 
 A read-only C# item-blob serializer gap audit now maps the specific `SmInventoryInfo.WriteItemInfoBlob` blockers for future unusual-storage `SM_WAREHOUSE_ADD_ITEM` byte comparison: missing `STAT_BONUSES`, missing composite fusion random bonus id, unsupported temporary-exchange and cleanup/seal general-info fields, missing plume tempering stat pairs, possible conditioning-entry presence mismatch, and wall-clock expiration/dye nondeterminism. Live bind-point fanout remains blocked because Java compile/runtime validation, runtime artifact generation, warehouse-add byte comparison, C# item-blob serializer gap closure, runtime lifecycle validation, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.
+
+## Update After UOW-1386
+
+The C# composite item blob now writes `InventoryItem.FusionRandomBonus` where Java `CompositeItemBlobEntry` writes `getFusionedItemBonusStatsId()`, and focused packet regression coverage verifies the emitted byte. The unusual-storage artifact reader diagnostics no longer report fusion random bonus id as a known serializer gap. Live bind-point fanout remains blocked because Java compile/runtime validation, runtime artifact generation, warehouse-add byte comparison, remaining item-blob serializer gaps, runtime lifecycle validation, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.
