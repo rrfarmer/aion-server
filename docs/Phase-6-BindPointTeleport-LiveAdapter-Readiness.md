@@ -419,3 +419,7 @@ Pet visibility descriptors can now be bridged to non-sending packet-construction
 ## Update After UOW-1292
 
 Population diagnostics can now carry optional non-sending dependent pet packet-construction metadata and count constructed or blocked pet packets from supplied pet spawn snapshots. Live bind-point fanout remains blocked because active pet/common-data hydration is missing, full pet packet coverage is incomplete, live known-list pet retry execution and socket dispatch are disabled, and no Java runtime packet capture has been performed.
+
+## Update After UOW-1293
+
+A disabled/non-live pet spawn snapshot provider shape now validates the Java-required `SM_PET(Pet)` spawn fields before producing `SmPetSpawnSnapshot` and preserves `Player.isInFlyingState()` metadata for fly-start planning. Live bind-point fanout remains blocked because the provider consumes supplied metadata rather than active pet/common-data/template/move-controller state, full pet packet coverage is incomplete, socket dispatch is disabled, and no Java runtime packet capture has been performed.
