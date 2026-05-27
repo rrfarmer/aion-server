@@ -547,3 +547,7 @@ A non-live C# `PetFeedXmlProjection` helper now projects Java `pet_feed.xml` int
 ## Update After UOW-1324
 
 A non-live C# `PetFeedEvaluation` helper now composes projected feed data, supplied item groups, supplied item levels, full-count point tables, food-type lookup, loved-limit gating, planner mutation, and reward selection for one offline feed attempt. Live bind-point fanout remains blocked because inventory decrement/unlock, item reward creation, refeed scheduling, cooldown DAO writes, concrete feed packet ordering, global `DataManager` wiring, Java RNG/runtime comparison, and socket dispatch remain disabled.
+
+## Update After UOW-1325
+
+A non-live C# `PetFeedServiceOperationPlanner` now records Java `PetService.checkFeeding` feed-side operation order around the evaluator, including rejected-food unlock/end/system-message intent, accepted-food decrement intent, repeat-feed scheduling intent, reward packet/add-item/refeed/DAO/reset intent, and cancel no-op behavior. Live bind-point fanout remains blocked because these are operation intents only; concrete packet dispatch, inventory mutation, reward item creation, scheduler execution, DAO writes, localization, Java runtime packet comparison, and socket dispatch remain disabled.
