@@ -799,3 +799,7 @@ The C# composite item blob now writes `InventoryItem.FusionRandomBonus` where Ja
 ## Update After UOW-1387
 
 A read-only `STAT_BONUSES` mapping audit now documents the Java rule for future C# serialization: include only condition-free bonus modifiers, use Java `StatEnum.getItemStoneMask()` and `getSign()`, and set the rate flag only for Java `StatRateFunction`/C# `Operation == "rate"`. Implementation remains pending. Live bind-point fanout remains blocked because Java compile/runtime validation, runtime artifact generation, warehouse-add byte comparison, `STAT_BONUSES` implementation/tests, remaining item-blob serializer gaps, runtime lifecycle validation, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.
+
+## Update After UOW-1388
+
+The C# item-blob writer now serializes Java-shaped `STAT_BONUSES` entries after `PREMIUM_OPTION` and before `GENERAL_INFO` for condition-free bonus template modifiers with known nonzero Java stat masks. Focused regression coverage verifies `MAXHP`, `ATTACK_SPEED` sign inversion/rate flag, non-bonus skip, and conditioned skip, and unusual-storage diagnostics no longer list `STAT_BONUSES` as a known serializer gap. Live bind-point fanout remains blocked because Java compile/runtime validation, runtime artifact generation, warehouse-add byte comparison, temporary-exchange/seal fields, plume tempering stats, conditioning presence, runtime lifecycle validation, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.
