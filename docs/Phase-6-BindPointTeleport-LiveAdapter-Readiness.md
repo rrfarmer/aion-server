@@ -443,3 +443,7 @@ A guarded C# schema-v1 pet vector artifact reader/comparator now exists for futu
 ## Update After UOW-1298
 
 `SmPet` now supports the selected Java `SM_PET(PetAction)` action-only packets for merchant, minder, house adopt, and house abandon, with tests confirming that each writes only the action id. Live bind-point fanout remains blocked because Java runtime vectors are still missing, `EXTEND_EXPIRATION` call-site behavior is unverified, broader `SM_PET` branches still need common-data/template/feed/mood/doping snapshots, live pet management dispatch is absent, and socket dispatch remains disabled.
+
+## Update After UOW-1299
+
+`SmPet` now supports the Java `SM_PET(int, String)` rename packet shape as source-derived serialization: action id, pet object id, and pet name. Live bind-point fanout remains blocked because Java runtime vectors are still missing, live rename validation/persistence/dispatch is absent, C# null-name behavior is stricter than unverified Java behavior, broader `SM_PET` branches still need common-data/template/feed/mood/doping snapshots, and socket dispatch remains disabled.
