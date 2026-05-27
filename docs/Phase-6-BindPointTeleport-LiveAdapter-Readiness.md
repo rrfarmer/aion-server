@@ -499,3 +499,7 @@ A read-only pet runtime dependency map now captures the Java service/model/repos
 ## Update After UOW-1312
 
 `SmPet` now supports the Java `MOOD` packet branch for subtypes `0`, `2`, `3`, and `4` from supplied snapshots, preserving Java's action-only behavior for unknown mood subtypes. Live bind-point fanout remains blocked because C# still lacks live mood-point timing, packet-time `PetCommonData` mutations, mood/gift cooldown date-time behavior, inventory reward flow, `PetMoodService` validation/dispatch, persistence, Java runtime vectors, and socket dispatch.
+
+## Update After UOW-1313
+
+A standalone C# `PetFeedProgress` helper and `PetHungryLevel` enum now preserve Java feed-progress bit packing, saved-data decode, total-point masking, unsigned regular-count view, loved-feed reset behavior, and hungry-level cycling. Live bind-point fanout remains blocked because the helper is not yet wired to live pet common data, feed calculator thresholds, DAO load/save, scheduled feed/refeed behavior, inventory mutation, Java runtime vectors, or socket dispatch.
