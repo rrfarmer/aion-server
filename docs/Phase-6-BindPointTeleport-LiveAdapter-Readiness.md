@@ -575,3 +575,7 @@ A non-sending C# `PetFeedPacketMetadataBridge` now converts packet-facing feed o
 ## Update After UOW-1331
 
 `PetFeedUnlockPacketContextAssembler` can now map supplied item location/storage snapshots into non-live unlock packet context for cube, regular warehouse, account warehouse, and legion warehouse storage ids, while preserving Java's unknown-storage no-send boundary and blocking unmodeled pet/house storage ids. Live bind-point fanout remains blocked because live item-template/player/account/legion storage hydration, inventory mutation, packet dispatch, scheduler execution, reward creation, DAO writes, Java runtime packet comparison, and socket dispatch remain disabled.
+
+## Update After UOW-1332
+
+Non-live rejected-food metadata composition tests now prove the supplied operation plan, unlock context assembler, supplemental context, and packet metadata bridge compose modeled cube/warehouse/legion unlock packet families before `SmPet`, `SmEmotion`, and rejected-food `SmSystemMessage` metadata. Live bind-point fanout remains blocked because live storage ownership/hydration, inventory mutation, packet dispatch, scheduler execution, reward creation, DAO writes, Java runtime packet comparison, and socket dispatch remain disabled.
