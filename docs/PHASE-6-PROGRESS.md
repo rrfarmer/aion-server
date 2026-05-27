@@ -61681,6 +61681,79 @@ Next recommended unit of work:
 
 ---
 
+### Session 1476 (May 27, 2026)
+- Continued after UOW-1475 with offline kisk login restore packet-order audit.
+- Re-read Java `PlayerEnterWorldService` ordering around `KiskService.onLogin(player)`, `TeleportService.sendObeliskBindPoint(player)`, and `TeleportService.sendKiskBindPoint(player)`.
+- Re-read Java `TeleportService.sendKiskBindPoint` and `SM_BIND_POINT_INFO`.
+- Found that C# restored offline bindings sent the obelisk bind-point packet before the restored kisk update, while Java calls `KiskService.onLogin` first; the duplicate offline member branch in `Kisk.addPlayer` sends `SM_KISK_UPDATE` before the bind-point packets.
+- Added `PlayerKiskLoginRestorePacketPlanService` and wired `GameServerConnection` enter-world restored-kisk handling through it.
+- The plan now emits direct packets in Java order: restored `SmKiskUpdate`, obelisk `SmBindPointInfo`, then kisk `SmBindPointInfo` when the kisk position is known.
+- Added `PlayerKiskLoginRestorePacketPlanServiceTests` covering restored-existing, restored-added, and no-restored-kisk cases.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --filter "FullyQualifiedName~PlayerKiskLoginRestorePacketPlanServiceTests"`.
+  - Result: passed 3 tests.
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --no-restore --filter "FullyQualifiedName~PlayerKiskRegistryTests|FullyQualifiedName~PlayerKiskUpdateFanoutServiceTests"`.
+  - Result: passed 11 tests.
+  - Ran full `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --no-restore`.
+  - Result: failed 2 unrelated inventory/item-use cleanup-seal tests after 3,038 tests passed; both failures reproduced when isolated.
+
+#### Parallel Work Discovery - Session 1476
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Offline login restore packet order | `KiskService.onLogin`, `PlayerEnterWorldService`, `TeleportService.sendObeliskBindPoint`, `TeleportService.sendKiskBindPoint`, `SM_BIND_POINT_INFO` | `GameServerConnection.cs`, new kisk login restore planner/test | Service / Regression Test | No | Medium | Touches shared enter-world packet sequence; should stay sequential. |
+| B | Duplicate bind socket response audit | `Kisk.addPlayer` duplicate branch, `SM_KISK_UPDATE` | bind response tests | Later | Medium | Separate interactive bind path; no file overlap if done later. |
+| C | Kisk packet byte comparison notes | `SM_KISK_UPDATE`, `SM_BIND_POINT_INFO`, `SM_DIE` | packet tests/docs | Later | Low | Java runtime artifact generation remains blocked locally. |
+| D | Live player aggro list design | `PlayerAggroList`, revive cleanup callers | future aggro model/service/test files | Later | High | Separate blocked workstream. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Align offline kisk login restore direct packet order | Service / Regression Test / Documentation | `GameServerConnection.cs`, `PlayerKiskLoginRestorePacketPlanService.cs`, `PlayerKiskLoginRestorePacketPlanServiceTests.cs`, progress/handoff docs | unrelated connection handlers, shared fixtures | Java enter-world/kisk login audit | Passing tests and C# enter-world restored-kisk order that sends `SmKiskUpdate` before bind-point packets. |
+
+No subagent was spawned because the selected work touched shared enter-world packet sequencing.
+
+#### Migration Parity Table - Session 1476
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerEnterWorldService` | `GameServerConnection` / `PlayerKiskLoginRestorePacketPlanService` | Service / Connection Flow | Partial | Unit Tested | Partial Parity | C# restored-kisk direct packet order now follows Java call order: `KiskService.onLogin`-driven update before obelisk/kisk bind-point packets. Full enter-world packet sequence remains broader. |
+| `com.aionemu.gameserver.services.KiskService` | `PlayerKiskRegistry.RestoreOfflineBinding` / `PlayerKiskLoginRestorePacketPlanService` | Service | Partial | Unit Tested | Partial Parity | Planner covers restored existing and restored added member direct packet order. Java duplicate branch sends `SM_KISK_UPDATE`; C# also sends direct `SmKiskUpdate`, but Java runtime packet bytes and full broadcast recipient behavior remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.Kisk` | `PlayerKiskRuntimeState` / `PlayerKiskOfflineBindingRestoreResult` | Runtime State / World Object | Partial | Unit Tested | Needs Verification | Restore result captures existing-vs-added member state by object id. Java uses direct `Kisk` references and synchronized member collection semantics. |
+| `com.aionemu.gameserver.services.teleport.TeleportService` | `PlayerKiskLoginRestorePacketPlanService` / `SmBindPointInfo` | Service / Packet Planner | Partial | Unit Tested | Partial Parity | Planner emits obelisk bind-point before kisk bind-point, matching Java `sendObeliskBindPoint` then `sendKiskBindPoint`. Payload byte comparison remains covered only by generic packet tests, not Java runtime output. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_BIND_POINT_INFO` | `SmBindPointInfo` | Packet | Partial | Unit Tested | Needs Verification | Packet type/order covered for login restore; byte serialization has generic C# tests but no Java-generated restored-login packet comparison in this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_KISK_UPDATE` | `SmKiskUpdate` | Packet | Partial | Unit Tested | Needs Verification | Direct restored-kisk packet order covered; packet bytes and live Java output remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlanOrdersRestoredKiskUpdateBeforeBindPointsLikeJavaEnterWorld` | Unit / packet planner | `PlayerEnterWorldService`, `KiskService.onLogin`, `TeleportService` | Restored existing kisk emits `SmKiskUpdate`, obelisk bind point, then kisk bind point. | Deterministic packet-order regression from Java source audit. | Does not run full enter-world socket flow or compare Java packet bytes. |
+| `CreatePlanBroadcastsAddedMemberAfterDirectJavaLoginPackets` | Unit / packet planner | `Kisk.addPlayer`, `PlayerEnterWorldService` | Restored added-member case still emits direct packets in Java login order and exposes a broadcast intent. | Deterministic planner regression. | Java `broadcastKiskUpdate` recipient nuances remain covered by separate fanout tests, not this planner. |
+| `CreatePlanSendsOnlyObeliskBindPointWhenNoKiskWasRestored` | Unit / packet planner | `PlayerEnterWorldService`, `TeleportService.sendObeliskBindPoint` | No restored kisk sends only the obelisk bind-point packet. | Deterministic planner regression. | Full no-kisk enter-world sequence remains broader. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Full game-server test suite currently has two unrelated stable failures in `GameServerConnectionInventoryExpansionUseItemTests`: `ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate` and `HandleUseItemAsync_ExpExtractMergesRestrictedRewardWithCleanupSealFlag`.
+- Full enter-world packet sequence was not replayed through `CmEnterWorld`; this unit verifies the extracted restored-kisk packet planner and production wiring.
+- C# still sends a direct `SmKiskUpdate` for restored added-member cases before broadcasting with the current fanout planner; Java `Kisk.addPlayer` enters `broadcastKiskUpdate` for added members. Recipient-level added-member restore remains Needs Verification.
+- Packet byte parity for restored-login `SmKiskUpdate` and `SmBindPointInfo` was not compared against Java output.
+- Direct Java `Player.kisk` object references differ from C# `BoundKiskObjectId` / runtime registry references.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped artifact rows in this unit
+- Total artifacts ported: 1 packet planner service added and 1 enter-world sequence adjusted
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 6 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, full enter-world replay comparison, restored-added fanout recipient comparison, packet byte comparison, direct Java object-reference semantics, unrelated full-suite cleanup-seal failures
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Continue kisk lifecycle with duplicate bind socket response audit, especially whether current C# dialog/response behavior should remain a documented guard or needs a direct `SmKiskUpdate` branch for stale restored member states.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
