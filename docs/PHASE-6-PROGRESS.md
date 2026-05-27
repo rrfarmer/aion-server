@@ -61950,6 +61950,68 @@ Next recommended unit of work:
 
 ---
 
+### Session 1480 (May 27, 2026)
+- Continued after UOW-1479 by wiring the new player-owned aggro boundary into production kisk revive.
+- Updated `GameServerConnection.HandleReviveAsync` to execute `PlayerReviveCleanupAdapterService` with `player.AggroList` after `PlayerReviveRestoreService.ApplyKiskReviveRestore` and before movement updates / revive emotion fanout.
+- Added `HandleReviveAsync_KiskReviveClearsLivePlayerAggro` to prove live player aggro entries and represented hate-reduction task state are cleared during kisk revive without changing the existing direct packet order.
+- Kept broader Java revive side effects queued: soul sickness, flying-before-death, full despawn/spawn ownership, protection tasks, instance/legion leave callbacks, and deeper teleport ordering are still pending.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --no-restore --filter "FullyQualifiedName~GameServerConnectionKiskReviveWorkflowTests|FullyQualifiedName~PlayerOwnedAggroListTests|FullyQualifiedName~PlayerReviveCleanupAdapterServiceTests"`.
+  - Result: passed 18 tests.
+
+#### Parallel Work Discovery - Session 1480
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Production kisk revive live aggro clear | `PlayerReviveService.kiskRevive`, `PlayerReviveService.revive`, `PlayerAggroList`, `AggroList.clear` | `GameServerConnection.cs`, `GameServerConnectionKiskReviveWorkflowTests.cs` | Connection Flow / Regression Test | No | Medium | Shared revive workflow and packet ordering should stay sequential. |
+| B | Known-list backed player aggro awareness | `PlayerAggroList.isAware`, `KnownList` | future player/world known-list bridge | Later | Medium | Requires broader known-list model and may touch shared visibility surfaces. |
+| C | Revive soul-sickness/flying-before-death | `PlayerReviveService.revive`, `skillRevive`, `kiskRevive` | player stats/effect/fly controller surfaces | Later | High | Needs missing effect/stat/fly runtime support. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Wire kisk revive to clear live player aggro | Connection Flow / Regression Test / Documentation | `GameServerConnection.cs`, `GameServerConnectionKiskReviveWorkflowTests.cs`, progress/handoff docs | unrelated revive types, broad player model changes | UOW-1479 player-owned aggro boundary | Passing workflow regression proving kisk revive clears `Player.AggroList` while preserving packet order. |
+
+No subagent was spawned because the selected work modified shared connection revive flow.
+
+#### Migration Parity Table - Session 1480
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerReviveService` | `Aion.GameServer.Network.Aion.GameServerConnection` / `PlayerReviveCleanupAdapterService` | Service / Connection Flow | Partial | Regression Tested | Partial Parity | C# kisk revive now clears live `player.AggroList` after resource/resurrection-state restore and before movement/emotion fanout, matching the currently modeled Java `revive` order. Other revive types and broader side effects remain pending. |
+| `com.aionemu.gameserver.controllers.attack.PlayerAggroList` | `Aion.GameServer.Model.GameObjects.PlayerOwnedAggroList` | Model / Aggro List | Partial | Unit Tested / Regression Tested | Partial Parity | Production kisk revive now clears the owned list. Known-list integration, Java `Creature` references, target selection, geo visibility, and scheduled hate decay remain missing. |
+| `com.aionemu.gameserver.controllers.attack.AggroList` | `PlayerOwnedAggroList` / `PlayerReviveCleanupAdapterService` | Base Aggro List | Partial | Unit Tested / Regression Tested | Needs Verification | Live clear empties entries and cancels represented hate-reduction state. Java `ConcurrentHashMap` and `Future.cancel(true)` behavior are represented, not runtime-equivalent. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_REVIVE` | `CmRevive` / `GameServerConnection.HandleReviveAsync` | Packet Handler | Partial | Regression Tested | Partial Parity | Kisk revive path now includes live aggro clear for revive id 4. Non-kisk revive ids remain intentionally ignored in this handler slice. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleReviveAsync_KiskReviveClearsLivePlayerAggro` | Regression / workflow | `PlayerReviveService.kiskRevive` -> `revive` -> `player.getAggroList().clear()` | Kisk revive clears live C# `Player.AggroList`, clears represented hate-reduction task state, teleports to the kisk, and preserves existing direct packet order. | Deterministic C# workflow regression from Java source audit. | Does not compare Java runtime packet bytes or real Java `Future` cancellation. |
+| Existing `GameServerConnectionKiskReviveWorkflowTests` | Regression / workflow | `CM_REVIVE`, `PlayerReviveService.kiskRevive`, `TeleportService.teleportTo` | Existing kisk revive charge, removal, target cleanup, movement-update, fanout, and object-id release behavior remained stable. | Focused workflow suite passed with aggro/model tests. | Full revive socket ordering and non-kisk revive types remain broader. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Full game-server test suite is still known to have two unrelated stable failures in `GameServerConnectionInventoryExpansionUseItemTests`: `ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate` and `HandleUseItemAsync_ExpExtractMergesRestrictedRewardWithCleanupSealFlag`.
+- Live aggro clear is now wired only for kisk revive; bind/instance/skill/item/duel revive paths remain unported or outside this handler slice.
+- C# uses object-id aggro snapshots rather than Java live `Creature` references and `KnownList`.
+- Java threading behavior for `AggroList.clear` is represented by state, not real scheduled task cancellation.
+- `PlayerReviveService.revive` order is only partially represented because C# still lacks `onBeforeSpawn`, protection task, instance/legion leave, and full teleport/despawn/spawn lifecycle support.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped artifact rows in this unit
+- Total artifacts ported: 1 production kisk revive live aggro-clear hook and 1 workflow regression
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, non-kisk revive live aggro clears, live known-list integration, scheduled hate decay, full revive/teleport side effects, unrelated full-suite cleanup-seal failures
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Continue revive parity by modeling the next `PlayerReviveService.revive` side-effect boundary that has enough C# support, preferably `onBeforeSpawn` / protection-task metadata planning or flying-before-death restoration planning, while keeping production socket ordering covered.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
