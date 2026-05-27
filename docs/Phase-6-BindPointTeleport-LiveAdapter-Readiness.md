@@ -427,3 +427,7 @@ A disabled/non-live pet spawn snapshot provider shape now validates the Java-req
 ## Update After UOW-1294
 
 Population pet diagnostics can now consume optional provider inputs, count provider results/statuses, and surface provider blockers such as missing move-controller targets alongside blocked pet packet construction. Live bind-point fanout remains blocked because provider inputs are still supplied metadata, live pet/common-data/template/move-controller hydration is missing, full pet packet coverage is incomplete, socket dispatch is disabled, and no Java runtime packet capture has been performed.
+
+## Update After UOW-1295
+
+A Java pet golden-vector design note now scopes the first runtime capture batch to known-list `SM_PET` spawn, `SM_PET_EMOTE` fly-start, and `SM_PET` dismiss packets, with movement-emote and full toy-pet management packets split into later batches. Live bind-point fanout remains blocked because no Java runtime vectors were generated, C# still lacks live pet/common-data/template/move-controller hydration, movement emote serializers are incomplete, socket dispatch is disabled, and full pet packet coverage remains out of scope.
