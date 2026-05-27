@@ -647,3 +647,7 @@ The Java unusual-storage construction context seam now exists at `ItemPacketServ
 ## Update After UOW-1349
 
 `PetFeedUnusualStorageArtifactCapture` now has a disabled bounded correlation registry and future observer accessor that can advance pending unusual-storage contexts across serialized `SM_WAREHOUSE_ADD_ITEM` then `SM_CUBE_UPDATE` packet observations. Live bind-point fanout remains blocked because the registry is not installed or enabled, Java compile validation is unavailable locally, file output and byte copying are missing, route/packet field validation is missing, and the C# live adapter still does not hydrate, mutate, dispatch, or runtime-compare unusual storage.
+
+## Update After UOW-1350
+
+The disabled unusual-storage capture registry now creates an internal no-output snapshot shape after the correlated warehouse-add/cube-update packet pair, recording storage id, storage ordinal, item object id, packet class names, clear-frame length, encoded opcode, and observer remaining-byte metadata. Live bind-point fanout remains blocked because no observer is installed or enabled, no bytes or files are retained, Java compile validation is unavailable locally, item/blob decoded fields are missing, and the C# live adapter still does not hydrate, mutate, dispatch, or runtime-compare unusual storage.

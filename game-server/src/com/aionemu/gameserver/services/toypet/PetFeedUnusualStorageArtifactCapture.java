@@ -96,11 +96,17 @@ public final class PetFeedUnusualStorageArtifactCapture {
 			CaptureContext context = contexts.peekFirst();
 			if (context == null)
 				return;
-			if (context.advance(packet) && context.isComplete())
+			if (context.advance(packet, clearFrame) && context.isComplete()) {
 				contexts.removeFirst();
+				onSnapshotReady(context.toSnapshot());
+			}
 			if (contexts.isEmpty())
 				pendingContexts.remove(player.getObjectId(), contexts);
 		}
+	}
+
+	private static void onSnapshotReady(ArtifactSnapshot snapshot) {
+		// Future artifact writer boundary. Intentionally no-op while capture remains disabled.
 	}
 
 	private static final class CaptureContext {
@@ -108,6 +114,7 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private final int storageTypeId;
 		private final int storageTypeOrdinal;
 		private final int itemObjectId;
+		private final PacketSnapshot[] packets = new PacketSnapshot[2];
 		private int nextPacketIndex;
 
 		private CaptureContext(int storageTypeId, int storageTypeOrdinal, int itemObjectId) {
@@ -116,12 +123,14 @@ public final class PetFeedUnusualStorageArtifactCapture {
 			this.itemObjectId = itemObjectId;
 		}
 
-		private boolean advance(AionServerPacket packet) {
+		private boolean advance(AionServerPacket packet, ByteBuffer clearFrame) {
 			if (nextPacketIndex == 0 && packet instanceof SM_WAREHOUSE_ADD_ITEM) {
+				packets[nextPacketIndex] = PacketSnapshot.from(nextPacketIndex, packet, clearFrame);
 				nextPacketIndex++;
 				return true;
 			}
 			if (nextPacketIndex == 1 && packet instanceof SM_CUBE_UPDATE) {
+				packets[nextPacketIndex] = PacketSnapshot.from(nextPacketIndex, packet, clearFrame);
 				nextPacketIndex++;
 				return true;
 			}
@@ -130,6 +139,52 @@ public final class PetFeedUnusualStorageArtifactCapture {
 
 		private boolean isComplete() {
 			return nextPacketIndex >= 2;
+		}
+
+		private ArtifactSnapshot toSnapshot() {
+			return new ArtifactSnapshot(storageTypeId, storageTypeOrdinal, itemObjectId, packets[0], packets[1]);
+		}
+	}
+
+	private static final class ArtifactSnapshot {
+
+		private final int storageTypeId;
+		private final int storageTypeOrdinal;
+		private final int itemObjectId;
+		private final PacketSnapshot warehouseAddPacket;
+		private final PacketSnapshot cubeUpdatePacket;
+
+		private ArtifactSnapshot(int storageTypeId, int storageTypeOrdinal, int itemObjectId, PacketSnapshot warehouseAddPacket,
+			PacketSnapshot cubeUpdatePacket) {
+			this.storageTypeId = storageTypeId;
+			this.storageTypeOrdinal = storageTypeOrdinal;
+			this.itemObjectId = itemObjectId;
+			this.warehouseAddPacket = warehouseAddPacket;
+			this.cubeUpdatePacket = cubeUpdatePacket;
+		}
+	}
+
+	private static final class PacketSnapshot {
+
+		private final int packetIndex;
+		private final String packetClassName;
+		private final int clearFrameLength;
+		private final int encodedOpcode;
+		private final int remainingBytesAtObserver;
+
+		private PacketSnapshot(int packetIndex, String packetClassName, int clearFrameLength, int encodedOpcode,
+			int remainingBytesAtObserver) {
+			this.packetIndex = packetIndex;
+			this.packetClassName = packetClassName;
+			this.clearFrameLength = clearFrameLength;
+			this.encodedOpcode = encodedOpcode;
+			this.remainingBytesAtObserver = remainingBytesAtObserver;
+		}
+
+		private static PacketSnapshot from(int packetIndex, AionServerPacket packet, ByteBuffer clearFrame) {
+			int clearFrameLength = clearFrame.limit() >= 2 ? clearFrame.getShort(0) & 0xFFFF : 0;
+			int encodedOpcode = clearFrame.limit() >= 4 ? clearFrame.getShort(2) & 0xFFFF : 0;
+			return new PacketSnapshot(packetIndex, packet.getClass().getName(), clearFrameLength, encodedOpcode, clearFrame.remaining());
 		}
 	}
 }
