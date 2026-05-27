@@ -61115,6 +61115,70 @@ Next recommended unit of work:
 
 ---
 
+### Session 1467 (May 27, 2026)
+- Continued after UOW-1466 with the player-owned aggro cleanup blocker.
+- Audited Java `AggroList`, `PlayerAggroList`, `PlayerReviveService.revive`, and `PlayerLifeStats.onHpChanged`.
+- Added non-live `PlayerAggroCleanupPlanService`.
+- Added `PlayerAggroAwarenessPlan` to capture Java `PlayerAggroList.isAware`, which only requires `owner.getKnownList().knows(creature)`.
+- Added `PlayerAggroClearPlan` to capture Java `player.getAggroList().clear()` during revive and full-HP restoration, including hate-reduction task cancellation.
+- Added `PlayerAggroCleanupPlanServiceTests`.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --filter "FullyQualifiedName~PlayerAggroCleanupPlanServiceTests"`.
+  - Result: passed 3 tests.
+
+#### Parallel Work Discovery - Session 1467
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Player aggro cleanup non-live planner | `PlayerAggroList`, `AggroList.clear`, `PlayerReviveService.revive`, `PlayerLifeStats.onHpChanged` | `PlayerAggroCleanupPlanService.cs`, `PlayerAggroCleanupPlanServiceTests.cs` | Planner / Unit Tests | No | Medium | New service/test pair should be kept atomic. |
+| B | Java aggro target/damage selection audit | `AggroList`, `DamageList`, `AggroInfo` | docs only | Later | Medium | Broader than revive cleanup and not required for this unblocker. |
+| C | Live revive aggro adapter | revive/kisk services | Later | High | Needs the planner boundary first; do not wire live mutation yet. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live player aggro cleanup planner and tests | Planner / Unit Tests / Documentation | `PlayerAggroCleanupPlanService.cs`, `PlayerAggroCleanupPlanServiceTests.cs`, progress/handoff docs | live revive wiring, combat mutation, socket fixture | Java aggro audit | Passing planner tests with Java breadcrumbs for awareness and clear boundaries. |
+
+No subagent was spawned because the implementation was a compact new planner/test pair.
+
+#### Migration Parity Table - Session 1467
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.attack.PlayerAggroList` | `PlayerAggroCleanupPlanService` / `PlayerAggroAwarenessPlan` | Planner / Aggro | Partial | Unit Tested | Partial Parity | C# planner captures Java's player-specific awareness rule: known-list membership is enough, without ordinary creature enemy/tribe/sanctuary checks. Non-live only. |
+| `com.aionemu.gameserver.controllers.attack.AggroList` | `PlayerAggroClearPlan` / `PlayerAggroEntrySnapshot` | Planner / Aggro | Partial | Unit Tested | Partial Parity | C# planner captures clear-all semantics and hate-reduction task cancellation metadata. It does not model hate reduction timing, damage transfer, target selection, or final damage aggregation. |
+| `com.aionemu.gameserver.services.player.PlayerReviveService` | `PlayerAggroCleanupPlanService.PlanClear(... Revive)` | Service Boundary | Partial | Unit Tested | Partial Parity | Test anchors revive cleanup to Java `player.getAggroList().clear()`. Not yet wired into live C# revive/kisk execution. |
+| `com.aionemu.gameserver.model.stats.container.PlayerLifeStats` | `PlayerAggroCleanupPlanService.PlanClear(... FullHpRestore)` | Stats Boundary | Partial | Unit Tested | Partial Parity | Test anchors full-HP aggro reset source. Live HP/stat mutation adapter remains separate. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `PlanAwareness_UsesPlayerAggroListKnownOnlyRule` | Unit / planner | `PlayerAggroList.isAware` | Known attacker is accepted and unknown attacker is rejected using only known-list awareness metadata. | Deterministic planner status and Java source breadcrumb assertion. | Does not execute live known-list lookup or ordinary creature awareness rules. |
+| `PlanClear_ReviveClearsAllPlayerAggroEntries` | Unit / planner | `PlayerReviveService.revive`, `AggroList.clear` | Revive clear plan records all entries, clears all, and cancels hate-reduction task metadata. | Deterministic clear plan and Java source breadcrumb assertion. | Does not mutate a live aggro list or player revive flow. |
+| `PlanClear_FullHpRestoreUsesPlayerLifeStatsSource` | Unit / planner | `PlayerLifeStats.onHpChanged`, `AggroList.clear` | Full-HP restore clear plan uses the Java life-stats source and clear metadata. | Deterministic clear plan and Java source breadcrumb assertion. | HP stat execution remains separate. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Player aggro planner is non-live; revive and HP paths do not yet call it.
+- C# still lacks a live `PlayerAggroList` equivalent with hate reduction, damage transfer, target selection, or final damage aggregation.
+- Interaction with kisk revive teleport/stat packet ordering remains unverified.
+- Ordinary creature aggro rules remain separate from the player-owned aggro cleanup blocker.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped artifact rows in this unit
+- Total artifacts ported: 1 non-live planner service plus DTOs
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, live player aggro mutation, revive integration, full aggro damage/target model
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Add a non-live revive cleanup composition test that includes the new player aggro clear plan alongside the existing kisk revive cleanup descriptors, without enabling live combat mutation.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
