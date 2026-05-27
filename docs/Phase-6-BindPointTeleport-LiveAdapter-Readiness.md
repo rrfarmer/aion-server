@@ -599,3 +599,7 @@ A docs-only Java observer implementation plan now scopes the safest future subty
 ## Update After UOW-1337
 
 Rejected-food unlock context tests now explicitly preserve the conservative boundary for known but unsupported Java storage ids: pet bags, representative house cabinets, broker, and mailbox locations return `UnsupportedStorageLocation` instead of guessing generic warehouse packet shape. Live bind-point fanout remains blocked because pet/house/broker/mailbox ownership, live storage hydration, storage mutation, packet dispatch, Java runtime bytes, scheduler execution, reward creation, DAO writes, and socket dispatch remain disabled.
+
+## Update After UOW-1338
+
+Rejected-food unlock context tests now cover every Java house storage id `60` through `79` as known but unsupported, alongside pet bags, broker, and mailbox. A read-only snapshot timing audit also confirms future live adapter work must queue the add/unlock packet first, then immediately snapshot `SM_CUBE_UPDATE`, preserving Java's zero count/expand fallback for account warehouse, pet bags, house storage, broker, and mailbox unless an intentional difference is documented. Live bind-point fanout remains blocked because house/pet/broker/mailbox ownership, live storage hydration, storage mutation, packet dispatch, Java runtime bytes, scheduler execution, reward creation, DAO writes, and socket dispatch remain disabled.

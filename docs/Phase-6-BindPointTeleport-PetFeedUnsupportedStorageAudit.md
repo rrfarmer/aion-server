@@ -104,3 +104,7 @@ The assembler intentionally blocks known Java storage ids for pet bags, house ca
 ## Next Recommended Unit of Work
 
 Either implement the inert Java serialization observer hook from UOW-1336, or add a docs-only warehouse live-adapter capture design that specifies when future C# should snapshot storage item counts/expands around rejected-food unlock execution. Keep live feed dispatch disabled.
+
+## Follow-up After UOW-1338
+
+`PetFeedUnlockPacketContextAssemblerTests.Assemble_UnsupportedKnownStorageLocationsDoNotGuessPacketShape` now enumerates every Java house storage id `60` through `79`, not just representative samples. The conservative unsupported boundary remains unchanged.
