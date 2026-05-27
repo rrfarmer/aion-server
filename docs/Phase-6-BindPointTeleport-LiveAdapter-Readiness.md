@@ -491,3 +491,7 @@ The checked-in pet static data was structurally audited: 218 pet templates, max 
 ## Update After UOW-1310
 
 A read-only pet runtime dependency map now captures the Java service/model/repository/timer dependencies behind `CM_PET` and `CM_PET_EMOTE`. Live bind-point fanout remains blocked because C# still lacks live pet common data, pet repository/list hydration, food/mood packet branches, pet service planners, scheduled feed/doping/mood behavior, pet world object mutation, Java runtime vectors, and socket dispatch.
+
+## Update After UOW-1311
+
+`SmPet` now supports the Java `FOOD` packet branch for subtypes `1` through `8` from supplied snapshots, preserving Java's header-only behavior for unknown subtypes. Live bind-point fanout remains blocked because C# still lacks live `PetFeedProgress` bit packing, `PetCommonData.getRefeedDelay()` date/time calculation, feed scheduler/task state, inventory/feed mutation, present/reward flow, persistence, Java runtime vectors, and socket dispatch.
