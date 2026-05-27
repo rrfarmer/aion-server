@@ -20,6 +20,7 @@ import com.aionemu.gameserver.model.items.IdianStone;
 import com.aionemu.gameserver.model.items.ItemStone;
 import com.aionemu.gameserver.model.items.storage.StorageType;
 import com.aionemu.gameserver.model.stats.container.PlumStatEnum;
+import com.aionemu.gameserver.model.templates.item.ItemTemplate;
 import com.aionemu.gameserver.model.templates.item.enums.ItemGroup;
 import com.aionemu.gameserver.network.aion.AionConnection;
 import com.aionemu.gameserver.network.aion.AionServerPacket;
@@ -248,21 +249,23 @@ public final class PetFeedUnusualStorageArtifactCapture {
 	}
 
 	private static Map<String, Object> buildItemDto(ArtifactSnapshot snapshot) {
+		EncodeTimeItemSnapshot itemSnapshot = getEncodeTimeItemSnapshot(snapshot);
 		Map<String, Object> item = orderedMap();
 		item.put("objectId", snapshot.itemObjectId);
-		item.put("itemId", null);
-		item.put("count", null);
-		item.put("itemLocation", snapshot.storageTypeId);
-		item.put("equipmentSlot", null);
-		item.put("itemTemplateId", null);
-		item.put("localizedName", null);
-		item.put("packCount", getPackCount(getEncodeTimeItemBlob(snapshot)));
-		item.put("expireTime", null);
-		item.put("temporaryExchangeTime", getTemporaryExchangeTime(getEncodeTimeItemBlob(snapshot)));
-		item.put("charge", getChargePoints(getEncodeTimeItemBlob(snapshot)));
-		item.put("enchantLevel", getEnchantLevel(getEncodeTimeItemBlob(snapshot)));
-		item.put("itemMask", getItemMask(getEncodeTimeItemBlob(snapshot)));
-		item.put("color", getDyeColor(getEncodeTimeItemBlob(snapshot)));
+		item.put("itemId", itemSnapshot == null ? null : itemSnapshot.itemId);
+		item.put("count", itemSnapshot == null ? null : itemSnapshot.itemCount);
+		item.put("itemLocation", itemSnapshot == null ? snapshot.storageTypeId : itemSnapshot.itemLocation);
+		item.put("equipmentSlot", itemSnapshot == null ? null : itemSnapshot.equipmentSlot);
+		item.put("itemTemplateId", itemSnapshot == null ? null : itemSnapshot.itemTemplateId);
+		item.put("localizedName", itemSnapshot == null ? null : itemSnapshot.localizedName);
+		item.put("packCount", itemSnapshot == null ? getPackCount(getEncodeTimeItemBlob(snapshot)) : itemSnapshot.packCount);
+		item.put("expireTime", itemSnapshot == null ? null : itemSnapshot.expireTime);
+		item.put("temporaryExchangeTime", itemSnapshot == null ? getTemporaryExchangeTime(getEncodeTimeItemBlob(snapshot))
+			: itemSnapshot.temporaryExchangeTimeRemaining);
+		item.put("charge", itemSnapshot == null ? getChargePoints(getEncodeTimeItemBlob(snapshot)) : itemSnapshot.chargePoints);
+		item.put("enchantLevel", itemSnapshot == null ? getEnchantLevel(getEncodeTimeItemBlob(snapshot)) : itemSnapshot.enchantLevel);
+		item.put("itemMask", itemSnapshot == null ? getItemMask(getEncodeTimeItemBlob(snapshot)) : itemSnapshot.itemMask);
+		item.put("color", itemSnapshot == null ? getDyeColor(getEncodeTimeItemBlob(snapshot)) : itemSnapshot.color);
 		return item;
 	}
 
@@ -363,6 +366,10 @@ public final class PetFeedUnusualStorageArtifactCapture {
 	private static ItemBlobSnapshot getEncodeTimeItemBlob(ArtifactSnapshot snapshot) {
 		return snapshot.warehouseAddPacket != null && snapshot.warehouseAddPacket.observedItemBlob != null ? snapshot.warehouseAddPacket.observedItemBlob
 			: snapshot.constructionTimeItemBlob;
+	}
+
+	private static EncodeTimeItemSnapshot getEncodeTimeItemSnapshot(ArtifactSnapshot snapshot) {
+		return snapshot.warehouseAddPacket == null ? null : snapshot.warehouseAddPacket.observedItem;
 	}
 
 	private static int getItemMask(ItemBlobSnapshot itemBlob) {
@@ -848,27 +855,78 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private final int encodedOpcode;
 		private final int remainingBytesAtObserver;
 		private final ItemBlobSnapshot observedItemBlob;
+		private final EncodeTimeItemSnapshot observedItem;
 
 		private PacketSnapshot(int packetIndex, String packetClassName, int clearFrameLength, int encodedOpcode,
-			int remainingBytesAtObserver, ItemBlobSnapshot observedItemBlob) {
+			int remainingBytesAtObserver, ItemBlobSnapshot observedItemBlob, EncodeTimeItemSnapshot observedItem) {
 			this.packetIndex = packetIndex;
 			this.packetClassName = packetClassName;
 			this.clearFrameLength = clearFrameLength;
 			this.encodedOpcode = encodedOpcode;
 			this.remainingBytesAtObserver = remainingBytesAtObserver;
 			this.observedItemBlob = observedItemBlob;
+			this.observedItem = observedItem;
 		}
 
 		private static PacketSnapshot from(int packetIndex, AionServerPacket packet, ByteBuffer clearFrame) {
 			int clearFrameLength = clearFrame.limit() >= 2 ? clearFrame.getShort(0) & 0xFFFF : 0;
 			int encodedOpcode = clearFrame.limit() >= 4 ? clearFrame.getShort(2) & 0xFFFF : 0;
 			ItemBlobSnapshot observedItemBlob = null;
+			EncodeTimeItemSnapshot observedItem = null;
 			if (packet instanceof SM_WAREHOUSE_ADD_ITEM) {
 				SM_WAREHOUSE_ADD_ITEM warehouseAddItem = (SM_WAREHOUSE_ADD_ITEM) packet;
-				observedItemBlob = ItemBlobSnapshot.from(warehouseAddItem.getFirstItemInfoBlob(), warehouseAddItem.getFirstItem());
+				Item item = warehouseAddItem.getFirstItem();
+				observedItemBlob = ItemBlobSnapshot.from(warehouseAddItem.getFirstItemInfoBlob(), item);
+				observedItem = EncodeTimeItemSnapshot.from(item);
 			}
 			return new PacketSnapshot(packetIndex, packet.getClass().getName(), clearFrameLength, encodedOpcode, clearFrame.remaining(),
-				observedItemBlob);
+				observedItemBlob, observedItem);
+		}
+	}
+
+	private static final class EncodeTimeItemSnapshot {
+
+		private final int itemId;
+		private final long itemCount;
+		private final int itemLocation;
+		private final long equipmentSlot;
+		private final int itemTemplateId;
+		private final String localizedName;
+		private final int packCount;
+		private final int expireTime;
+		private final int temporaryExchangeTime;
+		private final int temporaryExchangeTimeRemaining;
+		private final int chargePoints;
+		private final int enchantLevel;
+		private final int itemMask;
+		private final Integer color;
+
+		private EncodeTimeItemSnapshot(int itemId, long itemCount, int itemLocation, long equipmentSlot, int itemTemplateId,
+			String localizedName, int packCount, int expireTime, int temporaryExchangeTime, int temporaryExchangeTimeRemaining,
+			int chargePoints, int enchantLevel, int itemMask, Integer color) {
+			this.itemId = itemId;
+			this.itemCount = itemCount;
+			this.itemLocation = itemLocation;
+			this.equipmentSlot = equipmentSlot;
+			this.itemTemplateId = itemTemplateId;
+			this.localizedName = localizedName;
+			this.packCount = packCount;
+			this.expireTime = expireTime;
+			this.temporaryExchangeTime = temporaryExchangeTime;
+			this.temporaryExchangeTimeRemaining = temporaryExchangeTimeRemaining;
+			this.chargePoints = chargePoints;
+			this.enchantLevel = enchantLevel;
+			this.itemMask = itemMask;
+			this.color = color;
+		}
+
+		private static EncodeTimeItemSnapshot from(Item item) {
+			if (item == null)
+				return null;
+			ItemTemplate itemTemplate = item.getItemTemplate();
+			return new EncodeTimeItemSnapshot(item.getItemId(), item.getItemCount(), item.getItemLocation(), item.getEquipmentSlot(),
+				itemTemplate.getTemplateId(), itemTemplate.getL10n(), item.getPackCount(), item.getExpireTime(), item.getTemporaryExchangeTime(),
+				item.getTemporaryExchangeTimeRemaining(), item.getChargePoints(), item.getEnchantLevel(), item.getItemMask(), item.getItemColor());
 		}
 	}
 }
