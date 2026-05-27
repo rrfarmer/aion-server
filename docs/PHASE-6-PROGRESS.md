@@ -61492,6 +61492,69 @@ Next recommended unit of work:
 
 ---
 
+### Session 1473 (May 27, 2026)
+- Continued after UOW-1472 with the kisk duplicate bind/add-player audit.
+- Re-read Java `KiskAI.handleDialogStart`, `KiskService.onBind`, and `Kisk.addPlayer` behavior from the prior handoff context.
+- Re-audited C# `PlayerKiskDialogService`, `PlayerKiskAuthorizationService`, `PlayerKiskBindService`, and offline restore behavior.
+- Added `ValidateBindPrioritizesAlreadyRegisteredBeforeCapacityLikeJavaDialogGuard` to `PlayerKiskAuthorizationServiceTests`.
+- The test locks down the duplicate-first authorization order: already-bound players and member-id-only duplicates return `AlreadyRegistered` before a full-kisk response; unrelated players still receive `Full`.
+- Kept production code unchanged. Current C# interactive bind flow blocks duplicate registration through authorization/dialog before invoking the bind mutation, while offline restore still restores the bound pointer when the runtime member id already exists.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --filter "FullyQualifiedName~PlayerKiskAuthorizationServiceTests"`.
+  - Result: passed 4 tests.
+
+#### Parallel Work Discovery - Session 1473
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Duplicate-first kisk bind authorization | `KiskAI.handleDialogStart`, `KiskService.onBind`, `Kisk.addPlayer` | `PlayerKiskAuthorizationServiceTests.cs` | Unit Test | No | Low | Compact regression in one test file documenting the normal interactive duplicate guard. |
+| B | Bind response direct-only packet comparison | `Kisk.addPlayer` duplicate branch, `SM_KISK_UPDATE` | connection/bind workflow tests | Later | Medium | Needs broader socket fixture work to distinguish system message rejection from direct update packet. |
+| C | Online kisk removal packet/order fanout | `KiskService.removeKisk`, `TeleportService.sendKiskBindPoint`, `PlayerController.showResurrectionOptions` | runtime cleanup / connection tests | Later | Medium | Separate shared fixture workstream. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add duplicate-first kisk authorization regression | Unit Test / Documentation | `PlayerKiskAuthorizationServiceTests.cs`, progress/handoff docs | production authorization, bind service, connection fixtures | Java duplicate guard audit | Passing regression proving duplicate responses outrank full-kisk responses in the C# bind authorization layer. |
+
+No subagent was spawned because the selected unit was a narrow single-test change.
+
+#### Migration Parity Table - Session 1473
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.ai.handler.KiskAI` | `PlayerKiskDialogService` / `PlayerKiskAuthorizationService` | AI Handler / Dialog Authorization | Partial | Unit Tested | Partial Parity | Test covers duplicate-first guard ordering before full-kisk rejection. Java checks `player.getKisk() == getOwner()` in dialog; C# accepts both bound object-id and runtime member-id duplicates as already registered. |
+| `com.aionemu.gameserver.services.KiskService` | `PlayerKiskBindService` / `PlayerKiskRegistry.RestoreOfflineBinding` | Service | Partial | Unit Tested | Needs Verification | Interactive C# bind flow rejects duplicates before mutation; Java direct `Kisk.addPlayer` duplicate branch sends `SM_KISK_UPDATE` and sets the direct player kisk reference if called. Offline restore covers existing-member pointer restoration separately. |
+| `com.aionemu.gameserver.model.gameobjects.Kisk` | `PlayerKiskRuntimeState` | Runtime State / World Object | Partial | Unit Tested | Needs Verification | Runtime member ids participate in C# duplicate authorization and offline restore. Java uses synchronized member sets and direct `Kisk` object references; threading and direct reference semantics remain different and need live verification. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_KISK_UPDATE` | `SmKiskUpdate` | Packet | Partial | Regression Tested | Needs Verification | No new packet serialization test in this unit. The duplicate direct-only update branch remains unverified at live socket level because normal dialog authorization blocks duplicates first. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ValidateBindPrioritizesAlreadyRegisteredBeforeCapacityLikeJavaDialogGuard` | Unit / authorization | `KiskAI.handleDialogStart`, `Kisk.canBind`, `Kisk.addPlayer` audit | Already-registered players return `AlreadyRegistered` before a full-kisk response, including C#'s defensive member-id-only duplicate case. | Deterministic unit regression and Java source audit of duplicate-before-canBind/full order. | Does not execute Java runtime, socket sends, or the direct Java `Kisk.addPlayer` duplicate packet branch. |
+| Existing `PlayerKiskAuthorizationServiceTests` | Existing Unit | `Kisk.canBind` use-mask logic | Existing race, legion, solo, unrestricted, group, and alliance use-mask tests remained stable. | Focused 4-test suite passed. | Group/alliance live resolver parity depends on runtime team state wiring. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Normal C# dialog/authorization flow rejects duplicate kisk binds before `PlayerKiskBindService.Bind`, while Java `Kisk.addPlayer` still contains a direct duplicate packet branch; reachability remains Needs Verification.
+- C# runtime member-id duplicate detection is a defensive extension beyond Java's dialog `player.getKisk() == getOwner()` check.
+- Java synchronized member sets and direct object references differ from C# concurrent dictionaries and object-id lookups.
+- Live socket packet ordering for duplicate bind, offline login restore, and kisk removal remains broader.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped artifact rows in this unit
+- Total artifacts ported: 0 production artifacts in this unit; 1 authorization regression added
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, direct duplicate `SM_KISK_UPDATE` reachability, live socket duplicate/removal fanout, direct Java object-reference semantics
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Move to online kisk removal packet/order fanout review, focusing on creator/member update ordering and bind-point/death-option refresh behavior after runtime removal.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
