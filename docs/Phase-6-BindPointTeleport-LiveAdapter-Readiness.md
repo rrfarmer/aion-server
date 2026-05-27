@@ -459,3 +459,7 @@ Read-only audits confirm `SM_PET(int,int)` should remain unported because it has
 ## Update After UOW-1302
 
 The checked-in pet static data was structurally audited: 218 pet templates, max two packet-writable functions among warehouse/food/doping/loot, and zero templates exceeding Java's packet comment for writable functions. Total XML functions can be higher because non-written `BAG`/`WING` entries are common. Live bind-point fanout remains blocked because `writePetData` is still unimplemented, feed/doping/timing projections are missing, public list/adopt constructors remain disabled, Java runtime vectors are still missing, and socket dispatch remains disabled.
+
+## Update After UOW-1303
+
+`SmPet` now has an internal deterministic `writePetData` helper with packet-facing snapshots and source-derived tests for no, one, and two writable function cases, including Java order and doping slot padding. Public `LOAD_PETS` and `ADOPT` constructors remain disabled. Live bind-point fanout remains blocked because Java runtime vectors are still missing, live pet common-data/template/feed/doping hydration is absent, full `CM_PET` parser/runtime remains unported, and socket dispatch remains disabled.
