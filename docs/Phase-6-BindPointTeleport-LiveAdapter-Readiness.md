@@ -455,3 +455,7 @@ A guarded C# schema-v1 pet vector artifact reader/comparator now exists for futu
 ## Update After UOW-1301
 
 Read-only audits confirm `SM_PET(int,int)` should remain unported because it has no direct in-repo call site and would likely fail during Java surrender serialization, while `EXTEND_EXPIRATION` should remain out of the action-only response allow-list because Java `CM_PET` handles action `15` as a silent no-op with no `SM_PET` response. A `writePetData` design audit now identifies the required future snapshot inputs for list/adopt packets. Live bind-point fanout remains blocked because Java runtime vectors are still missing, `writePetData` is unimplemented, pet common-data/template/feed/doping projections are missing, full `CM_PET` runtime behavior is unported, and socket dispatch remains disabled.
+
+## Update After UOW-1302
+
+The checked-in pet static data was structurally audited: 218 pet templates, max two packet-writable functions among warehouse/food/doping/loot, and zero templates exceeding Java's packet comment for writable functions. Total XML functions can be higher because non-written `BAG`/`WING` entries are common. Live bind-point fanout remains blocked because `writePetData` is still unimplemented, feed/doping/timing projections are missing, public list/adopt constructors remain disabled, Java runtime vectors are still missing, and socket dispatch remains disabled.
