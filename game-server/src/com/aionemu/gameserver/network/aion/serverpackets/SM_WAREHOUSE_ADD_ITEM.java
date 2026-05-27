@@ -34,6 +34,10 @@ public class SM_WAREHOUSE_ADD_ITEM extends AionServerPacket {
 		return ItemInfoBlob.getFullBlob(player, items.get(0));
 	}
 
+	public Item getFirstItem() {
+		return items.isEmpty() ? null : items.get(0);
+	}
+
 	@Override
 	protected void writeImpl(AionConnection con) {
 		writeC(warehouseType);

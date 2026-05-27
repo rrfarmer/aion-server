@@ -687,3 +687,7 @@ A read-only key blob payload audit now maps Java `GeneralInfoBlobEntry`, `Compos
 ## Update After UOW-1359
 
 A read-only small blob payload audit now maps Java conditioning, premium-option, polish, and wrap payload fields against current C# serializer behavior. Live bind-point fanout remains blocked because runtime conditioning presence, decoded payload DTOs, Java artifact writer, raw/canonical bytes, C# serializer verification, warehouse-add byte comparison, and live unusual-storage hydration/mutation/dispatch/runtime comparison are still missing.
+
+## Update After UOW-1360
+
+The disabled Java capture snapshot now has schema-only payload DTOs for audited item-blob fields, covering general, composite, enchant, conditioning, premium-option, polish, and wrap payload inputs. Live bind-point fanout remains blocked because no JSON artifact writer, raw/canonical bytes, C# artifact reader/schema validation, C# serializer gap closure, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.

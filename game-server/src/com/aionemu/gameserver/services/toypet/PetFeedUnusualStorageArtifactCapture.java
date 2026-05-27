@@ -6,12 +6,18 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.aionemu.gameserver.configs.main.PetFeedUnusualStorageArtifactCaptureConfig;
+import com.aionemu.gameserver.dataholders.DataManager;
 import com.aionemu.gameserver.model.gameobjects.Item;
 import com.aionemu.gameserver.model.gameobjects.player.Player;
+import com.aionemu.gameserver.model.items.IdianStone;
+import com.aionemu.gameserver.model.items.ItemStone;
 import com.aionemu.gameserver.model.items.storage.StorageType;
+import com.aionemu.gameserver.model.stats.container.PlumStatEnum;
+import com.aionemu.gameserver.model.templates.item.enums.ItemGroup;
 import com.aionemu.gameserver.network.aion.AionConnection;
 import com.aionemu.gameserver.network.aion.AionServerPacket;
 import com.aionemu.gameserver.network.aion.capture.ServerPacketCaptureObserver;
@@ -212,23 +218,230 @@ public final class PetFeedUnusualStorageArtifactCapture {
 
 		private final int totalPayloadSize;
 		private final List<ItemBlobEntrySnapshot> entries;
+		private final ItemBlobPayloadSnapshot payload;
 
-		private ItemBlobSnapshot(int totalPayloadSize, List<ItemBlobEntrySnapshot> entries) {
+		private ItemBlobSnapshot(int totalPayloadSize, List<ItemBlobEntrySnapshot> entries, ItemBlobPayloadSnapshot payload) {
 			this.totalPayloadSize = totalPayloadSize;
 			this.entries = Collections.unmodifiableList(entries);
+			this.payload = payload;
 		}
 
 		private static ItemBlobSnapshot from(Player player, Item item) {
-			return from(ItemInfoBlob.getFullBlob(player, item));
+			return from(ItemInfoBlob.getFullBlob(player, item), item);
 		}
 
 		private static ItemBlobSnapshot from(ItemInfoBlob blob) {
+			return from(blob, null);
+		}
+
+		private static ItemBlobSnapshot from(ItemInfoBlob blob, Item item) {
 			if (blob == null)
 				return null;
 			List<ItemBlobEntrySnapshot> entries = new ArrayList<>();
 			for (ItemBlobEntryMetadata metadata : blob.getBlobEntryMetadata())
 				entries.add(new ItemBlobEntrySnapshot(metadata.getEntryName(), metadata.getEntryId(), metadata.getPayloadSize()));
-			return new ItemBlobSnapshot(blob.size(), entries);
+			return new ItemBlobSnapshot(blob.size(), entries, item == null ? null : ItemBlobPayloadSnapshot.from(item));
+		}
+	}
+
+	private static final class ItemBlobPayloadSnapshot {
+
+		private final GeneralPayloadSnapshot general;
+		private final CompositePayloadSnapshot composite;
+		private final EnchantPayloadSnapshot enchant;
+		private final ConditioningPayloadSnapshot conditioning;
+		private final PremiumOptionPayloadSnapshot premiumOption;
+		private final PolishPayloadSnapshot polish;
+		private final WrapPayloadSnapshot wrap;
+
+		private ItemBlobPayloadSnapshot(GeneralPayloadSnapshot general, CompositePayloadSnapshot composite, EnchantPayloadSnapshot enchant,
+			ConditioningPayloadSnapshot conditioning, PremiumOptionPayloadSnapshot premiumOption, PolishPayloadSnapshot polish,
+			WrapPayloadSnapshot wrap) {
+			this.general = general;
+			this.composite = composite;
+			this.enchant = enchant;
+			this.conditioning = conditioning;
+			this.premiumOption = premiumOption;
+			this.polish = polish;
+			this.wrap = wrap;
+		}
+
+		private static ItemBlobPayloadSnapshot from(Item item) {
+			return new ItemBlobPayloadSnapshot(GeneralPayloadSnapshot.from(item), CompositePayloadSnapshot.from(item),
+				EnchantPayloadSnapshot.from(item), ConditioningPayloadSnapshot.from(item), PremiumOptionPayloadSnapshot.from(item),
+				PolishPayloadSnapshot.from(item), WrapPayloadSnapshot.from(item));
+		}
+	}
+
+	private static final class GeneralPayloadSnapshot {
+
+		private final int itemMask;
+		private final long itemCount;
+		private final String itemCreator;
+		private final int secondsUntilExpiration;
+		private final int temporaryExchangeTimeRemaining;
+		private final int warehouseRestrictionFlag;
+
+		private GeneralPayloadSnapshot(int itemMask, long itemCount, String itemCreator, int secondsUntilExpiration,
+			int temporaryExchangeTimeRemaining, int warehouseRestrictionFlag) {
+			this.itemMask = itemMask;
+			this.itemCount = itemCount;
+			this.itemCreator = itemCreator;
+			this.secondsUntilExpiration = secondsUntilExpiration;
+			this.temporaryExchangeTimeRemaining = temporaryExchangeTimeRemaining;
+			this.warehouseRestrictionFlag = warehouseRestrictionFlag;
+		}
+
+		private static GeneralPayloadSnapshot from(Item item) {
+			int warehouseRestrictionFlag = DataManager.ITEM_CLEAN_UP.hasAccountOrLegionWhStorabilityDisabled(item.getItemId()) ? 3 : 0;
+			return new GeneralPayloadSnapshot(item.getItemMask(), item.getItemCount(), item.getItemCreator(), item.secondsUntilExpiration(),
+				item.getTemporaryExchangeTimeRemaining(), warehouseRestrictionFlag);
+		}
+	}
+
+	private static final class CompositePayloadSnapshot {
+
+		private final int fusionedItemId;
+		private final List<Integer> fusionStoneItemIdsBySlot;
+		private final int fusionedItemOptionalSockets;
+		private final int fusionedItemBonusStatsId;
+
+		private CompositePayloadSnapshot(int fusionedItemId, List<Integer> fusionStoneItemIdsBySlot, int fusionedItemOptionalSockets,
+			int fusionedItemBonusStatsId) {
+			this.fusionedItemId = fusionedItemId;
+			this.fusionStoneItemIdsBySlot = Collections.unmodifiableList(fusionStoneItemIdsBySlot);
+			this.fusionedItemOptionalSockets = fusionedItemOptionalSockets;
+			this.fusionedItemBonusStatsId = fusionedItemBonusStatsId;
+		}
+
+		private static CompositePayloadSnapshot from(Item item) {
+			return new CompositePayloadSnapshot(item.getFusionedItemId(), itemStoneIdsBySlot(item.hasFusionStones() ? item.getFusionStones() : null),
+				item.getFusionedItemOptionalSockets(), item.getFusionedItemBonusStatsId());
+		}
+	}
+
+	private static final class EnchantPayloadSnapshot {
+
+		private final boolean soulBound;
+		private final int enchantLevel;
+		private final int itemSkinTemplateId;
+		private final int optionalManastoneSockets;
+		private final int enchantBonus;
+		private final List<Integer> manaStoneItemIdsBySlot;
+		private final int godStoneId;
+		private final Integer dyeColor;
+		private final int dyeTimeLeft;
+		private final int idianStoneItemId;
+		private final int idianPolishNumber;
+		private final int tempering;
+		private final List<Integer> plumeTemperingStats;
+		private final boolean amplified;
+		private final int buffSkill;
+
+		private EnchantPayloadSnapshot(boolean soulBound, int enchantLevel, int itemSkinTemplateId, int optionalManastoneSockets,
+			int enchantBonus, List<Integer> manaStoneItemIdsBySlot, int godStoneId, Integer dyeColor, int dyeTimeLeft, int idianStoneItemId,
+			int idianPolishNumber, int tempering, List<Integer> plumeTemperingStats, boolean amplified, int buffSkill) {
+			this.soulBound = soulBound;
+			this.enchantLevel = enchantLevel;
+			this.itemSkinTemplateId = itemSkinTemplateId;
+			this.optionalManastoneSockets = optionalManastoneSockets;
+			this.enchantBonus = enchantBonus;
+			this.manaStoneItemIdsBySlot = Collections.unmodifiableList(manaStoneItemIdsBySlot);
+			this.godStoneId = godStoneId;
+			this.dyeColor = dyeColor;
+			this.dyeTimeLeft = dyeTimeLeft;
+			this.idianStoneItemId = idianStoneItemId;
+			this.idianPolishNumber = idianPolishNumber;
+			this.tempering = tempering;
+			this.plumeTemperingStats = Collections.unmodifiableList(plumeTemperingStats);
+			this.amplified = amplified;
+			this.buffSkill = buffSkill;
+		}
+
+		private static EnchantPayloadSnapshot from(Item item) {
+			int optionalManastoneSockets = !item.isIdentified() ? -1 : item.getOptionalSockets();
+			int enchantBonus = !item.isIdentified() ? -1 : item.getEnchantBonus();
+			int dyeTimeLeft = item.getColorTimeLeft();
+			IdianStone idianStone = item.getIdianStone();
+			int idianStoneItemId = idianStone != null && idianStone.getPolishNumber() > 0 ? idianStone.getItemId() : 0;
+			int idianPolishNumber = idianStone != null && idianStone.getPolishNumber() > 0 ? idianStone.getPolishNumber() : 0;
+			return new EnchantPayloadSnapshot(item.isSoulBound(), item.getEnchantLevel(), item.getItemSkinTemplate().getTemplateId(),
+				optionalManastoneSockets, enchantBonus, itemStoneIdsBySlot(item.hasManaStones() ? item.getItemStones() : null),
+				item.getGodStoneId(), dyeTimeLeft < 0 ? null : item.getItemColor(), dyeTimeLeft, idianStoneItemId, idianPolishNumber,
+				item.getTempering(), plumeTemperingStats(item), item.isAmplified(), item.getBuffSkill());
+		}
+
+		private static List<Integer> plumeTemperingStats(Item item) {
+			List<Integer> stats = new ArrayList<>();
+			if (item.getTempering() > 0 && item.getItemTemplate().getItemGroup() == ItemGroup.PLUME) {
+				PlumStatEnum stat = item.getItemTemplate().getTemperingName().equals("TSHIRT_PHYSICAL") ? PlumStatEnum.PLUM_PHISICAL_ATTACK
+					: PlumStatEnum.PLUM_BOOST_MAGICAL_SKILL;
+				stats.add(PlumStatEnum.PLUM_HP.getId());
+				stats.add(PlumStatEnum.PLUM_HP.getBoostValue() * item.getTempering());
+				stats.add(stat.getId());
+				stats.add(stat.getBoostValue() * item.getTempering() + item.getRndPlumeBonusValue());
+			}
+			return stats;
+		}
+	}
+
+	private static final class ConditioningPayloadSnapshot {
+
+		private final boolean conditioningInfoPresent;
+		private final int chargePoints;
+
+		private ConditioningPayloadSnapshot(boolean conditioningInfoPresent, int chargePoints) {
+			this.conditioningInfoPresent = conditioningInfoPresent;
+			this.chargePoints = chargePoints;
+		}
+
+		private static ConditioningPayloadSnapshot from(Item item) {
+			return new ConditioningPayloadSnapshot(item.getConditioningInfo() != null, item.getChargePoints());
+		}
+	}
+
+	private static final class PremiumOptionPayloadSnapshot {
+
+		private final boolean identified;
+		private final int bonusStatsId;
+		private final int tuneCount;
+
+		private PremiumOptionPayloadSnapshot(boolean identified, int bonusStatsId, int tuneCount) {
+			this.identified = identified;
+			this.bonusStatsId = bonusStatsId;
+			this.tuneCount = tuneCount;
+		}
+
+		private static PremiumOptionPayloadSnapshot from(Item item) {
+			return new PremiumOptionPayloadSnapshot(item.isIdentified(), !item.isIdentified() ? -1 : item.getBonusStatsId(),
+				!item.isIdentified() ? 0 : item.getTuneCount());
+		}
+	}
+
+	private static final class PolishPayloadSnapshot {
+
+		private final int polishCharge;
+
+		private PolishPayloadSnapshot(int polishCharge) {
+			this.polishCharge = polishCharge;
+		}
+
+		private static PolishPayloadSnapshot from(Item item) {
+			IdianStone stone = item.getIdianStone();
+			return new PolishPayloadSnapshot(stone == null ? 0 : stone.getPolishCharge());
+		}
+	}
+
+	private static final class WrapPayloadSnapshot {
+
+		private final int packCount;
+
+		private WrapPayloadSnapshot(int packCount) {
+			this.packCount = packCount;
+		}
+
+		private static WrapPayloadSnapshot from(Item item) {
+			return new WrapPayloadSnapshot(item.getPackCount());
 		}
 	}
 
@@ -243,6 +456,20 @@ public final class PetFeedUnusualStorageArtifactCapture {
 			this.entryId = entryId;
 			this.payloadSize = payloadSize;
 		}
+	}
+
+	private static List<Integer> itemStoneIdsBySlot(Set<? extends ItemStone> stones) {
+		List<Integer> itemIdsBySlot = new ArrayList<>();
+		for (int i = 0; i < Item.MAX_BASIC_STONES; i++)
+			itemIdsBySlot.add(0);
+		if (stones == null)
+			return itemIdsBySlot;
+		for (ItemStone stone : stones) {
+			int slot = stone.getSlot();
+			if (slot >= 0 && slot < Item.MAX_BASIC_STONES)
+				itemIdsBySlot.set(slot, stone.getItemId());
+		}
+		return itemIdsBySlot;
 	}
 
 	private static final class PacketSnapshot {
@@ -268,8 +495,10 @@ public final class PetFeedUnusualStorageArtifactCapture {
 			int clearFrameLength = clearFrame.limit() >= 2 ? clearFrame.getShort(0) & 0xFFFF : 0;
 			int encodedOpcode = clearFrame.limit() >= 4 ? clearFrame.getShort(2) & 0xFFFF : 0;
 			ItemBlobSnapshot observedItemBlob = null;
-			if (packet instanceof SM_WAREHOUSE_ADD_ITEM)
-				observedItemBlob = ItemBlobSnapshot.from(((SM_WAREHOUSE_ADD_ITEM) packet).getFirstItemInfoBlob());
+			if (packet instanceof SM_WAREHOUSE_ADD_ITEM) {
+				SM_WAREHOUSE_ADD_ITEM warehouseAddItem = (SM_WAREHOUSE_ADD_ITEM) packet;
+				observedItemBlob = ItemBlobSnapshot.from(warehouseAddItem.getFirstItemInfoBlob(), warehouseAddItem.getFirstItem());
+			}
 			return new PacketSnapshot(packetIndex, packet.getClass().getName(), clearFrameLength, encodedOpcode, clearFrame.remaining(),
 				observedItemBlob);
 		}
