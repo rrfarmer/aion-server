@@ -487,3 +487,7 @@ The checked-in pet static data was structurally audited: 218 pet templates, max 
 ## Update After UOW-1309
 
 `SmPet` now supports the Java dedicated doping `SPECIAL_FUNCTION` constructor shape for dope actions add, remove, switch, and use from supplied snapshots. Live bind-point fanout remains blocked because live `PetService.useDoping`, pet doping bag state, inventory lookup/mutation, cooldown/buff behavior, persistence, Java runtime vectors, and socket dispatch remain unported.
+
+## Update After UOW-1310
+
+A read-only pet runtime dependency map now captures the Java service/model/repository/timer dependencies behind `CM_PET` and `CM_PET_EMOTE`. Live bind-point fanout remains blocked because C# still lacks live pet common data, pet repository/list hydration, food/mood packet branches, pet service planners, scheduled feed/doping/mood behavior, pet world object mutation, Java runtime vectors, and socket dispatch.
