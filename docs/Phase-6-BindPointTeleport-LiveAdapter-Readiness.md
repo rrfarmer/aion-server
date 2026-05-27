@@ -679,3 +679,7 @@ The disabled Java capture registry now carries a no-output construction-time `It
 ## Update After UOW-1357
 
 `SM_WAREHOUSE_ADD_ITEM` now exposes a passive first-item `ItemInfoBlob` metadata projection, and the disabled observer-side packet snapshot can recompute warehouse-add entry metadata when serialized packets are observed. Live bind-point fanout remains blocked because this is still metadata-only: no raw/canonical bytes, payload-field decoder, artifact writer, Java runtime artifacts, C# serializer gap closure, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
+
+## Update After UOW-1358
+
+A read-only key blob payload audit now maps Java `GeneralInfoBlobEntry`, `CompositeItemBlobEntry`, and `EnchantInfoBlobEntry` dynamic fields against current C# serializer gaps. Live bind-point fanout remains blocked because no decoded payload DTOs, Java artifact writer, raw/canonical bytes, cleanup/seal static-data projection, C# serializer gap closure, warehouse-add byte comparison, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
