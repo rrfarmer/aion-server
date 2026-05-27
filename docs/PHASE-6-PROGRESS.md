@@ -61879,6 +61879,77 @@ Next recommended unit of work:
 
 ---
 
+### Session 1479 (May 27, 2026)
+- Continued after UOW-1478 by moving from kisk lifecycle tests to the documented player-owned aggro blocker for live kisk revive cleanup.
+- Re-read Java `AggroList`, `PlayerAggroList`, `AggroInfo`, `Player.createAggroList`, and `PlayerReviveService.revive`.
+- Confirmed Java `PlayerAggroList.isAware` only requires `owner.getKnownList().knows(creature)`, unlike ordinary creature aggro, and Java `PlayerReviveService.revive` clears `player.getAggroList()` after resource/resurrection-state restore and before `onBeforeSpawn`.
+- Added an executable C# `PlayerOwnedAggroList` and exposed it from `Player.AggroList`.
+- Added explicit known-list-only add behavior, deterministic snapshots, all-entry clear, and hate-reduction-task cancellation state for the narrow player-owned list boundary.
+- Updated `PlayerReviveCleanupAdapterService` so live aggro mutation remains blocked by default but can clear a supplied `PlayerOwnedAggroList` when `ExecuteLiveAggroMutation` is true.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --filter "FullyQualifiedName~PlayerOwnedAggroListTests|FullyQualifiedName~PlayerAggroCleanupPlanServiceTests|FullyQualifiedName~PlayerReviveCleanupAdapterServiceTests|FullyQualifiedName~PlayerReviveCleanupPlanServiceTests"`.
+  - Result: passed 11 tests.
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --no-restore --filter "FullyQualifiedName~GameServerConnectionKiskReviveWorkflowTests"`.
+  - Result: passed 10 tests.
+
+#### Parallel Work Discovery - Session 1479
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Player-owned aggro live boundary | `AggroList`, `PlayerAggroList`, `AggroInfo`, `Player`, `PlayerReviveService` | `PlayerOwnedAggroList.cs`, `Player.cs`, revive cleanup adapter/tests | Model / Adapter / Tests | No | Medium | Touches shared player model and revive cleanup boundary. |
+| B | Production kisk revive live aggro clear | `PlayerReviveService.kiskRevive` / `revive` | `GameServerConnection.cs`, kisk revive workflow fixture | Later | Medium | Should follow after the explicit aggro list boundary is tested. |
+| C | NPC/creature aggro parity | `AggroList`, `CreatureController`, `NpcController` | world NPC combat state/services | Later | High | Broader AI/combat side effects and hate-reduction scheduling are not ready. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add player-owned aggro list boundary and explicit revive adapter clear | Model / Adapter / Regression Test / Documentation | `PlayerOwnedAggroList.cs`, `Player.cs`, `PlayerAggroCleanupPlanService.cs`, `PlayerReviveCleanupPlanService.cs`, `PlayerReviveCleanupAdapterService.cs`, focused tests, progress/handoff docs | production `GameServerConnection` live kisk revive mutation | Java aggro/revive audit | Passing focused tests and an opt-in live aggro clear path without changing default kisk revive behavior. |
+
+No subagent was spawned because the selected work modified shared player model and revive cleanup adapter files.
+
+#### Migration Parity Table - Session 1479
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.attack.PlayerAggroList` | `Aion.GameServer.Model.GameObjects.PlayerOwnedAggroList` | Model / Aggro List | Partial | Unit Tested | Partial Parity | C# now owns executable player aggro entries with Java known-list-only awareness, deterministic snapshots, and clear. Missing Java live `Creature` references, known-list object lookup, target selection, stream valid target filtering, random target selection, geo visibility, and full thread scheduling. |
+| `com.aionemu.gameserver.controllers.attack.AggroList` | `Aion.GameServer.Model.GameObjects.PlayerOwnedAggroList` / `PlayerAggroCleanupPlanService` | Base Aggro List | Partial | Unit Tested | Needs Verification | C# models clear-all plus hate-reduction-task cancellation state for player-owned aggro. Ordinary creature awareness, damage/hate formulas, master damage transfer, final damage list, `ConcurrentHashMap` semantics, and scheduled hate decay remain unsupported. |
+| `com.aionemu.gameserver.controllers.attack.AggroInfo` | `PlayerAggroEntrySnapshot` / `PlayerOwnedAggroList` | DTO / Entry State | Partial | Unit Tested | Partial Parity | C# accumulates positive damage and clamps hate to at least 1 for known attackers. Java `lastInteractionTime`, `hateReduceCount`, and timed hate reduction remain represented only as cancellation state. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Aion.GameServer.Model.GameObjects.Player` | Model | Partial | Unit Tested | Needs Verification | `Player.AggroList` now mirrors Java `Player.createAggroList()` ownership. Full Java `KnownList`, `Creature`, effect controller, and concurrent lifecycle semantics remain broader. |
+| `com.aionemu.gameserver.services.player.PlayerReviveService` | `PlayerReviveCleanupAdapterService` / `PlayerReviveCleanupPlanService` | Service / Adapter | Partial | Unit Tested / Regression Tested | Partial Parity | Adapter can now execute `player.getAggroList().clear()` against a supplied C# list, and still stays disabled unless explicitly requested. Production kisk revive has not yet been wired to live aggro mutation. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `TryAddKnownAttacker_UsesPlayerKnownListOnlyAwareness` | Unit / model | `PlayerAggroList.isAware` | Known attackers are accepted and unknown attackers are rejected using the player known-list-only rule. | Deterministic assertion from Java source audit. | Uses a boolean known-list input, not live Java `KnownList`. |
+| `TryAddKnownAttacker_AccumulatesDamageAndClampsHateLikeAggroInfo` | Unit / model | `AggroInfo.addDamage`, `AggroInfo.addHate` | Positive damage accumulates and hate is clamped to at least 1 per add. | Deterministic assertion from Java source audit. | Does not model `lastInteractionTime` or scheduled hate decay. |
+| `Clear_ReturnsEntriesClearsAllAndCancelsHateReductionTask` | Unit / model | `AggroList.clear` | Clear returns previous entries, empties the list, and cancels represented hate-reduction state. | Deterministic assertion from Java source audit. | No real Java `Future` cancellation or `ConcurrentHashMap` race coverage. |
+| `PlayerOwnsExecutableAggroList` | Unit / model | `Player.createAggroList` | C# `Player` now owns an executable aggro list. | Deterministic model ownership assertion. | Full player known-list integration remains pending. |
+| `Apply_LiveAggroMutationClearsSuppliedPlayerOwnedAggroList` | Unit / adapter | `PlayerReviveService.revive` | Opt-in revive cleanup clears supplied player aggro, reports live mutation, and exposes live plan metadata. | Deterministic adapter regression. | Production kisk revive still does not pass the live aggro list. |
+| Existing aggro/revive cleanup and kisk revive workflow tests | Regression | `PlayerReviveService.kiskRevive` / `revive` | Existing disabled cleanup planning and kisk revive workflow behavior remain stable. | Focused 21-test validation passed across aggro/revive/kisk revive suites. | Full suite still has unrelated cleanup-seal failures from earlier sessions. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Full game-server test suite is still known to have two unrelated stable failures in `GameServerConnectionInventoryExpansionUseItemTests`: `ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate` and `HandleUseItemAsync_ExpExtractMergesRestrictedRewardWithCleanupSealFlag`.
+- `PlayerOwnedAggroList` uses object-id snapshots and explicit known-list booleans; it does not yet query a live Java-style `KnownList`.
+- Ordinary `AggroList` behavior for NPCs/creatures, summons/master transfer, final damage list, target selection, geo visibility, random target choice, `ConcurrentHashMap` race semantics, and hate-reduction scheduling remains unported.
+- Production kisk revive still does not execute live aggro mutation; the next unit should wire the now-available list carefully at the existing `GameServerConnection.HandleReviveAsync` boundary.
+- Threading differences remain: C# records hate-reduction cancellation state but does not schedule or cancel a real periodic task.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped artifact rows in this unit
+- Total artifacts ported: 1 executable player-owned aggro boundary plus 1 opt-in revive cleanup adapter mutation path
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 5 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, full known-list integration, creature/NPC aggro behavior, scheduled hate decay, production kisk revive live wiring, unrelated full-suite cleanup-seal failures
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Wire `GameServerConnection.HandleReviveAsync` kisk revive cleanup to pass `player.AggroList` into `PlayerReviveCleanupAdapterService` and add a socket/workflow regression proving live player aggro entries are cleared in Java `PlayerReviveService.revive` order without changing existing movement/teleport/emotion packet order.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
