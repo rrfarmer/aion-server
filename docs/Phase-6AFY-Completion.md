@@ -2,7 +2,7 @@
 
 Date: May 27, 2026
 Completed Unit of Work: UOW-1345
-Latest Commit: pending `[Phase 6][UOW-1345] Add unusual storage artifact reader`
+Latest Commit: a4ea9d75e `[Phase 6][UOW-1345] Add unusual storage artifact reader`
 Status: Guarded C# reader/comparator for future unusual-storage rejected-food Java runtime artifacts exists; no Java artifacts or live dispatch were enabled.
 
 ## What Changed
