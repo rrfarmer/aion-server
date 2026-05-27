@@ -182,6 +182,11 @@ public final class PetFeedUnusualStorageArtifactCapture {
 	}
 
 	private static void writeArtifact(ArtifactSnapshot snapshot) {
+		try {
+			buildArtifactPath(snapshot);
+		} catch (RuntimeException e) {
+			// Capture artifact path validation must never affect packet dispatch or writer lifecycle.
+		}
 		// Future JSON/file writer boundary. Intentionally no-op.
 	}
 

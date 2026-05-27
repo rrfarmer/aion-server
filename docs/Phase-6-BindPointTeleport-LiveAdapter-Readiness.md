@@ -727,3 +727,7 @@ A read-only output-path audit now defines safety rules for the future unusual-st
 ## Update After UOW-1369
 
 `PetFeedUnusualStorageArtifactCapture` now carries player object id into completed snapshots and has private helper shells to normalize the configured output directory, sanitize filename fragments, and construct a deterministic contained `.json` artifact path from scenario/player/storage/item/timing metadata. The helper is not invoked and `writeArtifact(...)` remains no-op. Live bind-point fanout remains blocked because no path helper tests, directory creation, JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, warehouse-add byte comparison, runtime lifecycle validation, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
+
+## Update After UOW-1370
+
+The no-op unusual-storage artifact writer boundary now invokes `buildArtifactPath(...)` and swallows validation failures so capture path checks cannot affect packet dispatch or writer lifecycle. It still creates no directories, writes no JSON, retains no raw/canonical bytes, and has no Java runtime validation. Live bind-point fanout remains blocked because no path helper tests, directory creation, JSON serialization, file output, raw/canonical bytes, C# artifact reader/schema validation, warehouse-add byte comparison, runtime lifecycle validation, or live unusual-storage hydration/mutation/dispatch/runtime comparison exists.
