@@ -563,3 +563,7 @@ A non-sending C# `PetFeedPacketMetadataBridge` now converts packet-facing feed o
 ## Update After UOW-1328
 
 `PetFeedPacketMetadataBridge` can now consume supplied normal-cube unlock context to construct the rejected-food unlock metadata pair Java sends before `SM_PET(5)`: `SmInventoryAddItem` with `ALL_SLOT = 0x13`, followed by `SmCubeUpdate`. Live bind-point fanout remains blocked because warehouse unlock packets, live storage/item/template/player hydration, inventory mutation, packet dispatch, scheduler execution, reward creation, DAO writes, Java runtime packet comparison, and socket dispatch remain disabled.
+
+## Update After UOW-1329
+
+`PetFeedPacketMetadataBridge` can now consume supplied regular/account warehouse unlock context to construct Java-shaped rejected-food warehouse unlock metadata: `SmWarehouseAddItem` with `ALL_SLOT = 0x13`, followed by regular warehouse `SmCubeUpdate` snapshots or the account warehouse zero cube-update payload. Live bind-point fanout remains blocked because legion warehouse item/kinah routing, live storage/item/template/player hydration, inventory mutation, packet dispatch, scheduler execution, reward creation, DAO writes, Java runtime packet comparison, and socket dispatch remain disabled.
