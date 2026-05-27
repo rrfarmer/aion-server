@@ -615,3 +615,7 @@ A docs-only warehouse live-adapter capture design now defines the future rejecte
 ## Update After UOW-1341
 
 `SmCubeUpdate.TryGetJavaStorageOrdinal` and `ZeroSizeForJavaStorageId` now resolve Java storage ids to Java enum ordinals before constructing zero-count cube-update metadata. Tests cover cube/warehouse ids `0` through `3`, pet bag ids `32` through `43`, house storage ids `60` through `79`, broker `126`, mailbox `127`, and unknown-id guards. Live bind-point fanout remains blocked because unusual `SM_WAREHOUSE_ADD_ITEM` metadata, pet/house/broker/mailbox ownership, storage mutation, packet dispatch, Java runtime bytes, scheduler execution, reward creation, DAO writes, and socket dispatch remain disabled.
+
+## Update After UOW-1342
+
+`PetFeedPacketMetadataBridge` now has a guarded non-live `UnusualWarehouse` path that can pair `SmWarehouseAddItem` using the Java storage id with `SmCubeUpdate.ZeroSizeForJavaStorageId` using the Java ordinal/zero-count payload. Focused tests cover representative pet bag, house storage, broker, and mailbox ids plus an unknown-id block. Live bind-point fanout remains blocked because the live assembler still rejects unusual storage ids, full unusual-id bridge coverage is not yet present, Java runtime bytes are missing, pet/house/broker/mailbox ownership and storage hydration are unsupported, and packet dispatch/storage mutation remain disabled.

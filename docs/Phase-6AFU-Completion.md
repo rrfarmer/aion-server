@@ -2,7 +2,7 @@
 
 Date: May 27, 2026
 Completed Unit of Work: UOW-1341
-Latest Commit: pending UOW-1341 unit commit
+Latest Commit: 7757c0024 `[Phase 6][UOW-1341] Add storage id ordinal resolver`
 Status: Non-live Java storage-id to ordinal resolution is implemented for `SM_CUBE_UPDATE`; unusual-storage unlock dispatch remains disabled.
 
 ## What Changed
