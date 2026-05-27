@@ -46,7 +46,7 @@ Add a small C# dataholder rather than deriving this flag from `ItemTemplateSumma
 
 ## Implementation Follow-Up
 
-UOW-1393 added `ItemRestrictionCleanupTable`, `ItemRestrictionCleanupSummary`, `StaticData.ItemRestrictionCleanups`, loader parsing, and focused tests for Java defaults plus the `awh == 0 || lwh == 0` predicate. The packet boundary recommendation is still pending: `WriteGeneralInfoBlob` continues to write zero until a future unit passes an explicit cleanup/seal flag.
+UOW-1393 added `ItemRestrictionCleanupTable`, `ItemRestrictionCleanupSummary`, `StaticData.ItemRestrictionCleanups`, loader parsing, and focused tests for Java defaults plus the `awh == 0 || lwh == 0` predicate. UOW-1394 then added an explicit cleanup/seal flag input to the item-blob serializer and wired enter-world inventory/warehouse login packet construction through the cleanup table. Service-produced item blobs such as warehouse add, inventory add/update, and mail attachment paths still need focused flag plumbing.
 
 ## Suggested Implementation Sequence
 
