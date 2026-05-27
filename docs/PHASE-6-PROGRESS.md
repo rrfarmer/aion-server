@@ -62012,6 +62012,69 @@ Next recommended unit of work:
 
 ---
 
+### Session 1481 (May 27, 2026)
+- Continued after UOW-1480 with the next narrow `PlayerController.onBeforeSpawn` state parity slice.
+- Re-audited Java `PlayerController.onBeforeSpawn`, `PlayerController.onDie`, `CreatureController.onDie`, `Player.getIsFlyingBeforeDeath`, and `PlayerReviveService` revive callers.
+- Added `Player.IsFlyingBeforeDeath` to mirror Java `Player.isFlyingBeforeDeath`.
+- Updated `PlayerReviveRestoreService.ApplyReviveRestore` so the modeled `onBeforeSpawn` state branch clears `FLOATING_CORPSE` when `IsFlyingBeforeDeath` is true, otherwise it clears `DEAD`, then sets `ACTIVE`.
+- Added coverage for kisk revive restore clearing `FloatingCorpse` while preserving the `IsFlyingBeforeDeath` flag, matching Java kisk revive's lack of flag reset.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests --no-restore --filter "FullyQualifiedName~PlayerReviveRestoreServiceTests|FullyQualifiedName~GameServerConnectionKiskReviveWorkflowTests"`.
+  - Result: passed 17 tests.
+
+#### Parallel Work Discovery - Session 1481
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Flying-before-death `onBeforeSpawn` state cleanup | `PlayerController.onBeforeSpawn`, `Player.getIsFlyingBeforeDeath`, `CreatureController.onDie`, `PlayerReviveService.kiskRevive` | `Player.cs`, `PlayerReviveRestoreService.cs`, restore tests | Model / Service / Unit Test | No | Low | Compact state branch, but shared player restore logic should stay sequential. |
+| B | Protection active task planning | `PlayerController.startProtectionActiveTask`, `stopProtectionActiveTask`, `TaskId.PROTECTION_ACTIVE` | future planner/tests | Later | Medium | Requires packet/task scheduling metadata and visibility fanout decisions. |
+| C | Full flying-before-death revive restoration | `skillRevive`, `rebirthRevive`, `itemSelfRevive`, `FlyController.startFly` | fly controller/player state services | Later | Medium | Kisk revive does not reset the flag or restart flying; other revive types need broader support. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Port flying-before-death `onBeforeSpawn` state branch into revive restore | Model / Service / Unit Test / Documentation | `Player.cs`, `PlayerReviveRestoreService.cs`, `PlayerReviveRestoreServiceTests.cs`, progress/handoff docs | production fly-controller execution, protection task scheduling | Java `onBeforeSpawn` audit | Passing restore/kisk revive tests and documented remaining revive side effects. |
+
+No subagent was spawned because the selected work modified shared player model and revive restore logic.
+
+#### Migration Parity Table - Session 1481
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController` | `PlayerReviveRestoreService` | Controller / Restore Service | Partial | Unit Tested | Partial Parity | Modeled the `onBeforeSpawn` branch that clears `FLOATING_CORPSE` for flying-before-death players and `DEAD` otherwise, then sets `ACTIVE`. Hit-time boost reset, Panesterra faction clearing, protection task scheduling, and full controller hooks remain pending. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Aion.GameServer.Model.GameObjects.Player` | Model | Partial | Unit Tested | Needs Verification | Added `IsFlyingBeforeDeath` flag. Java flag lifecycle from death through non-kisk revive callers remains broader; C# currently preserves the flag for kisk revive like Java. |
+| `com.aionemu.gameserver.controllers.CreatureController` | `PlayerCreatureState` / `PlayerReviveRestoreService` | Controller / State | Partial | Unit Tested | Needs Verification | Java death uses `FLOATING_CORPSE` instead of `DEAD` when `isFlyingBeforeDeath` is true. This unit validates the revive-side cleanup branch, not the full death transition. |
+| `com.aionemu.gameserver.services.player.PlayerReviveService` | `PlayerReviveRestoreService` / `GameServerConnection.HandleReviveAsync` | Service / Connection Flow | Partial | Unit Tested / Regression Tested | Partial Parity | Kisk revive restore now observes Java flying-before-death state cleanup. Other revive types that reset `isFlyingBeforeDeath` after fly handling are not ported in this unit. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ApplyKiskReviveRestoreClearsFloatingCorpseForFlyingBeforeDeathLikeOnBeforeSpawn` | Unit / restore state | `PlayerController.onBeforeSpawn`, `PlayerReviveService.kiskRevive` | Flying-before-death kisk revive clears `FloatingCorpse`, sets `Active`, preserves unrelated state, restores HP/MP, and does not reset `IsFlyingBeforeDeath`. | Deterministic C# state assertion from Java source audit. | Does not execute Java runtime or broader fly-controller restoration. |
+| Existing `PlayerReviveRestoreServiceTests` and `GameServerConnectionKiskReviveWorkflowTests` | Regression | `PlayerReviveService.revive`, `CM_REVIVE` kisk path | Existing resource restore, no-penalty restore, live aggro clear, movement, and teleport workflow stayed stable. | Focused 17-test validation passed. | Full suite still has unrelated cleanup-seal failures. |
+
+Remaining risks:
+- Java runtime artifact generation remains blocked locally by missing Maven/Java 25 tooling.
+- Full game-server test suite is still known to have two unrelated stable failures in `GameServerConnectionInventoryExpansionUseItemTests`: `ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate` and `HandleUseItemAsync_ExpExtractMergesRestrictedRewardWithCleanupSealFlag`.
+- C# now models the revive-side flying-before-death state branch, but not the full death-side transition that sets `IsFlyingBeforeDeath` and `FloatingCorpse`.
+- Non-kisk revive flows that restart flying or reset `isFlyingBeforeDeath` remain unported.
+- `PlayerController.onBeforeSpawn` hit-time boost reset, Panesterra faction clearing, `VisibleObjectController.onBeforeSpawn` static geo spawn, and protection active task scheduling remain unsupported.
+- State flags are represented in C# bit flags; Java exact state composition around `DEAD`, `ACTIVE`, and `FLOATING_CORPSE` still needs runtime comparison.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped artifact rows in this unit
+- Total artifacts ported: 1 player flag plus 1 revive restore state branch
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 4 grouped rows
+- Total blocked artifacts: Java runtime artifact generation, death-side flying flag transition, non-kisk revive fly restoration/reset, hit-time boost/Panesterra/static-geo/protection task side effects, unrelated full-suite cleanup-seal failures
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Continue `PlayerController.onBeforeSpawn` parity with a non-live metadata planner for protection active task scheduling (`TaskId.PROTECTION_ACTIVE`, 60000 ms delay, blinking visual state, cast/target cancellation, and `SM_PLAYER_STATE` fanout), then decide whether enough C# packet/task infrastructure exists to wire it into kisk revive or teleport spawn paths.
+
+---
+
 ## Next Steps
 
 Immediate next: continue kisk lifecycle with socket-order hardening for kisk removal/visibility refresh, or switch to a dedicated player-owned aggro model design UOW to unblock revive aggro cleanup. Keep both sequential if they touch shared connection fixtures or runtime state. Keep production changes narrow, keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
