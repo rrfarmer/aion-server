@@ -1,6 +1,7 @@
 package com.aionemu.gameserver.services.toypet;
 
 import java.nio.ByteBuffer;
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -98,7 +99,7 @@ public final class PetFeedUnusualStorageArtifactCapture {
 			int maxContexts = getMaxPendingContextsPerPlayer();
 			while (contexts.size() >= maxContexts)
 				contexts.removeFirst();
-			contexts.addLast(new CaptureContext(storageType.getId(), storageType.ordinal(), item.getObjectId(), now,
+			contexts.addLast(new CaptureContext(player.getObjectId(), storageType.getId(), storageType.ordinal(), item.getObjectId(), now,
 				PetFeedUnusualStorageArtifactCaptureConfig.ALLOWED_SCENARIO, PetFeedUnusualStorageArtifactCaptureConfig.OUTPUT_DIR,
 				ItemBlobSnapshot.from(player, item)));
 		}
@@ -184,6 +185,38 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		// Future JSON/file writer boundary. Intentionally no-op.
 	}
 
+	private static Path buildArtifactPath(ArtifactSnapshot snapshot) {
+		Path outputDirectory = resolveOutputDirectory(snapshot.outputDirectory);
+		String fileName = sanitizeFileNameFragment(snapshot.scenarioName) + "-player-" + snapshot.playerObjectId + "-storage-"
+			+ snapshot.storageTypeId + "-" + snapshot.storageTypeOrdinal + "-item-" + snapshot.itemObjectId + "-"
+			+ snapshot.registeredAtMillis + "-" + snapshot.completedAtMillis + ".json";
+		Path target = outputDirectory.resolve(fileName).normalize();
+		if (!target.startsWith(outputDirectory) || !target.getFileName().toString().endsWith(".json"))
+			throw new IllegalStateException("Invalid unusual-storage artifact path: " + target);
+		return target;
+	}
+
+	private static Path resolveOutputDirectory(String outputDirectory) {
+		if (outputDirectory == null || outputDirectory.trim().isEmpty())
+			throw new IllegalStateException("Unusual-storage artifact output directory is blank");
+		return Path.of(outputDirectory).toAbsolutePath().normalize();
+	}
+
+	private static String sanitizeFileNameFragment(String value) {
+		if (value == null || value.isBlank())
+			return "unknown";
+		StringBuilder sanitized = new StringBuilder(value.length());
+		for (int i = 0; i < value.length(); i++) {
+			char c = value.charAt(i);
+			sanitized.append(isSafeFileNameChar(c) ? c : '_');
+		}
+		return sanitized.toString();
+	}
+
+	private static boolean isSafeFileNameChar(char c) {
+		return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '.' || c == '_' || c == '-';
+	}
+
 	private static void startWriterWorker() {
 		synchronized (writerWorkerLock) {
 			if (writerWorker != null)
@@ -229,6 +262,7 @@ public final class PetFeedUnusualStorageArtifactCapture {
 
 	private static final class CaptureContext {
 
+		private final int playerObjectId;
 		private final int storageTypeId;
 		private final int storageTypeOrdinal;
 		private final int itemObjectId;
@@ -239,8 +273,9 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private final PacketSnapshot[] packets = new PacketSnapshot[2];
 		private int nextPacketIndex;
 
-		private CaptureContext(int storageTypeId, int storageTypeOrdinal, int itemObjectId, long registeredAtMillis, String scenarioName,
-			String outputDirectory, ItemBlobSnapshot constructionTimeItemBlob) {
+		private CaptureContext(int playerObjectId, int storageTypeId, int storageTypeOrdinal, int itemObjectId, long registeredAtMillis,
+			String scenarioName, String outputDirectory, ItemBlobSnapshot constructionTimeItemBlob) {
+			this.playerObjectId = playerObjectId;
 			this.storageTypeId = storageTypeId;
 			this.storageTypeOrdinal = storageTypeOrdinal;
 			this.itemObjectId = itemObjectId;
@@ -273,8 +308,8 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		}
 
 		private ArtifactSnapshot toSnapshot(long completedAtMillis) {
-			return new ArtifactSnapshot(scenarioName, outputDirectory, storageTypeId, storageTypeOrdinal, itemObjectId, registeredAtMillis,
-				completedAtMillis, constructionTimeItemBlob, packets[0], packets[1]);
+			return new ArtifactSnapshot(scenarioName, outputDirectory, playerObjectId, storageTypeId, storageTypeOrdinal, itemObjectId,
+				registeredAtMillis, completedAtMillis, constructionTimeItemBlob, packets[0], packets[1]);
 		}
 	}
 
@@ -282,6 +317,7 @@ public final class PetFeedUnusualStorageArtifactCapture {
 
 		private final String scenarioName;
 		private final String outputDirectory;
+		private final int playerObjectId;
 		private final int storageTypeId;
 		private final int storageTypeOrdinal;
 		private final int itemObjectId;
@@ -291,11 +327,12 @@ public final class PetFeedUnusualStorageArtifactCapture {
 		private final PacketSnapshot warehouseAddPacket;
 		private final PacketSnapshot cubeUpdatePacket;
 
-		private ArtifactSnapshot(String scenarioName, String outputDirectory, int storageTypeId, int storageTypeOrdinal, int itemObjectId,
-			long registeredAtMillis, long completedAtMillis, ItemBlobSnapshot constructionTimeItemBlob, PacketSnapshot warehouseAddPacket,
-			PacketSnapshot cubeUpdatePacket) {
+		private ArtifactSnapshot(String scenarioName, String outputDirectory, int playerObjectId, int storageTypeId, int storageTypeOrdinal,
+			int itemObjectId, long registeredAtMillis, long completedAtMillis, ItemBlobSnapshot constructionTimeItemBlob,
+			PacketSnapshot warehouseAddPacket, PacketSnapshot cubeUpdatePacket) {
 			this.scenarioName = scenarioName;
 			this.outputDirectory = outputDirectory;
+			this.playerObjectId = playerObjectId;
 			this.storageTypeId = storageTypeId;
 			this.storageTypeOrdinal = storageTypeOrdinal;
 			this.itemObjectId = itemObjectId;
