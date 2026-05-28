@@ -74819,3 +74819,84 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1648
 
 Next best unit: add a non-live material-zone construction plan for Java `ZoneService.createMaterialZoneTemplate`, including duplicate material mesh handling, shield/material handler selection, and sphere/cylinder/semisphere zone info metadata. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1649 (May 28, 2026)
+- Continued after UOW-1648 by modeling Java `ZoneService.createMaterialZoneTemplate` as a non-live material-zone construction plan.
+- Performed Parallel Work Discovery across material-zone construction planning, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected material-zone construction because it mutates the same zone data and collidable handler maps used by Java `ZoneService`.
+- Added `WorldMapRegionMaterialZoneConstructionService`.
+- Added material-zone construction context, plan, handler-kind, area-kind, and status DTOs/enums.
+- Modeled Java early returns for `ZoneName.NONE`, missing shield handler, and missing material template.
+- Modeled shield material id `11` through `ShieldService.tryRegisterShield` metadata and non-shield materials through `MaterialZoneHandler` metadata.
+- Modeled duplicate material mesh handler reuse/warning behavior.
+- Modeled existing `ZoneInfo` reuse and area-list creation metadata.
+- Modeled `MaterialZoneTemplate` area selection for cylinder/cone/H_COLUME, semisphere, and default sphere names.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionMaterialZoneConstructionServiceTests|FullyQualifiedName~WorldMapRegionZoneConstructionServiceTests|FullyQualifiedName~WorldMapRegionZoneIdentityServiceTests|FullyQualifiedName~WorldMapRegionZoneCapabilityServiceTests|FullyQualifiedName~WorldMapRegionZoneScanPlanServiceTests|FullyQualifiedName~WorldMapRegionZoneSortServiceTests|FullyQualifiedName~WorldMapRegionRuntimeSnapshotServiceTests|FullyQualifiedName~WorldMapRegionLifecyclePlanServiceTests|FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 91 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1649
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Material-zone construction plan | `ZoneService.createMaterialZoneTemplate`, `MaterialZoneTemplate`, `MaterialZoneHandler`, `ShieldService.tryRegisterShield` | new material construction service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; self-contained but docs and helper ownership are shared. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the material-zone blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Material-zone construction plan helper, tests, docs, commit | `WorldMapRegionMaterialZoneConstructionService.cs`, `WorldMapRegionMaterialZoneConstructionServiceTests.cs`, progress/handoff docs | Java source writes, unrelated services/tests | Implemented and documented UOW-1649. |
+| Sub-agents | None | None | All files | Not spawned because implementation and docs were small and Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1649 because selected work was small and progress/handoff docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1649
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.zone.ZoneService.createMaterialZoneTemplate` | `WorldMapRegionMaterialZoneConstructionService.CreatePlan` | Material Zone Construction Plan | Partial | Unit Tested | Partial Parity | C# models Java early returns, handler selection/reuse, area-list metadata, existing-zone reuse, and area-kind selection. It does not mutate live `collidableHandlers` or `zoneByMapIdMap`. |
+| `com.aionemu.gameserver.model.templates.zone.MaterialZoneTemplate` | `WorldMapRegionMaterialZoneAreaKind` | Material Zone Template Boundary | Partial | Unit Tested | Partial Parity | C# models Java geometry-name area selection: cylinder for `CYLINDER`/`CONE`/`H_COLUME`, semisphere for `SEMISPHERE`, otherwise sphere. It does not calculate radii, centers, extents, flags, or XML name. |
+| `com.aionemu.gameserver.world.zone.handler.MaterialZoneHandler` | `WorldMapRegionMaterialZoneHandlerKind.Material` | Handler Boundary | Not Started | Unit Tested Metadata | Needs Verification | C# records material handler creation metadata only. Live material skill matching, observer registration, staff debug messages, and collision actor behavior remain unported. |
+| `com.aionemu.gameserver.services.ShieldService.tryRegisterShield` | `WorldMapRegionMaterialZoneHandlerKind.Shield`; `BlockedMissingShieldHandler` | Shield Handler Boundary | Partial | Unit Tested | Needs Verification | C# models shield material id `11` and null/non-null registration outcomes via supplied metadata. Live geo shield enable/ignore checks and registered shield mutation remain unported. |
+| `com.aionemu.gameserver.world.zone.ZoneName.NONE` | `IgnoredNoneZoneName` | Zone Name Guard | Partial | Unit Tested | Partial Parity | C# returns without mutation for zone name `NONE`. It does not use Java `ZoneName` identity/cache. |
+| `com.aionemu.gameserver.dataholders.DataManager.MATERIAL_DATA` | `WorldMapRegionMaterialZoneConstructionContext.MaterialTemplateExists` | Data Manager Boundary DTO | Not Started | Unit Tested Metadata | Needs Verification | C# models missing/present material template as supplied metadata. Live data lookup remains unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_NoneZoneNameReturnsWithoutMutation` | Unit Added | Java `ZoneService.createMaterialZoneTemplate` `ZoneName.NONE` guard | NONE zone name blocks mutation. | Deterministic C# regression grounded in Java source review. | No Java `ZoneName` object identity. |
+| `CreatePlan_ShieldMaterialRequiresShieldHandler` | Unit Added | Java shield material id `11` branch | Shield handler null blocks; non-null registers shield handler and cylinder area. | Deterministic C# regression grounded in Java source review. | No live `ShieldService`. |
+| `CreatePlan_NonShieldMaterialRequiresMaterialTemplate` | Unit Added | Java material template lookup branch | Missing material template blocks; present template creates material handler metadata. | Deterministic C# regression grounded in Java source review. | No live `DataManager.MATERIAL_DATA`. |
+| `CreatePlan_SelectsJavaMaterialZoneAreaKind` | Unit Added | Java `MaterialZoneTemplate` constructor | Geometry-name based area type selection for cylinder/cone/H_COLUME, semisphere, and sphere. | Deterministic C# regression grounded in Java source review. | No radius/center calculation. |
+| `CreatePlan_DuplicateHandlerStillChecksZoneInfoAndWarns` | Unit Added | Java duplicate collidable handler branch | Duplicate handler path records warning and can still create missing zone info. | Deterministic C# regression grounded in Java source review. | No logger side effect. |
+| `CreatePlan_ExistingZoneInfoSkipsMaterialZoneInfoCreation` | Unit Added | Java existing `ZoneInfo` scan branch | Existing zone info prevents new material zone info creation while preserving list creation metadata. | Deterministic C# regression grounded in Java source review. | No live list mutation. |
+
+Remaining risks:
+- Material-zone planning is non-live and records selected branches/side effects as metadata.
+- Live `Spatial`, `BoundingBox`, center/radius/extents math, `MaterialZoneTemplate` flags/XML names, `DataManager` material/world lookups, shield ignore/config checks, and collidable handler mutation remain unported.
+- Live `MaterialZoneHandler` behavior is not executed: material skill matching, observer registration/removal, packet debug messages, and collision actor behavior remain future work.
+- `saveMaterialZones` remains unported and material zone persistence is not modeled.
+- Live C# `MapRegion`/`ZoneInstance` storage and callbacks remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 non-live material-zone construction helper plus 6 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity or Not Started metadata with known gaps.
+- Total blocked artifacts: live `Spatial`/`BoundingBox` math, live material template/world lookups, `ShieldService` config/ignore handling, collidable handler mutation, material skill/observer behavior, material zone persistence, dynamic zone handlers, live C# MapRegion/ZoneInstance storage, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Extend the material-zone plan with Java `MaterialZoneTemplate` numeric geometry metadata for sphere/cylinder/semisphere radius and bounds calculations, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1649
+
+Next best unit: extend the material-zone construction plan with Java `MaterialZoneTemplate` numeric geometry metadata for sphere/cylinder/semisphere center, radius, bottom/top calculations from bounding-box extents. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
