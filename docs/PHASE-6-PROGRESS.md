@@ -76288,3 +76288,83 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1667
 
 Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, add a non-live NPC target-change packet-plan boundary for `NpcController.onTargetChanged` using `SmLookAtObject`, or continue with another isolated packet parity unit. Keep Java source writes, repository production rewrites, live generated-zone writes, live target dispatch, live NPC target broadcast, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1668 (May 28, 2026)
+- Continued after UOW-1667 by adding a non-live NPC target-change packet-plan boundary for Java `NpcController.onTargetChanged`.
+- Performed Parallel Work Discovery across DB integration, NPC target-change boundary, zone-handler source audit, and isolated packet audit. Selected NPC target-change planning because UOW-1667 supplied `SmLookAtObject` and Java branch behavior is small enough to model without live broadcast.
+- Added `NpcTargetChangePacketPlanService`.
+- Added `NpcTargetChangePacketPlanInput`, `NpcTargetChangePacketPlan`, and `NpcTargetChangePacketPlanStatus`.
+- Modeled Java side effects that happen before dead-state packet branching: clear attacked count and renew last target-change time.
+- Modeled Java dead NPC branch with no packet.
+- Modeled Java talk-info target-clear branch with a 750 ms scheduled AI think intent and no broadcast.
+- Modeled Java broadcast branch with optional heading-toward-target selection and `SmLookAtObject` packet creation.
+- Kept live NPC controller/broadcast integration disabled.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~NpcTargetChangePacketPlanServiceTests|FullyQualifiedName~SmLookAtObjectPacketTests|FullyQualifiedName~GamePacketTests"`.
+  - Result: passed 247 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1668
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | NPC target-change packet-plan boundary | `NpcController.onTargetChanged`, `SM_LOOKATOBJECT`, `ThreadPoolManager`, `PositionUtil` | `NpcTargetChangePacketPlanService.cs`, `NpcTargetChangePacketPlanServiceTests.cs` | Controller Boundary / Packet Factory | Sequential for service/test writes | Low | Selected; closes the non-live packet factory boundary after packet body port. |
+| B | Run gated DB integration | charge-all DB integration harness | no file changes if executable | Parity Verification | No, env unavailable | Medium | Deferred because no DB environment is present. |
+| C | Zone handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks, but outside NPC target-change scope. |
+| D | Isolated packet audit | missing server packets | packet class/tests | Packet Port | Yes, later | Low | Still viable after NPC target boundary is documented. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | NPC target-change packet-plan service, tests, docs, commit | `NpcTargetChangePacketPlanService.cs`, `NpcTargetChangePacketPlanServiceTests.cs`, progress/handoff docs | Java source writes, live NPC controller/broadcast integration, unrelated services/tests | Implemented and documented UOW-1668. |
+| Sub-agents | None | None | All files | Not spawned because selected work was a small service/test unit plus shared docs. |
+
+No sub-agent was spawned for UOW-1668 because the selected boundary was small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1668
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.NpcController.onTargetChanged` | `Aion.GameServer.Services.NpcTargetChangePacketPlanService` | Controller Boundary | Partial | Unit Tested | Partial Parity | C# models clear-attacked-count and renew-last-target-change-time intents, dead branch, talk-info target-clear scheduled-think intent, heading selection, and `SmLookAtObject` packet creation. It does not integrate with live NPC controller state, AI, thread pool, PositionUtil, or PacketSendUtility. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LOOKATOBJECT` | `Aion.GameServer.Network.Aion.ServerPackets.SmLookAtObject` | Server Packet | Complete | Regression Tested | Partial Parity | Reused from UOW-1667; this unit verifies packet creation through the NPC target-change planner. No Java runtime golden/encrypted frame comparison. |
+| `com.aionemu.gameserver.model.gameobjects.Npc` | `NpcTargetChangePacketPlanInput` | Model Boundary | Partial | Unit Tested | Partial Parity | C# uses explicit snapshot inputs for NPC id, target id, dead flag, talk-info flag, and headings. Live NPC state, object template lookup, clearAttackedCount mutation, GameStats timestamp mutation, and equality semantics remain unported. |
+| `com.aionemu.gameserver.utils.PositionUtil.getHeadingTowards` | `NpcTargetChangePacketPlanInput.HeadingTowardTarget` | Utility Boundary | Not Started | Manual Only | Needs Verification | C# consumes a precomputed heading snapshot instead of calculating Java heading. Precision, rounding, coordinate handling, and byte conversion remain unverified. |
+| `com.aionemu.gameserver.utils.ThreadPoolManager.schedule` | `NpcTargetChangePacketPlan.ShouldScheduleThink` | Scheduler Boundary | Partial | Unit Tested | Partial Parity | C# records a 750 ms scheduled-think intent for talk NPC target clear. It does not schedule a task, check target still null after delay, or call AI think. Threading/cancellation behavior remains unported. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.broadcastPacket` | future broadcast integration | Utility Boundary | Not Started | No Tests | Needs Verification | Live packet broadcast remains disabled. Recipient selection, ordering, source inclusion, visibility, and threading remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_CreatesLookAtObjectPacketAndUsesHeadingTowardNonSelfTargetLikeJava` | Unit Added | Java `NpcController.onTargetChanged` non-null non-self target branch | Planner selects heading-toward-target and creates `SmLookAtObject`. | Source-derived packet-plan regression with payload assertion. | No live PositionUtil calculation or broadcast. |
+| `CreatePlan_CreatesZeroTargetPacketWhenTargetClearsAndNpcHasNoTalkInfoLikeJava` | Unit Added | Java null target/no talk-info else branch | Planner creates zero-target packet using current heading. | Source-derived packet-plan regression with payload assertion. | No live target reference clear. |
+| `CreatePlan_SchedulesThinkAndDoesNotBroadcastWhenTalkNpcTargetClearsLikeJava` | Unit Added | Java talk-info target-clear scheduled branch | Planner records 750 ms think schedule and no packet. | Source-derived branch regression. | No live scheduler or AI think call. |
+| `CreatePlan_DoesNotBroadcastWhenNpcIsDeadButKeepsPreDeadSideEffectsLikeJava` | Unit Added | Java side effects before `if (!isDead())` | Dead NPC plan keeps clear/renew intents and produces no packet. | Source-derived branch regression. | No live mutations. |
+| `CreatePlan_BlocksInvalidNpcOwnerBeforeJavaSideEffects` | Unit Added | Non-live C# safety boundary for Java live owner requirement | Invalid NPC id blocks all side-effect intents. | C# boundary regression. | Java controller would require a live owner rather than this id guard. |
+
+Remaining risks:
+- Live `NpcController.onTargetChanged` integration remains unported; no actual NPC state mutation, heading update, scheduler, AI think, or broadcast occurs.
+- `PositionUtil.getHeadingTowards` is not ported in this unit; heading is supplied by snapshot.
+- Threading/scheduler behavior for the 750 ms delayed AI think remains unverified.
+- Broadcast recipient selection, packet ordering, source inclusion, visibility, and threading remain unverified.
+- No Java runtime golden frame or encrypted frame comparison was produced for this workflow.
+- Gated charge-all DB integration execution still needs a real MySQL environment.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 non-live NPC target-change packet-plan service, 3 supporting DTO/enum artifacts, and 5 focused regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with documented non-live gaps.
+- Total blocked artifacts: live NPC controller integration, Java heading calculation, live scheduler/AI think, broadcast utility integration, Java runtime workflow comparison, DB-backed charge-all integration run.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- If a DB is available, run the gated DB integration suite. Otherwise, add a non-live `PositionUtil.getHeadingTowards` parity helper/test or continue with another isolated packet parity unit.
+
+---
+
+## Updated Immediate Next - Session 1668
+
+Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, add a non-live `PositionUtil.getHeadingTowards` parity helper/test to support NPC target-change heading calculation, or continue with another isolated packet parity unit. Keep Java source writes, repository production rewrites, live generated-zone writes, live target dispatch, live NPC target broadcast, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
