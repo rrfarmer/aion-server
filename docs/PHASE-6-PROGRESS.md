@@ -75749,3 +75749,75 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1660
 
 Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, perform a nearby packet golden gap audit such as `SM_NEARBY_QUESTS` or add another isolated packet body/factory parity unit. Keep Java source writes, repository production rewrites, live generated-zone writes, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1661 (May 28, 2026)
+- Continued after UOW-1660 by taking the no-DB fallback and adding a non-live `SM_NEARBY_QUESTS` packet-factory boundary to the nearby quest refresh planner.
+- Performed Parallel Work Discovery across gated DB execution, nearby quest packet factory work, standalone nearby packet body tests, and zone-handler source audit. Selected the nearby quest packet factory because the packet body already existed and the non-live refresh plan still stopped at packet intent metadata.
+- Added `CreatePacketFactoryPlan` to `NearbyQuestRefreshPlanService`.
+- Added `NearbyQuestPacketFactoryPlan` and `NearbyQuestPacketFactoryPlanStatus`.
+- Modeled Java `PlayerController.updateNearbyQuests` behavior at the non-live boundary: create `SmNearbyQuests` when the refresh plan would send, including empty marker maps; block packet creation when prerequisites such as world instance or quest templates are missing.
+- Added focused regressions for ready markers, Java empty-map send behavior, and missing-prerequisite blocking.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~NearbyQuestRefreshPlanServiceTests|FullyQualifiedName~NearbyQuestMarkerProjectionServiceTests|FullyQualifiedName~NearbyQuestRefreshInputAdapterServiceTests|FullyQualifiedName~NearbyQuestDelayedRefreshExecutionReportServiceTests|FullyQualifiedName~GamePacketTests"`.
+  - Result: passed 264 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1661
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Run gated DB integration | charge-all DB integration harness | no file changes if executable | Parity Verification | No, env unavailable | Medium | Deferred because no `AION_GAMESERVER_DB_*` env vars were present. |
+| B | Nearby quest packet factory boundary | `PlayerController.updateNearbyQuests`, `SM_NEARBY_QUESTS` | `NearbyQuestRefreshPlanService.cs`, `NearbyQuestRefreshPlanServiceTests.cs` | Packet Boundary Integration | Sequential for service/test writes | Low | Selected; closes non-live packet construction gap after existing marker projection and packet body work. |
+| C | Standalone nearby packet body tests | `SM_NEARBY_QUESTS` | new packet test file | Test Creation | Yes, later | Low | Useful later, but `GamePacketTests` already covers core bytes; selected factory boundary gives stronger integration value. |
+| D | Broader zone-handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks, but less direct than packet boundary continuation. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Nearby quest packet factory plan, tests, docs, commit | `NearbyQuestRefreshPlanService.cs`, `NearbyQuestRefreshPlanServiceTests.cs`, progress/handoff docs | Java source writes, live packet dispatch, unrelated services/tests | Implemented and documented UOW-1661. |
+| Sub-agents | None | None | All files | Not spawned because selected work touched one existing helper/test pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1661 because the selected change was small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1661
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `NearbyQuestRefreshPlanService.CreatePacketFactoryPlan` | Controller Packet Boundary | Partial | Unit Tested | Partial Parity | C# creates `SmNearbyQuests` from an already-composed non-live refresh plan when Java would send the packet. It does not access live `player.getPosition().getMapRegion()`, `QuestService`, `PacketSendUtility`, or controller dispatch. Null/missing dependency behavior is blocked as metadata rather than throwing. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `Aion.GameServer.Network.Aion.ServerPackets.SmNearbyQuests` | Server Packet | Complete | Regression Tested | Partial Parity | Existing packet writes opcode `127`, leading byte `0`, negative count as unsigned short, and not-yet-available flag. This unit verifies packet creation through the refresh planner, but no Java runtime golden frame/encryption comparison was produced. |
+| `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `NearbyQuestMarkerProjectionService`; `NearbyQuestRefreshPlanService` | Service Boundary | Partial | Regression Tested | Partial Parity | C# consumes marker results from staged nearby predicate logic. Unsupported XML/inventory/repeat timing conditions remain tracked as rejected dependencies; full Java quest condition evaluation is not live. |
+| `com.aionemu.gameserver.world.WorldMapInstance.getQuestIds` | `WorldMapInstanceRuntimeState.QuestIds`; `NearbyQuestRefreshPlan` | World State Boundary | Partial | Regression Tested | Partial Parity | C# uses staged quest ids from runtime state. Java uses `ConcurrentHashMap.newKeySet()` ordering and live map-region parent lookup; C# does not claim deterministic Java collection ordering or live region storage parity. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePacketFactoryPlan_CreatesSmNearbyQuestsForReadyPlan` | Unit Added | Java `PlayerController.updateNearbyQuests` and `SM_NEARBY_QUESTS.writeImpl` | Ready nearby quest refresh plan creates a packet with marker `1001 | (1 << 17)` and Java-shaped payload bytes. | Deterministic C# packet regression grounded in Java source review and existing packet writer. | No live controller/send path or Java runtime golden frame. |
+| `CreatePacketFactoryPlan_CreatesEmptySmNearbyQuestsWhenJavaWouldSendEmptyMap` | Unit Added | Java `updateNearbyQuests` always sends the packet after building the map | Empty world quest ids or all-rejected markers still create an empty `SM_NEARBY_QUESTS` payload. | Deterministic C# regression grounded in Java source review. | No live player/map-region traversal. |
+| `CreatePacketFactoryPlan_BlocksWhenRefreshPrerequisitesAreMissing` | Unit Added | Non-live C# prerequisite boundary for Java live dependencies | Missing world instance or quest templates do not create a packet in the C# planner. | C# boundary regression with explicit intentional non-live blocking. | Java live method would not have these nullable planner states. |
+
+Remaining risks:
+- Nearby quest packet factory boundary is non-live and does not call `PacketSendUtility.sendPacket`.
+- Live player controller, map-region parent lookup, quest id storage, `QuestService.checkStartConditions`, and static data lookup remain partially modeled.
+- Java `HashMap`/concurrent set ordering is not deterministic; C# tests assert packet body for supplied marker order only, not live Java iteration order.
+- Full Java runtime golden frame/encryption comparison for `SM_NEARBY_QUESTS` remains unverified.
+- Gated charge-all DB integration execution still needs a real MySQL environment.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 non-live packet-factory boundary plus 3 focused regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 0 grouped rows explicitly marked Needs Verification; all rows are Partial Parity with documented non-live gaps.
+- Total blocked artifacts: live nearby quest controller dispatch, full Java quest condition evaluation, live map-region lookup/order comparison, Java runtime packet capture, encrypted frame comparison, DB-backed charge-all integration run.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- If a DB is available, run the gated DB integration suite. Otherwise, continue with another isolated packet body/factory parity unit or a read-only zone handler source audit to prepare for live zone callback parity.
+
+---
+
+## Updated Immediate Next - Session 1661
+
+Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, continue with another isolated packet body/factory parity unit or a read-only zone handler source audit. Keep Java source writes, repository production rewrites, live generated-zone writes, live weather mutation, live actor mutation, and live nearby dispatch disabled.
