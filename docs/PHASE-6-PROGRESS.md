@@ -72382,3 +72382,74 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1615
 
 Next best unit: audit Java `WorldMapInstance.addObject` delayed nearby-refresh scheduling and compare it to C# `WorldMapInstanceRuntimeState.RegisterQuestStartIds`. If implementing, create only a non-live delayed-refresh plan/report surface that records whether a refresh would be scheduled and why. Keep production controller dispatch, `SM_NEARBY_QUESTS` sending, `ThreadPool` execution, repository writes, and ItemCharge behavior disabled.
+
+### Session 1616 (May 28, 2026)
+- Continued after UOW-1615 by auditing Java `WorldMapInstance.addObject(Npc)` delayed nearby-refresh scheduling.
+- Performed Parallel Work Discovery across delayed nearby-refresh scheduling, production ThreadPool dispatch, ItemCharge storage-location audit, and Java serializer implementation. Selected the delayed-refresh plan because the Java source shows a compact 1500ms pending-task suppression rule that can be represented non-live in existing C# world state.
+- Added `WorldMapInstanceRuntimeState.RegisterQuestStartIdsAndPlanNearbyRefresh`.
+- Added pending-refresh metadata, Java 1500ms delay metadata, and `CompletePendingNearbyQuestRefresh` to mirror Java clearing `updateNearbyQuestsTask` before iterating players.
+- Preserved existing `RegisterQuestStartIds` behavior for call sites that only need set registration.
+- Added focused tests proving first new quest ids schedule, duplicate ids do not schedule, new ids while pending are accumulated without a second schedule, and completion allows a later schedule.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~NearbyQuestRefreshInputAdapterServiceTests|FullyQualifiedName~NearbyQuestRefreshPlanServiceTests|FullyQualifiedName~QuestNpcStartRegistrationSourceRealDataAuditTests"`.
+  - Result: passed 31 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1616
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | WorldMapInstance delayed nearby-refresh scheduling plan | `WorldMapInstance.addObject`, `ThreadPoolManager.schedule`, `PlayerController.updateNearbyQuests` | `WorldMapInstanceRuntimeState.cs`, world runtime tests | Runtime State/Test | Sequential | Low | Selected; compact non-live metadata rule with no timer execution. |
+| B | Production ThreadPool nearby refresh dispatch | `WorldMapInstance.updateNearbyQuestsTask` callback | world services, connection dispatch | Live Dispatch | No | High | Deferred; would require live player iteration and packet sends. |
+| C | ItemCharge storage-location audit | `CM_CHARGE_ITEM`, Java `Inventory`/`Equipment` lifecycle | read-only Java/C# charge files | Java Analysis | Yes | Low | Safe support task after UOW-1611; separate subsystem. |
+| D | Java protection serializer implementation | future protection serializer/observer files | Java source/generated artifacts | Live Artifact Generation | No | High | Still blocked by Java 25/JDK/Maven and runtime artifact strategy. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live delayed nearby-refresh scheduling plan to world runtime state | Runtime State/Test/Docs | `WorldMapInstanceRuntimeState.cs`, `WorldMapRuntimeStateTests.cs`, progress/handoff docs | live `ThreadPoolManager.Schedule`, `GameServerConnection`, production `PlayerController.updateNearbyQuests`, repository files, ItemCharge files, Java source writes | Existing quest-id registration state and nearby adapter from UOW-1615 | One tested metadata surface for Java pending-task suppression semantics. |
+
+No sub-agent was spawned for UOW-1616 because the runtime state mutation and concurrency guard are tightly coupled.
+
+#### Migration Parity Table - Session 1616
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMapInstance.addObject` | `Aion.GameServer.World.WorldMapInstanceRuntimeState.RegisterQuestStartIdsAndPlanNearbyRefresh` | Runtime State / Scheduling Plan | Partial | Unit Tested | Partial Parity | C# now records the Java decision to schedule one delayed nearby refresh only after newly added quest ids and only when no refresh is pending. It does not add visible objects or NPC maps. |
+| `com.aionemu.gameserver.utils.ThreadPoolManager.schedule` | `WorldMapNearbyQuestRefreshSchedulePlan.Delay` | Scheduler Dependency | Partial | Unit Tested | Needs Verification | Java 1500ms delay is captured as metadata. No real timer, cancellation, thread execution, or Java runtime timing comparison was performed. |
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `WorldMapNearbyQuestRefreshSchedulePlan.JavaSource`; future adapter dispatch | Controller Callback Dependency | Partial | Unit Tested scheduling intent only | Needs Verification | Completion clears pending metadata like Java clears `updateNearbyQuestsTask`, but C# does not iterate players or call the nearby-refresh adapter. |
+| `com.aionemu.gameserver.questEngine.handlers.models.QuestNpc` | `QuestNpcStartTable` / `WorldMapInstanceRuntimeState.RegisterQuestStartIdsAndPlanNearbyRefresh` | Static Quest-NPC Registration Dependency | Partial | Existing Regression Tested + Unit Tested scheduling | Needs Verification | Existing C# quest-id projection feeds this state, but Java `QuestEngine.getQuestNpc` runtime lookup and NPC object/template integration remain partial. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | future dispatch after schedule plan | Packet Dependency | Partial | Existing Regression Tested | Needs Verification | This unit only plans delayed refresh scheduling; no packet serialization, send, or byte comparison occurred. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `WorldMapInstanceRuntimeState_PlansDelayedNearbyRefreshLikeJavaWorldMapInstance` | Unit / Runtime State | Java `WorldMapInstance.addObject(Npc)` pending `updateNearbyQuestsTask` logic | First new quest ids schedule with 1500ms delay; duplicate ids do not schedule; new ids while pending are accumulated without a second schedule. | Deterministic C# state regression from Java source. | No Java runtime, no live scheduler, no player iteration, no packet send. |
+| `WorldMapInstanceRuntimeState_CompletesPendingNearbyRefreshBeforeSchedulingAgain` | Unit / Runtime State | Java scheduled callback clears `updateNearbyQuestsTask` before `forEachPlayer` | Completing pending metadata allows a later new quest id to schedule again; completing without pending returns false. | Deterministic C# state regression from Java callback ordering. | No ThreadPool execution or Java timing comparison. |
+
+Remaining risks:
+- C# records delayed-refresh scheduling intent only; it does not execute a timer or iterate live players.
+- Java `WorldMapInstance.addObject` object maps, NPC maps, player maps, zones, and duplicate object behavior are only partially represented by other C# runtime state slices.
+- Production `PlayerController.updateNearbyQuests` remains unwired, and live `SM_NEARBY_QUESTS` sends remain disabled.
+- Threading behavior differs: Java uses `ConcurrentHashMap` sets plus a non-atomic null check on `Future`; C# uses a lock-protected metadata flag. This is intentionally safer for a non-live plan but not runtime-equivalent.
+- Packet bytes, socket ordering, reflection/dynamic quest lookups, date/time handling, and serialization remain unverified.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 non-live delayed nearby-refresh scheduling plan plus 2 focused unit tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 4 grouped rows explicitly marked Needs Verification; remaining row is Partial Parity with known gaps.
+- Total blocked artifacts: live ThreadPool execution, player iteration, production controller wiring, packet-byte comparison, full WorldMapInstance object/NPC map parity, Java runtime timing comparison.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Continue nearby-refresh prerequisites by connecting the delayed-refresh schedule plan to `NearbyQuestRefreshInputAdapterService` through a non-live execution report that accepts a player snapshot list and records per-player refresh plans without sending packets. Safe alternative: read-only ItemCharge storage-location lifecycle audit. Do not enable real timers or packet sends yet.
+
+---
+
+## Updated Immediate Next - Session 1616
+
+Next best unit: create a non-live delayed nearby-refresh execution report that takes a scheduled world-instance plan, a list of player snapshots, and `StaticData`, then records the `NearbyQuestRefreshInputAdapterService` result per player without invoking `ThreadPoolManager` or sending `SM_NEARBY_QUESTS`. Safe alternative: read-only ItemCharge `Location == CubeStorageId` lifecycle audit. Keep production timers, controller dispatch, packet sends, repository writes, and Java source changes disabled.
