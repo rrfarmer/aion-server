@@ -73592,3 +73592,77 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1632
 
 Next best unit: add non-live adapter coverage that derives `NearbyQuestRegionKey` or `PlayerKnownListRegionKey` from `WorldPosition` using `WorldRegionIdService`, proving the new Java region-id helper can feed existing snapshot planners without live storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1633 (May 28, 2026)
+- Continued after UOW-1632 by deriving existing non-live nearby and known-list region keys from `WorldPosition` through the new Java region-id helper.
+- Performed Parallel Work Discovery across region-key derivation adapter coverage, charge-all DB rollback integration planning, nearby packet golden gap audit, and live nearby dispatch. Selected region-key derivation because it directly builds on UOW-1632 and keeps live storage disabled.
+- Added `WorldRegionKeyProjectionService`, which creates `NearbyQuestRegionKey` and `PlayerKnownListRegionKey` from a C# `WorldPosition` using Java 2D or 3D region-id formulas.
+- Added `WorldRegionKeyProjectionServiceTests`, covering 2D/3D nearby key derivation, 2D/3D known-list key derivation, nearby snapshot filtering with derived keys, and known-list neighbour scanning with derived keys.
+- The helper stays in `Aion.GameServer.Services` so the lower-level `Aion.GameServer.World.WorldRegionIdService` does not depend on service DTOs.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests|FullyQualifiedName~NearbyQuestRegionSnapshotServiceTests|FullyQualifiedName~PlayerKnownListRegionSnapshotServiceTests"`.
+  - Result: passed 26 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1633
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Region-key derivation adapter coverage | `RegionUtil`, `WorldMap2DInstance`, `WorldMap3DInstance`, `WorldPosition` | `WorldRegionKeyProjectionService.cs`, projection tests | Utility Port / Test Creation | Sequential for writes | Low | Selected; connects region-id math to existing non-live snapshot planners. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred to keep region thread coherent. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the region-storage blocker. |
+| D | Live nearby dispatch | world/connection services | production world/connection files | Integration Fix | No | High | Deferred until region identity can flow into live storage and player iteration. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live region-key projection helper and tests | Utility Port / Tests / Docs | `WorldRegionKeyProjectionService.cs`, `WorldRegionKeyProjectionServiceTests.cs`, progress/handoff docs | Java source writes, live nearby dispatch, repository integration tests | UOW-1632 `WorldRegionIdService` | Tested projection from `WorldPosition` into nearby and known-list keys. |
+
+No sub-agent was spawned for UOW-1633 because the selected implementation and tests are tightly coupled and docs remain orchestrator-owned.
+
+#### Migration Parity Table - Session 1633
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.RegionUtil` | `WorldRegionIdService` consumed by `WorldRegionKeyProjectionService` | Utility Dependency | Complete | Unit Tested | Partial Parity | Java 2D/3D formulas now feed nearby and known-list key DTOs. Config override, negative coordinates, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.world.WorldPosition` | `Aion.GameServer.World.WorldPosition` consumed by `WorldRegionKeyProjectionService` | Position Model | Partial | Unit Tested | Needs Verification | C# record position can derive world id, instance id, and 2D/3D region id. Java mutable `mapRegion` pointer, spawned flag, and live parent lookup remain unported. |
+| `com.aionemu.gameserver.world.WorldMap2DInstance.getRegion` | `WorldRegionKeyProjectionService.CreateNearby2DRegionKey`; `CreateKnownList2DRegionKey` | Region Lookup Adapter | Partial | Unit Tested | Partial Parity | Tests confirm 2D key derivation ignores Z like Java 2D maps. Live region existence, precreated region bounds, neighbour arrays, owner/personal instance state, and zone filtering are not ported. |
+| `com.aionemu.gameserver.world.WorldMap3DInstance.getRegion` | `WorldRegionKeyProjectionService.CreateNearby3DRegionKey`; `CreateKnownList3DRegionKey` | Region Lookup Adapter | Partial | Unit Tested | Partial Parity | Tests confirm 3D key derivation includes Z and composes with existing snapshot planners. Live region existence, precreated Z bounds, neighbour arrays, and `parallelStream` creation remain unported. |
+| `com.aionemu.gameserver.world.MapRegion` | `NearbyQuestRegionKey`; `PlayerKnownListRegionKey` created by `WorldRegionKeyProjectionService` | Region Boundary DTO | Partial | Unit Tested | Needs Verification | Existing DTOs can now be derived from coordinates, but live object maps, activation/deactivation, synchronized player counts, zone revalidation, and parent instance storage remain snapshot-only or unported. |
+| `com.aionemu.gameserver.world.knownlist.KnownList.findVisibleObjects` | `PlayerKnownListRegionSnapshotService` using derived `PlayerKnownListRegionKey` in tests | Known-list Region Scan | Partial | Unit Tested | Partial Parity | Test proves derived region ids can drive existing non-live neighbour scan. Java range/canSee/two-way aware-list mutation and live MapRegion neighbours remain unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateNearby2DRegionKey_DerivesJava2DRegionIdFromWorldPosition` | Unit | Java `WorldMap2DInstance.getRegion` and `RegionUtil.get2dRegionId` | Nearby 2D key preserves world/instance and derives region id while ignoring Z. | Deterministic C# regression grounded in Java source. | No live map lookup or Java runtime comparison. |
+| `CreateNearby3DRegionKey_DerivesJava3DRegionIdFromWorldPosition` | Unit | Java `WorldMap3DInstance.getRegion` and `RegionUtil.get3dRegionId` | Nearby 3D key preserves world/instance and derives region id including Z. | Deterministic C# regression grounded in Java source. | No live map lookup or Java runtime comparison. |
+| `CreateKnownListRegionKeys_UseSameJavaRegionMathAsNearbyKeys` | Unit | Java shared `RegionUtil` math | Known-list 2D and 3D keys use the same formulas as nearby keys. | Deterministic C# regression grounded in Java source. | No live known-list neighbour source. |
+| `BuildSnapshot_UsesDerivedNearbyRegionKeysForSameInstanceFiltering` | Unit / Composition | Java delayed nearby refresh uses player's current map region parent | Derived nearby keys feed existing snapshot filtering for same instance vs other instance. | Deterministic C# composition test. | No live player collection or controller dispatch. |
+| `BuildSnapshot_UsesDerivedKnownListRegionKeysForNeighbourScan` | Unit / Composition | Java `KnownList.findVisibleObjects` scans current region and neighbours | Derived known-list keys feed existing neighbour scan ordering and owner exclusion. | Deterministic C# composition test. | No live neighbour arrays, range/canSee, or aware-list mutation. |
+
+Remaining risks:
+- Region-key projection is still non-live and does not attach a `MapRegion` to `WorldPosition`.
+- C# does not yet know whether a map is 2D or 3D from live world template/runtime metadata at this boundary; callers must choose the correct projection method.
+- Java map region precreation, neighbour linking, zone filtering, activation/deactivation, and object membership remain unported.
+- Region-size config override is not wired into the helper path.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 projection helper plus 5 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live C# MapRegion storage, 2D/3D map-type runtime selection, region precreation/neighbour model, zone filtering/revalidation, config-bound region size, Java runtime comparison, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Add a non-live map-dimension selection model that records whether a world map should use 2D or 3D region ids before projection, or run the charge-all DB rollback integration regression identified by the sidecar audit.
+
+---
+
+## Updated Immediate Next - Session 1633
+
+Next best unit: add a non-live map-dimension selection model for region-key projection, documenting how Java chooses `WorldMap2DInstance` versus `WorldMap3DInstance` and letting tests derive 2D/3D keys through one explicit selector. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
