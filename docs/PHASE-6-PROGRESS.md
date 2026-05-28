@@ -73370,3 +73370,73 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1629
 
 Next best unit: add a symmetric charge-all kinah all-current two-item packet-order regression, or document the Java-vs-C# charge-all transaction/ordering difference in a read-only audit before changing persistence semantics. Safe nearby alternative: read-only region-id calculation analysis before live region storage. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1630 (May 28, 2026)
+- Continued after UOW-1629 with the recommended symmetric charge-all kinah all-current two-item packet-order regression.
+- Performed Parallel Work Discovery across kinah charge-all multi-item order coverage, charge-all transaction/ordering audit, nearby region-id calculation analysis, and live nearby dispatch. Selected the kinah regression because UOW-1629 covered AP charge-all and this locks the parallel chargeWay 1 path without production changes.
+- Added `HandleQuestionResponseAsync_ChargeAllKinahPaymentSendsPerItemUpdatesStatsThenAllComplete`.
+- The new test covers two current kinah charge-all items, verifies the single quoted Kinah payment mutation, repository charged-item order, final inventory charges, Kinah inventory update first, per-item charge update/success/stats packets, and final charge-all complete message.
+- No production code changed in this unit.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests|FullyQualifiedName~GameServerConnectionChargeAllQuestionResponseTests|FullyQualifiedName~ItemChargeServiceTests|FullyQualifiedName~GamePacketTests"`.
+  - Result: passed 343 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1630
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Kinah charge-all multi-item packet order | `ItemChargeService.chargeItems`, `chargeItem`, `processKinahPayment`, `PlayerGameStats.updateStatsVisually` | charge-all connection tests | Test Creation | Sequential | Low | Selected; symmetric coverage for chargeWay 1 after AP packet cadence fix. |
+| B | Charge-all transaction/ordering audit | `ItemChargeService.chargeItems`; C# repository batching | docs/read-only code | Analysis | Yes | Low | Deferred; useful before persistence semantics changes. |
+| C | Nearby region-id calculation analysis | Java/C# world region files | docs/read-only code | Analysis | Yes | Low | Independent safe nearby strand. |
+| D | Live nearby refresh dispatch | `ThreadPoolManager.schedule`, `PacketSendUtility`, `GameServerConnection` | world/connection services | Live Dispatch | No | High | Deferred; still blocked by live region storage. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add symmetric kinah charge-all packet-order regression | Test/Docs | `GameServerConnectionInventoryExpansionUseItemTests.cs`, progress/handoff docs | production code, Java source writes, nearby dispatch files | UOW-1629 per-item stats packet cadence fix | One focused regression covering two all-current kinah charge-all items. |
+
+No sub-agent was spawned for UOW-1630 because the selected work is a focused test-only change plus orchestrator-owned docs.
+
+#### Migration Parity Table - Session 1630
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemChargeService.chargeItems` | `GameServerConnection.HandleChargeAllQuestionResponseAsync` | Service / Multi-item Mutation | Partial | Regression Tested | Partial Parity | Kinah two-item path now has symmetric packet-order coverage with per-item update/success/stats and one all-complete message. Java runtime iteration and persistence timing remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.chargeItem` | accepted charge-all per-item loop in `GameServerConnection` plus `ItemChargeService.CreateChargePlan` | Item Service / Packet Sequence | Partial | Unit Tested + Regression Tested | Partial Parity | Test verifies two current Kinah chargeWay 1 items are charged in pending request order with Java-like per-item packet cadence. Exact `ChargeInfo` side effects and Java packet bytes are not compared. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.processKinahPayment` | `ItemChargeService.CreateKinahPaymentPlan`; Kinah update path in `GameServerConnection` | Payment Service | Partial | Regression Tested | Partial Parity | Test verifies one quoted Kinah payment is applied before item packets and only one Kinah inventory update is sent. Java `Storage.tryDecreaseKinah` runtime behavior and concurrent inventory changes remain unverified. |
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats.updateStatsVisually` | `GameServerConnection.CreateStatsInfoPacket` per charged Kinah item | Stats Packet Dependency | Partial | Regression Tested | Partial Parity | Symmetric Kinah test confirms `SmStatsInfo` after each charged item. Exact Java stat values and packet bytes remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` | `SmInventoryUpdateItem` | Packet | Partial | Regression Tested | Needs Verification | Test asserts Kinah decrease packet first, then charged item object ids 7101 and 7102 in order. Full Java serialized bytes/encrypted frames are not compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `SmSystemMessage` | Packet | Partial | Regression Tested | Needs Verification | Test asserts two chargeWay 1 success messages and final charge-all complete message ids/parameters. Java localization/runtime packet capture remains unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleQuestionResponseAsync_ChargeAllKinahPaymentSendsPerItemUpdatesStatsThenAllComplete` | Integration-style connection regression | Java `ItemChargeService.startChargingEquippedItems`, `chargeItems`, `chargeItem`, `processKinahPayment`, and `PlayerGameStats.updateStatsVisually` | Accepted Kinah charge-all with two current items spends one quoted Kinah payment, persists charged items in order, sends Kinah decrease first, sends item update/success/stats for 7101 and 7102, then sends charge-all complete. | Deterministic C# packet-order regression grounded in reviewed Java source and UOW-1629 cadence fix. | No Java runtime packet capture, encrypted frame comparison, concurrent inventory mutation, or exact stat value comparison. |
+
+Remaining risks:
+- This unit is test-only; no production behavior changed beyond UOW-1629's already committed per-item stats fix.
+- C# batched charge-all persistence before packets remains different from Java's item-loop mutation timing and still needs transaction parity review.
+- Java equipped-item stream ordering is not runtime-compared to C# pending request order.
+- Exact packet bytes for Kinah decrease, item updates, system messages, and stats info are not compared against Java captures.
+- Concurrent inventory or AP/Kinah mutations between prompt and accept remain covered only by local stale/missing/insufficient tests, not Java runtime comparison.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 focused Kinah packet-order regression test; no production artifacts.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped packet rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: Java runtime packet capture, encrypted frame comparison, transaction timing parity, concurrent inventory mutation parity, exact stat calculation comparison.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Run a read-only charge-all transaction/ordering audit documenting Java item-loop mutation/persistence assumptions versus C# repository batching, or switch back to nearby with read-only region-id calculation analysis before live region storage.
+
+---
+
+## Updated Immediate Next - Session 1630
+
+Next best unit: run a read-only charge-all transaction/ordering audit documenting Java item-loop mutation/persistence assumptions versus C# repository batching, then decide whether the batching is an intentional C# safety difference or needs further parity work. Safe nearby alternative: read-only region-id calculation analysis before live region storage. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
