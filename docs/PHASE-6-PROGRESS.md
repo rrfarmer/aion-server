@@ -69258,9 +69258,76 @@ Next recommended unit of work:
 
 ---
 
+### Session 1577 (May 27, 2026)
+- Continued after UOW-1576 by running the broader .NET validation recommended in the latest handoff.
+- Performed Parallel Work Discovery for validation scope:
+  - discovered the solution entry point `dotnetConversion/AionServer.slnx`;
+  - discovered test projects `Aion.Commons.Tests`, `Aion.ChatServer.Tests`, `Aion.LoginServer.Tests`, and `Aion.GameServer.Tests`;
+  - selected a validation-only unit with no source edits.
+- Ran `dotnet test dotnetConversion/AionServer.slnx`.
+- Result: passed all solution tests:
+  - `Aion.Commons.Tests`: 57 passed;
+  - `Aion.ChatServer.Tests`: 29 passed;
+  - `Aion.LoginServer.Tests`: 121 passed;
+  - `Aion.GameServer.Tests`: 3349 passed.
+- No production C# code, C# tests, Java source, or Java data files were changed in this unit.
+- Created the next handoff document `docs/Phase-6AOW-Completion.md`.
+
+#### Parallel Work Discovery - Session 1577
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Full solution validation | none touched | solution/test projects only | Validation | Yes, read-only | Low-Medium | Best immediate sanity check after the game-server suite was made green. |
+| B | Read-only Java item-use scheduled ordering review | item-use scheduled action classes | none/read-only | Java Analysis | Yes | Low | Safe next Explorer task, but not needed for solution validation. |
+| C | Scheduled item-use ordering regression | item-use packet/action tests | `GameServerConnectionInventoryExpansionUseItemTests.cs` or focused services | Regression Test | No with validation docs | Medium | Useful next functional unit after validation. |
+| D | Hook detail readiness surfacing | protection readiness/export artifacts | readiness/export tests/services | Integration/Test | No with validation docs | Medium | Separate workstream from inventory validation. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Run solution-level .NET validation and document results | Validation/Documentation | progress and handoff docs | Java source writes, production C# writes, C# test edits | UOW-1576 green game-server suite | Full solution test result recorded conservatively. |
+
+No sub-agent was spawned for UOW-1577 because the selected validation command was read-only and did not need parallel implementation.
+
+#### Migration Parity Table - Session 1577
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| N/A - no Java artifact touched in this validation-only unit | `dotnetConversion/AionServer.slnx` | Solution Validation | Not Started | Regression Tested | Needs Verification | `dotnet test dotnetConversion/AionServer.slnx` passed 3556 total C# tests across Commons, ChatServer, LoginServer, and GameServer. This is broad C# regression evidence only; it is not Java runtime parity evidence. |
+| N/A - no Java artifact touched in this validation-only unit | `Aion.Commons.Tests` | Test Project | Not Started | Regression Tested | Needs Verification | 57 C# tests passed. No Java class/interface/enum was inspected or compared in this unit. |
+| N/A - no Java artifact touched in this validation-only unit | `Aion.ChatServer.Tests` | Test Project | Not Started | Regression Tested | Needs Verification | 29 C# tests passed. No Java class/interface/enum was inspected or compared in this unit. |
+| N/A - no Java artifact touched in this validation-only unit | `Aion.LoginServer.Tests` | Test Project | Not Started | Regression Tested | Needs Verification | 121 C# tests passed. No Java class/interface/enum was inspected or compared in this unit. |
+| N/A - no Java artifact touched in this validation-only unit | `Aion.GameServer.Tests` | Test Project | Not Started | Regression Tested | Needs Verification | 3349 C# tests passed, including the inventory cleanup-seal regressions fixed in UOW-1576. No Java runtime artifact comparison was executed. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| No tests added or updated | Validation Only | N/A | Existing C# solution test suite remains green after UOW-1576. | Broad C# regression pass: 3556 tests. | No new Java source review, Java runtime comparison, or generated Java golden artifact. |
+
+Remaining risks:
+- Passing the full .NET solution does not prove Java parity; it only confirms the current C# regression suite is green.
+- No Java source, Java runtime, packet capture, or generated golden artifact was inspected in UOW-1577.
+- Java 25 JDK/Maven blocker still prevents new generated Java runtime artifacts in this environment.
+- The next functional unit still needs artifact-specific Java source review and conservative parity rows.
+
+Summary metrics:
+- Total Java artifacts discovered: 0 new Java artifacts in this validation-only unit
+- Total artifacts ported: 0 production or test artifacts in this unit
+- Total artifacts with verified parity: 0 in this unit
+- Total artifacts needing verification: 5 validation rows
+- Total blocked artifacts: Java runtime comparison/golden generation, Java 25 JDK, Java compiler, Maven, Maven wrapper
+- Estimated overall migration completion: Phase 6 remains about 72% complete
+
+Next recommended unit of work:
+- Continue with the next isolated Phase 6 item-use runtime prerequisite: source-review scheduled decompose/assembly/XP/composition/extraction/AP extraction ordering and add one focused regression or metadata bridge. Keep Java runtime parity claims conservative until generated Java artifacts are available.
+
+---
+
 ## Next Steps
 
-Immediate next: run a broader solution-level validation now that the known game-server test blockers are cleared, or continue with the next isolated Phase 6 item-use runtime prerequisite such as scheduled decompose/assembly/XP/composition/extraction/AP extraction ordering evidence. Keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
+Immediate next: continue with the next isolated Phase 6 item-use runtime prerequisite such as scheduled decompose/assembly/XP/composition/extraction/AP extraction ordering evidence. Keep fixture reward randomness explicit, and do not claim Java runtime parity without generated artifacts. Keep the AP extraction atomicity decision unchanged unless Java runtime evidence says otherwise. Keep Java no-rollback/failure behavior explicit, keep no-blob delete paths separate from cleanup/seal metadata wiring, and keep warehouse-add byte comparison guarded until generated Java artifacts and the remaining blob gaps are resolved.
 
 1. Continue nearby-refresh prerequisite work now that staged NPC faction static-data, enter-world hydration, the future quest-start assigned-faction guard, configured repeat-date calculator, staged quest-finish state mutation, staged NPC faction completion, quest-finish ordering audit, staged operation plan, non-sending quest update packet, reward/work-item audit, non-live reward/work-item descriptor planner, operation-plan composition, callback dispatch audit, persistence contract audit, non-live quest persistence operation planning, non-live NPC-faction persistence operation planning, non-live quest-finish persistence composition, non-live completion callback dispatch planning, non-live quest-finish callback composition, non-live follow-up quest callback result planning, non-live callback follow-up result composition, nested callback follow-up operation-plan regression coverage, non-live reward item XML projection scaffolding, detailed reward item operation-plan composition, non-live non-item reward projection metadata, detailed non-item operation-plan composition, extended non-item reward projection metadata, regular/extended non-item source labeling, XML-derived class reward warning composition coverage, static quest bonus metadata projection, supported quest bonus item-group projection, reward side-effect live-boundary audit, non-composed quest kinah helper, full quest-finish failure-ordering regression, non-live title/cube/warehouse reward side-effect plans, composed title/cube/warehouse side-effect operation metadata, concrete quest-title reward system-message support, quest GP helper/config/packet scaffolding, non-live quest-finish GP side-effect metadata composition, offline GP DAO SQL/repository boundary, gated offline GP repository execution, quest XP rate/config/planner scaffolding, composed non-live quest XP reward metadata, concrete quest XP reward system-message helpers, non-live XP plan-to-message packet metadata bridge, staged XP execution/level-change descriptor plan, level-up action-animation packet prerequisite, non-live upgrade-player side-effect sub-plan, non-live NPC faction level-up sub-plan, non-live QuestEngine level-change callback dispatch sub-plan, nearby quest empty-packet intent parity, non-live guide HTML level-change planning, non-live skill auto-learn planning, non-live starter-kit level-change planning, non-live bonus/faction custom reward planning, non-live XP level-change sub-plan composition metadata, non-live XP level-change context factory, quest-finish XP execution metadata composition, custom reward receipt repository SQL, system-mail reward payload planning, opt-in custom reward execution planning, supplied custom reward execution-result XP metadata, non-live system-mail persistence/fanout operation metadata, disabled-by-default system-mail persistence execution boundary, and concrete opt-in system-mail persistence operation executor exist: model deterministic quest bonus candidate filtering or concrete guide/skill/mail packet/repository prerequisites before enabling live callbacks, reward mutation, or DAO writes. Keep live `SM_NEARBY_QUESTS` sends, live guide `SM_QUESTIONNAIRE` sends, live skill auto-learn mutation/effects/recipes, live starter-kit/custom reward mail sends, guide persistence, production player-controller refresh, faction write paths, XP level-change hooks, custom reward DAO writes, and ItemPurification automatic dispatch disabled until those gates are satisfied. Continue AP caller convergence on `AbyssPointsService`: NPC solo AP, NPC team-member AP, PvP AP gain/loss, Quest AP, Dredgion/basic PvP instance AP, PvP Arena AP, Aturam fixed AP, Eternal Bastion final AP, the narrow Stonespear AP branch, pure Trade AP formulas, pure ItemPurification AP precheck/spend planning, `item_purifications` static data, the ItemPurification lookup adapter, target-item inheritance projection, material/base/kinah mutation planning, the composed ItemPurification workflow planner, the `CM_ITEM_PURIFICATION` packet parser, the non-persistent connection guard adapter, the pure ItemPurification application-operation plan, the pure ItemPurification quest-notification projection, the pure packet-order plan, the concrete upgrade-success system-message packet, the concrete-message packet-plan bridge, the concrete update-packet bridge, the concrete delete-packet bridge, the concrete target-add packet bridge, the concrete-packet send adapter, the explicit cube snapshot bridge, the pure packet-input snapshot assembler, the handler-level ItemPurification workflow/application/packet-plan composition bridge, the ItemPurification runtime-input packet bridge, the ItemPurification ready concrete-packet send bridge, the ItemPurification target object-id allocation bridge, the ItemPurification random-bonus selection seam, the ItemPurification non-persistent mutation snapshot preview, the ItemPurification non-persistent handler mutation bridge, the ItemPurification live mutation adapter boundary, the ItemPurification live execution composition seam, the ItemPurification live AP rank-drop metadata regression, the ItemPurification explicit live AP player-packet emission bridge, the ItemPurification explicit live AP rank-update broadcast bridge, the ItemPurification explicit live equipment rank-limit state mutation bridge, the ItemPurification explicit live equipment rank-limit packet fanout bridge, the ItemPurification explicit live abyss skill refresh bridge, the ItemPurification explicit opt-in quest notification no-op seam, the ItemPurification explicit transform-min-rank config plumbing, the ItemPurification quest-update items audit, the ItemPurification quest-update item static-data projection, the ItemPurification no-op nearby-refresh planning seam, the ItemPurification no-op nearby-refresh dispatcher seam, the ItemPurification nearby quest refresh surface audit, the ItemPurification nearby quest packet prerequisite, the ItemPurification nearby quest world-instance registry prerequisite, the ItemPurification nearby quest start-registration table prerequisite, the ItemPurification handler opt-in live execution seam, the ItemPurification persistence plan analysis, the ItemPurification repository contract/payload plumbing, the ItemPurification inserted target item-stone persistence, the ItemPurification opt-in persistent live execution seam, the ItemPurification handler-level opt-in persistent execution helper, the ItemPurification handler-level persistence failure-ordering regression, the ItemPurification automatic-dispatch readiness policy, the ItemPurification staged dispatch-failure policy, the ItemPurification Java observer design, the ItemPurification opt-in DB integration happy path, the ItemPurification opt-in DB rollback path, the ItemPurification AP/quest readiness audit, the pure ItemCharge AP spend guard, and the live ItemCharge selected-item/charge-all AP guard consolidation now consume their configured/fixed/formula AP and item-state boundaries at planner/parser/handler boundaries. ItemCharge Kinah payment guard/consolidation, charge-all stale-item payment-before-revalidation hardening, mixed stale/current charge-all AP regression coverage, mixed stale/current charge-all Kinah regression coverage, missing/current charge-all AP approximation coverage, and missing/current charge-all Kinah approximation coverage are now staged for live selected-item/charge-all paths. Move next to Java observer artifact generation when tooling is available, nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another existing planner live adapter when supporting runtime surfaces are ready. Continue AP rank-change side effects beyond the current owner/visible-player/equipment/skill packets, AP/login rank-limited equipment persistence, configured abyss transform skill updates, rank config load, and real quest handler dispatch. Add Legion contribution fanout, ranking cache, and live `SiegeService.onAbyssPointsAdded` execution once those supporting systems have C# homes.
 2. Broaden the expirable lifecycle bridge to Java's remaining registered expirable types, pets and house objects, once the missing pet/house-object models and persistence surfaces exist.
