@@ -74584,3 +74584,80 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1645
 
 Next best unit: add a non-live zone identity/accessor plan for Java `ZoneInstance.getTownId`, `isDominionZone`, `forEach`, and handler-registration metadata, preserving live-handler gaps explicitly. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1646 (May 28, 2026)
+- Continued after UOW-1645 by modeling lightweight Java `ZoneInstance` identity/accessor behavior as a non-live snapshot.
+- Performed Parallel Work Discovery across zone identity/accessor planning, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected identity/accessor planning because it completes the lightweight `ZoneInstance` accessor cluster before live storage.
+- Added `WorldMapRegionZoneIdentityService`.
+- Added `WorldMapRegionZoneIdentityContext` and `WorldMapRegionZoneIdentitySnapshot`.
+- Modeled `getTownId`, `isDominionZone`, creature membership metadata for `forEach`, and handler append metadata for `addHandler`.
+- Explicitly marked creature iteration order as unstable because Java uses `HashMap` values through `CollectionUtil.forEach`.
+- Added tests for town id/dominion classification, non-dominion zones, creature membership metadata with unstable iteration, and handler append metadata.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionZoneIdentityServiceTests|FullyQualifiedName~WorldMapRegionZoneCapabilityServiceTests|FullyQualifiedName~WorldMapRegionZoneScanPlanServiceTests|FullyQualifiedName~WorldMapRegionZoneSortServiceTests|FullyQualifiedName~WorldMapRegionRuntimeSnapshotServiceTests|FullyQualifiedName~WorldMapRegionLifecyclePlanServiceTests|FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 73 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1646
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Zone identity/accessor snapshot | `ZoneInstance.getTownId`, `isDominionZone`, `forEach`, `addHandler`, `CollectionUtil.forEach` | new identity service/tests | Utility Port / Test Creation | Sequential for writes | Low | Selected; completes lightweight accessor metadata without live handlers. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the accessor blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Zone identity/accessor helper, tests, docs, commit | `WorldMapRegionZoneIdentityService.cs`, `WorldMapRegionZoneIdentityServiceTests.cs`, progress/handoff docs | Java source writes, unrelated services/tests | Implemented and documented UOW-1646. |
+| Sub-agents | None | None | All files | Not spawned because implementation and docs were small and Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1646 because the selected helper and tests were small and progress/handoff docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1646
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.zone.ZoneInstance.getTownId` | `WorldMapRegionZoneIdentitySnapshot.TownId` | Zone Accessor DTO | Partial | Unit Tested | Partial Parity | C# carries supplied town id metadata. It does not read live `ZoneTemplate.getTownId`. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.isDominionZone` | `WorldMapRegionZoneIdentitySnapshot.IsDominionZone` | Zone Accessor DTO | Partial | Unit Tested | Partial Parity | C# compares projected zone type to `Dominion`, matching Java's `ZoneClassName.DOMINION` check. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.forEach` | `WorldMapRegionZoneIdentitySnapshot.CreatureObjectIds`; `CreatureIterationOrderIsStable` | Creature Iteration Boundary DTO | Partial | Unit Tested | Needs Verification | C# carries creature ids as metadata and explicitly marks Java `HashMap` iteration order unstable. It does not execute `CollectionUtil.forEach` or catch/log per-creature callback exceptions. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.addHandler` | `WorldMapRegionZoneIdentitySnapshot.HandlerNames` | Handler Registration Boundary DTO | Partial | Unit Tested | Needs Verification | C# carries handler names in append order. It does not instantiate or execute live handlers. |
+| `com.aionemu.gameserver.utils.collections.CollectionUtil.forEach` | `WorldMapRegionZoneIdentitySnapshot.CreatureIterationOrderIsStable` | Utility Dependency | Not Started | Unit Tested Metadata | Needs Verification | Java catches/logs exceptions and continues iteration. C# metadata records the boundary only; callback execution and logging behavior remain unported. |
+| `com.aionemu.gameserver.world.zone.ZoneService.getZoneInstancesByWorldId` | `WorldMapRegionZoneIdentitySnapshot.HandlerNames` metadata only | Zone Construction Dependency | Partial | Manual Source Review | Needs Verification | Java attaches handlers during zone instance construction. C# records handler metadata but does not reproduce `ZoneService` construction, siege/artifact attachment, invasion zone selection, or material handler behavior. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateSnapshot_CarriesTownIdAndDominionZoneFlag` | Unit Added | Java `ZoneInstance.getTownId`, `isDominionZone` | Town id metadata and Dominion classification are carried. | Deterministic C# regression grounded in Java source review. | No live template read. |
+| `CreateSnapshot_NonDominionZoneDoesNotReportDominion` | Unit Added | Java `isDominionZone` | Non-Dominion zone types are not reported as Dominion. | Deterministic C# regression grounded in Java source review. | No Java runtime comparison. |
+| `CreateSnapshot_CarriesCreatureMembershipAndMarksIterationOrderUnstable` | Unit Added | Java `HashMap` creature storage plus `CollectionUtil.forEach` | Creature membership metadata is carried and iteration order is marked unstable. | Deterministic C# regression grounded in Java source review. | Does not execute callbacks or log exceptions. |
+| `CreateSnapshot_CarriesAttachedHandlerMetadataInAppendOrder` | Unit Added | Java `ZoneInstance.addHandler` | Handler metadata is carried in append order. | Deterministic C# regression grounded in Java source review. | Does not instantiate handlers. |
+
+Remaining risks:
+- Identity/accessor snapshot is non-live and uses supplied metadata.
+- Live `ZoneTemplate`, creature `HashMap`, handler list mutation, `CollectionUtil.forEach` callback execution/logging, and `ZoneService` construction side effects remain unported.
+- Java `HashMap` iteration order is intentionally not treated as stable.
+- Siege/artifact zone attachment, invasion zone substitution, material handlers, and dynamic handler loading remain future work.
+- Live C# `MapRegion`/`ZoneInstance` storage, scheduler behavior, AI notifications, and handler callbacks remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 non-live identity/accessor helper plus 4 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 4 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live `ZoneTemplate`, live creature map, handler execution, `CollectionUtil.forEach` logging behavior, `ZoneService` construction side effects, dynamic zone handlers, live C# MapRegion/ZoneInstance storage, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Start a non-live `ZoneService.getZoneInstancesByWorldId` construction plan that models full-map zone creation and per-zone instance type selection (`FLY`, `NO_FLY`, `FORT`, `ARTIFACT`, `PVP`, invasion/default), or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1646
+
+Next best unit: start a non-live `ZoneService.getZoneInstancesByWorldId` construction plan that models full-map zone creation and Java instance type selection (`FlyZoneInstance`, `NoFlyZoneInstance`, `SiegeZoneInstance`, `PvPZoneInstance`, invasion/default) before live zone storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
