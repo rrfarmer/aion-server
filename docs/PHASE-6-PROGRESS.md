@@ -72594,3 +72594,76 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1618
 
 Next best unit: perform the read-only ItemCharge `Location == CubeStorageId` lifecycle audit against Java `CM_CHARGE_ITEM`, inventory/equipment lookup, and C# selected equipped item lookup behavior, then document whether a code change is warranted. Safe nearby alternative: add a non-live controller-position/map-region input adapter only if it stays metadata-only. Keep production timers, controller dispatch, `SM_NEARBY_QUESTS` sends, repository writes, and Java source changes disabled.
+
+### Session 1619 (May 28, 2026)
+- Continued after UOW-1618 by performing the read-only ItemCharge selected-item storage lifecycle audit requested by the handoff.
+- Performed Parallel Work Discovery across ItemCharge selected-item lookup, nearby controller-position/map-region adapter work, live nearby dispatch, and Java serializer implementation. Selected ItemCharge audit because it is isolated and checks whether the remaining `Location == CubeStorageId` assumption still differs from Java.
+- Reviewed Java `CM_CHARGE_ITEM.runImpl`: selected item ids are resolved with `player.getInventory().getItemByObjId(itemObjId)`, not `player.getEquipment().getEquippedItemByObjId`.
+- Reviewed Java `Equipment.equipItem`: equipment first fetches the item from `owner.getInventory().getItemByObjId`, and equipped state is represented on the same `Item` object; Java storage lookup remains the inventory/cube storage object map.
+- Reviewed Java `StorageType.CUBE` id `0`, `ItemStorage.getItemByObjId`, and `Storage.decreaseByObjectId` to confirm object-id lookup is storage-backed.
+- Reviewed C# `GameServerConnection.HandleChargeItemAsync`: selected charge targets filter by `ObjectId` and `Location == CubeStorageId` but do not reject `IsEquipped`.
+- Reviewed existing C# regression `HandleChargeItemAsync_SelectedEquippedItemCanBeChargedLikeJavaInventoryLookup`, which verifies selected equipped items can be charged and remain equipped.
+- Conclusion: no production code change is warranted in this unit. The earlier selected-equipped fix matches Java's storage-plus-equipped-flag model. Remaining risks are broader live/runtime persistence comparisons, not this lookup guard.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~ItemChargeServiceTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~HandleChargeItemAsync_SelectedEquippedItemCanBeChargedLikeJavaInventoryLookup"`.
+  - Result: passed 256 tests.
+  - A broader class-level filter including all `GameServerConnectionInventoryExpansionUseItemTests` initially failed in unrelated `ProcessPacketAsync_CompositeStonesSendsConsumedPacketsInJavaOrderForMixedDeletes`; reran that exact test and it passed 1 test.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1619
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | ItemCharge selected-item storage lifecycle audit | `CM_CHARGE_ITEM`, `ItemChargeService`, `Equipment`, `Storage`, `StorageType` | docs only; read C# handler/tests | Java Analysis / Parity Verification | Yes, read-only | Low | Selected; confirms whether a code change is warranted without touching shared behavior. |
+| B | Nearby controller-position/map-region adapter | `PlayerController.updateNearbyQuests`, map-region parent lookup | nearby adapter/report files | Service/Test | Later | Medium | Possible next nearby metadata slice but would touch same nearby surfaces. |
+| C | Live nearby refresh dispatch | `ThreadPoolManager.schedule`, `PacketSendUtility`, `SM_NEARBY_QUESTS` | world/connection services | Live Dispatch | No | High | Deferred; production timers and sends remain risky. |
+| D | Java protection serializer implementation | future protection serializer/observer files | Java source/generated artifacts | Live Artifact Generation | No | High | Still blocked by Java 25/JDK/Maven and runtime artifact strategy. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Audit ItemCharge selected-item storage lifecycle and document result | Java Analysis / Docs | progress/handoff docs after read-only source inspection | production code, test files, live handler dispatch, repository files, Java source writes | Existing UOW-1611 selected-equipped regression | Conservative conclusion on whether further selected lookup change is needed. |
+
+No sub-agent was spawned for UOW-1619 because the work was read-only analysis plus orchestrator-owned docs.
+
+#### Migration Parity Table - Session 1619
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CHARGE_ITEM` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleChargeItemAsync`; `CmChargeItem` | Client Packet Handler | Partial | Regression Tested | Partial Parity | Java resolves selected item ids through `player.getInventory().getItemByObjId`. C# selected targets require `Location == CubeStorageId` and allow equipped items. Existing regression covers selected equipped charge; live targeting/audit behavior and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemChargeService` | `Aion.GameServer.Services.ItemChargeService` | Service | Partial | Regression Tested + Unit Tested | Partial Parity | Audit found no selected storage lookup change needed. Payment, charge math, and burn paths have C# tests, but full Java side effects, packet ordering, persistence timing, and AP/stat observers remain partial. |
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment` | `InventoryItem.IsEquipped` plus selected handler lookup | Model / Equipment State | Partial | Regression Tested through selected charge handler | Needs Verification | Java equipment references the same inventory-backed item object and `getEquippedItemByObjId` is separate. C# models equipped state as an inventory item flag; no full Equipment object identity/runtime comparison. |
+| `com.aionemu.gameserver.model.items.storage.StorageType` | `GameServerConnection.CubeStorageId` / `InventoryItem.Location` | Enum / Storage Identifier | Partial | Regression Tested through handlers | Partial Parity | Java `StorageType.CUBE.getId()` is 0; C# uses `CubeStorageId = 0`. Other storage types and unusual storage semantics are not part of this unit. |
+| `com.aionemu.gameserver.model.items.storage.ItemStorage` / `Storage` | `Player.InventoryItems` object-id lookup patterns | Storage / Collection | Partial | Manual Source Audit + Regression Tested selected charge | Needs Verification | Java uses `ConcurrentHashMap` object-id lookup inside storage. C# uses list scans by `ObjectId`/`Location`; collection ordering, concurrency, and storage mutation identity are not runtime-equivalent. |
+
+Tests referenced:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleChargeItemAsync_SelectedEquippedItemCanBeChargedLikeJavaInventoryLookup` | Regression | Java `CM_CHARGE_ITEM.runImpl` and `Equipment.equipItem` inventory-backed object lookup | C# selected equipped item with `Location == 0` is charged, remains equipped, and sends charge/update/stat packets. | Existing deterministic C# regression grounded in Java source lifecycle reviewed in this audit. | No Java runtime execution, database persistence comparison, encrypted packet trace, or concurrent storage mutation comparison. |
+
+Remaining risks:
+- No new code change was made; this unit is an audit confirming the previous selected-equipped fix is still the right shape.
+- Java inventory/equipment object identity is not fully modeled in C#; C# uses immutable-style item replacement in player inventory lists.
+- Java storage uses concurrent maps; C# handler paths use list snapshots and replacement. Threading/concurrency remains Needs Verification.
+- Live targeting/audit behavior for invalid target NPCs, packet ordering, persistence timing, AP side effects, and stats observer fanout remain partial.
+- Serialization, encrypted packet bytes, date/time handling, and Java runtime comparisons remain unverified.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 0 code artifacts; 1 completed read-only parity audit with docs.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: Java runtime selected-charge comparison, full inventory/equipment object identity comparison, concurrent storage mutation comparison, encrypted packet/frame comparison, live persistence timing comparison.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Continue ItemCharge with a focused selected-charge persistence ordering audit or a small non-live handler input assembly plan if code remains isolated. Safe alternative: nearby controller-position/map-region metadata adapter. Do not broaden into live dispatch or repository rewrites.
+
+---
+
+## Updated Immediate Next - Session 1619
+
+Next best unit: continue ItemCharge with a focused persistence/packet ordering audit for selected charge success and failed payment branches, using Java `ItemChargeService.chargeItems`, `chargeItem`, and C# `HandleChargeItemAsync`/repository calls as the source comparison. Safe alternative: add a non-live nearby controller-position/map-region metadata adapter. Keep production timers, live nearby sends, repository rewrites, and Java source changes disabled.
