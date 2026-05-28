@@ -76368,3 +76368,81 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1668
 
 Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, add a non-live `PositionUtil.getHeadingTowards` parity helper/test to support NPC target-change heading calculation, or continue with another isolated packet parity unit. Keep Java source writes, repository production rewrites, live generated-zone writes, live target dispatch, live NPC target broadcast, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1669 (May 28, 2026)
+- Continued after UOW-1668 by adding Java-derived heading helpers to the existing C# `PositionUtilService`.
+- Performed Parallel Work Discovery across DB integration, `PositionUtil` heading helper, isolated packet audit, and zone-handler source audit. Selected heading helper because it directly reduces the UOW-1668 NPC target-change snapshot gap without touching live NPC state.
+- Added `PositionUtilService.CalculateAngleFrom`.
+- Added `PositionUtilService.NormalizeAngle`.
+- Added `PositionUtilService.ConvertHeadingToAngle`.
+- Added `PositionUtilService.ConvertAngleToHeading`.
+- Added `PositionUtilService.GetHeadingTowards`.
+- Preserved Java signed-byte behavior in `ConvertHeadingToAngle` for values above 127 stored in C# `byte`.
+- Added focused Java-source-derived heading/angle tests.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PositionUtilServiceTests|FullyQualifiedName~NpcTargetChangePacketPlanServiceTests|FullyQualifiedName~SmLookAtObjectPacketTests|FullyQualifiedName~GamePacketTests"`.
+  - Result: passed 273 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1669
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | `PositionUtil` heading helper | `PositionUtil.calculateAngleFrom`, `normalizeAngle`, `convertHeadingToAngle`, `convertAngleToHeading`, `getHeadingTowards` | `PositionUtilService.cs`, `PositionUtilServiceTests.cs` | Utility Port / Test Creation | Sequential for existing utility/test writes | Low | Selected; directly supports NPC target-change heading calculation without live state mutation. |
+| B | Run gated DB integration | charge-all DB integration harness | no file changes if executable | Parity Verification | No, env unavailable | Medium | Deferred because no DB environment is present. |
+| C | Isolated packet audit | missing server packets | packet class/tests | Packet Port | Yes, later | Low | Still viable after heading helper is documented. |
+| D | Zone handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks, but outside heading utility scope. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Position heading utility, tests, docs, commit | `PositionUtilService.cs`, `PositionUtilServiceTests.cs`, progress/handoff docs | Java source writes, live NPC controller/broadcast integration, unrelated services/tests | Implemented and documented UOW-1669. |
+| Sub-agents | None | None | All files | Not spawned because selected work changed one existing utility/test pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1669 because the selected utility change was small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1669
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.utils.PositionUtil.calculateAngleFrom` | `Aion.GameServer.Services.PositionUtilService.CalculateAngleFrom` | Utility | Complete | Unit Tested | Partial Parity | C# uses `Math.Atan2`, degrees conversion, float cast, and Java-shaped normalization. Axis/diagonal cases are covered. No Java runtime vector/golden comparison was produced. |
+| `com.aionemu.gameserver.utils.PositionUtil.normalizeAngle` | `Aion.GameServer.Services.PositionUtilService.NormalizeAngle` | Utility | Complete | Unit Tested | Partial Parity | C# mirrors Java modulo branches for positive and negative angles. Float modulo behavior is covered for representative values; NaN/infinity behavior is not tested. |
+| `com.aionemu.gameserver.utils.PositionUtil.convertHeadingToAngle` | `Aion.GameServer.Services.PositionUtilService.ConvertHeadingToAngle` | Utility | Complete | Unit Tested | Partial Parity | C# preserves Java signed-byte multiplication by casting C# `byte` to `sbyte` before multiplying by `3f`. Values above 127 are covered. No runtime Java vector comparison. |
+| `com.aionemu.gameserver.utils.PositionUtil.convertAngleToHeading` | `Aion.GameServer.Services.PositionUtilService.ConvertAngleToHeading` | Utility | Complete | Unit Tested | Partial Parity | C# truncates `angle / 3f` into a byte like Java's byte cast for normal heading range. Out-of-range cast wrapping beyond Java's normal normalized-angle caller path is not exhaustively tested. |
+| `com.aionemu.gameserver.utils.PositionUtil.getHeadingTowards` | `Aion.GameServer.Services.PositionUtilService.GetHeadingTowards` | Utility | Complete | Unit Tested | Partial Parity | C# composes angle calculation and heading conversion for coordinates. It is not yet wired into `NpcTargetChangePacketPlanService` or live NPC heading mutation. |
+| `com.aionemu.gameserver.controllers.NpcController.onTargetChanged` | `NpcTargetChangePacketPlanService`; `PositionUtilService.GetHeadingTowards` | Controller Boundary | Partial | Regression Tested | Partial Parity | The heading dependency now exists as a C# helper, but live NPC target-change integration still supplies snapshot headings and does not mutate heading or broadcast. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GetHeadingTowards_UsesJavaAtan2AngleAndTruncatedHeading` | Unit Added | Java `calculateAngleFrom` and `getHeadingTowards` | Axis and diagonal coordinate cases produce Java-shaped angles/headings. | Deterministic C# utility regression grounded in Java source review. | No Java runtime golden vectors. |
+| `NormalizeAngle_MatchesJavaModuloBranches` | Unit Added | Java `normalizeAngle` | Positive, negative, and beyond-360 angles follow Java branch behavior. | Source-derived branch regression. | NaN/infinity not covered. |
+| `ConvertHeadingToAngle_NormalizesJavaByteHeading` | Unit Added | Java `convertHeadingToAngle(byte)` | C# handles normal headings and Java signed-byte values above 127. | Source-derived regression with explicit signed-byte case. | No Java runtime comparison. |
+| `ConvertAngleToHeading_TruncatesLikeJavaByteCast` | Unit Added | Java `convertAngleToHeading(float)` | Angle-to-heading conversion truncates fractional heading values. | Source-derived regression. | Out-of-normal-range byte wrapping not exhaustively covered. |
+
+Remaining risks:
+- The heading helper is not yet wired into `NpcTargetChangePacketPlanService`; current NPC target-change tests still pass precomputed heading snapshots.
+- Live NPC heading mutation, `PositionUtil.getHeadingTowards(VisibleObject, VisibleObject)`, object reference access, and broadcast remain unported.
+- Java float precision was source-derived but not runtime-compared with Java vector output.
+- NaN/infinity and unusual out-of-range angle cast behavior are not covered.
+- Gated charge-all DB integration execution still needs a real MySQL environment.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 5 utility methods plus 4 focused utility regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 0 grouped rows explicitly marked Needs Verification; all rows are Partial Parity with documented runtime/golden gaps.
+- Total blocked artifacts: live NPC controller integration, live object-reference heading calculation, broadcast utility integration, Java runtime vector comparison, DB-backed charge-all integration run.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- If a DB is available, run the gated DB integration suite. Otherwise, wire `PositionUtilService.GetHeadingTowards` into a non-live NPC target-change coordinate-input overload, or continue with another isolated packet parity unit.
+
+---
+
+## Updated Immediate Next - Session 1669
+
+Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, wire `PositionUtilService.GetHeadingTowards` into a non-live NPC target-change coordinate-input overload so heading calculation is no longer a caller-supplied snapshot, or continue with another isolated packet parity unit. Keep Java source writes, repository production rewrites, live generated-zone writes, live target dispatch, live NPC target broadcast, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
