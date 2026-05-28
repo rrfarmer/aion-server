@@ -74192,3 +74192,80 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1640
 
 Next best unit: add a non-live zone sorting model for Java `MapRegion` constructor ordering (`ZoneClassName`, priority, `ZoneName.id`) so filtered zone ids can be ordered before any live `ZoneInstance[]` storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1641 (May 28, 2026)
+- Continued after UOW-1640 by modeling Java `MapRegion` constructor zone ordering without live `ZoneInstance[]` storage.
+- Performed Parallel Work Discovery across zone sorting, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected zone sorting because runtime snapshots already expose zone ids but Java sorts zone instances before zone checks.
+- Added `WorldMapRegionZoneSortService`.
+- Added `WorldMapRegionZoneSortCandidate` and `WorldMapRegionZoneSortClassName` with Java `ZoneClassName` declaration order.
+- Added Java `String.hashCode` support for `ZoneName.id()` using uppercase zone names, matching Java `ZoneName.createOrGet`.
+- Added tests for type/priority/name-id ordering, equal-key stable ordering, and known Java hash values.
+- Validation:
+  - First focused run failed because the expected test order treated a larger positive Java hash as lower. Corrected the expectation to use signed Java `int` ordering.
+  - Re-ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionZoneSortServiceTests|FullyQualifiedName~WorldMapRegionRuntimeSnapshotServiceTests|FullyQualifiedName~WorldMapRegionLifecyclePlanServiceTests|FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 56 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1641
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Zone sorting model | `MapRegion.zoneComparator`, `ZoneClassName`, `ZoneTemplate`, `ZoneName` | new zone sort service/tests | Utility Port / Test Creation | Sequential for writes | Low | Selected; isolated helper needed before sorted live `ZoneInstance[]` storage. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the zone-ordering blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live Java `MapRegion` zone sort helper and tests | Utility Port / Tests / Docs | `WorldMapRegionZoneSortService.cs`, `WorldMapRegionZoneSortServiceTests.cs`, progress/handoff docs | Java source writes, live `MapRegion` storage, live zone handlers | UOW-1637 zone filtering and UOW-1640 runtime snapshot | Tested Java-style zone comparator ordering metadata. |
+
+No sub-agent was spawned for UOW-1641 because implementation and tests touched one small helper surface and docs remained orchestrator-owned.
+
+#### Migration Parity Table - Session 1641
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.MapRegion.zoneComparator` | `WorldMapRegionZoneSortService.SortByJavaMapRegionOrder` | Comparator / Utility | Partial | Unit Tested | Partial Parity | C# orders DTO candidates by Java zone type declaration order, priority, and signed Java zone-name id. It does not sort live `ZoneInstance[]`, does not mutate constructor input, and does not execute downstream zone checks yet. |
+| `com.aionemu.gameserver.world.MapRegion.<init>` | `WorldMapRegionZoneSortService.SortByJavaMapRegionOrder` | Constructor Dependency | Partial | Unit Tested | Needs Verification | The constructor's sort rule is modeled, but C# still has no live `MapRegion` constructor, parent reference, neighbour object references, or object map. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneClassName` | `WorldMapRegionZoneSortClassName` | Enum | Partial | Unit Tested | Partial Parity | C# enum values preserve Java declaration order from `DUMMY` through `DOMINION`. Serialization format and broader zone-template binding remain unverified. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneTemplate.getPriority` | `WorldMapRegionZoneSortCandidate.Priority` | DTO Field | Partial | Unit Tested | Partial Parity | Priority participates in ascending ordering after zone type. XML defaults and template loading are not ported at this boundary. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneTemplate.getName` | `WorldMapRegionZoneSortCandidate.ZoneNameId` | DTO Field | Partial | Unit Tested | Needs Verification | C# accepts a precomputed zone-name id or uses helper hash generation; it does not carry Java `ZoneName` object identity. |
+| `com.aionemu.gameserver.world.zone.ZoneName.id` | `WorldMapRegionZoneSortService.GetJavaZoneNameId` | Utility | Partial | Unit Tested | Partial Parity | C# computes uppercase Java `String.hashCode` values with signed `int` overflow. It does not model the concurrent `zoneNames` cache, missing-zone logging, or `NONE` fallback lookup behavior. |
+| `java.util.Arrays.sort(Object[], Comparator)` | `WorldMapRegionZoneSortService.SortByJavaMapRegionOrder` | Collection Ordering Dependency | Partial | Unit Tested | Needs Verification | Equal comparator keys preserve input order explicitly. Java object-array sort stability is modeled, but no Java runtime comparison has been run. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance` | `WorldMapRegionZoneSortCandidate` | Zone Runtime Boundary DTO | Not Started | Unit Tested Metadata | Needs Verification | DTO captures only sort keys and zone id. Live handlers, area checks, creature membership, `ZoneTemplate` references, and synchronized enter/leave behavior remain unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SortByJavaMapRegionOrder_OrdersByZoneClassThenPriorityThenZoneNameId` | Unit | Java `MapRegion.zoneComparator` | Sort order by enum declaration ordinal, priority, then signed Java zone-name id. | Deterministic C# regression grounded in Java source review and known Java hash values. | No live `ZoneInstance[]` or Java runtime comparison. |
+| `SortByJavaMapRegionOrder_PreservesInputOrderForEquivalentComparatorKeys` | Unit | Java `Arrays.sort(Object[])` with equal comparator keys | Equal comparator keys keep input order for future stable zone ordering. | Deterministic C# regression with explicit original-index tiebreaker. | Stability not runtime-compared against Java in this repository. |
+| `GetJavaZoneNameId_UsesUppercaseJavaStringHashCode` | Unit | Java `ZoneName.createOrGet`, `ZoneName.id`, `String.hashCode` | Uppercase names and signed Java hash overflow are reproduced for sample values. | Deterministic expected values for `NONE`, lowercase `none`, `LF1_ITEMUSEAREA_Q10020`, and `SANCTUM`. | Does not model cache lookup, missing-zone logging, or `NONE` fallback. |
+
+Remaining risks:
+- Zone sorting is non-live and operates on DTO candidates, not Java-equivalent `ZoneInstance[]`.
+- Runtime snapshots still expose unsorted zone ids unless a future unit composes sort metadata into creation/runtime snapshots.
+- Java `ZoneTemplate` XML binding defaults, serialization, and enum string formats remain unverified.
+- Java `ZoneName` concurrent cache, missing-zone logging, and fallback lookup behavior remain unported.
+- Live object storage, parent instance references, neighbour object references, synchronized/volatile state, scheduler behavior, AI notifications, zone revalidation, death callbacks, item-use zone checks, and handler callbacks remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 8 grouped rows in this unit.
+- Total artifacts ported: 1 non-live zone sort helper plus 3 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 4 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity or Not Started metadata with known gaps.
+- Total blocked artifacts: live C# MapRegion storage, live `ZoneInstance[]`, sorted zone composition into runtime snapshots, zone-template XML loading/serialization, zone-name cache/logging, scheduler execution, synchronization/volatile runtime parity, AI notifications, zone revalidation, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Compose zone sort metadata into the non-live creation/runtime snapshot path so filtered zones can be represented in Java `MapRegion` constructor order before any live `ZoneInstance[]` storage, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1641
+
+Next best unit: compose `WorldMapRegionZoneSortService` into the non-live region creation/runtime snapshot path so snapshots can expose Java-ordered zone ids and explicitly distinguish filtered input order from constructor order. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
