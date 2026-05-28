@@ -75821,3 +75821,79 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1661
 
 Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, continue with another isolated packet body/factory parity unit or a read-only zone handler source audit. Keep Java source writes, repository production rewrites, live generated-zone writes, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1662 (May 28, 2026)
+- Continued after UOW-1661 by adding isolated C# packet ports for Java target-selection packets.
+- Performed Parallel Work Discovery across target packet ports, gated DB execution, zone-handler source audit, and fly-time packet audit. Selected target packets because Java `SM_TARGET_SELECTED` and `SM_TARGET_UPDATE` are small, missing from the C# packet set, and have deterministic payload bodies.
+- Added `SmTargetSelected` and `TargetSelectedSnapshot`.
+- Added `SmTargetUpdate`.
+- Modeled Java `SM_TARGET_SELECTED` null target primitive defaults, non-creature target object-id-only payload, and creature stat payload.
+- Modeled Java `SM_TARGET_UPDATE` player id plus target id, with zero target for no target.
+- Added focused packet payload tests.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmTargetPacketsTests|FullyQualifiedName~GamePacketTests"`.
+  - Result: passed 245 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1662
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Target selection packet ports | `SM_TARGET_SELECTED`, `SM_TARGET_UPDATE`, `PlayerController.onTargetChanged` | `SmTargetSelected.cs`, `SmTargetUpdate.cs`, `SmTargetPacketsTests.cs` | Packet Port / Test Creation | Sequential for packet/test writes | Low | Selected; small missing packet bodies with clear Java source. |
+| B | Run gated DB integration | charge-all DB integration harness | no file changes if executable | Parity Verification | No, env unavailable | Medium | Deferred because no DB environment is present. |
+| C | Zone handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks, but less direct than packet parity. |
+| D | Fly-time packet audit | `SM_FLY_TIME`, `PlayerLifeStats` | existing packet/service tests | Test Creation | Yes, later | Low | Existing packet and resource-service coverage already exists. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Target packet classes, tests, docs, commit | `SmTargetSelected.cs`, `SmTargetUpdate.cs`, `SmTargetPacketsTests.cs`, progress/handoff docs | Java source writes, live target dispatch, unrelated services/tests | Implemented and documented UOW-1662. |
+| Sub-agents | None | None | All files | Not spawned because selected work was a small packet pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1662 because the selected packet pair and tests were small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1662
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_TARGET_SELECTED` | `Aion.GameServer.Network.Aion.ServerPackets.SmTargetSelected` | Server Packet | Complete | Unit Tested | Partial Parity | C# models packet opcode `41` and payload fields: target id, level, max/current HP, max/current MP. Null target and non-creature target behavior are covered. It does not yet accept live `VisibleObject`/`Creature` objects or runtime-compare Java frames. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_TARGET_UPDATE` | `Aion.GameServer.Network.Aion.ServerPackets.SmTargetUpdate` | Server Packet | Complete | Unit Tested | Partial Parity | C# models packet opcode `81`, player object id, and target object id with zero for no target. It does not use Java object identity, live `Player.getTarget()`, or broadcast dispatch. |
+| `com.aionemu.gameserver.controllers.PlayerController.onTargetChanged` | future target-change dispatch; packet classes only in this unit | Controller Boundary | Not Started | No Tests | Needs Verification | Java sends `SM_TARGET_SELECTED` to the owner and broadcasts `SM_TARGET_UPDATE` to sighted players. C# currently only has packet classes; live controller/known-list dispatch remains unported. |
+| `com.aionemu.gameserver.model.gameobjects.VisibleObject` | `TargetSelectedSnapshot` | DTO Projection | Partial | Unit Tested | Partial Parity | C# uses an explicit snapshot to avoid pretending the Java visible-object hierarchy is ported. Non-creature target id-only behavior is covered; reflection/inheritance behavior is not modeled. |
+| `com.aionemu.gameserver.model.gameobjects.Creature` | `TargetSelectedSnapshot` | DTO Projection | Partial | Unit Tested | Partial Parity | C# snapshot carries level and HP/MP stats used by the packet. It does not model live `Creature.getLifeStats()`, stat recalculation, threading, or null life-stat behavior. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SmTargetSelected_WritesZeroPayloadForNullTargetLikeJavaPrimitiveDefaults` | Unit Added | Java `SM_TARGET_SELECTED(VisibleObject)` constructor and primitive field defaults | Null target produces all-zero payload. | Deterministic C# packet regression grounded in Java source review. | No Java runtime golden frame. |
+| `SmTargetSelected_WritesOnlyObjectIdForNonCreatureTargetLikeJava` | Unit Added | Java `target instanceof Creature` branch | Non-creature target writes object id with zero stats. | Deterministic C# packet regression grounded in Java source review. | Does not instantiate live Java/C# object hierarchy. |
+| `SmTargetSelected_WritesCreatureStatsLikeJava` | Unit Added | Java `Creature` stat extraction | Creature snapshot writes target id, level, HP, and MP fields in Java order. | Deterministic C# packet regression grounded in Java source review. | No live `LifeStats` comparison. |
+| `SmTargetUpdate_WritesPlayerAndTargetObjectIdsLikeJava` | Unit Added | Java `SM_TARGET_UPDATE.writeImpl` | Player id and target id payload. | Deterministic C# packet regression grounded in Java source review. | No broadcast path. |
+| `SmTargetUpdate_UsesZeroTargetWhenPlayerHasNoTargetLikeJava` | Unit Added | Java `player.getTarget() == null ? 0 : objectId` | C# player target id zero produces Java no-target payload. | Deterministic C# packet regression grounded in Java source review. | C# player stores target id, not object reference. |
+
+Remaining risks:
+- Live `PlayerController.onTargetChanged` dispatch is not ported; no owner send or sighted-player broadcast occurs.
+- C# uses `TargetSelectedSnapshot` instead of the Java `VisibleObject`/`Creature` inheritance hierarchy.
+- Live `Creature.getLifeStats()` HP/MP extraction, stat recalculation timing, null object behavior, and threading remain unverified.
+- No Java runtime golden frame or encrypted frame comparison was produced for target packets.
+- Gated charge-all DB integration execution still needs a real MySQL environment.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 2 server packets plus 1 DTO projection and 5 focused regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 1 grouped row explicitly marked Needs Verification; remaining rows are Partial Parity with documented non-live gaps.
+- Total blocked artifacts: live target-change dispatch, Java object hierarchy/runtime stat extraction, Java runtime packet capture, encrypted frame comparison, DB-backed charge-all integration run.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- If a DB is available, run the gated DB integration suite. Otherwise, add a non-live target-change plan/factory boundary for `PlayerController.onTargetChanged`, or continue with another isolated packet parity unit.
+
+---
+
+## Updated Immediate Next - Session 1662
+
+Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, add a non-live target-change plan/factory boundary for `PlayerController.onTargetChanged` using the new target packets, or continue with another isolated packet parity unit. Keep Java source writes, repository production rewrites, live generated-zone writes, live target dispatch, live weather mutation, live actor mutation, and live nearby dispatch disabled.
