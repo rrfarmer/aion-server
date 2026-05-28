@@ -73738,3 +73738,78 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1634
 
 Next best unit: add a non-live region precreation/neighbour-id model for Java `WorldMap2DInstance.initMapRegions` and `WorldMap3DInstance.initMapRegions`, keeping it deterministic and disconnected from live object storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1635 (May 28, 2026)
+- Continued after UOW-1634 by modeling Java map-region precreation and neighbour-id linking without live object storage.
+- Performed Parallel Work Discovery across region layout modeling, charge-all DB rollback integration planning, nearby packet golden gap audit, and live region storage. Selected region layout modeling because dimension selection now exists and Java precreated region bounds are the next prerequisite before live `MapRegion` storage.
+- Added `WorldMapRegionLayoutService` and `WorldMapRegionLayout`.
+- Modeled Java 2D region creation loops with inclusive `x <= size` and `y <= size` bounds.
+- Modeled Java 3D region creation loops with inclusive `x/y`, Java-rounded `maxZ`, and exclusive `z < maxZ`.
+- Modeled Java 2D neighbour scans and Java 3D neighbour scans, including the 3D `z2 < z + regionSize` condition rather than changing it to a symmetric inclusive range.
+- Added tests for 2D precreated ids/neighbours, 3D precreated ids/exclusive rounded Z, 3D neighbour Z-loop shape, and Java-rounded maxZ for non-divisible world sizes.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 27 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1635
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Region precreation/neighbour-id model | `WorldMap2DInstance.initMapRegions`, `WorldMap3DInstance.initMapRegions`, `RegionUtil` | new layout service/tests | Utility Port / Test Creation | Sequential for writes | Low | Selected; deterministic non-live prerequisite before live region storage. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred to keep region thread coherent. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the region-storage blocker. |
+| D | Live region storage | `MapRegion`, `WorldMapInstance.addObject/removeObject` | production world services | Integration Fix | No | High | Deferred until layout, boundaries, and snapshot adapters are stable. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live region layout helper and tests | Utility Port / Tests / Docs | `WorldMapRegionLayoutService.cs`, `WorldMapRegionLayoutServiceTests.cs`, progress/handoff docs | Java source writes, live nearby dispatch, production world object storage | UOW-1634 dimension selector and UOW-1632 region-id helper | Tested deterministic Java-style region ids and neighbour ids. |
+
+No sub-agent was spawned for UOW-1635 because implementation and tests touched one new helper surface and docs remained orchestrator-owned.
+
+#### Migration Parity Table - Session 1635
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMap2DInstance.initMapRegions` | `WorldMapRegionLayoutService.CreateLayout(..., TwoDimensional)` | Region Layout / Utility | Partial | Unit Tested | Partial Parity | C# precomputes the same 2D region ids and neighbour ids for deterministic world sizes using inclusive x/y loops. It does not create `MapRegion` objects, call `filterZones`, store regions in a live map, or maintain player/object membership. |
+| `com.aionemu.gameserver.world.WorldMap3DInstance.initMapRegions` | `WorldMapRegionLayoutService.CreateLayout(..., ThreeDimensional)` | Region Layout / Utility | Partial | Unit Tested | Partial Parity | C# precomputes 3D region ids using inclusive x/y, Java-rounded maxZ, exclusive z loop, and Java's neighbour z-loop condition. Java `parallelStream` creation, synchronized region map writes, live regions, and zone filtering remain unported. |
+| `com.aionemu.gameserver.world.RegionUtil` | `WorldRegionIdService` consumed by `WorldMapRegionLayoutService` | Utility Dependency | Complete | Unit Tested | Partial Parity | Existing Java-equivalent region formulas are reused for layout ids and neighbour ids. Region-size config binding, negative-coordinate edge cases, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.world.MapRegion` | `WorldMapRegionLayout` region/neighbour id DTO | Region Storage / Boundary DTO | Partial | Unit Tested | Needs Verification | DTO captures ids and neighbour-id relationships only. Live object maps, activation/deactivation, synchronized player counts, zone revalidation, parent instance references, and `addNeighbourRegion(MapRegion)` object links remain unported. |
+| `com.aionemu.gameserver.world.WorldMapInstance` | `WorldMapRegionLayout` as non-live prerequisite | Abstract Runtime Instance | Partial | Unit Tested | Needs Verification | Layout captures region initialization prerequisites but not instance handlers, `regions` map lifecycle, `forEachObject`, add/remove object behavior, or registration/player counts. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateLayout_For2DMap_PrecreatesInclusiveXYRegionsAndNeighbours` | Unit | Java `WorldMap2DInstance.initMapRegions` | 2D region ids and neighbour ids for a 256-size map match inclusive x/y loops. | Deterministic C# regression grounded in Java source review. | No live `MapRegion` objects or zone filtering. |
+| `CreateLayout_For3DMap_PrecreatesInclusiveXYAndExclusiveRoundedZRegions` | Unit | Java `WorldMap3DInstance.initMapRegions` | 3D region ids use inclusive x/y, exclusive rounded z, and omit z at maxZ. | Deterministic C# regression grounded in Java source review. | No Java runtime comparison or parallel creation. |
+| `CreateLayout_For3DMap_MatchesJavaNeighbourZLoopShape` | Unit | Java `WorldMap3DInstance` neighbour loops | 3D neighbour ids preserve Java's `z2 < z + regionSize` shape. | Deterministic C# regression grounded in Java source review. | Does not assert live `MapRegion.addNeighbourRegion` object identity. |
+| `CreateLayout_UsesJavaRoundedMaxZForNonDivisibleWorldSize` | Unit | Java `Math.round((float) size / regionSize) * regionSize` | Non-divisible world sizes use Java-style positive rounding before z-loop creation. | Deterministic C# regression grounded in Java source review. | Negative/zero world-size behavior not compared to Java runtime. |
+
+Remaining risks:
+- Region layout is still non-live and does not create or attach `MapRegion` objects.
+- Java `filterZones`, zone bounds, activation/deactivation, player/object membership, and synchronized live region map writes remain unported.
+- Java `parallelStream` behavior is intentionally reduced to deterministic id ordering; this is a test/model convenience, not live threading parity.
+- The 3D neighbour z-loop shape is preserved from Java source, but broader gameplay implications need verification before live storage.
+- Region-size config override is not wired into runtime config.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 non-live layout helper plus 4 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live C# MapRegion storage, zone filtering/revalidation, object membership, `parallelStream` runtime parity, config-bound region size, Java runtime comparison, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Compose `WorldMapRegionLayoutService` with selector-driven projection in tests or a small resolver so a `WorldPosition` can resolve to an existing precreated region id plus known neighbour ids, still without live object storage. Safe alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation.
+
+---
+
+## Updated Immediate Next - Session 1635
+
+Next best unit: compose selector-driven projection with the non-live region layout model so a `WorldPosition` can resolve against a precreated Java-style region id and expose neighbour ids for nearby/known-list planning. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
