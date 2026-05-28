@@ -73299,3 +73299,74 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1628
 
 Next best unit: start the ItemCharge charge-all multi-item packet/order audit as an independent safe parity strand, or continue nearby with read-only Java/C# region-id calculation analysis before live region storage. Keep live `ThreadPoolManager`, `PacketSendUtility`, `GameServerConnection` sends, repository rewrites, and Java source changes disabled.
+
+### Session 1629 (May 28, 2026)
+- Continued after UOW-1628 with the recommended ItemCharge charge-all multi-item packet/order audit.
+- Performed Parallel Work Discovery across ItemCharge multi-item packet order, nearby region-id calculation audit, nearby packet golden gap audit, and live nearby dispatch. Selected ItemCharge because it is independent from nearby live-dispatch risk and had been repeatedly listed as a safe parity strand.
+- Compared Java `ItemChargeService.startChargingEquippedItems`, `chargeItems`, `chargeItem`, `processPayment`, and `PlayerGameStats.updateStatsVisually` with C# `GameServerConnection.HandleChargeAllQuestionResponseAsync` and `ItemChargeService` helpers.
+- Found and fixed a C# packet-cadence gap: Java `chargeItems` calls `chargeItem` for each charged item, and each successful `chargeItem` sends item update, item success system message, and `updateStatsVisually()` before the final charge-all complete message. C# charge-all was sending one `SmStatsInfo` after all charged items instead of one per charged item.
+- Moved `CreateStatsInfoPacket` emission inside the accepted charge-all per-item loop.
+- Added `HandleQuestionResponseAsync_ChargeAllApPaymentSendsPerItemUpdatesStatsThenAllComplete`, covering two AP charge-all items and asserting repository order, inventory mutation, per-item packet order, per-item stats packets, and final all-complete packet.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests|FullyQualifiedName~GameServerConnectionChargeAllQuestionResponseTests|FullyQualifiedName~ItemChargeServiceTests|FullyQualifiedName~GamePacketTests"`.
+  - Result: passed 342 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1629
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | ItemCharge charge-all multi-item packet order | `ItemChargeService.startChargingEquippedItems`, `chargeItems`, `chargeItem`, `PlayerGameStats.updateStatsVisually` | `GameServerConnection.cs`, charge-all connection tests | Implementation/Test | Sequential | Medium | Selected; clear parity gap in per-item stats packet cadence. |
+| B | Nearby region-id calculation audit | Java world map region classes | docs/read-only world files | Analysis | Yes | Low | Independent, deferred after ItemCharge gap was found. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes | Low | Useful later, not related to charge-all. |
+| D | Live nearby refresh dispatch | `ThreadPoolManager.schedule`, `PacketSendUtility`, `GameServerConnection` | world/connection services | Live Dispatch | No | High | Deferred; unrelated and still blocked by live region storage. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Fix and cover ItemCharge charge-all multi-item packet cadence | Implementation/Test/Docs | `GameServerConnection.cs`, `GameServerConnectionInventoryExpansionUseItemTests.cs`, progress/handoff docs | Java source writes, nearby dispatch files, unrelated repository rewrites | Java source audit of `ItemChargeService` and existing charge-all tests/helpers | C# accepted charge-all sends stats per charged item before all-complete, with focused regression. |
+
+No sub-agent was spawned for UOW-1629 because the selected work touched shared connection behavior and its paired tests.
+
+#### Migration Parity Table - Session 1629
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemChargeService.startChargingEquippedItems` | `Aion.GameServer.Network.Aion.GameServerConnection.StartChargingEquippedItemsAsync`; `PendingChargeAllRequest` | Service / Question Flow | Partial | Existing Unit Tested + Regression Tested | Partial Parity | Existing flow quotes one payment and registers a pending question before sending `SM_QUESTION_WINDOW`. This unit did not retest start prompt creation directly; Java runtime comparison and concurrent request behavior remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.chargeItems` | `GameServerConnection.HandleChargeAllQuestionResponseAsync` | Service / Multi-item Mutation | Partial | Regression Tested | Partial Parity | C# now emits item update, item success, and stats packet per charged item, then one all-complete message. Persistence is transactional through repository save before packets, unlike Java's in-memory mutation/persistence model; documented as a C# safety difference needing verification. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.chargeItem` | `ItemChargeService.CreateChargePlan`; charge-all per-item loop in `GameServerConnection` | Item Service / Packet Sequence | Partial | Unit Tested + Regression Tested | Partial Parity | Per-item chargeability is recalculated at accept time with `requirePayment=false`, matching Java's quoted-payment shape. Exact `ChargeInfo.updateChargePoints` observer effects and Java item packet bytes are not runtime-compared. |
+| `com.aionemu.gameserver.model.stats.container.PlayerGameStats.updateStatsVisually` | `GameServerConnection.CreateStatsInfoPacket` emission inside accepted charge-all loop | Stats Packet Dependency | Partial | Regression Tested | Partial Parity | Fixed gap: multi-item charge-all now sends `SmStatsInfo` after each charged item instead of one batched stats packet. Exact Java stat calculations and packet bytes remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryUpdateItem` | Packet | Partial | Regression Tested | Needs Verification | Test asserts packet order and charged object ids for two items. It does not compare full Java serialized packet bytes or encrypted frames. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage` | Packet | Partial | Regression Tested | Needs Verification | Test asserts AP spend, two item-charge success messages, and final charge2-all complete message ids/parameters. Java localization lookup and runtime packet capture remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleQuestionResponseAsync_ChargeAllApPaymentSendsPerItemUpdatesStatsThenAllComplete` | Integration-style connection regression | Java `ItemChargeService.chargeItems` loop and `chargeItem` packet order | Accepted AP charge-all with two current items spends quoted AP, persists charged items in request order, sends AP packets first, then item update/success/stats for item 7001, item update/success/stats for item 7002, then charge2-all complete. | Deterministic C# packet-order regression grounded in reviewed Java source. | No live Java server capture, no encrypted frame comparison, no concurrent inventory mutation, and exact stat values are not compared. |
+
+Remaining risks:
+- C# persists charge-all mutations before packet emission through `SaveItemChargeAllMutationAsync`; Java mutates each item during `chargeItems`. This is a C# safety/consolidation difference that still needs broader transaction parity review.
+- Java `filteredItems` iteration comes from equipped item stream order; C# uses pending request item order from the quoted plans. Current tests verify deterministic C# order but not a Java runtime ordering comparison.
+- Exact `SM_INVENTORY_UPDATE_ITEM`, `SM_SYSTEM_MESSAGE`, and `SM_STATS_INFO` bytes are not compared against Java captures.
+- AP side-effect packets and rank-change side effects are covered locally but not runtime-compared to Java.
+- Charge-all kinah two-item all-current ordering is still covered indirectly by one-item and stale/missing tests; a symmetric all-current kinah multi-item packet-order test could be added if needed.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 charge-all packet cadence fix plus 1 focused regression test.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped packet rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: Java runtime packet capture, encrypted frame comparison, concurrent inventory mutation parity, exact stats calculation comparison, transaction model review.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Add the symmetric charge-all kinah all-current two-item packet-order regression, or run a read-only transaction/ordering audit for Java charge-all persistence versus C# repository batching. Safe nearby alternative: read-only region-id calculation audit before live region storage.
+
+---
+
+## Updated Immediate Next - Session 1629
+
+Next best unit: add a symmetric charge-all kinah all-current two-item packet-order regression, or document the Java-vs-C# charge-all transaction/ordering difference in a read-only audit before changing persistence semantics. Safe nearby alternative: read-only region-id calculation analysis before live region storage. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
