@@ -76678,3 +76678,81 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1672
 
 Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, add Java runtime/golden vector coverage for `SM_POSITION`/`SM_POSITION_SELF` float payloads, continue with another isolated packet parity unit, or add a narrow non-live movement-correction effect outcome planner for `ConfuseEffect.endEffect`/`FearEffect.endEffect`. Keep Java source writes, repository production rewrites, live generated-zone writes, live movement dispatch, live packet broadcast, live effect-controller mutation, live world position mutation, live skill-engine dispatch, live target dispatch, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1673 (May 28, 2026)
+- Continued after UOW-1672 by adding a non-live end-effect outcome planner for Java `ConfuseEffect.endEffect` and `FearEffect.endEffect`.
+- Performed Parallel Work Discovery across DB integration, Java position packet vectors, another isolated packet audit, and effect outcome planning. Selected the effect planner because UOW-1672 provided reusable movement-correction packet intent but did not model effect-end side-effect ordering.
+- Added `FearConfuseEndEffectPlanService`.
+- Added `FearConfuseEffectKind`, `FearConfuseEndEffectPlanStatus`, `FearConfuseEndEffectPlanInput`, and `FearConfuseEndEffectPlan`.
+- Modeled Java common end-effect ordering for confuse/fear: unset matching abnormal state, abort movement, broadcast-and-receive `SM_POSITION`, then perform NPC AI cleanup.
+- Reused `MovementCorrectionPacketPlanService.CreateBroadcastObjectPlan` for `SM_POSITION` packet creation and send intent.
+- Added a C# safety block for invalid effected object ids that prevents planned side effects and packet creation.
+- Kept live effect-controller mutation, move-controller mutation, packet broadcast, AI state changes, AI event dispatch, scheduler/periodic-task cancellation, observer removal, and Java runtime comparison disabled.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~FearConfuseEndEffectPlanServiceTests|FullyQualifiedName~MovementCorrectionPacketPlanServiceTests|FullyQualifiedName~SmPositionPacketsTests|FullyQualifiedName~GamePacketTests"`.
+  - Result: passed 249 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1673
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Fear/confuse end-effect planner | `ConfuseEffect.endEffect`, `FearEffect.endEffect`, `AIState`, `AIEventType`, `PacketSendUtility.broadcastPacketAndReceive`, `SM_POSITION` | `FearConfuseEndEffectPlanService.cs`, `FearConfuseEndEffectPlanServiceTests.cs` | Effect Boundary / Test Creation | Sequential for service/test/docs writes | Low | Selected; composes the UOW-1672 packet planner into a slightly higher-level non-live effect outcome. |
+| B | Run gated DB integration | charge-all DB integration harness | no file changes if executable | Parity Verification | No, env unavailable | Medium | Deferred because no disposable DB environment is present. |
+| C | Java runtime position packet vectors | `SM_POSITION`, `SM_POSITION_SELF` | vector artifacts/tests | Golden/Runtime Verification | Yes, later | Low | Still useful for stronger packet parity but not necessary for this non-live outcome planner. |
+| D | Another isolated packet audit | missing server packets | packet class/tests | Packet Port | Yes, later | Low | Still viable after effect planner is documented. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Fear/confuse end-effect planner, tests, docs, commit | `FearConfuseEndEffectPlanService.cs`, `FearConfuseEndEffectPlanServiceTests.cs`, progress/handoff docs | Java source writes, live effect-controller mutation, live move-controller mutation, live packet broadcast, live AI state/event dispatch, unrelated services/tests | Implemented and documented UOW-1673. |
+| Sub-agents | None | None | All files | Not spawned because selected work touched one small service/test pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1673 because the selected effect boundary was small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1673
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.ConfuseEffect` | `Aion.GameServer.Services.FearConfuseEndEffectPlanService` | Effect Boundary | Partial | Unit Tested | Partial Parity | C# models `endEffect` intent for `CONFUSE`: unset abnormal, abort move, broadcast/receive `SM_POSITION`, and optional NPC AI cleanup. It does not implement `applyEffect`, `calculate`, `startEffect`, periodic confuse task scheduling, random movement, geo collision, gliding stop, effect-controller mutation, or live AI/movement calls. |
+| `com.aionemu.gameserver.skillengine.effect.FearEffect` | `Aion.GameServer.Services.FearConfuseEndEffectPlanService` | Effect Boundary | Partial | Unit Tested | Partial Parity | C# models `endEffect` intent for `FEAR`: unset abnormal, abort move, broadcast/receive `SM_POSITION`, and optional NPC AI cleanup. It does not implement `applyEffect`, `calculate`, `startEffect`, observer removal, periodic fear task scheduling, PositionUtil range/angle movement, geo collision, gliding stop, effect-controller mutation, or live AI/movement calls. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_POSITION` | `Aion.GameServer.Network.Aion.ServerPackets.SmPosition`; `MovementCorrectionPacketPlan` | Server Packet / Service Dependency | Complete packet, Partial workflow | Regression Tested | Partial Parity | End-effect planner reuses the UOW-1672 packet planner and asserts payload bytes. No Java runtime golden/encrypted frame comparison, and no live dispatch. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.broadcastPacketAndReceive` | `MovementCorrectionPacketPlan.ShouldBroadcastAndReceive`; `FearConfuseEndEffectPlan.ShouldBroadcastAndReceivePosition` | Utility Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records broadcast-and-receive intent but does not send packets. Recipient selection, ordering, source inclusion, visibility, encryption, response handling, and threading remain unverified. |
+| `com.aionemu.gameserver.ai.AIState` | `FearConfuseEndEffectPlan.ShouldSetNpcIdle` | Enum/AI Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records that NPC end-effect cleanup should set AI state `IDLE`. The Java enum and live AI state machine are not ported here. |
+| `com.aionemu.gameserver.ai.event.AIEventType` | `FearConfuseEndEffectPlan.ShouldNotifyNpcAttackEvent` | Enum/AI Event Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records that NPC end-effect cleanup should raise `AIEventType.ATTACK` with the effected creature. The Java enum/event dispatch and threading are not ported here. |
+| `com.aionemu.gameserver.model.gameobjects.Creature` | `FearConfuseEndEffectPlanInput`; `ObjectPositionSnapshot` | Model Boundary | Partial | Unit Tested | Partial Parity | C# uses an object-position snapshot plus `IsEffectedNpc` flag instead of a live `Creature`. Live type hierarchy, movement controller, effect controller, AI, null behavior, equality, and threading remain unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_ForConfusePlayerModelsUnsetAbortAndBroadcastReceiveLikeJava` | Unit Added | Java `ConfuseEffect.endEffect` and `SM_POSITION.writeImpl` | Confuse player plan records abnormal unset, movement abort, broadcast/receive position correction, and no NPC AI cleanup. | Source-derived service boundary regression with packet payload assertion. | No live effect mutation, move abort, packet broadcast, or Java runtime frame. |
+| `CreatePlan_ForFearNpcModelsNpcAiCleanupAfterPositionCorrectionLikeJava` | Unit Added | Java `FearEffect.endEffect`, NPC branch, and `SM_POSITION.writeImpl` | Fear NPC plan records abnormal unset, movement abort, broadcast/receive position correction, AI idle intent, and AI attack-event intent. | Source-derived service boundary regression with packet payload assertion. | No live AI state/event dispatch or threading validation. |
+| `CreatePlan_BlocksInvalidEffectedObjectBeforeSideEffects` | Unit Added | C# safety boundary for Java live `Creature`/`VisibleObject` requirement | Invalid effected object id creates no side-effect intents and no packet. | C# boundary regression. | Java would require a live creature rather than this snapshot/id guard. |
+
+Remaining risks:
+- Live `ConfuseEffect` and `FearEffect` integration remains unported; no effect controller, move controller, packet broadcast, AI state, or AI event mutation occurs.
+- `applyEffect`, `calculate`, `startEffect`, scheduler/periodic tasks, observer behavior, geo movement, random movement, gliding stop, and abnormal-state setup are outside this unit.
+- Java `PacketSendUtility.broadcastPacketAndReceive` semantics remain intent-only and unverified.
+- `AIState.IDLE` and `AIEventType.ATTACK` are represented only as booleans; enum values and live dispatch are not ported here.
+- Float precision and heading signed-byte behavior are source-derived through packet buffer tests but not Java runtime-compared.
+- Gated charge-all DB integration execution still needs a real MySQL environment.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 7 grouped rows in this unit.
+- Total artifacts ported: 1 non-live fear/confuse end-effect planner, 2 DTO records, 2 enums, and 3 focused planner regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with documented live/runtime gaps.
+- Total blocked artifacts: live fear/confuse effect integration, effect-controller mutation, move-controller mutation, live packet broadcast, live AI state/event dispatch, Java runtime packet capture, encrypted frame comparison, DB-backed charge-all integration run.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- If a DB is available, run the gated DB integration suite. Otherwise, add Java runtime/golden vector coverage for `SM_POSITION`/`SM_POSITION_SELF`, continue with another isolated packet parity unit, or add a non-live `SimpleRootEffect` sub-effect movement outcome planner using the existing movement-correction planner.
+
+---
+
+## Updated Immediate Next - Session 1673
+
+Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, add Java runtime/golden vector coverage for `SM_POSITION`/`SM_POSITION_SELF`, continue with another isolated packet parity unit, or add a non-live `SimpleRootEffect` sub-effect movement outcome planner using the existing movement-correction planner. Keep Java source writes, repository production rewrites, live generated-zone writes, live movement dispatch, live packet broadcast, live effect-controller mutation, live move-controller mutation, live AI state/event dispatch, live world position mutation, live skill-engine dispatch, live target dispatch, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
