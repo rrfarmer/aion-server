@@ -75296,3 +75296,83 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1654
 
 Next best unit: add a non-live material skill condition/time/weather service boundary model for material actors, including `GameTimeService`, `WeatherService`, null weather handling, and any discovered material condition edge cases. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, live generated-zone writes, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1655 (May 28, 2026)
+- Continued after UOW-1654 by adding a non-live material-zone environment boundary plan for Java `GameTimeService`, `GameTime`, `DayTime`, `WeatherService`, and `WeatherEntry`.
+- Performed Parallel Work Discovery across material time/weather modeling, charge-all DB rollback integration planning, nearby packet golden audit, and broader zone-handler source audit. Selected time/weather modeling because UOW-1654 now consumes supplied day/weather metadata but did not model the Java boundary that produces it.
+- Added `WorldMapRegionMaterialZoneEnvironmentPlanService`.
+- Modeled Java `GameTime` negative-time rejection as blocked metadata.
+- Modeled Java day-time thresholds from in-game minutes: night, morning, afternoon, evening, and night.
+- Corrected `WorldMapRegionMaterialZoneDayTime` from the previous coarse `Day` value to Java's four actual values: `MORNING`, `AFTERNOON`, `EVENING`, `NIGHT`.
+- Modeled Java `WeatherService.findWeatherEntry` selection of the first non-null weather entry from WEATHER zones and fallback to `WeatherEntry.NONE`.
+- Modeled Java `SUNNY` condition rain-prefix behavior with ordinal/case-sensitive `RAIN` matching and weather-before handling.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionMaterialZoneEnvironmentPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneActorPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneHandlerPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneSerializationPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneSavePlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneConstructionServiceTests"`.
+  - Result: passed 38 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1655
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Material time/weather boundary model | `GameTimeService`, `GameTime`, `DayTime`, `WeatherService`, `WeatherEntry` | new environment-plan service/tests plus actor day-time enum fix | Utility Port / Test Creation | Sequential for writes | Medium | Selected; next material actor boundary after actor task metadata. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe candidate; deferred after sidecar notes from UOW-1654. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the environment blocker. |
+| D | Broader zone-handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Material time/weather boundary helper, tests, actor day-time enum correction, docs, commit | `WorldMapRegionMaterialZoneEnvironmentPlanService.cs`, `WorldMapRegionMaterialZoneEnvironmentPlanServiceTests.cs`, `WorldMapRegionMaterialZoneActorPlanService.cs`, `WorldMapRegionMaterialZoneActorPlanServiceTests.cs`, progress/handoff docs | Java source writes, live actor mutation, unrelated services/tests | Implemented and documented UOW-1655. |
+| Sub-agents | None | None | All files | Not spawned because selected work required a small correction in an existing shared material actor enum/test. |
+
+No sub-agent was spawned for UOW-1655 because the selected work touched an existing material actor enum/test in addition to new files, making single-owner edits safer.
+
+#### Migration Parity Table - Session 1655
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.GameTimeService` | `WorldMapRegionMaterialZoneEnvironmentPlanService` | Time Service Boundary Plan | Partial | Unit Tested Metadata | Partial Parity | C# models the material-actor-facing `getGameTime().getDayTime()` boundary from supplied minutes. It does not load/store server variable `time`, start the clock, broadcast `SM_GAME_TIME`, or schedule periodic saves. |
+| `com.aionemu.gameserver.utils.time.gametime.GameTime` | `WorldMapRegionMaterialZoneEnvironmentPlanService`; `WorldMapRegionMaterialZoneDayTime` | Game Time Utility Boundary | Partial | Unit Tested | Partial Parity | C# models negative-time rejection and day-time threshold calculation. It does not model year/month/day arithmetic, addMinutes side effects, equality/hash, clone, or weather updates on hour changes. |
+| `com.aionemu.gameserver.utils.time.gametime.DayTime` | `WorldMapRegionMaterialZoneDayTime` | Enum | Partial | Unit Tested | Partial Parity | C# now exposes Java's four day-time values. Existing actor tests were updated from coarse `Day` to `Morning`. Serialization of enum names is not exercised. |
+| `com.aionemu.gameserver.services.WeatherService.findWeatherEntry` | `WorldMapRegionMaterialZoneEnvironmentPlanService` | Weather Boundary Plan | Partial | Unit Tested Metadata | Partial Parity | C# models WEATHER-zone scan with first non-null entry and fallback to `WeatherEntry.NONE`. It does not query live creature zones, `DataManager.ZONE_DATA`, weather arrays, or broadcast `SM_WEATHER`. |
+| `com.aionemu.gameserver.model.templates.world.WeatherEntry` | `WorldMapRegionMaterialZoneWeatherEntrySnapshot` | Weather DTO | Partial | Unit Tested Metadata | Partial Parity | C# carries weather name and before/after metadata needed by material SUNNY logic. It does not model rank/code/zone id behavior beyond DTO storage or JAXB serialization. |
+| `com.aionemu.gameserver.model.templates.materials.MaterialActCondition` | `WorldMapRegionMaterialZoneEnvironmentPlan.SunnyConditionMatches`; `WorldMapRegionMaterialZoneActorPlanService` | Condition Boundary | Partial | Unit Tested | Partial Parity | C# models SUNNY's Java rain-prefix and before-state behavior plus NIGHT through day-time enum. It does not call live services or model future condition enum expansion. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_MapsGameMinutesToJavaDayTimeThresholds` | Unit Added | Java `GameTime.calculateDayTime` | In-game minute thresholds for night, morning, afternoon, evening, and night. | Deterministic C# regression grounded in Java source review. | Does not model clock scheduling or month/day arithmetic. |
+| `CreatePlan_BlocksNegativeGameTimeLikeJavaConstructor` | Unit Added | Java `GameTime` constructor | Negative game time is blocked. | Deterministic C# regression grounded in Java source review. | C# returns blocked metadata instead of throwing; non-live planner convention. |
+| `CreatePlan_UsesFirstNonNullWeatherEntryFromWeatherZones` | Unit Added | Java `WeatherService.findWeatherEntry` | Non-weather zones are ignored, null weather entries are skipped, first non-null WEATHER entry wins. | Deterministic C# metadata regression grounded in Java source review. | Does not query live `ZoneInstance` or `DataManager`. |
+| `CreatePlan_ModelsJavaSunnyConditionRainPrefixCaseSensitivity` | Unit Added | Java `AbstractMaterialSkillActor.matchActConditions` | Null/non-rain/rain-before/rain-active/lowercase-rain sunny matching. | Deterministic C# regression grounded in Java source review. | Does not call live weather service. |
+| `WorldMapRegionMaterialZoneActorPlanServiceTests` day-time updates | Unit Updated | Java `DayTime` enum | Actor condition tests use `Morning` instead of the previous coarse `Day` value. | Deterministic C# correction grounded in Java enum review. | Existing actor planner remains non-live. |
+
+Remaining risks:
+- Environment planning is non-live and does not call actual `GameTimeService` or `WeatherService`.
+- Java clock scheduling, server variable persistence, `SM_GAME_TIME`, `SM_WEATHER`, random weather generation, and weather broadcast behavior remain unported.
+- `GameTime` year/month/day arithmetic, `addMinutes`, clone, equals/hash, and weather-on-hour-change behavior remain outside this material actor boundary.
+- `WeatherService` random selection, before/after transition chains, snow condition, table lookup, and map weather arrays remain unported.
+- C# returns blocked metadata for negative time rather than throwing Java `IllegalArgumentException`, because this helper is a non-live planner; live parity remains Needs Verification if/when implemented.
+- Live material actors still consume supplied DTOs rather than live services.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 non-live material-zone environment-boundary helper, 1 enum correction, and 5 focused tests/updates.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 0 grouped rows explicitly marked Needs Verification; all rows are Partial Parity with documented non-live gaps.
+- Total blocked artifacts: live `GameTimeService` clock/persistence/broadcasts, live `WeatherService` random weather/table/broadcast logic, live `GameTime` addMinutes and date arithmetic, live `WeatherEntry` table serialization, live material actor service integration, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add a non-live material weather transition plan for Java `WeatherTable.getWeatherAfter`, `WeatherService.getRandomWeather`, before/after chains, snow filtering, and afternoon correction metadata, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1655
+
+Next best unit: add a non-live material weather transition plan for Java `WeatherTable.getWeatherAfter`, `WeatherService.getRandomWeather`, before/after chains, snow filtering, and afternoon correction metadata. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, live generated-zone writes, live actor mutation, and live nearby dispatch disabled.
