@@ -76446,3 +76446,73 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1669
 
 Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, wire `PositionUtilService.GetHeadingTowards` into a non-live NPC target-change coordinate-input overload so heading calculation is no longer a caller-supplied snapshot, or continue with another isolated packet parity unit. Keep Java source writes, repository production rewrites, live generated-zone writes, live target dispatch, live NPC target broadcast, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1670 (May 28, 2026)
+- Continued after UOW-1669 by wiring `PositionUtilService.GetHeadingTowards` into a non-live NPC target-change coordinate-input overload.
+- Performed Parallel Work Discovery across DB integration, NPC heading overload, isolated packet audit, and zone-handler source audit. Selected the heading overload because it directly removes the precomputed-heading snapshot gap from UOW-1668/1669 without live NPC mutation.
+- Added `NpcTargetChangeCoordinatePacketPlanInput`.
+- Added `NpcTargetChangePacketPlanService.CreatePlan(NpcTargetChangeCoordinatePacketPlanInput)`.
+- Coordinate overload calculates heading toward non-self targets using `PositionUtilService.GetHeadingTowards`.
+- Target-clear and self-target cases keep the current heading, matching the Java branch that only recalculates heading for `newTarget != null && !owner.equals(newTarget)`.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~NpcTargetChangePacketPlanServiceTests|FullyQualifiedName~PositionUtilServiceTests|FullyQualifiedName~SmLookAtObjectPacketTests|FullyQualifiedName~GamePacketTests"`.
+  - Result: passed 274 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1670
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | NPC heading coordinate overload | `NpcController.onTargetChanged`, `PositionUtil.getHeadingTowards` | `NpcTargetChangePacketPlanService.cs`, `NpcTargetChangePacketPlanServiceTests.cs` | Controller Boundary / Utility Composition | Sequential for existing service/test writes | Low | Selected; removes the precomputed-heading dependency from non-live NPC target-change planning. |
+| B | Run gated DB integration | charge-all DB integration harness | no file changes if executable | Parity Verification | No, env unavailable | Medium | Deferred because no DB environment is present. |
+| C | Isolated packet audit | missing server packets | packet class/tests | Packet Port | Yes, later | Low | Still viable after heading overload is documented. |
+| D | Zone handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks, but outside heading overload scope. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | NPC heading overload, tests, docs, commit | `NpcTargetChangePacketPlanService.cs`, `NpcTargetChangePacketPlanServiceTests.cs`, progress/handoff docs | Java source writes, live NPC controller/broadcast integration, unrelated services/tests | Implemented and documented UOW-1670. |
+| Sub-agents | None | None | All files | Not spawned because selected work changed one existing service/test pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1670 because the selected overload was small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1670
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.NpcController.onTargetChanged` | `NpcTargetChangePacketPlanService.CreatePlan(NpcTargetChangeCoordinatePacketPlanInput)` | Controller Boundary | Partial | Unit Tested | Partial Parity | C# non-live planner can now calculate heading from NPC/target coordinates before creating `SmLookAtObject`. It still does not mutate live NPC heading, clear attacked count, update game stats, schedule AI, or broadcast. |
+| `com.aionemu.gameserver.utils.PositionUtil.getHeadingTowards` | `Aion.GameServer.Services.PositionUtilService.GetHeadingTowards` | Utility | Complete | Regression Tested | Partial Parity | Reused by NPC target-change coordinate overload. Source-derived tests cover representative coordinate cases, but no Java runtime vector/golden comparison was produced. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LOOKATOBJECT` | `Aion.GameServer.Network.Aion.ServerPackets.SmLookAtObject` | Server Packet | Complete | Regression Tested | Partial Parity | Coordinate overload creates packet payload with calculated heading. No Java runtime golden/encrypted frame comparison. |
+| `com.aionemu.gameserver.model.gameobjects.Npc` | `NpcTargetChangeCoordinatePacketPlanInput` | Model Boundary | Partial | Unit Tested | Partial Parity | C# uses coordinate/id snapshots instead of live NPC and target object references. Live object equality, world/instance, z-coordinate, object templates, and heading mutation remain unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_WithCoordinatesCalculatesHeadingTowardNonSelfTargetLikeJavaPositionUtil` | Unit Added | Java `NpcController.onTargetChanged` and `PositionUtil.getHeadingTowards` | Coordinate overload calculates heading `105` for the diagonal target and creates `SmLookAtObject` with that heading. | Source-derived composition regression with packet payload assertion. | No live object reference or broadcast. |
+
+Remaining risks:
+- Live `NpcController.onTargetChanged` integration remains unported; no actual NPC state mutation, heading update, scheduler, AI think, or broadcast occurs.
+- Coordinate overload still uses snapshots and does not inspect live `VisibleObject`/`Npc` references or object equality.
+- Java runtime vector/golden comparison for heading precision remains missing.
+- Broadcast recipient selection, packet ordering, source inclusion, visibility, and threading remain unverified.
+- Gated charge-all DB integration execution still needs a real MySQL environment.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 coordinate-input DTO/overload plus 1 focused composition regression.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 0 grouped rows explicitly marked Needs Verification; all rows are Partial Parity with documented live/runtime gaps.
+- Total blocked artifacts: live NPC controller integration, live object-reference heading calculation, broadcast utility integration, Java runtime vector comparison, DB-backed charge-all integration run.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- If a DB is available, run the gated DB integration suite. Otherwise, continue with another isolated packet parity unit or add a Java runtime/golden vector generator for `PositionUtil` heading calculations.
+
+---
+
+## Updated Immediate Next - Session 1670
+
+Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, continue with another isolated packet parity unit or add Java runtime/golden vector coverage for `PositionUtil` heading calculations. Keep Java source writes, repository production rewrites, live generated-zone writes, live target dispatch, live NPC target broadcast, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
