@@ -74426,3 +74426,77 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1643
 
 Next best unit: add a non-live death-zone plan for Java `MapRegion.onDie`, including sorted inside-zone scanning and first handler short-circuit behavior. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1644 (May 28, 2026)
+- Continued after UOW-1643 by modeling Java `MapRegion.onDie` and `ZoneInstance.onDie` as a non-live death-zone plan over constructor-ordered zone metadata.
+- Performed Parallel Work Discovery across death-zone planning, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected death-zone planning because it is the remaining sorted-zone scan in Java `MapRegion` before live zone handlers.
+- Extended `WorldMapRegionZoneScanPlanService` with `CreateDeathPlan`.
+- Added `WorldMapRegionZoneDeathPlan`, `WorldMapRegionZoneDeathAction`, and `WorldMapRegionZoneDeathActionType`.
+- Added `DeathHandlerHandles` metadata to `WorldMapRegionZoneScanCandidate`.
+- Modeled Java sorted scan behavior: skip zones where target is not inside, record inside unhandled zones, and short-circuit on the first handling advanced zone handler.
+- Added tests for first-handler short-circuiting and unhandled inside-zone scans.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionZoneScanPlanServiceTests|FullyQualifiedName~WorldMapRegionZoneSortServiceTests|FullyQualifiedName~WorldMapRegionRuntimeSnapshotServiceTests|FullyQualifiedName~WorldMapRegionLifecyclePlanServiceTests|FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 64 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1644
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Death-zone plan | `MapRegion.onDie`, `ZoneInstance.onDie`, `AdvancedZoneHandler.onDie` | zone scan service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; extends the shared zone scan helper and test file, so one writer is safest. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the death-zone blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Death-zone plan implementation, tests, docs, commit | `WorldMapRegionZoneScanPlanService.cs`, `WorldMapRegionZoneScanPlanServiceTests.cs`, progress/handoff docs | Java source writes, unrelated services/tests | Implemented and documented UOW-1644. |
+| Sub-agents | None | None | All files | Not spawned because selected work edits shared helper/test/docs. |
+
+No sub-agent was spawned for UOW-1644 because the selected implementation modifies the same helper/test files and Orchestrator-owned docs.
+
+#### Migration Parity Table - Session 1644
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.MapRegion.onDie` | `WorldMapRegionZoneScanPlanService.CreateDeathPlan` | Death Zone Plan | Partial | Unit Tested | Partial Parity | C# models sorted scan order, skips zones where the target is not inside, and short-circuits on the first handled death. It does not call live `ZoneInstance.onDie` or mutate handlers/creatures. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.onDie` | `WorldMapRegionZoneScanCandidate.DeathHandlerHandles`; `WorldMapRegionZoneDeathAction` | Zone Runtime Boundary DTO | Partial | Unit Tested | Partial Parity | C# models the `creatures.containsKey(target)` gate via `IsInsideCreature` and the advanced-handler handled/unhandled result via metadata. It does not iterate real handler instances. |
+| `com.aionemu.gameserver.world.zone.handler.AdvancedZoneHandler.onDie` | `WorldMapRegionZoneScanCandidate.DeathHandlerHandles` | Handler Boundary | Not Started | Unit Tested Metadata | Needs Verification | Advanced handler execution is represented as a supplied boolean. Handler side effects such as revive scheduling, teleport, quest progress, packet sends, and broadcasts remain unported. |
+| `zone.pvpZones.PvPZone.onDie` | `WorldMapRegionZoneDeathPlan` metadata only | Dynamic Handler Boundary | Not Started | Manual Source Review | Needs Verification | Java PVP handler sends system messages, schedules revive/teleport, and broadcasts. C# does not execute dynamic zone handlers yet. Newly discovered dependency for future live handler work. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.isInsideCreature` | `WorldMapRegionZoneScanCandidate.IsInsideCreature` | Zone Membership Boundary DTO | Partial | Unit Tested | Needs Verification | C# uses supplied membership metadata for `onDie` and `findZones`; live creature membership map remains unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateDeathPlan_ScansOnlyInsideZonesAndStopsOnFirstHandledDeath` | Unit Added | Java `MapRegion.onDie`, `ZoneInstance.onDie` | Outside zones are skipped, inside unhandled zones are scanned, first handled zone short-circuits later zones. | Deterministic C# regression grounded in Java source review. | No live advanced handler execution. |
+| `CreateDeathPlan_ReturnsUnhandledWhenInsideZonesDoNotHandleDeath` | Unit Added | Java `MapRegion.onDie`, `ZoneInstance.onDie` | Inside zones that do not handle death are recorded and final result is unhandled. | Deterministic C# regression grounded in Java source review. | No Java runtime comparison. |
+
+Remaining risks:
+- Death-zone planning is non-live and reports handler results from supplied metadata.
+- Live `ZoneInstance.onDie`, `AdvancedZoneHandler` implementations, PVP revive/teleport scheduling, quest/instance death handling, packet sends, broadcasts, and creature membership maps remain unported.
+- Java handler side effects may require dynamic handler loading and scheduler parity before live replacement.
+- Java priority and death behavior are modeled over caller-provided constructor order; real enforcement awaits live sorted zones or template projection.
+- Live object storage, parent instance references, neighbour object references, synchronized/volatile state, scheduler behavior, AI notifications, and handler callbacks remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 non-live death-zone plan extension plus 2 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity or Not Started metadata with known gaps.
+- Total blocked artifacts: live `ZoneInstance.onDie`, dynamic advanced zone handlers, PVP revive/teleport scheduling, quest/instance death side effects, live creature membership, live C# MapRegion storage, scheduler execution, synchronization/volatile runtime parity, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add a non-live zone capability/options plan for Java `ZoneInstance.canFly`, `canGlide`, `canPutKisk`, `canRecall`, `canReturnToBattle`, and related flag/world-option fallback behavior, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1644
+
+Next best unit: add a non-live zone capability/options plan for Java `ZoneInstance` flag resolution (`canFly`, `canGlide`, `canPutKisk`, `canRecall`, `canReturnToBattle`, and adjacent option checks) using world-map option metadata before live `ZoneInstance` storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
