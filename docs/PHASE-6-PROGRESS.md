@@ -75049,3 +75049,78 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1651
 
 Next best unit: add a non-live `ZoneData.saveData` XML serialization boundary model for generated material zones, including shape-specific required fields and JAXB/XSD/error metadata. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, live generated-zone writes, and live nearby dispatch disabled.
+
+### Session 1652 (May 28, 2026)
+- Continued after UOW-1651 by adding a non-live XML serialization-boundary plan for generated material zones.
+- Performed Parallel Work Discovery across `ZoneData.saveData` serialization modeling, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected serialization modeling because UOW-1651 now selects and orders templates before Java's JAXB save boundary.
+- Added `WorldMapRegionMaterialZoneSerializationPlanService`.
+- Modeled Java JAXB boundary metadata: `zones` root element, `zone` child element, `zones.xsd` schema path, generated-zone output path, and formatted output.
+- Modeled material shape required-attribute metadata for cylinder, sphere, and semisphere generated templates.
+- Added validation metadata for templates missing shape geometry or cylinder top/bottom bounds.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionMaterialZoneSerializationPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneSavePlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneConstructionServiceTests"`.
+  - Result: passed 17 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1652
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | ZoneData save serialization boundary | `ZoneData.saveData`, `ZoneTemplate`, `Cylinder`, `Sphere`, `Semisphere` | new serialization-plan service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; next generated-zone boundary after save filtering/sorting. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the serialization blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Serialization-boundary helper, tests, docs, commit | `WorldMapRegionMaterialZoneSerializationPlanService.cs`, `WorldMapRegionMaterialZoneSerializationPlanServiceTests.cs`, progress/handoff docs | Java source writes, live generated-zone writes, unrelated services/tests | Implemented and documented UOW-1652. |
+| Sub-agents | None | None | All files | Not spawned because selected work was small and Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1652 because selected work was small, self-contained, and docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1652
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dataholders.ZoneData.saveData` | `WorldMapRegionMaterialZoneSerializationPlanService.CreatePlan` | Serialization Boundary | Partial | Unit Tested Metadata | Partial Parity | C# models JAXB root/child names, schema path, formatted-output flag, generated-zone output path, and invalid-template blocking metadata. It does not create `JAXBContext`, marshal XML, validate XSD, log exceptions, or write files. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneTemplate` | `WorldMapRegionMaterialZoneSerializableTemplate` | Zone Template DTO | Partial | Unit Tested Metadata | Needs Verification | C# carries name, map id, area kind, flags, priority, zone type, and geometry metadata. JAXB annotations, siege/town attributes, `ZoneName.createOrGet`, and XML field ordering remain unverified. |
+| `com.aionemu.gameserver.model.templates.zone.Cylinder` | `WorldMapRegionMaterialZoneSerializationEntry.RequiredShapeAttributes` | Shape Serialization DTO | Partial | Unit Tested Metadata | Partial Parity | C# records required generated cylinder attributes `x`, `y`, `r`, `top`, and `bottom`, and blocks missing top/bottom. It does not serialize float formatting or instantiate `Cylinder`. |
+| `com.aionemu.gameserver.model.templates.zone.Sphere` | `WorldMapRegionMaterialZoneSerializationEntry.RequiredShapeAttributes` | Shape Serialization DTO | Partial | Unit Tested Metadata | Partial Parity | C# records required generated sphere attributes `x`, `y`, `z`, and `r`. It does not serialize float formatting or model Java's `afterUnmarshal` radius `<= 0` skip at save time. |
+| `com.aionemu.gameserver.model.templates.zone.Semisphere` | `WorldMapRegionMaterialZoneSerializationEntry.RequiredShapeAttributes` | Shape Serialization DTO | Partial | Unit Tested Metadata | Partial Parity | C# records semisphere attributes inherited from `Sphere`. It does not instantiate or serialize `Semisphere`. |
+| `com.aionemu.gameserver.utils.xml.XmlUtil.getSchema` | `WorldMapRegionMaterialZoneSerializationPlan.SchemaPath` | XML Schema Boundary | Not Started | Unit Tested Metadata | Needs Verification | C# records the Java schema path only. Schema loading, validation, and JAXB exception behavior remain unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_RecordsJavaJaxbSchemaAndOutputBoundary` | Unit Added | Java `ZoneData.saveData` and JAXB annotations | Root/child element names, schema path, output path, formatted-output metadata, and required attributes for cylinder/sphere/semisphere. | Deterministic C# metadata regression grounded in Java source review. | No XML writer, schema validation, or JAXB runtime comparison. |
+| `CreatePlan_BlocksTemplatesMissingShapeFields` | Unit Added | Java material shape constructors and template shape fields | Missing generated shape fields are surfaced before a live write boundary. | Deterministic C# guard grounded in Java constructor fields. | JAXB may permit some null attributes; this is a conservative C# preflight model. |
+
+Remaining risks:
+- Serialization planning is non-live and does not write or compare XML.
+- JAXB `JAXBContext`, `Marshaller`, XSD validation, formatted output exactness, exception logging, and filesystem writes remain unported.
+- Java XML field/attribute ordering and float formatting remain unverified.
+- `ZoneTemplate` siege/town attributes, `ZoneName.createOrGet`, and XML name cache behavior remain unported.
+- Live material template generation still does not feed a real XML writer.
+- Live `MaterialZoneHandler` behavior, dynamic zone handlers, and live C# `MapRegion`/`ZoneInstance` storage remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 non-live material-zone serialization-boundary helper plus 2 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity or Not Started metadata with known gaps.
+- Total blocked artifacts: live JAXB context/marshalling, XSD validation, generated-zone filesystem writes, exact XML ordering/float formatting, `ZoneTemplate` siege/town/XML-name fields, `ZoneName` cache behavior, live material template generation pipeline, dynamic zone handlers, live C# MapRegion/ZoneInstance storage, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add a source-grounded audit/model for live `MaterialZoneHandler` behavior, including material skill matching, observer registration/removal, collision debug messaging, and unsupported live actor side effects, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1652
+
+Next best unit: add a source-grounded audit/model for live `MaterialZoneHandler` behavior, including material skill matching, observer registration/removal, collision debug messaging, and unsupported live actor side effects. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, live generated-zone writes, and live nearby dispatch disabled.
