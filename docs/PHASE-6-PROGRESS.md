@@ -72736,3 +72736,72 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1620
 
 Next best unit: audit the ItemCharge charge-all pending-request path against Java `startChargingEquippedItems` and `chargeItems`, then add a focused `SaveItemChargeAllMutationAsync` failure regression if the C# path lacks fail-closed coverage. Safe alternative: nearby controller-position/map-region metadata adapter. Keep repository SQL rewrites, production timers, live nearby sends, and Java source changes disabled.
+
+### Session 1621 (May 28, 2026)
+- Continued after UOW-1620 by auditing the ItemCharge charge-all pending-request persistence and packet ordering path.
+- Performed Parallel Work Discovery across charge-all save failure coverage, charge-all multi-item ordering, nearby controller-position metadata, and live nearby dispatch. Selected charge-all save-failure coverage because the C# transaction boundary mirrors the selected-charge branch hardened in UOW-1620.
+- Re-read Java `ItemChargeService.startChargingEquippedItems`, `chargeItems`, and `chargeItem`: accepted charge-all responses process one quoted payment, then call `chargeItems(... requirePayment=false)`, mutate charge points, send charge/success/stat/all-complete packets only for updated items.
+- Reviewed C# `HandleChargeAllQuestionResponseAsync`: accepted responses consume the response requester, stage payment and current item charge plans, call `SaveItemChargeAllMutationAsync`, and only after successful persistence apply AP/Kinah, inventory charge, stats, and completion packets.
+- Added `EmptyPlayerEnterWorldRepository.SaveItemChargeAllMutationResult` so tests can simulate charge-all persistence failure.
+- Added `HandleQuestionResponseAsync_ChargeAllApPaymentSaveFailureStopsBeforeInMemoryMutationAndPackets`, proving a ready AP charge-all accept consumes the question response and reaches the repository with staged rank/items, but failed persistence does not mutate player AP/item charge or send packets.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~ItemChargeServiceTests|FullyQualifiedName~HandleQuestionResponseAsync_ChargeAllApPaymentSendsAbyssPointsPlannerPackets|FullyQualifiedName~HandleQuestionResponseAsync_ChargeAllApPaymentHonorsConfiguredAbyssPointCapClamp|FullyQualifiedName~HandleQuestionResponseAsync_ChargeAllApPaymentSaveFailureStopsBeforeInMemoryMutationAndPackets|FullyQualifiedName~HandleQuestionResponseAsync_ChargeAllApPaymentRejectsInsufficientAbyssPointsWithoutSideEffects|FullyQualifiedName~HandleQuestionResponseAsync_ChargeAllKinahPaymentRejectsInsufficientKinahWithoutSideEffects|FullyQualifiedName~GameServerConnectionChargeAllQuestionResponseTests"`.
+  - Result: passed 22 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1621
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Charge-all persistence-failure ordering | `ItemChargeService.startChargingEquippedItems`, `chargeItems`, `chargeItem`; `ResponseRequester.respond` | `PlayerEnterWorldRepository.cs`, charge-all response tests | Test/Fake | Sequential | Low | Selected; small test seam matching UOW-1620 and no SQL rewrite. |
+| B | Charge-all multi-item packet/order audit | `chargeItems` over multiple charge ways/items | existing charge-all tests | Test/Analysis | Later | Medium | Useful, but broader than the missing save-failure branch. |
+| C | Nearby controller-position/map-region metadata adapter | `PlayerController.updateNearbyQuests`, map-region lookup | nearby adapter/report files | Service/Test | Later | Medium | Safe only if kept metadata-only. |
+| D | Live nearby refresh dispatch | `ThreadPoolManager.schedule`, `PacketSendUtility`, `SM_NEARBY_QUESTS` | world/connection services | Live Dispatch | No | High | Deferred; production timers and sends remain risky. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add charge-all save-failure ordering regression | Test/Fake/Docs | `PlayerEnterWorldRepository.cs`, `GameServerConnectionInventoryExpansionUseItemTests.cs`, progress/handoff docs | repository SQL implementation, live packet dispatch rewrites, Java source writes, nearby files | Existing charge-all response path and UOW-1620 fake-result pattern | One focused regression proving charge-all persistence failure is fail-closed after response consumption and before state mutation/packets. |
+
+No sub-agent was spawned for UOW-1621 because the implementation touches the same fake repository and shared connection test file.
+
+#### Migration Parity Table - Session 1621
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemChargeService.startChargingEquippedItems` | `Aion.GameServer.Network.Aion.GameServerConnection.StartChargingEquippedItemsAsync`; `HandleChargeAllQuestionResponseAsync` | Service / Request Flow | Partial | Regression Tested | Partial Parity | Charge-all accept consumes the response and stages quoted payment before charge mutation. New regression covers failed C# persistence before live state/packet effects. Java mutates live objects after payment and has no equivalent staged repository boundary. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.chargeItems` | `HandleChargeAllQuestionResponseAsync` plus `ItemChargeService.CreateChargePlan` | Service / Charge-All Mutation | Partial | Unit Tested + Regression Tested | Partial Parity | C# recalculates current chargeable items and sends charge/success/stat/all-complete only after a successful repository save. Java live-object identity, exact multi-item iteration ordering, and runtime packet comparison remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.respond` | `QuestionResponseRegistry.Respond`; `PendingChargeAllRequest` | Request Registry / Dispatch | Partial | Regression Tested | Needs Verification | New save-failure regression confirms accepted charge-all response is consumed even when persistence fails. Java anonymous handler invocation and reflection/polymorphism differences remain unverified. |
+| `com.aionemu.gameserver.dao.InventoryDAO` / `AbyssRankDAO` persistence side effects | `IPlayerEnterWorldRepository.SaveItemChargeAllMutationAsync`; `EmptyPlayerEnterWorldRepository.SaveItemChargeAllMutationResult` | Repository Boundary / Test Fake | Partial | Regression Tested fake boundary | Needs Verification | Fake can now simulate failed charge-all persistence. Production SQL transaction rollback/autocommit timing and Java dirty-state persistence are not integration-compared. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService.addAp` | `AbyssPointsService.CreateAddApPlan` via charge-all AP payment plan | Service Dependency | Partial | Regression Tested through charge-all AP accept | Needs Verification | Staged AP rank payload is captured but not applied when persistence fails. Java AP side effects, rank threshold fanout, and packet ordering are not runtime-compared. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleQuestionResponseAsync_ChargeAllApPaymentSaveFailureStopsBeforeInMemoryMutationAndPackets` | Regression | Java `ItemChargeService.startChargingEquippedItems.acceptRequest` -> `processPayment` -> `chargeItems(... requirePayment=false)` plus C# transaction boundary | Accepted AP charge-all response consumes request, calls repository with staged updated rank and charged item, then failed save prevents player AP/item mutation and all packet sends. | Deterministic C# fail-closed regression documenting the transaction-oriented difference from Java live mutation. | Does not execute Java runtime or real SQL rollback; Kinah save-failure branch is inferred from shared repository boundary and remains untested directly. |
+
+Remaining risks:
+- C# charge-all uses a transaction-oriented persistence-first boundary, while Java spends/mutates live state directly after response acceptance.
+- Real SQL transaction rollback/autocommit behavior was not integration-tested for `SaveItemChargeAllMutationAsync`.
+- Kinah charge-all save failure is not directly covered by a new regression; AP branch covers the shared save-failure gate.
+- Java live captured `Item` object identity, deleted-item behavior, multi-item iteration order, AP rank side effects, stat observer fanout, encrypted packet bytes, date/time behavior, and threading remain unverified.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 fake-repository failure knob plus 1 charge-all AP save-failure regression.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: Java runtime charge-all comparison, real SQL rollback validation, dirty-state timing comparison, AP/stat side-effect fanout, encrypted packet/frame comparison, multi-item/order comparison.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Continue ItemCharge with a narrow Kinah charge-all save-failure regression if desired, or pivot to the nearby controller-position/map-region metadata adapter. Keep repository SQL rewrites, production timers, live nearby sends, and Java source changes disabled.
+
+---
+
+## Updated Immediate Next - Session 1621
+
+Next best unit: add a narrow Kinah charge-all `SaveItemChargeAllMutationAsync` failure regression to mirror the new AP save-failure coverage, unless the shared save boundary is considered sufficient; safe alternative is nearby controller-position/map-region metadata. Keep repository SQL rewrites, production timers, live nearby sends, and Java source changes disabled.
