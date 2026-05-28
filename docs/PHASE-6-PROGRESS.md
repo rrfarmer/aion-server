@@ -26,6 +26,7 @@ Last updated: May 23, 2026
 - Stigma removal now mirrors Java `StigmaService.removeLinkedStigmaSkills` hidden-skill deletion notices: linked stigma skills are removed by stack and emit `STR_MSG_STIGMA_DELETE_HIDDEN_SKILL` (`1402895`) through equip/unequip and stigma-charge mutation flows.
 - Non-autolearn stigma login now mirrors Java `StigmaService.onPlayerLogin`: equipped stigma stones are validated for slot permission, class, and same-slot conflicts, invalid stones are persisted as unequipped, and valid equipped stigma stones rebuild normal/linked temporary skills before the first enter-world skill list.
 - Movement packet surface now covers Java movement masks/glide flags, `CM_MOVE` opcode `48`, `CM_MOVE_IN_AIR` opcode `49`, `SM_MOVE` opcode `55`, mutable player position, and PlayerMoveController-style target/vector/glide/vehicle state. A first known-list bridge now broadcasts `SM_MOVE`, baseline player enter `SM_PLAYER_INFO` plus companion `SM_MOTION` action `7`, player logout `SM_DELETE`, postman `SM_NPC_INFO`, and postman `SM_DELETE` to active players in the same world within Java's default 95m visible distance. Persistent cached KnownList membership, full player-info dependent state, anti-hack, protection/fall/glide side effects, and strict flying-state gates remain pending.
+- Java `SM_FORCED_MOVE` now has a C# packet writer and non-live broadcast-and-receive plan boundary for the player-facing forced-move packet branch used by `PulledEffect`, `OpenAerialEffect`, and adjacent movement-control callers. Live skill/effect/world/controller integration for those effects remains pending.
 - Housing auction timing now includes Java `AuctionEndTask.tryProlongAuction` parity for the default Sunday-noon auction end: late bids can prolong individual house auctions by five-minute windows up to thirty minutes, and `SM_HOUSE_BIDS` countdowns use that per-house state.
 - Housing auction and maintenance timing now parse the Java weekly cron strings from `housing.properties`, so auction countdown/prolongation math and rent due-date advancement are no longer limited to the default Sunday-noon and Monday-midnight schedules.
 - `SM_HOUSE_OWNER_INFO` inactive-house grace seconds now mirror Java `House.findGraceEndTime`, using the configured auction-end schedule and the last auction end before the two-week inactive-house cap.
@@ -76818,6 +76819,69 @@ Remaining risks:
 Summary metrics:
 - Total Java artifacts discovered: 5 grouped rows in this unit.
 - Total artifacts ported: 1 non-live simple-root movement planner, 2 DTO records, 1 status enum, and 4 focused regressions.
+
+### Session 1675 (May 28, 2026)
+- Continued after UOW-1674 by porting the missing Java `SM_FORCED_MOVE` packet shape plus a non-live packet-plan helper for the existing `broadcastPacketAndReceive` call sites.
+- Performed Work Discovery across the latest handoff, the Phase 6 ledger, Java `SM_FORCED_MOVE.writeImpl`, and the packet/effect callers in `PulledEffect`, `OpenAerialEffect`, `StaggerEffect`, `StumbleEffect`, `CM_MOVE`, and `AntiHackService`.
+- Selected a packet-parity unit instead of a live effect-planner unit because the packet surface itself was still missing in C# and offered the smallest deterministic slice with direct unit-test evidence.
+- Added `SmForcedMove` with Java opcode `195`, source object id, target object id, literal unknown byte `16`, and x/y/z float payload ordering.
+- Added `ForcedMoveSnapshot`, `ForcedMovePacketPlan`, `ForcedMovePacketPlanStatus`, and `ForcedMovePacketPlanService` to model the Java `PacketSendUtility.broadcastPacketAndReceive(..., new SM_FORCED_MOVE(...))` intent without live dispatch.
+- Added focused packet and planner regressions in `SmForcedMovePacketTests` and `ForcedMovePacketPlanServiceTests`.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmForcedMovePacketTests|FullyQualifiedName~ForcedMovePacketPlanServiceTests"`
+	- Result: 4 tests passed.
+
+#### Parallel Work Discovery - Session 1675
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | `SM_FORCED_MOVE` packet parity | `SM_FORCED_MOVE.writeImpl` | `SmForcedMove.cs`, packet tests | Packet Port | Sequential for packet + tests | Low | Selected because the packet surface was missing and fully deterministic. |
+| B | Forced-move start-effect planner | `PulledEffect.startEffect`, `OpenAerialEffect.startEffect` | new service + tests | Effect Boundary | Sequential after packet exists | Low | Deferred to the next unit so the packet surface could land first with clean evidence. |
+| C | Java runtime/golden forced-move vectors | `SM_FORCED_MOVE` live output | vector artifacts/tests | Golden Verification | Yes, later | Low | Valuable follow-up for stronger parity evidence once packet shape exists. |
+| D | Gated DB integration | existing DB harness | no code files if executable | Parity Verification | No, environment-dependent | Medium | Deferred because this unit was packet-only and did not need DB access. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Forced-move packet, packet-plan helper, focused tests, docs, commit | `SmForcedMove.cs`, `ForcedMovePacketPlanService.cs`, dedicated test files, progress/handoff docs | Java source writes, live effect/world/controller mutation, unrelated gameplay services | Implemented and documented UOW-1675. |
+| Sub-agents | None | None | All files | Not spawned because packet, planner, tests, docs, and commit touched one small shared slice. |
+
+No sub-agent was spawned for UOW-1675 because the selected packet-parity boundary was small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1675
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_FORCED_MOVE` | `Aion.GameServer.Network.Aion.ServerPackets.SmForcedMove` | Server Packet | Complete | Unit Tested | Verified Parity | Unit test covers opcode `195`, source object id, target object id, literal byte `16`, and x/y/z payload ordering from Java `writeImpl`. Java's convenience constructor overload taking a target `Creature` is represented by the snapshot contract rather than a matching C# overload. |
+| `com.aionemu.gameserver.skillengine.effect.PulledEffect.startEffect` packet branch | `Aion.GameServer.Services.ForcedMovePacketPlanService` | Effect Boundary Utility | Partial | Unit Tested | Partial Parity | Planner records only the Java `broadcastPacketAndReceive(..., new SM_FORCED_MOVE(...))` intent. It does not model cancel-skill, glide-stop, stop-move, world-position update, reflection source selection, or abnormal-state mutation. |
+| `com.aionemu.gameserver.skillengine.effect.OpenAerialEffect.startEffect` packet branch | `Aion.GameServer.Services.ForcedMovePacketPlanService` | Effect Boundary Utility | Partial | Unit Tested | Partial Parity | Planner records packet intent only. Java `removeParalyzeEffects`, cancel-skill ordering, stop-glide/stop-move, world update, and abnormal-state mutation remain outside this unit. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SmForcedMove_WritesJavaPayloadShape` | Unit Added | Java `SM_FORCED_MOVE.writeImpl` | Serialized payload writes source id, target id, byte `16`, and x/y/z floats in Java order. | Direct packet payload comparison against reviewed Java source. | Does not compare encrypted frame bytes against live Java output. |
+| `CreateBroadcastReceivePlan_CreatesSmForcedMoveAndBroadcastReceiveIntent` | Unit Added | Java `PulledEffect.startEffect` / `OpenAerialEffect.startEffect` packet branch | Non-live planner emits `SmForcedMove` plus `broadcastPacketAndReceive` intent metadata. | Source-derived planner regression. | No live recipient selection or dispatch execution. |
+| `CreateBroadcastReceivePlan_BlocksInvalidSourceBeforePacketCreation` | Unit Added | C# safety boundary | Invalid source object id blocks packet creation. | C# boundary regression. | Java requires a live creature reference rather than this snapshot guard. |
+| `CreateBroadcastReceivePlan_BlocksInvalidTargetBeforePacketCreation` | Unit Added | C# safety boundary | Invalid target object id blocks packet creation. | C# boundary regression. | Java requires a live target creature/object rather than this snapshot guard. |
+
+Remaining risks:
+- Live `PulledEffect`/`OpenAerialEffect`/`StaggerEffect`/`StumbleEffect` integration is still absent.
+- `PacketSendUtility.broadcastPacketAndReceive` semantics are represented as intent only; live recipient ordering, source inclusion, visibility, threading, and encrypted frame behavior remain unverified.
+- Reflection source selection for `PulledEffect` is not modeled yet.
+- No Java runtime capture/golden vector currently proves `SM_FORCED_MOVE` outside the reviewed source and unit test payload assertions.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: 1 server packet, 1 packet-plan service, 1 DTO record, 1 status enum, and 4 focused regressions.
+- Total artifacts with verified parity: 1 grouped row (`SM_FORCED_MOVE` packet shape).
+- Total artifacts needing verification: 0 grouped rows explicitly marked Needs Verification in this unit; 2 grouped rows remain Partial Parity due to missing live workflow integration.
+- Total blocked artifacts: live forced-move effect integration, live packet dispatch verification, Java runtime packet capture/golden comparison.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add a non-live `PulledEffect`/`OpenAerialEffect` start-effect planner that reuses `ForcedMovePacketPlanService`, or capture Java runtime/golden vectors for `SM_FORCED_MOVE` to strengthen packet evidence before effect-level composition.
 - Total artifacts with verified parity: 0 in this unit.
 - Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with documented live/runtime gaps.
 - Total blocked artifacts: live simple-root effect integration, live world/movement mutation, live packet broadcast semantics, Java runtime packet capture/encryption comparison, test execution in this runtime, DB-backed charge-all integration run.
