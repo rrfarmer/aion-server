@@ -72245,3 +72245,69 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1613
 
 Continue nearby-refresh prerequisites by using `StaticData.NearbyQuestTemplates` in one non-live composition boundary, preferably a focused XP level-change context/static-data adapter or a guarded nearby-refresh input plan. Keep live `SM_NEARBY_QUESTS` dispatch, production `PlayerController.updateNearbyQuests`, quest-start mutation, quest-finish reward execution, and repository writes disabled. Safe parallel support remains a read-only ItemCharge `Location == CubeStorageId` lifecycle audit or a read-only Java serializer/tooling feasibility check.
+### Session 1614 (May 28, 2026)
+- Continued after UOW-1613 by composing the newly exposed `StaticData.NearbyQuestTemplates` into a non-live XP level-change context boundary.
+- Performed Parallel Work Discovery across XP nearby-refresh composition, guarded nearby-refresh input planning, ItemCharge storage-location audit, and Java serializer implementation. Selected XP context composition because it is a narrow service/test pair and follows Java `PlayerController.onLevelChange -> updateNearbyQuests` ordering already staged in C#.
+- Added a `QuestXpLevelChangeContextFactoryService.CreateContext(player, input, staticData)` overload that falls back to `staticData.NearbyQuestTemplates` when explicit nearby templates are not supplied.
+- Preserved existing explicit `NearbyQuestTemplates` input behavior and did not enable live packet sends.
+- Added a merged-cache fixture regression with one real quest template and one event quest reference: the context produces a marker only for the real template and rejects the event reference as `MissingTemplate`.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~QuestXpLevelChangeContextFactoryServiceTests|FullyQualifiedName~QuestFinishRewardProjectionStaticDataBridgeTests|FullyQualifiedName~NearbyQuestRefreshPlanServiceTests|FullyQualifiedName~NearbyQuestTemplateXmlExtractorTests|FullyQualifiedName~QuestXpExecutionPlanServiceTests"`.
+  - Result: passed 21 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1614
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | XP level-change nearby static-data composition | `PlayerController.onLevelChange`, `updateNearbyQuests`, `QuestsData` | `QuestXpLevelChangeContextFactoryService.cs`, context factory tests | Service/Test | Sequential | Low | Selected; one non-live composition boundary using UOW-1613 static data. |
+| B | Guarded nearby-refresh input plan | `PlayerController.updateNearbyQuests` | possible new small service/test | Service/Test | Later | Medium | Useful follow-up but would introduce a new surface. |
+| C | ItemCharge storage-location audit | `CM_CHARGE_ITEM`, Java `Inventory`/`Equipment` lifecycle | read-only Java/C# charge files | Java Analysis | Yes | Low | Safe support task after UOW-1611. |
+| D | Java protection serializer implementation | future protection serializer/observer files | Java source/generated artifacts | Live Artifact Generation | No | High | Still blocked by Java 25/JDK/Maven and runtime artifact strategy. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Compose StaticData nearby templates into XP level-change context | Service/Test/Docs | `QuestXpLevelChangeContextFactoryService.cs`, `QuestXpLevelChangeContextFactoryServiceTests.cs`, progress/handoff docs | live `GameServerConnection`, production controller dispatch, repository files, ItemCharge files, Java source writes | UOW-1613 `StaticData.NearbyQuestTemplates` | One tested non-live bridge from StaticData to nearby-refresh plan metadata. |
+
+No sub-agent was spawned for UOW-1614 because the service/test pair is small and docs remain orchestrator-owned.
+
+#### Migration Parity Table - Session 1614
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController.onLevelChange` | `Aion.GameServer.Services.QuestXpLevelChangeContextFactoryService.CreateContext` | Controller / Level Change Composition | Partial | Unit Tested | Partial Parity | Context factory can now source nearby templates from `StaticData` for the staged `updateNearbyQuests` sub-plan. Live player stat mutation, controller invocation, and production event ordering remain disabled. |
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestRefreshPlanService` consumed by `QuestXpLevelChangeContextFactoryService` | Controller / Nearby Refresh Plan | Partial | Unit Tested | Needs Verification | The new bridge creates non-live refresh metadata from real static quest templates. It does not send `SM_NEARBY_QUESTS`, resolve map regions from production world state, or compare Java runtime packets. |
+| `com.aionemu.gameserver.dataholders.QuestsData` | `Aion.GameServer.Dataholders.StaticData.NearbyQuestTemplates` | Static Data Repository | Partial | Unit Tested through context bridge | Partial Parity | StaticData-backed nearby templates are consumed when explicit templates are absent. Full Java `QuestTemplate` graph/JAXB/script behavior remains incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `Aion.GameServer.Network.Aion.ServerPackets.SmNearbyQuests` | Packet Dependency | Partial | Existing Regression Tested | Needs Verification | Context marks packet intent only. No live send, byte comparison, encryption/frame validation, or socket ordering was executed. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateContext_WithStaticDataUsesNearbyQuestTemplatesWithoutLiveDispatch` | Unit / Composition | Java `PlayerController.onLevelChange -> updateNearbyQuests` and `QuestsData` holder scope | StaticData fallback supplies nearby templates to XP level-change context; event quest references are rejected as missing templates; context remains non-live metadata. | Deterministic C# composition regression grounded in Java source ordering and UOW-1613 static-data scope. | No live controller dispatch, no map-region lookup, no Java runtime packet trace, no socket bytes. |
+
+Remaining risks:
+- XP level-change execution remains non-live metadata; production `PlayerController.onLevelChange` is not wired.
+- Live nearby quest sends, real map-region/world-instance lookup, and socket packet ordering remain disabled.
+- Full Java quest template object parity, JAXB lifecycle, script hooks, and unsupported fields remain incomplete.
+- Threading, reflection/dynamic handler behavior, date/time handling, packet bytes, and serialization remain unverified.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 non-live StaticData-to-XP-context composition bridge plus 1 focused unit regression.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live nearby refresh dispatch, production level-change hook, map-region/world-instance lookup, full Java quest-template graph, packet-byte comparison, runtime Java comparison.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Continue nearby-refresh prerequisites by adding a guarded non-live nearby-refresh input adapter for controller/level-change callers, or switch to the read-only ItemCharge storage-location lifecycle audit. Do not enable production nearby sends yet.
+
+---
+
+## Updated Immediate Next - Session 1614
+
+Next best unit: add a small guarded nearby-refresh input adapter that accepts `Player`, optional `WorldMapInstanceRuntimeState`, and `StaticData` and returns `NearbyQuestRefreshPlan` metadata using `StaticData.NearbyQuestTemplates`; keep it non-live and test event-reference rejection/empty packet intent. Safe alternative: read-only ItemCharge `Location == CubeStorageId` lifecycle audit. Avoid live `SM_NEARBY_QUESTS` sends, `GameServerConnection` production quest dispatch, and repository writes.
