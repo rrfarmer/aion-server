@@ -73966,3 +73966,75 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1637
 
 Next best unit: compose the non-live layout, position resolver, and zone-filter helper into a Java-style region creation snapshot for one region id, still without live `MapRegion` objects or object membership. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1638 (May 28, 2026)
+- Continued after UOW-1637 by composing the non-live region layout and zone-filter prerequisites into a Java-style region creation snapshot.
+- Performed Parallel Work Discovery across region creation snapshot composition, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected snapshot composition because all prerequisite DTO helpers now exist and the work remains isolated.
+- Added `WorldMapRegionCreationSnapshotService`.
+- Added `WorldMapRegionCreationSnapshot`, carrying map id, region id, dimension, existence flag, bounds, neighbour ids, filtered zone ids, dummy-zone misses, and Java-source breadcrumb.
+- Added tests for 2D snapshot composition, 3D snapshot composition with z bounds, and missing-region snapshots for ids not precreated by the Java layout loops.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 38 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1638
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Region creation snapshot composition | `WorldMap2DInstance.createMapRegion`, `WorldMap3DInstance.createMapRegion`, `MapRegion` constructor | new snapshot service/tests | Utility Port / Test Creation | Sequential for writes | Low | Selected; composes existing helper outputs without live storage. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the region-creation blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live region creation snapshot composer and tests | Utility Port / Tests / Docs | `WorldMapRegionCreationSnapshotService.cs`, `WorldMapRegionCreationSnapshotServiceTests.cs`, progress/handoff docs | Java source writes, live `MapRegion` storage, packet dispatch | UOW-1635 layout, UOW-1636 resolver, UOW-1637 zone filter | Tested composed Java-style region prerequisites. |
+
+No sub-agent was spawned for UOW-1638 because implementation and tests touched one small helper surface and docs remained orchestrator-owned.
+
+#### Migration Parity Table - Session 1638
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMap2DInstance.createMapRegion` | `WorldMapRegionCreationSnapshotService.CreateSnapshot` on 2D layouts | Region Creation Snapshot | Partial | Unit Tested | Partial Parity | C# composes decoded bounds, neighbour ids, and filtered zone ids for a 2D region. It does not instantiate `MapRegion`, store it in `regions`, attach `ZoneInstance[]`, or link object neighbours. |
+| `com.aionemu.gameserver.world.WorldMap3DInstance.createMapRegion` | `WorldMapRegionCreationSnapshotService.CreateSnapshot` on 3D layouts | Region Creation Snapshot | Partial | Unit Tested | Partial Parity | C# composes z-aware bounds and filtered zone ids for a 3D region. Java `parallelStream`, synchronized region map writes, and live `MapRegion` construction remain unported. |
+| `com.aionemu.gameserver.world.MapRegion` | `WorldMapRegionCreationSnapshot` | Region DTO / Runtime Boundary | Partial | Unit Tested | Needs Verification | Snapshot captures constructor prerequisites but not live fields or behavior: parent instance reference, `MapRegion[] neighboursIncludingSelf`, object maps, activation/deactivation, synchronized player count, zone revalidation, and handler callbacks remain unported. |
+| `com.aionemu.gameserver.world.WorldMapInstance.filterZones` | `WorldMapRegionZoneFilterService` consumed by `WorldMapRegionCreationSnapshotService` | Region Zone Filter Dependency | Partial | Unit Tested | Partial Parity | Filtered zone ids flow into snapshot composition. Live `ZoneInstance[]`, logging, and handler/flag behavior remain unported. |
+| `com.aionemu.gameserver.world.WorldMapInstance` | `WorldMapRegionCreationSnapshotService` as non-live prerequisite | Abstract Runtime Instance | Partial | Unit Tested | Needs Verification | Snapshot combines layout and filter prerequisites only. Instance handler lifecycle, live `regions` map, add/remove object behavior, `forEachObject`, and registered/player counts remain outside this unit. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateSnapshot_For2DRegion_ComposesBoundsNeighboursAndFilteredZones` | Unit | Java `WorldMap2DInstance.createMapRegion`, `initMapRegions`, `filterZones` | 2D snapshot carries decoded bounds, neighbours, and filtered zone ids. | Deterministic C# regression grounded in Java source review. | No live `MapRegion` object or zone array. |
+| `CreateSnapshot_For3DRegion_ComposesZBoundsAndFilteredZones` | Unit | Java `WorldMap3DInstance.createMapRegion`, `filterZones` | 3D snapshot carries z-aware bounds and filtered sphere zone id. | Deterministic C# regression grounded in Java source review. | No live synchronized region map write. |
+| `CreateSnapshot_ForRegionIdNotPrecreated_ReturnsMissingSnapshot` | Unit | Java `regions.get(regionId)` null possibility | Missing precreated ids return a missing snapshot with no neighbours or zones. | Deterministic C# regression grounded in prior Java loop modeling. | No Java runtime comparison. |
+
+Remaining risks:
+- Region creation snapshot remains non-live and does not instantiate Java-equivalent `MapRegion`.
+- Parent instance references, live neighbour object arrays, object membership, activation/deactivation, and zone revalidation remain unported.
+- Zone filtering still uses DTO candidates rather than loaded Java-equivalent `ZoneInstance[]`.
+- Java `parallelStream` creation and synchronized region-map writes remain modeled only as deterministic snapshots.
+- Region-size config override is not wired into runtime config.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 non-live snapshot composer plus 3 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live C# MapRegion storage, live `ZoneInstance[]`, parent instance references, object membership, activation/deactivation, zone revalidation, config-bound region size, Java runtime comparison, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Add a non-live `MapRegion` lifecycle intent model for activation/deactivation and player-count transitions using the existing snapshot data, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1638
+
+Next best unit: add a non-live `MapRegion` lifecycle intent model for Java activation/deactivation and player-count transitions, grounded in `MapRegion.add`, `remove`, `tryActivate`, and `tryDeactivate`, without live object storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
