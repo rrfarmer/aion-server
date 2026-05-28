@@ -72667,3 +72667,72 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1619
 
 Next best unit: continue ItemCharge with a focused persistence/packet ordering audit for selected charge success and failed payment branches, using Java `ItemChargeService.chargeItems`, `chargeItem`, and C# `HandleChargeItemAsync`/repository calls as the source comparison. Safe alternative: add a non-live nearby controller-position/map-region metadata adapter. Keep production timers, live nearby sends, repository rewrites, and Java source changes disabled.
+
+### Session 1620 (May 28, 2026)
+- Continued after UOW-1619 by auditing selected ItemCharge persistence and packet ordering.
+- Performed Parallel Work Discovery across selected ItemCharge ordering, charge-all ordering, nearby controller-position metadata, and live nearby dispatch. Selected selected-charge save-failure coverage because the Java/C# comparison found a C# transaction-boundary branch without a focused regression.
+- Reviewed Java `ItemChargeService.chargeItems` and `chargeItem`: payment is processed before charge mutation, inventory charge update packet is sent only after `ChargeInfo.updateChargePoints`, success/stat packets follow successful charge, and all-complete is sent only if at least one item updated.
+- Reviewed C# `HandleChargeItemAsync`: payment and charge update are staged, `SaveItemChargeMutationAsync` is attempted before mutating in-memory state or sending packets, then payment packets, charge update, success, stats, and all-complete packets are sent after successful persistence.
+- Added `EmptyPlayerEnterWorldRepository.SaveItemChargeMutationResult` so tests can force selected-charge persistence failure.
+- Added `HandleChargeItemAsync_SaveFailureStopsBeforeInMemoryMutationAndPackets` proving a ready selected AP charge that fails persistence does not mutate player AP/charge or send packets, while still exposing the staged AP rank payload to the repository fake.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~ItemChargeServiceTests|FullyQualifiedName~HandleChargeItemAsync_ApPaymentSendsAbyssPointsPlannerPackets|FullyQualifiedName~HandleChargeItemAsync_SelectedEquippedItemCanBeChargedLikeJavaInventoryLookup|FullyQualifiedName~HandleChargeItemAsync_ApPaymentRejectsInsufficientAbyssPointsWithoutSideEffects|FullyQualifiedName~HandleChargeItemAsync_SaveFailureStopsBeforeInMemoryMutationAndPackets|FullyQualifiedName~HandleChargeItemAsync_KinahPaymentRejectsInsufficientKinahWithoutSideEffects"`.
+  - Result: passed 20 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1620
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Selected ItemCharge persistence/packet ordering | `ItemChargeService.chargeItems`, `chargeItem`, `processPayment`; `CM_CHARGE_ITEM` | `PlayerEnterWorldRepository.cs`, connection charge tests | Test Creation / Integration Fix | Sequential | Low | Selected; small fake-repository knob and focused fail-closed regression. |
+| B | Charge-all persistence/packet ordering audit | `startChargingEquippedItems`, `chargeItems` | charge-all tests/repository fake | Later | Medium | Related but different pending-request path; keep separate. |
+| C | Nearby controller-position/map-region metadata adapter | `PlayerController.updateNearbyQuests`, map-region lookup | nearby adapter/report files | Service/Test | Later | Medium | Safe only if kept metadata-only. |
+| D | Live nearby refresh dispatch | `ThreadPoolManager.schedule`, `PacketSendUtility`, `SM_NEARBY_QUESTS` | world/connection services | Live Dispatch | No | High | Deferred; production timers and sends remain risky. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add selected ItemCharge save-failure ordering regression | Test/Fake/Docs | `PlayerEnterWorldRepository.cs`, `GameServerConnectionInventoryExpansionUseItemTests.cs`, progress/handoff docs | repository SQL implementation, live packet dispatch rewrites, charge-all path, Java source writes | Existing selected charge handler and fake repository | One focused regression proving C# persistence failure is fail-closed before state mutation/packets. |
+
+No sub-agent was spawned for UOW-1620 because the test needs a small shared fake-repository change and one connection test file.
+
+#### Migration Parity Table - Session 1620
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemChargeService.chargeItems` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleChargeItemAsync` | Service / Handler Composition | Partial | Regression Tested | Partial Parity | C# success and failed-payment branches are covered, and new persistence-failure regression proves no packets/state mutation after failed save. C# intentionally persists before mutating live state, while Java mutates live objects directly. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.chargeItem` | `Aion.GameServer.Services.ItemChargeService.CreateChargePlan`; handler application path | Service / Charge Mutation | Partial | Unit Tested + Regression Tested | Partial Parity | Charge math and staged mutation are tested. Java `ChargeInfo.updateChargePoints` observer behavior and exact packet ordering remain partially modeled. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.processAPPayment` | `ItemChargeAbyssPointPaymentPlan`; `SaveItemChargeMutationAsync` rank payload | Service / AP Payment Dependency | Partial | Regression Tested | Needs Verification | New test verifies staged AP rank payload is not applied to player when persistence fails. Java runtime AP side effects and downstream observer ordering remain unverified. |
+| `com.aionemu.gameserver.dao.InventoryDAO` / dirty persistence side effects | `IPlayerEnterWorldRepository.SaveItemChargeMutationAsync`; `EmptyPlayerEnterWorldRepository.SaveItemChargeMutationResult` | Repository Boundary / Test Fake | Partial | Regression Tested fake boundary | Needs Verification | Fake can now simulate failed persistence. Real SQL transaction behavior, rollback, and Java dirty-state/autocommit timing remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleChargeItemAsync_SaveFailureStopsBeforeInMemoryMutationAndPackets` | Regression | Java charge path ordering plus C# transaction boundary | Ready selected AP charge calls repository with staged rank payload; failed save prevents player AP/charge mutation and emits no packets. | Deterministic C# fail-closed regression documenting intentional transaction-oriented difference from Java live mutation. | Does not execute Java runtime or real SQL rollback; packet order after successful save remains covered by existing tests only. |
+
+Remaining risks:
+- C# selected charge intentionally stages persistence before in-memory state mutation; Java mutates live objects directly and relies on dirty-state persistence. This remains an Intentional Difference candidate but is documented here as transaction-oriented partial parity.
+- Real SQL transaction failure/rollback behavior was not integration-tested.
+- Java packet ordering after AP side effects may include additional configured side effects not fully represented by C# tests.
+- Charge-all path uses a separate pending-request/repository flow and should be audited separately.
+- Threading, object identity, encrypted packet bytes, date/time handling, and Java runtime comparison remain unverified.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 fake-repository failure knob plus 1 selected ItemCharge save-failure regression.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: Java runtime selected-charge comparison, real SQL rollback validation, dirty-state timing comparison, AP side-effect fanout, encrypted packet/frame comparison, charge-all ordering audit.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Continue ItemCharge with charge-all persistence/packet ordering audit and a focused save-failure regression for `SaveItemChargeAllMutationAsync`, or switch back to nearby controller-position/map-region metadata. Keep repository SQL rewrites and live dispatch disabled.
+
+---
+
+## Updated Immediate Next - Session 1620
+
+Next best unit: audit the ItemCharge charge-all pending-request path against Java `startChargingEquippedItems` and `chargeItems`, then add a focused `SaveItemChargeAllMutationAsync` failure regression if the C# path lacks fail-closed coverage. Safe alternative: nearby controller-position/map-region metadata adapter. Keep repository SQL rewrites, production timers, live nearby sends, and Java source changes disabled.
