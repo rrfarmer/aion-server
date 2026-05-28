@@ -74500,3 +74500,87 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1644
 
 Next best unit: add a non-live zone capability/options plan for Java `ZoneInstance` flag resolution (`canFly`, `canGlide`, `canPutKisk`, `canRecall`, `canReturnToBattle`, and adjacent option checks) using world-map option metadata before live `ZoneInstance` storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1645 (May 28, 2026)
+- Continued after UOW-1644 by modeling Java `ZoneInstance` capability/option resolution as a non-live plan.
+- Performed Parallel Work Discovery across zone capability planning, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected zone capability planning because it is the next `ZoneInstance` behavior cluster after scan/death flows.
+- Added `WorldMapRegionZoneCapabilityService`.
+- Added `WorldMapRegionZoneCapabilityContext` and `WorldMapRegionZoneCapabilityPlan`.
+- Modeled Java flag resolution for `canFly`, `canGlide`, `canPutKisk`, `canRecall`, `canRide`, and `canFlyRide`: use world-map options when zone flags are `-1`/`0` or the world map option is overridden; otherwise use the zone flag bit.
+- Modeled `canReturnToBattle` as a world-map option result.
+- Modeled PVP and duel special branches from Java `ZoneInstance`.
+- Added tests for `-1`/`0` flags, zone flags versus overrides, return-to-battle fallback, PVP zone special handling, and duel-zone special handling.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionZoneCapabilityServiceTests|FullyQualifiedName~WorldMapRegionZoneScanPlanServiceTests|FullyQualifiedName~WorldMapRegionZoneSortServiceTests|FullyQualifiedName~WorldMapRegionRuntimeSnapshotServiceTests|FullyQualifiedName~WorldMapRegionLifecyclePlanServiceTests|FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 69 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1645
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Zone capability/options plan | `ZoneInstance.canFly`, `canGlide`, `canPutKisk`, `canRecall`, `canReturnToBattle`, `canRide`, `canFlyRide`, `isPvpAllowed`, duel checks | new capability service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; self-contained helper over existing world-map flag DTOs. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the zone-options blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Zone capability/options helper, tests, docs, commit | `WorldMapRegionZoneCapabilityService.cs`, `WorldMapRegionZoneCapabilityServiceTests.cs`, progress/handoff docs | Java source writes, unrelated services/tests | Implemented and documented UOW-1645. |
+| Sub-agents | None | None | All files | Not spawned because implementation and docs were small and Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1645 because the selected helper and tests were small and progress/handoff docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1645
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.zone.ZoneInstance.canFly` | `WorldMapRegionZoneCapabilityService.CreatePlan` / `CanFly` | Zone Capability Utility | Partial | Unit Tested | Partial Parity | C# models Java flag/world-option fallback for FLY. It does not read live `World.getInstance()` or live `ZoneTemplate` storage. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.canGlide` | `WorldMapRegionZoneCapabilityService.CreatePlan` / `CanGlide` | Zone Capability Utility | Partial | Unit Tested | Partial Parity | C# models Java GLIDE fallback/flag behavior using `WorldMapSummary` and current world flags. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.canPutKisk` | `WorldMapRegionZoneCapabilityService.CreatePlan` / `CanPutKisk` | Zone Capability Utility | Partial | Unit Tested | Partial Parity | C# maps Java BIND flag behavior. Live world-map mutation and template reads remain unverified. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.canRecall` | `WorldMapRegionZoneCapabilityService.CreatePlan` / `CanRecall` | Zone Capability Utility | Partial | Unit Tested | Partial Parity | C# maps Java RECALL fallback/flag behavior. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.canReturnToBattle` | `WorldMapRegionZoneCapabilityService.CreatePlan` / `CanReturnToBattle` | Zone Capability Utility | Partial | Unit Tested | Partial Parity | Java always delegates to world map. C# delegates to `WorldMapSummary.CanReturnToBattle` over current flags. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.canRide` | `WorldMapRegionZoneCapabilityService.CreatePlan` / `CanRide` | Zone Capability Utility | Partial | Unit Tested | Partial Parity | C# maps Java RIDE fallback/flag behavior. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.canFlyRide` | `WorldMapRegionZoneCapabilityService.CreatePlan` / `CanFlyRide` | Zone Capability Utility | Partial | Unit Tested | Partial Parity | C# maps Java FLY_RIDE fallback/flag behavior. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.isPvpAllowed` | `WorldMapRegionZoneCapabilityService.CreatePlan` / `IsPvpAllowed` | Zone Capability Utility | Partial | Unit Tested | Partial Parity | C# models Java `ZoneClassName.PVP` special branch: PVP zones use the zone flag, non-PVP zones use world-map state. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.isSameRaceDuelsAllowed` | `WorldMapRegionZoneCapabilityService.CreatePlan` / `IsSameRaceDuelAllowed` | Zone Capability Utility | Partial | Unit Tested | Partial Parity | C# models Java DUEL branch, zero flags fallback, and world override fallback. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.isOtherRaceDuelsAllowed` | `WorldMapRegionZoneCapabilityService.CreatePlan` / `IsOtherRaceDuelAllowed` | Zone Capability Utility | Partial | Unit Tested | Partial Parity | C# models Java DUEL branch, zero flags fallback, and world override fallback. |
+| `com.aionemu.gameserver.world.zone.ZoneAttributes` | `WorldZoneAttributes` | Enum / Flags | Partial | Unit Tested | Needs Verification | Existing C# flag values match Java bit positions used by this unit. XML enum serialization names and full static-data binding remain unverified. |
+| `com.aionemu.gameserver.world.WorldMap` | `WorldMapSummary` | World Option Boundary DTO | Partial | Unit Tested | Needs Verification | C# uses immutable current flags and summary metadata instead of Java mutable world options and `World.getInstance()` lookup. Threading/live mutation parity remains unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_UsesWorldMapOptionsWhenZoneFlagsAreMinusOneOrZero` | Unit Added | Java `ZoneInstance` flag fallback branches | `-1` and `0` zone flags delegate to world-map option state. | Deterministic C# regression grounded in Java source review. | No live world singleton. |
+| `CreatePlan_UsesZoneFlagsUnlessWorldMapOptionWasOverridden` | Unit Added | Java `hasOverridenOption` branches | Nonzero zone flags decide unless world map option state is overridden. | Deterministic C# regression grounded in Java source review. | No live mutable world options. |
+| `CreatePlan_ReturnToBattleAlwaysUsesWorldMapNoReturnBattleFlag` | Unit Added | Java `ZoneInstance.canReturnToBattle` | Return-to-battle ignores zone flags and delegates to world map. | Deterministic C# regression grounded in Java source review. | No Java runtime comparison. |
+| `CreatePlan_PvpZoneUsesZonePvpFlagAndNonPvpUsesWorldMapFlag` | Unit Added | Java `ZoneInstance.isPvpAllowed` | PVP zones use zone PVP flag; non-PVP zones use world-map PVP state. | Deterministic C# regression grounded in Java source review. | No live PVP zone handler. |
+| `CreatePlan_DuelZonesUseFlagsUnlessZeroOrWorldMapOverride` | Unit Added | Java duel checks | DUEL zones use flags unless zero or override; non-DUEL zones use world state. | Deterministic C# regression grounded in Java source review. | No live duel handler. |
+
+Remaining risks:
+- Capability planning is non-live and uses supplied world/zone metadata.
+- Live `World.getInstance()`, mutable world options, live `ZoneTemplate.flags`, XML enum serialization, and thread visibility remain unported or unverified.
+- C# `WorldMapSummary` uses immutable current flags; Java mutates world options in a live world map.
+- Live `ZoneInstance` storage, creature membership, zone handlers, scheduler behavior, AI notifications, and dynamic handler side effects remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 12 grouped rows in this unit.
+- Total artifacts ported: 1 non-live capability helper plus 5 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live `World.getInstance()` option reads, mutable world option threading parity, live `ZoneTemplate.flags`, XML enum serialization, live C# MapRegion/ZoneInstance storage, dynamic zone handlers, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add a non-live zone identity/accessor plan for Java `ZoneInstance.getTownId`, `isDominionZone`, `forEach`, and handler-registration metadata, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1645
+
+Next best unit: add a non-live zone identity/accessor plan for Java `ZoneInstance.getTownId`, `isDominionZone`, `forEach`, and handler-registration metadata, preserving live-handler gaps explicitly. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
