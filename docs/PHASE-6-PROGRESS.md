@@ -75608,3 +75608,74 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1658
 
 Next best unit: add the gated charge-all DB rollback integration regression for charge-all partial-save failure, or add a small `SmWeather` packet-factory boundary in the weather broadcast/load/change plans before live weather broadcast integration. Keep Java source writes, repository rewrites, live generated-zone writes, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1659 (May 28, 2026)
+- Continued after UOW-1658 by adding the gated charge-all DB rollback integration regression identified in prior handoffs.
+- Performed Parallel Work Discovery across charge-all DB rollback testing, `SmWeather` packet-factory boundary work, nearby packet golden audit, and zone-handler source audit. Selected charge-all DB rollback because it was an independent persistence risk carried forward since UOW-1654.
+- Added a gated integration test to `PlayerEnterWorldRepositoryDatabaseIntegrationTests`.
+- The new test seeds one inventory item, attempts a charge-all save where the first item update succeeds and a later charged item is missing, then asserts the first item's `charge` remains unchanged after the repository returns `false`.
+- Extended the local inventory seeding helper with an optional `charge` column value.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests"`.
+  - Result: passed 7 tests.
+  - Important: `AION_GAMESERVER_DB_INTEGRATION` was not set, so these gated tests returned before opening MySQL. This run validates compile/gating only; DB-backed rollback execution remains Manual Only until the env var and schema DB are available.
+
+#### Parallel Work Discovery - Session 1659
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Charge-all DB rollback integration | `ItemChargeService.chargeItems`, `ChargeInfo.updateChargePoints`, `InventoryDAO.UPDATE_QUERY` | `PlayerEnterWorldRepositoryDatabaseIntegrationTests.cs` | Gated Integration Test | Sequential for test writes | Medium | Selected; known persistence rollback risk from UOW-1654. |
+| B | `SmWeather` packet-factory boundary | `SM_WEATHER`, `WeatherService.loadWeather/checkWeathersTime/changeWeather` | weather broadcast helper/tests | Packet Boundary Integration | Yes, later | Low | Independent follow-up after UOW-1658. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the current persistence blocker. |
+| D | Broader zone-handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Charge-all gated DB rollback test, docs, commit | `PlayerEnterWorldRepositoryDatabaseIntegrationTests.cs`, progress/handoff docs | Java source writes, repository production rewrites, unrelated tests | Implemented and documented UOW-1659. |
+| Sub-agents | None | None | All files | Not spawned because selected work touched a single existing integration test file plus shared docs. |
+
+No sub-agent was spawned for UOW-1659 because the selected test change was small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1659
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemChargeService.chargeItems` | `MySqlPlayerEnterWorldRepository.SaveItemChargeAllMutationAsync`; `GameServerConnection` charge-all persistence path | Service / Persistence Boundary | Partial | Manual Only | Partial Parity | Existing C# gameplay tests cover fake-repository charge-all success/failure behavior. This unit added a gated DB regression for partial item-update failure, but it was not executed against MySQL because `AION_GAMESERVER_DB_INTEGRATION` was unset. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.updateChargePoints` | `InventoryItem.Charge`; `SaveItemChargeAllMutationAsync` charge update | Model / Persistence Field | Partial | Manual Only | Partial Parity | C# persists the `inventory.charge` column for staged charged items. Live Java object persistent-state timing and packet emission remain outside this repository test. |
+| `com.aionemu.gameserver.dao.InventoryDAO.UPDATE_QUERY` | `MySqlPlayerEnterWorldRepository.SaveItemChargeAllMutationAsync` | Repository | Partial | Manual Only | Intentional Difference | Java DAO update is broad item persistence and Java charge-all mutates live items then sends packets. C# repository uses an explicit transaction for the charge-all write set and returns false on a missing charged item; this safer atomic behavior is intentionally documented. |
+| `com.aionemu.commons.database.DatabaseFactory` | `Aion.Commons.Database.DatabaseFactory`; MySQL transaction use | Persistence Infrastructure | Partial | Manual Only | Needs Verification | Existing gated harness initializes schema through `game-server/sql/aion_gs.sql`. The new test compiled but did not open a DB in this environment, so actual rollback behavior still needs an enabled integration run. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SaveItemChargeAllMutation_RollsBackPriorChargeUpdatesWhenLaterItemMissingAgainstJavaSchema_WhenEnabled` | Gated Integration Added | Java `ItemChargeService.chargeItems`, `ChargeInfo.updateChargePoints`, `InventoryDAO.UPDATE_QUERY` | With DB integration enabled, a later missing charged item should make C# return false and leave the first updated item's `charge` unchanged. | Compile/gating regression passed; source review confirms schema/field mapping. | Not executed against MySQL in this run; Java runtime behavior is not directly comparable because C# intentionally uses an atomic transaction. |
+| `SeedInventoryItemAsync` helper charge parameter | Test Helper Updated | Java inventory `charge` column | Allows integration seeds to assert charge-column rollback directly. | Compile/gating regression passed. | Helper only seeds simplified inventory rows needed by tests. |
+
+Remaining risks:
+- The new charge-all rollback test was not executed against MySQL because `AION_GAMESERVER_DB_INTEGRATION` was unset.
+- Java charge-all mutates live item state and sends packets; C# repository rollback proves only DB write-set atomicity when the gated test is enabled.
+- C# transaction atomicity is a deliberate safety difference from Java's broader object/persistence lifecycle, not a verified Java behavioral match.
+- AP/kinah payment rollback after a failure later than item updates remains only partly covered by existing fake-repository tests and this missing-item DB test.
+- Full charge-all live path still depends on packet ordering, stats updates, player state mutation timing, and repository save result handling.
+- `SmWeather` packet-factory boundary remains a possible next weather follow-up after UOW-1658.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 0 production artifacts; 1 gated DB integration regression added.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 1 grouped row explicitly marked Needs Verification; remaining rows are Partial Parity or Intentional Difference with documented gaps.
+- Total blocked artifacts: DB-backed execution of charge-all rollback test, Java runtime comparison for persistence timing, full payment rollback failure matrix, live packet/stat ordering, `SmWeather` factory/broadcast integration.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` against a disposable schema if environment is available, or add the `SmWeather` packet-factory boundary to the weather broadcast/load/change plans without enabling live mutation.
+
+---
+
+## Updated Immediate Next - Session 1659
+
+Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` against a disposable MySQL schema if credentials/environment are available. If no DB is available, add the `SmWeather` packet-factory boundary to the weather broadcast/load/change plans. Keep Java source writes, repository production rewrites, live generated-zone writes, live weather mutation, live actor mutation, and live nearby dispatch disabled.
