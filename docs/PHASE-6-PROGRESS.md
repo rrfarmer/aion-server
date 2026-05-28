@@ -73078,3 +73078,84 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1625
 
 Next best unit: perform a read-only Java `MapRegion` lifecycle analysis for nearby quest refresh, focused on how player positions obtain regions, how `getParent().getQuestIds()` is maintained, and what C# live storage prerequisites remain. Safe implementation alternative: ItemCharge charge-all multi-item packet/order audit. Keep live `ThreadPoolManager`, `PacketSendUtility`, `GameServerConnection` sends, repository rewrites, and Java source changes disabled.
+
+### Session 1626 (May 28, 2026)
+- Continued after UOW-1625 with the requested read-only Java `MapRegion` lifecycle analysis before any live nearby dispatcher plan.
+- Performed Parallel Work Discovery across Java MapRegion lifecycle analysis, ItemCharge multi-item packet/order audit, nearby packet golden gap audit, and live nearby dispatch. Selected Java lifecycle analysis because it documents the live dependencies that block safe dispatcher wiring.
+- Read Java `MapRegion`, `WorldPosition`, `WorldMapInstance`, `WorldMap`, `WorldMap2DInstance`, `WorldMap3DInstance`, `World`, `VisibleObject.setPosition`, `Player.setPosition`, and `PlayerController.updateNearbyQuests`.
+- Java lifecycle findings:
+  - `World.createPosition` resolves `WorldMap -> WorldMapInstance -> getRegion(x,y,z)` and stores the resulting `MapRegion` in `WorldPosition`.
+  - `World.spawn` marks the position spawned, calls `position.getMapRegion().getParent().addObject(object)`, then `position.getMapRegion().add(object)`, then updates known-list state.
+  - `World.updatePosition` rejects despawned movement, derives the new region from `oldRegion.getParent().getRegion(newX,newY,newZ)`, revalidates zones when the region changes, moves the object between region object maps, then updates the known-list.
+  - `World.despawn` marks the position unspawned, removes the object from the parent `WorldMapInstance` and `MapRegion`, revalidates zones for creatures, then clears known-list state.
+  - `MapRegion` stores visible objects in a `ConcurrentHashMap`, tracks player count with synchronized counters, activates/deactivates itself and neighbors asynchronously, and exposes `getParent()` for the owning `WorldMapInstance`.
+  - `WorldMapInstance.addObject(Npc)` maintains the concurrent `questIds` set from `QuestNpc.getOnQuestStart`; newly added quest ids schedule one delayed `updateNearbyQuestsTask` if no task is pending.
+  - The delayed task clears `updateNearbyQuestsTask` before `forEachPlayer(player -> player.getController().updateNearbyQuests())`.
+  - `PlayerController.updateNearbyQuests` reads `getOwner().getPosition().getMapRegion().getParent().getQuestIds()`, filters through `QuestService.checkStartConditions`, then unconditionally sends `SM_NEARBY_QUESTS`.
+- C# prerequisite findings:
+  - `WorldMapInstanceRuntimeState` models player ids, quest ids, and pending delayed refresh state, but not live `MapRegion` object buckets, region ids, neighbor arrays, region active/deactivation state, or per-position map-region references.
+  - `NearbyQuestMapRegionSnapshot` and `CreateReportFromMapRegions` model the controller dependency as explicit metadata only.
+  - Existing `PlayerKnownListRegionSnapshotService` has a separate region snapshot model for known-list planning, but it is not backed by live region storage and is not connected to nearby quest refresh.
+  - Live dispatch should remain disabled until a single source of truth for C# region storage/position-region membership exists.
+- Validation:
+  - No tests were run because this unit is read-only analysis and documentation only.
+  - `git diff --check` will be run before commit.
+
+#### Parallel Work Discovery - Session 1626
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Java MapRegion lifecycle analysis | `MapRegion`, `WorldPosition`, `WorldMapInstance`, `World`, `PlayerController` | docs only | Java Analysis / Documentation | Yes, read-only | Low | Selected; needed before live nearby dispatch planning. |
+| B | ItemCharge multi-item packet/order audit | `ItemChargeService.chargeItems` | ItemCharge tests if implemented later | Java/C# Analysis | Yes | Medium | Independent safe alternative, deferred to keep nearby thread coherent. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs if assigned | Parity Verification | Yes | Low | Useful later, but live region prerequisites are the current blocker. |
+| D | Live nearby refresh dispatch | `ThreadPoolManager.schedule`, `PacketSendUtility`, `SM_NEARBY_QUESTS` | world/connection services | Live Dispatch | No | High | Deferred; region storage and live player iteration prerequisites are not implemented. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Document Java MapRegion lifecycle and C# live prerequisites | Java Analysis / Docs | progress/handoff docs after read-only source review | production C#, Java source writes, live dispatch, packet sends, repository files, ItemCharge files | UOW-1623 through UOW-1625 map-region metadata work | One handoff-friendly dependency map before live nearby dispatch planning. |
+
+No sub-agent was spawned for UOW-1626 because the selected work is docs-only and the required Java source review was small enough to keep with the orchestrator.
+
+#### Migration Parity Table - Session 1626
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.MapRegion` | `Aion.GameServer.Services.NearbyQuestMapRegionSnapshot`; `PlayerKnownListRegionSnapshotService` prerequisites | Region Storage / Boundary | Partial | Manual Only | Needs Verification | Java has live region object maps, neighbor arrays, player-count activation/deactivation, zone revalidation, and parent instance references. C# has explicit snapshots only; no live region storage or threading/deactivation behavior. |
+| `com.aionemu.gameserver.world.WorldPosition` | `Aion.GameServer.World.WorldPosition` plus nearby snapshot metadata | Position Model | Partial | Manual Only | Needs Verification | Java `WorldPosition` carries a mutable `MapRegion` reference and spawned flag; C# record stores world id/coords/instance id only. Null map-region, spawned state, equality, threading, and position mutation differ. |
+| `com.aionemu.gameserver.world.WorldMapInstance` | `Aion.GameServer.World.WorldMapInstanceRuntimeState` | World Instance Runtime | Partial | Existing Unit Tested + Manual Analysis | Partial Parity | C# models quest ids, player ids, registration, and pending nearby refresh metadata. Java also stores live objects/NPCs/players, regions, zones, `Future` tasks, concurrent maps/sets, and delayed task execution. |
+| `com.aionemu.gameserver.world.World` | `WorldMapRuntimeStateTable` plus scattered service-level world models | World Registry / Spawn Boundary | Partial | Existing Unit Tested + Manual Analysis | Needs Verification | Java owns store/spawn/despawn/updatePosition and mutates map-region membership. C# lacks a unified live world/region mutation path for nearby refresh; multiple services use explicit snapshots. |
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `NearbyQuestRefreshInputAdapterService.CreatePlanFromMapRegion`; delayed report metadata | Controller Callback | Partial | Unit Tested + Manual Analysis | Partial Parity | C# now models per-player map-region parent quest-id lookup as metadata. Live controller invocation, `PacketSendUtility`, exact Java null behavior, and socket ordering remain disabled/unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `NearbyQuestRefreshPlan.WouldSendPacket`; `SmNearbyQuests` existing packet tests | Packet Dependency | Partial | Existing Regression Tested | Needs Verification | Packet intent and local serialization tests exist. No live send, encrypted frame comparison, Java runtime packet capture, or dispatcher ordering validation. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| None | Manual / Docs Only | Java `MapRegion`, `WorldPosition`, `WorldMapInstance`, `World`, `PlayerController` source review | Documents live region lifecycle and C# prerequisites before live nearby dispatch. | Static source review only. | No code change, no runtime comparison, no tests, no live dispatcher validation. |
+
+Remaining risks:
+- No production code changed; this unit only documents the dependency map.
+- Live C# `MapRegion` storage, region id calculation, neighbor arrays, region activation/deactivation, player-count synchronization, object membership, zone revalidation, and known-list integration remain unported or separate snapshot-only approximations.
+- Java `WorldPosition` mutable region pointer and spawned-state semantics differ from C# `WorldPosition` record semantics.
+- Java delayed refresh uses a real `Future` and `ConcurrentHashMap` player iteration; C# only has report metadata.
+- Live `PacketSendUtility.sendPacket`, encrypted packet bytes, socket ordering, threading, dynamic handlers, and Java runtime behavior remain unverified.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 0 code artifacts; 1 completed read-only lifecycle analysis with docs.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 4 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live MapRegion storage, region id/neighbor model, world spawn/despawn/updatePosition membership, live timer scheduling, live player iteration, live controller dispatch, packet send/encrypted frame comparison, Java runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Add a non-live C# region-key/region-membership planning model that can derive and carry Java-like region identity for nearby refresh snapshots, reusing lessons from `PlayerKnownListRegionSnapshotService` without wiring live dispatch. Safe alternative: ItemCharge charge-all multi-item packet/order audit. Keep live timers, packet sends, Java source writes, and repository rewrites disabled.
+
+---
+
+## Updated Immediate Next - Session 1626
+
+Next best unit: add a non-live nearby region-key/region-membership planning model for Java-like map-region identity and per-player snapshot assembly, or audit whether `PlayerKnownListRegionSnapshotService` can be reused without coupling known-list and nearby quest concerns. Safe implementation alternative: ItemCharge charge-all multi-item packet/order audit. Keep live `ThreadPoolManager`, `PacketSendUtility`, `GameServerConnection` sends, repository rewrites, and Java source changes disabled.
