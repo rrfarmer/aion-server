@@ -73885,3 +73885,84 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1636
 
 Next best unit: audit and model Java `WorldMapInstance.filterZones` as a non-live region-creation prerequisite, preserving zone-bound calculations before any live `MapRegion` object storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1637 (May 28, 2026)
+- Continued after UOW-1636 by modeling Java `WorldMapInstance.filterZones` as a non-live prerequisite for future `MapRegion` creation.
+- Performed Parallel Work Discovery across zone filtering, charge-all DB rollback integration planning, nearby packet golden audit, and live region storage. Selected zone filtering because layout-backed position resolution now exists and Java region creation also attaches filtered zone arrays.
+- Added `WorldMapRegionZoneFilterService`, `WorldMapRegionZoneFilterResult`, `WorldMapRegionZoneCandidate`, `WorldMapRegionBounds`, and zone-area DTOs.
+- Added Java-style region-bound creation for 2D and 3D layouts. 2D bounds use `minZ = 0` and Java-rounded map maxZ; 3D bounds use the decoded region start Z and `startZ + regionSize`.
+- Modeled non-live filtering for polygon, cylinder, sphere, semisphere, rectangle, and dummy zones.
+- Preserved Java `RectangleArea.intersectsRectangle` behavior as a current no-intersection stub instead of correcting it.
+- Added dummy-zone miss reporting for the Java log-error branch when a dummy zone does not intersect a region.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 35 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1637
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Zone-filtering prerequisite model | `WorldMapInstance.filterZones`, `RegionZone`, geometry `Area.intersectsRectangle` implementations | new zone filter service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; shared geometry helper and tests are tightly coupled. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the region-creation blocker. |
+| D | Live region storage | `MapRegion`, `WorldMapInstance.addObject/removeObject` | production world services | Integration Fix | No | High | Deferred until zone filtering and object lifecycle prerequisites are stable. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live zone-filtering helper and tests | Utility Port / Tests / Docs | `WorldMapRegionZoneFilterService.cs`, `WorldMapRegionZoneFilterServiceTests.cs`, progress/handoff docs | Java source writes, live region storage, packet dispatch | UOW-1635 layout helper and UOW-1636 resolver | Tested Java-style region bounds and candidate filtering. |
+
+No sub-agent was spawned for UOW-1637 because implementation and tests touched one new helper surface and docs remained orchestrator-owned.
+
+#### Migration Parity Table - Session 1637
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMapInstance.filterZones` | `WorldMapRegionZoneFilterService.FilterZones` | Region Zone Filter / Utility | Partial | Unit Tested | Partial Parity | C# models non-live filtering with Java-source breadcrumbs and dummy-miss reporting. It does not instantiate `ZoneInstance`, log through Java logger, attach handlers, or return live zone arrays. Collection ordering follows supplied candidate order; Java stream over `zones.values()` depends on map iteration order. |
+| `com.aionemu.gameserver.world.zone.RegionZone` | `WorldMapRegionBounds` | Region Boundary DTO | Partial | Unit Tested | Partial Parity | C# captures region rectangle min/max XY and min/max Z. Java `RegionZone` uses `WorldConfig.WORLD_REGION_SIZE`; C# accepts layout region size. Runtime config binding remains unverified. |
+| `com.aionemu.gameserver.world.WorldMap2DInstance.createMapRegion` | `WorldMapRegionZoneFilterService.CreateRegionBounds` on 2D layouts | Region Creation Prerequisite | Partial | Unit Tested | Partial Parity | Tests confirm 2D region bounds use decoded X/Y, minZ `0`, and Java-rounded map maxZ. Live `MapRegion` construction, zone array attachment, and parent instance storage remain unported. |
+| `com.aionemu.gameserver.world.WorldMap3DInstance.createMapRegion` | `WorldMapRegionZoneFilterService.CreateRegionBounds` on 3D layouts | Region Creation Prerequisite | Partial | Unit Tested | Partial Parity | Tests confirm 3D bounds use decoded X/Y/Z and `startZ + regionSize`. Live `MapRegion` construction, zone array attachment, and parent instance storage remain unported. |
+| `com.aionemu.gameserver.model.geometry.PolyArea` | `WorldMapPolygonZoneArea` filtered by `WorldMapRegionZoneFilterService` | Geometry Area | Partial | Unit Tested | Needs Verification | C# implements deterministic polygon/rectangle intersection suitable for focused tests. Java delegates to `Polygon2D.intersects`; edge/boundary semantics are not runtime-compared. |
+| `com.aionemu.gameserver.model.geometry.CylinderArea` | `WorldMapCylinderZoneArea` filtered by `WorldMapRegionZoneFilterService` | Geometry Area | Partial | Unit Tested | Partial Parity | C# preserves Java z-overlap guard and rectangle distance `< radius` rule. Floating precision and edge cases are not runtime-compared. |
+| `com.aionemu.gameserver.model.geometry.SphereArea` | `WorldMapSphereZoneArea` filtered by `WorldMapRegionZoneFilterService` | Geometry Area | Partial | Unit Tested | Partial Parity | C# preserves Java rectangle 3D distance `<= radius` rule. Floating precision and edge cases are not runtime-compared. |
+| `com.aionemu.gameserver.model.geometry.SemisphereArea` | `WorldMapSemisphereZoneArea` filtered by `WorldMapRegionZoneFilterService` | Geometry Area | Partial | Unit Tested | Partial Parity | C# preserves the Java source condition including its `||` z-clause. Floating precision and broader gameplay implications remain unverified. |
+| `com.aionemu.gameserver.model.geometry.RectangleArea` | `WorldMapRectangleZoneArea` filtered by `WorldMapRegionZoneFilterService` | Geometry Area | Partial | Unit Tested | Intentional Difference | C# intentionally mirrors Java's current `intersectsRectangle` TODO stub returning false. This may be surprising if future Java fixes the stub; documented as a parity-preserving behavior, not a geometry improvement. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance` | `WorldMapRegionZoneCandidate` | Zone DTO / Runtime Boundary | Partial | Unit Tested | Needs Verification | Candidate captures id, map id, class name, and area only. Creature membership, handlers, flags, canFly/canGlide option resolution, synchronized enter/leave, and callbacks remain unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateRegionBounds_For2DLayout_UsesJava2DCreateMapRegionZRange` | Unit | Java `WorldMap2DInstance.createMapRegion` | 2D region zone bounds use decoded x/y, minZ `0`, and layout maxZ. | Deterministic C# regression grounded in Java source review. | No live `MapRegion` construction. |
+| `CreateRegionBounds_For3DLayout_UsesJava3DCreateMapRegionZRange` | Unit | Java `WorldMap3DInstance.createMapRegion` | 3D region zone bounds use decoded x/y/z and `z + regionSize`. | Deterministic C# regression grounded in Java source review. | No live `MapRegion` construction. |
+| `FilterZones_KeepsPolygonCylinderAndSphereIntersectionsForMap` | Unit | Java `WorldMapInstance.filterZones`, `PolyArea`, `CylinderArea`, `SphereArea` | Matching-map polygon/cylinder/sphere candidates are retained and other map/z-miss candidates are excluded. | Deterministic C# regression grounded in Java source review. | No Java runtime comparison of geometry edges. |
+| `FilterZones_PreservesJavaRectangleAreaNoIntersectionStubAndDummyMissReport` | Unit | Java `RectangleArea.intersectsRectangle`; dummy log branch | Rectangle candidates do not intersect and dummy misses are reported. | Deterministic C# regression grounded in Java source review. | Does not assert actual logging side effect. |
+| `FilterZones_PreservesJavaSemisphereIntersectionCondition` | Unit | Java `SemisphereArea.intersectsRectangle` | Semisphere candidate uses Java's source z-clause and distance rule. | Deterministic C# regression grounded in Java source review. | No runtime comparison. |
+
+Remaining risks:
+- Zone filtering is still non-live and returns DTOs, not Java `ZoneInstance[]`.
+- Java logger side effects for dummy misses are modeled as data, not emitted logs.
+- Polygon/rectangle intersection is a C# deterministic implementation of Java intent, but not a runtime comparison against `Polygon2D.intersects`.
+- Java `ZoneInstance` handlers, creature membership, flags, canFly/canGlide/canRide option resolution, and synchronized enter/leave callbacks remain unported.
+- Region-size config override is not wired into runtime config.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 10 grouped rows in this unit.
+- Total artifacts ported: 1 non-live zone filter helper plus 5 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity or Intentional Difference with known gaps.
+- Total blocked artifacts: live C# MapRegion storage, live `ZoneInstance` arrays, zone handlers/callbacks, creature membership, option flag resolution, config-bound region size, Java runtime geometry comparison, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Compose `WorldMapRegionLayoutService`, `WorldMapRegionZoneFilterService`, and layout-backed position resolution into a non-live region creation snapshot that carries region id, bounds, neighbours, and filtered zone ids. Safe alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation.
+
+---
+
+## Updated Immediate Next - Session 1637
+
+Next best unit: compose the non-live layout, position resolver, and zone-filter helper into a Java-style region creation snapshot for one region id, still without live `MapRegion` objects or object membership. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
