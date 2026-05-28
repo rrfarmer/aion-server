@@ -72107,3 +72107,71 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1611
 
 Move to a fresh Phase 6 safe slice after UOW-1611. Prefer nearby-refresh Java handler/XML quest-start extraction or ItemPurification side-effect persistence analysis unless Java serializer tooling becomes available. If continuing ItemCharge, make the next unit a read-first storage/equipment lifecycle audit for `CM_CHARGE_ITEM` selected item lookup, especially the remaining C# `Location == CubeStorageId` guard versus Java `Inventory`/`Equipment` object membership. Keep live serializer/protection observer execution disabled and do not claim verified parity without Java runtime artifacts or deterministic cross-runtime comparison.
+### Session 1612 (May 28, 2026)
+- Continued after UOW-1611 by selecting a narrow ItemPurification persistence-boundary guard instead of touching live nearby quest sends or broad quest reward execution.
+- Performed Parallel Work Discovery across nearby quest extraction, ItemPurification persistence analysis, and an ItemCharge storage-location audit. Selected ItemPurification because the AP persistence payload boundary is isolated to one service/test pair and directly follows Java `ItemPurificationService` AP mutation ordering.
+- Source-read the existing C# ItemPurification live mutation/persistent execution chain and Java-parity breadcrumbs for `ItemPurificationService.decreaseMaterials`, `upgradeItem`, and `AbyssPointsService.addAp`.
+- Added `ItemPurificationPersistencePlanStatus.MissingAbyssRankMutation`.
+- Updated `ItemPurificationPersistencePlanService.CreatePersistencePlan` to fail closed when the application plan spends AP but no `AbyssPointsAddPlan.UpdatedRank` is available.
+- Added focused regression coverage proving AP-spend persistence payloads do not silently become ready without a rank mutation.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~ItemPurificationPersistencePlanServiceTests|FullyQualifiedName~ItemPurificationPersistentLiveExecutionServiceTests|FullyQualifiedName~ItemPurificationLiveExecutionServiceTests|FullyQualifiedName~ItemPurificationLiveMutationServiceTests|FullyQualifiedName~ItemPurificationApplicationPlanServiceTests"`.
+  - Result: passed 19 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1612
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | ItemPurification AP persistence guard | `ItemPurificationService.decreaseMaterials`, `AbyssPointsService.addAp`, rank dirty persistence | `ItemPurificationPersistencePlanService.cs`, persistence tests | Service/Test | Sequential | Low | Selected; isolated fail-closed guard for a staged repository payload. |
+| B | Nearby quest Java handler/XML extraction | quest start handlers, `QuestTemplate` XML | nearby/quest extractor services/tests | Extractor/Test | Later | Medium | Requires real-data count audit; safe next candidate. |
+| C | ItemCharge storage-location audit | `CM_CHARGE_ITEM`, Java `Inventory`/`Equipment` lifecycle | read-only Java/C# charge files | Analysis | Later | Low | Useful after UOW-1611 but should be read-first only. |
+| D | Java protection serializer implementation | future protection serializer/observer files | Java source/generated artifacts | Live Artifact Generation | No | High | Still blocked by Java 25/JDK/Maven and runtime artifact strategy. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add missing AP-rank mutation guard to ItemPurification persistence planning | Service/Test/Docs | `ItemPurificationPersistencePlanService.cs`, `ItemPurificationPersistencePlanServiceTests.cs`, progress/handoff docs | live handler dispatch, repository SQL, nearby quest files, ItemCharge files | Existing ItemPurification live mutation AP plan | One focused guard and regression preventing silent rank-write omission. |
+
+No sub-agent was spawned for UOW-1612 because the service and test are tightly coupled.
+
+#### Migration Parity Table - Session 1612
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemPurificationService.decreaseMaterials` | `Aion.GameServer.Services.ItemPurificationPersistencePlanService.CreatePersistencePlan` | Service / Persistence Payload Planner | Partial | Unit Tested | Partial Parity | Persistence plan now refuses AP-spend payloads when no rank mutation result exists. Java mutates AP inline before dirty-state persistence; C# remains staged/transaction-oriented. |
+| `com.aionemu.gameserver.services.abyss.AbyssPointsService.addAp` | `Aion.GameServer.Services.AbyssPointsService` / `AbyssPointsAddPlan` consumed by `ItemPurificationPersistencePlanService` | Service / AP Mutation Dependency | Partial | Unit Tested through ItemPurification | Needs Verification | The guard requires `UpdatedRank` for AP-spend plans. Full AP rank side effects, configured transform skill updates, ranking contribution, siege hooks, and Java runtime comparison remain missing. |
+| `com.aionemu.gameserver.dao.InventoryDAO` and rank persistence side effects | `Aion.GameServer.Data.IPlayerEnterWorldRepository.SaveItemPurificationMutationAsync` payload inputs | Repository Boundary | Partial | Existing Regression Tested + New Unit Tested Guard | Needs Verification | Repository payload cannot be marked ready without rank data when AP was spent. SQL execution, transaction behavior, rollback ordering, and Java dirty-state persistence timing remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player` | `Aion.GameServer.Model.GameObjects.Player.AbyssRank` | Model / Runtime State | Partial | Unit Tested | Needs Verification | Player rank mutation is represented by copied `PlayerAbyssRank` snapshots. Java live object identity/threading and downstream observer behavior remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePersistencePlan_RejectsMissingAbyssRankMutationWhenApplicationSpendsAp` | Unit | Java ItemPurification AP spend path through `AbyssPointsService.addAp` | If the application spends AP but no AP mutation/rank result is supplied, persistence planning fails with `MissingAbyssRankMutation` and emits no item/rank payload. | Deterministic C# guard regression grounded in Java source ordering. | Does not execute Java runtime, repository SQL, transaction rollback, configured rank side effects, or packet fanout. |
+
+Remaining risks:
+- C# ItemPurification persistence remains transaction-oriented while Java mutates storage/AP live and later persists dirty state.
+- Full AP side effects beyond the current rank/player packet seams remain partial.
+- Repository SQL execution, rollback ordering, and Java dirty-state timing are not runtime-compared.
+- Quest notifications and nearby quest refresh remain opt-in/no-op seams for ItemPurification.
+- Serialization, threading, reflection, date/time behavior, and packet byte comparison remain unverified for this path.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 ItemPurification AP persistence guard plus 1 focused unit regression.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows.
+- Total blocked artifacts: Java runtime AP/persistence comparison, repository SQL/rollback validation, dirty-state timing comparison, full AP side effects, quest notification dispatch, nearby-refresh dispatch, packet byte comparison.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Continue with nearby-refresh Java handler/XML quest-start extraction or a read-first ItemCharge storage-location lifecycle audit. If staying in ItemPurification, the next safe unit is a repository-payload or rollback-order regression around `SaveItemPurificationMutationAsync`, not live automatic dispatch.
+
+---
+
+## Updated Immediate Next - Session 1612
+
+Move to a fresh Phase 6 slice after UOW-1612. Recommended next work is nearby-refresh Java handler/XML quest-start extraction with real-data audit updates, or a read-only ItemCharge `Location == CubeStorageId` lifecycle audit after UOW-1611. ItemPurification can continue only with another isolated persistence/readiness guard; keep automatic live dispatch, quest notification dispatch, nearby-refresh dispatch, and repository SQL broadening disabled until separately designed and tested.
