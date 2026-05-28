@@ -73666,3 +73666,75 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1633
 
 Next best unit: add a non-live map-dimension selection model for region-key projection, documenting how Java chooses `WorldMap2DInstance` versus `WorldMap3DInstance` and letting tests derive 2D/3D keys through one explicit selector. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1634 (May 28, 2026)
+- Continued after UOW-1633 by modeling Java's map-dimension selection for non-live region-key projection.
+- Performed Parallel Work Discovery across map-dimension selection, charge-all DB rollback integration planning, nearby packet golden gap audit, and region precreation analysis. Selected map-dimension selection because it is the next low-risk dependency before live region storage.
+- Confirmed Java `WorldMapInstanceFactory.createWorldMapInstance` creates `WorldMap3DInstance` only when `parent.getMapId() == WorldMapType.RESHANTA.getId()` and otherwise creates `WorldMap2DInstance`.
+- Added `WorldMapRegionDimension` plus `WorldRegionKeyProjectionService.GetJavaRegionDimension`, default nearby projection, default known-list projection, and explicit dimension-selector overloads.
+- Added tests proving Reshanta (`400010000`) selects 3D, non-Reshanta maps select 2D, selector-driven nearby keys use the Java factory dimension, and known-list keys can be projected through an explicit selector.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests|FullyQualifiedName~NearbyQuestRegionSnapshotServiceTests|FullyQualifiedName~PlayerKnownListRegionSnapshotServiceTests"`.
+  - Result: passed 29 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1634
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Map-dimension selection model | `WorldMapInstanceFactory`, `WorldMapType.RESHANTA`, `WorldMap2DInstance`, `WorldMap3DInstance` | `WorldRegionKeyProjectionService.cs`, projection tests | Utility Port / Test Creation | Sequential for writes | Low | Selected; removes manual 2D/3D caller choice for Java-equivalent defaults. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred to keep region thread coherent. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the region-storage blocker. |
+| D | Region precreation analysis | `WorldMap2DInstance.initMapRegions`, `WorldMap3DInstance.initMapRegions` | read-only docs or future world model | Analysis | Yes, later | Low | Next logical region-model dependency after dimension selection. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live Java map-dimension selector and projection overload tests | Utility Port / Tests / Docs | `WorldRegionKeyProjectionService.cs`, `WorldRegionKeyProjectionServiceTests.cs`, progress/handoff docs | Java source writes, live nearby dispatch, repository integration tests | UOW-1633 projection helper | Tested default projection through Java's Reshanta-only 3D selection rule. |
+
+No sub-agent was spawned for UOW-1634 because implementation and tests touched the same small projection helper and docs remained orchestrator-owned.
+
+#### Migration Parity Table - Session 1634
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMapInstanceFactory` | `WorldRegionKeyProjectionService.GetJavaRegionDimension`; default `CreateNearbyRegionKey`; default `CreateKnownListRegionKey` | Factory Selection / Utility | Partial | Unit Tested | Partial Parity | C# now mirrors the Java 3D-vs-2D selection rule for region-key projection: Reshanta uses 3D, all other maps use 2D. It does not create live `WorldMapInstance` objects, invoke handlers, increment `WorldMap.nextInstanceId`, or add instances to the map. |
+| `com.aionemu.gameserver.world.WorldMapType.RESHANTA` | `WorldRegionKeyProjectionService.ReshantaWorldId` | Enum Constant / Identifier | Partial | Unit Tested | Needs Verification | Constant `400010000` was verified by Java source review and covered by tests. Broader `WorldMapType` enum, personal flags, Panesterra helpers, and map-name lookup remain unported at this boundary. |
+| `com.aionemu.gameserver.world.WorldMap2DInstance` | `WorldMapRegionDimension.TwoDimensional`; selector-driven 2D projection overloads | Region Lookup Adapter | Partial | Unit Tested | Partial Parity | Default selector maps non-Reshanta worlds to 2D ids and tests confirm Z is ignored through the default path. Live region precreation, neighbour arrays, owner/personal instance state, and zone filtering remain unported. |
+| `com.aionemu.gameserver.world.WorldMap3DInstance` | `WorldMapRegionDimension.ThreeDimensional`; selector-driven 3D projection overloads | Region Lookup Adapter | Partial | Unit Tested | Partial Parity | Default selector maps Reshanta to 3D ids and tests confirm Z is included through the default path. Live 3D region precreation, `parallelStream` creation, neighbour arrays, and zone filtering remain unported. |
+| `com.aionemu.gameserver.world.RegionUtil` | `WorldRegionIdService` consumed through selector-driven `WorldRegionKeyProjectionService` | Utility Dependency | Complete | Unit Tested | Partial Parity | Existing Java-equivalent formulas are now reached through Java's map-dimension rule. Region-size config binding, negative-coordinate edge cases, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.world.WorldPosition` | `Aion.GameServer.World.WorldPosition` consumed by default selector overloads | Position Model | Partial | Unit Tested | Needs Verification | Position can now derive default Java-style nearby and known-list keys from world id, instance id, and coordinates. Java mutable `mapRegion`, spawned flag, and live parent instance lookup remain unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GetJavaRegionDimension_SelectsThreeDimensionalOnlyForReshanta` | Unit | Java `WorldMapInstanceFactory.createWorldMapInstance`; `WorldMapType.RESHANTA(400010000)` | Reshanta maps select 3D and a representative non-Reshanta map selects 2D. | Deterministic C# regression grounded in Java source review. | Does not compare against Java runtime or port full `WorldMapType`. |
+| `CreateNearbyRegionKey_UsesJavaWorldMapInstanceFactoryDimension` | Unit | Java factory selection plus `WorldMap2DInstance.getRegion` / `WorldMap3DInstance.getRegion` | Default nearby projection uses 3D for Reshanta and 2D for non-Reshanta with identical coordinates. | Deterministic C# regression grounded in Java source review. | No live region lookup or instance creation. |
+| `CreateKnownListRegionKey_UsesExplicitDimensionSelector` | Unit | Java 2D/3D region id formulas via `RegionUtil` | Explicit selector overloads project known-list keys through 2D and 3D paths. | Deterministic C# regression grounded in Java source review. | Does not execute Java `KnownList.findVisibleObjects`. |
+
+Remaining risks:
+- Selector-driven projection is still non-live and does not attach a `MapRegion` to `WorldPosition`.
+- Only the Reshanta-only 3D rule is modeled; the broader Java `WorldMapType` enum and personal-map metadata are not ported here.
+- Java map region precreation, neighbour linking, zone filtering, activation/deactivation, and object membership remain unported.
+- Region-size config override is not wired into runtime config.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 selector enum/constant path plus 3 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live C# MapRegion storage, region precreation/neighbour model, zone filtering/revalidation, full `WorldMapType`, config-bound region size, Java runtime comparison, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Add a non-live region precreation/neighbour-id model for Java 2D/3D map regions, starting with deterministic region-id lists and neighbour ids for small map sizes. Safe alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation.
+
+---
+
+## Updated Immediate Next - Session 1634
+
+Next best unit: add a non-live region precreation/neighbour-id model for Java `WorldMap2DInstance.initMapRegions` and `WorldMap3DInstance.initMapRegions`, keeping it deterministic and disconnected from live object storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
