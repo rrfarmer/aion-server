@@ -73813,3 +73813,75 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1635
 
 Next best unit: compose selector-driven projection with the non-live region layout model so a `WorldPosition` can resolve against a precreated Java-style region id and expose neighbour ids for nearby/known-list planning. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1636 (May 28, 2026)
+- Continued after UOW-1635 by composing selector-driven projection with the finite non-live region layout model.
+- Performed Parallel Work Discovery across layout-backed position resolution, charge-all DB rollback integration planning, nearby packet golden gap audit, and zone-filtering source audit. Selected layout-backed position resolution because it is the next deterministic step toward Java `getRegion` behavior without live object storage.
+- Added `WorldMapRegionLayoutService.CreateLayoutForWorld`, which uses the Java Reshanta-only 3D selector before creating a layout.
+- Added `WorldMapRegionLayoutService.ResolvePosition`, which projects a `WorldPosition` through the layout's 2D/3D formula and reports whether the projected region exists in the precreated layout.
+- Added `WorldMapRegionLayoutResolution`, including projected region id, existence flag, neighbour ids, dimension, original position, and Java-source breadcrumb.
+- Added tests for selector-driven layout creation, 2D existing-region resolution with neighbours, and 3D missing-region resolution when the position projects to z at `maxZ`.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 30 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1636
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Layout-backed position resolver | `WorldMap2DInstance.getRegion`, `WorldMap3DInstance.getRegion`, init layout loops | `WorldMapRegionLayoutService.cs`, layout tests | Utility Port / Test Creation | Sequential for writes | Low | Selected; composes projection and layout before live storage. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the region-storage blocker. |
+| D | Zone-filtering source audit | `WorldMapInstance.filterZones`, zone services | docs/read-only source | Analysis | Yes, later | Low | Likely next prerequisite after position-to-layout resolution. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add layout-backed position resolver and tests | Utility Port / Tests / Docs | `WorldMapRegionLayoutService.cs`, `WorldMapRegionLayoutServiceTests.cs`, progress/handoff docs | Java source writes, live nearby dispatch, production world object storage | UOW-1634 dimension selector and UOW-1635 layout helper | Tested Java-style region existence and neighbours for projected positions. |
+
+No sub-agent was spawned for UOW-1636 because implementation and tests touched the same layout helper and docs remained orchestrator-owned.
+
+#### Migration Parity Table - Session 1636
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMapInstanceFactory` | `WorldMapRegionLayoutService.CreateLayoutForWorld` | Factory Selection / Utility | Partial | Unit Tested | Partial Parity | Layout creation now uses the Java Reshanta-only 3D selector. It still does not create live instances, handlers, or mutate `WorldMap.instances`. |
+| `com.aionemu.gameserver.world.WorldMap2DInstance.getRegion` | `WorldMapRegionLayoutService.ResolvePosition` on 2D layouts | Region Lookup Adapter | Partial | Unit Tested | Partial Parity | Resolver projects x/y through the 2D formula and confirms the region exists in the precreated layout. It returns DTO metadata rather than a live `MapRegion` object. |
+| `com.aionemu.gameserver.world.WorldMap3DInstance.getRegion` | `WorldMapRegionLayoutService.ResolvePosition` on 3D layouts | Region Lookup Adapter | Partial | Unit Tested | Partial Parity | Resolver projects x/y/z through the 3D formula and returns missing when the id was not precreated, matching Java's `regions.get(regionId)` null possibility. Live object lookup and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.world.MapRegion` | `WorldMapRegionLayoutResolution` | Region Boundary DTO | Partial | Unit Tested | Needs Verification | Resolution exposes region id and neighbour ids only. Parent instance, zone array, object membership, activation/deactivation, and synchronized player counts remain unported. |
+| `com.aionemu.gameserver.world.WorldPosition` | `Aion.GameServer.World.WorldPosition` consumed by `ResolvePosition` | Position Model | Partial | Unit Tested | Needs Verification | Position can be resolved against a precreated layout, including missing-region outcomes. Java mutable `mapRegion`, spawned flag, and live assignment lifecycle remain unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateLayoutForWorld_UsesJavaDimensionSelector` | Unit | Java `WorldMapInstanceFactory`; `WorldMapType.RESHANTA` | Reshanta layouts are 3D and representative non-Reshanta layouts are 2D. | Deterministic C# regression grounded in Java source review. | Full `WorldMapType` enum remains unported. |
+| `ResolvePosition_For2DLayout_ReturnsExistingPrecreatedRegionAndNeighbours` | Unit | Java `WorldMap2DInstance.getRegion` and neighbour init loops | 2D position resolution returns an existing region id and precomputed neighbours. | Deterministic C# regression grounded in Java source review. | No live `MapRegion` object returned. |
+| `ResolvePosition_For3DLayout_ReturnsMissingWhenProjectedRegionWasNotPrecreated` | Unit | Java `WorldMap3DInstance.getRegion` and exclusive z loop | 3D resolution returns missing for a z-at-maxZ id that layout precreation omitted. | Deterministic C# regression grounded in Java source review. | No Java runtime comparison. |
+
+Remaining risks:
+- Resolver is still non-live and returns DTO metadata, not a Java-equivalent `MapRegion`.
+- Java `WorldPosition.mapRegion` assignment lifecycle, spawned flag, and live parent instance references remain unported.
+- Java `filterZones`, zone bounds, activation/deactivation, player/object membership, and synchronized live region map writes remain unported.
+- Region-size config override is not wired into runtime config.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 resolver path plus 3 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live C# MapRegion storage, zone filtering/revalidation, object membership, `WorldPosition.mapRegion` lifecycle, config-bound region size, Java runtime comparison, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Audit and then model Java `WorldMapInstance.filterZones` as a non-live zone-filtering prerequisite for region creation, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1636
+
+Next best unit: audit and model Java `WorldMapInstance.filterZones` as a non-live region-creation prerequisite, preserving zone-bound calculations before any live `MapRegion` object storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
