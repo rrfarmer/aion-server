@@ -72453,3 +72453,75 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1616
 
 Next best unit: create a non-live delayed nearby-refresh execution report that takes a scheduled world-instance plan, a list of player snapshots, and `StaticData`, then records the `NearbyQuestRefreshInputAdapterService` result per player without invoking `ThreadPoolManager` or sending `SM_NEARBY_QUESTS`. Safe alternative: read-only ItemCharge `Location == CubeStorageId` lifecycle audit. Keep production timers, controller dispatch, packet sends, repository writes, and Java source changes disabled.
+
+### Session 1617 (May 28, 2026)
+- Continued after UOW-1616 by adding the non-live delayed nearby-refresh execution report recommended by AQJ.
+- Performed Parallel Work Discovery across delayed refresh execution reporting, live ThreadPool dispatch, ItemCharge storage-location audit, and Java serializer implementation. Selected execution reporting because it composes existing UOW-1615/UOW-1616 metadata without enabling timers or packet sends.
+- Added `NearbyQuestDelayedRefreshExecutionReportService.CreateReport`.
+- The report consumes a scheduled `WorldMapNearbyQuestRefreshSchedulePlan`, a `WorldMapInstanceRuntimeState`, player snapshots, and `StaticData`.
+- For scheduled plans it clears pending world-instance refresh metadata like Java clears `updateNearbyQuestsTask`, then records one `NearbyQuestRefreshInputAdapterService` result per player.
+- Added focused tests for per-player refresh metadata, empty-player completion, and not-scheduled suppression.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~NearbyQuestDelayedRefreshExecutionReportServiceTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~NearbyQuestRefreshInputAdapterServiceTests|FullyQualifiedName~NearbyQuestRefreshPlanServiceTests"`.
+  - Result: passed 30 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1617
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Non-live delayed nearby-refresh execution report | `WorldMapInstance.updateNearbyQuestsTask`, `forEachPlayer`, `PlayerController.updateNearbyQuests` | new report service/tests | Service/Test | Sequential | Low | Selected; composes existing plan and adapter without live side effects. |
+| B | Live ThreadPool dispatch | `ThreadPoolManager.schedule`, player iteration, packet send | world services, connection registry | Live Dispatch | No | High | Deferred; requires production timing and socket behavior. |
+| C | ItemCharge storage-location audit | `CM_CHARGE_ITEM`, Java `Inventory`/`Equipment` lifecycle | read-only Java/C# charge files | Java Analysis | Yes | Low | Safe support task after UOW-1611; separate subsystem. |
+| D | Java protection serializer implementation | future protection serializer/observer files | Java source/generated artifacts | Live Artifact Generation | No | High | Still blocked by Java 25/JDK/Maven and runtime artifact strategy. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live delayed nearby-refresh execution report | Service/Test/Docs | `NearbyQuestDelayedRefreshExecutionReportService.cs`, report tests, progress/handoff docs | live `ThreadPoolManager.Schedule`, `GameServerConnection`, `PacketSendUtility`, production controller wiring, repository files, ItemCharge files, Java source writes | UOW-1615 adapter and UOW-1616 schedule plan | One tested report recording per-player refresh plans without sends. |
+
+No sub-agent was spawned for UOW-1617 because the new report composes two newly added surfaces and needs tight test alignment.
+
+#### Migration Parity Table - Session 1617
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMapInstance.updateNearbyQuestsTask` | `Aion.GameServer.Services.NearbyQuestDelayedRefreshExecutionReportService` | Scheduler Callback / Report | Partial | Unit Tested | Partial Parity | C# clears pending metadata and records per-player refresh results for scheduled plans. It does not execute a real timer or iterate live world player collections. |
+| `com.aionemu.gameserver.world.WorldMapInstance.forEachPlayer` | `IReadOnlyList<Player>` input to `NearbyQuestDelayedRefreshExecutionReportService.CreateReport` | Player Iteration Dependency | Partial | Unit Tested | Needs Verification | Player snapshots are explicit test inputs. Production `worldMapPlayers` iteration, concurrent mutation, and Java runtime ordering are not implemented. |
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `NearbyQuestRefreshInputAdapterService` consumed by report | Controller Callback Dependency | Partial | Unit Tested through report | Partial Parity | Per-player adapter results are recorded without dispatch. No live controller, player position map-region lookup, or packet send occurs. |
+| `com.aionemu.gameserver.dataholders.QuestsData` | `Aion.GameServer.Dataholders.StaticData.NearbyQuestTemplates` consumed by report via adapter | Static Data Repository | Partial | Unit Tested through report | Partial Parity | StaticData quest-template summaries are reused for per-player plans. Full Java `QuestTemplate` graph/JAXB/script behavior remains incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `NearbyQuestRefreshPlan.WouldSendPacket` per player | Packet Dependency | Partial | Existing Regression Tested + Unit Tested intent | Needs Verification | Reports packet intent metadata only. No serialization, encrypted frame, socket ordering, or Java byte comparison occurred. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateReport_ComposesPerPlayerNearbyRefreshResultsWithoutSending` | Unit / Report | Java delayed task clears pending and calls `forEachPlayer(player -> updateNearbyQuests())` | Scheduled plan clears pending metadata and records distinct nearby-refresh adapter results for Elyos and Asmodian players. | Deterministic C# report regression from Java callback ordering. | No real timer, live player iteration, controller dispatch, or packet bytes. |
+| `CreateReport_ClearsPendingRefreshEvenWhenNoPlayersArePresent` | Unit / Report | Java task clears `updateNearbyQuestsTask` before player iteration | Pending metadata is cleared even when no players are available. | Deterministic C# state regression from Java callback ordering. | No Java runtime comparison. |
+| `CreateReport_DoesNotRunWhenSchedulePlanDidNotSchedule` | Unit / Guard | Java only creates a delayed task for scheduled plans | Not-scheduled plans do not clear pending metadata or produce player reports. | C# guard regression grounded in Java source branch. | No live scheduling comparison. |
+
+Remaining risks:
+- Execution report remains non-live; no timers, live world player collection, controller dispatch, or packet send is enabled.
+- Player iteration is explicit and ordered by test input, not Java `ConcurrentHashMap` iteration.
+- Pending metadata clearing is lock-protected C# state, not Java `Future` field behavior.
+- Full `QuestService.checkStartConditions`, dynamic quest handlers, map-region position lookup, and Java `QuestTemplate` graph remain partial.
+- Packet bytes, encryption/frame validation, socket ordering, threading, date/time handling, and serialization remain unverified.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 non-live delayed nearby-refresh execution report plus 3 focused unit tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live ThreadPool execution, production player iteration, controller dispatch, packet-byte comparison, map-region lookup, full QuestService dynamic condition parity.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Continue nearby-refresh prerequisites by adding a packet-intent aggregation summary for delayed refresh reports, or switch to the read-only ItemCharge storage-location lifecycle audit. Keep live timers and sends disabled.
+
+---
+
+## Updated Immediate Next - Session 1617
+
+Next best unit: add a small packet-intent aggregation summary for `NearbyQuestDelayedRefreshExecutionReport` so future live wiring can see player count, ready packet count, empty packet intent count, rejected quest counts, and unsupported dependency counts without sending packets. Safe alternative: read-only ItemCharge `Location == CubeStorageId` lifecycle audit. Keep production timers, controller dispatch, `SM_NEARBY_QUESTS` sends, repository writes, and Java source changes disabled.
