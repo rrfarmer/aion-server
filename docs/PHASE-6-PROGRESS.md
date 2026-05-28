@@ -75124,3 +75124,83 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1652
 
 Next best unit: add a source-grounded audit/model for live `MaterialZoneHandler` behavior, including material skill matching, observer registration/removal, collision debug messaging, and unsupported live actor side effects. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, live generated-zone writes, and live nearby dispatch disabled.
+
+### Session 1653 (May 28, 2026)
+- Continued after UOW-1652 by adding a non-live behavior plan for Java `MaterialZoneHandler`.
+- Performed Parallel Work Discovery across `MaterialZoneHandler` behavior modeling, charge-all DB rollback integration planning, nearby packet golden audit, and broader zone-handler source audit. Selected handler behavior modeling because material-zone construction/save/serialization metadata is now represented and live handler side effects are the next major material-zone gap.
+- Added `WorldMapRegionMaterialZoneHandlerPlanService`.
+- Modeled Java owner-race derivation from geometry names beginning with `BU_AB_DARKSP` and `BU_AB_LIGHTSP`.
+- Modeled `MaterialTarget` matching for `ALL`, `NPC`, `PLAYER`, and `PLAYER_WITH_PET`.
+- Modeled Java observer registration side effects for matching skills.
+- Modeled Java `CheckType.PASS` selection for material ids `14..16`, otherwise `TOUCH`.
+- Modeled staff debug-message metadata for enter/leave when material details are enabled.
+- Modeled leave cleanup metadata for observed actor removal, observer removal, and actor abort.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionMaterialZoneHandlerPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneSerializationPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneSavePlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneConstructionServiceTests"`.
+  - Result: passed 21 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1653
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | MaterialZoneHandler behavior plan | `MaterialZoneHandler`, `MaterialTarget`, `ZoneCollisionMaterialActor`, `AbstractMaterialSkillActor` | new handler-plan service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; next material-zone side-effect boundary after serialization modeling. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the material handler blocker. |
+| D | Broader zone-handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | MaterialZoneHandler behavior helper, tests, docs, commit | `WorldMapRegionMaterialZoneHandlerPlanService.cs`, `WorldMapRegionMaterialZoneHandlerPlanServiceTests.cs`, progress/handoff docs | Java source writes, live actor mutation, unrelated services/tests | Implemented and documented UOW-1653. |
+| Sub-agents | None | None | All files | Not spawned because selected work was small and Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1653 because selected work was small, self-contained, and docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1653
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.zone.handler.MaterialZoneHandler` | `WorldMapRegionMaterialZoneHandlerPlanService` | Zone Handler Behavior Plan | Partial | Unit Tested Metadata | Partial Parity | C# models owner-race guard, material target matching, observer registration metadata, PASS/TOUCH selection, staff debug metadata, and leave cleanup metadata. It does not create live observers, mutate creature controllers, or run material skill tasks. |
+| `com.aionemu.gameserver.model.templates.materials.MaterialTarget` | `WorldMapRegionMaterialZoneSkillTarget` | Enum / Predicate Boundary | Partial | Unit Tested | Partial Parity | C# models `ALL`, `NPC`, `PLAYER`, and `PLAYER_WITH_PET` matching, including summon-with-master behavior. It does not use Java runtime type checks. |
+| `com.aionemu.gameserver.controllers.observer.ZoneCollisionMaterialActor` | `WorldMapRegionMaterialZoneCollisionCheckType`; enter side effects | Observer Boundary | Not Started | Unit Tested Metadata | Needs Verification | C# records actor creation, `actor.moved`, and check-type selection only. Collision results, touch/untouch transitions, `act`, and `abort` runtime behavior remain unported. |
+| `com.aionemu.gameserver.controllers.observer.AbstractMaterialSkillActor` | Handler enter/leave side-effect metadata | Periodic Skill Actor Boundary | Not Started | Unit Tested Metadata | Needs Verification | C# does not schedule tasks, evaluate weather/time conditions, check protection/dead/spawned state, or invoke `SkillEngine.applyEffectDirectly`. |
+| `com.aionemu.gameserver.configs.main.GeoDataConfig.GEO_MATERIALS_SHOWDETAILS` | `WorldMapRegionMaterialZoneHandlerContext.ShowDetailsToStaff` | Config Boundary DTO | Partial | Unit Tested Metadata | Needs Verification | C# records debug message intent only. Packet send behavior and staff/player runtime checks remain unported. |
+| `com.aionemu.gameserver.world.zone.handler.ZoneHandler` | `CreateEnterPlan`; `CreateLeavePlan` | Interface Boundary | Partial | Unit Tested Metadata | Partial Parity | C# models the enter/leave contract for material zones only. Other zone handlers remain separate work. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateEnterPlan_OwnerRaceGeometrySkipsRegistration` | Unit Added | Java `MaterialZoneHandler` constructor and owner-race guard | Dark-spire geometry maps to Asmodians and skips same-race creature registration. | Deterministic C# regression grounded in Java source review. | No Java `Race` object or live creature type. |
+| `CreateEnterPlan_FiltersMaterialSkillsAndUsesPassForLandingShieldMaterials` | Unit Added | Java target matching and material id `14..16` branch | Matching skill ids, `PASS` check type, observer side effects, and staff debug metadata. | Deterministic C# regression grounded in Java source review. | No live observer, collision, or packet send. |
+| `CreateEnterPlan_NoMatchingSkillsSkipsObserverRegistration` | Unit Added | Java matching-skills empty guard | No matching skills returns without observer side effects. | Deterministic C# regression grounded in Java source review. | No Java predicate runtime. |
+| `CreateLeavePlan_RemovesObservedActorAndReportsStaffDebugMessage` | Unit Added | Java `MaterialZoneHandler.onLeaveZone` | Observed actor removal, observer removal, abort metadata, and staff debug leave metadata. | Deterministic C# regression grounded in Java source review. | No live observer removal or actor abort. |
+
+Remaining risks:
+- Handler planning is non-live and does not mutate creature observe controllers or `ConcurrentHashMap` state.
+- `ZoneCollisionMaterialActor.onMoved`, collision results, touch/untouch transitions, and material skill task scheduling remain unported.
+- `AbstractMaterialSkillActor` weather/time conditions, frequency timing, spawned/dead/protection guards, and `SkillEngine.applyEffectDirectly` remain unported.
+- Packet debug messages are metadata only; no `PacketSendUtility` parity yet.
+- Java runtime type checks are represented by supplied DTO enums, not real class hierarchy checks.
+- Live dynamic zone handlers and live C# `MapRegion`/`ZoneInstance` storage remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 non-live material-zone handler behavior helper plus 4 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity or Not Started metadata with known gaps.
+- Total blocked artifacts: live observer mutation, `ConcurrentHashMap` observed state, collision result transitions, periodic material skill tasks, weather/time material conditions, `SkillEngine.applyEffectDirectly`, packet debug sending, live Java type hierarchy checks, dynamic zone handlers, live C# MapRegion/ZoneInstance storage, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add a non-live `ZoneCollisionMaterialActor` / `AbstractMaterialSkillActor` task plan for material collision touch/untouch transitions, condition matching, frequency gates, and `SkillEngine.applyEffectDirectly` metadata, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1653
+
+Next best unit: add a non-live `ZoneCollisionMaterialActor` / `AbstractMaterialSkillActor` task plan for material collision touch/untouch transitions, condition matching, frequency gates, and `SkillEngine.applyEffectDirectly` metadata. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, live generated-zone writes, live actor mutation, and live nearby dispatch disabled.
