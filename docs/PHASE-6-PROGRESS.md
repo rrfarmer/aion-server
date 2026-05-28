@@ -75455,3 +75455,83 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1656
 
 Next best unit: add a non-live weather broadcast/change plan for Java `WeatherService.checkWeathersTime`, `loadWeather`, and `changeWeather`, including packet broadcast metadata, player filtering, random-delay scheduling metadata, and weather-code override behavior. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, live generated-zone writes, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1657 (May 28, 2026)
+- Continued after UOW-1656 by adding a non-live weather broadcast/change plan for Java `WeatherService.checkWeathersTime`, `loadWeather`, and `changeWeather`.
+- Performed Parallel Work Discovery across weather broadcast/change modeling, charge-all DB rollback integration planning, nearby packet golden audit, and broader zone-handler source audit. Selected weather broadcast/change modeling because UOW-1656 now models weather transitions but not scheduling, packet broadcast, or manual weather-code overrides.
+- Added `WorldMapRegionMaterialZoneWeatherBroadcastPlanService`.
+- Modeled Java `checkWeathersTime` random-delay scheduling range `Rnd.get(20000, 240000)` as clamped metadata.
+- Modeled Java per-map `SM_WEATHER` broadcast metadata and spawned/same-world player filter.
+- Modeled Java `loadWeather` send/no-send behavior when a player's world has or lacks weather entries.
+- Modeled Java `changeWeather` missing-world false return behavior.
+- Modeled Java `changeWeather` weather-code branches: `-1` natural transition request, `0` none weather, existing table entry, and created `WeatherEntry(zoneId, weatherCode)`.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionMaterialZoneWeatherBroadcastPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneWeatherTransitionPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneEnvironmentPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneActorPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneHandlerPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneSerializationPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneSavePlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneConstructionServiceTests"`.
+  - Result: passed 50 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1657
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Weather broadcast/change plan | `WeatherService.checkWeathersTime`, `WeatherService.loadWeather`, `WeatherService.changeWeather`, `SM_WEATHER` | new weather-broadcast service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; next weather boundary after transition metadata. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe candidate; deferred after sidecar notes from UOW-1654. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the weather broadcast blocker. |
+| D | Broader zone-handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Weather broadcast/change helper, tests, docs, commit | `WorldMapRegionMaterialZoneWeatherBroadcastPlanService.cs`, `WorldMapRegionMaterialZoneWeatherBroadcastPlanServiceTests.cs`, progress/handoff docs | Java source writes, live weather mutation, unrelated services/tests | Implemented and documented UOW-1657. |
+| Sub-agents | None | None | All files | Not spawned because selected work was small and Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1657 because selected implementation and docs were small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1657
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.WeatherService.checkWeathersTime` | `WorldMapRegionMaterialZoneWeatherBroadcastPlanService.CreateCheckWeathersTimePlan` | Weather Broadcast Plan | Partial | Unit Tested Metadata | Partial Parity | C# models delayed scheduling range, per-map weather recalculation/broadcast metadata, and spawned/same-world player filter. It does not schedule a runnable, mutate weather arrays, call `setNextWeather`, or broadcast packets. |
+| `com.aionemu.gameserver.services.WeatherService.loadWeather` | `WorldMapRegionMaterialZoneWeatherBroadcastPlanService.CreateLoadWeatherPlan` | Weather Packet Load Plan | Partial | Unit Tested Metadata | Partial Parity | C# models send/no-send behavior depending on world weather entries. It does not instantiate or encode `SM_WEATHER`. |
+| `com.aionemu.gameserver.services.WeatherService.changeWeather` | `WorldMapRegionMaterialZoneWeatherBroadcastPlanService.CreateChangeWeatherPlan` | Weather Change Plan | Partial | Unit Tested Metadata | Partial Parity | C# models missing-world false return, per-zone natural transition request, none weather, existing entry lookup, created override entry, and broadcast intent. It does not mutate synchronized arrays or broadcast packets. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_WEATHER` | `WorldMapRegionMaterialZoneWeatherBroadcastEntry`; load/change plans | Packet Boundary Metadata | Not Started | Unit Tested Metadata | Needs Verification | C# records packet intent only. Wire format, weather array payload order, and golden bytes remain unported. |
+| `com.aionemu.commons.utils.Rnd.get` | `WorldMapRegionMaterialZoneWeatherCheckContext.ScheduledDelayMilliseconds` | Random Delay Boundary DTO | Not Started | Unit Tested Metadata | Needs Verification | C# clamps supplied delay to Java range. It does not generate Java-equivalent random values. |
+| `com.aionemu.gameserver.model.templates.world.WeatherEntry` | `WorldMapRegionMaterialZoneWeatherOverrideEntrySnapshot` | Weather Override DTO | Partial | Unit Tested Metadata | Partial Parity | C# records zone id, weather code, and optional weather name for existing/created entries. It does not model rank, before/after, JAXB serialization, or singleton `NONE` identity in this helper. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateCheckWeathersTimePlan_ClampsJavaRandomDelayAndBroadcastsPerMap` | Unit Added | Java `WeatherService.checkWeathersTime` | Delay range and per-map broadcast/filter metadata. | Deterministic C# metadata regression grounded in Java source review. | No live scheduler or packets. |
+| `CreateLoadWeatherPlan_SendsPacketOnlyWhenWorldHasWeatherEntries` | Unit Added | Java `WeatherService.loadWeather` | Load-weather send/no-send branches. | Deterministic C# metadata regression grounded in Java source review. | No `SM_WEATHER` bytes. |
+| `CreateChangeWeatherPlan_ReturnsFalseWhenWorldHasNoWeatherEntries` | Unit Added | Java `WeatherService.changeWeather` | Missing world weather entries block change and broadcast. | Deterministic C# metadata regression grounded in Java source review. | No live map state. |
+| `CreateChangeWeatherPlan_ModelsNaturalAndNoneWeatherCodes` | Unit Added | Java `changeWeather` code `-1` and `0` branches | Natural transition requests and none weather entries. | Deterministic C# metadata regression grounded in Java source review. | Natural transition not executed here. |
+| `CreateChangeWeatherPlan_UsesExistingWeatherEntryOrCreatesOverrideEntryByZone` | Unit Added | Java `getOrCreateWeatherEntry` | Existing weather-table entry lookup and created override entry behavior. | Deterministic C# metadata regression grounded in Java source review. | No live weather table mutation. |
+
+Remaining risks:
+- Broadcast/change planning is non-live and does not mutate synchronized weather arrays, call `setNextWeather`, or broadcast `SM_WEATHER`.
+- `SM_WEATHER` packet encoding and golden byte parity remain unported.
+- Java RNG delay generation is represented by supplied/clamped metadata only.
+- Live `DataManager.MAP_WEATHER_DATA`, weather tables, and player-world filtering are not executed.
+- Weather code override entries only record metadata; Java object identity and serialization are not modeled.
+- Live material actors still consume supplied DTOs rather than live services.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 non-live weather broadcast/change helper plus 5 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with documented non-live gaps.
+- Total blocked artifacts: live weather mutation, weather scheduling, live `SM_WEATHER` packet encoding/broadcasts, Java RNG delay generation, live `DataManager.MAP_WEATHER_DATA`, player-world filtering execution, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add `SM_WEATHER` packet metadata/golden audit or move to the gated charge-all DB rollback integration regression identified by the UOW-1654 sidecar.
+
+---
+
+## Updated Immediate Next - Session 1657
+
+Next best unit: add `SM_WEATHER` packet metadata/golden audit for weather arrays and player load/broadcast paths, or move to the gated charge-all DB rollback integration regression identified by the UOW-1654 sidecar. Keep Java source writes, repository rewrites, live generated-zone writes, live weather mutation, live actor mutation, and live nearby dispatch disabled.
