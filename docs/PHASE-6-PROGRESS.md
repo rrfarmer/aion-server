@@ -74038,3 +74038,84 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1638
 
 Next best unit: add a non-live `MapRegion` lifecycle intent model for Java activation/deactivation and player-count transitions, grounded in `MapRegion.add`, `remove`, `tryActivate`, and `tryDeactivate`, without live object storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1639 (May 28, 2026)
+- Continued after UOW-1638 by modeling Java `MapRegion` lifecycle decisions without live object storage.
+- Performed Parallel Work Discovery across `MapRegion` lifecycle intent modeling, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected lifecycle intent modeling because region creation snapshots now exist and Java `MapRegion` activation/deactivation is the next prerequisite before live storage.
+- Added `WorldMapRegionLifecyclePlanService`.
+- Added `WorldMapRegionLifecycleContext`, `WorldMapRegionLifecycleRegionState`, `WorldMapRegionLifecyclePlan`, lifecycle action enum, and blocked-reason enum.
+- Modeled Java `MapRegion.add` first-player activation of self plus neighbours.
+- Modeled Java `MapRegion.remove` last-player schedule behavior, including 60-second delay and duplicate pending suppression.
+- Modeled Java scheduled deactivation guards: clear pending first, skip when self has players, skip instance maps, skip Transidium Annex (`400030000`), skip when any neighbour has players, and deactivate active self/neighbours otherwise.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionLifecyclePlanServiceTests|FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 47 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1639
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | `MapRegion` lifecycle intent model | `MapRegion.add`, `remove`, `activate`, `scheduleDeactivation`, `tryDeactivate` | new lifecycle service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; models threshold and delayed-state decisions in one isolated helper. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the region-lifecycle blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live `MapRegion` lifecycle intent model and tests | Utility Port / Tests / Docs | `WorldMapRegionLifecyclePlanService.cs`, `WorldMapRegionLifecyclePlanServiceTests.cs`, progress/handoff docs | Java source writes, live `MapRegion` storage, packet dispatch | UOW-1638 creation snapshot prerequisites | Tested Java-style player-count activation and deactivation decisions. |
+
+No sub-agent was spawned for UOW-1639 because implementation and tests touched one small helper surface and docs remained orchestrator-owned.
+
+#### Migration Parity Table - Session 1639
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.MapRegion.add` | `WorldMapRegionLifecyclePlanService.CreateAddPlan` | Region Lifecycle / Utility | Partial | Unit Tested | Partial Parity | C# models duplicate-object no-op, non-player add, player-count increment, and first-player activation of inactive self/neighbours. It does not mutate a live `ConcurrentHashMap`, store objects, or notify AI. |
+| `com.aionemu.gameserver.world.MapRegion.remove` | `WorldMapRegionLifecyclePlanService.CreateRemovePlan` | Region Lifecycle / Utility | Partial | Unit Tested | Partial Parity | C# models missing-object no-op, non-player removal, decrement without crossing zero, last-player schedule, and duplicate pending suppression. It does not mutate live objects or schedule a real task. |
+| `com.aionemu.gameserver.world.MapRegion.activate` | `WorldMapRegionLifecyclePlan.ActivatedRegionIds` | Activation Intent | Partial | Unit Tested | Partial Parity | C# reports which self/neighbour region ids would transition inactive-to-active. Java asynchronous `ThreadPoolManager.execute` and `AIEventType.ACTIVATE` notifications remain unported. |
+| `com.aionemu.gameserver.world.MapRegion.scheduleDeactivation` | `WorldMapRegionLifecyclePlanService.CreateScheduledDeactivationPlan` | Delayed Deactivation Intent | Partial | Unit Tested | Partial Parity | C# models 60-second delay metadata, pending clear, self-player guard, neighbour-player guard, instance-map guard, Transidium Annex guard, and inactive-region skip. It does not execute a scheduler or synchronize live state. |
+| `com.aionemu.gameserver.world.MapRegion.tryDeactivate` | `WorldMapRegionLifecyclePlan.DeactivatedRegionIds`; `BlockedReason` | Deactivation Intent | Partial | Unit Tested | Partial Parity | C# reports active region ids that would deactivate and reasons deactivation is blocked. Java `AIEventType.DEACTIVATE` notification and creature iteration remain unported. |
+| `com.aionemu.gameserver.world.WorldMapType.TRANSIDIUM_ANNEX` | `WorldMapRegionLifecyclePlanService.TransidiumAnnexWorldId` | Enum Constant / Guard | Partial | Unit Tested | Needs Verification | Constant `400030000` was verified by Java source review and covered by tests for deactivation blocking. Broader `WorldMapType` enum remains unported at this boundary. |
+| `com.aionemu.gameserver.world.MapRegion` | `WorldMapRegionLifecycleContext`; `WorldMapRegionLifecycleRegionState`; `WorldMapRegionLifecyclePlan` | Region Runtime Boundary DTO | Partial | Unit Tested | Needs Verification | DTOs model player count, active state, deactivation pending flag, and neighbour states. Missing live object maps, `ZoneInstance[]`, parent instance references, synchronized methods, volatile/threading behavior, AI notifications, zone revalidation, and death/item-use zone callbacks. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateAddPlan_FirstPlayerActivatesInactiveSelfAndNeighbours` | Unit | Java `MapRegion.add` and `activate` | First new player activates inactive self/neighbours and skips already active neighbours. | Deterministic C# regression grounded in Java source review. | No live objects or AI notifications. |
+| `CreateAddPlan_DuplicateOrNonPlayerDoesNotChangeLifecycle` | Unit | Java `objects.put == null` and `instanceof Player` guard | Duplicate adds and non-player adds do not affect lifecycle state. | Deterministic C# regression grounded in Java source review. | Does not mutate object map. |
+| `CreateRemovePlan_LastPlayerSchedulesOneJavaDelayedDeactivation` | Unit | Java `MapRegion.remove` and `scheduleDeactivation` | Last player removal schedules one 60-second deactivation. | Deterministic C# regression grounded in Java source review. | Does not schedule real task. |
+| `CreateRemovePlan_PendingDeactivationSuppressesDuplicateSchedule` | Unit | Java `deactivationPending` guard | Pending deactivation suppresses duplicate schedule. | Deterministic C# regression grounded in Java source review. | Volatile/threading behavior not runtime-compared. |
+| `CreateRemovePlan_NonLastPlayerOnlyDecrementsCount` | Unit | Java `decrementPlayerCount` threshold | Removing one of multiple players decrements count without scheduling. | Deterministic C# regression grounded in Java source review. | Does not mutate live count. |
+| `CreateScheduledDeactivationPlan_DeactivatesActiveSelfAndNeighboursWhenNoPlayersRemain` | Unit | Java scheduled task and `tryDeactivate` | Active self/neighbours deactivate when no players remain. | Deterministic C# regression grounded in Java source review. | No AI deactivate notifications. |
+| `CreateScheduledDeactivationPlan_BlocksInstanceAndTransidiumAnnexMaps` | Unit | Java `tryDeactivate` instance/Transidium guard | Instance maps and Transidium Annex block deactivation. | Deterministic C# regression grounded in Java source review. | Broader world map enum not ported. |
+| `CreateScheduledDeactivationPlan_BlocksWhenAnyNeighbourStillHasPlayers` | Unit | Java `anyNeighbourHasPlayers` | Any neighbour with players blocks deactivation. | Deterministic C# regression grounded in Java source review. | No live neighbour array. |
+
+Remaining risks:
+- Lifecycle model is non-live and does not mutate `MapRegion.objects`, `playerCount`, `regionActive`, or `deactivationPending`.
+- Java synchronization/volatile behavior and scheduled task timing are represented as metadata only.
+- AI activation/deactivation notifications and creature iteration are not executed.
+- Zone revalidation, death callbacks, item-use zone checks, and live `ZoneInstance[]` behavior remain unported.
+- Parent instance references and full `WorldMapType` enum behavior remain incomplete.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 7 grouped rows in this unit.
+- Total artifacts ported: 1 non-live lifecycle intent helper plus 8 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live C# MapRegion storage, object map mutation, scheduler execution, synchronization/volatile runtime parity, AI notifications, zone revalidation, full `WorldMapType`, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Compose region creation snapshots with lifecycle intent into a non-live region runtime snapshot that records constructor prerequisites plus current lifecycle state, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1639
+
+Next best unit: compose `WorldMapRegionCreationSnapshot` with `WorldMapRegionLifecyclePlanService` into a non-live region runtime snapshot/readiness model that records constructor prerequisites plus active/player/deactivation state before live storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
