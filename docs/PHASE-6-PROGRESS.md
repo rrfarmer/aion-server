@@ -75535,3 +75535,76 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1657
 
 Next best unit: add `SM_WEATHER` packet metadata/golden audit for weather arrays and player load/broadcast paths, or move to the gated charge-all DB rollback integration regression identified by the UOW-1654 sidecar. Keep Java source writes, repository rewrites, live generated-zone writes, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1658 (May 28, 2026)
+- Continued after UOW-1657 by adding a real C# `SM_WEATHER` packet equivalent for the Java packet body.
+- Performed Parallel Work Discovery across `SM_WEATHER` packet body parity, charge-all DB rollback integration planning, nearby packet golden gap audit, and broader zone-handler source audit. Selected `SM_WEATHER` because UOW-1657 reached the weather packet boundary and the Java packet is small and isolated.
+- Added `SmWeather` under `Network/Aion/ServerPackets`.
+- Confirmed Java `PacketWriteHelper.writeC` uses `buf.put((byte) value)` and C# `PacketBuffer.WriteC(int)` writes `(byte)value`.
+- Modeled Java `SM_WEATHER.writeImpl`: unknown byte `0`, weather-entry count through `writeC`, then each `WeatherEntry.getCode()` through `writeC`.
+- Added focused packet payload tests for empty arrays, ordinary weather codes, and Java-style low-byte truncation for count/codes.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmWeatherPacketTests|FullyQualifiedName~WorldMapRegionMaterialZoneWeatherBroadcastPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneWeatherTransitionPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneEnvironmentPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneActorPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneHandlerPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneSerializationPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneSavePlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneConstructionServiceTests"`.
+  - Result: passed 53 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1658
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | `SM_WEATHER` packet body | `SM_WEATHER`, `WeatherEntry`, `PacketWriteHelper.writeC`, `AionServerPacket` | `SmWeather.cs`, `SmWeatherPacketTests.cs` | Packet Port / Test Creation | Sequential for packet/test writes | Low | Selected; direct packet boundary after weather broadcast/change metadata. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe candidate; deferred after sidecar notes from UOW-1654. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the current weather packet blocker. |
+| D | Broader zone-handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | `SM_WEATHER` packet, tests, docs, commit | `SmWeather.cs`, `SmWeatherPacketTests.cs`, progress/handoff docs | Java source writes, live weather mutation, unrelated services/tests | Implemented and documented UOW-1658. |
+| Sub-agents | None | None | All files | Not spawned because selected work was small and Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1658 because selected implementation and docs were small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1658
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_WEATHER` | `Aion.GameServer.Network.Aion.ServerPackets.SmWeather` | Server Packet | Complete | Unit Tested | Partial Parity | C# models the Java packet payload body and opcode `67`. It does not yet prove live broadcast integration from `WeatherService`, encrypted frame golden capture against Java, or player load/broadcast paths. |
+| `com.aionemu.gameserver.model.templates.world.WeatherEntry` | `SmWeather` constructor `IReadOnlyList<int> weatherCodes` boundary | DTO Projection | Partial | Unit Tested | Partial Parity | C# consumes weather codes equivalent to Java `WeatherEntry.getCode()`. It does not model `WeatherEntry` zone id, rank, before/after, JAXB serialization, singleton `NONE` identity, or weather table lookup. |
+| `com.aionemu.gameserver.network.PacketWriteHelper.writeC` | `Aion.Commons.Network.PacketBuffer.WriteC(int)` | Packet Buffer Utility | Complete | Unit Tested | Partial Parity | Source review confirms both Java and C# write the low byte. Tests cover low-byte truncation for `SM_WEATHER`, but no Java runtime packet capture was compared in this unit. |
+| `com.aionemu.gameserver.network.aion.AionServerPacket` | `Aion.GameServer.Network.Aion.GameServerPacket` | Packet Frame Base | Partial | Regression Tested | Needs Verification | Existing C# frame base writes encoded opcode/static header/encryption. This unit only verifies unencrypted payload slice; full Java frame/encryption parity for `SM_WEATHER` was not captured. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SmWeather_WritesEmptyWeatherArrayLikeJava` | Unit Added | Java `SM_WEATHER.writeImpl` | Empty weather array writes unknown byte `0`, count `0`, and no entries. | Deterministic C# payload regression grounded in Java source review. | No Java runtime golden frame. |
+| `SmWeather_WritesWeatherEntryCodesLikeJava` | Unit Added | Java `WeatherEntry.getCode()` loop | Weather codes `[0, 7, 255]` produce byte payload `00 03 00 07 FF`. | Deterministic C# payload regression grounded in Java source review. | Does not instantiate C# `WeatherEntry` model. |
+| `SmWeather_UsesWriteCLowByteSemanticsForCountAndCodes` | Unit Added | Java `PacketWriteHelper.writeC` | Count `300` writes low byte `44`, and codes use `(byte)value` semantics. | Source-confirmed Java/C# low-byte behavior plus deterministic regression. | No runtime comparison against Java ByteBuffer output. |
+
+Remaining risks:
+- `SmWeather` is not yet wired into live `WeatherService.loadWeather`, `checkWeathersTime`, or `changeWeather` C# execution.
+- No Java runtime golden packet capture was produced; parity is source-review and C# regression-test based.
+- Full encrypted frame parity for `SM_WEATHER` remains unverified.
+- Weather-entry DTO construction, table lookup, JAXB serialization, rank/before/after metadata, and singleton `WeatherEntry.NONE` object identity remain outside the packet body.
+- Java weather broadcasts filter live spawned players and mutate synchronized arrays; UOW-1657 only models that as non-live metadata.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 server packet plus 3 focused packet tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 1 grouped row explicitly marked Needs Verification; remaining rows are Partial Parity with documented gaps.
+- Total blocked artifacts: live `SM_WEATHER` weather-service integration, Java runtime packet capture, full encrypted frame comparison, `WeatherEntry` table/model parity, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add the gated charge-all DB rollback integration regression identified by the UOW-1654 sidecar, or wire `SmWeather` into the non-live weather broadcast/load/change plans as an explicit packet-factory boundary before live broadcast integration.
+
+---
+
+## Updated Immediate Next - Session 1658
+
+Next best unit: add the gated charge-all DB rollback integration regression for charge-all partial-save failure, or add a small `SmWeather` packet-factory boundary in the weather broadcast/load/change plans before live weather broadcast integration. Keep Java source writes, repository rewrites, live generated-zone writes, live weather mutation, live actor mutation, and live nearby dispatch disabled.
