@@ -76756,3 +76756,78 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1673
 
 Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, add Java runtime/golden vector coverage for `SM_POSITION`/`SM_POSITION_SELF`, continue with another isolated packet parity unit, or add a non-live `SimpleRootEffect` sub-effect movement outcome planner using the existing movement-correction planner. Keep Java source writes, repository production rewrites, live generated-zone writes, live movement dispatch, live packet broadcast, live effect-controller mutation, live move-controller mutation, live AI state/event dispatch, live world position mutation, live skill-engine dispatch, live target dispatch, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1674 (May 28, 2026)
+- Continued after UOW-1673 by adding a non-live `SimpleRootEffect.startEffect` sub-effect movement outcome planner.
+- Performed Parallel Work Discovery across DB integration execution, Java position-packet vector verification, isolated packet parity, and simple-root effect planning. Selected the simple-root planner because UOW-1672 already provided `SM_POSITION` packet planning and this unit can compose it safely without live mutation.
+- Added `SimpleRootSubEffectMovementPlanService`.
+- Added `SimpleRootSubEffectMovementPlanInput`, `SimpleRootSubEffectMovementPlan`, and `SimpleRootSubEffectMovementPlanStatus`.
+- Modeled Java `SimpleRootEffect.startEffect` ordering metadata: set spell status none, optional player stop-move intent, optional sub-effect world-position update intent, optional non-player `broadcastPacket(new SM_POSITION(effected))` intent, and abnormal-state set intents.
+- Reused `MovementCorrectionPacketPlanService.CreateBroadcastObjectPlan(receiveAfterBroadcast: false)` for the non-player sub-effect packet path.
+- Added a C# safety block for invalid effected object ids before side-effect planning.
+- Validation:
+  - Attempted `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SimpleRootSubEffectMovementPlanServiceTests|FullyQualifiedName~MovementCorrectionPacketPlanServiceTests|FullyQualifiedName~FearConfuseEndEffectPlanServiceTests|FullyQualifiedName~SmPositionPacketsTests|FullyQualifiedName~GamePacketTests"`.
+  - Execution was blocked in this runtime because `pwsh.exe` is unavailable; test execution remains Manual Only for this unit.
+
+#### Parallel Work Discovery - Session 1674
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Simple-root movement outcome planner | `SimpleRootEffect.startEffect`, `PacketSendUtility.broadcastPacket`, `SM_POSITION` | `SimpleRootSubEffectMovementPlanService.cs`, `SimpleRootSubEffectMovementPlanServiceTests.cs` | Effect Boundary / Test Creation | Sequential for service/test writes | Low | Selected; directly composes existing movement-correction packet planning without live mutation. |
+| B | Run gated DB integration | charge-all DB integration harness | no file changes if executable | Parity Verification | No, env unavailable | Medium | Deferred because no disposable DB environment is present. |
+| C | Java runtime position packet vectors | `SM_POSITION`, `SM_POSITION_SELF` | vector artifacts/tests | Golden/Runtime Verification | Yes, later | Low | Useful for stronger packet parity evidence but independent of this planner unit. |
+| D | Another isolated packet audit | missing server packets | packet class/tests | Packet Port | Yes, later | Low | Still viable after this effect-planner slice. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Simple-root movement planner, tests, docs, commit | `SimpleRootSubEffectMovementPlanService.cs`, `SimpleRootSubEffectMovementPlanServiceTests.cs`, progress/handoff docs | Java source writes, live effect-controller mutation, live world/movement mutation, live packet broadcast, unrelated services/tests | Implemented and documented UOW-1674. |
+| Sub-agents | None | None | All files | Not spawned because selected work was a small service/test pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1674 because the selected boundary was small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1674
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.SimpleRootEffect` | `Aion.GameServer.Services.SimpleRootSubEffectMovementPlanService` | Effect Boundary | Partial | Manual Only | Partial Parity | C# models non-live `startEffect` side-effect intent ordering for spell status, player stop move, optional sub-effect movement correction, optional non-player `SM_POSITION` broadcast intent, and abnormal-state set intents. It does not integrate with live `Effect`, `EffectController`, `World.updatePosition`, `PlayerController.onStopMove`, or packet dispatch. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_POSITION` | `Aion.GameServer.Network.Aion.ServerPackets.SmPosition`; `MovementCorrectionPacketPlanService` reused by simple-root planner | Server Packet / Service Dependency | Complete packet, Partial workflow | Manual Only | Partial Parity | Planner composes the existing packet service boundary with broadcast-without-receive intent for simple-root non-player sub effects. No Java runtime golden/encrypted frame comparison and no live dispatch integration were produced in this unit. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.broadcastPacket` | `MovementCorrectionPacketPlan.ShouldBroadcastPacket` through `SimpleRootSubEffectMovementPlan` | Utility Boundary | Partial | Manual Only | Needs Verification | C# records broadcast intent only. Live recipient selection, ordering, visibility, source inclusion/exclusion, encryption, and threading remain unverified. |
+| `com.aionemu.gameserver.world.World.updatePosition` | `SimpleRootSubEffectMovementPlan.ShouldUpdateWorldPosition`; `UpdatedPosition` metadata | World Mutation Boundary | Partial | Manual Only | Needs Verification | C# records non-live world-position update intent for sub effects. Live world mutation, map/instance state handling, known-list updates, and movement-controller interactions remain unported for this path. |
+| `com.aionemu.gameserver.model.gameobjects.player.PlayerController.onStopMove` | `SimpleRootSubEffectMovementPlan.ShouldCallPlayerOnStopMove` | Controller Boundary | Partial | Manual Only | Partial Parity | C# records player stop-move intent in Java order before sub-effect movement branch. No live controller invocation or movement-state mutation occurs in this unit. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_ForPlayerSubEffect_StopsMoveUpdatesWorldAndSkipsBroadcastLikeJava` | Unit Added | Java `SimpleRootEffect.startEffect` player + sub-effect branch | Player sub effect records stop-move and world-position update intents and does not create `SM_POSITION` broadcast intent. | Source-derived planner regression. | Not executed in this runtime because `pwsh.exe` is unavailable. |
+| `CreatePlan_ForNpcSubEffect_UsesMovementCorrectionBroadcastWithoutReceiveLikeJava` | Unit Added | Java non-player sub-effect `broadcastPacket(new SM_POSITION(effected))` branch | Non-player sub effect composes movement-correction packet plan with broadcast-only intent and Java-shaped payload bytes. | Source-derived planner regression with packet payload assertion. | Not executed in this runtime because `pwsh.exe` is unavailable. |
+| `CreatePlan_ForNonSubEffectPlayer_SetsAbnormalWithoutWorldUpdateLikeJava` | Unit Added | Java non-sub-effect branch of `SimpleRootEffect.startEffect` | Non-sub-effect path keeps spell/abnormal and player stop-move intents while skipping world update and packet creation. | Source-derived planner regression. | Not executed in this runtime because `pwsh.exe` is unavailable. |
+| `CreatePlan_BlocksInvalidObjectBeforeAnySideEffects` | Unit Added | C# safety boundary for Java live effected-object requirement | Invalid effected object id blocks side-effect planning and packet creation. | C# boundary regression. | Java requires a live creature reference rather than this snapshot/id guard. |
+
+Remaining risks:
+- Live `SimpleRootEffect` integration remains unported; no effect-controller mutation, movement-controller mutation, world position update, or packet broadcast occurs.
+- Planner coverage is focused on `startEffect` movement outcomes only; `calculate`, `applyEffect`, and `endEffect` runtime behavior remain outside this unit.
+- `PacketSendUtility.broadcastPacket` semantics are intent-only and unverified.
+- `World.updatePosition` semantics, known-list side effects, and movement-state synchronization are not executed.
+- Unit tests were added but could not be executed in this runtime because command execution requires unavailable `pwsh.exe`.
+- Gated charge-all DB integration execution still needs a real MySQL environment.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 non-live simple-root movement planner, 2 DTO records, 1 status enum, and 4 focused regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with documented live/runtime gaps.
+- Total blocked artifacts: live simple-root effect integration, live world/movement mutation, live packet broadcast semantics, Java runtime packet capture/encryption comparison, test execution in this runtime, DB-backed charge-all integration run.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- If a DB is available, run the gated DB integration suite. Otherwise, restore executable test tooling in this runtime (or run tests externally) and then continue with Java runtime/golden vector coverage for `SM_POSITION`/`SM_POSITION_SELF`, another isolated packet parity unit, or a non-live planner for additional movement-correction effect outcomes.
+
+---
+
+## Updated Immediate Next - Session 1674
+
+Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, first run the new planner tests in an environment with working command execution (`pwsh.exe` available), then continue with Java runtime/golden vector coverage for `SM_POSITION`/`SM_POSITION_SELF`, another isolated packet parity unit, or another narrow non-live movement-correction effect planner. Keep Java source writes, repository production rewrites, live generated-zone writes, live movement dispatch, live packet broadcast, live effect-controller mutation, live move-controller mutation, live AI state/event dispatch, live world position mutation, live skill-engine dispatch, live target dispatch, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
