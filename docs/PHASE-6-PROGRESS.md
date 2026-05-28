@@ -76516,3 +76516,76 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1670
 
 Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, continue with another isolated packet parity unit or add Java runtime/golden vector coverage for `PositionUtil` heading calculations. Keep Java source writes, repository production rewrites, live generated-zone writes, live target dispatch, live NPC target broadcast, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1671 (May 28, 2026)
+- Continued after UOW-1670 by selecting another isolated packet parity unit instead of touching live dispatch.
+- Performed Parallel Work Discovery across DB integration, heading vectors, zone-handler audit, and missing server packets. Selected Java `SM_POSITION` plus `SM_POSITION_SELF` because both are small movement-correction packets with deterministic float/heading payloads and missing C# equivalents.
+- Added `SmPosition` and `ObjectPositionSnapshot`.
+- Added `SmPositionSelf` and `PositionSelfSnapshot`.
+- Modeled Java `SM_POSITION` opcode `204` payload: object id, x/y/z floats, heading.
+- Modeled Java `SM_POSITION_SELF` opcode `21` payload: x/y/z floats, heading.
+- Added focused packet payload tests.
+- Kept live movement correction dispatch disabled.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmPositionPacketsTests|FullyQualifiedName~GamePacketTests"`.
+  - Result: passed 242 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1671
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | `SM_POSITION`/`SM_POSITION_SELF` packet port | `SM_POSITION`, `SM_POSITION_SELF`, `CM_POSITION_SELF` response boundary | `SmPosition.cs`, `SmPositionSelf.cs`, `SmPositionPacketsTests.cs` | Packet Port / Test Creation | Sequential for paired packet/test writes | Low | Selected; small deterministic packet bodies sharing float/heading shape. |
+| B | Run gated DB integration | charge-all DB integration harness | no file changes if executable | Parity Verification | No, env unavailable | Medium | Deferred because no DB environment is present. |
+| C | Java runtime heading vectors | `PositionUtil` | vector tests/artifacts | Golden/Runtime Verification | Yes, later | Low | Useful for stronger heading parity, but packet unit is more direct. |
+| D | Zone handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks, but outside packet body scope. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Position packet classes, tests, docs, commit | `SmPosition.cs`, `SmPositionSelf.cs`, `SmPositionPacketsTests.cs`, progress/handoff docs | Java source writes, live movement dispatch, unrelated services/tests | Implemented and documented UOW-1671. |
+| Sub-agents | None | None | All files | Not spawned because selected work was a small paired packet/test unit plus shared docs. |
+
+No sub-agent was spawned for UOW-1671 because the selected packet pair was small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1671
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_POSITION` | `Aion.GameServer.Network.Aion.ServerPackets.SmPosition` | Server Packet | Complete | Unit Tested | Partial Parity | C# models opcode `204` and payload fields: object id, x, y, z, heading. It uses snapshot input instead of live `VisibleObject`. No Java runtime golden/encrypted frame comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_POSITION_SELF` | `Aion.GameServer.Network.Aion.ServerPackets.SmPositionSelf` | Server Packet | Complete | Unit Tested | Partial Parity | C# models opcode `21` and payload fields: x, y, z, heading. Client response `CM_POSITION_SELF` is already parsed but no live request/response workflow is verified. |
+| `com.aionemu.gameserver.model.gameobjects.VisibleObject` | `ObjectPositionSnapshot`; `PositionSelfSnapshot` | DTO Projection | Partial | Unit Tested | Partial Parity | C# uses snapshots for object id, coordinates, and heading. Live object position, heading signed-byte behavior, movement controller side effects, and object equality are unported for this path. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_POSITION_SELF` | `Aion.GameServer.Network.Aion.ClientPackets.CmPositionSelf` | Client Packet Boundary | Existing | Regression Tested | Partial Parity | Existing C# parser recognizes the response packet. This unit does not verify the Java request/response workflow or live movement cancellation semantics. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SmPosition_WritesObjectPositionAndHeadingLikeJava` | Unit Added | Java `SM_POSITION.writeImpl` | Packet writes object id, x/y/z floats, and heading in Java order. | Deterministic C# packet regression grounded in Java source review. | No Java runtime golden frame. |
+| `SmPositionSelf_WritesCoordinatesAndHeadingLikeJava` | Unit Added | Java `SM_POSITION_SELF.writeImpl` | Packet writes x/y/z floats and heading in Java order. | Deterministic C# packet regression grounded in Java source review. | No Java request/response workflow test. |
+
+Remaining risks:
+- Live movement correction dispatch remains unported; no server path sends `SmPosition` or `SmPositionSelf`.
+- Float precision is source-derived through packet buffer behavior but not compared with Java runtime frames.
+- Heading signed-byte behavior for these packet paths is not runtime-compared.
+- `SM_POSITION_SELF` response workflow with `CM_POSITION_SELF` remains unverified.
+- Gated charge-all DB integration execution still needs a real MySQL environment.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 2 server packets, 2 DTO projections, and 2 focused regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 0 grouped rows explicitly marked Needs Verification; all rows are Partial Parity with documented live/runtime gaps.
+- Total blocked artifacts: live movement correction dispatch, Java runtime packet capture, encrypted frame comparison, `SM_POSITION_SELF` response workflow, DB-backed charge-all integration run.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- If a DB is available, run the gated DB integration suite. Otherwise, add a non-live movement-correction packet-plan boundary for `SM_POSITION`/`SM_POSITION_SELF`, continue with another isolated packet parity unit, or add Java runtime vector coverage for packet float payloads.
+
+---
+
+## Updated Immediate Next - Session 1671
+
+Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, add a non-live movement-correction packet-plan boundary for `SM_POSITION`/`SM_POSITION_SELF`, continue with another isolated packet parity unit, or add Java runtime vector coverage for packet float payloads. Keep Java source writes, repository production rewrites, live generated-zone writes, live movement dispatch, live target dispatch, live NPC target broadcast, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
