@@ -73509,3 +73509,86 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1631
 
 Next best unit: return to nearby with read-only Java/C# region-id calculation analysis before live region storage, focused on how Java 2D/3D map instances derive region ids and how that could map to C# non-live region keys. Safe ItemCharge alternative: add a narrow DB integration regression for C# charge-all transaction rollback/no-mutation behavior. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1632 (May 28, 2026)
+- Continued after UOW-1631 with nearby region-id calculation work before live region storage.
+- Performed Parallel Work Discovery across nearby region-id calculation, charge-all rollback coverage audit, nearby packet golden gap audit, and live nearby dispatch. Selected region-id calculation for the local implementation path and delegated the charge-all rollback audit as a read-only sidecar with no write access.
+- Added `WorldRegionIdService`, a non-live C# helper that ports Java `RegionUtil` 2D/3D region-id math and reverse component extraction.
+- Added `WorldRegionIdServiceTests` covering Java's integer-cast-before-division behavior, 2D/3D offset encoding, reverse start-coordinate extraction, and custom region-size overloads.
+- Java findings:
+  - `RegionUtil.get2DRegionId(regionSize, x, y)` computes `(int)x / regionSize * 1000 + (int)y / regionSize`.
+  - `RegionUtil.get3DRegionId(regionSize, x, y, z)` computes `(int)x / regionSize * 1000000 + (int)y / regionSize * 1000 + (int)z / regionSize`.
+  - Default region size comes from `WorldConfig.WORLD_REGION_SIZE`, whose default property is `128`.
+  - `WorldMap2DInstance.getRegion` ignores Z and uses 2D ids.
+  - `WorldMap3DInstance.getRegion` includes Z and uses 3D ids.
+  - 2D init creates regions for `x <= worldSize` and `y <= worldSize`; 3D init creates regions for `x <= worldSize`, `y <= worldSize`, and `z < maxZ`, where `maxZ = round(worldSize / regionSize) * regionSize`.
+- Sidecar charge-all rollback audit findings:
+  - Existing fake-repository tests cover no runtime mutation and no packets when AP or Kinah charge-all save fails.
+  - Existing tests do not prove actual MySQL transaction rollback if `SaveItemChargeAllMutationAsync` fails after one or more item charge updates.
+  - A gated DB integration rollback regression remains worthwhile as a future ItemCharge unit.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldRegionIdServiceTests|FullyQualifiedName~NearbyQuestRegionSnapshotServiceTests|FullyQualifiedName~PlayerKnownListRegionSnapshotServiceTests|FullyQualifiedName~WorldMapRuntimeStateTests"`.
+  - Result: passed 40 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1632
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Nearby region-id calculation | `RegionUtil`, `WorldMap2DInstance`, `WorldMap3DInstance`, `MapRegion`, `WorldConfig` | `WorldRegionIdService.cs`, `WorldRegionIdServiceTests.cs` | Utility Port / Test Creation | Sequential for writes | Low | Selected; unlocks Java-like region identity for future nearby snapshot/storage work. |
+| B | Charge-all rollback coverage audit | C# charge-all tests/repository; no Java writes | read-only only | Parity Verification | Yes | Low | Delegated sidecar; non-overlapping and no writes. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs if later implemented | Analysis/Test | Yes, later | Low | Useful later, not the live-region identity blocker. |
+| D | Live nearby refresh dispatch | `ThreadPoolManager.schedule`, `PacketSendUtility`, `GameServerConnection` | world/connection services | Integration Fix | No | High | Deferred; live region storage and player iteration are still blocked. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Port Java region-id math into non-live C# helper and tests | Utility Port / Tests / Docs | `WorldRegionIdService.cs`, `WorldRegionIdServiceTests.cs`, progress/handoff docs | Java source writes, live nearby dispatch, shared region storage files | AQY handoff; Java `RegionUtil` review | Tested helper matching Java region-id formulas. |
+| Explorer | Audit charge-all rollback coverage | Read-only Parity Verification | read-only inspection only | all writes, docs, production/test changes | UOW-1631 charge-all audit | Coverage/gap report for future ItemCharge unit. |
+
+The explorer was spawned with read-only instructions, returned a report, and was closed after completion.
+
+#### Migration Parity Table - Session 1632
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.RegionUtil` | `Aion.GameServer.World.WorldRegionIdService` | Utility | Complete | Unit Tested | Partial Parity | Java 2D/3D formulas, offsets, default region size, and reverse component extraction are ported and tested. Negative coordinate behavior is not separately tested; no Java runtime comparison was performed. |
+| `com.aionemu.gameserver.configs.main.WorldConfig` | `WorldRegionIdService.DefaultRegionSize` | Config Dependency | Partial | Unit Tested | Needs Verification | C# helper uses Java default `128`, but it is not yet wired to live `.properties` config. Runtime config override behavior remains unported for this helper. |
+| `com.aionemu.gameserver.world.WorldMap2DInstance` | `WorldRegionIdService.Get2DRegionId`; future nearby region-key planning | World Region Instance | Partial | Unit Tested Utility | Needs Verification | 2D region-id derivation is covered, including ignoring Z. Region precreation loops, neighbour linking, zone filtering, owner/personal instance behavior, and live `getRegion` lookup are not ported. |
+| `com.aionemu.gameserver.world.WorldMap3DInstance` | `WorldRegionIdService.Get3DRegionId`; future nearby region-key planning | World Region Instance | Partial | Unit Tested Utility | Needs Verification | 3D region-id derivation and reverse starts are covered. Region precreation loops, `parallelStream` creation, 3D neighbour linking, zone filtering, and live lookup remain unported. |
+| `com.aionemu.gameserver.world.MapRegion` | `NearbyQuestRegionKey`; `PlayerKnownListRegionKey`; future C# live region storage | Region Storage / Boundary | Partial | Existing Unit Tested + Manual Analysis | Needs Verification | Region ids can now be derived by Java-equivalent helper, but live object maps, neighbour arrays, activation/deactivation, synchronized player counts, zone revalidation, and parent instance storage remain snapshot-only or unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `Get2DRegionId_UsesJavaIntegerCastAndRegionOffsets` | Unit | Java `RegionUtil.get2DRegionId` source review | 2D region ids use `(int)x`, `(int)y`, region size 128, and X offset 1000. | Deterministic C# regression grounded in Java formula. | No Java runtime comparison; negative coordinates not separately covered. |
+| `Get3DRegionId_UsesJavaIntegerCastAndRegionOffsets` | Unit | Java `RegionUtil.get3DRegionId` source review | 3D region ids use `(int)x`, `(int)y`, `(int)z`, region size 128, X offset 1000000, and Y offset 1000. | Deterministic C# regression grounded in Java formula. | No Java runtime comparison; negative coordinates not separately covered. |
+| `GetRegionStartCoordinates_ReversesJavaRegionIdComponents` | Unit | Java `getX/Y/ZFrom*RegionId` source review | Reverse extraction returns region start coordinates for encoded 2D and 3D ids. | Deterministic C# regression grounded in Java formula. | Does not validate full region precreation or neighbour linking. |
+| `GetRegionIds_SupportCustomRegionSizeLikeJavaOverloads` | Unit | Java overloads accepting `regionSize` | Custom region size affects forward and reverse formulas. | Deterministic C# regression grounded in Java overloads. | Runtime config binding for region size is not wired. |
+
+Remaining risks:
+- `WorldRegionIdService` is non-live and not yet connected to `NearbyQuestRegionSnapshotService`, known-list snapshots, world positions, or runtime world storage.
+- Java `WorldMap2DInstance`/`WorldMap3DInstance` region precreation boundaries, neighbour linking, zone filtering, and live `regions` map behavior remain unported.
+- Java negative-coordinate behavior depends on Java/C# truncation toward zero; this is likely equivalent for casts/division but was not separately tested.
+- Region size config override behavior is not wired into the helper; it uses Java's default property value.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 region-id utility plus 4 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 4 grouped rows explicitly marked Needs Verification or Partial Parity with known gaps.
+- Total blocked artifacts: live C# MapRegion storage, region precreation/neighbour model, zone filtering/revalidation, config-bound region size, Java runtime comparison, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Thread `WorldRegionIdService` into non-live nearby/known-list region-key planning tests so region keys are derived from `WorldPosition` instead of manually invented ids, while keeping live storage disabled. Safe alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation.
+
+---
+
+## Updated Immediate Next - Session 1632
+
+Next best unit: add non-live adapter coverage that derives `NearbyQuestRegionKey` or `PlayerKnownListRegionKey` from `WorldPosition` using `WorldRegionIdService`, proving the new Java region-id helper can feed existing snapshot planners without live storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
