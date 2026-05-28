@@ -75897,3 +75897,82 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1662
 
 Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, add a non-live target-change plan/factory boundary for `PlayerController.onTargetChanged` using the new target packets, or continue with another isolated packet parity unit. Keep Java source writes, repository production rewrites, live generated-zone writes, live target dispatch, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1663 (May 28, 2026)
+- Continued after UOW-1662 by adding a non-live target-change packet-plan boundary for Java `PlayerController.onTargetChanged`.
+- Performed Parallel Work Discovery across target-change boundary planning, gated DB integration, zone-handler source audit, and isolated packet audit. Selected target-change planning because UOW-1662 supplied the packet bodies and Java `PlayerController.onTargetChanged` has a small deterministic side-effect shape.
+- Added `PlayerTargetChangePacketPlanService`.
+- Added `PlayerTargetChangePacketPlan` and `PlayerTargetChangePacketPlanStatus`.
+- Modeled Java owner packet creation with `SmTargetSelected`.
+- Modeled Java sighted-player broadcast packet creation with `SmTargetUpdate`.
+- Preserved the Java `VisibleObject.setTarget` changed-target guard as an object-id approximation until live `VisibleObject` references and KnownList target resolution are ported.
+- Kept live dispatch disabled: the plan creates packet objects and metadata only; it does not send to the owner or broadcast to visible players.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerTargetChangePacketPlanServiceTests|FullyQualifiedName~SmTargetPacketsTests|FullyQualifiedName~GamePacketTests"`.
+  - Result: passed 250 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1663
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Target-change packet-plan boundary | `PlayerController.onTargetChanged`, `VisibleObject.setTarget`, `SM_TARGET_SELECTED`, `SM_TARGET_UPDATE` | `PlayerTargetChangePacketPlanService.cs`, `PlayerTargetChangePacketPlanServiceTests.cs` | Controller Boundary / Packet Factory | Sequential for service/test writes | Low | Selected; closes a non-live controller boundary immediately after packet bodies were ported. |
+| B | Run gated DB integration | charge-all DB integration harness | no file changes if executable | Parity Verification | No, env unavailable | Medium | Deferred because no DB environment is present. |
+| C | Zone handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks, but outside target-change packet scope. |
+| D | Isolated packet audit | missing server packets | packet class/tests | Packet Port | Yes, later | Low | Still viable after target-change boundary is documented. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Target-change packet-plan service, tests, docs, commit | `PlayerTargetChangePacketPlanService.cs`, `PlayerTargetChangePacketPlanServiceTests.cs`, progress/handoff docs | Java source writes, live target dispatch, unrelated connection handlers/services/tests | Implemented and documented UOW-1663. |
+| Sub-agents | None | None | All files | Not spawned because selected work was a small service/test pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1663 because the selected boundary was small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1663
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController.onTargetChanged` | `Aion.GameServer.Services.PlayerTargetChangePacketPlanService` | Controller Boundary | Partial | Unit Tested | Partial Parity | C# creates owner `SmTargetSelected` and sighted-player `SmTargetUpdate` packet objects in Java order. It does not call `PacketSendUtility.sendPacket`, `broadcastToSightedPlayers`, connection registry dispatch, or live KnownList visibility filtering. |
+| `com.aionemu.gameserver.model.gameobjects.VisibleObject.setTarget` | `PlayerTargetChangePacketPlanService.CreatePlan` | Model Boundary | Partial | Unit Tested | Partial Parity | Java guards by object reference before invoking the controller. C# currently approximates this with target object ids because live `VisibleObject` references are not ported into targeting. This is an explicit non-live approximation and needs verification once object references exist. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_TARGET_SELECTED` | `Aion.GameServer.Network.Aion.ServerPackets.SmTargetSelected` | Server Packet | Complete | Regression Tested | Partial Parity | Reused from UOW-1662; this unit verifies the controller-boundary factory creates the owner packet and serializes the expected payload. No Java runtime golden/encrypted frame comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_TARGET_UPDATE` | `Aion.GameServer.Network.Aion.ServerPackets.SmTargetUpdate` | Server Packet | Complete | Regression Tested | Partial Parity | Reused from UOW-1662; this unit verifies the controller-boundary factory creates the sighted-player broadcast packet. Live broadcast recipients and include/exclude source behavior remain unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TARGET_SELECT` | `GameServerConnection.HandleTargetSelect`; future targeting input plan | Client Packet / Input Boundary | Partial | Manual Only | Needs Verification | Java resolves target-of-target, self target, KnownList object, team member fallback, invisible-target audit, and then calls `player.setTarget`. Existing C# handler only stores a target object id and logs target-of-target as unported. No new live connection integration was added in this unit. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.broadcastToSightedPlayers` | future connection-registry broadcast integration | Utility Boundary | Not Started | No Tests | Needs Verification | Newly documented dependency for live target-change parity. Recipient selection, source exclusion, visibility, threading, and packet ordering remain unported for this path. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_CreatesOwnerAndSightedPacketsWhenTargetChangesToCreatureLikeJavaController` | Unit Added | Java `VisibleObject.setTarget` and `PlayerController.onTargetChanged` | Changed creature target creates owner `SM_TARGET_SELECTED` and sighted-player `SM_TARGET_UPDATE` packet objects with Java-shaped payloads. | Deterministic C# packet-plan regression grounded in Java source review. | No live dispatch or Java runtime frame comparison. |
+| `CreatePlan_CreatesClearTargetPacketsWhenTargetChangesToNullLikeJavaController` | Unit Added | Java null target path through `SM_TARGET_SELECTED` and `SM_TARGET_UPDATE` | Clearing a target creates zeroed selected-target payload and zero target-update id. | Deterministic C# regression grounded in Java source review. | No live object-reference clear path. |
+| `CreatePlan_DoesNotCreatePacketsWhenTargetIdIsUnchangedLikeVisibleObjectGuard` | Unit Added | Java `VisibleObject.setTarget` reference guard | Unchanged target id creates no packets in the non-live approximation. | C# guard regression with documented id-vs-reference limitation. | Java compares object references, not ids. |
+| `CreatePlan_CreatesPlanFromPlayerCurrentTargetObjectId` | Unit Added | C# adapter for Java player owner/current target state | `Player` overload uses current C# target id and creates broadcast packet for the new target. | C# boundary regression; source-derived side-effect shape. | No live `Player.getTarget()` object reference. |
+| `CreatePlan_BlocksPacketsWhenPlayerOwnerIsUnavailable` | Unit Added | Non-live C# safety boundary for Java live owner requirement | Invalid player owner does not create packets. | C# boundary regression. | Java controller would require a live owner rather than this nullable/id guard. |
+
+Remaining risks:
+- Live `GameServerConnection.HandleTargetSelect` still does not resolve Java target-of-target, self target, KnownList target, team member fallback, invisible-target audit, or object-reference target assignment.
+- Live `PlayerController.onTargetChanged` dispatch remains unported; no owner send or sighted-player broadcast occurs.
+- C# changed-target guard uses target ids instead of Java object-reference equality.
+- Broadcast recipient selection, packet ordering, threading, and source-player inclusion/exclusion remain unverified.
+- No Java runtime golden frame or encrypted frame comparison was produced for target-change packets.
+- Gated charge-all DB integration execution still needs a real MySQL environment.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 non-live controller packet-plan service, 2 packet-factory uses, and 5 focused regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with documented non-live gaps.
+- Total blocked artifacts: live `CM_TARGET_SELECT` target resolution, live target-change dispatch, Java object-reference target storage, sighted-player broadcast recipient selection, Java runtime packet capture, encrypted frame comparison, DB-backed charge-all integration run.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- If a DB is available, run the gated DB integration suite. Otherwise, add a non-live `CM_TARGET_SELECT` input-resolution plan for target-of-target/self/KnownList/team-member/audit outcomes, or continue with another isolated packet parity unit.
+
+---
+
+## Updated Immediate Next - Session 1663
+
+Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, add a non-live `CM_TARGET_SELECT` input-resolution plan that models Java target-of-target, self target, KnownList, team fallback, invisible-target audit, and no-target outcomes without enabling live dispatch. Keep Java source writes, repository production rewrites, live generated-zone writes, live target dispatch, live weather mutation, live actor mutation, and live nearby dispatch disabled.
