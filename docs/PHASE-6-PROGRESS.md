@@ -76589,3 +76589,92 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1671
 
 Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, add a non-live movement-correction packet-plan boundary for `SM_POSITION`/`SM_POSITION_SELF`, continue with another isolated packet parity unit, or add Java runtime vector coverage for packet float payloads. Keep Java source writes, repository production rewrites, live generated-zone writes, live movement dispatch, live target dispatch, live NPC target broadcast, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1672 (May 28, 2026)
+- Continued after UOW-1671 by adding a non-live movement-correction packet-plan boundary for Java `SM_POSITION` and `SM_POSITION_SELF`.
+- Performed Parallel Work Discovery across DB integration, movement-correction call sites, another isolated packet audit, and Java runtime packet vectors. Selected the movement-correction planner because the packet bodies existed but no C# service modeled where Java would create/send them.
+- Reviewed Java creation sites:
+  - `ConfuseEffect.endEffect` uses `PacketSendUtility.broadcastPacketAndReceive(effect.getEffected(), new SM_POSITION(effect.getEffected()))`.
+  - `FearEffect.endEffect` uses `PacketSendUtility.broadcastPacketAndReceive(effect.getEffected(), new SM_POSITION(effect.getEffected()))`.
+  - `SimpleRootEffect.startEffect` uses `PacketSendUtility.broadcastPacket(effected, new SM_POSITION(effected))` for non-player sub effects after `World.updatePosition`.
+  - `EternalBastionMountableAI.tryMountNpc` uses `World.updatePosition(player, ...)`, `PacketSendUtility.broadcastPacketAndReceive(player, new SM_POSITION(player))`, applies a mount skill, and deletes the NPC owner.
+  - `SM_POSITION_SELF` documents a `CM_POSITION_SELF` response but no direct construction site was found by the current grep.
+- Added `MovementCorrectionPacketPlanService`.
+- Added `MovementCorrectionPacketPlan` and `MovementCorrectionPacketPlanStatus`.
+- Modeled non-live object-position correction as a plan that creates `SmPosition`, records broadcast intent, and distinguishes Java `broadcastPacketAndReceive` from `broadcastPacket`.
+- Modeled non-live self-position correction as a plan that creates `SmPositionSelf`, records owner-send intent, and records the expected `CM_POSITION_SELF` response.
+- Added a C# safety block for invalid object ids before creating `SmPosition`.
+- Kept live movement dispatch, world position mutation, effect cleanup, AI mount logic, packet recipient selection, and client response workflow disabled.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~MovementCorrectionPacketPlanServiceTests|FullyQualifiedName~SmPositionPacketsTests|FullyQualifiedName~GamePacketTests"`.
+  - Result: passed 246 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1672
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Movement-correction packet-plan boundary | `SM_POSITION`, `SM_POSITION_SELF`, `ConfuseEffect`, `FearEffect`, `SimpleRootEffect`, `EternalBastionMountableAI`, `PacketSendUtility` | `MovementCorrectionPacketPlanService.cs`, `MovementCorrectionPacketPlanServiceTests.cs` | Service Boundary / Test Creation | Sequential for service/test/docs writes | Low | Selected; creates a non-live factory boundary for packets added in UOW-1671 without enabling live dispatch. |
+| B | Run gated DB integration | charge-all DB integration harness | no file changes if executable | Parity Verification | No, env unavailable | Medium | Deferred because no disposable DB environment is present. |
+| C | Another isolated packet audit | missing server packets | packet class/tests | Packet Port | Yes, later | Low | Still viable after movement-correction planner is documented. |
+| D | Java runtime position packet vectors | `SM_POSITION`, `SM_POSITION_SELF` | vector artifacts/tests | Golden/Runtime Verification | Yes, later | Low | Useful for stronger packet parity, but planner boundary was the immediate documented gap. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Movement-correction planner, tests, docs, commit | `MovementCorrectionPacketPlanService.cs`, `MovementCorrectionPacketPlanServiceTests.cs`, progress/handoff docs | Java source writes, live movement dispatch, world mutation, effect controller mutation, AI mount integration, unrelated services/tests | Implemented and documented UOW-1672. |
+| Sub-agents | None | None | All files | Not spawned because selected work touched one small service/test pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1672 because the selected service boundary was small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1672
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_POSITION` | `Aion.GameServer.Network.Aion.ServerPackets.SmPosition`; `Aion.GameServer.Services.MovementCorrectionPacketPlanService.CreateBroadcastObjectPlan` | Server Packet / Service Boundary | Complete packet, Partial planner integration | Unit Tested | Partial Parity | C# planner creates `SmPosition` from an `ObjectPositionSnapshot` and records broadcast intent. It does not read a live `VisibleObject`, mutate world position, dispatch to known lists, include/exclude the source connection, or verify Java runtime packet frames. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_POSITION_SELF` | `Aion.GameServer.Network.Aion.ServerPackets.SmPositionSelf`; `Aion.GameServer.Services.MovementCorrectionPacketPlanService.CreateSelfPlan` | Server Packet / Service Boundary | Complete packet, Partial planner integration | Unit Tested | Partial Parity | C# planner creates `SmPositionSelf`, records owner-send intent, and records expected `CM_POSITION_SELF`. No direct Java construction site was found by current grep, and the live request/response workflow remains unverified. |
+| `com.aionemu.gameserver.skillengine.effect.ConfuseEffect` | `Aion.GameServer.Services.MovementCorrectionPacketPlanService.CreateBroadcastObjectPlan` | Effect Boundary | Partial | Unit Tested | Partial Parity | Java aborts movement and broadcasts/receives `SM_POSITION` on effect end. C# models only packet creation and broadcast intent; abnormal-state cleanup, movement abort, AI state changes, scheduled confuse task behavior, threading, and effect-controller side effects remain unported here. |
+| `com.aionemu.gameserver.skillengine.effect.FearEffect` | `Aion.GameServer.Services.MovementCorrectionPacketPlanService.CreateBroadcastObjectPlan` | Effect Boundary | Partial | Unit Tested | Partial Parity | Java aborts movement and broadcasts/receives `SM_POSITION` on effect end. C# models only packet creation and broadcast intent; abnormal-state cleanup, movement abort, AI state changes, observer behavior, scheduled fear task behavior, threading, and effect-controller side effects remain unported here. |
+| `com.aionemu.gameserver.skillengine.effect.SimpleRootEffect` | `Aion.GameServer.Services.MovementCorrectionPacketPlanService.CreateBroadcastObjectPlan(receiveAfterBroadcast: false)` | Effect Boundary | Partial | Unit Tested | Partial Parity | Java updates world position for sub effects and broadcasts `SM_POSITION` for non-player effected creatures. C# models packet creation and broadcast-without-receive intent only; target-location calculation, `World.updatePosition`, player `onStopMove`, abnormal state, and non-player filtering remain outside this unit. |
+| `ai.instance.eternalBastion.EternalBastionMountableAI` | `Aion.GameServer.Services.MovementCorrectionPacketPlanService.CreateBroadcastObjectPlan` | AI Handler Boundary | Not Started | Unit Tested boundary only | Needs Verification | Java updates player position to the mountable NPC, broadcasts/receives `SM_POSITION`, applies a skill, and deletes the NPC. C# only has a reusable packet-plan boundary; handler runtime, inventory decrement, race skill choice, world mutation, skill engine, and NPC deletion are not ported in this unit. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.broadcastPacketAndReceive` | `Aion.GameServer.Services.MovementCorrectionPacketPlan.ShouldBroadcastAndReceive` | Utility Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records intent but performs no live broadcast. Recipient selection, ordering, visibility, source inclusion, encryption, response handling, and threading remain unverified. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.broadcastPacket` | `Aion.GameServer.Services.MovementCorrectionPacketPlan.ShouldBroadcastPacket` | Utility Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records broadcast-only intent for `SimpleRootEffect` shape. Live packet dispatch and known-list behavior are not implemented here. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_POSITION_SELF` | `Aion.GameServer.Network.Aion.ClientPackets.CmPositionSelf`; `MovementCorrectionPacketPlan.ExpectsClientPositionSelfResponse` | Client Packet Boundary | Existing parser, Partial workflow | Regression Tested existing parser; Unit Tested planner intent | Partial Parity | Existing C# parser remains the response boundary. This unit only records that `SM_POSITION_SELF` expects a response; it does not verify the Java live response workflow or movement cancellation semantics. |
+| `com.aionemu.gameserver.model.gameobjects.VisibleObject` | `ObjectPositionSnapshot`; `PositionSelfSnapshot`; `MovementCorrectionPacketPlan` | DTO Projection | Partial | Unit Tested | Partial Parity | C# still uses snapshots for object id, x/y/z, and heading. Live object reference behavior, heading signed-byte source type, position mutation, equality, null behavior, and threading remain unported for this path. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateBroadcastObjectPlan_CreatesSmPositionAndBroadcastReceiveIntentLikeJavaEffects` | Unit Added | Java `ConfuseEffect.endEffect`, `FearEffect.endEffect`, `EternalBastionMountableAI.tryMountNpc`, and `SM_POSITION.writeImpl` | Planner creates `SmPosition`, records broadcast-and-receive intent, and writes object id/x/y/z/heading payload. | Source-derived service boundary regression with packet payload assertion. | No live broadcast, world mutation, effect cleanup, or Java runtime frame. |
+| `CreateBroadcastObjectPlan_CanModelSimpleRootBroadcastWithoutReceive` | Unit Added | Java `SimpleRootEffect.startEffect` and `SM_POSITION.writeImpl` | Planner can create `SmPosition` with broadcast-only intent. | Source-derived branch regression with packet payload assertion. | No `World.updatePosition`, non-player filtering, or live known-list broadcast. |
+| `CreateBroadcastObjectPlan_BlocksInvalidObjectBeforePacketCreation` | Unit Added | C# safety boundary for Java live `VisibleObject` constructor requirement | Invalid object id creates no packet and no send intent. | C# boundary regression. | Java would require a live object rather than this snapshot/id guard. |
+| `CreateSelfPlan_CreatesSmPositionSelfAndOwnerResponseIntentLikeJavaPacketDoc` | Unit Added | Java `SM_POSITION_SELF.writeImpl` and `CM_POSITION_SELF` packet doc | Planner creates `SmPositionSelf`, records owner-send intent, records expected response, and writes x/y/z/heading payload. | Source-derived service boundary regression with packet payload assertion. | No direct Java construction site found; no live response workflow validation. |
+
+Remaining risks:
+- Live movement correction dispatch remains unported; no server path calls `MovementCorrectionPacketPlanService`.
+- Java `PacketSendUtility.broadcastPacketAndReceive` and `broadcastPacket` semantics are only recorded as intent. Recipient selection, source inclusion, packet ordering, visibility, encryption, and threading are not verified.
+- Effect end/start side effects in `ConfuseEffect`, `FearEffect`, and `SimpleRootEffect` remain unported for this unit.
+- `EternalBastionMountableAI` runtime behavior remains not started outside the packet-plan dependency.
+- `SM_POSITION_SELF` has no currently discovered direct Java construction site and the `CM_POSITION_SELF` response workflow remains unverified.
+- Float precision and heading signed-byte behavior are source-derived through packet buffer tests but not Java runtime-compared.
+- Gated charge-all DB integration execution still needs a real MySQL environment.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 10 grouped rows in this unit.
+- Total artifacts ported: 1 non-live movement-correction packet-plan service, 1 plan DTO, 1 status enum, and 4 focused planner regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with documented live/runtime gaps.
+- Total blocked artifacts: live movement correction dispatch, live `PacketSendUtility` semantics, effect controller side effects, world position mutation, AI mount runtime integration, Java runtime packet capture, encrypted frame comparison, `SM_POSITION_SELF` response workflow, DB-backed charge-all integration run.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- If a DB is available, run the gated DB integration suite. Otherwise, continue with Java runtime/golden vector coverage for `SM_POSITION`/`SM_POSITION_SELF` float payloads, add another isolated packet parity unit, or add a narrow non-live movement-correction effect outcome planner for `ConfuseEffect.endEffect`/`FearEffect.endEffect`.
+
+---
+
+## Updated Immediate Next - Session 1672
+
+Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, add Java runtime/golden vector coverage for `SM_POSITION`/`SM_POSITION_SELF` float payloads, continue with another isolated packet parity unit, or add a narrow non-live movement-correction effect outcome planner for `ConfuseEffect.endEffect`/`FearEffect.endEffect`. Keep Java source writes, repository production rewrites, live generated-zone writes, live movement dispatch, live packet broadcast, live effect-controller mutation, live world position mutation, live skill-engine dispatch, live target dispatch, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
