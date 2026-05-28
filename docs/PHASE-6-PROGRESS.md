@@ -72872,3 +72872,73 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1622
 
 Next best unit: add a non-live nearby controller-position/map-region metadata adapter for staged nearby quest refresh, keeping it report-only with no production timers or packet sends. Safe ItemCharge alternative: charge-all multi-item packet/order audit. Keep repository SQL rewrites, live nearby sends, and Java source changes disabled.
+
+### Session 1623 (May 28, 2026)
+- Continued after UOW-1622 by returning to the non-live nearby quest refresh path recommended by the handoff.
+- Performed Parallel Work Discovery across nearby controller-position/map-region metadata, delayed refresh report integration, charge-all multi-item ordering, and live nearby dispatch. Selected the map-region metadata adapter because it is the smallest controller-boundary prerequisite and keeps production timers/sends disabled.
+- Re-read Java `PlayerController.updateNearbyQuests`: it builds nearby quest markers from `getOwner().getPosition().getMapRegion().getParent().getQuestIds()`, filters through `QuestService.checkStartConditions`, and unconditionally sends `SM_NEARBY_QUESTS`.
+- Added `NearbyQuestMapRegionSnapshot` and `NearbyQuestRefreshInputAdapterService.CreatePlanFromMapRegion` to model the Java `player.position.mapRegion.parent` boundary explicitly without live region storage.
+- Extended `NearbyQuestRefreshInputAdapterResult` with player/map-region position metadata and parent instance id metadata, plus a `MissingMapRegion` guard status.
+- Added tests proving the map-region snapshot path uses parent quest ids and captures position/parent metadata, and that missing map-region input stops before packet intent.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~NearbyQuestRefreshInputAdapterServiceTests|FullyQualifiedName~NearbyQuestRefreshPlanServiceTests|FullyQualifiedName~NearbyQuestDelayedRefreshExecutionReportServiceTests|FullyQualifiedName~WorldMapRuntimeStateTests|FullyQualifiedName~GamePacketTests"`.
+  - Result: passed 274 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1623
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Nearby controller-position/map-region metadata adapter | `PlayerController.updateNearbyQuests`, `MapRegion.getParent`, `WorldMapInstance.getQuestIds` | `NearbyQuestRefreshInputAdapterService.cs`, adapter tests | Service/Test | Sequential | Low | Selected; shared adapter/test surface and docs should have one owner. |
+| B | Delayed refresh report map-region integration | `WorldMapInstance.updateNearbyQuestsTask`, `PlayerController.updateNearbyQuests` | delayed report service/tests | Later | Medium | Builds on candidate A; should wait until map-region snapshot shape exists. |
+| C | Charge-all multi-item packet/order audit | `ItemChargeService.chargeItems` | ItemCharge handler tests | Yes, later | Medium | Independent of nearby files, but current handoff prioritized nearby metadata. |
+| D | Live nearby refresh dispatch | `ThreadPoolManager.schedule`, `PacketSendUtility`, `SM_NEARBY_QUESTS` | world/connection services | No | High | Deferred; production timers and sends remain risky. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live map-region snapshot adapter for nearby quest refresh | Service/Test/Docs | `NearbyQuestRefreshInputAdapterService.cs`, `NearbyQuestRefreshInputAdapterServiceTests.cs`, progress/handoff docs | live `GameServerConnection`, `ThreadPoolManager`, `PacketSendUtility`, delayed report service, Java source writes, ItemCharge files | Existing nearby refresh planner and world instance quest-id state | One tested adapter overload that preserves Java map-region-parent metadata without live dispatch. |
+
+No sub-agent was spawned for UOW-1623 because the work edits a shared adapter and its paired tests; docs remain orchestrator-owned.
+
+#### Migration Parity Table - Session 1623
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestRefreshInputAdapterService.CreatePlanFromMapRegion` | Controller Adapter / Service | Partial | Unit Tested | Partial Parity | C# now models the Java `player.position.mapRegion.parent.questIds` boundary as explicit snapshot metadata. It still does not invoke a live controller, send packets, or resolve live `MapRegion` storage. |
+| `com.aionemu.gameserver.world.MapRegion` | `Aion.GameServer.Services.NearbyQuestMapRegionSnapshot` | Region Boundary DTO | Partial | Unit Tested | Needs Verification | Snapshot carries position and parent world instance, but live Java region buckets, neighboring regions, zone/known-list behavior, threading, and object membership are not ported here. |
+| `com.aionemu.gameserver.world.WorldMapInstance.getQuestIds` | `Aion.GameServer.World.WorldMapInstanceRuntimeState.QuestIds` via `NearbyQuestMapRegionSnapshot.ParentWorldInstance` | World Runtime Dependency | Partial | Unit Tested | Partial Parity | Parent instance quest ids flow into the existing plan. Java concurrent set behavior and runtime ordering are not compared. |
+| `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `NearbyQuestRefreshPlanService` / `NearbyQuestStartConditionService` | Service Dependency | Partial | Unit Tested through adapter | Needs Verification | Existing staged condition filters are reused. Unsupported XML/inventory/repeat timing dependencies remain explicit rejections. No Java runtime comparison. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `NearbyQuestRefreshPlan.WouldSendPacket`; `SmNearbyQuests` existing packet tests | Packet Dependency | Partial | Regression Tested + Unit Tested intent | Needs Verification | Map-region adapter produces packet intent only. No live send, encrypted frame comparison, or Java byte capture was run. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlanFromMapRegion_UsesParentQuestIdsAndCapturesPositionMetadataWithoutLiveDispatch` | Unit / Adapter | Java `PlayerController.updateNearbyQuests` source review | Parent world instance quest ids flow through the adapter; player/map-region position and parent instance metadata are captured; packet intent is staged without live send. | Deterministic C# adapter regression grounded in reviewed Java source. | No live `MapRegion`, controller dispatch, socket send, Java runtime comparison, or encrypted frame. |
+| `CreatePlanFromMapRegion_GuardsMissingMapRegionBeforePlanning` | Unit / Adapter Guard | Java requires `player.getPosition().getMapRegion()` before parent quest-id lookup | Missing map-region snapshot returns explicit `MissingMapRegion`, preserves player position metadata, and produces no packet intent. | Deterministic C# guard regression for an unported live dependency. | Java null/exception behavior for impossible live region absence is not runtime compared. |
+
+Remaining risks:
+- This is metadata-only; no live `PlayerController.updateNearbyQuests`, `MapRegion` storage, timers, or `PacketSendUtility.sendPacket` is enabled.
+- C# snapshot input approximates Java's live `player.position.mapRegion.parent` object graph.
+- Java concurrent region/world collections, collection ordering, threading, zone/known-list side effects, reflection/dynamic handlers, date/time behavior, and encrypted packet bytes remain unverified.
+- Existing nearby start-condition support is partial; unsupported XML inventory/repeat timing dependencies still reject candidates.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 map-region snapshot DTO plus 1 adapter overload and 2 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live MapRegion storage, live controller dispatch, production timer callback, packet send/encrypted frame comparison, full QuestService condition parity, Java runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Integrate `NearbyQuestMapRegionSnapshot` into the delayed refresh execution report input shape without sending packets, or switch to ItemCharge charge-all multi-item packet/order audit. Keep live timers, live packet sends, repository rewrites, and Java source changes disabled.
+
+---
+
+## Updated Immediate Next - Session 1623
+
+Next best unit: thread `NearbyQuestMapRegionSnapshot` into `NearbyQuestDelayedRefreshExecutionReportService` as optional per-player input metadata, preserving the existing explicit-player report path and no-send behavior. Safe alternative: ItemCharge charge-all multi-item packet/order audit. Keep live `ThreadPoolManager`, `PacketSendUtility`, `GameServerConnection` sends, repository rewrites, and Java source changes disabled.
