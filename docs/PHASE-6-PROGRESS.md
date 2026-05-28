@@ -74900,3 +74900,76 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1649
 
 Next best unit: extend the material-zone construction plan with Java `MaterialZoneTemplate` numeric geometry metadata for sphere/cylinder/semisphere center, radius, bottom/top calculations from bounding-box extents. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1650 (May 28, 2026)
+- Continued after UOW-1649 by extending the material-zone construction plan with Java `MaterialZoneTemplate` numeric geometry metadata.
+- Performed Parallel Work Discovery across material-zone numeric geometry metadata, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected numeric geometry because UOW-1649 modeled area kind selection but left Java bounding-box math explicit as a gap.
+- Extended `WorldMapRegionMaterialZoneConstructionContext` with bounding-box center and extents.
+- Added `WorldMapRegionMaterialZoneGeometry`.
+- Modeled Java cylinder radius as `sqrt(xExtent^2 + yExtent^2) + 1`, top as `centerZ + zExtent + 1`, and bottom as `centerZ - zExtent - 1`.
+- Modeled Java sphere/semisphere radius as `sqrt(xExtent^2 + yExtent^2 + zExtent^2) + 1`.
+- Added focused tests for cylinder geometry and sphere/semisphere geometry.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionMaterialZoneConstructionServiceTests|FullyQualifiedName~WorldMapRegionZoneConstructionServiceTests|FullyQualifiedName~WorldMapRegionZoneIdentityServiceTests|FullyQualifiedName~WorldMapRegionZoneCapabilityServiceTests|FullyQualifiedName~WorldMapRegionZoneScanPlanServiceTests|FullyQualifiedName~WorldMapRegionZoneSortServiceTests|FullyQualifiedName~WorldMapRegionRuntimeSnapshotServiceTests|FullyQualifiedName~WorldMapRegionLifecyclePlanServiceTests|FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 94 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1650
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Material-zone numeric geometry metadata | `MaterialZoneTemplate`, `BoundingBox`, sphere/cylinder/semisphere constructors | material construction service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; extends shared material construction helper from UOW-1649. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the material geometry blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Material-zone numeric geometry metadata, tests, docs, commit | `WorldMapRegionMaterialZoneConstructionService.cs`, `WorldMapRegionMaterialZoneConstructionServiceTests.cs`, progress/handoff docs | Java source writes, unrelated services/tests | Implemented and documented UOW-1650. |
+| Sub-agents | None | None | All files | Not spawned because selected work edits shared material helper/test/docs. |
+
+No sub-agent was spawned for UOW-1650 because selected work edits shared material construction helper/test/docs and needs one owner.
+
+#### Migration Parity Table - Session 1650
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.zone.MaterialZoneTemplate` | `WorldMapRegionMaterialZoneGeometry` | Material Zone Geometry DTO | Partial | Unit Tested | Partial Parity | C# now models center/radius and cylinder top/bottom calculations from Java bounding-box extents. It still does not instantiate Java `Sphere`, `Cylinder`, or `Semisphere` template objects. |
+| `com.aionemu.gameserver.geoEngine.bounding.BoundingBox` | `WorldMapRegionMaterialZoneConstructionContext` center/extents | Geometry Boundary DTO | Partial | Unit Tested | Needs Verification | C# receives center/extents as supplied metadata. Live `Spatial.getWorldBound()` and cast to `BoundingBox` remain unported. |
+| `com.aionemu.gameserver.model.templates.zone.Cylinder` | `WorldMapRegionMaterialZoneGeometry` with `Cylinder` area kind | Material Area DTO | Partial | Unit Tested | Partial Parity | C# computes Java radius/top/bottom for cylinder-like material names. Serialization and live area construction remain unverified. |
+| `com.aionemu.gameserver.model.templates.zone.Sphere` | `WorldMapRegionMaterialZoneGeometry` with `Sphere` area kind | Material Area DTO | Partial | Unit Tested | Partial Parity | C# computes Java corner-distance radius plus one for default material geometry. Serialization and live area construction remain unverified. |
+| `com.aionemu.gameserver.model.templates.zone.Semisphere` | `WorldMapRegionMaterialZoneGeometry` with `Semisphere` area kind | Material Area DTO | Partial | Unit Tested | Partial Parity | C# computes Java corner-distance radius plus one for semisphere material geometry. Serialization and live area construction remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_CylinderGeometryUsesJavaHorizontalExtentRadiusAndVerticalBounds` | Unit Added | Java `MaterialZoneTemplate` cylinder branch | Cylinder center, horizontal-extent radius plus one, top, and bottom are modeled. | Deterministic C# regression grounded in Java source review. | No live `BoundingBox` or `Cylinder` object. |
+| `CreatePlan_SphereAndSemisphereGeometryUseJavaCornerDistanceRadius` | Unit Added | Java `calculateDistanceFromCenterToCorner` plus sphere/semisphere branches | Sphere and semisphere center/radius metadata uses Java corner-distance plus one. | Deterministic C# regression grounded in Java source review. | No live `Sphere`/`Semisphere` object. |
+
+Remaining risks:
+- Numeric geometry metadata is non-live and depends on supplied center/extents.
+- Live `Spatial`, `BoundingBox`, template object creation, XML serialization, material/world lookups, shield ignore/config checks, and collidable handler mutation remain unported.
+- Floating-point behavior is covered by simple deterministic values only; broader precision/runtime comparison remains unverified.
+- Live `MaterialZoneHandler` behavior, material zone persistence, dynamic zone handlers, and live C# `MapRegion`/`ZoneInstance` storage remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 material-zone construction helper extension plus 2 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 1 grouped row explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live `Spatial`/`BoundingBox`, live material template/world lookups, XML serialization, collidable handler mutation, material skill/observer behavior, material zone persistence, dynamic zone handlers, live C# MapRegion/ZoneInstance storage, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add a non-live `saveMaterialZones` plan for Java `ZoneService.saveMaterialZones`, including collidable-handler filtering and sorting by map id, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1650
+
+Next best unit: add a non-live `saveMaterialZones` plan for Java `ZoneService.saveMaterialZones`, including collidable-handler filtering, sorting by `ZoneTemplate.mapid`, and persistence-boundary metadata. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
