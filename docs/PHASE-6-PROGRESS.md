@@ -76215,3 +76215,76 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1666
 
 Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, decide between adding an opt-in/live-disabled `GameServerConnection.HandleTargetSelect` integration seam that consumes `TargetSelectHandlerPlanService`, or pivot to another isolated packet parity unit until live KnownList/object-reference targeting can be safely modeled. Keep Java source writes, repository production rewrites, live generated-zone writes, live target dispatch, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1667 (May 28, 2026)
+- Continued after UOW-1666 by selecting a safer isolated packet parity unit instead of touching live connection targeting.
+- Performed Parallel Work Discovery across live-disabled target connection seam, DB integration, zone-handler source audit, and missing server packets. Selected Java `SM_LOOKATOBJECT` because it is small, missing in C#, and has deterministic payload fields.
+- Added `SmLookAtObject`.
+- Added `LookAtObjectSnapshot`.
+- Modeled Java opcode `40` payload: visible object id, target object id or zero, and heading.
+- Added focused packet payload tests for targeted and no-target cases.
+- Kept live `NpcController.onTargetChanged`/broadcast integration disabled; no runtime target dispatch was added.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmLookAtObjectPacketTests|FullyQualifiedName~GamePacketTests"`.
+  - Result: passed 242 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1667
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Live-disabled target connection seam | `CM_TARGET_SELECT`, `GameServerConnection.HandleTargetSelect` | `GameServerConnection.cs`, focused tests | Integration Fix | No | Medium | Deferred because it touches a very large live connection handler and target references are still snapshot-only. |
+| B | Run gated DB integration | charge-all DB integration harness | no file changes if executable | Parity Verification | No, env unavailable | Medium | Deferred because no DB environment is present. |
+| C | `SM_LOOKATOBJECT` packet port | `SM_LOOKATOBJECT`, `NpcController.onTargetChanged` | `SmLookAtObject.cs`, `SmLookAtObjectPacketTests.cs` | Packet Port / Test Creation | Sequential for packet/test writes | Low | Selected; small deterministic missing packet. |
+| D | Zone handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks, but outside packet body scope. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | `SM_LOOKATOBJECT` packet class, tests, docs, commit | `SmLookAtObject.cs`, `SmLookAtObjectPacketTests.cs`, progress/handoff docs | Java source writes, live NPC target dispatch, live connection targeting, unrelated services/tests | Implemented and documented UOW-1667. |
+| Sub-agents | None | None | All files | Not spawned because selected work was a small packet/test pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1667 because the selected packet was small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1667
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_LOOKATOBJECT` | `Aion.GameServer.Network.Aion.ServerPackets.SmLookAtObject` | Server Packet | Complete | Unit Tested | Partial Parity | C# models opcode `40` and payload fields: visible object id, target id, heading. Null target is represented by snapshot target id `0`. No Java runtime golden/encrypted frame comparison was produced. |
+| `com.aionemu.gameserver.model.gameobjects.VisibleObject` | `LookAtObjectSnapshot` | DTO Projection | Partial | Unit Tested | Partial Parity | C# uses a snapshot for object id, target id, and heading instead of the live Java object/reference hierarchy. Live heading range, target reference nullability, and object equality behavior remain unverified. |
+| `com.aionemu.gameserver.controllers.NpcController.onTargetChanged` | future NPC target-change dispatch; packet class only in this unit | Controller Boundary | Not Started | No Tests | Needs Verification | Java broadcasts `SM_LOOKATOBJECT` when NPC target changes and other AI conditions pass. C# only has the packet body; live NPC controller/broadcast behavior remains unported. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.broadcastPacket` | future broadcast integration | Utility Boundary | Not Started | No Tests | Needs Verification | Newly documented dependency for live `SM_LOOKATOBJECT` use. Recipient selection, source inclusion, ordering, threading, and visibility remain unported for this path. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SmLookAtObject_WritesObjectTargetAndHeadingLikeJava` | Unit Added | Java `SM_LOOKATOBJECT.writeImpl` | Packet writes object id, target object id, and heading in Java order. | Deterministic C# packet regression grounded in Java source review. | No Java runtime golden frame. |
+| `SmLookAtObject_WritesZeroTargetWhenJavaVisibleObjectHasNoTarget` | Unit Added | Java constructor `visibleObject.getTarget() == null ? 0 : objectId` | No-target snapshot writes target id zero and heading byte. | Deterministic C# packet regression grounded in Java source review. | Snapshot does not model live Java null reference. |
+
+Remaining risks:
+- Live `NpcController.onTargetChanged` behavior remains unported; no `SM_LOOKATOBJECT` broadcast occurs.
+- C# uses `LookAtObjectSnapshot` instead of live `VisibleObject` references.
+- Heading byte range/overflow behavior is source-derived but not compared against Java runtime frames.
+- Broadcast recipient selection, packet ordering, threading, and source-player inclusion/exclusion remain unverified.
+- No Java runtime golden frame or encrypted frame comparison was produced for `SM_LOOKATOBJECT`.
+- Gated charge-all DB integration execution still needs a real MySQL environment.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 server packet, 1 DTO projection, and 2 focused regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with documented non-live gaps.
+- Total blocked artifacts: live NPC target-change dispatch, broadcast utility integration, Java runtime packet capture, encrypted frame comparison, DB-backed charge-all integration run.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- If a DB is available, run the gated DB integration suite. Otherwise, either add a non-live NPC target-change packet-plan boundary for `NpcController.onTargetChanged` using `SmLookAtObject`, or continue with another isolated packet parity unit.
+
+---
+
+## Updated Immediate Next - Session 1667
+
+Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, add a non-live NPC target-change packet-plan boundary for `NpcController.onTargetChanged` using `SmLookAtObject`, or continue with another isolated packet parity unit. Keep Java source writes, repository production rewrites, live generated-zone writes, live target dispatch, live NPC target broadcast, live weather mutation, live actor mutation, and live nearby dispatch disabled.
