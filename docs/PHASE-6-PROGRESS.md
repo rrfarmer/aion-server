@@ -74347,3 +74347,82 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1642
 
 Next best unit: add a non-live region zone query/revalidation plan model for Java `MapRegion.revalidateZones`, `findZones`, and `isInsideZone`, using constructor-ordered zone ids to document priority-zone behavior before live handlers are enabled. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1643 (May 28, 2026)
+- Continued after UOW-1642 by modeling Java `MapRegion` zone scans as non-live plans over constructor-ordered zone metadata.
+- Performed Parallel Work Discovery across zone scan/revalidation planning, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected zone scan planning because sorted-zone snapshot metadata now exists and Java zone behavior depends on sorted order.
+- Added `WorldMapRegionZoneScanPlanService`.
+- Added DTOs for scan candidates, revalidation plans, revalidation actions, action type, and inside-check mode.
+- Modeled `MapRegion.revalidateZones` priority suppression per `ZoneClassName` group, unspawned creature leave behavior, and enter/leave action reporting.
+- Modeled `MapRegion.findZones`, `isInsideZone`, and `isInsideItemUseZone` as non-live query helpers.
+- Added tests for priority-zone behavior, unspawned leave behavior, inside-zone scans, first matching zone-name checks, and item-use prefix/fortress special cases.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionZoneScanPlanServiceTests|FullyQualifiedName~WorldMapRegionZoneSortServiceTests|FullyQualifiedName~WorldMapRegionRuntimeSnapshotServiceTests|FullyQualifiedName~WorldMapRegionLifecyclePlanServiceTests|FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 62 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1643
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Zone scan/revalidation plan | `MapRegion.revalidateZones`, `findZones`, `isInsideZone`, `isInsideItemUseZone` | new zone scan service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; uses sorted-zone metadata without live handlers. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the zone-scan blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live zone scan/revalidation plan and tests | Utility Port / Tests / Docs | new zone scan service/tests, progress/handoff docs | Java source writes, live `ZoneInstance` handlers, packet dispatch | UOW-1641 sort helper and UOW-1642 sorted snapshots | Tested Java-style scan decisions over constructor-ordered zone metadata. |
+
+No sub-agent was spawned for UOW-1643 because the selected implementation and tests touched one small helper surface and docs remained orchestrator-owned.
+
+#### Migration Parity Table - Session 1643
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.MapRegion.revalidateZones` | `WorldMapRegionZoneScanPlanService.CreateRevalidationPlan` | Zone Revalidation Plan | Partial | Unit Tested | Partial Parity | C# models sorted scan order, per-type priority suppression, unspawned leave behavior, and enter/leave intent reporting. It does not call live `ZoneInstance.revalidate`, `onEnter`, or `onLeave`. |
+| `com.aionemu.gameserver.world.MapRegion.findZones` | `WorldMapRegionZoneScanPlanService.FindInsideZones` | Zone Query Utility | Partial | Unit Tested | Partial Parity | C# returns all candidates marked inside in constructor order. It does not call live `ZoneInstance.isInsideCreature`. |
+| `com.aionemu.gameserver.world.MapRegion.isInsideZone(ZoneName, float, float, float)` | `WorldMapRegionZoneScanPlanService.IsInsideZoneByName` with `Coordinate` mode | Coordinate Zone Query | Partial | Unit Tested | Partial Parity | C# returns the first matching zone-name coordinate result. It does not run live geometry checks. |
+| `com.aionemu.gameserver.world.MapRegion.isInsideZone(ZoneName, Creature)` | `WorldMapRegionZoneScanPlanService.IsInsideZoneByName` with `Creature` mode | Creature Zone Query | Partial | Unit Tested | Partial Parity | C# returns the first matching zone-name creature result. It does not call live `ZoneInstance.isInsideCreature`. |
+| `com.aionemu.gameserver.world.MapRegion.isInsideItemUseZone` | `WorldMapRegionZoneScanPlanService.IsInsideItemUseZone` | Item-Use Zone Query | Partial | Unit Tested | Partial Parity | C# models `_ABYSS_CASTLE_AREA_` fortress handling and XML-name prefix checks. It does not load live item-use zone templates or execute real geometry. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.revalidate` | `WorldMapRegionZoneScanCandidate.RevalidateSucceeds` | Zone Runtime Boundary DTO | Not Started | Unit Tested Metadata | Needs Verification | C# takes revalidation outcome as metadata; live membership state, synchronization, flags, handlers, and shape checks remain unported. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance.onEnter/onLeave` | `WorldMapRegionZoneRevalidationAction` | Handler Intent DTO | Not Started | Unit Tested Metadata | Needs Verification | C# reports intended enter/leave actions but does not run handlers or mutate creature zone membership. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneTemplate.getXmlName` | `WorldMapRegionZoneScanCandidate.XmlName` | Template Field DTO | Partial | Unit Tested | Needs Verification | C# uses supplied XML names for item-use prefix checks. XML loading, case handling beyond ordinal Java-style prefix checks, and serialization remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateRevalidationPlan_LeavesLaterPriorityZonesWithinSameTypeUntilTypeChanges` | Unit Added | Java `MapRegion.revalidateZones` | One priority zone per type group can enter; later same-type zones leave until type changes. | Deterministic C# regression grounded in Java source review. | No live `ZoneInstance.revalidate` or handlers. |
+| `CreateRevalidationPlan_UnspawnedCreatureLeavesAllZones` | Unit Added | Java `!creature.isSpawned()` branch | Unspawned creatures leave every scanned zone. | Deterministic C# regression grounded in Java source review. | No live creature state. |
+| `FindInsideZones_ReturnsEveryInsideCreatureZoneInConstructorOrder` | Unit Added | Java `MapRegion.findZones` | All inside zones are returned in constructor order. | Deterministic C# regression grounded in Java source review. | No live geometry. |
+| `IsInsideZoneByName_UsesFirstMatchingZoneNameForCreatureAndCoordinateChecks` | Unit Added | Java `MapRegion.isInsideZone` overloads | First matching zone-name result is returned for creature and coordinate modes. | Deterministic C# regression grounded in Java source review. | No Java runtime comparison. |
+| `IsInsideItemUseZone_UsesFortressSpecialCaseOrXmlNamePrefix` | Unit Added | Java `MapRegion.isInsideItemUseZone` | Fortress special case and XML-name prefix checks are modeled. | Deterministic C# regression grounded in Java source review. | No real item-use templates or geometry. |
+
+Remaining risks:
+- Zone scan planning is non-live and reports intents/results from supplied metadata.
+- Live `ZoneInstance.revalidate`, `onEnter`, `onLeave`, `onDie`, geometry checks, creature membership, and handler side effects remain unported.
+- Java priority behavior is modeled over caller-provided constructor order; real enforcement awaits live sorted zones or template projection.
+- Java `String.startsWith` item-use prefix behavior is modeled with ordinal comparison; broader XML-name normalization remains unverified.
+- Live object storage, parent instance references, neighbour object references, synchronized/volatile state, scheduler behavior, AI notifications, and death callbacks remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 8 grouped rows in this unit.
+- Total artifacts ported: 1 non-live zone scan helper plus 5 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity or Not Started metadata with known gaps.
+- Total blocked artifacts: live `ZoneInstance` handlers, live creature membership, real geometry execution in query helpers, live C# MapRegion storage, live object maps, scheduler execution, synchronization/volatile runtime parity, AI notifications, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Extend the non-live zone scan model to cover Java `MapRegion.onDie` behavior and death-handler short-circuiting, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1643
+
+Next best unit: add a non-live death-zone plan for Java `MapRegion.onDie`, including sorted inside-zone scanning and first handler short-circuit behavior. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
