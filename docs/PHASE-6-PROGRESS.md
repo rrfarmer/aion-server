@@ -72175,3 +72175,73 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1612
 
 Move to a fresh Phase 6 slice after UOW-1612. Recommended next work is nearby-refresh Java handler/XML quest-start extraction with real-data audit updates, or a read-only ItemCharge `Location == CubeStorageId` lifecycle audit after UOW-1611. ItemPurification can continue only with another isolated persistence/readiness guard; keep automatic live dispatch, quest notification dispatch, nearby-refresh dispatch, and repository SQL broadening disabled until separately designed and tested.
+### Session 1613 (May 28, 2026)
+- Continued after UOW-1612 by taking the nearby-refresh/static quest-template prerequisite from the latest handoff.
+- Performed Parallel Work Discovery across nearby quest extraction/static-data exposure, ItemCharge storage-location audit, ItemPurification repository guards, and Java serializer implementation. Selected nearby/static-data exposure because it is isolated and moves future nearby-refresh consumers closer to real Java quest-template data without enabling live sends.
+- Tightened `NearbyQuestTemplateXmlExtractor` so it only extracts `<quest>` elements directly under `<quests>`, matching Java `QuestsData` quest-template scope and excluding merged-cache event quest references.
+- Added `StaticData.NearbyQuestTemplates`, loaded from the merged static-data cache alongside `QuestFinishRewardProjections`.
+- Updated static-data bridge tests to prove fixture and real-data loads expose 8,043 nearby quest templates while ignoring non-template event quest references.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~QuestFinishRewardProjectionStaticDataBridgeTests|FullyQualifiedName~NearbyQuestTemplateXmlExtractorTests|FullyQualifiedName~NearbyQuestRefreshPlanServiceTests|FullyQualifiedName~QuestFinishSocketGuardedInputAssemblyPlanServiceTests|FullyQualifiedName~QuestFinishSocketInputAssemblyPlanServiceTests"`.
+  - Result: passed 24 tests.
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~QuestFinishRewardProjectionStaticDataBridgeTests|FullyQualifiedName~NearbyQuestTemplateXmlExtractorTests"`.
+  - Result: passed 27 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1613
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Nearby quest template StaticData exposure | `QuestsData`, `QuestTemplate`, `PlayerController.updateNearbyQuests` prerequisite | `StaticData.cs`, `NearbyQuestTemplateXmlExtractor.cs`, static-data/nearby tests | Static Data / Extractor | Sequential | Medium | Selected; constructor/property shape and extractor scope are coupled. |
+| B | ItemCharge storage-location audit | `CM_CHARGE_ITEM`, Java `Inventory`/`Equipment` lifecycle | read-only Java/C# charge files | Java Analysis | Yes | Low | Safe supporting work, but no code change needed before the selected static-data bridge. |
+| C | ItemPurification repository payload/rollback guard | `ItemPurificationService`, repository boundary | ItemPurification persistence/execution tests | Test Creation | Later | Medium | Separate subsystem; avoid mixing with static-data loading changes. |
+| D | Java protection serializer implementation | future protection serializer/observer files | Java source/generated artifacts | Live Artifact Generation | No | High | Still blocked by Java 25/JDK/Maven and runtime artifact strategy. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Expose nearby quest templates through StaticData and tighten extractor scope | Static Data/Test/Docs | `StaticData.cs`, `NearbyQuestTemplateXmlExtractor.cs`, `QuestFinishRewardProjectionStaticDataBridgeTests.cs`, `NearbyQuestTemplateXmlExtractorTests.cs`, progress/handoff docs | live `GameServerConnection` quest dispatch, repository files, ItemCharge files, ItemPurification files, Java source writes | Existing nearby template extractor and real-data audit counts | One tested static-data bridge exposing real quest-template summaries without live nearby packet sends. |
+
+No sub-agent was spawned for UOW-1613 because `StaticData` constructor shape and extractor scope are shared surfaces that need one owner.
+
+#### Migration Parity Table - Session 1613
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dataholders.QuestsData` | `Aion.GameServer.Dataholders.StaticData.NearbyQuestTemplates`; `NearbyQuestTemplateTable` | Static Data Repository | Partial | Regression Tested | Partial Parity | StaticData now exposes 8,043 quest-template summaries from the merged cache. It still does not expose the full Java `QuestTemplate` object graph, script hooks, JAXB lifecycle, or live QuestEngine integration. |
+| `com.aionemu.gameserver.model.templates.QuestTemplate` | `Aion.GameServer.Dataholders.NearbyQuestTemplateSummary`; `NearbyQuestTemplateXmlExtractor` | Static Template DTO / Extractor | Partial | Unit Tested + Regression Tested | Partial Parity | Extractor now scopes templates to direct `<quests><quest>` rows and ignores event quest references. Many Java fields, nested reward details, serialization behavior, and production runtime comparison remain unverified. |
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | future consumers of `StaticData.NearbyQuestTemplates`; existing `NearbyQuestRefreshPlanService` | Controller / Nearby Refresh Dependency | Partial | Existing Unit Tested + StaticData Regression Tested | Needs Verification | Real quest-template table is now available to future refresh composition, but no live `SM_NEARBY_QUESTS` send, map-region lookup, or production controller refresh was enabled. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `Aion.GameServer.Network.Aion.ServerPackets.SmNearbyQuests` | Packet Dependency | Partial | Existing Regression Tested | Needs Verification | This unit only provides static template data. Packet serialization/live socket ordering was not touched or compared to Java runtime bytes. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| Updated `Extract_StreamInputFeedsNearbyQuestTemplateTableAndPredicate` | Unit | Java `QuestsData` `<quests>` holder scope | Event `<quest>` references in merged static-data XML are ignored; real quest templates under `<quests>` remain indexed. | Deterministic C# extractor regression from Java holder structure. | No Java JAXB runtime object comparison. |
+| Updated `LoadFromCacheAsync_ExposesQuestFinishRewardProjectionLookupTableWithoutSocketWiring` | Unit / StaticData bridge | Java static-data quest holder scope | `StaticData.NearbyQuestTemplates` exposes only the real quest template, not event quest references, and keeps `CanReport`/reward metadata available. | Deterministic merged-cache fixture regression. | No live quest finish or nearby refresh dispatch. |
+| Updated `LoadStaticDataAsync_RealDataExposesQuestFinishRewardProjectionLookupTable` | Regression / StaticData real data | Current Java static XML data set | Real static data exposes 8,043 nearby quest templates and keeps reward projection counts intact. | Real XML load through C# cache/StaticData path. | Counts are not Java runtime comparison; full quest template object parity remains partial. |
+
+Remaining risks:
+- `StaticData.NearbyQuestTemplates` contains staged summaries, not full Java `QuestTemplate` objects.
+- Live `PlayerController.updateNearbyQuests`, production world-instance lookup, and `SM_NEARBY_QUESTS` sends remain disabled.
+- Java JAXB defaults/lifecycle, script hooks, full reward/work item content, and unsupported quest-template fields remain incomplete.
+- Packet bytes, socket ordering, threading, reflection/dynamic handler behavior, date/time handling, and serialization remain unverified.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 StaticData nearby quest-template exposure plus 1 extractor scope tightening and focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live nearby refresh dispatch, map-region/world-instance lookup, full Java `QuestTemplate` object graph, JAXB runtime comparison, packet-byte comparison, production QuestEngine integration.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Compose `StaticData.NearbyQuestTemplates` into the next non-live consumer, such as `QuestXpLevelChangeContextFactoryService` or a guarded nearby-refresh adapter, without enabling production sends. Safe alternative: read-only ItemCharge storage-location lifecycle audit after UOW-1611.
+
+---
+
+## Updated Immediate Next - Session 1613
+
+Continue nearby-refresh prerequisites by using `StaticData.NearbyQuestTemplates` in one non-live composition boundary, preferably a focused XP level-change context/static-data adapter or a guarded nearby-refresh input plan. Keep live `SM_NEARBY_QUESTS` dispatch, production `PlayerController.updateNearbyQuests`, quest-start mutation, quest-finish reward execution, and repository writes disabled. Safe parallel support remains a read-only ItemCharge `Location == CubeStorageId` lifecycle audit or a read-only Java serializer/tooling feasibility check.
