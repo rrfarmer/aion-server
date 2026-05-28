@@ -74119,3 +74119,76 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1639
 
 Next best unit: compose `WorldMapRegionCreationSnapshot` with `WorldMapRegionLifecyclePlanService` into a non-live region runtime snapshot/readiness model that records constructor prerequisites plus active/player/deactivation state before live storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1640 (May 28, 2026)
+- Continued after UOW-1639 by composing region creation prerequisites with lifecycle state into a non-live runtime snapshot/readiness model.
+- Performed Parallel Work Discovery across runtime snapshot composition, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected runtime snapshot composition because creation and lifecycle helpers now exist and the work is isolated.
+- Added `WorldMapRegionRuntimeSnapshotService`.
+- Added `WorldMapRegionRuntimeSnapshot`, carrying region id, map id, dimension, existence, bounds, neighbours, zone ids, active state, player count, deactivation pending flag, live-readiness flag, missing live pieces, and Java-source breadcrumb.
+- Added tests for composing constructor prerequisites with lifecycle state, blocking live readiness when the region id was not precreated, and preserving pending deactivation metadata for the future scheduler boundary.
+- Validation:
+  - First focused run failed because a test used exact collection membership for a substring check; corrected the assertion.
+  - Re-ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionRuntimeSnapshotServiceTests|FullyQualifiedName~WorldMapRegionLifecyclePlanServiceTests|FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 50 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1640
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Region runtime snapshot/readiness model | `MapRegion` constructor, `getObjects`, `getNeighbours`, `isActive`, `getZoneCount` | new runtime snapshot service/tests | Utility Port / Test Creation | Sequential for writes | Low | Selected; composes existing helper outputs without live storage. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the runtime snapshot blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add non-live region runtime snapshot/readiness model and tests | Utility Port / Tests / Docs | `WorldMapRegionRuntimeSnapshotService.cs`, `WorldMapRegionRuntimeSnapshotServiceTests.cs`, progress/handoff docs | Java source writes, live `MapRegion` storage, packet dispatch | UOW-1638 creation snapshot and UOW-1639 lifecycle helper | Tested combined constructor/lifecycle readiness metadata. |
+
+No sub-agent was spawned for UOW-1640 because implementation and tests touched one small helper surface and docs remained orchestrator-owned.
+
+#### Migration Parity Table - Session 1640
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.MapRegion` | `WorldMapRegionRuntimeSnapshot` | Region Runtime Boundary DTO | Partial | Unit Tested | Needs Verification | C# now composes constructor prerequisites plus active/player/pending lifecycle metadata. It still lacks live parent instance reference, live `ConcurrentHashMap` object storage, `ZoneInstance[]` sorting by type/priority, `MapRegion[] neighboursIncludingSelf`, synchronized/volatile state, AI notifications, and zone callbacks. |
+| `com.aionemu.gameserver.world.MapRegion.<init>` | `WorldMapRegionRuntimeSnapshotService.CreateSnapshot` | Constructor Readiness Snapshot | Partial | Unit Tested | Partial Parity | Snapshot captures region id, bounds, zone ids, neighbours, and missing live pieces for future construction. It does not sort real `ZoneInstance[]` or instantiate a `MapRegion`. |
+| `com.aionemu.gameserver.world.MapRegion.getObjects` | `WorldMapRegionRuntimeSnapshot.MissingLivePieces` | Object Storage Boundary | Not Started | Unit Tested Metadata | Needs Verification | C# explicitly records missing `ConcurrentHashMap<Integer, VisibleObject> objects`; no live map or object membership exists. |
+| `com.aionemu.gameserver.world.MapRegion.getNeighbours` | `WorldMapRegionRuntimeSnapshot.NeighbourRegionIds` | Neighbour Boundary DTO | Partial | Unit Tested | Partial Parity | C# carries neighbour ids from layout snapshots, not live `MapRegion` object references including self. Object identity/order and `ArrayUtils.add` behavior remain unported. |
+| `com.aionemu.gameserver.world.MapRegion.isActive` | `WorldMapRegionRuntimeSnapshot.IsActive` | Lifecycle State DTO | Partial | Unit Tested | Partial Parity | Active state is captured as supplied metadata and can compose with lifecycle plans. Java synchronized active-state access and live mutations remain unported. |
+| `com.aionemu.gameserver.world.MapRegion.getZoneCount` | `WorldMapRegionRuntimeSnapshot.ZoneIds` | Zone Count/Boundary DTO | Partial | Unit Tested | Needs Verification | Snapshot exposes filtered zone ids, but not sorted `ZoneInstance[]`; type/priority/name ordering and handler-backed zone semantics remain unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateSnapshot_ComposesCreationPrerequisitesWithLifecycleState` | Unit | Java `MapRegion` constructor fields plus `isActive`/player count state | Runtime snapshot carries creation metadata, lifecycle state, neighbours, zone ids, and missing live pieces. | Deterministic C# regression grounded in Java source review. | No live `MapRegion` object. |
+| `CreateSnapshot_BlocksLiveReadinessWhenRegionWasNotPrecreated` | Unit | Java `regions.get(regionId)` null possibility | Missing precreated ids block live-readiness metadata. | Deterministic C# regression grounded in Java source review. | No Java runtime comparison. |
+| `CreateSnapshot_CarriesPendingDeactivationMetadataForFutureSchedulerBoundary` | Unit | Java `deactivationPending` lifecycle field | Pending deactivation state is preserved for future scheduler boundary modeling. | Deterministic C# regression grounded in Java source review. | No real scheduler. |
+
+Remaining risks:
+- Runtime snapshot is non-live and does not instantiate Java-equivalent `MapRegion`.
+- Live object storage, parent instance references, neighbour object references, zone array sorting, and synchronized/volatile state remain unported.
+- AI activation/deactivation notifications, zone revalidation, death callbacks, item-use zone checks, and handler callbacks remain disabled.
+- Region-size config override is not wired into runtime config.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 non-live runtime snapshot helper plus 3 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity or Not Started metadata with known gaps.
+- Total blocked artifacts: live C# MapRegion storage, object map mutation, parent references, neighbour object references, zone sorting, scheduler execution, synchronization/volatile runtime parity, AI notifications, zone revalidation, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Add a non-live zone sorting model for Java `MapRegion` constructor ordering by zone type, priority, and name id, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1640
+
+Next best unit: add a non-live zone sorting model for Java `MapRegion` constructor ordering (`ZoneClassName`, priority, `ZoneName.id`) so filtered zone ids can be ordered before any live `ZoneInstance[]` storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
