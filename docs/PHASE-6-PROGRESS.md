@@ -74973,3 +74973,79 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1650
 
 Next best unit: add a non-live `saveMaterialZones` plan for Java `ZoneService.saveMaterialZones`, including collidable-handler filtering, sorting by `ZoneTemplate.mapid`, and persistence-boundary metadata. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1651 (May 28, 2026)
+- Continued after UOW-1650 by adding a non-live material-zone save plan for Java `ZoneService.saveMaterialZones`.
+- Performed Parallel Work Discovery across material-zone save planning, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected material-zone save planning because construction and geometry metadata now flow into Java's generated-zone persistence boundary.
+- Added `WorldMapRegionMaterialZoneSavePlanService`.
+- Modeled Java world-map scan order against supplied map ids.
+- Modeled Java skip behavior for maps with no `zoneByMapIdMap` entry.
+- Modeled Java `collidableHandlers.containsKey(zone.getArea().getZoneName())` filtering.
+- Modeled Java `templates.sort(Comparator.comparingInt(ZoneTemplate::getMapid))` ordering while preserving same-map insertion order.
+- Added persistence-boundary metadata for `ZoneData.saveData` and `generated_zones.xml`.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionMaterialZoneSavePlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneConstructionServiceTests|FullyQualifiedName~WorldMapRegionZoneConstructionServiceTests|FullyQualifiedName~WorldMapRegionZoneIdentityServiceTests|FullyQualifiedName~WorldMapRegionZoneCapabilityServiceTests|FullyQualifiedName~WorldMapRegionZoneScanPlanServiceTests|FullyQualifiedName~WorldMapRegionZoneSortServiceTests|FullyQualifiedName~WorldMapRegionRuntimeSnapshotServiceTests|FullyQualifiedName~WorldMapRegionLifecyclePlanServiceTests|FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests"`.
+  - Result: passed 96 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1651
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Material-zone save plan | `ZoneService.saveMaterialZones`, `ZoneData.saveData`, `ZoneTemplate.getMapid` | new save-plan service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; next material-zone boundary after construction and geometry metadata. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the material persistence blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Material-zone save plan helper, tests, docs, commit | `WorldMapRegionMaterialZoneSavePlanService.cs`, `WorldMapRegionMaterialZoneSavePlanServiceTests.cs`, progress/handoff docs | Java source writes, unrelated services/tests | Implemented and documented UOW-1651. |
+| Sub-agents | None | None | All files | Not spawned because selected work was small and Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1651 because selected work was small, self-contained, and docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1651
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.zone.ZoneService.saveMaterialZones` | `WorldMapRegionMaterialZoneSavePlanService.CreatePlan` | Material Zone Save Plan | Partial | Unit Tested | Partial Parity | C# models world-map scan order, missing-map skip behavior, collidable handler filtering, map-id sorting, and persistence-boundary metadata. It does not instantiate `ZoneData` or write XML. |
+| `com.aionemu.gameserver.dataholders.ZoneData.saveData` | `WorldMapRegionMaterialZoneSavePlan.PersistencePath` | Persistence Boundary | Not Started | Unit Tested Metadata | Needs Verification | C# records the generated-zone output path and Java source boundary only. JAXB schema validation, marshalling, logging, and filesystem writes remain unported. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneTemplate.getMapid` | `WorldMapRegionMaterialZoneTemplateSnapshot.MapId` | Zone Template DTO | Partial | Unit Tested | Partial Parity | C# uses supplied template map ids for ordering. Live template objects, area shape serialization, priority, flags, and JAXB fields remain unported. |
+| `com.aionemu.gameserver.world.zone.ZoneService.collidableHandlers` | `WorldMapRegionMaterialZoneSaveContext.CollidableHandlerZoneNames` | Handler Registry Boundary | Partial | Unit Tested | Needs Verification | C# models `containsKey` filtering using supplied zone names. Live `ZoneName` identity/cache and handler registry mutation remain unverified. |
+| `com.aionemu.gameserver.dataholders.DataManager.WORLD_MAPS_DATA` | `WorldMapRegionMaterialZoneSaveContext.WorldMapIds` | Data Manager Boundary DTO | Not Started | Unit Tested Metadata | Needs Verification | C# scans supplied map ids in Java world-map order. Live data manager iteration order and loaded template set remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_FiltersZonesWithoutCollidableHandlersAndSortsTemplatesByMapId` | Unit Added | Java `ZoneService.saveMaterialZones` | Only handled area zone names are included, templates sort by map id, scan order is recorded, and persistence path is exposed. | Deterministic C# regression grounded in Java source review. | Does not marshal XML or instantiate Java templates. |
+| `CreatePlan_SkipsWorldMapsWithoutZoneInfoAndPreservesSameMapOrder` | Unit Added | Java null-area skip and stable `List.sort` behavior | Missing map entries are skipped and templates with the same map id retain insertion order. | Deterministic C# regression grounded in Java source review and stable sort semantics. | Runtime `DataManager.WORLD_MAPS_DATA` ordering remains unverified. |
+
+Remaining risks:
+- Save planning is non-live and records selected templates/metadata only.
+- JAXB `ZoneData.saveData`, XSD validation, logging, and filesystem writes remain unported.
+- Live `ZoneTemplate` shape fields, priority, flags, XML names, and area serialization remain unported.
+- Live `ZoneName` identity/cache and collidable handler registry mutation remain unverified.
+- Runtime `DataManager.WORLD_MAPS_DATA` iteration order is supplied metadata here, not read live.
+- Live `MaterialZoneHandler` behavior, dynamic zone handlers, and live C# `MapRegion`/`ZoneInstance` storage remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 non-live material-zone save-plan helper plus 2 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity or Not Started metadata with known gaps.
+- Total blocked artifacts: live JAXB `ZoneData.saveData`, XSD validation, generated-zone filesystem writes, live `ZoneTemplate` serialization fields, `ZoneName` identity/cache, live collidable handler registry mutation, runtime `DataManager.WORLD_MAPS_DATA` loading/order, material skill/observer behavior, dynamic zone handlers, live C# MapRegion/ZoneInstance storage, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add a non-live `ZoneData.saveData` XML serialization boundary model for generated material zones, including shape-specific required fields and schema/error metadata, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1651
+
+Next best unit: add a non-live `ZoneData.saveData` XML serialization boundary model for generated material zones, including shape-specific required fields and JAXB/XSD/error metadata. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, live generated-zone writes, and live nearby dispatch disabled.
