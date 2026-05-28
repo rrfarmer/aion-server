@@ -26,7 +26,7 @@ Last updated: May 23, 2026
 - Stigma removal now mirrors Java `StigmaService.removeLinkedStigmaSkills` hidden-skill deletion notices: linked stigma skills are removed by stack and emit `STR_MSG_STIGMA_DELETE_HIDDEN_SKILL` (`1402895`) through equip/unequip and stigma-charge mutation flows.
 - Non-autolearn stigma login now mirrors Java `StigmaService.onPlayerLogin`: equipped stigma stones are validated for slot permission, class, and same-slot conflicts, invalid stones are persisted as unequipped, and valid equipped stigma stones rebuild normal/linked temporary skills before the first enter-world skill list.
 - Movement packet surface now covers Java movement masks/glide flags, `CM_MOVE` opcode `48`, `CM_MOVE_IN_AIR` opcode `49`, `SM_MOVE` opcode `55`, mutable player position, and PlayerMoveController-style target/vector/glide/vehicle state. A first known-list bridge now broadcasts `SM_MOVE`, baseline player enter `SM_PLAYER_INFO` plus companion `SM_MOTION` action `7`, player logout `SM_DELETE`, postman `SM_NPC_INFO`, and postman `SM_DELETE` to active players in the same world within Java's default 95m visible distance. Persistent cached KnownList membership, full player-info dependent state, anti-hack, protection/fall/glide side effects, and strict flying-state gates remain pending.
-- Java `SM_FORCED_MOVE` now has a C# packet writer and non-live broadcast-and-receive plan boundary for the player-facing forced-move packet branch used by `PulledEffect`, `OpenAerialEffect`, and adjacent movement-control callers. Live skill/effect/world/controller integration for those effects remains pending.
+- Java `SM_FORCED_MOVE` now has a C# packet writer, a non-live broadcast-and-receive plan boundary, and a non-live `PulledEffect` / `OpenAerialEffect` start-effect planner that records cancel/movement/world-update/abnormal ordering without enabling live effect-controller or packet-dispatch wiring.
 - Housing auction timing now includes Java `AuctionEndTask.tryProlongAuction` parity for the default Sunday-noon auction end: late bids can prolong individual house auctions by five-minute windows up to thirty minutes, and `SM_HOUSE_BIDS` countdowns use that per-house state.
 - Housing auction and maintenance timing now parse the Java weekly cron strings from `housing.properties`, so auction countdown/prolongation math and rent due-date advancement are no longer limited to the default Sunday-noon and Monday-midnight schedules.
 - `SM_HOUSE_OWNER_INFO` inactive-house grace seconds now mirror Java `House.findGraceEndTime`, using the configured auction-end schedule and the last auction end before the two-week inactive-house cap.
@@ -76895,3 +76895,72 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1674
 
 Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, first run the new planner tests in an environment with working command execution (`pwsh.exe` available), then continue with Java runtime/golden vector coverage for `SM_POSITION`/`SM_POSITION_SELF`, another isolated packet parity unit, or another narrow non-live movement-correction effect planner. Keep Java source writes, repository production rewrites, live generated-zone writes, live movement dispatch, live packet broadcast, live effect-controller mutation, live move-controller mutation, live AI state/event dispatch, live world position mutation, live skill-engine dispatch, live target dispatch, live scheduler mutation, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1676 (May 28, 2026)
+- Continued after UOW-1675 by adding a non-live start-effect planner for Java `PulledEffect` and `OpenAerialEffect`.
+- Performed Work Discovery across the latest handoff, the new forced-move packet plan surface, and the exact Java `startEffect` ordering in `PulledEffect` and `OpenAerialEffect`.
+- Selected a shared planner boundary because both effects update world position, optionally stop player movement, optionally emit `SM_FORCED_MOVE` for players, and then set a single abnormal state, with only small branch differences.
+- Added `ForcedMoveEffectKind`, `ForcedMoveStartEffectPlanStatus`, `ForcedMoveStartEffectPlanInput`, `ForcedMoveStartEffectPlan`, and `ForcedMoveStartEffectPlanService`.
+- Modeled Java ordering metadata for:
+	- current-skill cancellation source
+	- open-aerial paralyze-removal intent
+	- player stop-glide and stop-move intent
+	- world-position update intent
+	- player-only `SM_FORCED_MOVE` broadcast-and-receive intent
+	- abnormal-state set intent
+- Preserved Java reflected-pull packet-source behavior by routing the packet source to `originalEffected` while skipping the non-reflected cancel/stop branch.
+- Added focused regressions in `ForcedMoveStartEffectPlanServiceTests` for pulled player, reflected pulled player, open-aerial NPC, and invalid-effected guards.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~ForcedMoveStartEffectPlanServiceTests|FullyQualifiedName~ForcedMovePacketPlanServiceTests|FullyQualifiedName~SmForcedMovePacketTests"`
+	- Result: 8 tests passed.
+
+#### Parallel Work Discovery - Session 1676
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Non-live pulled/open-aerial start planner | `PulledEffect.startEffect`, `OpenAerialEffect.startEffect` | `ForcedMoveStartEffectPlanService.cs`, dedicated tests | Effect Boundary | Sequential for service + tests | Low | Selected because it composes the new packet-plan service without touching live movement systems. |
+| B | Java runtime/golden `SM_FORCED_MOVE` vectors | `SM_FORCED_MOVE` live output | vector artifacts/tests | Golden Verification | Yes, later | Low | Still valuable, but packet/start-plan source review was enough for this deterministic planner slice. |
+| C | Live forced-move effect wiring | effect/controller/world code | multiple shared gameplay files | Runtime Integration | No | High | Deferred because it crosses shared controller, world, and packet-dispatch boundaries. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Forced-move start planner, tests, docs, commit | `ForcedMoveStartEffectPlanService.cs`, dedicated tests, progress/handoff docs | Java source writes, live controller/world/dispatch mutation, unrelated services | Implemented and documented UOW-1676. |
+| Sub-agents | None | None | All files | Not spawned because the unit touched one small service/test slice plus shared docs. |
+
+No sub-agent was spawned for UOW-1676 because the selected work was a small, tightly coupled planner/test/doc slice.
+
+#### Migration Parity Table - Session 1676
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.PulledEffect` | `Aion.GameServer.Services.ForcedMoveStartEffectPlanService` | Effect Boundary | Partial | Unit Tested | Partial Parity | C# models non-live `startEffect` ordering for cancel-current-skill, reflected-source packet selection, optional player stop-glide/stop-move intents, world-position update intent, player-only forced-move packet intent, and abnormal-state set intent. Live controller/world/packet integration remains absent. |
+| `com.aionemu.gameserver.skillengine.effect.OpenAerialEffect` | `Aion.GameServer.Services.ForcedMoveStartEffectPlanService` | Effect Boundary | Partial | Unit Tested | Partial Parity | C# models non-live `startEffect` ordering for cancel-current-skill, remove-paralyze intent, optional player stop-glide/stop-move intents, world-position update intent, player-only forced-move packet intent, and abnormal-state set intent. Live controller/world/packet integration remains absent. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_FORCED_MOVE` | `Aion.GameServer.Network.Aion.ServerPackets.SmForcedMove`; `ForcedMovePacketPlanService` dependency reused by start planner | Server Packet / Service Dependency | Complete packet, Partial workflow | Unit Tested | Partial Parity | Packet bytes remain covered by unit tests, and the planner composes the packet-plan service for player branches. No live Java runtime frame capture or live dispatch integration was added in this unit. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_ForPulledPlayer_UsesEffectorPacketAndStopsMovement` | Unit Added | Java non-reflected `PulledEffect.startEffect` player branch | Planner records cancel-current-skill, player stop-glide/stop-move, world update, `SM_FORCED_MOVE` payload, and `PULLED` abnormal state intent. | Source-derived planner regression. | No live controller or packet dispatch execution. |
+| `CreatePlan_ForReflectedPulledPlayer_UsesOriginalEffectedPacketSourceAndSkipsMotionStops` | Unit Added | Java reflected `PulledEffect.startEffect` packet-source branch | Planner switches packet source to `originalEffected` and skips the non-reflected cancel/stop branch. | Source-derived planner regression. | No live reflected effect execution. |
+| `CreatePlan_ForOpenAerialNpc_RemovesParalyzeAndSkipsForcedMovePacket` | Unit Added | Java NPC `OpenAerialEffect.startEffect` branch | Planner records paralyze removal, world update, `OPENAERIAL` abnormal state intent, and no player packet. | Source-derived planner regression. | No live effect-controller/world mutation. |
+| `CreatePlan_BlocksInvalidEffectedBeforeWorldOrPacketPlanning` | Unit Added | C# safety boundary | Invalid effected object id blocks world update and packet planning. | C# boundary regression. | Java requires a live creature reference rather than this snapshot guard. |
+
+Remaining risks:
+- Live `PulledEffect` and `OpenAerialEffect` integration is still absent.
+- `removeParalyzeEffects`, cancel-current-skill, stop-glide, stop-move, and abnormal-state updates are intent-only in this slice.
+- `PacketSendUtility.broadcastPacketAndReceive` semantics remain non-live and unverified beyond planner metadata.
+- Java runtime/golden vectors for `SM_FORCED_MOVE` are still desirable to strengthen evidence.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: 1 non-live start-effect planner, 1 DTO record, 1 effect-kind enum, 1 status enum, and 4 focused regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 0 grouped rows explicitly marked Needs Verification in this unit; all 3 grouped rows remain Partial Parity because runtime integration is intentionally deferred.
+- Total blocked artifacts: live forced-move effect integration, live packet dispatch verification, Java runtime/golden vector capture.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Capture Java runtime/golden vectors for `SM_FORCED_MOVE`, or extend the non-live forced-move planner pattern to `StaggerEffect` / `StumbleEffect` before any live movement-system wiring.
