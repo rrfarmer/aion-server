@@ -73230,3 +73230,72 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1627
 
 Next best unit: add a non-live composition test or helper that builds `NearbyQuestRegionSnapshotService` output and feeds it into `NearbyQuestDelayedRefreshExecutionReportService.CreateReportFromMapRegions`, proving the planner-to-report boundary before any live dispatcher work. Safe implementation alternative: ItemCharge charge-all multi-item packet/order audit. Keep live `ThreadPoolManager`, `PacketSendUtility`, `GameServerConnection` sends, repository rewrites, and Java source changes disabled.
+
+### Session 1628 (May 28, 2026)
+- Continued after UOW-1627 by adding the recommended non-live planner-to-report composition regression.
+- Performed Parallel Work Discovery across planner-to-report composition, ItemCharge multi-item packet/order audit, nearby packet golden gap audit, and live nearby dispatch. Selected planner-to-report composition because it validates the new region snapshot planner against the existing delayed report boundary without production wiring.
+- Added `CreateReportFromMapRegions_ComposesRegionSnapshotPlannerOutputWithoutSending`.
+- The test builds `NearbyQuestRegionSnapshotService` output for two same-instance players and one excluded other-instance player, feeds `snapshot.PlayerInputs` into `NearbyQuestDelayedRefreshExecutionReportService.CreateReportFromMapRegions`, and verifies ready packet-intent summaries plus player ordering.
+- This remains test-only; no live scheduler, live player iteration, controller invocation, or packet send was enabled.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~NearbyQuestDelayedRefreshExecutionReportServiceTests|FullyQualifiedName~NearbyQuestRegionSnapshotServiceTests|FullyQualifiedName~NearbyQuestRefreshInputAdapterServiceTests|FullyQualifiedName~WorldMapRuntimeStateTests"`.
+  - Result: passed 36 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1628
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Planner-to-report composition regression | `WorldMapInstance.forEachPlayer`, `PlayerController.updateNearbyQuests`, `SM_NEARBY_QUESTS` | delayed report tests | Test Creation | Sequential | Low | Selected; proves UOW-1627 planner output composes with the existing non-live delayed report service. |
+| B | ItemCharge multi-item packet/order audit | `ItemChargeService.chargeItems` | ItemCharge tests if implemented later | Java/C# Analysis | Yes | Medium | Independent safe alternative, deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes | Low | Useful later; not needed for this composition boundary. |
+| D | Live nearby refresh dispatch | `ThreadPoolManager.schedule`, `PacketSendUtility`, `GameServerConnection` | world/connection services | Live Dispatch | No | High | Deferred; live region storage and packet dispatch remain blocked. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add planner-to-report composition regression | Test/Docs | `NearbyQuestDelayedRefreshExecutionReportServiceTests.cs`, progress/handoff docs | production nearby services, live dispatch, packet sends, Java source writes, ItemCharge files | UOW-1627 `NearbyQuestRegionSnapshotService` and existing map-region report path | One focused regression proving snapshot planner output can feed delayed report creation. |
+
+No sub-agent was spawned for UOW-1628 because the selected work is a small test-only change plus orchestrator-owned docs.
+
+#### Migration Parity Table - Session 1628
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMapInstance.forEachPlayer` | `NearbyQuestRegionSnapshotService.BuildSnapshot` feeding `NearbyQuestDelayedRefreshExecutionReportService.CreateReportFromMapRegions` | Player Iteration / Composition Boundary | Partial | Unit Tested | Partial Parity | Composition test proves non-live same-instance player inputs flow into delayed report creation. Java live `ConcurrentHashMap` iteration, runtime ordering, scheduler callback, and controller dispatch are not executed. |
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `CreateReportFromMapRegions` via `NearbyQuestDelayedRefreshPlayerInput` from planner output | Controller Callback Dependency | Partial | Unit Tested | Partial Parity | Test validates per-player region parent quest ids produce ready marker reports for Elyos and Asmodian players. No live controller invocation, exact null behavior, `PacketSendUtility`, serialization, or socket ordering. |
+| `com.aionemu.gameserver.world.MapRegion` | `NearbyQuestRegionKey`; `NearbyQuestMapRegionSnapshot`; planner output consumed by report service | Region Boundary DTO | Partial | Unit Tested | Needs Verification | Explicit region metadata composes with report creation, but live map-region storage, object buckets, neighbours, activation/deactivation, synchronized player counts, and zone side effects remain unported. |
+| `com.aionemu.gameserver.world.WorldMapInstance.getQuestIds` | `WorldMapInstanceRuntimeState.QuestIds` through each planned region parent | World Runtime Dependency | Partial | Unit Tested | Partial Parity | Test uses distinct parent instances for each player region so report creation reads quest ids per player region. Java concurrent set behavior and ordering are not runtime-compared. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `NearbyQuestDelayedRefreshPacketIntentSummary` / `NearbyQuestRefreshPlan.WouldSendPacket` | Packet Dependency | Partial | Unit Tested Intent + Existing Packet Tests | Needs Verification | Composition test validates two ready packet intents and zero empty intents. No live send, encrypted frame, Java packet capture, or socket ordering comparison occurred. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateReportFromMapRegions_ComposesRegionSnapshotPlannerOutputWithoutSending` | Unit / Composition | Java delayed callback -> `WorldMapInstance.forEachPlayer` -> `PlayerController.updateNearbyQuests` | Region snapshot planner output feeds delayed report creation, excludes an other-instance player before report creation, preserves input order, clears pending refresh, and produces two ready packet intents. | Deterministic C# regression grounded in reviewed Java source and prior nearby planner/report tests. | No live timer, live player collection, controller dispatch, packet send, Java runtime comparison, or encrypted frame. |
+
+Remaining risks:
+- This unit is test-only and does not wire production dispatch.
+- C# still lacks live world instance player collection, map-region storage, region id calculation, neighbour arrays, zone revalidation, object membership, and activation/deactivation threading.
+- Java `ConcurrentHashMap` iteration order and concurrent mutation behavior remain unverified.
+- Packet intent is metadata only; no `PacketSendUtility`, encrypted frame, socket ordering, or Java runtime packet comparison occurred.
+- Full `QuestService.checkStartConditions` parity remains partial for unsupported XML, inventory, repeat timing, and dynamic handler dependencies.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 focused composition test; no production artifacts.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live MapRegion storage, live world player iteration, live scheduler callback, live controller dispatch, packet send/encrypted frame comparison, Java runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Start the ItemCharge charge-all multi-item packet/order audit, or continue nearby with a read-only Java/C# region-id calculation audit before any live storage plan. Keep live nearby timers and sends disabled.
+
+---
+
+## Updated Immediate Next - Session 1628
+
+Next best unit: start the ItemCharge charge-all multi-item packet/order audit as an independent safe parity strand, or continue nearby with read-only Java/C# region-id calculation analysis before live region storage. Keep live `ThreadPoolManager`, `PacketSendUtility`, `GameServerConnection` sends, repository rewrites, and Java source changes disabled.
