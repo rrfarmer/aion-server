@@ -75679,3 +75679,73 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1659
 
 Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` against a disposable MySQL schema if credentials/environment are available. If no DB is available, add the `SmWeather` packet-factory boundary to the weather broadcast/load/change plans. Keep Java source writes, repository production rewrites, live generated-zone writes, live weather mutation, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1660 (May 28, 2026)
+- Continued after UOW-1659 by taking the no-DB fallback and adding a non-live `SmWeather` packet-factory boundary to the weather broadcast/change planner.
+- Performed Parallel Work Discovery across DB integration execution, `SmWeather` packet-factory boundary work, nearby packet golden audit, and zone-handler source audit. Selected packet-factory boundary because the DB integration gate was unavailable and UOW-1658/UOW-1657 left weather packet construction disconnected from broadcast metadata.
+- Added `CreateWeatherPacketFactoryPlan` to `WorldMapRegionMaterialZoneWeatherBroadcastPlanService`.
+- The factory plan accepts an ordered weather-code list, returns the codes and a constructed `SmWeather` packet, and keeps Java breadcrumbs to `new SM_WEATHER(weatherEntries)`.
+- Added a regression that serializes the produced packet payload and confirms Java `SM_WEATHER` body bytes.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionMaterialZoneWeatherBroadcastPlanServiceTests|FullyQualifiedName~SmWeatherPacketTests|FullyQualifiedName~WorldMapRegionMaterialZoneWeatherTransitionPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneEnvironmentPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneActorPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneHandlerPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneSerializationPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneSavePlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneConstructionServiceTests"`.
+  - Result: passed 54 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1660
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Run gated DB integration | charge-all DB integration harness | no file changes if executable | Test Execution | Yes, if DB available | Medium | Deferred because DB gate/environment was unavailable in this run. |
+| B | `SmWeather` packet-factory boundary | `WeatherService.loadWeather`, `WeatherService.checkWeathersTime`, `WeatherService.changeWeather`, `SM_WEATHER` | weather broadcast service/tests | Packet Boundary Integration | Sequential for service/test writes | Low | Selected; connects UOW-1657 packet intents to UOW-1658 packet object. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the current weather packet boundary. |
+| D | Broader zone-handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Weather packet factory plan, tests, docs, commit | `WorldMapRegionMaterialZoneWeatherBroadcastPlanService.cs`, `WorldMapRegionMaterialZoneWeatherBroadcastPlanServiceTests.cs`, progress/handoff docs | Java source writes, live weather mutation/broadcast, unrelated services/tests | Implemented and documented UOW-1660. |
+| Sub-agents | None | None | All files | Not spawned because selected work touched one existing weather helper/test pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1660 because the selected change was small and shared docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1660
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.WeatherService.loadWeather` | `WorldMapRegionMaterialZoneWeatherBroadcastPlanService.CreateWeatherPacketFactoryPlan` | Packet Factory Boundary | Partial | Unit Tested | Partial Parity | C# now creates `SmWeather` from ordered weather-code metadata after load/broadcast plans decide a packet should exist. It does not query live `worldZoneWeathers`, select player world entries, or send packets. |
+| `com.aionemu.gameserver.services.WeatherService.checkWeathersTime` | `WorldMapRegionMaterialZoneWeatherBroadcastPlanService.CreateWeatherPacketFactoryPlan` | Packet Factory Boundary | Partial | Unit Tested | Partial Parity | C# can construct the packet object for broadcast metadata from UOW-1657. It does not schedule, mutate weather arrays, filter live players, or broadcast. |
+| `com.aionemu.gameserver.services.WeatherService.changeWeather` | `WorldMapRegionMaterialZoneWeatherBroadcastPlanService.CreateWeatherPacketFactoryPlan` | Packet Factory Boundary | Partial | Unit Tested | Partial Parity | C# packet factory can be used after non-live change plans. It does not execute `setNextWeather`, synchronized array writes, or live broadcast. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_WEATHER` | `Aion.GameServer.Network.Aion.ServerPackets.SmWeather` | Server Packet | Complete | Unit Tested | Partial Parity | Factory plan constructs the UOW-1658 packet and tests its payload bytes. Full Java runtime golden frame/encryption and live dispatch remain unverified. |
+| `com.aionemu.gameserver.model.templates.world.WeatherEntry` | ordered `IReadOnlyList<int>` weather-code boundary | DTO Projection | Partial | Unit Tested | Partial Parity | C# packet factory consumes weather codes equivalent to `WeatherEntry.getCode()`. Full table lookup, JAXB serialization, rank/before/after metadata, and singleton `NONE` identity remain outside this boundary. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateWeatherPacketFactoryPlan_CreatesSmWeatherWithJavaPacketBody` | Unit Added | Java `new SM_WEATHER(weatherEntries)` and `SM_WEATHER.writeImpl` | Factory plan preserves weather code order, returns Java-source breadcrumb, and produces payload bytes `00 03 00 07 FF`. | Deterministic C# packet regression grounded in Java source review and UOW-1658 packet tests. | No live weather service dispatch or Java runtime golden frame. |
+
+Remaining risks:
+- Packet factory boundary is non-live and does not wire `SmWeather` into active weather service execution.
+- Live `worldZoneWeathers` lookup, synchronized mutation, player filtering, scheduler delay, and packet send remain unimplemented.
+- No Java runtime golden frame or encrypted frame comparison was produced.
+- Weather-entry table/model parity remains partial: codes are projected, not full `WeatherEntry` object behavior.
+- Gated charge-all DB integration execution still needs a real MySQL environment.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 non-live packet-factory boundary plus 1 focused regression.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 0 grouped rows explicitly marked Needs Verification; all rows are Partial Parity with documented non-live gaps.
+- Total blocked artifacts: live weather-service packet dispatch, Java runtime packet capture, encrypted frame comparison, live weather arrays/player filtering, DB-backed charge-all integration run.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- If a DB is available, run the gated DB integration suite. Otherwise, continue with a nearby packet golden gap audit such as `SM_NEARBY_QUESTS`, or add another small packet factory/body parity unit with objective C# payload tests.
+
+---
+
+## Updated Immediate Next - Session 1660
+
+Next best unit: run the gated DB integration suite with `AION_GAMESERVER_DB_INTEGRATION=1` if a disposable MySQL schema is available. If no DB is available, perform a nearby packet golden gap audit such as `SM_NEARBY_QUESTS` or add another isolated packet body/factory parity unit. Keep Java source writes, repository production rewrites, live generated-zone writes, live weather mutation, live actor mutation, and live nearby dispatch disabled.
