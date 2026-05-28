@@ -73440,3 +73440,72 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1630
 
 Next best unit: run a read-only charge-all transaction/ordering audit documenting Java item-loop mutation/persistence assumptions versus C# repository batching, then decide whether the batching is an intentional C# safety difference or needs further parity work. Safe nearby alternative: read-only region-id calculation analysis before live region storage. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1631 (May 28, 2026)
+- Continued after UOW-1630 with the recommended read-only charge-all transaction/ordering audit.
+- Performed Parallel Work Discovery across charge-all transaction audit, nearby region-id calculation research, nearby packet golden gap audit, and production persistence changes. Selected the read-only audit because UOW-1629 and UOW-1630 completed packet cadence coverage and the remaining charge-all risk is mutation/persistence timing.
+- Reviewed Java `ItemChargeService`, `ChargeInfo.updateChargePoints`, `InventoryDAO.UPDATE_QUERY`, C# `GameServerConnection.HandleChargeAllQuestionResponseAsync`, `PlayerEnterWorldService.SaveItemChargeAllMutationAsync`, and `PlayerEnterWorldRepository.SaveItemChargeAllMutationAsync`.
+- Audit finding: Java charge-all mutates item charge in memory item-by-item during `chargeItems`; `ChargeInfo.updateChargePoints` marks the item persistent and, when equipped, marks equipment persistent. Persistence is deferred to the normal Java inventory/equipment persistence path rather than an immediate charge-all transaction in `ItemChargeService`.
+- Audit finding: C# charge-all stages all current charged items, persists them plus one Kinah/AP payment in one repository transaction before mutating in-memory inventory or emitting packets. If the repository save fails, C# sends no packets and keeps in-memory charge unchanged.
+- Decision: keep the C# batched transaction as an intentional safety difference for now, because existing tests already assert no in-memory mutation or packets on save failure. Do not change persistence semantics without a broader persistence model audit and Java runtime failure-mode evidence.
+- Validation:
+  - No tests were run because this unit is read-only source analysis and documentation only.
+  - `git diff --check` will be run before commit.
+
+#### Parallel Work Discovery - Session 1631
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Charge-all transaction/ordering audit | `ItemChargeService`, `ChargeInfo`, `InventoryDAO` | docs/read-only C# connection/service/repository files | Analysis / Documentation | Yes, read-only | Low | Selected; documents whether C# batching is intentional after packet cadence fixes. |
+| B | Nearby region-id calculation research | Java/C# world region files | docs/read-only world files | Analysis | Yes | Low | Independent safe alternative, deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes | Low | Useful later, unrelated to charge-all persistence. |
+| D | Production persistence change | charge-all repository/connection files | production code/tests | Implementation | No | High | Deferred; audit does not justify changing transaction semantics yet. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Document charge-all transaction and persistence timing differences | Analysis / Docs | progress/handoff docs after read-only source review | production code, Java source writes, repository rewrites, nearby dispatch files | UOW-1629 and UOW-1630 charge-all packet cadence coverage | One handoff-friendly decision record for C# batched persistence. |
+
+No sub-agent was spawned for UOW-1631 because the selected work is docs-only and the read-only source review was narrow.
+
+#### Migration Parity Table - Session 1631
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemChargeService.startChargingEquippedItems` | `GameServerConnection.StartChargingEquippedItemsAsync`; `PendingChargeAllRequest` | Service / Question Flow | Partial | Existing Regression Tested + Manual Analysis | Partial Parity | Both quote one payment before accept. Java stores a live `RequestResponseHandler` over the filtered `Item` collection; C# stores DTO snapshots and revalidates current items at accept. Concurrent prompt-to-accept mutation remains Needs Verification. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.chargeItems` | `GameServerConnection.HandleChargeAllQuestionResponseAsync` | Service / Multi-item Mutation | Refactored | Regression Tested + Manual Analysis | Intentional Difference | Java mutates each item in memory and marks persistence state during the loop. C# persists all charged items and payment in one repository transaction before in-memory mutation/packets. Kept intentionally for save-failure safety, but no Java failure-mode comparison exists. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.updateChargePoints` | `ItemChargeService.CreateChargePlan`; repository charge updates | Item Charge State | Partial | Unit Tested + Manual Analysis | Needs Verification | Java synchronized method clamps charge, marks item persistent, marks equipment persistent when equipped, and returns charge-bar-step change. C# planning is immutable and persistence is explicit through repository updates; threading and persistent-state side effects differ. |
+| `com.aionemu.gameserver.dao.InventoryDAO.UPDATE_QUERY` | `PlayerEnterWorldRepository.SaveItemChargeAllMutationAsync` | Repository / Persistence | Refactored | Existing Regression Tested + Manual Analysis | Intentional Difference | Java full inventory update query persists many columns when normal persistence runs. C# charge-all updates only `charge`, payment item count, and AP rank in a transaction. This is narrower and safer locally but not Java-runtime verified. |
+| `com.aionemu.gameserver.model.gameobjects.Persistable.PersistentState` | explicit C# repository save calls | Persistence State Model | Partial | Manual Only | Needs Verification | Java persistence dirty flags are not ported 1:1 for charge-all. C# has explicit save calls and failure gates. Broader persistence model still needs audit. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| None | Manual / Docs Only | Java `ItemChargeService`, `ChargeInfo`, `InventoryDAO`; C# connection/service/repository source review | Documents charge-all mutation and persistence timing differences after packet cadence fixes. | Static source review only. | No runtime Java failure-mode comparison, no DB integration test added, no production code change. |
+
+Remaining risks:
+- C# batched transaction remains an intentional difference, not verified Java parity.
+- Java dirty-flag persistence and C# explicit repository persistence are structurally different across more than ItemCharge.
+- Prompt-to-accept concurrent item changes are locally covered for stale/missing/insufficient cases, but not compared to Java runtime behavior with the live filtered item collection.
+- C# only updates the `charge` column for charged items; Java normal `InventoryDAO.UPDATE_QUERY` can persist many item fields when dirty state is flushed.
+- Threading/synchronization differences remain: Java `ChargeInfo.updateChargePoints` is synchronized; C# charge planning uses immutable copies and connection-level async flow.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 0 code artifacts; 1 read-only charge-all transaction audit.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; 2 grouped rows marked Intentional Difference pending broader verification.
+- Total blocked artifacts: Java runtime failure-mode comparison, dirty-flag persistence model parity, DB integration comparison, concurrent prompt-to-accept mutation comparison.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Return to nearby with read-only Java/C# region-id calculation analysis before live region storage, or add a narrow DB integration regression proving C# charge-all transaction rollback/no-mutation behavior if repository failure coverage needs strengthening.
+
+---
+
+## Updated Immediate Next - Session 1631
+
+Next best unit: return to nearby with read-only Java/C# region-id calculation analysis before live region storage, focused on how Java 2D/3D map instances derive region ids and how that could map to C# non-live region keys. Safe ItemCharge alternative: add a narrow DB integration regression for C# charge-all transaction rollback/no-mutation behavior. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
