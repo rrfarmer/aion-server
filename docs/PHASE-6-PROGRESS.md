@@ -72311,3 +72311,74 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1614
 
 Next best unit: add a small guarded nearby-refresh input adapter that accepts `Player`, optional `WorldMapInstanceRuntimeState`, and `StaticData` and returns `NearbyQuestRefreshPlan` metadata using `StaticData.NearbyQuestTemplates`; keep it non-live and test event-reference rejection/empty packet intent. Safe alternative: read-only ItemCharge `Location == CubeStorageId` lifecycle audit. Avoid live `SM_NEARBY_QUESTS` sends, `GameServerConnection` production quest dispatch, and repository writes.
+
+### Session 1615 (May 28, 2026)
+- Continued after UOW-1614 by adding the guarded non-live nearby-refresh input adapter recommended by the AQH handoff.
+- Performed Parallel Work Discovery across a controller-facing nearby adapter, Java `WorldMapInstance` delayed refresh behavior, ItemCharge storage-location audit, and Java serializer implementation. Selected the adapter because it is a small service/test unit that composes existing `NearbyQuestRefreshPlanService` and `StaticData.NearbyQuestTemplates` without enabling live sends.
+- Added `NearbyQuestRefreshInputAdapterService.CreatePlan(player, worldInstance, staticData)`.
+- The adapter guards missing player and missing static data, then delegates to the existing non-live plan service with `StaticData.NearbyQuestTemplates`.
+- Added fixture tests for real quest-template marker creation, event quest reference rejection, empty world quest-id packet intent, and missing dependency guards.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~NearbyQuestRefreshInputAdapterServiceTests|FullyQualifiedName~NearbyQuestRefreshPlanServiceTests|FullyQualifiedName~QuestXpLevelChangeContextFactoryServiceTests|FullyQualifiedName~NearbyQuestTemplateXmlExtractorTests|FullyQualifiedName~WorldMapRuntimeStateTests"`.
+  - Result: passed 33 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1615
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Guarded nearby-refresh input adapter | `PlayerController.updateNearbyQuests`, `QuestService.checkStartConditions`, `SM_NEARBY_QUESTS` | `NearbyQuestRefreshInputAdapterService.cs`, adapter tests | Service/Test | Sequential | Low | Selected; small non-live bridge using existing plan service and StaticData. |
+| B | WorldMapInstance delayed refresh audit | `WorldMapInstance.addObject`, scheduled `updateNearbyQuests` fanout | read-only Java/C# world runtime files | Analysis | Yes | Medium | Useful next step, but scheduling/threading should remain separate. |
+| C | ItemCharge storage-location audit | `CM_CHARGE_ITEM`, Java `Inventory`/`Equipment` lifecycle | read-only Java/C# charge files | Java Analysis | Yes | Low | Safe support task after UOW-1611; separate subsystem. |
+| D | Java protection serializer implementation | future protection serializer/observer files | Java source/generated artifacts | Live Artifact Generation | No | High | Still blocked by Java 25/JDK/Maven and runtime artifact strategy. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add guarded nearby-refresh StaticData adapter | Service/Test/Docs | `NearbyQuestRefreshInputAdapterService.cs`, `NearbyQuestRefreshInputAdapterServiceTests.cs`, progress/handoff docs | live `GameServerConnection`, `PacketSendUtility`, production controller wiring, repository files, ItemCharge files, Java source writes | UOW-1613 StaticData table and existing `NearbyQuestRefreshPlanService` | One tested non-live adapter for future controller/level-change callers. |
+
+No sub-agent was spawned for UOW-1615 because the new service is intentionally thin and test/docs context is coupled.
+
+#### Migration Parity Table - Session 1615
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.PlayerController.updateNearbyQuests` | `Aion.GameServer.Services.NearbyQuestRefreshInputAdapterService`; `NearbyQuestRefreshPlanService` | Controller / Adapter | Partial | Unit Tested | Partial Parity | Adapter accepts player/world/static-data inputs and returns non-live refresh metadata. It does not resolve the production map region from player position or send packets. |
+| `com.aionemu.gameserver.services.QuestService.checkStartConditions` | `Aion.GameServer.Services.NearbyQuestStartConditionService` via `NearbyQuestRefreshPlanService` | Service / Condition Filter | Partial | Unit Tested through adapter and plan service | Needs Verification | Existing C# condition summaries are reused. Unsupported XML start conditions, inventory item checks, repeat timing, dynamic handlers, and Java runtime comparison remain gaps. |
+| `com.aionemu.gameserver.dataholders.QuestsData` | `Aion.GameServer.Dataholders.StaticData.NearbyQuestTemplates` consumed by adapter | Static Data Repository | Partial | Unit Tested through adapter | Partial Parity | Adapter uses StaticData quest-template summaries when available. Full Java `QuestTemplate` graph, JAXB defaults, script hooks, and QuestEngine integration remain incomplete. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_NEARBY_QUESTS` | `Aion.GameServer.Network.Aion.ServerPackets.SmNearbyQuests` intent via `NearbyQuestRefreshPlan.WouldSendPacket` | Packet Dependency | Partial | Existing Regression Tested | Needs Verification | Adapter only marks packet intent; no live send, encrypted frame, byte comparison, or socket ordering was executed. |
+| `com.aionemu.gameserver.world.WorldMapInstance` | `Aion.GameServer.World.WorldMapInstanceRuntimeState` | Runtime State | Partial | Regression Tested with nearby adapter dependencies | Needs Verification | Existing runtime state supplies quest ids. Java delayed refresh scheduling, map-region parent lookup, NPC add/remove synchronization, and ThreadPool timing remain unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_UsesStaticDataQuestTemplatesWithoutLiveDispatch` | Unit / Adapter | Java `PlayerController.updateNearbyQuests` and `QuestsData` holder scope | StaticData supplies templates, world quest ids are projected, event quest references are rejected as missing templates, and only metadata is produced. | Deterministic C# adapter regression grounded in Java source ordering and static-data scope. | No live controller, no map-region lookup, no Java runtime packet trace, no socket bytes. |
+| `CreatePlan_ReturnsEmptyPacketIntentWhenStaticDataHasNoWorldQuestIds` | Unit / Adapter | Java sends `SM_NEARBY_QUESTS` even with an empty nearby quest map | Empty world quest ids produce `NoWorldQuestIds` with packet intent metadata. | Deterministic C# behavior matching existing packet-intent tests. | No actual packet send or byte comparison. |
+| `CreatePlan_GuardsMissingPlayerAndStaticData` | Unit / Guard | Java method requires controller owner and `DataManager.QUEST_DATA` | Missing player/static-data dependencies fail closed and do not mark packet intent. | C# guard regression only. | Java null handling is not runtime-compared because Java call sites normally provide both dependencies. |
+
+Remaining risks:
+- The adapter is still non-live metadata; production `PlayerController.updateNearbyQuests` remains unwired.
+- Real player position/map-region parent lookup is not implemented in this adapter.
+- Java `WorldMapInstance` delayed refresh scheduling and ThreadPool spam-prevention behavior remain unported.
+- Full `QuestService.checkStartConditions` parity is partial; XML handlers, inventory checks, repeat timing, dynamic quest scripts, and reflection behavior remain incomplete.
+- Packet bytes, encryption/frame validation, socket ordering, threading, date/time handling, and serialization remain unverified.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 guarded non-live nearby-refresh input adapter plus 3 focused unit tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live nearby refresh dispatch, production controller wiring, map-region parent lookup, Java delayed refresh scheduling, full QuestService dynamic condition parity, packet-byte comparison.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Continue nearby-refresh prerequisites with a read-only Java/C# `WorldMapInstance` delayed refresh scheduling audit, then stage a non-live delayed-refresh plan if the scope stays isolated. Safe alternative: read-only ItemCharge storage-location lifecycle audit. Do not enable production nearby sends yet.
+
+---
+
+## Updated Immediate Next - Session 1615
+
+Next best unit: audit Java `WorldMapInstance.addObject` delayed nearby-refresh scheduling and compare it to C# `WorldMapInstanceRuntimeState.RegisterQuestStartIds`. If implementing, create only a non-live delayed-refresh plan/report surface that records whether a refresh would be scheduled and why. Keep production controller dispatch, `SM_NEARBY_QUESTS` sending, `ThreadPool` execution, repository writes, and ItemCharge behavior disabled.
