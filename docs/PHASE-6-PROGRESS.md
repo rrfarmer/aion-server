@@ -74746,3 +74746,76 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1647
 
 Next best unit: extend the non-live `ZoneService` construction plan to model full-map `WorldZoneTemplate` bounds/flags metadata and duplicate `ZoneName` replacement semantics from Java `HashMap.put`. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1648 (May 28, 2026)
+- Continued after UOW-1647 by extending the non-live `ZoneService` construction plan with Java full-map template metadata and duplicate zone replacement semantics.
+- Performed Parallel Work Discovery across full-map/duplicate construction metadata, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected construction metadata because UOW-1647 left full-map `WorldZoneTemplate` bounds/flags and `HashMap.put` duplicate behavior as explicit gaps.
+- Extended `WorldMapRegionZoneConstructionContext` with region size and world flags.
+- Added `WorldMapRegionZoneFullMapBounds`.
+- Added full-map bounds/flags metadata to the first construction entry.
+- Added `FinalZoneIds` and `ReplacedZoneIds` to construction plans to model Java `HashMap.put` replacement semantics.
+- Added tests for full-map bounds/flags and duplicate zone replacement.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionZoneConstructionServiceTests|FullyQualifiedName~WorldMapRegionZoneIdentityServiceTests|FullyQualifiedName~WorldMapRegionZoneCapabilityServiceTests|FullyQualifiedName~WorldMapRegionZoneScanPlanServiceTests|FullyQualifiedName~WorldMapRegionZoneSortServiceTests|FullyQualifiedName~WorldMapRegionRuntimeSnapshotServiceTests|FullyQualifiedName~WorldMapRegionLifecyclePlanServiceTests|FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 81 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1648
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Full-map/duplicate construction metadata | `WorldZoneTemplate`, `ZoneService.getZoneInstancesByWorldId`, `HashMap.put` replacement | construction service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; extends shared construction helper from UOW-1647. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the construction blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Full-map and duplicate construction metadata, tests, docs, commit | `WorldMapRegionZoneConstructionService.cs`, `WorldMapRegionZoneConstructionServiceTests.cs`, progress/handoff docs | Java source writes, unrelated services/tests | Implemented and documented UOW-1648. |
+| Sub-agents | None | None | All files | Not spawned because selected work edits shared construction helper/test/docs. |
+
+No sub-agent was spawned for UOW-1648 because selected work edits shared construction helper/test/docs and needs one owner.
+
+#### Migration Parity Table - Session 1648
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.zone.WorldZoneTemplate` | `WorldMapRegionZoneFullMapBounds`; first `WorldMapRegionZoneConstructionEntry` | Full-Map Zone Template DTO | Partial | Unit Tested | Partial Parity | C# now models full-map x/y bounds, bottom/top, DUMMY type, map-id zone id, and flags metadata. It still does not model actual `Points`, JAXB binding, or `ZoneName.createOrGet` cache behavior. |
+| `com.aionemu.gameserver.world.zone.ZoneService.getZoneInstancesByWorldId` | `WorldMapRegionZoneConstructionPlan.FinalZoneIds`; `ReplacedZoneIds` | Zone Construction Plan | Partial | Unit Tested | Partial Parity | C# now records final zone ids and duplicate replacements to model Java `HashMap.put`. It does not return live `Map<ZoneName, ZoneInstance>` or preserve Java hash bucket iteration behavior. |
+| `java.util.HashMap.put` | `WorldMapRegionZoneConstructionPlan.FinalZoneIds`; `ReplacedZoneIds` | Collection Semantics Dependency | Partial | Unit Tested | Needs Verification | Duplicate zone ids replace previous entries in C# metadata. Java HashMap iteration order remains unmodeled and is not treated as stable. |
+| `com.aionemu.gameserver.configs.main.WorldConfig.WORLD_REGION_SIZE` | `WorldMapRegionZoneConstructionContext.RegionSize` | Config Boundary | Partial | Unit Tested | Needs Verification | C# uses supplied region size to compute full-map top metadata. Runtime config wiring remains unverified. |
+| `com.aionemu.gameserver.model.templates.world.WorldMapTemplate.getFlags` | `WorldMapRegionZoneConstructionContext.WorldFlags`; `WorldMapRegionZoneFullMapBounds.Flags` | World Template Boundary DTO | Partial | Unit Tested | Needs Verification | C# carries supplied world flags into full-map metadata. Live `DataManager.WORLD_MAPS_DATA` lookup remains unported at this boundary. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_FullMapZoneCarriesJavaWorldZoneTemplateBoundsAndFlags` | Unit Added | Java `WorldZoneTemplate` constructor | Full-map x/y bounds, bottom/top rounding by region size, and flags metadata are carried. | Deterministic C# regression grounded in Java source review. | Does not instantiate Java points or zone name cache. |
+| `CreatePlan_FinalZoneIdsPreserveJavaHashMapPutReplacementSemantics` | Unit Added | Java `HashMap.put` in `ZoneService.getZoneInstancesByWorldId` | Duplicate zone ids are recorded as replacements and final ids represent last-write-wins semantics. | Deterministic C# regression grounded in Java source review. | Java HashMap iteration order not modeled. |
+
+Remaining risks:
+- Construction planning remains non-live and records selected types/metadata only.
+- Full-map `Points`, `ZoneName.createOrGet`, JAXB/XML serialization, live world-map template lookup, and Java HashMap iteration order remain unverified.
+- Live `DataManager` lookups, `ZoneInstance` subclasses, handler instantiation, siege/artifact attachment, shield service, vortex mutation, material zone creation, and dynamic handler loading remain unported.
+- Live C# `MapRegion`/`ZoneInstance` storage and callbacks remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 construction helper extension plus 2 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: live `ZoneInstance` subclasses, full-map `Points` object model, `ZoneName` cache behavior, `DataManager` lookups, live handler instantiation, siege/artifact attachment, `ShieldService`, vortex mutation, material zone creation, dynamic zone handlers, live C# MapRegion/ZoneInstance storage, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add a non-live material-zone construction plan for Java `ZoneService.createMaterialZoneTemplate`, including duplicate material mesh handling, shield/material handler selection, and sphere/cylinder/semisphere zone info metadata, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1648
+
+Next best unit: add a non-live material-zone construction plan for Java `ZoneService.createMaterialZoneTemplate`, including duplicate material mesh handling, shield/material handler selection, and sphere/cylinder/semisphere zone info metadata. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
