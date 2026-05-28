@@ -74661,3 +74661,88 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1646
 
 Next best unit: start a non-live `ZoneService.getZoneInstancesByWorldId` construction plan that models full-map zone creation and Java instance type selection (`FlyZoneInstance`, `NoFlyZoneInstance`, `SiegeZoneInstance`, `PvPZoneInstance`, invasion/default) before live zone storage. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1647 (May 28, 2026)
+- Continued after UOW-1646 by modeling Java `ZoneService.getZoneInstancesByWorldId` as a non-live construction/type-selection plan.
+- Performed Parallel Work Discovery across ZoneService construction planning, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected construction planning because it is the next dependency before live zone arrays and object-backed `ZoneInstance` storage.
+- Added `WorldMapRegionZoneConstructionService`.
+- Added construction DTOs for context, candidates, plan entries, and Java instance kind.
+- Modeled Java full-map `WorldZoneTemplate` creation as the first DUMMY base zone with handler attachment metadata.
+- Modeled Java instance type selection for `FLY`, `NO_FLY`, `FORT`, `ARTIFACT`, `PVP`, named invasion zones with vortex locations, and default base zones.
+- Modeled FORT siege/shield side-effect metadata and ARTIFACT missing-location metadata without executing live services.
+- Added tests for full-map creation, type selection, FORT side effects, ARTIFACT side effects/missing data, invasion vortex creation, and invasion fallback.
+- Validation:
+  - First focused run failed because test call sites used collection expressions for `IReadOnlySet<int>` parameters. Corrected the tests to pass `HashSet<int>`.
+  - Re-ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionZoneConstructionServiceTests|FullyQualifiedName~WorldMapRegionZoneIdentityServiceTests|FullyQualifiedName~WorldMapRegionZoneCapabilityServiceTests|FullyQualifiedName~WorldMapRegionZoneScanPlanServiceTests|FullyQualifiedName~WorldMapRegionZoneSortServiceTests|FullyQualifiedName~WorldMapRegionRuntimeSnapshotServiceTests|FullyQualifiedName~WorldMapRegionLifecyclePlanServiceTests|FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 79 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1647
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | ZoneService construction plan | `ZoneService.getZoneInstancesByWorldId`, `getIZI`, `validateZone`, `WorldZoneTemplate` | new construction service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; models construction/type selection without live storage. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the construction blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | ZoneService construction plan helper, tests, docs, commit | `WorldMapRegionZoneConstructionService.cs`, `WorldMapRegionZoneConstructionServiceTests.cs`, progress/handoff docs | Java source writes, unrelated services/tests | Implemented and documented UOW-1647. |
+| Sub-agents | None | None | All files | Not spawned because implementation and docs were small and Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1647 because the selected helper and tests were small and progress/handoff docs remained Orchestrator-owned.
+
+#### Migration Parity Table - Session 1647
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.zone.ZoneService.getZoneInstancesByWorldId` | `WorldMapRegionZoneConstructionService.CreatePlan` | Zone Construction Plan | Partial | Unit Tested | Partial Parity | C# models full-map zone creation, per-zone instance type selection, handler attachment metadata, and major side-effect metadata. It does not instantiate live `ZoneInstance` objects or return a `Map<ZoneName, ZoneInstance>`. |
+| `com.aionemu.gameserver.model.templates.zone.WorldZoneTemplate` | first `WorldMapRegionZoneConstructionEntry` | Full-Map Zone Template Boundary | Partial | Unit Tested | Needs Verification | C# records a DUMMY full-map base zone by map id. It does not model points, maxZ rounding, world-size geometry, flags, or `ZoneName.createOrGet`. |
+| `com.aionemu.gameserver.world.zone.ZoneService.getIZI` | `WorldMapRegionZoneConstructionService` invasion-name matching | Invasion Zone Selection Utility | Partial | Unit Tested | Partial Parity | C# models the hard-coded Brusthonin/Theobomos invasion zone names and vortex requirement. It does not read live `DataManager.VORTEX_DATA`. |
+| `com.aionemu.gameserver.world.zone.ZoneService.validateZone` | `WorldMapRegionZoneConstructionService` vortex side-effect metadata | Invasion Zone Validation Utility | Partial | Unit Tested | Partial Parity | C# models vortex-backed `InvasionZoneInstance` selection and `vortex.addZone` metadata. It does not create live instances or mutate vortex data. |
+| `com.aionemu.gameserver.world.zone.FlyZoneInstance` | `WorldMapRegionZoneInstanceKind.Fly` | Zone Instance Type | Partial | Unit Tested | Needs Verification | C# records selected type only; live enter/leave flight side effects remain modeled elsewhere/non-live. |
+| `com.aionemu.gameserver.world.zone.NoFlyZoneInstance` | `WorldMapRegionZoneInstanceKind.NoFly` | Zone Instance Type | Partial | Unit Tested | Needs Verification | C# records selected type only; live enter/leave flight side effects remain unported. |
+| `com.aionemu.gameserver.world.zone.SiegeZoneInstance` | `WorldMapRegionZoneInstanceKind.Siege` | Zone Instance Type | Partial | Unit Tested | Needs Verification | C# records selected type for FORT/ARTIFACT and side-effect metadata. Siege/artifact object attachment and shield service behavior remain non-live. |
+| `com.aionemu.gameserver.world.zone.PvPZoneInstance` | `WorldMapRegionZoneInstanceKind.Pvp` | Zone Instance Type | Partial | Unit Tested | Needs Verification | C# records selected type only; live PvP enter/leave/death behavior remains unported. |
+| `com.aionemu.gameserver.world.zone.InvasionZoneInstance` | `WorldMapRegionZoneInstanceKind.Invasion` | Zone Instance Type | Partial | Unit Tested | Needs Verification | C# records selected type only when matching name and vortex map metadata are present. Live invasion registration remains unported. |
+| `com.aionemu.gameserver.services.ShieldService.attachShield` | `WorldMapRegionZoneConstructionEntry.SideEffects` | Side-Effect Boundary | Not Started | Unit Tested Metadata | Needs Verification | C# records shield attachment metadata for FORT zones with known siege locations; no live shield service call occurs. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_AlwaysCreatesFullMapDummyZoneFirst` | Unit Added | Java `WorldZoneTemplate` and first full-map `ZoneInstance` creation | Full-map DUMMY base zone is first and handler metadata is attached. | Deterministic C# regression grounded in Java source review. | No geometry/flags modeling. |
+| `CreatePlan_SelectsJavaZoneInstanceKindsByZoneType` | Unit Added | Java `switch (zoneType)` | FLY, NO_FLY, PVP, and default type selection. | Deterministic C# regression grounded in Java source review. | No live subclasses. |
+| `CreatePlan_FortZoneUsesSiegeInstanceAndShieldSideEffectsWhenSiegeExists` | Unit Added | Java FORT branch | FORT selects siege kind and records siege/shield side effects when location exists. | Deterministic C# regression grounded in Java source review. | No live `ShieldService`. |
+| `CreatePlan_ArtifactZoneUsesSiegeInstanceAndReportsMissingArtifacts` | Unit Added | Java ARTIFACT branch | ARTIFACT selects siege kind, records found artifact add-zone and missing artifact metadata. | Deterministic C# regression grounded in Java source review. | No live artifact data mutation. |
+| `CreatePlan_InvasionZoneNameUsesVortexBackedInvasionInstance` | Unit Added | Java `getIZI` / `validateZone` | Known invasion names with a vortex map select invasion kind and record vortex side effect. | Deterministic C# regression grounded in Java source review. | No live vortex data. |
+| `CreatePlan_InvasionNameWithoutVortexFallsBackToBaseZone` | Unit Added | Java `validateZone` null branch | Known invasion name without vortex falls back to base zone with metadata. | Deterministic C# regression grounded in Java source review. | No Java runtime comparison. |
+
+Remaining risks:
+- Construction planning is non-live and records selected types/side effects as metadata.
+- Full-map `WorldZoneTemplate` geometry, maxZ rounding, flags, XML names, and `ZoneName` cache behavior are not modeled in this unit.
+- Live `DataManager` lookups, `ZoneInstance` subclasses, handler instantiation, siege/artifact attachment, shield service, vortex mutation, material zone creation, and dynamic handler loading remain unported.
+- Java `HashMap` return semantics for duplicate `ZoneName` keys are not modeled beyond entry metadata.
+- Live C# `MapRegion`/`ZoneInstance` storage and callbacks remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 10 grouped rows in this unit.
+- Total artifacts ported: 1 non-live construction helper plus 6 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 7 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity or Not Started metadata with known gaps.
+- Total blocked artifacts: live `ZoneInstance` subclasses, full-map geometry/flags, `DataManager` lookups, live handler instantiation, siege/artifact attachment, `ShieldService`, vortex mutation, material zone creation, dynamic zone handlers, live C# MapRegion/ZoneInstance storage, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Extend the construction plan to model full-map `WorldZoneTemplate` bounds/flags metadata and duplicate `ZoneName` replacement semantics, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1647
+
+Next best unit: extend the non-live `ZoneService` construction plan to model full-map `WorldZoneTemplate` bounds/flags metadata and duplicate `ZoneName` replacement semantics from Java `HashMap.put`. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
