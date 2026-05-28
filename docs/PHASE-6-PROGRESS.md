@@ -72039,3 +72039,71 @@ Immediate next: move out of the now-surfaced serializer writer-plan metadata cha
 6. Continue housing/NPC work from the new world-house/NPC-spawn baseline: wire studio spawn calls from the future instance/teleport `registeredId` path, model instance-aware house/NPC visibility, add visitor kick side effects, deepen temporary spawn parity beyond ordinary non-instance NPCs, continue resource/effect mutation wiring from the HP heal boundary into concrete HP stat packets, observers, restore tasks, DP/resource visual stat packet invocation, and remaining resource packet side effects, deepen loot/drop work from the new drop-registration/start-loot/solo-collection/custom-drop/quest-drop/global-drop/event-drop workflow into handler-side quest drops, event scheduler/config side effects, live zone membership and siege/base spawn global-drop restrictions, live boost-rate inputs, optional socket selection, group/alliance kinah and item distribution, rolls/bids, winner messages, temporary trade predicates, pet auto-sell, quality announcements, and broader non-solo/drop-aware corpse cleanup, invoke walker/formation variant swaps from future death/variant-change callbacks, deepen walker and random-walk interpolation with Java geo Z correction / collision correction / move-validate / zone-update side effects, broaden the focused walker AI state surface toward Java's full NPC AI event machine and dialog-start flow as supporting systems appear, and continue special spawn parity for static objects, gatherables, town spawns, pooled respawns, and per-instance pool state.
 7. Real-client validate scheduled item-use ordering for decompose, assembly, XP extraction, composition, extraction, and AP extraction once the readiness pass begins.
 8. Run and harden `LoopbackCaptureProof` under Java 25/Maven tooling when available; while tooling is blocked locally, draft Java packet-observer design notes for Level 2 artifact generation or add object-id mapping/comparison support once the Java artifact format for generated reward object ids is settled, without claiming Java runtime verification.
+### Session 1611 (May 28, 2026)
+- Continued after UOW-1610 by moving out of the protection serializer metadata chain and selecting a narrow ItemCharge live-handler parity slice.
+- Performed Parallel Work Discovery across ItemCharge, nearby quest refresh, ItemPurification persistence analysis, and Java serializer implementation. Selected ItemCharge because Java source and C# tests were already local, the edit surface was one handler predicate plus one regression, and Java serializer work remains blocked by tooling/runtime artifact strategy.
+- Source-read Java `CM_CHARGE_ITEM.runImpl`, `ItemChargeService.chargeItems`, and `ItemStorage.getItemByObjId`.
+- Removed the extra selected-item `!IsEquipped` filter in `GameServerConnection.HandleChargeItemAsync` so selected conditioning follows Java's object-id inventory lookup before delegating to charge planning.
+- Added a focused selected-equipped-item regression proving C# now spends AP, preserves `IsEquipped`, updates charge, emits the charge inventory update, refreshes stats, and sends the charge-all-complete message.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests|FullyQualifiedName~ItemChargeServiceTests|FullyQualifiedName~GameServerConnectionChargeAllQuestionResponseTests"`.
+  - Result: passed 98 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1611
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Selected ItemCharge equipped lookup parity | `CM_CHARGE_ITEM`, `ItemStorage.getItemByObjId`, `ItemChargeService.chargeItems` | `GameServerConnection.cs`, `GameServerConnectionInventoryExpansionUseItemTests.cs` | Handler/Test | Sequential | Low | Selected; one shared handler predicate and one focused regression. |
+| B | Nearby quest refresh Java handler/XML extraction | quest-start handler/extractor files | nearby/quest extractor services/tests | Extractor/Test | Later | Medium | Safe candidate, but requires a fresh ownership map and real-data count audit. |
+| C | ItemPurification side-effect persistence analysis | ItemPurification live/persistence dependencies | ItemPurification planner/report files | Analysis/Planner | Later | Medium | Separate subsystem; avoid mixing with ItemCharge handler changes. |
+| D | Java protection serializer implementation | future protection serializer/observer files | Java source/generated artifacts | Live Artifact Generation | No | High | Still blocked by Java 25/JDK/Maven and runtime artifact strategy. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Align selected ItemCharge lookup with Java inventory object-id lookup | Handler/Test/Docs | `GameServerConnection.cs`, charge handler tests, progress/handoff docs | protection serializer reports, nearby quest files, ItemPurification files, Java source writes | Java source review of `CM_CHARGE_ITEM` and `ItemStorage` | One focused production parity fix with C# regression coverage. |
+
+No sub-agent was spawned for UOW-1611 because the implementation and test both touch the same charge-handler surface.
+
+#### Migration Parity Table - Session 1611
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CHARGE_ITEM` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleChargeItemAsync` | Client Packet Handler | Partial | Regression Tested in C# | Partial Parity | Selected-item lookup no longer rejects equipped items before charge planning. This matches Java source shape where `player.getInventory().getItemByObjId` feeds `ItemChargeService.chargeItems`; no Java runtime packet trace or encrypted socket comparison was run. |
+| `com.aionemu.gameserver.model.items.storage.ItemStorage.getItemByObjId` | C# `Player.InventoryItems` object-id lookup in `HandleChargeItemAsync` | Inventory Lookup Dependency | Partial | Regression Tested in C# | Needs Verification | Java storage returns the item by object id without an explicit equipped guard. C# still requires `Location == CubeStorageId`; exact Java storage membership for every non-cube/equipped lifecycle state remains unverified. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.chargeItems` | `Aion.GameServer.Services.ItemChargeService.CreateChargePlan` consumed by `GameServerConnection.HandleChargeItemAsync` | Service / Charge Mutation | Partial | Regression Tested in C# | Partial Parity | Regression verifies an equipped selected AP-conditioning item can be charged and still emits charge/stat/completion packets. Java `ChargeInfo.updateChargePoints`, observer attachment, stats internals, threading, and full side-effect fanout remain partial. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.processAPPayment` | `Aion.GameServer.Services.ItemChargeService.CreateAbyssPointPaymentPlan` | Service / AP Payment Guard | Partial | Regression Tested in C# | Partial Parity | Existing AP guard is exercised by the new equipped selected-item regression. C# keeps its intentional `int.MaxValue` payment guard; Java overflow behavior is not reproduced or runtime-compared. |
+| `com.aionemu.gameserver.model.gameobjects.Item` | `Aion.GameServer.Model.GameObjects.InventoryItem` | Model / Item State | Partial | Regression Tested in C# | Needs Verification | Regression preserves `IsEquipped=true` while updating charge on the copied item snapshot. Java live-object identity, `ChargeInfo` observer attachment, and concurrent inventory/equipment collection behavior remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleChargeItemAsync_SelectedEquippedItemCanBeChargedLikeJavaInventoryLookup` | Regression | Java `CM_CHARGE_ITEM.runImpl`, `ItemStorage.getItemByObjId`, and `ItemChargeService.chargeItems` source review | Validates selected equipped AP-conditioning item is accepted, AP is spent, equipped state is preserved, charge reaches level 1, charge update/stat/success/complete packets are emitted. | Deterministic C# handler regression grounded in Java source. | Does not execute Java runtime, real client UI selection, encrypted packet bytes, repository transaction failure, Java stats internals, or observer threading. |
+
+Remaining risks:
+- Java runtime behavior for equipped/non-cube inventory lookup has not been executed; this unit is source-derived.
+- C# still requires `Location == CubeStorageId` for selected charge items, while Java storage membership for all storage/equipment transitions needs deeper verification.
+- Full Java `ChargeInfo.updateChargePoints`, observer attachment, stat recalculation internals, packet byte serialization, and socket ordering remain unverified.
+- AP side effects remain partial beyond the current planner packets and configured cap handling.
+- Repository failure ordering and transaction rollback for selected equipped charge mutations were not newly tested.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 selected ItemCharge lookup parity fix plus 1 focused live-handler regression.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification, with the remaining rows Partial Parity based on C# regression evidence only.
+- Total blocked artifacts: Java runtime inventory/equipment lifecycle comparison, Java packet trace, encrypted socket comparison, full `ChargeInfo` observer/stat internals, repository failure/rollback comparison, broader non-cube storage lookup semantics.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Continue with a separate safe Phase 6 slice. Good candidates are nearby-refresh Java handler/XML quest-start extraction, ItemPurification side-effect persistence analysis, or another isolated planner/report prerequisite. If staying in ItemCharge, audit the remaining selected-item storage-location assumption against Java `Inventory`/`Equipment` lifecycle before changing production behavior; do not broaden this unit without runtime/source evidence.
+
+---
+
+## Updated Immediate Next - Session 1611
+
+Move to a fresh Phase 6 safe slice after UOW-1611. Prefer nearby-refresh Java handler/XML quest-start extraction or ItemPurification side-effect persistence analysis unless Java serializer tooling becomes available. If continuing ItemCharge, make the next unit a read-first storage/equipment lifecycle audit for `CM_CHARGE_ITEM` selected item lookup, especially the remaining C# `Location == CubeStorageId` guard versus Java `Inventory`/`Equipment` object membership. Keep live serializer/protection observer execution disabled and do not claim verified parity without Java runtime artifacts or deterministic cross-runtime comparison.
