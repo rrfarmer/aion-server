@@ -74269,3 +74269,81 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1641
 
 Next best unit: compose `WorldMapRegionZoneSortService` into the non-live region creation/runtime snapshot path so snapshots can expose Java-ordered zone ids and explicitly distinguish filtered input order from constructor order. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
+
+### Session 1642 (May 28, 2026)
+- Continued after UOW-1641 by composing zone sort metadata into the non-live creation/runtime snapshot path.
+- Performed Parallel Work Discovery across sorted-zone snapshot composition, charge-all DB rollback integration planning, nearby packet golden audit, and zone-handler source audit. Selected snapshot composition because the zone sort helper now exists and Java stores sorted zones during `MapRegion` construction.
+- Updated `WorldMapRegionCreationSnapshotService` to accept optional `WorldMapRegionZoneSortCandidate` metadata.
+- Added `ConstructorOrderedZoneIds` and `MissingZoneSortIds` to creation snapshots.
+- Updated `WorldMapRegionRuntimeSnapshotService` to carry constructor-ordered zone ids and missing-sort metadata forward.
+- Preserved filtered `ZoneIds` separately from Java constructor order to avoid assuming parity when sort metadata is incomplete.
+- Added tests for Java-ordered snapshot ids and partial sort metadata blocking constructor-order assumptions.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionZoneSortServiceTests|FullyQualifiedName~WorldMapRegionRuntimeSnapshotServiceTests|FullyQualifiedName~WorldMapRegionLifecyclePlanServiceTests|FullyQualifiedName~WorldMapRegionCreationSnapshotServiceTests|FullyQualifiedName~WorldMapRegionZoneFilterServiceTests|FullyQualifiedName~WorldMapRegionLayoutServiceTests|FullyQualifiedName~WorldRegionKeyProjectionServiceTests|FullyQualifiedName~WorldRegionIdServiceTests"`.
+  - Result: passed 57 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1642
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Sorted-zone snapshot composition | `MapRegion.<init>`, `MapRegion.zoneComparator`, `getZoneCount` | creation/runtime snapshot services/tests | Utility Composition / Test Creation | Sequential for writes | Low | Selected; connects UOW-1641 sort metadata to existing non-live region snapshots. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Test Creation | Yes, later | Medium | Independent safe alternative; deferred. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the sorted-zone snapshot blocker. |
+| D | Zone-handler source audit | `ZoneInstance`, zone handlers | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Compose zone sort metadata into non-live creation/runtime snapshots | Utility Composition / Tests / Docs | creation/runtime snapshot services/tests, progress/handoff docs | Java source writes, live `MapRegion` storage, packet dispatch | UOW-1641 zone sort helper | Tested snapshots carrying filtered ids and Java constructor order separately. |
+
+No sub-agent was spawned for UOW-1642 because implementation and tests touched shared snapshot contracts that should have one writer.
+
+#### Migration Parity Table - Session 1642
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.WorldMap2DInstance.createMapRegion` | `WorldMapRegionCreationSnapshotService.CreateSnapshot` | Region Creation Snapshot | Partial | Unit Tested | Partial Parity | C# now carries filtered zone ids plus Java constructor-ordered zone ids when complete sort metadata is provided. It still does not construct live `MapRegion` objects or store live zones. |
+| `com.aionemu.gameserver.world.WorldMap3DInstance.createMapRegion` | `WorldMapRegionCreationSnapshotService.CreateSnapshot` | Region Creation Snapshot | Partial | Unit Tested | Partial Parity | 3D snapshots preserve missing-sort metadata when zone sort keys are absent. Java parallel creation and synchronized map writes remain unported. |
+| `com.aionemu.gameserver.world.MapRegion.<init>` | `WorldMapRegionCreationSnapshot.ConstructorOrderedZoneIds`; `WorldMapRegionRuntimeSnapshot.ConstructorOrderedZoneIds` | Constructor Readiness DTO | Partial | Unit Tested | Partial Parity | C# exposes constructor-order ids based on UOW-1641 comparator metadata but does not instantiate `MapRegion` or sort a live `ZoneInstance[]`. |
+| `com.aionemu.gameserver.world.MapRegion.zoneComparator` | `WorldMapRegionZoneSortService` consumed by snapshot services | Comparator Dependency | Partial | Unit Tested | Partial Parity | Snapshot composition uses the Java-style comparator only when all matched zones have sort metadata. Partial metadata blocks constructor-order output and records missing zone ids. |
+| `com.aionemu.gameserver.world.MapRegion.getZoneCount` | `WorldMapRegionRuntimeSnapshot.ZoneIds`; `ConstructorOrderedZoneIds` | Zone Count/Boundary DTO | Partial | Unit Tested | Needs Verification | C# preserves both filtered count/order and constructor order metadata. Live `ZoneInstance[]` count and handler-backed zone semantics remain unverified. |
+| `com.aionemu.gameserver.world.zone.ZoneInstance` | `WorldMapRegionZoneCandidate`; `WorldMapRegionZoneSortCandidate` | Zone Runtime Boundary DTO | Not Started | Unit Tested Metadata | Needs Verification | C# still splits geometry/filter data from sort metadata. Java object identity, `ZoneTemplate` references, handlers, creature membership, and callbacks remain unported. |
+| `com.aionemu.gameserver.model.templates.zone.ZoneTemplate` | `WorldMapRegionZoneCandidate`; `WorldMapRegionZoneSortCandidate` | Template Boundary DTO | Partial | Unit Tested | Needs Verification | C# uses DTO projections for map id, area, type, priority, and name id. XML binding, defaults, flags, siege/town ids, and serialization remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateSnapshot_For2DRegion_ComposesBoundsNeighboursAndFilteredZones` | Unit Updated | Java `WorldMap2DInstance.createMapRegion`, `WorldMapInstance.filterZones`, `MapRegion.zoneComparator` | Snapshot keeps filtered zone ids and also exposes Java constructor-ordered zone ids when sort metadata is complete. | Deterministic C# regression grounded in Java source review and UOW-1641 comparator tests. | No live `MapRegion` or `ZoneInstance[]`. |
+| `CreateSnapshot_For3DRegion_ComposesZBoundsAndFilteredZones` | Unit Updated | Java `WorldMap3DInstance.createMapRegion` | Missing sort metadata is explicit for matched 3D zones. | Deterministic C# regression grounded in Java source review. | No Java runtime comparison. |
+| `CreateSnapshot_WithPartialSortMetadata_DoesNotAssumeConstructorOrder` | Unit Added | Java constructor requires sortable `ZoneInstance` templates | Partial metadata prevents constructor-order output and records missing zone ids. | Deterministic C# regression avoiding false parity assumptions. | Does not load real Java zone templates. |
+| `CreateSnapshot_ComposesCreationPrerequisitesWithLifecycleState` | Unit Updated | Java `MapRegion` constructor/runtime fields | Runtime snapshot carries filtered ids, constructor-ordered ids, lifecycle state, and missing live pieces. | Deterministic C# regression grounded in Java source review. | No live object map or zone handler invocation. |
+
+Remaining risks:
+- Constructor-ordered zone ids are metadata only; no live `ZoneInstance[]` exists.
+- Sort metadata must be supplied manually until real `ZoneTemplate` loading/projection is ported.
+- Partial sort metadata blocks constructor order by design; future callers must decide whether to fail fast or continue non-live.
+- Java `ZoneTemplate` XML binding defaults, flags, siege/town ids, serialization, and enum string formats remain unverified.
+- Java `ZoneName` cache/missing logging/fallback behavior remains unported beyond hash generation.
+- Live object storage, parent instance references, neighbour object references, synchronized/volatile state, scheduler behavior, AI notifications, zone revalidation, death callbacks, item-use zone checks, and handler callbacks remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 7 grouped rows in this unit.
+- Total artifacts ported: 2 snapshot contract updates plus 1 focused test and 3 updated tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity or Not Started metadata with known gaps.
+- Total blocked artifacts: live C# MapRegion storage, live `ZoneInstance[]`, real zone-template projection into sort metadata, zone-template XML loading/serialization, zone-name cache/logging, scheduler execution, synchronization/volatile runtime parity, AI notifications, zone revalidation, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add a non-live region zone query/revalidation plan model for Java `MapRegion.revalidateZones`, `findZones`, and `isInsideZone` using constructor-ordered zone metadata, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1642
+
+Next best unit: add a non-live region zone query/revalidation plan model for Java `MapRegion.revalidateZones`, `findZones`, and `isInsideZone`, using constructor-ordered zone ids to document priority-zone behavior before live handlers are enabled. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, and live nearby dispatch disabled.
