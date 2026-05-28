@@ -72805,3 +72805,70 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1621
 
 Next best unit: add a narrow Kinah charge-all `SaveItemChargeAllMutationAsync` failure regression to mirror the new AP save-failure coverage, unless the shared save boundary is considered sufficient; safe alternative is nearby controller-position/map-region metadata. Keep repository SQL rewrites, production timers, live nearby sends, and Java source changes disabled.
+
+### Session 1622 (May 28, 2026)
+- Continued after UOW-1621 by adding explicit Kinah charge-all save-failure coverage on the same `SaveItemChargeAllMutationAsync` boundary.
+- Performed Parallel Work Discovery across Kinah charge-all save failure, charge-all multi-item ordering, nearby controller-position metadata, and live nearby dispatch. Selected Kinah save-failure coverage because it is a narrow branch-pair for the AP save-failure test added in UOW-1621.
+- Added `EmptyPlayerEnterWorldRepository.ChargeAllPaymentKinahItem` capture so tests can verify the staged quoted Kinah spend handed to the repository fake.
+- Added `HandleQuestionResponseAsync_ChargeAllKinahPaymentSaveFailureStopsBeforeInMemoryMutationAndPackets`, proving a ready Kinah charge-all accept consumes the question response, stages Kinah and charge updates for persistence, and leaves live Kinah/item state plus packets untouched when the save fails.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~ItemChargeServiceTests|FullyQualifiedName~HandleQuestionResponseAsync_ChargeAllApPaymentSaveFailureStopsBeforeInMemoryMutationAndPackets|FullyQualifiedName~HandleQuestionResponseAsync_ChargeAllKinahPaymentSaveFailureStopsBeforeInMemoryMutationAndPackets|FullyQualifiedName~HandleQuestionResponseAsync_ChargeAllKinahPaymentRejectsInsufficientKinahWithoutSideEffects|FullyQualifiedName~HandleQuestionResponseAsync_ChargeAllKinahPaymentChargesOnlyCurrentChargeableItemWhenOnePendingItemIsStale|FullyQualifiedName~HandleQuestionResponseAsync_ChargeAllKinahPaymentChargesOnlyCurrentChargeableItemWhenOnePendingItemIsMissing|FullyQualifiedName~GameServerConnectionChargeAllQuestionResponseTests"`.
+  - Result: passed 22 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1622
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Kinah charge-all persistence-failure ordering | `ItemChargeService.startChargingEquippedItems`, `processKinahPayment`, `chargeItems` | `PlayerEnterWorldRepository.cs`, charge-all response tests | Test/Fake | Sequential | Low | Selected; mirrors AP save-failure coverage with a branch-specific staged Kinah assertion. |
+| B | Charge-all multi-item packet/order audit | `chargeItems` over multiple items | existing charge-all tests | Test/Analysis | Later | Medium | Useful but broader than the missing branch. |
+| C | Nearby controller-position/map-region metadata adapter | `PlayerController.updateNearbyQuests`, map-region lookup | nearby adapter/report files | Service/Test | Later | Medium | Safe only if kept metadata-only. |
+| D | Live nearby refresh dispatch | `ThreadPoolManager.schedule`, `PacketSendUtility`, `SM_NEARBY_QUESTS` | world/connection services | Live Dispatch | No | High | Deferred; production timers and sends remain risky. |
+
+Selected batch:
+
+| Agent | Assigned Task | Task Type | Allowed Files | Forbidden Files | Dependencies | Expected Result |
+|---|---|---|---|---|---|---|
+| Orchestrator | Add Kinah charge-all save-failure ordering regression | Test/Fake/Docs | `PlayerEnterWorldRepository.cs`, `GameServerConnectionInventoryExpansionUseItemTests.cs`, progress/handoff docs | repository SQL implementation, live packet dispatch rewrites, Java source writes, nearby files | UOW-1621 save-failure fake result knob and existing Kinah charge-all tests | One focused regression proving Kinah charge-all failed save leaves live state/packets untouched. |
+
+No sub-agent was spawned for UOW-1622 because the change is a small branch-specific assertion in the same shared test surface.
+
+#### Migration Parity Table - Session 1622
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemChargeService.startChargingEquippedItems` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleChargeAllQuestionResponseAsync` | Service / Request Flow | Partial | Regression Tested | Partial Parity | Kinah accept path now has explicit failed-save coverage matching AP. C# consumes the response and stages persistence before live mutation; Java mutates live payment/charges after acceptance. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.processKinahPayment` | `ItemChargeService.CreateKinahPaymentPlan`; `SaveItemChargeAllMutationAsync` Kinah payload | Payment Service / Inventory Mutation | Partial | Regression Tested | Needs Verification | New fake capture verifies the staged Kinah count after quoted payment, but production inventory SQL rollback and Java `tryDecreaseKinah` dirty persistence timing remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemChargeService.chargeItems` | `HandleChargeAllQuestionResponseAsync` plus `ItemChargeService.CreateChargePlan` | Service / Charge-All Mutation | Partial | Unit Tested + Regression Tested | Partial Parity | Staged charged item is captured by the repository fake and live item charge remains unchanged on save failure. Java live object identity and runtime packet ordering remain unverified. |
+| `com.aionemu.gameserver.dao.InventoryDAO` / Kinah inventory persistence | `IPlayerEnterWorldRepository.SaveItemChargeAllMutationAsync`; `EmptyPlayerEnterWorldRepository.ChargeAllPaymentKinahItem` | Repository Boundary / Test Fake | Partial | Regression Tested fake boundary | Needs Verification | Fake now captures staged Kinah item for charge-all. Real SQL transaction rollback/autocommit behavior and Java dirty-state persistence are not integration-compared. |
+| `com.aionemu.gameserver.model.gameobjects.player.ResponseRequester.respond` | `QuestionResponseRegistry.Respond`; `PendingChargeAllRequest` | Request Registry / Dispatch | Partial | Regression Tested | Needs Verification | Kinah save-failure regression confirms accepted response is consumed before failed persistence returns. Java anonymous callback invocation remains unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `HandleQuestionResponseAsync_ChargeAllKinahPaymentSaveFailureStopsBeforeInMemoryMutationAndPackets` | Regression | Java `ItemChargeService.startChargingEquippedItems.acceptRequest` -> `processKinahPayment` -> `chargeItems(... requirePayment=false)` plus C# transaction boundary | Accepted Kinah charge-all response consumes request, calls repository with staged Kinah and charged item payloads, then failed save prevents live Kinah/item mutation and all packet sends. | Deterministic C# fail-closed regression documenting the transaction-oriented difference from Java live mutation. | Does not execute Java runtime or real SQL rollback; no encrypted packet/frame comparison. |
+
+Remaining risks:
+- C# charge-all persistence-first staging remains intentionally different from Java's live Kinah spend and charge mutation.
+- Real SQL transaction rollback/autocommit behavior was not integration-tested.
+- Java `Storage.tryDecreaseKinah` dirty-state behavior, live captured `Item` object identity, multi-item iteration order, stat observer fanout, encrypted packet bytes, date/time behavior, and threading remain unverified.
+- The regression covers one chargeable Kinah item; mixed charge-way and multi-item exact packet ordering remain open.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 fake-repository Kinah capture plus 1 charge-all Kinah save-failure regression.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity with known gaps.
+- Total blocked artifacts: Java runtime charge-all comparison, real SQL rollback validation, dirty-state timing comparison, live object identity, encrypted packet/frame comparison, multi-item/order comparison.
+- Estimated overall migration completion: Phase 6 remains about 72% complete.
+
+Next recommended unit of work:
+- Pivot back to nearby controller-position/map-region metadata adapter, or audit charge-all multi-item packet ordering if staying in ItemCharge. Keep repository SQL rewrites, production timers, live nearby sends, and Java source changes disabled.
+
+---
+
+## Updated Immediate Next - Session 1622
+
+Next best unit: add a non-live nearby controller-position/map-region metadata adapter for staged nearby quest refresh, keeping it report-only with no production timers or packet sends. Safe ItemCharge alternative: charge-all multi-item packet/order audit. Keep repository SQL rewrites, live nearby sends, and Java source changes disabled.
