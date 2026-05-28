@@ -75204,3 +75204,95 @@ Next recommended unit of work:
 ## Updated Immediate Next - Session 1653
 
 Next best unit: add a non-live `ZoneCollisionMaterialActor` / `AbstractMaterialSkillActor` task plan for material collision touch/untouch transitions, condition matching, frequency gates, and `SkillEngine.applyEffectDirectly` metadata. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, live generated-zone writes, live actor mutation, and live nearby dispatch disabled.
+
+### Session 1654 (May 28, 2026)
+- Continued after UOW-1653 by adding a non-live material collision actor/task plan for Java `ZoneCollisionMaterialActor` and `AbstractMaterialSkillActor`.
+- Performed Parallel Work Discovery across material collision actor modeling, charge-all DB rollback integration planning, nearby packet golden audit, and broader zone-handler source audit. Selected actor modeling because UOW-1653 now records handler enter/leave lifecycle intent but still left collision touch/untouch and periodic material skill tasks unmodeled.
+- Spawned read-only sidecar `Descartes the 2nd` to inspect the independent charge-all DB rollback candidate while Orchestrator owned the actor implementation files. The sidecar was read-only and assigned no writable files.
+- Integrated sidecar findings: future charge-all rollback work should live in `PlayerEnterWorldRepositoryDatabaseIntegrationTests.cs`, remain gated by `AION_GAMESERVER_DB_INTEGRATION=1`, and is a C# transaction regression guard rather than full Java runtime parity because Java DAO commit boundaries differ.
+- Added `WorldMapRegionMaterialZoneActorPlanService`.
+- Modeled Java touch-state transitions from collision result count, including `act()`/`abort()` side-effect metadata and staff debug messages.
+- Modeled Java material task scheduling metadata using `TaskId.ZONE_MATERIAL_ACTION` and 1000ms tick interval.
+- Modeled Java `MaterialSkillTask.run` gates: previous skill frequency, touched state, spawned/dead guard, player protection guard, and first matching material condition.
+- Modeled Java material act conditions: empty condition list, `NIGHT`, and `SUNNY` where sunny means not raining or weather-before.
+- Modeled `SkillEngine.applyEffectDirectly` metadata with `Effect.ForceType.MATERIAL_SKILL`.
+- Validation:
+  - Ran `dotnet test dotnetConversion/tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldMapRegionMaterialZoneActorPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneHandlerPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneSerializationPlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneSavePlanServiceTests|FullyQualifiedName~WorldMapRegionMaterialZoneConstructionServiceTests"`.
+  - Result: passed 26 tests.
+  - Full game-server suite was not rerun in this unit.
+
+#### Parallel Work Discovery - Session 1654
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Material collision actor task plan | `ZoneCollisionMaterialActor`, `AbstractMaterialSkillActor`, `MaterialActCondition`, `MaterialSkill` | new actor-plan service/tests | Utility Port / Test Creation | Sequential for writes | Medium | Selected; next material-zone behavior boundary after handler lifecycle metadata. |
+| B | Charge-all DB rollback integration planning | charge-all repository integration tests | DB integration tests if later implemented | Parity Verification / Java Analysis | Yes, read-only sidecar | Medium | Independent safe candidate; read-only sidecar spawned to inspect while Orchestrator implemented actor plan. |
+| C | Nearby packet golden gap audit | `SM_NEARBY_QUESTS` | packet tests/docs | Analysis/Test | Yes, later | Low | Useful later, but not the material actor blocker. |
+| D | Broader zone-handler source audit | zone handler Java files | docs/read-only source | Java Analysis | Yes, later | Low | Useful before live callbacks. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Material collision actor/task helper, tests, docs, commit | `WorldMapRegionMaterialZoneActorPlanService.cs`, `WorldMapRegionMaterialZoneActorPlanServiceTests.cs`, progress/handoff docs | Java source writes, live actor mutation, unrelated services/tests | Implemented and documented UOW-1654. |
+| Descartes the 2nd | Read-only charge-all DB rollback candidate audit | Read-only inspection of docs/Java/C# tests | All writes | Future-work notes only; no integration dependency for UOW-1654. |
+
+No writable sub-agent work was spawned for UOW-1654 because selected implementation edits a new helper/test pair but shared docs remain Orchestrator-owned. The sidecar was read-only and independent.
+
+Sidecar charge-all rollback notes:
+- Relevant Java artifacts: `ItemChargeService.startChargingEquippedItems`, `ItemChargeService.chargeItems`, `CM_QUESTION_RESPONSE`, `DialogAction.CHARGE_ITEM_MULTI`/`CHARGE_ITEM_MULTI2`, and `InventoryDAO`.
+- Relevant C# artifacts: `ItemChargeService.CreateChargeAllPlans`, `GameServerConnection` charge-all response handling, and `PlayerEnterWorldRepository.SaveItemChargeAllMutationAsync`.
+- Suggested future gated test: `SaveItemChargeAllMutation_RollsBackPriorChargeUpdatesWhenLaterChargeUpdateFailsAgainstJavaSchema_WhenEnabled`.
+- Suggested test home: `dotnetConversion/tests/Aion.GameServer.Tests/PlayerEnterWorldRepositoryDatabaseIntegrationTests.cs`.
+- Parallelization: safe with material-zone work if limited to the DB integration test file and docs remain Orchestrator-owned.
+
+#### Migration Parity Table - Session 1654
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.controllers.observer.ZoneCollisionMaterialActor` | `WorldMapRegionMaterialZoneActorPlanService.CreateMovePlan` | Collision Actor Behavior Plan | Partial | Unit Tested Metadata | Partial Parity | C# models touch/untouch transitions from collision result count, staff debug text, and act/abort side-effect metadata. It does not inspect real collision results, mutate `isTouched`, or call live `act`/`abort`. |
+| `com.aionemu.gameserver.controllers.observer.AbstractMaterialSkillActor` | `WorldMapRegionMaterialZoneActorPlanService.CreateTickPlan`; `CreateDiedPlan` | Periodic Skill Actor Plan | Partial | Unit Tested Metadata | Partial Parity | C# models scheduling metadata, frequency gate, touch/spawn/dead/protection guards, condition selection, death abort metadata, and skill-application metadata. It does not schedule `Future` tasks, use `AtomicReference`, or mutate creature controller tasks. |
+| `com.aionemu.gameserver.model.templates.materials.MaterialSkill` | `WorldMapRegionMaterialZoneActorSkillSnapshot` | Material Skill DTO | Partial | Unit Tested Metadata | Partial Parity | C# carries id, level, frequency, and act conditions needed by actor task logic. It does not model target matching here, XML defaults, or mutable synchronized skill list behavior. |
+| `com.aionemu.gameserver.model.templates.materials.MaterialActCondition` | `WorldMapRegionMaterialZoneActCondition` | Enum / Condition Boundary | Partial | Unit Tested | Partial Parity | C# models `SUNNY` and `NIGHT`, including Java's sunny-as-not-raining-or-weather-before behavior. It does not call live `GameTimeService` or `WeatherService`. |
+| `com.aionemu.gameserver.services.GameTimeService` | `WorldMapRegionMaterialZoneActorTickContext.DayTime` | Time Service Boundary DTO | Not Started | Unit Tested Metadata | Needs Verification | C# receives day/night as supplied metadata. Live game-time lookup and timezone/tick behavior remain unported. |
+| `com.aionemu.gameserver.services.WeatherService` | `WorldMapRegionMaterialZoneActorTickContext.WeatherName`; `WeatherIsBefore` | Weather Service Boundary DTO | Not Started | Unit Tested Metadata | Needs Verification | C# receives weather metadata and models Java string-prefix logic. Live weather lookup, null weather entry behavior, and weather timing remain unported. |
+| `com.aionemu.gameserver.skillengine.SkillEngine.applyEffectDirectly` | `WorldMapRegionMaterialZoneActorTickPlan` skill-application metadata | Skill Engine Boundary | Not Started | Unit Tested Metadata | Needs Verification | C# records skill id, level, and `MATERIAL_SKILL` force type only. Live skill effect application and packet/stat side effects remain unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateMovePlan_TouchTransitionSchedulesTaskAndReportsClosestGeometry` | Unit Added | Java `ZoneCollisionMaterialActor.onMoved` and `AbstractMaterialSkillActor.act` | Touch-start transition, task scheduling metadata, closest-collision debug message. | Deterministic C# metadata regression grounded in Java source review. | No live collision result or scheduler. |
+| `CreateMovePlan_UntouchTransitionAbortsTaskAndReportsMaterialGeometry` | Unit Added | Java `ZoneCollisionMaterialActor.onMoved` and `AbstractMaterialSkillActor.abort` | Untouch transition, task cancellation metadata, own-geometry debug message. | Deterministic C# metadata regression grounded in Java source review. | No live task cancellation. |
+| `CreateTickPlan_HonorsJavaFrequencyTouchAndProtectionGuards` | Unit Added | Java `MaterialSkillTask.run` guard sequence | Frequency gate, not-touched skip, inactive creature skip, and protection skip. | Deterministic C# metadata regression grounded in Java source review. | No scheduled repeated task. |
+| `CreateTickPlan_SelectsFirstSkillWithMatchingConditionAndAppliesMaterialSkill` | Unit Added | Java `findFirstSkillWithMatchingCondition`, `matchActConditions`, and `SkillEngine.applyEffectDirectly` | First matching condition, sunny weather-before handling, debug metadata, and material skill application metadata. | Deterministic C# metadata regression grounded in Java source review. | No live `SkillEngine` invocation. |
+| `CreateTickPlan_SkipsWhenNoMaterialActConditionMatches` | Unit Added | Java `matchActConditions` | No matching sunny/night conditions skips skill application. | Deterministic C# metadata regression grounded in Java source review. | No live game-time/weather services. |
+
+Remaining risks:
+- Actor planning is non-live and does not mutate collision observers, `AtomicReference<Future<?>>`, creature controller tasks, or volatile `isTouched`.
+- Real collision result geometry, closest-collision selection beyond supplied first name, and collision intention bytes remain unported.
+- Live `ThreadPoolManager.scheduleAtFixedRate`, task cancellation, and concurrent compare-and-set behavior remain unverified.
+- Live `GameTimeService`, `WeatherService`, null weather entries, and weather timing remain unported.
+- Live `SkillEngine.applyEffectDirectly`, effect force handling, stat/packet side effects, and material skill conditions beyond sunny/night remain unported.
+- Java synchronized skill-list iteration is represented by immutable supplied DTOs.
+- Packet debug messages are metadata only; no `PacketSendUtility` parity yet.
+- Live dynamic zone handlers and live C# `MapRegion`/`ZoneInstance` storage remain disabled.
+- Charge-all DB rollback remains a future gap: fake-repository tests prove runtime no-mutation/no-packet behavior, not MySQL transaction rollback.
+- `docs/commit-conventions.md` was requested by the startup flow but is absent in this repository.
+
+Summary metrics:
+- Total Java artifacts discovered: 7 grouped rows in this unit.
+- Total artifacts ported: 1 non-live material-zone actor/task helper plus 5 focused tests.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity or Not Started metadata with known gaps.
+- Total blocked artifacts: live collision observer mutation, `AtomicReference<Future<?>>` scheduling, `ThreadPoolManager`, concurrent task ownership, live game-time/weather services, live `SkillEngine.applyEffectDirectly`, packet debug sending, collision intention bytes, dynamic zone handlers, live C# MapRegion/ZoneInstance storage, charge-all MySQL rollback regression.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add a non-live material skill condition/time/weather service boundary model or a source-grounded `PacketSendUtility` staff debug metadata audit for material zones, or add the gated charge-all DB rollback integration regression.
+
+---
+
+## Updated Immediate Next - Session 1654
+
+Next best unit: add a non-live material skill condition/time/weather service boundary model for material actors, including `GameTimeService`, `WeatherService`, null weather handling, and any discovered material condition edge cases. Safe ItemCharge alternative: add a gated DB integration regression for charge-all transaction rollback/no-DB-mutation. Keep Java source writes, repository rewrites, live generated-zone writes, live actor mutation, and live nearby dispatch disabled.
