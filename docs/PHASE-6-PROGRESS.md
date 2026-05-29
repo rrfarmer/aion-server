@@ -77110,3 +77110,70 @@ Summary metrics:
 
 Next recommended unit of work:
 - Capture Java runtime/golden vectors for `SM_FORCED_MOVE` or for `StaggerEffect`/`StumbleEffect` calculate probe vectors, then continue toward non-live end-effect cleanup planning or another isolated packet parity unit before live movement-system wiring.
+
+### Session 1679 (May 28, 2026)
+- Continued after UOW-1678 by adding a non-live end-effect cleanup planner for Java `StaggerEffect.endEffect` and `StumbleEffect.endEffect`.
+- Performed Work Discovery across Java `StaggerEffect.endEffect`, Java `StumbleEffect.endEffect`, existing forced-move start/calculate planners, and the latest UOW-1678 handoff.
+- Selected the end-effect planner because both Java methods are deterministic single-action cleanup paths and complete the non-live start/calculate/end planner coverage for stagger/stumble before live wiring.
+- Added `StaggerStumbleEndEffectPlanService`.
+- Added `StaggerStumbleEndEffectPlanStatus`, `StaggerStumbleEndEffectPlanInput`, and `StaggerStumbleEndEffectPlan`.
+- Modeled Java end-effect metadata:
+	- `STAGGER` abnormal unset intent for `StaggerEffect.endEffect`
+	- `STUMBLE` abnormal unset intent for `StumbleEffect.endEffect`
+	- C# invalid-effected guard before unset intent
+- Added focused regressions for both supported effect kinds, invalid effected id, and unsupported forced-move effect kind rejection.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaggerStumbleEndEffectPlanServiceTests|FullyQualifiedName~StaggerStumbleCalculatePlanServiceTests|FullyQualifiedName~ForcedMoveStartEffectPlanServiceTests"`
+	- Result: 16 tests passed.
+
+#### Parallel Work Discovery - Session 1679
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Non-live stagger/stumble end-effect cleanup planner | `StaggerEffect.endEffect`, `StumbleEffect.endEffect` | `StaggerStumbleEndEffectPlanService.cs`, dedicated tests | Effect Cleanup Boundary | Sequential for new service/tests | Low | Selected because it is deterministic and completes start/calculate/end non-live planner coverage for these two effects. |
+| B | Java runtime/golden `SM_FORCED_MOVE` vectors | `SM_FORCED_MOVE` live output | vector artifacts/tests | Golden Verification | Yes, later | Low | Still valuable for stronger packet evidence but independent of end cleanup planning. |
+| C | Java runtime/golden stagger/stumble calculate vectors | calculate probe inputs/outputs | vector artifacts/tests | Golden Verification | Yes, later | Low | Useful to harden heading/angle/probe math and GeoService assumptions. |
+| D | Live forced-move effect wiring | effect/controller/world code | multiple shared gameplay files | Runtime Integration | No | High | Deferred because it crosses shared controller, world, and packet-dispatch boundaries. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Stagger/stumble end-effect planner, tests, docs, commit | `StaggerStumbleEndEffectPlanService.cs`, `StaggerStumbleEndEffectPlanServiceTests.cs`, progress/handoff docs | Java source writes, live controller/world/dispatch/effect mutation, unrelated services | Implemented and documented UOW-1679. |
+| Sub-agents | None | None | All files | Not spawned because the unit touched one new service/test pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1679 because the selected work was a small, tightly coupled planner/test/doc slice.
+
+#### Migration Parity Table - Session 1679
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.StaggerEffect.endEffect` | `Aion.GameServer.Services.StaggerStumbleEndEffectPlanService` | Effect Cleanup Boundary | Partial | Unit Tested | Partial Parity | C# models non-live `STAGGER` abnormal unset intent and guards invalid effected ids. It does not call a live `EffectController`, mutate real abnormal state, or execute Java effect lifecycle objects. |
+| `com.aionemu.gameserver.skillengine.effect.StumbleEffect.endEffect` | `Aion.GameServer.Services.StaggerStumbleEndEffectPlanService` | Effect Cleanup Boundary | Partial | Unit Tested | Partial Parity | C# models non-live `STUMBLE` abnormal unset intent and guards invalid effected ids. It does not call a live `EffectController`, mutate real abnormal state, or execute Java effect lifecycle objects. |
+| `com.aionemu.gameserver.model.gameobjects.Creature` | `StaggerStumbleEndEffectPlanInput.EffectedObjectId` | Model Boundary | Partial | Unit Tested boundary only | Needs Verification | C# uses an object-id guard instead of a live `Creature`/`Effected` reference. Live null behavior, effect-controller access, threading, and object lifecycle remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_ForStaggerOrStumbleUnsetsMatchingAbnormalLikeJava` | Unit Added | Java `StaggerEffect.endEffect` / `StumbleEffect.endEffect` | Planner records the matching abnormal-state unset intent for both effect kinds. | Source-derived cleanup regression. | No live effect-controller mutation. |
+| `CreatePlan_BlocksInvalidEffectedBeforeUnsetIntent` | Unit Added | C# safety boundary around Java live effected requirement | Invalid effected id blocks abnormal unset intent. | C# boundary regression. | Java requires a live creature reference rather than this id guard. |
+| `CreatePlan_RejectsUnsupportedForcedMoveEffectKinds` | Unit Added | C# scope guard | Planner rejects `Pulled` and other non-stagger/stumble effect kinds. | C# boundary regression. | Not a Java branch; documents service scope. |
+
+Remaining risks:
+- Live `StaggerEffect` and `StumbleEffect` integration remains absent.
+- The planner does not mutate a live `EffectController` or validate Java threading/lifecycle behavior.
+- Java runtime/golden vectors for `SM_FORCED_MOVE` and calculate probe math are still desirable to strengthen evidence.
+- `GeoService.getClosestCollision`, `EffectTemplate.calculate`, and live world update behavior remain unported for this movement path.
+- Stumble's skill-specific no-send TODO remains unmodeled for start-effect packet planning.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: 1 non-live end-effect cleanup planner, 2 DTO/status records/enums, and 4 focused regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 1 grouped row explicitly marked Needs Verification; remaining rows are Partial Parity because runtime integration and live effect-controller behavior are intentionally deferred.
+- Total blocked artifacts: live stagger/stumble effect lifecycle integration, live effect-controller mutation, Java runtime/golden vector capture.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Capture Java runtime/golden vectors for `SM_FORCED_MOVE` or stagger/stumble calculate probe vectors, or continue with another isolated packet parity unit before live movement-system wiring.
