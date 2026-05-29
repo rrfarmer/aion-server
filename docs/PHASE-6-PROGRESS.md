@@ -77317,3 +77317,78 @@ Summary metrics:
 
 Next recommended unit of work:
 - Capture Java runtime/golden vectors for `SM_RIDE_ROBOT` or continue with another isolated packet parity unit such as `SM_SHIELD_EFFECT` before live effect/dispatch wiring.
+
+### Session 1682 (May 28, 2026)
+- Continued after UOW-1681 by porting Java `SM_SHIELD_EFFECT` packet serialization and adding conservative non-live packet-plan helpers for the two known Java call paths.
+- Performed Work Discovery across Java `SM_SHIELD_EFFECT.writeImpl`, `ShieldNpcAI.updateFortressShieldStatus`, `SiegeService.onEnterSiegeWorld`, opcode registration, and existing C# packet/planner test patterns.
+- Selected `SM_SHIELD_EFFECT` because it is a deterministic packet boundary and was explicitly recommended by the Session 1681 handoff.
+- Added `SmShieldEffect` with Java opcode `218`.
+- Added `ShieldEffectLocationSnapshot`.
+- Added `ShieldEffectPacketPlanService`, `ShieldEffectPacketPlan`, and `ShieldEffectPacketPlanStatus`.
+- Modeled Java payload order:
+	- `writeH(locations.size())`
+	- for each location in collection order: `writeD(locationId)` then `writeC(isUnderShield ? 1 : 0)`
+- Modeled non-live send intent for `SiegeService.onEnterSiegeWorld -> PacketSendUtility.sendPacket(player, new SM_SHIELD_EFFECT(worldLocations.values()))`.
+- Modeled non-live map broadcast intent for `ShieldNpcAI.updateFortressShieldStatus -> PacketSendUtility.broadcastToMap(map, new SM_SHIELD_EFFECT(siegeLocationId))`.
+- Preserved Java empty-collection behavior for the collection constructor path by serializing count `0`.
+- Added invalid location-id guard for C# snapshot inputs; this blocks unresolved or invalid live `SiegeLocation` data before packet creation instead of reproducing Java's later null dereference risk.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmShieldEffectPacketTests|FullyQualifiedName~GamePacketTests"`
+	- Result: 245 tests passed.
+
+#### Parallel Work Discovery - Session 1682
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | `SM_SHIELD_EFFECT` packet parity | `SM_SHIELD_EFFECT.writeImpl`, `ShieldNpcAI`, `SiegeService.onEnterSiegeWorld` | `SmShieldEffect.cs`, `ShieldEffectPacketPlanService.cs`, dedicated tests | Packet Port / Boundary | Sequential for packet + planner + tests | Low | Selected because packet payload is deterministic and missing in C#. |
+| B | Java runtime/golden `SM_RIDE_ROBOT` vectors | `SM_RIDE_ROBOT` live output | vector artifacts/tests | Golden Verification | Yes, later | Low | Still valuable, but independent of shield packet parity. |
+| C | Java runtime/golden shield packet vectors | `SM_SHIELD_EFFECT` live output | vector artifacts/tests | Golden Verification | Yes, later | Low | Useful to harden evidence beyond reviewed source, especially empty collection and live location ordering. |
+| D | Live `SiegeService` shield packet dispatch | `SiegeService`, `PacketSendUtility`, world/map state | shared service/runtime files | Runtime Integration | No | Medium | Deferred because it crosses live player world state, map broadcast, and siege lookup boundaries. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Shield effect packet, packet-plan helper, focused tests, docs, commit | `SmShieldEffect.cs`, `ShieldEffectPacketPlanService.cs`, `SmShieldEffectPacketTests.cs`, progress/handoff docs | Java source writes, live siege-service mutation, live map/player dispatch, unrelated services | Implemented and documented UOW-1682. |
+| Sub-agents | None | None | All files | Not spawned because the packet/planner/test/docs slice was small and shared docs remained Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1682 because the selected work was a small packet boundary plus docs.
+
+#### Migration Parity Table - Session 1682
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SHIELD_EFFECT` | `Aion.GameServer.Network.Aion.ServerPackets.SmShieldEffect` | Server Packet | Complete | Unit Tested | Verified Parity | Java source reviewed; tests cover opcode `218`, count as `H`, location id as `D`, shield flag as `C`, Java collection order, true/false shield flags, and empty collection count `0`. No Java runtime/encrypted frame capture was produced. |
+| `com.aionemu.gameserver.model.siege.SiegeLocation` | `Aion.GameServer.Network.Aion.ServerPackets.ShieldEffectLocationSnapshot` | DTO Projection | Partial | Unit Tested boundary only | Partial Parity | C# snapshots only `LocationId` and `IsUnderShield`, the two fields read by `SM_SHIELD_EFFECT.writeImpl`. Other `SiegeLocation` state, mutability, threading, equality, serialization, date/time, reflection, and live lifecycle behavior are not ported here. |
+| `com.aionemu.gameserver.services.SiegeService.onEnterSiegeWorld` | `Aion.GameServer.Services.ShieldEffectPacketPlanService.CreateSendToPlayerPlan` | Service Boundary | Partial | Unit Tested | Partial Parity | C# preserves provided location ordering and empty collection serialization for `worldLocations.values()`, but it does not build `LinkedHashMap`, filter live locations by world id, inspect player world id, or execute live `PacketSendUtility.sendPacket`. Collection ordering is caller-supplied and must be verified in live integration. |
+| `ai.siege.ShieldNpcAI.updateFortressShieldStatus` | `Aion.GameServer.Services.ShieldEffectPacketPlanService.CreateMapBroadcastPlan` | AI Handler Boundary | Partial | Unit Tested boundary only | Partial Parity | C# models the single-location map broadcast packet intent after fortress shield status changes. It does not call `getFortress(...).setUnderShield`, resolve `SiegeService.getSiegeLocation`, inspect spawn template siege id, or execute live map broadcast. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` / `broadcastToMap` | `ShieldEffectPacketPlan.ShouldSendToPlayer`; `ShouldBroadcastToMap` | Utility Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records send/broadcast intent only. Recipient selection, map membership, ordering, visibility, encryption, socket write behavior, exception handling, and threading remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SmShieldEffect_WritesCountAndLocationsInJavaOrder` | Unit Added | Java `SM_SHIELD_EFFECT.writeImpl` | Packet writes count, location ids, and shield flags in Java order. | Direct packet payload regression against reviewed Java source. | No Java runtime/encrypted frame capture. |
+| `CreateSendToPlayerPlan_PreservesWorldLocationOrderLikeJavaCollectionIteration` | Unit Added | Java `SiegeService.onEnterSiegeWorld` and `SM_SHIELD_EFFECT(Collection)` | Planner preserves caller-supplied world location order and emits send-to-player intent plus Java-shaped payload. | Source-derived planner regression with packet payload assertion. | Does not build/filter live `LinkedHashMap` or send to a real player. |
+| `CreateMapBroadcastPlan_CreatesSingleLocationBroadcastLikeShieldNpcAI` | Unit Added | Java `ShieldNpcAI.updateFortressShieldStatus` and `SM_SHIELD_EFFECT(int)` | Planner emits a single-location map broadcast intent and Java-shaped payload. | Source-derived planner regression with packet payload assertion. | Does not mutate fortress shield state or broadcast to a live map. |
+| `CreateSendToPlayerPlan_AllowsEmptyLocationCollectionLikeJavaWriteImpl` | Unit Added | Java `SM_SHIELD_EFFECT.writeImpl` collection size write | Empty location collection serializes count `0`. | Source-derived packet regression. | No runtime evidence that live `worldLocations` can be empty for a supported world. |
+| `CreateMapBroadcastPlan_BlocksInvalidLocationBeforePacketCreation` | Unit Added | C# safety boundary around Java live siege lookup | Invalid location id blocks snapshot packet creation. | C# boundary regression. | Java would rely on `SiegeService.getSiegeLocation` and may fail later if lookup returns null. |
+
+Remaining risks:
+- Live `SiegeService` and `ShieldNpcAI` integration remains absent.
+- Live fortress shield mutation, siege-location lookup, world filtering, player world id lookup, and map broadcast are not ported here.
+- `PacketSendUtility.sendPacket` and `broadcastToMap` behavior remains intent-only and unverified.
+- `SiegeLocation` is represented only by a two-field snapshot; remaining state and lifecycle behavior are not ported.
+- Collection ordering is preserved from caller input, but live Java `LinkedHashMap` construction and C# equivalent ordering still need integration verification.
+- No Java runtime/encrypted frame capture was produced for `SM_SHIELD_EFFECT`.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 server packet, 1 packet-plan service, 1 DTO record, 1 status enum, and 5 focused regressions.
+- Total artifacts with verified parity: 1 grouped row (`SM_SHIELD_EFFECT` packet shape).
+- Total artifacts needing verification: 1 grouped row explicitly marked Needs Verification; remaining non-packet rows are Partial Parity because live workflow integration is intentionally deferred.
+- Total blocked artifacts: live siege shield dispatch integration, live `SiegeLocation` lookup/state lifecycle, `PacketSendUtility` runtime behavior, Java runtime/encrypted packet capture.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Capture Java runtime/golden vectors for `SM_SHIELD_EFFECT` or `SM_RIDE_ROBOT`, or continue with another isolated packet parity unit before live siege/effect/dispatch wiring.
