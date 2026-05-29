@@ -77177,3 +77177,70 @@ Summary metrics:
 
 Next recommended unit of work:
 - Capture Java runtime/golden vectors for `SM_FORCED_MOVE` or stagger/stumble calculate probe vectors, or continue with another isolated packet parity unit before live movement-system wiring.
+
+### Session 1680 (May 28, 2026)
+- Continued after UOW-1679 by porting the missing Java `SM_RIDE_ROBOT` packet shape plus a non-live packet-plan helper for the `RideRobotEffect` broadcast path.
+- Performed Work Discovery across Java `SM_RIDE_ROBOT.writeImpl`, opcode registration, `RideRobotEffect`, the Preview command robot appearance helper, C# packet inventory, and the latest Session 1679 handoff.
+- Selected a packet-parity unit because the packet surface was missing in C# and has a deterministic two-field payload.
+- Added `SmRideRobot` with Java opcode `92`.
+- Added `RideRobotSnapshot`.
+- Added `RideRobotPacketPlanService`, `RideRobotPacketPlan`, and `RideRobotPacketPlanStatus`.
+- Modeled Java payload order: player object id, robot id.
+- Modeled non-live `PacketSendUtility.broadcastPacketAndReceive(player, new SM_RIDE_ROBOT(player))` intent for `RideRobotEffect`.
+- Covered `robotId = 0` for Java dismount/preview reset behavior.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmRideRobotPacketTests|FullyQualifiedName~GamePacketTests"`
+	- Result: 244 tests passed.
+
+#### Parallel Work Discovery - Session 1680
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | `SM_RIDE_ROBOT` packet parity | `SM_RIDE_ROBOT.writeImpl`, `RideRobotEffect`, Preview command helper | `SmRideRobot.cs`, `RideRobotPacketPlanService.cs`, dedicated tests | Packet Port / Boundary | Sequential for packet + planner + tests | Low | Selected because packet payload is deterministic and missing in C#. |
+| B | Java runtime/golden forced-move vectors | `SM_FORCED_MOVE` live output | vector artifacts/tests | Golden Verification | Yes, later | Low | Deferred because this unit delivered another missing packet surface. |
+| C | Another isolated packet parity unit | missing server packet | new packet + tests | Packet Port | Yes, later | Low | Still viable after ride-robot packet lands. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Ride robot packet, packet-plan helper, focused tests, docs, commit | `SmRideRobot.cs`, `RideRobotPacketPlanService.cs`, `SmRideRobotPacketTests.cs`, progress/handoff docs | Java source writes, live ride-robot effect wiring, live packet dispatch, unrelated services | Implemented and documented UOW-1680. |
+| Sub-agents | None | None | All files | Not spawned because the packet/planner/test/docs slice was small and shared docs remained Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1680 because the selected work was a small packet boundary plus docs.
+
+#### Migration Parity Table - Session 1680
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_RIDE_ROBOT` | `Aion.GameServer.Network.Aion.ServerPackets.SmRideRobot` | Server Packet | Complete | Unit Tested | Verified Parity | Unit tests cover opcode `92`, player object id, robot id, payload order, and `robotId = 0` dismount/preview case from Java constructor usage. No Java runtime/encrypted frame capture was produced. |
+| `com.aionemu.gameserver.skillengine.effect.RideRobotEffect` | `Aion.GameServer.Services.RideRobotPacketPlanService` | Effect Packet Boundary | Partial | Unit Tested boundary only | Partial Parity | C# planner records only broadcast-and-receive packet intent for start/end effect packet sends. It does not set `Player.robotId`, inspect equipped weapon skin robot id, attach unequip observers, end ride-robot-condition effects, or execute live packet dispatch. |
+| `playercommands.Preview.updateRobotAppearance` | `SmRideRobot`; `RideRobotSnapshot` | Handler Packet Boundary | Partial | Unit Tested packet only | Partial Parity | C# packet supports the Java helper's `SM_RIDE_ROBOT(player, 0)` followed by `SM_RIDE_ROBOT(player, robotId)` payload shape. The preview command/runtime handler and owner-only send path are not ported in this unit. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.broadcastPacketAndReceive` | `RideRobotPacketPlan.ShouldBroadcastAndReceive` | Utility Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records broadcast-and-receive intent only. Recipient selection, ordering, source inclusion, visibility, encryption, response handling, and threading remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SmRideRobot_WritesPlayerObjectIdAndRobotIdLikeJava` | Unit Added | Java `SM_RIDE_ROBOT.writeImpl` | Packet writes player object id and robot id in Java order. | Direct packet payload regression against reviewed Java source. | No live Java frame capture. |
+| `SmRideRobot_AllowsZeroRobotIdForDismountPreviewLikeJavaConstructor` | Unit Added | Java `RideRobotEffect.endEffect` and Preview command helper | Packet accepts robot id `0` for dismount/reset. | Source-derived packet regression. | No live effect/preview workflow. |
+| `CreateBroadcastReceivePlan_CreatesPacketAndBroadcastReceiveIntent` | Unit Added | Java `RideRobotEffect.startEffect` / `endEffect` packet sends | Non-live planner emits `SmRideRobot` plus broadcast-and-receive intent metadata. | Source-derived planner regression with packet payload assertion. | No live player robot id mutation or dispatch. |
+| `CreateBroadcastReceivePlan_BlocksInvalidPlayerBeforePacketCreation` | Unit Added | C# safety boundary | Invalid player object id blocks packet creation. | C# boundary regression. | Java requires a live player reference rather than this snapshot guard. |
+
+Remaining risks:
+- Live `RideRobotEffect` integration is absent.
+- Player robot id mutation, weapon-skin robot id lookup, unequip observer behavior, and ride-robot-condition effect cleanup are not ported in this unit.
+- Preview command robot appearance workflow is not ported.
+- `PacketSendUtility.broadcastPacketAndReceive` semantics remain intent-only and unverified.
+- No Java runtime/encrypted frame capture was produced for `SM_RIDE_ROBOT`.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 server packet, 1 packet-plan service, 1 DTO record, 1 status enum, and 4 focused regressions.
+- Total artifacts with verified parity: 1 grouped row (`SM_RIDE_ROBOT` packet shape).
+- Total artifacts needing verification: 1 grouped row explicitly marked Needs Verification; remaining rows are Partial Parity due to missing live workflow integration.
+- Total blocked artifacts: live ride-robot effect integration, live preview command workflow, live packet dispatch verification, Java runtime/encrypted packet capture.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add a non-live `RideRobotEffect` start/end planner that composes `RideRobotPacketPlanService`, or capture Java runtime/golden vectors for newly ported movement/ride packets before live movement/effect wiring.
