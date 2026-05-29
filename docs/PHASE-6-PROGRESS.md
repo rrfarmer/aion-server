@@ -77036,3 +77036,77 @@ Summary metrics:
 
 Next recommended unit of work:
 - Capture Java runtime/golden vectors for `SM_FORCED_MOVE`, or add a non-live calculate-phase planner for `StaggerEffect`/`StumbleEffect` heading/geo target-location selection before any live movement-system wiring.
+
+### Session 1678 (May 28, 2026)
+- Continued after UOW-1677 by adding a non-live calculate-phase planner for Java `StaggerEffect.calculate` and `StumbleEffect.calculate`.
+- Performed Work Discovery across Java `StaggerEffect.calculate`, Java `StumbleEffect.calculate`, C# `PositionUtilService`, and the UOW-1677 forced-move start-effect handoff.
+- Selected the calculate planner because it models the next deterministic movement-effect dependency before live movement/controller/world integration.
+- Added `StaggerStumbleCalculatePlanService`.
+- Added `StaggerStumbleCalculatePlanStatus`, `StaggerStumbleCalculatePlanInput`, `StaggerStumbleCalculatePlan`, and `GeoCollisionSnapshot`.
+- Modeled Java calculate ordering metadata:
+	- reject when any forced-move abnormal state is already present
+	- respect the `EffectTemplate.calculate` result as an input gate
+	- set non-player sub-effect type metadata
+	- calculate heading toward effected using `PositionUtilService.GetHeadingTowards`
+	- convert heading back to angle like Java
+	- calculate the 2-meter collision probe point
+	- record `GeoService.getClosestCollision` dependency and target-location output when supplied
+- Added focused regressions for abnormal blocking, failed calculate gate, stagger NPC sub-effect target selection, stumble player target selection, and missing collision result.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaggerStumbleCalculatePlanServiceTests|FullyQualifiedName~PositionUtilServiceTests|FullyQualifiedName~ForcedMoveStartEffectPlanServiceTests"`
+	- Result: 38 tests passed.
+
+#### Parallel Work Discovery - Session 1678
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Non-live stagger/stumble calculate planner | `StaggerEffect.calculate`, `StumbleEffect.calculate`, `PositionUtil`, `GeoService`, `EffectTemplate.calculate` | `StaggerStumbleCalculatePlanService.cs`, dedicated tests | Effect Calculate Boundary | Sequential for new service/tests | Low | Selected because it models deterministic target-location planning without live world/controller mutation. |
+| B | Java runtime/golden `SM_FORCED_MOVE` vectors | `SM_FORCED_MOVE` live output | vector artifacts/tests | Golden Verification | Yes, later | Low | Still valuable for stronger packet evidence but independent of calculate planning. |
+| C | Live forced-move effect wiring | effect/controller/world code | multiple shared gameplay files | Runtime Integration | No | High | Deferred because it crosses shared controller, world, and packet-dispatch boundaries. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Stagger/stumble calculate planner, tests, docs, commit | `StaggerStumbleCalculatePlanService.cs`, `StaggerStumbleCalculatePlanServiceTests.cs`, progress/handoff docs | Java source writes, live controller/world/dispatch mutation, unrelated services | Implemented and documented UOW-1678. |
+| Sub-agents | None | None | All files | Not spawned because the unit touched one new service/test pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1678 because the selected work was a small, tightly coupled planner/test/doc slice.
+
+#### Migration Parity Table - Session 1678
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.StaggerEffect.calculate` | `Aion.GameServer.Services.StaggerStumbleCalculatePlanService` | Effect Calculate Boundary | Partial | Unit Tested | Partial Parity | C# models abnormal pre-checks, external base-calculate result, non-player sub-effect typing, heading/angle conversion, 2m collision probe, and target-location assignment when a collision result is supplied. It does not execute `EffectTemplate.calculate`, live effect state, `GeoService`, or live `effect.setTargetLoc`. |
+| `com.aionemu.gameserver.skillengine.effect.StumbleEffect.calculate` | `Aion.GameServer.Services.StaggerStumbleCalculatePlanService` | Effect Calculate Boundary | Partial | Unit Tested | Partial Parity | C# models the same calculate path with `STUMBLE_RESISTANCE`, `SpellStatus.STUMBLE`, and `SubEffectType.STUMBLE`. Live resistance calculation, abnormal checks against a real effect controller, geo collision, and target-location mutation remain unported. |
+| `com.aionemu.gameserver.utils.PositionUtil.getHeadingTowards` / `convertHeadingToAngle` | `Aion.GameServer.Services.PositionUtilService.GetHeadingTowards`; `ConvertHeadingToAngle` | Utility Dependency | Complete utility, Partial workflow | Regression Tested | Partial Parity | Planner reuses existing source-derived heading helpers. Tests cover deterministic axis vectors, but this unit did not add Java runtime vector comparison or unusual signed-byte/precision edge cases. |
+| `com.aionemu.gameserver.world.geo.GeoService.getClosestCollision` | `StaggerStumbleCalculatePlan.ShouldRequestGeoCollision`; `GeoCollisionSnapshot` | Geo Boundary | Not Started | Unit Tested boundary only | Needs Verification | C# records the collision probe point and requires a supplied collision snapshot before target location is planned. It does not run the Java/C# geo engine or verify collision behavior. |
+| `com.aionemu.gameserver.skillengine.effect.EffectTemplate.calculate` | `StaggerStumbleCalculatePlanInput.BaseCalculateSucceeded` | Effect Base Boundary | Not Started | Unit Tested boundary only | Needs Verification | C# treats base calculate success/failure as an input gate. Resistance formulas, skill accuracy, stat containers, spell status side effects, and randomness remain outside this unit. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_BlocksWhenAnyForcedMoveAbnormalAlreadyExistsLikeJava` | Unit Added | Java abnormal pre-checks in `StaggerEffect.calculate` / `StumbleEffect.calculate` | Existing forced-move abnormal state blocks geo and target planning. | Source-derived branch regression. | No live effect-controller query. |
+| `CreatePlan_BlocksWhenBaseCalculateFailsLikeJavaResistanceGate` | Unit Added | Java `super.calculate(..., resistance, SpellStatus)` gate | Failed base-calculate input blocks geo and target planning. | Source-derived gate regression. | Does not execute actual `EffectTemplate.calculate`. |
+| `CreatePlan_ForStaggerNpcSubEffect_RequestsTwoMeterGeoProbeAndSetsSubEffectType` | Unit Added | Java stagger non-player sub-effect branch and 2m probe math | Planner sets `STAGGER` sub-effect type and requests collision at the Java-shaped 2m probe point. | Source-derived planner regression using `PositionUtilService`. | No live `GeoService`. |
+| `CreatePlan_ForStumblePlayer_DoesNotSetSubEffectTypeButKeepsTargetLocation` | Unit Added | Java player branch of stumble calculate | Player sub effects do not set sub-effect type but still use supplied collision as target location. | Source-derived planner regression. | No live effect mutation. |
+| `CreatePlan_WithoutCollisionResultRecordsGeoDependencyBeforeTargetLocation` | Unit Added | Java `GeoService.getClosestCollision` dependency | Planner records `NeedsGeoCollision` and withholds target location without collision output. | C# boundary regression. | Java always calls GeoService in the live path. |
+
+Remaining risks:
+- Live `StaggerEffect` and `StumbleEffect` integration remains absent.
+- `EffectTemplate.calculate`, stat resistance formulas, skill result behavior, and spell-status side effects are not ported here.
+- `GeoService.getClosestCollision` behavior is not implemented or runtime-compared in this unit.
+- Position math has source-derived unit coverage but no Java runtime vector/golden comparison for this exact calculate path.
+- Stumble's skill-specific no-send TODO remains unmodeled for start-effect packet planning.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 non-live calculate planner, 3 DTO/status records/enums, 1 geo snapshot DTO, and 5 focused regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity because runtime integration and geo/base-calculate behavior are intentionally deferred.
+- Total blocked artifacts: live stagger/stumble calculate integration, live geo collision, live base calculate/resistance behavior, Java runtime/golden vector capture.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Capture Java runtime/golden vectors for `SM_FORCED_MOVE` or for `StaggerEffect`/`StumbleEffect` calculate probe vectors, then continue toward non-live end-effect cleanup planning or another isolated packet parity unit before live movement-system wiring.
