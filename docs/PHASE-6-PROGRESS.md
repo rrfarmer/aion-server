@@ -77547,3 +77547,86 @@ Summary metrics:
 
 Next recommended unit of work:
 - Port `SM_SUMMON_UPDATE` as a snapshot-based packet with source-derived tests, or capture Java runtime/golden vectors for `SM_SUMMON_PANEL` / `SM_SUMMON_PANEL_REMOVE` before live summon lifecycle wiring.
+
+### Session 1685 (May 28, 2026)
+- Continued after UOW-1684 by porting Java `SM_SUMMON_UPDATE` packet serialization and adding conservative non-live packet-plan helpers for master-send and summon-broadcast paths.
+- Performed Work Discovery across Java `SM_SUMMON_UPDATE.writeImpl`, `SummonMode`, `SummonsService.createSummon/restMode/guardMode/attackMode/setUnkMode`, `SummonController.onAttack`, `SummonGameStats.updateStatInfo`, opcode registration, the latest completion document, and the latest handoff.
+- Selected `SM_SUMMON_UPDATE` because it was the preferred next small unit and can be represented as a resolved stat snapshot without live summon lifecycle wiring.
+- Added `SmSummonUpdate` with Java opcode `155`.
+- Added `SummonUpdateModeId` with Java ids `ATTACK=0`, `GUARD=1`, `REST=2`, `RELEASE=3`, and `UNK=5`.
+- Added `SummonUpdateStatSnapshot` and `SummonUpdateSnapshot`.
+- Added `SummonUpdatePacketPlanService`, `SummonUpdatePacketPlan`, and `SummonUpdatePacketPlanStatus`.
+- Modeled Java payload order:
+	- level byte
+	- mode id word
+	- two zero dwords
+	- current hp
+	- current max hp, main-hand physical attack, physical defense, magic resist, magic defense, physical accuracy, physical critical, magic boost, magic boost resist, magic accuracy, magic critical, parry, and evasion
+	- base max hp, main-hand physical attack, physical defense, magic resist, magic defense, physical accuracy, physical critical, magic boost, magic boost resist, magic accuracy, magic critical, parry, and evasion
+- Modeled non-live send intent for Java master-send paths such as `SummonsService.guardMode -> PacketSendUtility.sendPacket(master, new SM_SUMMON_UPDATE(summon))`.
+- Modeled non-live broadcast intent for `SummonsService.createSummon -> PacketSendUtility.broadcastPacket(summon, new SM_SUMMON_UPDATE(summon))`.
+- Kept live summon mode mutation, stat-container calculation, `CalculationType.DISPLAY`, restore tasks, controller attack damage paths, broadcast recipient selection, and packet dispatch out of scope.
+- Added invalid snapshot guards for undefined mode ids and negative primitive stat values before packet planning.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmSummonUpdatePacketTests|FullyQualifiedName~GamePacketTests"`
+	- Result: 250 tests passed.
+	- `dotnet test dotnetConversion\AionServer.slnx`
+	- Result: passed with 3,882 total tests across Commons, LoginServer, ChatServer, and GameServer test projects.
+
+#### Parallel Work Discovery - Session 1685
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | `SM_SUMMON_UPDATE` snapshot packet parity | `SM_SUMMON_UPDATE.writeImpl`, `SummonMode`, summon update call sites | `SmSummonUpdate.cs`, `SummonUpdatePacketPlanService.cs`, dedicated tests | Packet Port / Boundary | Sequential for packet + planner + tests | Medium | Selected because the handoff recommended it and the stat surface is deterministic once snapshotted. |
+| B | Java runtime/golden vectors for summon panel/update packets | `SM_SUMMON_PANEL`, `SM_SUMMON_UPDATE`, `SM_SUMMON_PANEL_REMOVE` live output | vector artifacts/tests | Golden Verification | Yes, later | Low-medium | Useful to harden evidence beyond reviewed source, especially for live stat values. |
+| C | `SM_SUMMON_OWNER_REMOVE` packet parity | release owner-remove packet | new packet + tests | Packet Port | Yes, later if isolated | Low | Likely deterministic and adjacent to the release path. |
+| D | Live summon mode/stat update integration | `SummonsService`, `SummonController`, `SummonGameStats`, `PacketSendUtility` | shared runtime files | Runtime Integration | No | High | Deferred because it crosses live mode mutation, stat formulas, restore tasks, controller damage events, and dispatch ordering. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Summon update packet, packet-plan helper, focused tests, docs, commit | `SmSummonUpdate.cs`, `SummonUpdatePacketPlanService.cs`, `SmSummonUpdatePacketTests.cs`, progress/handoff docs | Java source writes, live summon lifecycle wiring, live stat calculation, live packet dispatch, unrelated services | Implemented and documented UOW-1685. |
+| Sub-agents | None | None | All files | Not spawned because the packet/planner/test/docs slice was small and shared docs remained Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1685 because the selected work was a small packet boundary plus docs.
+
+#### Migration Parity Table - Session 1685
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SUMMON_UPDATE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSummonUpdate` | Server Packet | Complete | Unit Tested | Verified Parity | Java source reviewed; tests cover opcode `155`, level byte, mode word, two zero dwords, all current stat fields, and all base stat fields in Java source order. No Java runtime/encrypted frame capture was produced. |
+| `com.aionemu.gameserver.model.summons.SummonMode` | `Aion.GameServer.Network.Aion.ServerPackets.SummonUpdateModeId` | Enum Projection | Complete | Unit Tested | Verified Parity | Java enum ids reviewed; tests cover `ATTACK=0`, `GUARD=1`, `REST=2`, `RELEASE=3`, and `UNK=5`. C# uses `Unknown` as the member name for Java `UNK`; wire id is preserved. |
+| `com.aionemu.gameserver.model.gameobjects.Summon` | `Aion.GameServer.Network.Aion.ServerPackets.SummonUpdateSnapshot` | DTO Projection | Partial | Unit Tested boundary only | Partial Parity | C# snapshots only the fields read by `SM_SUMMON_UPDATE.writeImpl`. Live summon ownership, stat containers, mode mutation, lifecycle, equality/hash behavior, threading, and serialization outside this packet are not ported here. |
+| `com.aionemu.gameserver.model.stats.container.SummonGameStats` / `Stat2` / `CalculationType.DISPLAY` | `SummonUpdateStatSnapshot` fields | Stat Projection Boundary | Partial | Unit Tested boundary only | Needs Verification | Packet writes provided current/base primitive stat snapshots in Java order, but C# does not calculate them from live stat containers or verify Java master-bonus/display formulas. |
+| `com.aionemu.gameserver.services.summons.SummonsService` / `SummonController.onAttack` / `SummonGameStats.updateStatInfo` | `Aion.GameServer.Services.SummonUpdatePacketPlanService` | Service Boundary | Partial | Unit Tested boundary only | Partial Parity | C# records send-to-master and broadcast-from-summon intents for known Java call paths. It does not mutate mode, trigger restore tasks, inspect damage/stat-change events, or execute live packet dispatch. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` / `broadcastPacket` | `SummonUpdatePacketPlan.ShouldSendToMaster`; `ShouldBroadcastFromSummon` | Utility Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records send/broadcast intent only. Recipient selection, visibility/range, ordering, encryption, exception handling, and threading remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SmSummonUpdate_WritesCurrentAndBaseStatsLikeJava` | Unit Added | Java `SM_SUMMON_UPDATE.writeImpl` | Packet writes every current/base stat and zero placeholder in source order. | Direct packet payload regression against reviewed Java source. | No Java runtime/encrypted frame capture. |
+| `SmSummonUpdate_WritesJavaSummonModeIds` | Unit Added | Java `SummonMode` | Packet writes every Java summon mode id. | Source-derived enum/wire regression. | Does not test Java `getSummonModeById` null return for invalid ids. |
+| `CreateSendToMasterPlan_CreatesPacketIntentForSummonModeUpdates` | Unit Added | Java `SummonsService.guardMode` send path | Planner emits send-to-master intent and Java-shaped packet payload for a resolved snapshot. | Source-derived planner regression with packet payload assertion. | Does not execute live mode mutation or send. |
+| `CreateBroadcastFromSummonPlan_CreatesPacketIntentForCreateSummonBroadcast` | Unit Added | Java `SummonsService.createSummon` broadcast path | Planner emits broadcast-from-summon intent and Java-shaped packet payload. | Source-derived planner regression with packet payload assertion. | Does not execute live broadcast or visibility selection. |
+| `CreateSendToMasterPlan_BlocksInvalidModeBeforePacketCreation` | Unit Added | C# safety boundary around Java live enum state | Invalid mode id blocks packet planning. | C# boundary regression. | Java live `SummonMode` is expected to be non-null. |
+| `CreateSendToMasterPlan_BlocksNegativeStatsBeforePacketCreation` | Unit Added | C# safety boundary around primitive stat snapshots | Negative stat snapshot blocks packet planning. | C# boundary regression. | Java stat containers are expected to provide non-negative current/base values; exact Java guard behavior is not modeled. |
+
+Remaining risks:
+- Live `SM_SUMMON_UPDATE` integration remains absent.
+- Live summon mode mutation, stat-container calculation, `CalculationType.DISPLAY`, master item-stat bonus rates, restore tasks, attack/stat-change triggers, broadcast recipient selection, and packet ordering are not ported here.
+- `PacketSendUtility.sendPacket` and `broadcastPacket` behavior remains intent-only and unverified.
+- C# snapshot validation is a safety boundary around unresolved live summon/stat data; Java does not expose an equivalent packet-constructor guard.
+- No Java runtime/encrypted frame capture was produced for `SM_SUMMON_UPDATE`.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 server packet, 1 enum projection, 2 snapshot records, 1 packet-plan service, 1 status enum, and 6 focused regressions.
+- Total artifacts with verified parity: 2 grouped rows (`SM_SUMMON_UPDATE` packet shape and `SummonMode` ids).
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining non-packet rows are Partial Parity because live workflow integration is intentionally deferred.
+- Total blocked artifacts: live summon update integration, live stat-container calculation, live packet dispatch/order verification, Java runtime/encrypted packet capture.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Port `SM_SUMMON_OWNER_REMOVE` if missing and deterministic, or capture Java runtime/golden vectors for `SM_SUMMON_PANEL` / `SM_SUMMON_UPDATE` before live summon lifecycle wiring.
