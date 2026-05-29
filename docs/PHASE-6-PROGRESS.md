@@ -77630,3 +77630,77 @@ Summary metrics:
 
 Next recommended unit of work:
 - Port `SM_SUMMON_OWNER_REMOVE` if missing and deterministic, or capture Java runtime/golden vectors for `SM_SUMMON_PANEL` / `SM_SUMMON_UPDATE` before live summon lifecycle wiring.
+
+### Session 1686 (May 28, 2026)
+- Continued after UOW-1685 by porting Java `SM_SUMMON_OWNER_REMOVE` packet serialization and adding a conservative non-live packet-plan helper for the summon release send-to-master path.
+- Performed Work Discovery across Java `SM_SUMMON_OWNER_REMOVE.writeImpl`, opcode registration, `SummonsService.ReleaseSummonTask.run`, the latest completion document, and the latest handoff.
+- Selected `SM_SUMMON_OWNER_REMOVE` because it was the preferred handoff item and the packet payload is a deterministic summon object id.
+- Added `SmSummonOwnerRemove` with Java opcode `154`.
+- Added `SummonOwnerRemovePacketPlanService`, `SummonOwnerRemovePacketPlan`, and `SummonOwnerRemovePacketPlanStatus`.
+- Modeled Java payload order:
+	- `writeD(summonObjId)`
+- Modeled non-live send intent for `SummonsService.ReleaseSummonTask.run -> PacketSendUtility.sendPacket(master, new SM_SUMMON_OWNER_REMOVE(summon.getObjectId()))`.
+- Kept live summon release scheduling, object deletion, master summon clearing, cooldown mutation, system messages, `SM_SUMMON_PANEL_REMOVE` ordering integration, packet dispatch, and hate-transfer behavior out of scope.
+- Added invalid summon object id guards before packet planning.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmSummonOwnerRemovePacketTests|FullyQualifiedName~GamePacketTests"`
+	- Result: 244 tests passed.
+	- `dotnet test dotnetConversion\AionServer.slnx`
+	- Result: failed in unrelated `GameServerConnectionInventoryExpansionUseItemTests` full-suite context. First run: 2 failures, 3,877 GameServer tests passed; Commons/Login/Chat tests passed. Second run: 1 failure, 3,878 GameServer tests passed; Commons/Login/Chat tests passed.
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests.ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate|FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests.HandleUseItemAsync_ExpExtractMergesRestrictedRewardWithCleanupSealFlag"`
+	- Result: 2 tests passed.
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests"`
+	- Result: 86 tests passed.
+
+#### Parallel Work Discovery - Session 1686
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | `SM_SUMMON_OWNER_REMOVE` packet parity | `SM_SUMMON_OWNER_REMOVE.writeImpl`, `SummonsService.ReleaseSummonTask.run` | `SmSummonOwnerRemove.cs`, `SummonOwnerRemovePacketPlanService.cs`, dedicated tests | Packet Port / Boundary | Sequential for packet + planner + tests | Low | Selected because the packet is deterministic and release ordering context is clear. |
+| B | Java runtime/golden vectors for summon release packets | `SM_SUMMON_PANEL_REMOVE`, `SM_SUMMON_OWNER_REMOVE` live output | vector artifacts/tests | Golden Verification | Yes, later | Low-medium | Useful to verify encrypted/runtime order after source-derived packet evidence. |
+| C | Live summon release integration | `SummonsService.release`, `ReleaseSummonTask`, world delete/cooldown/message/hate-transfer paths | shared runtime files | Runtime Integration | No | High | Deferred because it crosses scheduling, object lifecycle, cooldowns, messages, and dispatch order. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Summon owner-remove packet, packet-plan helper, focused tests, docs, commit | `SmSummonOwnerRemove.cs`, `SummonOwnerRemovePacketPlanService.cs`, `SmSummonOwnerRemovePacketTests.cs`, progress/handoff docs | Java source writes, live summon lifecycle wiring, live packet dispatch, unrelated services | Implemented and documented UOW-1686. |
+| Sub-agents | None | None | All files | Not spawned because the packet/planner/test/docs slice was small and shared docs remained Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1686 because the selected work was a small packet boundary plus docs.
+
+#### Migration Parity Table - Session 1686
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SUMMON_OWNER_REMOVE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSummonOwnerRemove` | Server Packet | Complete | Unit Tested | Verified Parity | Java source reviewed; tests cover opcode `154` and summon object id as `D`. No Java runtime/encrypted frame capture was produced. |
+| `com.aionemu.gameserver.services.summons.SummonsService.ReleaseSummonTask.run` | `Aion.GameServer.Services.SummonOwnerRemovePacketPlanService.CreateSendToMasterPlan` | Service Boundary | Partial | Unit Tested boundary only | Partial Parity | C# records only the `SM_SUMMON_OWNER_REMOVE` send-to-master intent after release. It does not delete live summon/NPC objects, clear `master.summon`, set cooldowns, send system messages, send `SM_SUMMON_PANEL_REMOVE`, schedule hate transfer, or model `UnsummonType` branching. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `SummonOwnerRemovePacketPlan.ShouldSendToMaster` | Utility Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records send intent only. Recipient socket behavior, ordering relative to system messages and panel remove, encryption, exception handling, and threading remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.Summon.getObjectId` | `SummonOwnerRemovePacketPlan.SummonObjectId` | Model Boundary | Partial | Unit Tested boundary only | Needs Verification | C# accepts a primitive summon object-id snapshot. Live summon ownership, id allocation source, null handling, threading, and lifecycle behavior remain unverified. Non-positive ids are blocked as a C# safety boundary. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SmSummonOwnerRemove_WritesSummonObjectIdLikeJava` | Unit Added | Java `SM_SUMMON_OWNER_REMOVE.writeImpl` | Packet writes summon object id as a dword. | Direct packet payload regression against reviewed Java source. | No Java runtime/encrypted frame capture. |
+| `CreateSendToMasterPlan_CreatesPacketIntentForSummonsServiceRelease` | Unit Added | Java `SummonsService.ReleaseSummonTask.run` | Planner emits send-to-master intent and Java-shaped packet payload. | Source-derived planner regression with packet payload assertion. | Does not execute live release task or packet send. |
+| `CreateSendToMasterPlan_BlocksInvalidSummonObjectIdBeforePacketCreation` | Unit Added | C# safety boundary around live summon resolution | Non-positive summon object ids block packet planning. | C# boundary regression. | Java requires a live summon with a real object id. |
+
+Remaining risks:
+- Live `SummonsService.release` and `ReleaseSummonTask` integration remains absent.
+- Summon deletion, transformed NPC deletion, master summon clearing, cooldown mutation, system messages, `SM_SUMMON_PANEL_REMOVE`, scheduler delay, and hate-transfer behavior are not ported here.
+- `PacketSendUtility.sendPacket` behavior remains intent-only and unverified.
+- The C# non-positive summon object-id guard is a safety boundary; Java constructor does not explicitly reject the value.
+- No Java runtime/encrypted frame capture was produced for `SM_SUMMON_OWNER_REMOVE`.
+- Full-solution validation is not green in this session because unrelated inventory expansion/use-item tests failed only in full-suite context and passed when rerun directly; this needs separate follow-up before claiming full-suite health.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 server packet, 1 packet-plan service, 1 status enum, and 3 focused regressions.
+- Total artifacts with verified parity: 1 grouped row (`SM_SUMMON_OWNER_REMOVE` packet shape).
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining non-packet row is Partial Parity because live workflow integration is intentionally deferred.
+- Total blocked artifacts: live summon release integration, live packet dispatch/order verification, Java runtime/encrypted packet capture, scheduler/cooldown/hate-transfer behavior.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Capture Java runtime/golden vectors for summon panel/update/release packets, or inspect the next missing deterministic summon/effect packet before live summon lifecycle wiring.
