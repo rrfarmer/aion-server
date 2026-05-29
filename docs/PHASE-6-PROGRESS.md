@@ -77244,3 +77244,76 @@ Summary metrics:
 
 Next recommended unit of work:
 - Add a non-live `RideRobotEffect` start/end planner that composes `RideRobotPacketPlanService`, or capture Java runtime/golden vectors for newly ported movement/ride packets before live movement/effect wiring.
+
+### Session 1681 (May 28, 2026)
+- Continued after UOW-1680 by adding a non-live lifecycle planner for Java `RideRobotEffect.startEffect` and `RideRobotEffect.endEffect`.
+- Performed Work Discovery across Java `RideRobotEffect`, `SM_RIDE_ROBOT`, `PacketSendUtility.broadcastPacketAndReceive`, the C# `RideRobotPacketPlanService`, and the latest Session 1680 handoff.
+- Selected the lifecycle planner because UOW-1680 provided the packet boundary but did not model Java's player robot-id mutation, unequip observer, or cleanup intents.
+- Added `RideRobotEffectPlanService`.
+- Added `RideRobotEffectPlan` and `RideRobotEffectPlanStatus`.
+- Modeled Java start-effect metadata:
+	- set `Player.robotId` from main-hand weapon skin robot id
+	- broadcast-and-receive `SM_RIDE_ROBOT`
+	- add `ObserverType.UNEQUIP` observer scoped to `EquipType.WEAPON`
+- Modeled Java end-effect metadata:
+	- reset `Player.robotId` to `0`
+	- broadcast-and-receive `SM_RIDE_ROBOT`
+	- end abnormal effects whose skill templates have `RideRobotCondition`
+- Added invalid player and missing weapon-skin robot id guards.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~RideRobotEffectPlanServiceTests|FullyQualifiedName~SmRideRobotPacketTests"`
+	- Result: 9 tests passed.
+
+#### Parallel Work Discovery - Session 1681
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Non-live `RideRobotEffect` lifecycle planner | `RideRobotEffect.startEffect`, `RideRobotEffect.endEffect`, `SM_RIDE_ROBOT` | `RideRobotEffectPlanService.cs`, dedicated tests | Effect Lifecycle Boundary | Sequential for new service/tests | Low | Selected as the natural follow-up to the UOW-1680 packet boundary. |
+| B | Java runtime/golden `SM_RIDE_ROBOT` vectors | `SM_RIDE_ROBOT` live output | vector artifacts/tests | Golden Verification | Yes, later | Low | Still valuable for stronger packet evidence but independent of lifecycle intent planning. |
+| C | Another isolated packet parity unit | missing server packet | new packet + tests | Packet Port | Yes, later | Low | Still viable after ride-robot lifecycle planning lands. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Ride-robot lifecycle planner, tests, docs, commit | `RideRobotEffectPlanService.cs`, `RideRobotEffectPlanServiceTests.cs`, progress/handoff docs | Java source writes, live player/effect/observer mutation, live packet dispatch, unrelated services | Implemented and documented UOW-1681. |
+| Sub-agents | None | None | All files | Not spawned because the unit touched one new service/test pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1681 because the selected work was a small planner/test/doc slice.
+
+#### Migration Parity Table - Session 1681
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.RideRobotEffect.startEffect` | `Aion.GameServer.Services.RideRobotEffectPlanService.CreateStartPlan` | Effect Lifecycle Boundary | Partial | Unit Tested | Partial Parity | C# models non-live robot-id mutation intent, `SM_RIDE_ROBOT` broadcast-and-receive intent, and weapon-unequip observer metadata. It does not inspect live equipment, mutate `Player.robotId`, attach a real observer, or execute packet dispatch. |
+| `com.aionemu.gameserver.skillengine.effect.RideRobotEffect.endEffect` | `Aion.GameServer.Services.RideRobotEffectPlanService.CreateEndPlan` | Effect Lifecycle Boundary | Partial | Unit Tested | Partial Parity | C# models non-live robot-id reset to `0`, `SM_RIDE_ROBOT` broadcast-and-receive intent, and ride-robot-condition effect cleanup intent. It does not iterate live abnormal effects, call `Effect.endEffect`, mutate player state, or execute packet dispatch. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_RIDE_ROBOT` | `Aion.GameServer.Network.Aion.ServerPackets.SmRideRobot`; `RideRobotPacketPlanService` | Server Packet / Service Dependency | Complete packet, Partial workflow | Regression Tested | Partial Parity | Lifecycle planner composes the UOW-1680 packet-plan service and asserts payload bytes for start and end paths. Packet body itself remains unit-tested, but no Java runtime/encrypted frame capture was added in this unit. |
+| `com.aionemu.gameserver.controllers.observer.ActionObserver` / `ObserverType.UNEQUIP` | `RideRobotEffectPlan.ShouldAddUnequipObserver`; observer metadata | Observer Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records observer intent and weapon-equipment filter only. Live observer registration, callback ordering, item equipment-type comparison, and effect termination are not implemented here. |
+| `com.aionemu.gameserver.model.templates.item.enums.EquipType` | `RideRobotEffectPlan.ObserverEquipmentTypeName` | Enum Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records `WEAPON` as metadata but does not port enum values or live item equipment checks in this unit. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateStartPlan_SetsRobotIdBroadcastsPacketAndAddsWeaponUnequipObserverLikeJava` | Unit Added | Java `RideRobotEffect.startEffect` | Planner records robot-id set, packet broadcast, unequip observer, and Java-shaped packet payload. | Source-derived lifecycle regression with packet payload assertion. | No live equipment lookup, observer registration, or dispatch. |
+| `CreateEndPlan_ResetsRobotIdBroadcastsZeroAndEndsRideRobotConditionEffectsLikeJava` | Unit Added | Java `RideRobotEffect.endEffect` | Planner records robot-id reset to `0`, packet broadcast, cleanup intent, and Java-shaped packet payload. | Source-derived lifecycle regression with packet payload assertion. | No live abnormal effect iteration. |
+| `CreateStartPlan_BlocksInvalidPlayerBeforeMutationOrPacketPlanning` | Unit Added | C# safety boundary | Invalid player id blocks start mutation and packet planning. | C# boundary regression. | Java requires a live player reference. |
+| `CreateStartPlan_BlocksMissingWeaponRobotIdBeforeMutationOrPacketPlanning` | Unit Added | C# safety boundary for live equipment dependency | Missing weapon robot id blocks start mutation and packet planning. | C# boundary regression. | Java would dereference live main-hand weapon/item skin data. |
+| `CreateEndPlan_BlocksInvalidPlayerBeforeResetOrCleanup` | Unit Added | C# safety boundary | Invalid player id blocks end reset, packet planning, and cleanup intent. | C# boundary regression. | Java requires a live player reference. |
+
+Remaining risks:
+- Live `RideRobotEffect` integration remains absent.
+- Equipment lookup, item skin robot-id resolution, player robot-id mutation, packet dispatch, observer registration, unequip callback behavior, and abnormal-effect cleanup are intent-only.
+- `ActionObserver`, `ObserverType`, and `EquipType` are not ported here beyond metadata strings.
+- No Java runtime/encrypted frame capture was produced for `SM_RIDE_ROBOT`.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 non-live lifecycle planner, 1 DTO/status record, and 5 focused regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity because live workflow integration is intentionally deferred.
+- Total blocked artifacts: live ride-robot effect integration, live observer/equipment checks, live abnormal-effect cleanup, Java runtime/encrypted packet capture.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Capture Java runtime/golden vectors for `SM_RIDE_ROBOT` or continue with another isolated packet parity unit such as `SM_SHIELD_EFFECT` before live effect/dispatch wiring.
