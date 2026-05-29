@@ -77463,3 +77463,87 @@ Summary metrics:
 
 Next recommended unit of work:
 - Port `SM_SUMMON_PANEL` as a snapshot-based packet with source-derived tests, or capture Java runtime/golden vectors for `SM_SUMMON_PANEL_REMOVE` before live summon lifecycle wiring.
+
+### Session 1684 (May 28, 2026)
+- Continued after UOW-1683 by porting Java `SM_SUMMON_PANEL` packet serialization and adding a conservative non-live packet-plan helper for the summon creation send-to-master path.
+- Performed Work Discovery across Java `SM_SUMMON_PANEL.writeImpl`, opcode registration, `SummonsService.createSummon`, recent C# packet/planner patterns, the latest completion document, and the latest handoff.
+- Selected `SM_SUMMON_PANEL` because it was the preferred handoff item and the packet payload is deterministic when represented as a resolved summon-stat snapshot.
+- Added `SmSummonPanel` with Java opcode `153`.
+- Added `SummonPanelSnapshot`.
+- Added `SummonPanelPacketPlanService`, `SummonPanelPacketPlan`, and `SummonPanelPacketPlanStatus`.
+- Modeled Java payload order:
+	- `writeD(summon.getObjectId())`
+	- `writeH(summon.getLevel())`
+	- two zero dwords
+	- `writeD(currentHp)`
+	- `writeD(maxHp.current)`
+	- `writeD(mainHandPAttack(DISPLAY).current)`
+	- `writeH(pDef.current)`
+	- zero word
+	- `writeH(mResist.current)`
+	- two zero words
+	- `writeD(liveTime)`
+- Modeled non-live send intent for `SummonsService.createSummon -> PacketSendUtility.sendPacket(master, new SM_SUMMON_PANEL(summon))`.
+- Kept live `VisibleObjectSpawner.spawnSummon`, `master.setSummon`, stat-container calculation, `CalculationType.DISPLAY`, `SM_EMOTION`, `SM_SUMMON_UPDATE`, and packet dispatch out of scope.
+- Added invalid snapshot guards for unresolved summon ids and negative primitive stat values before packet planning.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmSummonPanelPacketTests|FullyQualifiedName~GamePacketTests"`
+	- Result: 245 tests passed.
+	- `dotnet test dotnetConversion\AionServer.slnx`
+	- Result: passed with 3,872 total tests across Commons, LoginServer, ChatServer, and GameServer test projects. An initial 4-minute run timed out before returning results; the longer rerun completed successfully.
+
+#### Parallel Work Discovery - Session 1684
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | `SM_SUMMON_PANEL` snapshot packet parity | `SM_SUMMON_PANEL.writeImpl`, `SummonsService.createSummon` | `SmSummonPanel.cs`, `SummonPanelPacketPlanService.cs`, dedicated tests | Packet Port / Boundary | Sequential for packet + planner + tests | Low-medium | Selected because the handoff recommended it and the packet is deterministic from a snapshot. |
+| B | `SM_SUMMON_UPDATE` snapshot packet parity | `SM_SUMMON_UPDATE.writeImpl`, summon mode/stats | new packet + snapshot/tests | Packet Port | Yes, later if isolated | Medium | Natural follow-up, but a wider stat/mode packet than this unit. |
+| C | Java runtime/golden vectors for summon packets | `SM_SUMMON_PANEL`, `SM_SUMMON_PANEL_REMOVE` live output | vector artifacts/tests | Golden Verification | Yes, later | Low | Useful to strengthen evidence beyond reviewed source. |
+| D | Live summon creation/release integration | `SummonsService`, `VisibleObjectSpawner`, `PacketSendUtility`, world state | shared summon/runtime files | Runtime Integration | No | High | Deferred because it crosses live spawning, master state, stat containers, dispatch ordering, and scheduler/lifecycle behavior. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Summon panel packet, packet-plan helper, focused tests, docs, commit | `SmSummonPanel.cs`, `SummonPanelPacketPlanService.cs`, `SmSummonPanelPacketTests.cs`, progress/handoff docs | Java source writes, live summon lifecycle wiring, live packet dispatch, unrelated services | Implemented and documented UOW-1684. |
+| Sub-agents | None | None | All files | Not spawned because the packet/planner/test/docs slice was small and shared docs remained Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1684 because the selected work was a small packet boundary plus docs.
+
+#### Migration Parity Table - Session 1684
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SUMMON_PANEL` | `Aion.GameServer.Network.Aion.ServerPackets.SmSummonPanel` | Server Packet | Complete | Unit Tested | Verified Parity | Java source reviewed; tests cover opcode `153`, object id as `D`, level as `H`, the two zero dwords, current/max HP, display main-hand physical attack, physical defense word, zero word, magic resist word, two trailing zero words, and live time. No Java runtime/encrypted frame capture was produced. |
+| `com.aionemu.gameserver.model.gameobjects.Summon` | `Aion.GameServer.Network.Aion.ServerPackets.SummonPanelSnapshot` | DTO Projection | Partial | Unit Tested boundary only | Partial Parity | C# snapshots only the fields read by `SM_SUMMON_PANEL.writeImpl`. Live summon ownership, null handling, stat-container references, lifecycle, equality/hash behavior, threading, and serialization outside this packet are not ported here. |
+| `com.aionemu.gameserver.model.stats.container.SummonGameStats` / `CalculationType.DISPLAY` | `SummonPanelSnapshot.MainHandPhysicalAttack`, `MaxHp`, `PhysicalDefense`, `MagicResist` | Stat Projection Boundary | Partial | Unit Tested boundary only | Needs Verification | Packet writes provided primitive stat snapshots in Java order, but C# does not calculate them from live stat containers or verify Java `CalculationType.DISPLAY` formulas. |
+| `com.aionemu.gameserver.services.summons.SummonsService.createSummon` | `Aion.GameServer.Services.SummonPanelPacketPlanService.CreateSendToMasterPlan` | Service Boundary | Partial | Unit Tested boundary only | Partial Parity | C# records only the `SM_SUMMON_PANEL` send-to-master intent after a summon snapshot is resolved. It does not spawn a summon, mutate `master.summon`, send `SM_EMOTION`, send `SM_SUMMON_UPDATE`, or execute live packet dispatch. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `SummonPanelPacketPlan.ShouldSendToMaster` | Utility Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records send intent only. Recipient socket behavior, ordering relative to create-summon side effects and follow-up broadcasts, encryption, exception handling, and threading remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SmSummonPanel_WritesSnapshotFieldsLikeJava` | Unit Added | Java `SM_SUMMON_PANEL.writeImpl` | Packet writes every Java field and zero placeholder in source order. | Direct packet payload regression against reviewed Java source. | No Java runtime/encrypted frame capture. |
+| `SmSummonPanel_AllowsZeroStatsAndLiveTimeLikeJavaPrimitiveGetters` | Unit Added | Java primitive/stat getter write behavior | Packet preserves zero level/stat/live-time values. | Source-derived packet branch regression. | Does not prove live Java summon can expose every zero value. |
+| `CreateSendToMasterPlan_CreatesPacketIntentForSummonsServiceCreateSummon` | Unit Added | Java `SummonsService.createSummon` | Planner emits send-to-master intent and Java-shaped packet payload for a resolved snapshot. | Source-derived planner regression with packet payload assertion. | Does not execute live spawn, master mutation, or packet send. |
+| `CreateSendToMasterPlan_BlocksInvalidSnapshotBeforePacketCreation` | Unit Added | C# safety boundary around live summon resolution | Invalid object id blocks packet planning. | C# boundary regression. | Java requires a non-null live summon reference and would fail earlier/later if unresolved. |
+| `CreateSendToMasterPlan_BlocksNegativeStatsBeforePacketCreation` | Unit Added | C# safety boundary around primitive stat snapshots | Negative stat snapshot blocks packet planning. | C# boundary regression. | Java stat containers are expected to provide non-negative current values; exact Java guard behavior is not modeled. |
+
+Remaining risks:
+- Live `SummonsService.createSummon` integration remains absent.
+- Live summon spawning, master summon mutation, stat-container calculation, `CalculationType.DISPLAY`, `SM_EMOTION` speed broadcast, `SM_SUMMON_UPDATE` broadcast, packet dispatch, and ordering are not ported here.
+- `PacketSendUtility.sendPacket` behavior remains intent-only and unverified.
+- C# snapshot validation is a safety boundary around unresolved live summon data; Java does not expose an equivalent packet-constructor guard.
+- No Java runtime/encrypted frame capture was produced for `SM_SUMMON_PANEL`.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 server packet, 1 snapshot record, 1 packet-plan service, 1 status enum, and 5 focused regressions.
+- Total artifacts with verified parity: 1 grouped row (`SM_SUMMON_PANEL` packet shape).
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining non-packet rows are Partial Parity because live workflow integration is intentionally deferred.
+- Total blocked artifacts: live summon creation integration, live stat-container calculation, live packet dispatch/order verification, Java runtime/encrypted packet capture.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Port `SM_SUMMON_UPDATE` as a snapshot-based packet with source-derived tests, or capture Java runtime/golden vectors for `SM_SUMMON_PANEL` / `SM_SUMMON_PANEL_REMOVE` before live summon lifecycle wiring.
