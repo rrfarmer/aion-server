@@ -76964,3 +76964,75 @@ Summary metrics:
 
 Next recommended unit of work:
 - Capture Java runtime/golden vectors for `SM_FORCED_MOVE`, or extend the non-live forced-move planner pattern to `StaggerEffect` / `StumbleEffect` before any live movement-system wiring.
+
+### Session 1677 (May 28, 2026)
+- Continued after UOW-1676 by extending the existing non-live forced-move start-effect planner to Java `StaggerEffect.startEffect` and `StumbleEffect.startEffect`.
+- Performed Work Discovery across the latest handoff, the Phase 6 ledger, Java `StaggerEffect`, Java `StumbleEffect`, and the existing `ForcedMoveStartEffectPlanService`.
+- Selected the planner extension because it reuses the `SM_FORCED_MOVE` packet-plan boundary and avoids live controller/world/packet wiring.
+- Extended `ForcedMoveEffectKind` with `Stagger` and `Stumble`.
+- Added `ShouldRemoveStunEffects` to `ForcedMoveStartEffectPlan`.
+- Modeled Java shared ordering metadata for stagger/stumble start effects:
+	- cancel current skill from effector
+	- remove paralyze effects
+	- stumble-only remove stun effects
+	- player stop-glide and stop-move intents
+	- world-position update intent
+	- player-only `SM_FORCED_MOVE` broadcast-and-receive intent
+	- abnormal-state set intent
+- Added focused regressions for stagger player, stumble NPC, and invalid stagger packet source.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~ForcedMoveStartEffectPlanServiceTests|FullyQualifiedName~ForcedMovePacketPlanServiceTests|FullyQualifiedName~SmForcedMovePacketTests"`
+	- Result: 11 tests passed.
+
+#### Parallel Work Discovery - Session 1677
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Non-live stagger/stumble start planner | `StaggerEffect.startEffect`, `StumbleEffect.startEffect` | `ForcedMoveStartEffectPlanService.cs`, `ForcedMoveStartEffectPlanServiceTests.cs` | Effect Boundary | Sequential for existing service + tests | Low | Selected because it composes the existing forced-move packet planner without touching live movement systems. |
+| B | Java runtime/golden `SM_FORCED_MOVE` vectors | `SM_FORCED_MOVE` live output | vector artifacts/tests | Golden Verification | Yes, later | Low | Still valuable follow-up for stronger packet evidence. |
+| C | Live forced-move effect wiring | effect/controller/world code | multiple shared gameplay files | Runtime Integration | No | High | Deferred because it crosses shared controller, world, and packet-dispatch boundaries. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Stagger/stumble planner extension, tests, docs, commit | `ForcedMoveStartEffectPlanService.cs`, `ForcedMoveStartEffectPlanServiceTests.cs`, progress/handoff docs | Java source writes, live controller/world/dispatch mutation, unrelated services | Implemented and documented UOW-1677. |
+| Sub-agents | None | None | All files | Not spawned because the unit touched one existing service/test pair plus shared docs. |
+
+No sub-agent was spawned for UOW-1677 because the selected work was a small, tightly coupled planner/test/doc slice.
+
+#### Migration Parity Table - Session 1677
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.StaggerEffect` | `Aion.GameServer.Services.ForcedMoveStartEffectPlanService` | Effect Boundary | Partial | Unit Tested | Partial Parity | C# models non-live `startEffect` ordering for cancel-current-skill, remove-paralyze intent, optional player stop-glide/stop-move intents, world-position update intent, player-only forced-move packet intent, and `STAGGER` abnormal-state set intent. `calculate`, `applyEffect`, `endEffect`, geo collision, resistance checks, sub-effect typing, and live controller/world/packet integration remain absent. |
+| `com.aionemu.gameserver.skillengine.effect.StumbleEffect` | `Aion.GameServer.Services.ForcedMoveStartEffectPlanService` | Effect Boundary | Partial | Unit Tested | Partial Parity | C# models non-live `startEffect` ordering for cancel-current-skill, remove-paralyze intent, remove-stun intent, optional player stop-glide/stop-move intents, world-position update intent, player-only forced-move packet intent, and `STUMBLE` abnormal-state set intent. `calculate`, `applyEffect`, `endEffect`, geo collision, resistance checks, sub-effect typing, TODO no-send special cases, and live controller/world/packet integration remain absent. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_FORCED_MOVE` | `Aion.GameServer.Network.Aion.ServerPackets.SmForcedMove`; `ForcedMovePacketPlanService` dependency reused by start planner | Server Packet / Service Dependency | Complete packet, Partial workflow | Regression Tested | Partial Parity | Existing packet bytes remain covered and planner composes the packet-plan service for player branches. No Java runtime frame capture or live dispatch integration was added in this unit. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.broadcastPacketAndReceive` | `ForcedMovePacketPlan.ShouldBroadcastAndReceive`; `ForcedMoveStartEffectPlan.ForcedMovePacketPlan` | Utility Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records broadcast-and-receive intent only. Recipient selection, ordering, source inclusion, visibility, encryption, response handling, and threading remain unverified. |
+| `com.aionemu.gameserver.world.World.updatePosition` | `ForcedMoveStartEffectPlan.ShouldUpdateWorldPosition`; `UpdatedPosition` metadata | World Mutation Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records intended world position update but performs no live world, known-list, instance, or movement-controller mutation. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_ForStaggerPlayer_RemovesParalyzeAndCreatesForcedMovePacketLikeJava` | Unit Added | Java `StaggerEffect.startEffect` player branch | Planner records paralyze removal, player stop-glide/stop-move, world update, `SM_FORCED_MOVE` payload, and `STAGGER` abnormal-state intent. | Source-derived planner regression with packet payload assertion. | No live controller/world/packet dispatch execution. |
+| `CreatePlan_ForStumbleNpc_RemovesParalyzeAndStunButSkipsPlayerPacketLikeJava` | Unit Added | Java `StumbleEffect.startEffect` NPC branch | Planner records paralyze and stun removal, world update, `STUMBLE` abnormal-state intent, and no player packet for NPCs. | Source-derived planner regression. | No live effect-controller/world mutation. |
+| `CreatePlan_ForStaggerPlayerWithInvalidEffector_BlocksBeforeWorldAndAbnormalMutation` | Unit Added | C# safety boundary around Java live effector requirement | Invalid packet source blocks world update, packet creation, and abnormal-state mutation. | C# boundary regression. | Java requires a live effector creature rather than this snapshot/id guard. |
+
+Remaining risks:
+- Live `StaggerEffect` and `StumbleEffect` integration is still absent.
+- `calculate`, resistance checks, heading/angle calculation, geo collision, sub-effect classification, `applyEffect`, and `endEffect` are outside this unit.
+- `StumbleEffect` Java TODO notes some skills do not send anything; this planner does not model skill-specific no-send exceptions.
+- `removeParalyzeEffects`, `removeStunEffects`, cancel-current-skill, stop-glide, stop-move, world update, packet broadcast, and abnormal-state changes are intent-only.
+- Java runtime/golden vectors for `SM_FORCED_MOVE` are still desirable to strengthen packet evidence.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 extended non-live start-effect planner, 2 effect-kind enum values, 1 plan field, and 3 focused regressions.
+- Total artifacts with verified parity: 0 in this unit.
+- Total artifacts needing verification: 2 grouped rows explicitly marked Needs Verification; remaining rows are Partial Parity because runtime integration is intentionally deferred.
+- Total blocked artifacts: live stagger/stumble effect integration, live packet dispatch verification, live world mutation, Java runtime/golden vector capture, skill-specific stumble no-send behavior.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Capture Java runtime/golden vectors for `SM_FORCED_MOVE`, or add a non-live calculate-phase planner for `StaggerEffect`/`StumbleEffect` heading/geo target-location selection before any live movement-system wiring.
