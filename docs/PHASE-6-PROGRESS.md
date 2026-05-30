@@ -78426,3 +78426,71 @@ Next recommended unit of work:
 	- keep the work non-live and add an explicit live pending-preview state ownership surface first
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1780 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1779-Completion.md`, and `Phase-6-Session-1779-Handoff.md`, then re-inspected Java `Item.pendingTuneResult`, `TuningAction.act`, `ItemActionService.applyTuneResult`, `CM_TUNE_RESULT.runImpl`, and the current C# `InventoryItem` / retuning planner surfaces.
+- Confirmed the smallest honest next unit was the missing item-owned pending-preview state surface, not live `CM_TUNE` / `CM_TUNE_RESULT` dispatch yet. Java keeps `PendingTuneResult` directly on `Item`, and the current C# planner chain still carried that preview as detached method input instead of source-shaped item state.
+- Added `InventoryItem.PendingTuneResult` as the Java-shaped live ownership surface for retuning previews.
+- Updated the retuning planners to use and preserve item-owned preview state in Java order:
+	- `TuningActionExecutionPlanService` now stamps the generated `PendingTuneResult` onto the target-item update snapshot, matching Java `TuningAction.act -> targetItem.setPendingTuneResult(result)`.
+	- `TuneResultApplicationPlanService` now reads `targetItem.PendingTuneResult` directly and clears it on the applied-result snapshot, matching Java `ItemActionService.applyTuneResult`.
+	- `CmTuneResultPlanService` now derives attribute-only cancel/apply behavior from `targetItem.PendingTuneResult` and clears that state on the cancel branch, matching Java `CM_TUNE_RESULT.runImpl`.
+	- `IdentifyItemExecutionPlanService` now preserves any existing pending-preview state when it copies inventory snapshots, avoiding accidental state loss in future mixed runtime slices.
+- Kept the unit intentionally runtime-preparatory rather than overstating live packet parity:
+	- no `CM_TUNE` / `CM_TUNE_RESULT` packet classes were added yet
+	- no `GameClientPacketFactory` registration was added yet
+	- no `GameServerConnection` dispatch wiring was added yet
+	- no new scheduler/observer runtime path was claimed
+- Updated focused tests so they now validate Java-shaped preview ownership instead of detached method inputs:
+	- `TuningActionExecutionPlanServiceTests` now assert the generated preview is attached to the target-item update snapshot.
+	- `TuneResultApplicationPlanServiceTests` now assert the planner reads from `InventoryItem.PendingTuneResult` and clears it on apply.
+	- `CmTuneResultPlanServiceTests` now assert accepted/cancelled flows consume or clear the item-owned preview state.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~TuneResultApplicationPlanServiceTests|FullyQualifiedName~CmTuneResultPlanServiceTests|FullyQualifiedName~TuningActionExecutionPlanServiceTests|FullyQualifiedName~IdentifyItemExecutionPlanServiceTests|FullyQualifiedName~GamePacketTests"` passed with 255 tests.
+	- A first `dotnet test dotnetConversion\AionServer.slnx` attempt timed out before completion at the command boundary, so it is not counted as a completed validation run.
+	- The next three full-suite runs each failed in the same pre-existing `GameServerConnectionInventoryExpansionUseItemTests` flake zone, but on different tests:
+		- `ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate`
+		- `HandleUseItemAsync_ExpExtractMergesRestrictedRewardWithCleanupSealFlag`
+		- `ProcessPacketAsync_CompositeStonesWritesCleanupSealFlagsForRemainingConsumedInputs`
+	- Each of those failing tests then passed in isolated reruns (`1`, `2`, and `1` tests respectively), so this unit is documented as focused-green with repeated unrelated full-suite transient failures rather than as a clean full-suite pass.
+
+#### Migration Parity Table - Session 1780
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.Item.pendingTuneResult` + getter/setter | `Aion.GameServer.Model.GameObjects.InventoryItem.PendingTuneResult` | Model State Surface | Complete | Unit Tested | Verified Parity | Java source reviewed; C# now carries the retuning preview directly on the item snapshot instead of only as detached planner input. The ownership surface is exercised by the retuning planner tests that set, read, and clear the preview state. |
+| `com.aionemu.gameserver.model.templates.item.actions.TuningAction.act` pending-preview ownership | `Aion.GameServer.Services.TuningActionExecutionPlanService` | Service Boundary / Execution Planner | Partial | Unit Tested | Partial Parity | C# now mirrors Java `targetItem.setPendingTuneResult(result)` by attaching the generated preview to the target-item update snapshot. Live scheduler, observer, scroll-decrease, and packet dispatch wiring still remain outside this planner unit. |
+| `com.aionemu.gameserver.services.item.ItemActionService.applyTuneResult` | `Aion.GameServer.Services.TuneResultApplicationPlanService` | Service Boundary / Application Planner | Partial | Unit Tested | Partial Parity | C# now reads from `InventoryItem.PendingTuneResult` and clears it on the applied snapshot instead of receiving a detached preview argument. No live persistence or packet-send wiring is claimed yet. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TUNE_RESULT.runImpl` pending-preview branches | `Aion.GameServer.Services.CmTuneResultPlanService` | Runtime Decision Planner | Partial | Unit Tested | Partial Parity | C# now derives attribute-only cancel/apply behavior from the item-owned preview and clears that state on the cancel branch. No live packet registration or connection dispatch exists yet. |
+| `com.aionemu.gameserver.services.item.ItemActionService.identifyItem` copied-item state preservation | `Aion.GameServer.Services.IdentifyItemExecutionPlanService` | Service Boundary / Execution Planner | Partial | Unit Tested | Partial Parity | The existing planner now preserves any item-owned pending retuning preview when it copies inventory snapshots, which keeps later mixed runtime slices from accidentally dropping Java-shaped item state. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateCompletionPlan_AttributeOnlyReusesTuneStateAndSetsJavaFlags` | Unit Updated | Java `TuningAction.act` | Attribute-only retuning keeps tune count stable and attaches the generated pending preview to the target-item snapshot. | Source-derived state-ownership regression. | No live observer/scheduler wiring. |
+| `CreateCompletionPlan_NormalTuneIncrementsCountAndMarksInventoryUpdateRequired` | Unit Updated | Java `TuningAction.act` | Normal retuning increments tune count and carries the generated pending preview on the target-item snapshot. | Source-derived state-ownership regression. | No live scroll-decrease or packet dispatch wiring. |
+| `CreatePlan_AuditsWhenPendingTuneResultIsMissing` | Unit Updated | Java `ItemActionService.applyTuneResult` | The planner audits when the item-owned preview state is absent. | Source-derived missing-preview regression. | No live audit sink. |
+| `CreatePlan_AppliesPendingTuneResultToInventoryItem` | Unit Updated | Java `ItemActionService.applyTuneResult` | Applying a preview now reads from `InventoryItem.PendingTuneResult` and clears it on the resulting snapshot. | Source-derived apply-and-clear regression. | No live persistence/write path. |
+| `CreatePlan_AcceptedBranchAppliesPendingTuneResultAndBuildsInventoryUpdate` | Unit Updated | Java `CM_TUNE_RESULT.runImpl` | Accepted reidentify consumes the item-owned preview and clears it on the resulting item snapshot. | Source-derived branch/state regression. | No live packet dispatch. |
+| `CreatePlan_CancelBranchClearsPreviewAndSendsApplyNo` | Unit Updated | Java `CM_TUNE_RESULT.runImpl` | Cancel clears the item-owned preview state before building the inventory-update packet. | Source-derived cancel-branch regression. | No live packet registration or connection dispatch. |
+
+Remaining risks:
+- `CM_TUNE` / `CM_TUNE_RESULT` are still not live packet classes in C#, so the new item-owned preview state should be treated as a runtime-preparatory ownership surface rather than as completed runtime parity.
+- The retuning flow still lacks `GameClientPacketFactory` registration and `GameServerConnection` dispatch wiring.
+- The full solution did not produce a clean all-green rerun this session because of repeated unrelated inventory-expansion transients in `GameServerConnectionInventoryExpansionUseItemTests`; the isolated reruns passed, so the validation record should be interpreted accordingly.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 model-state surface plus 4 retuning planner updates and 6 focused regression updates.
+- Total artifacts with verified parity: 1 grouped row.
+- Total artifacts needing verification: 4 grouped rows.
+- Total blocked artifacts: live `CM_TUNE` / `CM_TUNE_RESULT` packet registration and connection wiring, plus live scheduler/observer integration for identify/tuning execution.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the item-owned pending-preview ownership gap without overstating the still-missing live packet/runtime boundary work.
+
+Next recommended unit of work:
+- Next sequential task: port the narrow live packet-model and registration slice for `CM_TUNE` / `CM_TUNE_RESULT` through `GameClientPacketFactory`, now that the missing item-owned preview state exists.
+- Safe alternative candidates for the next session:
+	- add packet classes plus connection dispatch only for the `CM_TUNE` identify/audit/no-scroll branches before attempting full retuning execution
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
