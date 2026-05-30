@@ -77996,3 +77996,73 @@ Summary metrics:
 Next recommended unit of work:
 - Restore executable command access or run the focused Aion.GameServer test slice externally, then commit this `COMMAND` delayed-release planner unit if the build is green.
 - After validation/commit, either capture deterministic Java runtime/golden vectors for the follower warning + `SM_SUMMON_UPDATE` sequence, or continue with the next isolated non-live delayed-release boundary only if it can stay source-driven and testable.
+
+### Session 1774 (May 30, 2026)
+- Performed fresh Work Discovery against the current Java and C# state before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1773-Handoff.md`, and the latest completion artifact `Phase-6-Session-1690-Completion.md`.
+- Audited the Session 1773 backlog recommendations against the repo and found that `EnchantService.amplifyItem`, `DropRegistrationService.getItemCount`, and `AbyssSkillService.updateSkills` already have C# coverage in the current tree, so they were not safe new units.
+- Selected the next smallest unported deterministic slice: Java `model/templates/item/actions/TuningAction.canAct`.
+- Added the non-live `TuningActionGuardPlanService` with Java-shaped guard ordering for:
+	- equipped-target silent rejection
+	- unidentified-target denial
+	- untunable-target denial
+	- wrong target-type denial
+	- higher-level target denial
+	- final max-tune-count silent rejection
+	- `shouldNotReduceTuneCount` bypass of the final tune-count guard
+- Added `TuningActionTargetType`, `TuningActionGuardPlanStatus`, and `TuningActionGuardPlan` so the denial path and packet side effects are captured explicitly without claiming live execution parity.
+- Added the missing Java `SM_SYSTEM_MESSAGE` factories used by `TuningAction.canAct`:
+	- `STR_MSG_ITEM_REIDENTIFY_WRONG_SELECT`
+	- `STR_MSG_ITEM_REIDENTIFY_WRONG_LEVEL`
+	- `STR_MSG_ITEM_REIDENTIFY_CANNOT_REIDENTIFY`
+	- `STR_MSG_ITEM_REIDENTIFY_DIDNT_IDENTIFY`
+- Added focused `TuningActionGuardPlanServiceTests` covering happy path, Java guard order, each packetized denial branch, the silent max-tune-count failure, and the `shouldNotReduceTuneCount` bypass.
+- Extended `GamePacketTests` with regression assertions for the four retuning system-message factories.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~TuningActionGuardPlanServiceTests|FullyQualifiedName~GamePacketTests"` passed with 248 tests.
+	- `dotnet test dotnetConversion\AionServer.slnx` passed with 4714 tests total (`57` commons, `29` chat, `121` login, `4507` game).
+	- The full solution run initially hit the shell timeout and then passed when rerun with a longer timeout; no functional failure was observed.
+
+#### Migration Parity Table - Session 1774
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.TuningAction.canAct` | `Aion.GameServer.Services.TuningActionGuardPlanService.CreatePlan` | Service Boundary / Guard Planner | Partial | Unit Tested | Partial Parity | C# now mirrors the Java guard order and denial-message selection for the non-live `canAct` boundary. Live packet dispatch, XML action binding, and the delayed `act(...)` flow remain outside this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ITEM_REIDENTIFY_WRONG_SELECT` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ItemReidentifyWrongSelect` | System Message Factory | Complete | Regression Tested | Verified Parity | Java source reviewed; tests cover message id `1401633` and the two-string payload shape. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ITEM_REIDENTIFY_WRONG_LEVEL` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ItemReidentifyWrongLevel` | System Message Factory | Complete | Regression Tested | Verified Parity | Java source reviewed; tests cover message id `1401635` and the two-string payload shape. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ITEM_REIDENTIFY_CANNOT_REIDENTIFY` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ItemReidentifyCannotReidentify` | System Message Factory | Complete | Regression Tested | Verified Parity | Java source reviewed; tests cover message id `1401636` and the single-string payload shape. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ITEM_REIDENTIFY_DIDNT_IDENTIFY` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ItemReidentifyDidntIdentify` | System Message Factory | Complete | Regression Tested | Verified Parity | Java source reviewed; tests cover message id `1401637` and the single-string payload shape. |
+| `com.aionemu.gameserver.model.templates.item.actions.UseTarget` | `Aion.GameServer.Services.TuningActionTargetType` | Enum / Planner Input | Partial | Unit Tested through planner | Partial Parity | The planner models the Java enum values needed by `TuningAction.canAct`; no XML/action binding currently maps live item templates onto this enum surface. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_AllowsJavaHappyPath` | Unit Added | Java `TuningAction.canAct` | A valid untuned, identified, matching target is accepted. | Source-derived guard-path regression. | Does not execute live item action wiring. |
+| `CreatePlan_FollowsJavaGuardOrder` | Unit Added | Java `TuningAction.canAct` | The equipped-target guard returns first and suppresses later denial branches. | Source-derived guard-order regression. | No live packet send verification because the Java branch is silent. |
+| `CreatePlan_UsesJavaSystemMessagesForTargetStateFailures` | Unit Added | Java `TuningAction.canAct` + `SM_SYSTEM_MESSAGE` source | Unidentified and untunable targets emit the correct Java message ids. | Source-derived message-selection regression. | No encrypted frame/runtime capture. |
+| `CreatePlan_UsesJavaWrongSelectMessageForTargetMismatch` | Unit Added | Java `TuningAction.canAct` | Weapon-vs-armor mismatch emits `STR_MSG_ITEM_REIDENTIFY_WRONG_SELECT`. | Source-derived message-selection regression. | No live XML action binding coverage. |
+| `CreatePlan_UsesJavaWrongLevelMessageForHigherLevelTarget` | Unit Added | Java `TuningAction.canAct` | Higher-level target emits `STR_MSG_ITEM_REIDENTIFY_WRONG_LEVEL`. | Source-derived message-selection regression. | No runtime packet dispatch coverage. |
+| `CreatePlan_FinalTuneCountGuardIsSilentLikeJava` | Unit Added | Java `TuningAction.canAct` | The final max-tune-count rejection returns `false` without a denial packet. | Source-derived guard regression. | No live action invocation. |
+| `CreatePlan_ShouldNotReduceTuneCountBypassesJavaFinalGuard` | Unit Added | Java `TuningAction.canAct` | `no_reduce=true` bypasses the final tune-count guard. | Source-derived guard regression. | No live XML binding coverage. |
+| `GamePacketTests` updated `SmSystemMessage_WritesDialogTooFarMessages` | Regression Updated | Java `SM_SYSTEM_MESSAGE` factories | The four retuning denial factories serialize the expected ids and parameter counts. | Source-derived packet payload regression. | No Java runtime/encrypted frame capture. |
+
+Remaining risks:
+- This unit only covers the `canAct` guard boundary. Java `TuningAction.act`, its `5000` ms item-use animation lifecycle, observer abort path, pending tune result mutation, and `SM_TUNE_RESULT` / success-cancel system messages remain unported or unverified in this slice.
+- `TuningActionTargetType` is currently a planner-only enum; live XML or item-action binding parity is still absent.
+- No deterministic Java runtime packet capture was produced for the retuning denial messages.
+- Threading and delayed task behavior are intentionally out of scope for this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 guard planner, 1 planner enum, 1 planner record, 4 system-message factories, and 8 focused regression updates/additions.
+- Total artifacts with verified parity: 4 grouped rows (all four `SM_SYSTEM_MESSAGE` factories).
+- Total artifacts needing verification: 2 grouped rows (`TuningAction.canAct` planner boundary and `UseTarget` planner-input surface remain Partial Parity because live action binding/dispatch is still missing).
+- Total blocked artifacts: 0 for this unit.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit improves deterministic item-action boundary coverage but does not change the larger live-execution, combat, handler, quest, and full runtime parity backlog.
+
+Next recommended unit of work:
+- Next sequential task: port the adjacent non-live Java `TuningAction.act` boundary, especially the `5000` ms item-use animation/send order, observer abort branch, source-scroll consumption, pending tune-result mutation, `SM_TUNE_RESULT`, and success/cancel system-message composition.
+- Safe alternative candidates for the next session:
+	- Java `CraftService.finishCrafting` product selection (`critCount > 0 ? getComboProduct(critCount) : getProductId()`) as a small pure planner slice adjacent to the already ported crafting XP formula.
+	- Java `DropRegistrationService.calculateBoostDropRate` as a pure drop-boost formula slice with repose/salvation/palace bonuses.
+	- Java `PlayerReviveService.rebirthRevive` as a conservative non-live revive planner if the needed revive/effect snapshots are already present.
