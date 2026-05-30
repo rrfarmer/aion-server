@@ -78360,3 +78360,69 @@ Next recommended unit of work:
 	- wire `CM_TUNE` / `CM_TUNE_RESULT` packet registration and connection dispatch only if a small exclusive runtime slice can be held safely
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1779 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1778-Completion.md`, and `Phase-6-Session-1778-Handoff.md`, then re-inspected Java `ItemActionService.identifyItem`, the current C# retuning planners, `ItemRandomBonusTable`, and the existing inventory-update/message packet surfaces.
+- Confirmed the next smallest safe unit was the remaining non-live Java identify-item delayed execution boundary, not live packet registration. The main deterministic gaps were:
+	- start animation (`5000`, end `9`)
+	- abort branch (`TaskId.ITEM_USE`, identify-canceled message, end `11`)
+	- completion branch (`end 10`)
+	- optional-socket / stat-bonus / enchant-bonus random roll order
+	- tune-count increment from the unidentified `-1` state
+	- inventory-update and identify-success message intents
+- Added `IdentifyItemExecutionPlanService` to model Java `ItemActionService.identifyItem` in three source-shaped pieces:
+	- start plan
+	- abort plan
+	- completion plan
+- Added the missing identify system-message factories:
+	- `STR_MSG_ITEM_IDENTIFY_CANCELED`
+	- `STR_MSG_ITEM_IDENTIFY_SUCCEED`
+- Kept the unit intentionally non-live:
+	- no `GameServerConnection` dispatch wiring was added yet
+	- no scheduler or observer ownership was added yet
+	- the completion plan records inventory persistence intent but does not claim live persistence or controller task integration
+- Added focused `IdentifyItemExecutionPlanServiceTests` covering:
+	- Java start animation delay
+	- Java abort branch message and animation
+	- Java completion mutation shape, including tune-count increment from `-1` to `0`
+- Extended `GamePacketTests` with the two identify system-message regressions (`1401625`, `1401626`).
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~IdentifyItemExecutionPlanServiceTests|FullyQualifiedName~GamePacketTests"` passed with 243 tests.
+	- `dotnet test dotnetConversion\AionServer.slnx` passed cleanly on the first run with 4736 tests total (`57` commons, `29` chat, `121` login, `4529` game).
+
+#### Migration Parity Table - Session 1779
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemActionService.identifyItem` | `Aion.GameServer.Services.IdentifyItemExecutionPlanService` | Service Boundary / Execution Planner | Partial | Unit Tested | Partial Parity | C# now models the deterministic start, abort, and completion branches, including the unidentified `tuneCount` transition from `-1` to `0`. No live scheduler, observer, or connection wiring is claimed yet. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ITEM_IDENTIFY_CANCELED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ItemIdentifyCanceled` | System Message Factory | Complete | Regression Tested | Verified Parity | Java source reviewed; tests cover message id `1401625` and the single-string payload shape. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ITEM_IDENTIFY_SUCCEED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ItemIdentifySucceed` | System Message Factory | Complete | Regression Tested | Verified Parity | Java source reviewed; tests cover message id `1401626` and the single-string payload shape. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateStartPlan_UsesJavaStartAnimationAndDelay` | Unit Added | Java `ItemActionService.identifyItem` | Start broadcast uses `5000` ms with end state `9`. | Source-derived packet-composition regression. | No live broadcast dispatch. |
+| `CreateAbortPlan_UsesJavaCancellationMessageAndAnimation` | Unit Added | Java `ItemActionService.identifyItem.abort()` | Abort records `ITEM_USE`, identify-canceled message id `1401625`, and end state `11`. | Source-derived abort-branch regression. | No live observer removal or controller task cancellation. |
+| `CreateCompletionPlan_RollsMutationAndBuildsPackets` | Unit Added | Java `ItemActionService.identifyItem` | Completion rolls optional sockets/stat bonus/enchant bonus, increments tune count from `-1` to `0`, and prepares inventory-update plus identify-success message intents. | Source-derived mutation regression. | No live scheduler/persistence/connection wiring. |
+| `GamePacketTests` updated identify message assertions | Regression Updated | Java `SM_SYSTEM_MESSAGE` factories | The two identify message factories serialize the expected ids and parameter counts. | Source-derived packet regression. | No encrypted runtime frame capture. |
+
+Remaining risks:
+- `identifyItem` is still not wired into a live `GameServerConnection` or task/observer runtime path, so the new planner should be treated as a runtime-adjacent boundary rather than completed live parity.
+- The retuning flow still has no live item-owned pending-preview state or live packet registration for `CM_TUNE` / `CM_TUNE_RESULT`.
+- This unit did not add Java runtime packet capture for the identify animation sequence.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: 1 planner service, 2 system-message factories, and 4 focused regression additions/updates.
+- Total artifacts with verified parity: 2 grouped rows.
+- Total artifacts needing verification: 1 grouped row (`identifyItem` planner boundary remains Partial Parity until live wiring exists).
+- Total blocked artifacts: live `CM_TUNE` / `CM_TUNE_RESULT` packet registration and connection wiring, live pending-preview state ownership, and live identify-item scheduler/observer integration.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the remaining deterministic non-live retuning branch but leaves the live runtime boundary work for later.
+
+Next recommended unit of work:
+- Next sequential task: port a narrowly scoped live runtime slice that registers and dispatches `CM_TUNE` / `CM_TUNE_RESULT` through `GameClientPacketFactory` / `GameServerConnection`, consuming the now-complete retuning planner chain without broadening into unrelated systems.
+- Safe alternative candidates for the next session:
+	- keep the work non-live and add an explicit live pending-preview state ownership surface first
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
