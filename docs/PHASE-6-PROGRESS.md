@@ -78147,3 +78147,63 @@ Next recommended unit of work:
 	- Java `CraftService.finishCrafting` product selection (`critCount > 0 ? getComboProduct(critCount) : getProductId()`)
 	- Java `DropRegistrationService.calculateBoostDropRate`
 	- Java `PlayerReviveService.rebirthRevive`
+
+### Session 1776 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1775-Completion.md`, and `Phase-6-Session-1775-Handoff.md`, then re-inspected Java `CM_TUNE`, `CM_TUNE_RESULT`, `ItemActionService`, `ItemActions.getTuningAction()`, `UseTarget`, and the current C# static-data loader / item-template surface.
+- Confirmed the smallest safe next unit was not the full live `CM_TUNE` path yet, but the missing retuning template/input snapshot boundary that feeds it.
+- Added retuning metadata to the C# item-template surface:
+	- `ItemTemplateSummary.MaxEnchantBonus`
+	- `ItemTemplateSummary.OptionSlotBonus`
+	- `ItemTemplateSummary.TuningAction`
+- Added `ItemActionUseTargetType` and `ItemTuningActionInfo` to represent Java `UseTarget` and `TuningAction` XML metadata in loaded C# static data.
+- Extended `StaticData` parsing to recognize `<actions><tuning no_reduce="..." target="..."/></actions>` and map it into `ItemTuningActionInfo`.
+- Threaded the already-available builder values for Java `max_enchant_bonus` and `option_slot_bonus` through to the final `ItemTemplateSummary`, instead of forcing later retuning code to take those ceilings as synthetic test-only inputs.
+- Added focused real-data assertions to `StaticDataLoadingTests` proving:
+	- Java tuning-scroll templates `166200000`, `166200001`, and `166200002` load the expected `target` and `no_reduce` values
+	- the real tuning-action count matches `staticData.GetElementCount("tuning")`
+	- a real Java target item (`100001433`) exposes the expected `max_enchant_bonus="5"` and `option_slot_bonus="3"` values in C#
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaticDataLoadingTests"` passed with 20 tests.
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate"` passed with 1 test after a transient unrelated full-suite failure appeared in the first rerun.
+	- `dotnet test dotnetConversion\AionServer.slnx` first reported one failing inventory-expansion test (`ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate`) and then passed cleanly on full rerun with 4719 tests total (`57` commons, `29` chat, `121` login, `4512` game). The transient was documented rather than hidden.
+
+#### Migration Parity Table - Session 1776
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.ItemActions.getTuningAction()` + `<tuning .../>` XML metadata | `Aion.GameServer.Dataholders.ItemTemplateSummary.TuningAction` | Static Data Snapshot | Complete | Regression Tested | Verified Parity | Java source and real XML reviewed; C# now loads retuning action metadata from `item_templates.xml` and tests assert real tuning-scroll ids plus total element count. |
+| `com.aionemu.gameserver.model.templates.item.actions.TuningAction` fields `target` / `shouldNotReduceTuneCount` | `Aion.GameServer.Dataholders.ItemTuningActionInfo` | DTO / Action Metadata | Complete | Regression Tested | Verified Parity | The snapshot preserves the Java action's `target` and `no_reduce` inputs only; live `canAct` / `act` execution remains elsewhere. |
+| `com.aionemu.gameserver.model.templates.item.actions.UseTarget` | `Aion.GameServer.Dataholders.ItemActionUseTargetType` | Enum | Complete | Regression Tested through static-data load | Partial Parity | Real XML values `WEAPON` and `EQUIPMENT` are covered by loader assertions, but the less-common enum values (`ACCESSORY`, `WING`, `OTHER`, `ALL`) were not independently exercised in this unit. |
+| Java item-template attributes `max_enchant_bonus` and `option_slot_bonus` | `Aion.GameServer.Dataholders.ItemTemplateSummary.MaxEnchantBonus` / `OptionSlotBonus` | Template Fields | Complete | Regression Tested | Verified Parity | Real XML-backed assertions now prove the C# summary carries these retuning-relevant ceilings for a representative tuned item (`100001433`). |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `StaticDataLoadingTests.DataManager_LoadsRealJavaStaticDataManifestCounts` updated with retuning assertions | Regression Updated | Real Java `item_templates.xml` plus reviewed `ItemActions.getTuningAction()` / `UseTarget` source | Real tuning-scroll templates load `target` and `no_reduce`, tuning-action count matches the Java XML element count, and a real target item exposes preview ceilings. | Source-derived real-data regression. | No live `CM_TUNE` consumption yet. |
+| `ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate` rerun in isolation | Regression Rerun | Existing unrelated inventory-expansion path | Verified the first full-suite failure was transient before accepting the rerun as the authoritative result. | Isolated regression rerun only. | Unrelated to retuning; documented as transient signal. |
+
+Remaining risks:
+- The retuning metadata now exists in loaded C# item templates, but no live/runtime `CM_TUNE` path consumes it yet.
+- The new `ItemActionUseTargetType` enum is source-shaped, but only the values exercised by current retuning XML (`WEAPON`, `EQUIPMENT`) have direct regression evidence in this unit.
+- The first full-suite run again exposed a transient inventory-expansion test failure in the same broad flake zone as Session 1775; the isolated rerun and the second full-suite rerun both passed, so this unit is documented as validated with another transient test-signal caveat rather than as a perfect single-pass run.
+- `CM_TUNE_RESULT` / `ItemActionService.applyTuneResult` still remain unported on the C# runtime side.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 enum, 1 action-metadata record, 3 item-template fields, 1 static-data parser branch, and 1 focused real-data regression update.
+- Total artifacts with verified parity: 3 grouped rows.
+- Total artifacts needing verification: 1 grouped row (`ItemActionUseTargetType` remains Partial Parity because only the retuning-relevant enum values were exercised).
+- Total blocked artifacts: live `CM_TUNE` / `CM_TUNE_RESULT` runtime integration, scheduler/observer consumption of the retuning planners, and Java runtime packet capture for the full retuning flow.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the missing retuning template/input snapshot gap but leaves the actual runtime consumer path for later.
+
+Next recommended unit of work:
+- Next sequential task: port the narrow `CM_TUNE` runtime decision boundary in C# so it consumes the newly loaded retuning template metadata:
+	- identify-target vs tuning-scroll branch
+	- scroll lookup by object id
+	- tuning-action metadata lookup from the scroll template
+	- conservative handoff into the existing retuning guard/execution planners
+- Safe alternative candidates for the next session:
+	- Java `CM_TUNE_RESULT` / `ItemActionService.applyTuneResult` non-live application boundary
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
