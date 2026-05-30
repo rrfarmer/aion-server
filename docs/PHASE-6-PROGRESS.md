@@ -78754,3 +78754,67 @@ Next recommended unit of work:
 	- execute the new opt-in MySQL logout persistence test path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1785 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, and `Phase-6-Session-1784-Handoff.md`, then re-inspected Java `Persistable.PersistentState`, Java `Item.setPersistentState`, Java `Storage`, Java `Equipment`, Java `Player.getDirtyItemsToUpdate`, Java `InventoryDAO.store(Player)`, Java `PlayerService.storePlayer`, Java `PlayerLeaveWorldService.leaveWorld`, Java `ItemActionService.identifyItem`, Java `ItemActionService.applyTuneResult`, and Java `TuningAction.act`, along with the current C# `InventoryItem`, `Player`, `MySqlPlayerEnterWorldRepository.SavePlayerLogoutAsync`, `IdentifyItemExecutionPlanService`, `TuneResultApplicationPlanService`, and `TuningActionExecutionPlanService`.
+- Confirmed the narrowest safe follow-up after UOW-1784 was to add the missing item-level dirty-state surface used by the live identify/reidentify paths, without overstating parity by claiming a full Java storage-state or delete-queue port.
+- Added a Java-shaped item persistent-state model in C#:
+	- introduced `InventoryItemPersistentState` on `InventoryItem`
+	- mirrored the Java item-level states with `New`, `UpdateRequired`, `Updated`, `Deleted`, and `NoAction`
+- Added a conservative dirty-item harvest surface on `Player`:
+	- `GetDirtyItemsToUpdate()` now returns modeled cube, warehouse, and account-warehouse items whose `PersistentState` is `New`, `UpdateRequired`, or `Deleted`
+	- `MarkDirtyItemsPersisted()` now normalizes those dirty items back to `Updated` after persistence
+	- kept the scope intentionally narrow by not introducing Java `Storage`-level persistent state or deleted-item queues yet
+- Wired the current retuning and identify mutation outputs into the new dirty-state model:
+	- `IdentifyItemExecutionPlanService` now marks the completed identified item `UpdateRequired`
+	- `TuneResultApplicationPlanService` now marks the accepted reidentify result item `UpdateRequired`
+	- `TuningActionExecutionPlanService` now marks tune-count consumption mutations `UpdateRequired`
+	- the attribute-preview branch continues to preserve the incoming `PersistentState`, so pending preview creation alone does not over-claim a persisted runtime mutation
+- Kept logout persistence behavior conservative:
+	- `SavePlayerLogoutAsync` still flushes full modeled inventory snapshots as established in UOW-1784
+	- after that flush, it now calls `player.MarkDirtyItemsPersisted()` so the in-memory item state reflects that those modeled rows have been persisted
+- Added focused coverage in `PlayerInventoryPersistentStateTests`:
+	- dirty-item harvest across modeled storages
+	- dirty-state normalization after persistence
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerInventoryPersistentStateTests|FullyQualifiedName~IdentifyItemExecutionPlanServiceTests|FullyQualifiedName~TuneResultApplicationPlanServiceTests|FullyQualifiedName~TuningActionExecutionPlanServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passed with 43 tests.
+	- A first `dotnet test dotnetConversion\AionServer.slnx` run failed in `GameServerConnectionInventoryExpansionUseItemTests.HandleUseItemAsync_ExpExtractMergesRestrictedRewardWithCleanupSealFlag`.
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~HandleUseItemAsync_ExpExtractMergesRestrictedRewardWithCleanupSealFlag"` then passed in isolation with 1 test.
+	- A second `dotnet test dotnetConversion\AionServer.slnx` run then passed cleanly with 4752 total tests (`57` commons, `29` chat, `121` login, `4545` game).
+
+#### Migration Parity Table - Session 1785
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.Persistable.PersistentState` + `com.aionemu.gameserver.model.gameobjects.Item.setPersistentState` | `Aion.GameServer.Model.GameObjects.InventoryItemPersistentState` | Item Dirty-State Model | Partial | Regression Tested | Partial Parity | Java source reviewed; C# now models the item-level persistent-state enum and uses it on `InventoryItem`, but it does not yet replicate Java `setPersistentState` transition rules such as `NEW -> DELETED => NOACTION` or `UPDATE_REQUIRED` preservation on newly created items. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getDirtyItemsToUpdate` | `Aion.GameServer.Model.GameObjects.Player.GetDirtyItemsToUpdate` + `MarkDirtyItemsPersisted` | Dirty-State Harvest | Partial | Regression Tested | Partial Parity | C# now harvests dirty modeled items across cube, warehouse, and account warehouse and normalizes them after persistence. Java storage-level `PersistentState`, equipment participation, and deleted-item side lists are still missing. |
+| `com.aionemu.gameserver.services.item.ItemActionService.identifyItem` + `com.aionemu.gameserver.services.item.ItemActionService.applyTuneResult` + `com.aionemu.gameserver.model.templates.item.actions.TuningAction.act` dirty-item lifecycle | `Aion.GameServer.Services.IdentifyItemExecutionPlanService` + `TuneResultApplicationPlanService` + `TuningActionExecutionPlanService` | Runtime Mutation Dirty Marking | Partial | Regression Tested | Partial Parity | C# now marks the current modeled identify and accepted reidentify mutations as `UpdateRequired`, and keeps attribute-preview creation non-dirty like the Java source intent. Broader Java storage-state propagation and delete handling remain future work. |
+| `com.aionemu.gameserver.services.player.PlayerLeaveWorldService.leaveWorld` + `com.aionemu.gameserver.services.player.PlayerService.storePlayer` post-save state normalization | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.SavePlayerLogoutAsync` + `Player.MarkDirtyItemsPersisted` | Logout Dirty-State Reset | Partial | Regression Tested | Partial Parity | C# logout now resets modeled dirty item state after the snapshot flush completes. The underlying persistence path still saves full snapshots rather than Java-filtered dirty rows. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GetDirtyItemsToUpdate_ReturnsDirtyItemsAcrossModeledStorages` | Unit Added | Java `Player.getDirtyItemsToUpdate` | Dirty-item harvest returns only modeled items marked `New`, `UpdateRequired`, or `Deleted` across cube, warehouse, and account warehouse. | Source-derived unit regression for the current modeled storage scope. | No equipment/storage-state/delete-queue coverage. |
+| `MarkDirtyItemsPersisted_NormalizesDirtyItemsToUpdated` | Unit Added | Java `Player.getDirtyItemsToUpdate` post-store normalization | Persisted modeled items are normalized back to `Updated` without dropping their carried item data. | Source-derived unit regression for the post-save normalization boundary. | No direct Java `Storage` persistent-state reset proof. |
+
+Remaining risks:
+- C# still does not model Java `Storage`/`Equipment` persistent state or deleted-item side lists, so `GetDirtyItemsToUpdate()` remains a narrowed approximation rather than a full source-shaped port.
+- The new `InventoryItemPersistentState` surface does not yet implement Java `Item.setPersistentState` transition semantics for all state combinations.
+- Logout persistence still flushes full snapshots rather than invoking a Java-shaped filtered `InventoryDAO.store(player)` path.
+- The first full-suite attempt hit another transient failure in the inventory-expansion area; this unit relies on the isolated rerun plus the second completed all-green full-suite run for evidence.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 item persistent-state enum, 2 player dirty-state helpers, 3 runtime dirty-marking updates, and 2 focused unit tests.
+- Total artifacts with verified parity: 0 grouped rows in this unit.
+- Total artifacts needing verification: 4 grouped rows.
+- Total blocked artifacts: Java storage/equipment dirty-state participation, delete-side-list behavior, and Java-shaped filtered persistence writes.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the most immediate item-level dirty-state gap for live identify/reidentify work without overstating the still-missing storage-level lifecycle.
+
+Next recommended unit of work:
+- Next sequential task: port the narrow Java `Item.setPersistentState` transition rules plus storage/equipment dirty-state participation needed to make `Player.getDirtyItemsToUpdate` source-shaped for the modeled storages.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout persistence test path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
