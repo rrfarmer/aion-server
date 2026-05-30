@@ -78553,3 +78553,80 @@ Next recommended unit of work:
 	- keep the live slice even smaller by dispatching only the `CM_TUNE` identify/audit/no-scroll branches first
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1782 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1781-Completion.md`, and `Phase-6-Session-1781-Handoff.md`, then re-inspected Java `CM_TUNE.runImpl`, Java `ItemActionService.identifyItem`, Java `TuningAction.act`, the current C# `CmTuneRuntimePlanService`, `IdentifyItemExecutionPlanService`, `TuningActionExecutionPlanService`, and adjacent `GameServerConnection` delayed item-use patterns.
+- Confirmed the next smallest safe unit was the live `CmTune` dispatch slice itself, not `CmTuneResult` yet. The Java-backed runtime behavior now in scope was:
+	- `CM_TUNE.runImpl` active-player inventory lookup and branch order
+	- unidentified target -> `ItemActionService.identifyItem`
+	- identified target without scroll -> audit only
+	- missing scroll / missing tuning action -> silent return
+	- `TuningAction.canAct` denial-message branches
+	- executable `TuningAction.act` delayed start/completion through the existing pending-item-use runtime boundary
+- Added live `CmTune` dispatch in `GameServerConnection`:
+	- opcode `235` packets now route through `HandleTuneAsync`
+	- runtime lookup now feeds the existing `CmTuneRuntimePlanService`
+	- silent lookup-miss branches remain silent like Java
+	- identified-without-scroll now logs the Java audit string through the connection logger
+	- guard-blocked branches now send the existing Java-shaped denial `SM_SYSTEM_MESSAGE` packets
+- Wired the Java-shaped identify branch live through the existing pending-item-use scheduler surface:
+	- start animation `5000 / 9`
+	- completion animation `0 / 10`
+	- runtime item mutation from unidentified `tuneCount = -1` to identified `0`
+	- `SM_INVENTORY_UPDATE_ITEM`
+	- `STR_MSG_ITEM_IDENTIFY_SUCCEED`
+	- added `PendingItemUseCancelMessage.ItemIdentify` so cancellation now maps to `STR_MSG_ITEM_IDENTIFY_CANCELED`
+- Wired the executable retuning branch live through the same pending-item-use surface:
+	- start animation `5000 / 12`
+	- completion animation `0 / 13`
+	- source scroll decrease/delete packets through the existing `ApplySourceItemMutationAsync` path
+	- runtime target-item `PendingTuneResult` / `tuneCount` mutation from the existing planner
+	- `SM_TUNE_RESULT`
+	- `STR_MSG_ITEM_REIDENTIFY_SUCCEED`
+	- added `PendingItemUseCancelMessage.ItemReidentify` so cancellation now maps to `STR_MSG_ITEM_REIDENTIFY_CANCELED`
+- Added focused live dispatch coverage in `GameServerConnectionTuneTests`:
+	- identify branch through `ProcessPacketAsync`
+	- guard-denial branch through `ProcessPacketAsync`
+	- executable retuning branch through `ProcessPacketAsync`
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionTuneTests|FullyQualifiedName~CmTuneTests|FullyQualifiedName~CmTuneRuntimePlanServiceTests|FullyQualifiedName~TuningActionExecutionPlanServiceTests|FullyQualifiedName~TuningActionGuardPlanServiceTests"` passed with 25 tests.
+	- A first `dotnet test dotnetConversion\AionServer.slnx` attempt hit the command timeout boundary and is not counted as a completed validation run.
+	- Two subsequent full-suite runs each failed in the same pre-existing transient `GameServerConnectionInventoryExpansionUseItemTests.ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate` flake zone, but with different failure shapes (`cleanup seal flag mismatch` once, `WaitUntilAsync` timeout once).
+	- An isolated rerun of `ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate` then passed with 1 test, so this unit is documented as focused-green with repeated unrelated full-suite transient failures rather than as a clean all-green full-suite pass.
+
+#### Migration Parity Table - Session 1782
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TUNE.runImpl` runtime dispatch | `Aion.GameServer.Network.Aion.GameServerConnection.HandleTuneAsync` | Client Packet Runtime Dispatch | Partial | Integration Tested | Partial Parity | Java source reviewed; C# now performs live inventory lookup, preserves the Java branch order, and drives identify / silent-return / audit / guard / execute branches through `ProcessPacketAsync`. `CmTuneResult` dispatch still remains separate future work. |
+| `com.aionemu.gameserver.services.item.ItemActionService.identifyItem` live delayed execution | `Aion.GameServer.Network.Aion.GameServerConnection.ScheduleIdentifyItemAsync` + `CompleteIdentifyItemAsync` | Runtime Item Action Bridge | Partial | Integration Tested | Partial Parity | C# now sends Java-shaped identify start/completion animations, mutates the target item from unidentified to identified, sends `SM_INVENTORY_UPDATE_ITEM`, and sends `STR_MSG_ITEM_IDENTIFY_SUCCEED`. The Java observer/task persistence lifecycle is approximated through the existing pending-item-use scheduler rather than a dedicated observer surface. |
+| `com.aionemu.gameserver.model.templates.item.actions.TuningAction.act` live delayed execution boundary | `Aion.GameServer.Network.Aion.GameServerConnection.ScheduleTuningActionAsync` + `CompleteTuningActionAsync` | Runtime Item Action Bridge | Partial | Integration Tested | Partial Parity | C# now sends Java-shaped retuning start/completion animations, consumes the tuning scroll through the existing source-item mutation path, stamps the pending preview on the target item, and sends `SM_TUNE_RESULT` plus `STR_MSG_ITEM_REIDENTIFY_SUCCEED`. `CM_TUNE_RESULT` accept/cancel dispatch and any later persistence/save boundary remain future work. |
+| `com.aionemu.gameserver.services.item.ItemActionService.identifyItem.abort()` + `com.aionemu.gameserver.model.templates.item.actions.TuningAction.act.abort()` cancel messages | `Aion.GameServer.Network.Aion.GameServerConnection.PendingItemUseCancelMessage.ItemIdentify` / `.ItemReidentify` | Pending Item Use Cancellation Mapping | Complete | Integration Tested | Verified Parity | Java source reviewed; live cancellation routing now maps the identify and retuning pending-item-use branches to `STR_MSG_ITEM_IDENTIFY_CANCELED` and `STR_MSG_ITEM_REIDENTIFY_CANCELED` respectively. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ProcessPacketAsync_CmTune_IdentifyBranchBroadcastsAndUpdatesIdentifiedItem` | Integration Added | Java `CM_TUNE.runImpl` + `ItemActionService.identifyItem` | `ProcessPacketAsync` drives the unidentified branch through Java-shaped identify animations, inventory update, and identify-success message. | Source-derived live dispatch regression. | No dedicated Java runtime packet capture artifact. |
+| `ProcessPacketAsync_CmTune_GuardDeniedSendsJavaSystemMessage` | Integration Added | Java `CM_TUNE.runImpl` + `TuningAction.canAct` | Guard failure sends the expected Java denial message without mutating inventory. | Source-derived live guard regression. | No audit-log capture in this test. |
+| `ProcessPacketAsync_CmTune_ExecutableActionConsumesScrollAndSendsTunePreview` | Integration Added | Java `CM_TUNE.runImpl` + `TuningAction.act` | Executable retuning consumes the scroll, sends the Java-shaped start/completion animations, stamps pending preview state, and sends `SM_TUNE_RESULT` plus success message. | Source-derived live execute regression. | `CM_TUNE_RESULT` accept/cancel path is still not wired live. |
+
+Remaining risks:
+- `CM_TUNE_RESULT` still does not dispatch live through `GameServerConnection`, so the reidentify accept/cancel half of the runtime loop remains incomplete.
+- The identify and retuning branches now mutate runtime item state live, but this unit does not introduce a dedicated persistence write boundary; future work still needs to prove the Java `UPDATE_REQUIRED` lifecycle end to end.
+- The full solution did not produce a clean all-green rerun this session because the same unrelated `ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate` transient failed twice and then passed in isolation.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 live `CmTune` dispatch path, 4 runtime helper methods, 2 cancel-message mappings, and 3 focused live integration tests.
+- Total artifacts with verified parity: 1 grouped row.
+- Total artifacts needing verification: 3 grouped rows.
+- Total blocked artifacts: live `CmTuneResult` dispatch, end-to-end retuning apply/cancel runtime parity, and fuller persistence-lifecycle proof for the new live identify/retuning item-state mutations.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the first live retuning packet-dispatch boundary without overstating the still-missing `CM_TUNE_RESULT` runtime half.
+
+Next recommended unit of work:
+- Next sequential task: port the narrow `GameServerConnection` dispatch slice for `CmTuneResult` so the existing Java-shaped `CmTuneResultPlanService` and `TuneResultApplicationPlanService` can complete the live retuning loop.
+- Safe alternative candidates for the next session:
+	- keep the retuning work narrow by wiring only `CM_TUNE_RESULT` accepted-apply before the cancel/audit branch
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
