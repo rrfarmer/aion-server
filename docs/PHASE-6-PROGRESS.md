@@ -77704,3 +77704,211 @@ Summary metrics:
 
 Next recommended unit of work:
 - Capture Java runtime/golden vectors for summon panel/update/release packets, or inspect the next missing deterministic summon/effect packet before live summon lifecycle wiring.
+
+### Session 1687 (May 30, 2026)
+- Continued after UOW-1686 by adding a conservative non-live release-sequence planner for `SummonsService.ReleaseSummonTask.run`.
+- Performed Work Discovery across Java `SummonsService.ReleaseSummonTask.run`, `UnsummonType`, `SM_SUMMON_PANEL_REMOVE`, `SM_SUMMON_OWNER_REMOVE`, and the latest session handoff.
+- Selected the release-sequence planner because the next missing deterministic gap was the Java packet order boundary between the already ported panel-remove and owner-remove packets.
+- Added `SummonReleasePacketSequencePlanService`, `SummonReleasePacketSequencePlan`, `SummonReleaseUnsummonType`, and `SummonReleasePacketSequencePlanStatus`.
+- Modeled Java release branch order:
+	- `COMMAND`, `DISTANCE`, and `UNSPECIFIED` -> `SM_SYSTEM_MESSAGE` then `SM_SUMMON_PANEL_REMOVE` then `SM_SUMMON_OWNER_REMOVE`
+	- `LOGOUT` -> skips the master packet pair
+- Reused `SummonPanelRemovePacketPlanService` and `SummonOwnerRemovePacketPlanService` so the composed sequence keeps the earlier packet-shape guards.
+- Kept live summon release scheduling, deletion, master summon clearing, cooldown mutation, system-message packet creation, packet dispatch, and hate-transfer behavior out of scope.
+- Validation:
+	- Focused Aion.GameServer test run covering `SummonReleasePacketSequencePlanServiceTests`, `SmSummonPanelRemovePacketTests`, and `SmSummonOwnerRemovePacketTests`
+	- Result: 9 tests passed.
+
+#### Parallel Work Discovery - Session 1687
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Summon release packet sequence planner | `SummonsService.ReleaseSummonTask.run`, `UnsummonType`, `SM_SUMMON_PANEL_REMOVE`, `SM_SUMMON_OWNER_REMOVE` | `SummonReleasePacketSequencePlanService.cs`, dedicated tests | Boundary Composition | Sequential for planner + tests + docs | Low | Selected because both packet primitives already existed and Java order was explicit. |
+| B | Summon release system-message planner | `SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMON_BY_TOO_DISTANCE`, `SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMONED` | `SmSystemMessage.cs`, adjacent planner/tests | Message Boundary | Yes, later | Low-medium | Adjacent deterministic gap once the packet pair order is modeled. |
+| C | Live summon release integration | `SummonsService.release`, `ReleaseSummonTask`, world delete/cooldown/message/hate-transfer paths | shared runtime files | Runtime Integration | No | High | Deferred because it crosses scheduling, object lifecycle, localization, cooldowns, and dispatch order. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Release-sequence planner, focused tests, docs | `SummonReleasePacketSequencePlanService.cs`, dedicated tests, progress/handoff docs | Java source writes, live summon lifecycle files, unrelated services | Implemented and documented UOW-1687. |
+| Sub-agents | None | None | All files | Not spawned because the selected planner/test/docs slice was small and shared docs remained Orchestrator-owned. |
+
+No sub-agent was spawned for UOW-1687 because the selected work was a small composition boundary plus docs.
+
+#### Migration Parity Table - Session 1687
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.summons.SummonsService.ReleaseSummonTask.run` | `Aion.GameServer.Services.SummonReleasePacketSequencePlanService.CreatePlan` | Service Boundary | Partial | Unit Tested boundary only | Partial Parity | C# models the non-live packet order branch for `COMMAND`, `DISTANCE`, and `UNSPECIFIED`, and skips the pair for `LOGOUT`. It still does not create the preceding system message, delete live summon/NPC objects, clear `master.summon`, set cooldowns, schedule hate transfer, or run inside live release scheduling. |
+| `com.aionemu.gameserver.model.summons.UnsummonType` | `Aion.GameServer.Services.SummonReleaseUnsummonType` | Enum / Branch Control | Partial | Unit Tested boundary only | Needs Verification | C# mirrors the Java branch labels used by `ReleaseSummonTask.run`, but live callers, serialization, and controller integration remain unverified. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `SummonReleasePacketSequencePlan.PacketsInOrder` | Utility Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records ordered send intent only. Recipient socket behavior, packet dispatch, encryption, exception handling, and runtime ordering relative to system messages remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SUMMON_PANEL_REMOVE` + `com.aionemu.gameserver.network.aion.serverpackets.SM_SUMMON_OWNER_REMOVE` | `SummonReleasePacketSequencePlan.PacketsInOrder` | Packet Composition | Complete inputs reused | Unit Tested composition only | Needs Verification | This unit reuses already ported packet shapes and verifies that the composed non-live sequence preserves Java order. No Java runtime capture of the combined release sequence was produced. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_ComposesPanelRemoveThenOwnerRemoveInJavaOrder` | Unit Added | Java `SummonsService.ReleaseSummonTask.run` | Planner emits `SM_SUMMON_PANEL_REMOVE` before `SM_SUMMON_OWNER_REMOVE` for `COMMAND`, `DISTANCE`, and `UNSPECIFIED`. | Source-derived ordered planner regression. | Does not execute live release task, system message send, or socket dispatch. |
+| `CreatePlan_LogoutSkipsReleasePackets` | Unit Added | Java `SummonsService.ReleaseSummonTask.run` | `LOGOUT` branch produces no master packet pair. | Source-derived branch regression. | Does not cover live logout cleanup. |
+| `CreatePlan_BlocksNegativeSkillIdBeforeSequenceCreation` | Unit Added | C# safety boundary via existing panel-remove planner | Negative skill ids block sequence creation before packet ordering. | C# boundary regression. | Java relies on live summon state rather than primitive validation. |
+| `CreatePlan_BlocksInvalidSummonObjectIdBeforeSequenceCreation` | Unit Added | C# safety boundary via existing owner-remove planner | Non-positive summon object ids block sequence creation. | C# boundary regression. | Java requires a live summon with a real object id. |
+
+Remaining risks:
+- Live `SummonsService.release` and `ReleaseSummonTask` integration remains absent.
+- The preceding `SM_SYSTEM_MESSAGE` branch for distance vs non-distance release is still not modeled in C#.
+- Summon deletion, transformed NPC deletion, master summon clearing, cooldown mutation, scheduler delay, and hate-transfer behavior are not ported here.
+- `PacketSendUtility.sendPacket` behavior remains intent-only and unverified.
+- No Java runtime/encrypted frame capture was produced for the combined release packet sequence.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 packet-sequence planner, 1 plan record, 2 enums, and 4 focused regressions.
+- Total artifacts with verified parity: 0 new grouped rows in this unit.
+- Total artifacts needing verification: 3 grouped rows explicitly marked Needs Verification; the main release boundary remains Partial Parity because live workflow integration and system-message composition are intentionally deferred.
+- Total blocked artifacts: live summon release integration, release system-message modeling, live packet dispatch/order verification, Java runtime/encrypted packet capture, scheduler/cooldown/hate-transfer behavior.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add `SmSystemMessage` factories and a non-live release notification planner for `STR_SKILL_SUMMON_UNSUMMON_BY_TOO_DISTANCE()` vs `STR_SKILL_SUMMON_UNSUMMONED(summon.getL10n())`, composed ahead of the existing release packet sequence.
+- Otherwise capture Java runtime/golden vectors for the summon release packet order if a deterministic harness is available.
+
+### Session 1688 (May 30, 2026)
+- Continued after UOW-1687 by adding the missing non-live release notification planner for the `SummonsService.ReleaseSummonTask.run` system-message branch.
+- Performed Work Discovery across Java `SummonsService.ReleaseSummonTask.run`, `SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMON_BY_TOO_DISTANCE()`, `SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMONED(String)`, the existing release packet-sequence planner, and the latest session handoff.
+- Selected the release notification planner because it was the next deterministic gap immediately ahead of the already ported release packet order boundary.
+- Added `SmSystemMessage.SkillSummonUnsummonByTooDistance()` and `SmSystemMessage.SkillSummonUnsummoned(string)`.
+- Added `SummonReleaseNotificationPlanService`, `SummonReleaseNotificationPlan`, and `SummonReleaseNotificationPlanStatus`.
+- Modeled Java release notification order:
+	- `DISTANCE` -> `SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMON_BY_TOO_DISTANCE()` then `SM_SUMMON_PANEL_REMOVE` then `SM_SUMMON_OWNER_REMOVE`
+	- `COMMAND` and `UNSPECIFIED` -> `SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMONED(summon.getL10n())` then `SM_SUMMON_PANEL_REMOVE` then `SM_SUMMON_OWNER_REMOVE`
+	- `LOGOUT` -> skips the notification and packet trio
+- Reused `SummonReleasePacketSequencePlanService` so the composed planner keeps the existing packet-order and primitive guards.
+- Kept live summon release scheduling, deletion, master summon clearing, cooldown mutation, hate-transfer behavior, and socket dispatch out of scope.
+- Validation:
+	- Focused Aion.GameServer test run covering `SummonReleaseNotificationPlanServiceTests`, `SummonReleasePacketSequencePlanServiceTests`, `SmSummonPanelRemovePacketTests`, `SmSummonOwnerRemovePacketTests`, and `GamePacketTests`
+	- Result: 255 tests passed.
+
+#### Parallel Work Discovery - Session 1688
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | Summon release notification planner | `SummonsService.ReleaseSummonTask.run`, `SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMON_BY_TOO_DISTANCE`, `SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMONED` | `SmSystemMessage.cs`, `SummonReleaseNotificationPlanService.cs`, dedicated tests | Message Boundary / Composition | Sequential for factories + planner + tests | Low | Selected because the branch is deterministic and directly adjacent to the already modeled release packet sequence. |
+| B | COMMAND release `scheduleOrRun` warning/update branch | `SummonsService.ReleaseSummonTask.scheduleOrRun`, `SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMON_FOLLOWER`, `SM_SUMMON_UPDATE` | `SmSystemMessage.cs`, adjacent planner/tests | Message + Packet Composition | Yes, later | Low-medium | Next isolated boundary once the `run()` release notification branch is covered. |
+| C | Live summon release integration | `SummonsService.release`, `ReleaseSummonTask`, world delete/cooldown/message/hate-transfer paths | shared runtime files | Runtime Integration | No | High | Deferred because it crosses scheduling, object lifecycle, cooldowns, localization, and dispatch order. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | Release notification factories, planner, focused tests, docs | `SmSystemMessage.cs`, `SummonReleaseNotificationPlanService.cs`, dedicated tests, progress/handoff docs | Java source writes, live summon lifecycle files, unrelated services | Implemented and documented UOW-1688. |
+| Sub-agents | None | None | All files | Not spawned because the selected factory/planner/test/docs slice was small and remained tightly coupled. |
+
+No sub-agent was spawned for UOW-1688 because the selected work was a small message-composition boundary plus docs.
+
+#### Migration Parity Table - Session 1688
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.summons.SummonsService.ReleaseSummonTask.run` | `Aion.GameServer.Services.SummonReleaseNotificationPlanService.CreatePlan` | Service Boundary | Partial | Unit Tested boundary only | Partial Parity | C# now models the non-live release notification branch ahead of the existing packet sequence for `DISTANCE`, `COMMAND`, and `UNSPECIFIED`, and skips the trio for `LOGOUT`. It still does not delete live summon/NPC objects, clear `master.summon`, set cooldowns, schedule hate transfer, or run inside live release scheduling. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMON_BY_TOO_DISTANCE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.SkillSummonUnsummonByTooDistance` | System Message Factory | Complete | Regression Tested | Verified Parity | Java source reviewed; tests cover message id `1300073` and the no-parameter packet payload. No Java runtime/encrypted frame capture was produced. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMONED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.SkillSummonUnsummoned` | System Message Factory | Complete | Regression Tested | Verified Parity | Java source reviewed; tests cover message id `1200006` and the summon-name parameter payload. No Java runtime/encrypted frame capture was produced. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` | `SummonReleaseNotificationPlan.PacketsInOrder` | Utility Boundary | Partial | Unit Tested boundary only | Needs Verification | C# records ordered send intent only. Recipient socket behavior, dispatch, encryption, exception handling, and runtime ordering relative to live release scheduling remain unverified. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_DistanceComposesTooDistanceMessageAheadOfReleasePackets` | Unit Added | Java `SummonsService.ReleaseSummonTask.run` | `DISTANCE` branch emits the distance release message ahead of the panel-remove and owner-remove packets. | Source-derived ordered planner regression. | Does not execute live release task or socket dispatch. |
+| `CreatePlan_CommandLikeBranchesComposeUnsummonedMessageAheadOfReleasePackets` | Unit Added | Java `SummonsService.ReleaseSummonTask.run` | `COMMAND` and `UNSPECIFIED` branches emit the summon-name release message ahead of the packet pair. | Source-derived ordered planner regression. | Does not execute live release task or localized summon-name generation. |
+| `CreatePlan_LogoutSkipsNotificationAndReleasePackets` | Unit Added | Java `SummonsService.ReleaseSummonTask.run` | `LOGOUT` branch produces no notification or release packets. | Source-derived branch regression. | Does not cover live logout cleanup. |
+| `CreatePlan_CommandLikeBranchesBlockEmptySummonName` | Unit Added | C# safety boundary around `summon.getL10n()` snapshot input | Blank summon names block notification planning for the Java parameterized message branch. | C# boundary regression. | Java uses live localized summon names instead of primitive validation. |
+| `CreatePlan_BlocksNegativeSkillIdBeforeCompositeSend` | Unit Added | C# safety boundary via existing release packet-sequence planner | Negative skill ids block the composite send before packet emission. | C# boundary regression. | Java relies on live summon state rather than primitive validation. |
+| `GamePacketTests` updated `SmSystemMessage_WritesDialogTooFarMessages` | Regression Updated | Java `SM_SYSTEM_MESSAGE` factories | New summon release system-message factories serialize the expected ids and parameter counts. | Source-derived packet payload regression. | No Java runtime/encrypted frame capture. |
+
+Remaining risks:
+- Live `SummonsService.release` and `ReleaseSummonTask` integration remains absent.
+- The `scheduleOrRun()` `COMMAND` branch that sends `STR_SKILL_SUMMON_UNSUMMON_FOLLOWER(summon.getL10n())` and `SM_SUMMON_UPDATE` before delayed release is still not modeled in C#.
+- Summon deletion, transformed NPC deletion, master summon clearing, cooldown mutation, scheduler delay, and hate-transfer behavior are not ported here.
+- No Java runtime/encrypted frame capture was produced for the combined release notification + packet sequence.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 2 `SmSystemMessage` factories, 1 notification planner, 1 plan record, 1 status enum, and 6 focused regressions/updates.
+- Total artifacts with verified parity: 2 grouped rows (`STR_SKILL_SUMMON_UNSUMMON_BY_TOO_DISTANCE`, `STR_SKILL_SUMMON_UNSUMMONED` factories).
+- Total artifacts needing verification: 1 grouped row explicitly marked Needs Verification; the main release boundary remains Partial Parity because live workflow integration and `scheduleOrRun()` follow-up behavior are intentionally deferred.
+- Total blocked artifacts: live summon release integration, `scheduleOrRun()` command-release notification/update modeling, live packet dispatch/order verification, Java runtime/encrypted packet capture, scheduler/cooldown/hate-transfer behavior.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Add `SmSystemMessage.STR_SKILL_SUMMON_UNSUMMON_FOLLOWER(summon.getL10n())` parity and a non-live `scheduleOrRun()` `COMMAND` release planner that composes that warning message ahead of the existing `SM_SUMMON_UPDATE` send-to-master intent.
+- Otherwise capture Java runtime/golden vectors for the release notification + packet sequence if a deterministic harness is available.
+
+### Session 1689 (May 30, 2026)
+- Continued after UOW-1688 by taking the next deterministic `SummonsService.ReleaseSummonTask.scheduleOrRun` `COMMAND` warning/update branch.
+- Performed Work Discovery across Java `SummonsService.ReleaseSummonTask.scheduleOrRun`, `SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMON_FOLLOWER(String)`, existing C# `SmSummonUpdate`, `SummonUpdatePacketPlanService`, and the latest Session 1688 handoff.
+- Selected the non-live `COMMAND` schedule planner because it remained an isolated message/packet composition boundary adjacent to the already ported release notification sequence.
+- Added `SmSystemMessage.SkillSummonUnsummonFollower(string)` for Java `STR_SKILL_SUMMON_UNSUMMON_FOLLOWER(String)`.
+- Added `SummonCommandReleaseSchedulePlanService`, `SummonCommandReleaseSchedulePlan`, and `SummonCommandReleaseSchedulePlanStatus`.
+- Reused `SummonUpdatePacketPlanService.CreateSendToMasterPlan(...)` so the new planner composes the existing `SM_SUMMON_UPDATE` send-to-master intent instead of re-encoding packet logic.
+- Modeled Java `COMMAND` `scheduleOrRun()` intent as:
+	- delayed release scheduling intent of `5000` ms
+	- immediate `SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMON_FOLLOWER(summon.getL10n())`
+	- immediate `SM_SUMMON_UPDATE`
+	- release-task storage intent on the summon
+- Kept live scheduler execution, delayed `run()` invocation, `scheduleAddMasterHate`, socket dispatch, and runtime release-task mutation out of scope.
+- Validation:
+	- Attempted focused validation for `SummonCommandReleaseSchedulePlanServiceTests`, `SmSummonUpdatePacketTests`, and `GamePacketTests`.
+	- Result: blocked because the available runtime command path requires `pwsh.exe`, and PowerShell 6+ is unavailable in this environment. No build/test command completed, and no commit was made.
+
+#### Parallel Work Discovery - Session 1689
+
+| Candidate | Workstream | Java Artifacts | C# Target Files | Task Type | Can Parallelize? | Risk | Reason |
+|---|---|---|---|---|---|---|---|
+| A | `COMMAND` delayed-release warning/update planner | `SummonsService.ReleaseSummonTask.scheduleOrRun`, `SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMON_FOLLOWER`, `SM_SUMMON_UPDATE` | `SmSystemMessage.cs`, new adjacent planner/tests, progress/handoff docs | Message + Packet Composition | Sequential for planner + packet reuse + docs | Low-medium | Selected because the branch is deterministic, non-live, and directly adjacent to the already modeled release notification path. |
+| B | Java runtime/golden capture for delayed release | `scheduleOrRun`, `PacketSendUtility.sendPacket`, runtime packet flow | harness/docs only | Runtime Comparison | Later | Medium | Still valuable, but blocked until a deterministic capture path or executable runtime command access is available. |
+| C | Live delayed release integration | `ThreadPoolManager.schedule`, `summon.setReleaseTask`, delayed `run()`, `scheduleAddMasterHate` | shared summon/runtime files | Runtime Integration | No | High | Deferred because it crosses scheduling, object lifecycle, hate transfer, and live dispatch. |
+
+File ownership map:
+
+| Agent | Scope | Allowed Files | Forbidden Files | Expected Output |
+|---|---|---|---|---|
+| Orchestrator | `COMMAND` warning/update planner, focused tests, docs | `SmSystemMessage.cs`, `SummonCommandReleaseSchedulePlanService.cs`, dedicated tests, progress/handoff docs | Java source writes, live summon runtime files, unrelated services | Implement planner/tests/docs conservatively and leave live scheduling for a later unit. |
+| Sub-agents | None | None | All files | Not spawned because the selected planner/test/docs slice remained tightly coupled. |
+
+No sub-agent was spawned for Session 1689 because the selected work was a small non-live composition boundary plus docs.
+
+#### Migration Parity Table - Session 1689
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.summons.SummonsService.ReleaseSummonTask.scheduleOrRun` | `Aion.GameServer.Services.SummonCommandReleaseSchedulePlanService.CreatePlan` | Service Boundary | Partial | No Tests | Partial Parity | C# now models only the `COMMAND` branch's `5000` ms delayed-release intent, immediate follower warning, immediate `SM_SUMMON_UPDATE` send-to-master intent, and release-task storage intent. It does not schedule live work, execute delayed release, call `scheduleAddMasterHate`, or perform socket dispatch. Focused tests were added but could not be executed because command execution is blocked in this environment. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_SUMMON_UNSUMMON_FOLLOWER` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.SkillSummonUnsummonFollower` | System Message Factory | Complete | No Tests | Needs Verification | Java source reviewed; C# factory matches message id `1200011` and one string parameter. A regression assertion was added but not executed because `pwsh.exe` is unavailable here. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SUMMON_UPDATE` | `Aion.GameServer.Services.SummonUpdatePacketPlanService.CreateSendToMasterPlan` reused by `SummonCommandReleaseSchedulePlanService` | Packet / Utility Boundary | Partial | No Tests | Needs Verification | This unit reuses the existing non-live send-to-master `SM_SUMMON_UPDATE` planner inside the `COMMAND` delayed-release composition. No runtime send, broadcast semantics, or focused validation command completed in this environment. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_ComposesFollowerWarningAheadOfSummonUpdateAndStoresReleaseTaskIntent` | Unit Added | Java `SummonsService.ReleaseSummonTask.scheduleOrRun` plus reviewed `SM_SUMMON_UPDATE` packet boundary | `COMMAND` branch composes the follower warning before `SM_SUMMON_UPDATE`, records a `5000` ms delay intent, and records release-task storage intent. | Source-derived regression added only; not executed because runtime command execution is blocked. | No live scheduler execution, delayed `run()`, or socket dispatch. |
+| `CreatePlan_BlocksEmptySummonName` | Unit Added | C# safety boundary around `summon.getL10n()` snapshot input | Blank summon names block the composite planner before any immediate packet intent is emitted. | Boundary regression added only; not executed. | Java uses live localized summon names instead of primitive validation. |
+| `CreatePlan_BlocksInvalidSummonUpdateSnapshotBeforeCompositeSend` | Unit Added | Existing C# `SummonUpdatePacketPlanService` boundary reused by the new planner | Invalid `SM_SUMMON_UPDATE` snapshot input blocks the composite planner before immediate packet emission. | Boundary regression added only; not executed. | Java uses live summon stats instead of primitive snapshot validation. |
+| `GamePacketTests` updated `SmSystemMessage_WritesDialogTooFarMessages` | Regression Updated | Java `SM_SYSTEM_MESSAGE` follower factory | `SkillSummonUnsummonFollower("Wind Spirit")` serializes the expected message id and string parameter shape. | Regression assertion added only; not executed. | No Java runtime/encrypted frame capture. |
+
+Remaining risks:
+- Focused/full validation and commit are blocked until executable command access is restored; the available runtime path currently fails because `pwsh.exe` is missing.
+- Live `ThreadPoolManager.schedule`, delayed `ReleaseSummonTask.run`, `summon.setReleaseTask` side effects, and `scheduleAddMasterHate` behavior remain unmodeled or unverified.
+- No Java runtime/encrypted frame capture exists for the follower warning plus `SM_SUMMON_UPDATE` immediate sequence.
+- The broader live summon release workflow still lacks scheduler, cooldown, deletion, and dispatch parity.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this session.
+- Total artifacts ported: 1 `SmSystemMessage` factory, 1 `COMMAND` delayed-release planner, 1 plan record, 1 status enum, and 4 focused test updates/additions.
+- Total artifacts with verified parity: 0 new grouped rows in this session because no focused validation command completed.
+- Total artifacts needing verification: 3 grouped rows touched in this session.
+- Total blocked artifacts: executable test/build/commit path in this environment, live delayed release scheduling/execution, `scheduleAddMasterHate`, runtime packet dispatch/order verification, and Java runtime/encrypted packet capture.
+- Estimated overall migration completion: Phase 6 remains about 72%.
+
+Next recommended unit of work:
+- Restore executable command access or run the focused Aion.GameServer test slice externally, then commit this `COMMAND` delayed-release planner unit if the build is green.
+- After validation/commit, either capture deterministic Java runtime/golden vectors for the follower warning + `SM_SUMMON_UPDATE` sequence, or continue with the next isolated non-live delayed-release boundary only if it can stay source-driven and testable.
