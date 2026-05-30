@@ -78693,3 +78693,64 @@ Next recommended unit of work:
 	- keep the retuning work narrow by proving only the `CM_TUNE_RESULT` accepted/apply persistence path first
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1784 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, and `Phase-6-Session-1783-Handoff.md`, then re-inspected Java `ItemActionService.identifyItem`, Java `ItemActionService.applyTuneResult`, Java `TuningAction.act`, Java `PlayerLeaveWorldService.leaveWorld`, Java `PlayerService.storePlayer`, Java `Player.getDirtyItemsToUpdate`, Java `InventoryDAO.store(Player)`, and Java `InventoryDAO.UPDATE_QUERY`, along with the current C# `PlayerEnterWorldService.LeaveWorldAsync`, `MySqlPlayerEnterWorldRepository.SavePlayerLogoutAsync`, `InventoryItem`, and the existing repository DB integration harness.
+- Confirmed the next smallest honest persistence unit was not immediate retuning writes, but the Java logout save boundary that flushes dirty inventory rows after identify/reidentify runtime mutation. The Java-backed behavior in scope was:
+	- `PlayerLeaveWorldService.leaveWorld` calling `PlayerService.storePlayer`
+	- `PlayerService.storePlayer` calling `InventoryDAO.store(player)`
+	- `Player.getDirtyItemsToUpdate` harvesting dirty storage/equipment items
+	- `InventoryDAO.UPDATE_QUERY` writing the full inventory row, including `enchant_bonus`, `optional_socket`, `tune_count`, `rnd_bonus`, and related fields
+- Updated `MySqlPlayerEnterWorldRepository.SavePlayerLogoutAsync` to flush live item snapshots before the final player-row update:
+	- current `InventoryItems`
+	- current `WarehouseItems`
+	- current `AccountWarehouseItems`
+- Added `SaveInventoryItemFullStateAsync` as the Java-shaped full-row inventory update helper:
+	- keyed by `item_unique_id` like Java `InventoryDAO.UPDATE_QUERY`
+	- writes the full inventory row shape rather than only `tune_count`
+	- preserves owner/location moves by updating `item_owner` and `item_location` as data columns rather than query filters
+- Kept the scope intentionally narrow:
+	- no Java-style `PersistentState` / `getDirtyItemsToUpdate` model was introduced yet
+	- no `ItemStoneListDAO.save(player)` equivalent logout flush was added yet
+	- no immediate identify/reidentify persistence writes were added; the unit stays aligned to Java’s deferred save lifecycle
+- Added an opt-in repository DB integration test:
+	- `SavePlayerLogoutAsync_WritesRetuningInventoryFieldsAgainstJavaSchema_WhenEnabled`
+	- validates the logout save path for Java-schema inventory columns used by identify/reidentify (`enchant_bonus`, `optional_socket`, `tune_count`, `rnd_bonus`, `is_soul_bound`, `buff_skill`, `rnd_plume_bonus`) plus final player `exp`/`online` fields
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests"` passed with 31 tests.
+	- `dotnet test dotnetConversion\AionServer.slnx` passed cleanly with 4750 total tests (`57` commons, `29` chat, `121` login, `4543` game).
+	- The new DB integration test compiled and ran in the focused slice, but `AION_GAMESERVER_DB_INTEGRATION` was not enabled in this environment, so the MySQL-backed branch returned early and did not produce runtime DB parity evidence in this session.
+
+#### Migration Parity Table - Session 1784
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerLeaveWorldService.leaveWorld` + `com.aionemu.gameserver.services.player.PlayerService.storePlayer` inventory-save boundary | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.SavePlayerLogoutAsync` | Logout Persistence Boundary | Partial | Regression Tested | Partial Parity | Java source reviewed; C# logout now flushes the current cube/warehouse/account-warehouse item snapshots before writing final player offline state, covering the live identify/reidentify item fields. Java-style dirty-item harvesting is still absent, and the new DB integration proof path was not executed in this session because `AION_GAMESERVER_DB_INTEGRATION` was unset. |
+| `com.aionemu.gameserver.dao.InventoryDAO.UPDATE_QUERY` | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.SaveInventoryItemFullStateAsync` | Repository Helper | Complete | Regression Tested | Partial Parity | Java source reviewed; C# now mirrors the full-row update column set and matches Java’s `WHERE item_unique_id = ?` key shape. Current evidence is static review plus surrounding regression coverage; the opt-in DB integration test that would exercise the helper transitively did not hit MySQL here. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getDirtyItemsToUpdate` | no direct C# equivalent; current snapshot flush in `SavePlayerLogoutAsync` | Dirty-State Harvest | Partial | No Tests | Partial Parity | C# still lacks Java `PersistentState` tracking on `InventoryItem`/storage and therefore flushes current snapshots instead of Java-filtered dirty rows. This is behaviorally aligned for the live retuning/logout slice but not yet a source-shaped port of the full dirty-state lifecycle. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SavePlayerLogoutAsync_WritesRetuningInventoryFieldsAgainstJavaSchema_WhenEnabled` | Integration Added | Java `PlayerLeaveWorldService.leaveWorld` + `PlayerService.storePlayer` + `InventoryDAO.UPDATE_QUERY` | Logout persistence writes the identify/reidentify inventory columns through the Java schema path. | Opt-in DB integration coverage added at the repository boundary. | `AION_GAMESERVER_DB_INTEGRATION` was not enabled in this session, so the MySQL-backed assertions were not exercised here. |
+
+Remaining risks:
+- C# still does not model Java `PersistentState` / `getDirtyItemsToUpdate`, so logout currently flushes whole snapshots rather than source-shaped dirty rows.
+- The logout save path still lacks a Java-equivalent `ItemStoneListDAO.save(player)` boundary for stone-changing runtime mutations.
+- The new repository integration test provides a stronger proof path, but it was not executed against MySQL in this session because the opt-in DB flag was unset.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: 1 logout persistence update path, 1 full-row inventory helper, and 1 opt-in DB integration test.
+- Total artifacts with verified parity: 0 grouped rows in this unit.
+- Total artifacts needing verification: 3 grouped rows.
+- Total blocked artifacts: Java-style inventory dirty-state tracking/filtering and fuller logout/periodic inventory persistence proof for stone-bearing items.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the main logout persistence gap for live identify/reidentify fields without overstating the still-unverified dirty-state lifecycle.
+
+Next recommended unit of work:
+- Next sequential task: inspect and port the narrow Java dirty-item harvest / periodic inventory save lifecycle around `Player.getDirtyItemsToUpdate`, `InventoryDAO.store(player)`, and any adjacent periodic-save entry point, keeping the scope limited to modeled player storages.
+- Safe alternative candidates for the next session:
+	- execute the new opt-in MySQL logout persistence test path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
