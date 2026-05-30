@@ -78494,3 +78494,62 @@ Next recommended unit of work:
 	- add packet classes plus connection dispatch only for the `CM_TUNE` identify/audit/no-scroll branches before attempting full retuning execution
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1781 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1780-Completion.md`, and `Phase-6-Session-1780-Handoff.md`, then re-inspected Java `AionClientPacketFactory`, `CM_TUNE`, `CM_TUNE_RESULT`, and the current C# client-packet / packet-factory / packet-test patterns.
+- Confirmed the next smallest safe unit was the packet-model and opcode-registration slice only, not live `GameServerConnection` dispatch. The deterministic Java behavior in scope was:
+	- opcode `235` registration for `CM_TUNE`
+	- opcode `238` registration for `CM_TUNE_RESULT`
+	- `CM_TUNE.readImpl` reading `itemObjectId` then `tuningScrollObjectId`
+	- `CM_TUNE_RESULT.readImpl` reading `itemObjectId` then `hasAccepted = readC() == 1`
+- Added `CmTune` as the Java-shaped client packet model for opcode `235`.
+- Added `CmTuneResult` as the Java-shaped client packet model for opcode `238`.
+- Registered both packets in `GameClientPacketFactory` as `InGame` only, matching Java `State.IN_GAME`.
+- Added focused packet parsing tests:
+	- `CmTuneTests`
+	- `CmTuneResultTests`
+- Kept the unit intentionally narrow:
+	- no `GameServerConnection` dispatch branch was added yet
+	- no live planner invocation was added yet
+	- no scheduler, observer, inventory, or packet-send runtime behavior was claimed yet
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmTuneTests|FullyQualifiedName~CmTuneResultTests"` passed with 6 tests.
+	- `dotnet test dotnetConversion\AionServer.slnx` passed cleanly with 4742 total tests (`57` commons, `29` chat, `121` login, `4535` game).
+
+#### Migration Parity Table - Session 1781
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `235` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `235` -> `CmTune` | Client Packet Registration | Complete | Unit Tested | Verified Parity | Java source reviewed; C# now registers opcode `235` as `InGame` only and packet tests verify the state gate. No live dispatch branch is claimed yet. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `238` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `238` -> `CmTuneResult` | Client Packet Registration | Complete | Unit Tested | Verified Parity | Java source reviewed; C# now registers opcode `238` as `InGame` only and packet tests verify the state gate. No live dispatch branch is claimed yet. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TUNE.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmTune` | Client Packet | Complete | Unit Tested | Verified Parity | Java source reviewed; C# reads `itemObjectId` then `tuningScrollObjectId` in the same order. Runtime `runImpl` behavior is still outside this unit. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TUNE_RESULT.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmTuneResult` | Client Packet | Complete | Unit Tested | Verified Parity | Java source reviewed; C# reads `itemObjectId` and interprets acceptance as `readC() == 1`, so non-`1` bytes remain false like Java. Runtime `runImpl` behavior is still outside this unit. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `TryCreatePacket_RegistersJavaIdentifyItemOpcodeAsInGameOnly` | Unit Added | Java `AionClientPacketFactory` | Opcode `235` creates `CmTune` only in `InGame`. | Source-derived packet-factory regression. | No live dispatch. |
+| `ReadFrom_ReadsTargetItemAndTuningScrollObjectIdsLikeJava` | Unit Added | Java `CM_TUNE.readImpl` | `CmTune` reads both object ids in Java order. | Source-derived read-shape regression. | No `runImpl` behavior. |
+| `TryCreatePacket_RegistersJavaAnswerReidentifyOpcodeAsInGameOnly` | Unit Added | Java `AionClientPacketFactory` | Opcode `238` creates `CmTuneResult` only in `InGame`. | Source-derived packet-factory regression. | No live dispatch. |
+| `ReadFrom_ReadsItemObjectIdAndAcceptFlagLikeJava` | Unit Added | Java `CM_TUNE_RESULT.readImpl` | `CmTuneResult` reads the item object id and treats only byte `1` as accepted. | Source-derived read-shape regression. | No `runImpl` behavior. |
+
+Remaining risks:
+- `GameServerConnection` still does not dispatch `CmTune` or `CmTuneResult`, so runtime planner invocation is not live yet.
+- The retuning flow still lacks live identify/tuning scheduler and observer integration.
+- This unit proves packet registration and parsing only; it should not be interpreted as completed `CM_TUNE` / `CM_TUNE_RESULT` runtime parity.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 2 client packet classes, 2 opcode registrations, and 4 focused packet tests.
+- Total artifacts with verified parity: 4 grouped rows.
+- Total artifacts needing verification: 0 within this narrow packet-registration slice, but broader runtime retuning work remains incomplete.
+- Total blocked artifacts: live `GameServerConnection` retuning dispatch and live scheduler/observer runtime integration.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the packet-registration/read-shape gap for retuning without overstating the still-missing live dispatch boundary.
+
+Next recommended unit of work:
+- Next sequential task: port the narrow `GameServerConnection` dispatch slice for `CmTune` so the existing Java-shaped planner chain can drive the identify/audit/no-scroll/guard/runtime-intent branches live without yet claiming full scheduler completion.
+- Safe alternative candidates for the next session:
+	- keep the live slice even smaller by dispatching only the `CM_TUNE` identify/audit/no-scroll branches first
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
