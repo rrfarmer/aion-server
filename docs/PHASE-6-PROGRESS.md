@@ -78280,3 +78280,83 @@ Next recommended unit of work:
 	- Java `ItemActionService.identifyItem` non-live delayed execution boundary
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1778 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1777-Completion.md`, and `Phase-6-Session-1777-Handoff.md`, then re-inspected Java `CM_TUNE_RESULT`, `ItemActionService.applyTuneResult`, the current C# `PendingTuneResult` / `SmTuneResult` / retuning planners, and the available inventory-update packet surface.
+- Confirmed the next smallest safe unit was the adjacent non-live preview-application boundary, not live packet registration or connection wiring. The main deterministic gaps were:
+	- accept vs cancel branch ordering in Java `CM_TUNE_RESULT.runImpl`
+	- the attribute-only cancel override branch
+	- the audit-only `applyTuneResult` missing-preview branch
+	- the item mutation shape applied by Java `ItemActionService.applyTuneResult`
+	- the two missing reidentify-apply system-message factories
+	- the always-send `SM_INVENTORY_UPDATE_ITEM` tail after any non-null target-item branch
+- Added `TuneResultApplicationPlanService` to model the deterministic Java `ItemActionService.applyTuneResult` mutation boundary:
+	- missing pending preview -> audit only, no mutation, no persistence intent
+	- present pending preview -> apply optional sockets, enchant bonus, and stat-bonus id to the item snapshot, then mark item/inventory persistence intents
+- Added `CmTuneResultPlanService` to model Java `CM_TUNE_RESULT.runImpl` in source order:
+	- missing target item -> silent return
+	- accepted preview -> call application planner, send `STR_MSG_ITEM_REIDENTIFY_APPLY_YES`, send `SM_INVENTORY_UPDATE_ITEM`
+	- attribute-only cancel attempt -> audit, force application, send `STR_MSG_ITEM_REIDENTIFY_APPLY_YES`, send `SM_INVENTORY_UPDATE_ITEM`
+	- normal cancel -> clear preview conceptually, send `STR_MSG_ITEM_REIDENTIFY_APPLY_NO`, send `SM_INVENTORY_UPDATE_ITEM`
+	- accepted preview with missing pending result -> preserve Java behavior by still sending `APPLY_YES` and `SM_INVENTORY_UPDATE_ITEM` after the inner audit-only apply call returns
+- Added the missing retuning message factories:
+	- `STR_MSG_ITEM_REIDENTIFY_APPLY_YES`
+	- `STR_MSG_ITEM_REIDENTIFY_APPLY_NO`
+- Kept the unit intentionally non-live:
+	- no `CM_TUNE_RESULT` packet registration was added yet
+	- no `GameServerConnection` dispatch wiring was added yet
+	- no live persistence or item-owned pending-preview state was added
+	- no attempt was made to over-model Java `item.setPendingTuneResult(null)` beyond the planner branch semantics, because C# still carries pending preview state as an explicit planner input rather than a live item field
+- Added focused tests:
+	- `TuneResultApplicationPlanServiceTests` for the audit-only missing-preview branch and the applied-mutation branch
+	- `CmTuneResultPlanServiceTests` for missing target, accepted apply, accepted-without-preview audit, attribute-only cancel override, and normal cancel
+- Extended `GamePacketTests` with the two reidentify-apply system-message regressions (`1401910`, `1401911`).
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~TuneResultApplicationPlanServiceTests|FullyQualifiedName~CmTuneResultPlanServiceTests|FullyQualifiedName~GamePacketTests"` passed with 247 tests.
+	- `dotnet test dotnetConversion\AionServer.slnx` first reported two failing inventory-expansion tests in the existing flake zone:
+		- `ProcessPacketAsync_CompositeStonesWritesCleanupSealFlagsForRemainingConsumedInputs`
+		- `HandleUseItemAsync_ExpExtractMergesRestrictedRewardWithCleanupSealFlag`
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~ProcessPacketAsync_CompositeStonesWritesCleanupSealFlagsForRemainingConsumedInputs|FullyQualifiedName~HandleUseItemAsync_ExpExtractMergesRestrictedRewardWithCleanupSealFlag"` then passed with 2 tests.
+	- `dotnet test dotnetConversion\AionServer.slnx` passed cleanly on rerun with 4733 tests total (`57` commons, `29` chat, `121` login, `4526` game). The transient was documented rather than hidden.
+
+#### Migration Parity Table - Session 1778
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemActionService.applyTuneResult` | `Aion.GameServer.Services.TuneResultApplicationPlanService` | Service Boundary / Application Planner | Partial | Unit Tested | Partial Parity | C# now models the deterministic audit-only missing-preview branch and the preview-application mutation branch, but it still carries pending preview state as an explicit planner input instead of a live item field. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TUNE_RESULT.runImpl` | `Aion.GameServer.Services.CmTuneResultPlanService` | Runtime Decision Planner | Partial | Unit Tested | Partial Parity | C# now models accept/cancel ordering, the attribute-only cancel override, the accepted-without-preview audit case, and the unconditional inventory-update tail for non-null target items. No live packet registration or connection wiring is claimed yet. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ITEM_REIDENTIFY_APPLY_YES` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ItemReidentifyApplyYes` | System Message Factory | Complete | Regression Tested | Verified Parity | Java source reviewed; tests cover message id `1401910` and the single-string payload shape. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ITEM_REIDENTIFY_APPLY_NO` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ItemReidentifyApplyNo` | System Message Factory | Complete | Regression Tested | Verified Parity | Java source reviewed; tests cover message id `1401911` and the zero-parameter payload shape. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_AuditsWhenPendingTuneResultIsMissing` | Unit Added | Java `ItemActionService.applyTuneResult` | Missing preview state audits and returns without mutating the item snapshot. | Source-derived branch regression. | No live audit sink or pending-state field. |
+| `CreatePlan_AppliesPendingTuneResultToInventoryItem` | Unit Added | Java `ItemActionService.applyTuneResult` | Applying a preview updates optional sockets, enchant bonus, and stat bonus id, then records persistence intent. | Source-derived mutation regression. | No live item-owned pending-state clear. |
+| `CreatePlan_AcceptedBranchAuditsMissingPendingButStillSendsApplyYesAndInventoryUpdate` | Unit Added | Java `CM_TUNE_RESULT.runImpl` + `ItemActionService.applyTuneResult` | Accepted preview without pending state still emits `APPLY_YES` and `SM_INVENTORY_UPDATE_ITEM` after the inner audit-only apply call. | Source-derived branch-order regression. | No live packet dispatch. |
+| `CreatePlan_AcceptedBranchAppliesPendingTuneResultAndBuildsInventoryUpdate` | Unit Added | Java `CM_TUNE_RESULT.runImpl` | Accepted preview applies the result and prepares the expected message/update intents. | Source-derived planner regression. | No live persistence or connection wiring. |
+| `CreatePlan_AttributeOnlyCancelForcesApplyAndAudits` | Unit Added | Java `CM_TUNE_RESULT.runImpl` | Attribute-only preview cancel attempts are audited and forced through the apply-yes branch. | Source-derived branch-order regression. | No live audit sink. |
+| `CreatePlan_CancelBranchClearsPreviewAndSendsApplyNo` | Unit Added | Java `CM_TUNE_RESULT.runImpl` | Normal cancel emits the Java apply-no message and still sends the inventory update. | Source-derived branch regression. | Pending-preview clear is conceptual only in planner form. |
+| `GamePacketTests` updated retuning message assertions | Regression Updated | Java `SM_SYSTEM_MESSAGE` factories | The two reidentify-apply message factories serialize the expected ids and parameter counts. | Source-derived packet regression. | No encrypted runtime frame capture. |
+
+Remaining risks:
+- `CM_TUNE_RESULT` is still not wired into `GameClientPacketFactory` or `GameServerConnection`, so the new planner should be treated as a runtime-adjacent boundary rather than completed live packet parity.
+- C# still has no live item-owned pending-preview state equivalent to Java `Item.pendingTuneResult`; this unit uses explicit planner inputs instead of pretending that state already exists.
+- Java `item.setPendingTuneResult(null)` is only represented conceptually through branch outcomes in this unit because there is no live pending-preview field to clear yet.
+- The first full-suite run again surfaced transient unrelated inventory-expansion failures in the same broad flake zone; the isolated rerun and the second full-suite rerun passed, so this unit is documented as validated with a transient test-signal caveat rather than as a perfect single-pass run.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 2 planner services, 2 status/record surfaces, 2 system-message factories, and 7 focused regression additions/updates.
+- Total artifacts with verified parity: 2 grouped rows.
+- Total artifacts needing verification: 2 grouped rows (`applyTuneResult` planner boundary and the overall `CM_TUNE_RESULT` planner boundary remain Partial Parity until live state/wiring exists).
+- Total blocked artifacts: live `CM_TUNE` / `CM_TUNE_RESULT` packet registration and connection wiring, the identify-item runtime branch, and live pending-preview state ownership.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the deterministic preview-application half of the retuning planner chain without overstating the remaining live wiring backlog.
+
+Next recommended unit of work:
+- Next sequential task: port the adjacent non-live Java `ItemActionService.identifyItem` delayed execution boundary so the remaining retuning planner chain covers both Java entry branches before any live packet wiring is attempted.
+- Safe alternative candidates for the next session:
+	- wire `CM_TUNE` / `CM_TUNE_RESULT` packet registration and connection dispatch only if a small exclusive runtime slice can be held safely
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
