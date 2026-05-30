@@ -78207,3 +78207,76 @@ Next recommended unit of work:
 	- Java `CM_TUNE_RESULT` / `ItemActionService.applyTuneResult` non-live application boundary
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1777 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1776-Completion.md`, and `Phase-6-Session-1776-Handoff.md`, then re-inspected Java `CM_TUNE.runImpl`, the current C# connection/item-use runtime surface, and the newly loaded retuning template metadata.
+- Confirmed the next safe unit was still the narrow `CM_TUNE` runtime decision boundary, but not the full live handler wiring. The persistence, scheduler, and observer gaps were still large enough that this unit stayed planner-only on purpose.
+- Added `CmTuneRuntimePlanService` to model Java `CM_TUNE.runImpl` branch selection in source order:
+	- target item lookup null branch
+	- unidentified target -> `ItemActionService.identifyItem(...)`
+	- identified target without scroll -> audit log branch
+	- tuning-scroll lookup null branch
+	- tuning-scroll without `TuningAction` metadata branch
+	- resolved retuning action -> `canAct(...)` guard delegation
+	- resolved retuning action -> `act(...)` handoff intent
+- Added `CmTuneResolvedTuningAction` so the planner can carry the resolved scroll item, scroll template, target item, target template, mapped target type, `shouldNotReduceTuneCount`, and the guard plan into the next runtime-facing unit without claiming that the live connection path is already ported.
+- Kept the new planner deliberately conservative:
+	- no C# packet opcode registration was added yet
+	- no `GameServerConnection` runtime wiring was added yet
+	- no scheduler, observer, cooldown, inventory mutation, or persistence side effects were claimed
+	- no synthetic parity claim was made for live `CM_TUNE` behavior beyond branch selection and guard handoff
+- Added focused `CmTuneRuntimePlanServiceTests` covering:
+	- target-item lookup miss
+	- unidentified target preferring the Java identify branch before scroll handling
+	- already identified target without a scroll producing the Java audit branch
+	- tuning-scroll lookup miss
+	- tuning-scroll without retuning metadata
+	- guard-blocked resolution using the existing guard planner
+	- successful execution handoff with loaded `target` / `no_reduce` metadata
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmTuneRuntimePlanServiceTests|FullyQualifiedName~TuningActionGuardPlanServiceTests|FullyQualifiedName~TuningActionExecutionPlanServiceTests"` passed with 20 tests.
+	- `dotnet test dotnetConversion\AionServer.slnx` first reported one failing inventory-expansion test (`ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate`).
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate"` then passed with 1 test.
+	- `dotnet test dotnetConversion\AionServer.slnx` passed cleanly on rerun with 4726 tests total (`57` commons, `29` chat, `121` login, `4519` game). The transient was documented rather than hidden.
+
+#### Migration Parity Table - Session 1777
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TUNE.runImpl` branch ordering | `Aion.GameServer.Services.CmTuneRuntimePlanService` | Runtime Decision Planner | Partial | Unit Tested | Partial Parity | C# now mirrors the Java branch order and silent/audit branches as a planner only. No live packet registration or connection dispatch is claimed yet. |
+| Java `CM_TUNE` identified-target audit branch | `CmTuneRuntimePlanStatus.AuditAlreadyIdentifiedWithoutScroll` + `AuditMessage` | Audit / No-Op Runtime Boundary | Complete | Unit Tested | Verified Parity | The Java audit string is preserved exactly in the planner result. No live audit sink wiring exists yet. |
+| Java `CM_TUNE` handoff from scroll metadata into `TuningAction.canAct(...)` | `CmTuneResolvedTuningAction` + `TuningActionGuardPlanService` delegation | Runtime Input Bridge | Complete | Unit Tested | Verified Parity | The planner consumes loaded retuning metadata and passes the mapped target type / `no_reduce` values into the existing guard planner in Java order. |
+| Java `CM_TUNE` handoff from successful `canAct(...)` into `TuningAction.act(...)` | `CmTuneRuntimePlanStatus.ExecuteTuning` + resolved action payload | Runtime Intent Boundary | Partial | Unit Tested | Partial Parity | The planner now exposes the source-shaped execution intent, but no live `GameServerConnection` / scheduler / packet dispatch wiring is attached yet. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreatePlan_ReturnsNoTargetWhenLookupMisses` | Unit Added | Java `CM_TUNE.runImpl` | Missing target item returns immediately before any identify or scroll logic. | Source-derived branch-order regression. | No live object lookup. |
+| `CreatePlan_PrefersIdentifyBranchBeforeScrollHandling` | Unit Added | Java `CM_TUNE.runImpl` | Unidentified targets take the identify branch even if a scroll object id is present. | Source-derived branch-order regression. | No live identify scheduler/persistence. |
+| `CreatePlan_AuditsIdentifiedTargetWithoutScroll` | Unit Added | Java `CM_TUNE.runImpl` | Already identified targets with scroll id `0` produce the Java audit branch. | Source-derived audit-branch regression. | No live audit sink wiring. |
+| `CreatePlan_ReturnsMissingScrollWhenObjectLookupFails` | Unit Added | Java `CM_TUNE.runImpl` | Missing tuning scroll returns silently. | Source-derived silent-branch regression. | No live inventory lookup. |
+| `CreatePlan_ReturnsMissingActionWhenScrollTemplateHasNoTuningMetadata` | Unit Added | Java `CM_TUNE.runImpl` + `ItemActions.getTuningAction()` | Scrolls without retuning metadata stop before guard execution. | Source-derived metadata-lookup regression. | No live item-action binding. |
+| `CreatePlan_UsesGuardPlanWhenResolvedActionCannotAct` | Unit Added | Java `CM_TUNE.runImpl` + `TuningAction.canAct` | Guard failures are delegated into the existing retuning guard planner. | Source-derived guard-handoff regression. | No live packet send. |
+| `CreatePlan_ResolvesExecutableActionWithLoadedMetadata` | Unit Added | Java `CM_TUNE.runImpl` + `TuningAction` metadata | Successful plans carry the resolved scroll/target/templates plus target type and `no_reduce`. | Source-derived runtime-intent regression. | No live `action.act(...)` wiring. |
+
+Remaining risks:
+- `CM_TUNE` is still not wired into `GameClientPacketFactory` or `GameServerConnection`, so the new planner should be treated as a runtime-adjacent boundary rather than completed live packet parity.
+- The Java identify branch still lacks the corresponding C# `ItemActionService.identifyItem` live execution path.
+- The successful execution handoff now has resolved metadata, but it still stops before scheduler, observer, cooldown, inventory, persistence, and packet-send integration.
+- The first full-suite run again surfaced the same transient inventory-expansion failure in `ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate`; the isolated rerun and second full-suite rerun passed, so this unit is documented as validated with a transient test-signal caveat rather than as a perfect single-pass run.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 runtime planner service, 1 resolved-action DTO, 1 status surface, and 7 focused unit tests.
+- Total artifacts with verified parity: 2 grouped rows.
+- Total artifacts needing verification: 2 grouped rows (`CM_TUNE.runImpl` overall planner surface and the `act(...)` execution-intent boundary remain Partial Parity until live wiring exists).
+- Total blocked artifacts: live `CM_TUNE` packet registration/dispatch, the identify-item runtime branch, and the remaining `CM_TUNE_RESULT` / tune-apply runtime work.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the deterministic runtime branch-selection gap for `CM_TUNE` without overstating the remaining live wiring backlog.
+
+Next recommended unit of work:
+- Next sequential task: port the adjacent non-live `CM_TUNE_RESULT` / `ItemActionService.applyTuneResult` application boundary so the current retuning planner chain can cover the full Java preview-accept / preview-cancel decision before any live packet wiring is attempted.
+- Safe alternative candidates for the next session:
+	- Java `ItemActionService.identifyItem` non-live delayed execution boundary
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
