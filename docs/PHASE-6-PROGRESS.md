@@ -78066,3 +78066,84 @@ Next recommended unit of work:
 	- Java `CraftService.finishCrafting` product selection (`critCount > 0 ? getComboProduct(critCount) : getProductId()`) as a small pure planner slice adjacent to the already ported crafting XP formula.
 	- Java `DropRegistrationService.calculateBoostDropRate` as a pure drop-boost formula slice with repose/salvation/palace bonuses.
 	- Java `PlayerReviveService.rebirthRevive` as a conservative non-live revive planner if the needed revive/effect snapshots are already present.
+
+### Session 1775 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, and `Phase-6-Session-1774-Handoff.md`, then re-inspected Java `TuningAction.act`, `SM_ITEM_USAGE_ANIMATION`, `SM_TUNE_RESULT`, and `PendingTuneResult` against the current C# tree.
+- Confirmed the next safe adjacent slice was still non-live Java `TuningAction.act`, with the main deterministic gaps being:
+	- item-use animation start/abort/complete packet composition
+	- cancel/success retuning system messages
+	- pending tune-result preview state
+	- `SM_TUNE_RESULT` payload composition
+	- the silent scroll-consumption failure branch after the completion animation
+- Added `PendingTuneResult` to the C# model surface to mirror the Java preview container.
+- Added `SmTuneResult` with Java packet opcode `288` and Java-shaped payload ordering:
+	- target item object id
+	- tuning scroll item id
+	- pending stat bonus id
+	- `EnchantInfoBlobEntry.writeInfo(...)`-equivalent payload with overridden optional-socket and enchant-bonus preview values
+	- the two attribute-only flags (`showManastoneSlots` / `tuneCancelPossible`) inverted exactly like Java
+- Extended `SmInventoryInfo.WriteEnchantInfo(...)` with an override-based internal overload so `SmTuneResult` can reuse the existing item-info encoding path while preserving Java preview semantics.
+- Added the missing retuning message factories:
+	- `STR_MSG_ITEM_REIDENTIFY_CANCELED`
+	- `STR_MSG_ITEM_REIDENTIFY_SUCCEED`
+- Added the non-live `TuningActionExecutionPlanService` to model the deterministic `act(...)` boundary in three source-shaped pieces:
+	- start animation plan (`5000`, end `12`)
+	- abort plan (`TaskId.ITEM_USE` cancel intent, cooldown removal intent, cancel system message, abort animation end `14`, observer-removal intent)
+	- completion plan (observer removal, completion animation end `13`, scroll-consumption attempt, silent failure branch, attribute-only preview reuse branch, normal tune-count increment branch, pending preview result, `SM_TUNE_RESULT`, and success message)
+- Kept the new planner conservative by requiring the preview roll ceilings (`maxOptionalSockets`, `maxEnchantBonus`) as explicit inputs instead of claiming unavailable live template fields already exist on `ItemTemplateSummary`.
+- Added focused `TuningActionExecutionPlanServiceTests` covering:
+	- Java start animation delay
+	- Java abort branch message/task/cooldown intent
+	- silent scroll-consumption failure after the completion animation
+	- attribute-only preview behavior
+	- normal tune-count increment + persistence intent behavior
+- Extended `GamePacketTests` with a `SmTuneResult` regression that verifies the Java header fields, the overridden preview optional-socket/enchant-bonus bytes, and the two attribute-only flags.
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~TuningActionExecutionPlanServiceTests|FullyQualifiedName~GamePacketTests"` passed with 245 tests.
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~ProcessPacketAsync_CompositeStonesWritesCleanupSealFlagsForRemainingConsumedInputs"` passed with 1 test after a transient full-suite failure surfaced that specific case.
+	- `dotnet test dotnetConversion\AionServer.slnx` first reported one failing inventory-expansion test (`ProcessPacketAsync_CompositeStonesWritesCleanupSealFlagsForRemainingConsumedInputs`) and then passed cleanly on full rerun with 4719 tests total (`57` commons, `29` chat, `121` login, `4512` game). The transient was documented rather than ignored.
+
+#### Migration Parity Table - Session 1775
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.TuningAction.act` | `Aion.GameServer.Services.TuningActionExecutionPlanService` | Service Boundary / Execution Planner | Partial | Unit Tested | Partial Parity | C# now models the deterministic non-live start, abort, and completion branches of Java `act(...)`, including the silent scroll-consumption failure after the completion animation. No live scheduler, observer wiring, inventory mutation, or packet dispatch loop is claimed. |
+| `com.aionemu.gameserver.model.items.PendingTuneResult` | `Aion.GameServer.Model.Items.PendingTuneResult` | Model Record | Complete | Indirectly Tested | Verified Parity | Java source reviewed; the C# record mirrors the four Java fields used by `SM_TUNE_RESULT` and the planner. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_TUNE_RESULT` | `Aion.GameServer.Network.Aion.ServerPackets.SmTuneResult` | Server Packet | Complete | Regression Tested | Verified Parity | Java source reviewed; tests cover opcode, leading fields, preview override bytes, and attribute-only tail flags. No encrypted runtime frame capture was produced. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ITEM_REIDENTIFY_CANCELED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ItemReidentifyCanceled` | System Message Factory | Complete | Unit Tested via planner | Partial Parity | Java source reviewed; the planner asserts the message id `1401638`, but no standalone packet regression or runtime capture was added in this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_ITEM_REIDENTIFY_SUCCEED` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ItemReidentifySucceed` | System Message Factory | Complete | Unit Tested via planner | Partial Parity | Java source reviewed; the planner asserts the message id `1401639`, but no standalone packet regression or runtime capture was added in this unit. |
+| `com.aionemu.gameserver.network.aion.iteminfo.EnchantInfoBlobEntry.writeInfo(...)` preview override path | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryInfo.WriteEnchantInfo(...)` override overload | Packet Helper | Partial | Regression Tested through `SmTuneResult` | Partial Parity | The helper now supports preview-only optional-socket/enchant-bonus overrides needed by `SM_TUNE_RESULT`. The broader helper remains shared with other packet paths and was only verified through the new retuning regression plus the passing full-suite rerun. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateStartPlan_UsesJavaStartAnimationAndDelay` | Unit Added | Java `TuningAction.act` | The retuning start broadcast uses `5000` ms with end state `12`. | Source-derived packet-composition regression. | No live broadcast dispatch. |
+| `CreateAbortPlan_UsesJavaCancellationMessageAndAbortAnimation` | Unit Added | Java `TuningAction.act.abort()` | Abort records `ITEM_USE` cancel intent, cooldown removal intent, cancel message id `1401638`, and end state `14`. | Source-derived abort-branch regression. | No live observer removal or controller task cancellation. |
+| `CreateCompletionPlan_ScrollConsumptionFailureStopsAfterCompletionAnimation` | Unit Added | Java `TuningAction.act` completion branch | The completion animation is still emitted before the silent `decreaseByObjectId(...)` early return. | Source-derived branch-order regression. | No live inventory decrease call. |
+| `CreateCompletionPlan_AttributeOnlyReusesTuneStateAndSetsJavaFlags` | Unit Added | Java `TuningAction.act` + `PendingTuneResult` + `SM_TUNE_RESULT` | Attribute-only retuning reuses sockets/enchant bonus, keeps tune count unchanged, and emits the success message id `1401639`. | Source-derived preview-state regression. | No runtime packet send verification. |
+| `CreateCompletionPlan_NormalTuneIncrementsCountAndMarksInventoryUpdateRequired` | Unit Added | Java `TuningAction.act` | Normal retuning increments tune count, marks the Java `UPDATE_REQUIRED` persistence intent, and creates preview output. | Source-derived mutation-intent regression. | No live persistence DAO/store call. |
+| `GamePacketTests` updated `SmItemUsageAnimation_SerializesAllConstructors` block with `SmTuneResult` assertions | Regression Updated | Java `SM_TUNE_RESULT.writeImpl` | Packet payload keeps the Java header fields, preview override bytes, and attribute-only tail flags. | Source-derived packet regression. | No encrypted frame/runtime capture. |
+
+Remaining risks:
+- The new `TuningActionExecutionPlanService` is intentionally non-live. Java `ThreadPoolManager.schedule`, `ItemUseObserver.attach/remove`, controller task cancellation, cooldown mutation, and actual inventory/object mutation still require a later runtime-facing unit.
+- `ItemTemplateSummary` does not currently expose Java `optionSlotBonus` / `maxEnchantBonus` fields, so the planner requires those preview ceilings as explicit inputs instead of pretending live template parity already exists.
+- The first full-suite run exposed a transient failure in `GameServerConnectionInventoryExpansionUseItemTests.ProcessPacketAsync_CompositeStonesWritesCleanupSealFlagsForRemainingConsumedInputs`; the isolated rerun and the second full-suite rerun both passed, so the unit is documented as validated with a transient test-signal caveat rather than as a perfect single-pass run.
+- No Java runtime/encrypted frame capture was produced for the retuning start/abort/complete packet sequence.
+
+Summary metrics:
+- Total Java artifacts discovered: 6 grouped rows in this unit.
+- Total artifacts ported: 1 planner service, 3 planner records/status surfaces, 1 preview-result model, 1 new packet, 2 system-message factories, 1 packet-helper overload, and 6 focused regression updates/additions.
+- Total artifacts with verified parity: 2 grouped rows (`PendingTuneResult`, `SM_TUNE_RESULT`).
+- Total artifacts needing verification: 4 grouped rows (`TuningAction.act` planner boundary, the two message factories, and the shared enchant-info preview helper).
+- Total blocked artifacts: live scheduling/observer/cooldown/inventory mutation integration and Java runtime packet capture for the retuning flow.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the main deterministic non-live retuning preview boundary but leaves live execution and binding work for later.
+
+Next recommended unit of work:
+- Next sequential task: bridge the remaining live/runtime gap around Java `TuningAction.act`, starting with the safest adjacent boundary that can consume the new planner outputs without overstating parity:
+	- wire the retuning planner into a controlled C# action/connection surface if the runtime entry point is already partially present, or
+	- port the missing live template/input snapshot boundary that can supply `targetType`, `maxOptionalSockets`, and `maxEnchantBonus` from Java-equivalent item data.
+- Safe alternative candidates for the next session:
+	- Java `CraftService.finishCrafting` product selection (`critCount > 0 ? getComboProduct(critCount) : getProductId()`)
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- Java `PlayerReviveService.rebirthRevive`
