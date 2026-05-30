@@ -78630,3 +78630,66 @@ Next recommended unit of work:
 	- keep the retuning work narrow by wiring only `CM_TUNE_RESULT` accepted-apply before the cancel/audit branch
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1783 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1782-Completion.md`, and `Phase-6-Session-1782-Handoff.md`, then re-inspected Java `CM_TUNE_RESULT.runImpl`, Java `SM_INVENTORY_UPDATE_ITEM`, the current C# `CmTuneResultPlanService`, `TuneResultApplicationPlanService`, `CmTuneResult`, `SmInventoryUpdateItem`, and the adjacent live retuning helpers already present in `GameServerConnection`.
+- Confirmed the next smallest safe unit was the live `CmTuneResult` dispatch slice itself. The Java-backed runtime behavior now in scope was:
+	- `CM_TUNE_RESULT.runImpl` active-player inventory lookup and silent no-target return
+	- accepted apply branch, including the accepted-without-pending audit shape
+	- attribute-only cancel forced-apply audit branch
+	- normal cancel branch that clears `pendingTuneResult`
+	- unconditional `SM_INVENTORY_UPDATE_ITEM` send after each non-silent branch
+- Added live `CmTuneResult` dispatch in `GameServerConnection`:
+	- opcode `238` packets now route through `HandleTuneResultAsync`
+	- runtime lookup now feeds the existing Java-shaped `CmTuneResultPlanService`
+	- silent missing-target behavior remains silent like Java
+	- accepted-without-pending and attribute-only cancel audit strings now log through the connection logger
+	- accepted and forced-apply branches now apply the pending preview to the live item state through the existing planner chain
+	- cancel branch now clears `InventoryItem.PendingTuneResult` without mutating the previewed stat values
+	- all non-silent branches now send Java-shaped `STR_MSG_ITEM_REIDENTIFY_APPLY_YES` or `STR_MSG_ITEM_REIDENTIFY_APPLY_NO`, followed by `SM_INVENTORY_UPDATE_ITEM`
+- Added focused live dispatch coverage in `GameServerConnectionTuneTests`:
+	- accepted branch applies the preview and sends apply-yes
+	- accepted-without-pending still sends apply-yes plus inventory update like Java
+	- attribute-only cancel forces apply and sends apply-yes
+	- normal cancel clears the pending preview and sends apply-no
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionTuneTests|FullyQualifiedName~CmTuneResultPlanServiceTests|FullyQualifiedName~TuneResultApplicationPlanServiceTests|FullyQualifiedName~CmTuneResultTests"` passed with 18 tests.
+	- A first `dotnet test dotnetConversion\AionServer.slnx` attempt hit the command timeout boundary and is not counted as a completed validation run.
+	- A second `dotnet test dotnetConversion\AionServer.slnx` run then passed cleanly with 4749 total tests (`57` commons, `29` chat, `121` login, `4542` game).
+
+#### Migration Parity Table - Session 1783
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TUNE_RESULT.runImpl` runtime dispatch | `Aion.GameServer.Network.Aion.GameServerConnection.HandleTuneResultAsync` | Client Packet Runtime Dispatch | Complete | Integration Tested | Verified Parity | Java source reviewed; C# now performs live inventory lookup, preserves Java branch order, keeps the no-target return silent, logs the same audit-only branches, sends the Java-shaped apply-yes/apply-no system messages, and follows each non-silent branch with `SM_INVENTORY_UPDATE_ITEM`. |
+| `com.aionemu.gameserver.services.item.ItemActionService.applyTuneResult` live application boundary | `Aion.GameServer.Network.Aion.GameServerConnection.HandleTuneResultAsync` + `Aion.GameServer.Services.TuneResultApplicationPlanService` | Runtime Item Action Bridge | Partial | Integration Tested | Partial Parity | C# now applies or clears pending reidentify preview state live through `ProcessPacketAsync`, including the Java accepted-without-pending audit shape. Dedicated dirty-flag persistence/write proof for the now-live runtime mutation remains future work. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_INVENTORY_UPDATE_ITEM(Player, Item)` send point from `CM_TUNE_RESULT.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleTuneResultAsync` + `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryUpdateItem` | Server Packet Runtime Send | Complete | Integration Tested | Verified Parity | Java source reviewed; C# now sends an inventory update after each non-silent `CM_TUNE_RESULT` branch and preserves the default decrease-item-use update type. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ProcessPacketAsync_CmTuneResult_AcceptedBranchAppliesPendingPreviewAndSendsApplyYes` | Integration Added | Java `CM_TUNE_RESULT.runImpl` + `ItemActionService.applyTuneResult` | Accepted live dispatch applies the preview, clears pending state, sends apply-yes, and sends the inventory update. | Source-derived live dispatch regression. | No dedicated persistence write assertion. |
+| `ProcessPacketAsync_CmTuneResult_AcceptedWithoutPendingStillSendsApplyYesAndInventoryUpdate` | Integration Added | Java `CM_TUNE_RESULT.runImpl` | Accepted live dispatch preserves the Java oddity where a missing pending result still audits internally, sends apply-yes, and sends an inventory update. | Source-derived live dispatch regression. | Logger output is not asserted. |
+| `ProcessPacketAsync_CmTuneResult_AttributeOnlyCancelForcesApplyAndSendsApplyYes` | Integration Added | Java `CM_TUNE_RESULT.runImpl` | Attribute-only cancel forces live apply and sends apply-yes rather than apply-no. | Source-derived live dispatch regression. | Logger output is not asserted. |
+| `ProcessPacketAsync_CmTuneResult_CancelBranchClearsPendingPreviewAndSendsApplyNo` | Integration Added | Java `CM_TUNE_RESULT.runImpl` | Normal cancel clears `PendingTuneResult`, preserves current stats, sends apply-no, and sends the inventory update. | Source-derived live dispatch regression. | No persistence write assertion. |
+
+Remaining risks:
+- The retuning loop is now live end to end across `CM_TUNE` and `CM_TUNE_RESULT`, but this unit still does not prove the Java dirty-state / persistence lifecycle after runtime item mutation.
+- The new live handler depends on existing planner behavior for accepted-without-pending and attribute-only cancel audit branches; if those planners change, the packet-path tests should remain the guardrail.
+- The first full-suite attempt timed out at the command boundary, so this unit relies on the second completed run for all-suite evidence.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: 1 live `CmTuneResult` dispatch path, 1 runtime helper method, and 4 focused live integration tests.
+- Total artifacts with verified parity: 2 grouped rows.
+- Total artifacts needing verification: 1 grouped row.
+- Total blocked artifacts: dedicated dirty-state / persistence proof for the now-live retuning apply/cancel runtime mutations.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the live retuning accept/cancel packet-dispatch loop without overstating the still-unverified persistence lifecycle.
+
+Next recommended unit of work:
+- Next sequential task: port or prove the narrow dirty-state/persistence boundary for the now-live retuning item mutations, starting with the Java-equivalent save lifecycle after `applyTuneResult` and identify/reidentify runtime updates.
+- Safe alternative candidates for the next session:
+	- keep the retuning work narrow by proving only the `CM_TUNE_RESULT` accepted/apply persistence path first
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
