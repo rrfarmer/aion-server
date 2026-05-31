@@ -79586,3 +79586,63 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `DropRegistrationService.calculateBoostDropRate`
 	- return to the deferred `TemperingEffect.apply/endEffect` ownership surface only if a narrower deterministic slice becomes obvious
+
+### Session 1798 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1797-Completion.md`, and `Phase-6-Session-1797-Handoff.md`, then re-inspected Java `CraftingTask`, `AbstractCraftTask`, `SM_CRAFT_UPDATE`, `SM_CRAFT_ANIMATION`, and the current C# `CraftService`, packet surfaces, and craft-related tests.
+- Confirmed the next smallest honest crafting slice was still below live scheduler/runtime wiring: the C# port was missing both craft runtime server packets and any source-shaped representation of Java `CraftingTask` packet ordering.
+- Added the missing craft runtime packet surface:
+	- `SmCraftAnimation` now mirrors Java `SM_CRAFT_ANIMATION` with opcode `180` and payload order `playerObjId`, `targetObjectId`, `skillId`, `action`
+	- `SmCraftUpdate` now mirrors Java `SM_CRAFT_UPDATE` with opcode `181`, action-specific message ids, localized item-name payload rules, and the Java morph delay override forcing `1000ms` for skill `40009`
+- Added a non-live `CraftingTaskPacketPlanService` to preserve the Java packet sequence boundary without widening into scheduler work:
+	- start plan emits Java `SM_CRAFT_UPDATE(action=0 or 3)` then `SM_CRAFT_UPDATE(action=1)` to self, followed by broadcast `SM_CRAFT_ANIMATION(action=0)` then `action=1`
+	- progress-update plan emits the Java `craftType.getProgressId()` packet with supplied success/failure values, execution speed, and show-bar delay
+	- abort plan emits Java `SM_CRAFT_UPDATE(action=4)` plus broadcast `SM_CRAFT_ANIMATION(skill=0, action=2)`
+	- failure-finish plan emits Java `SM_CRAFT_UPDATE(action=6)` plus broadcast `SM_CRAFT_ANIMATION(skill=0, action=3)`
+	- non-crit success-finish plan emits Java `SM_CRAFT_UPDATE(action=5)` plus broadcast `SM_CRAFT_ANIMATION(skill=0, action=2)`
+- Added focused parity evidence:
+	- `CraftingTaskPacketPlanServiceTests` prove start ordering, combo restart action `3`, progress action/timing forwarding, and abort/failure/success finish packet branches
+	- `GamePacketTests` prove the new packet payload shapes directly, including Java action/message branches and the morph delay override
+- Kept scope intentionally narrow:
+	- no live `CM_CRAFT` / `CraftingTask` scheduler or callback wiring
+	- no craft XP, player XP, recipe deletion, cooldown persistence, or craft logging
+	- no claim that packet existence alone proves live crafting parity
+
+#### Migration Parity Table - Session 1798
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CRAFT_ANIMATION` | `Aion.GameServer.Network.Aion.ServerPackets.SmCraftAnimation` | Packet / Serialization | Complete | Regression Tested | Verified Parity | Java source reviewed; opcode `180` and payload field order are represented directly and regression-tested through direct packet serialization. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CRAFT_UPDATE` | `Aion.GameServer.Network.Aion.ServerPackets.SmCraftUpdate` | Packet / Serialization | Complete | Regression Tested | Verified Parity | Java source reviewed; opcode `181`, action-specific message ids, localized item-name payloads, and morph `1000ms` delay override are represented and packet-tested directly. |
+| `com.aionemu.gameserver.skillengine.task.CraftingTask.onInteractionStart` | `Aion.GameServer.Services.CraftingTaskPacketPlanService.CreateInteractionStartPlan` | Deterministic Packet-Sequence Planner | Partial | Unit Tested | Partial Parity | C# now preserves the Java self/broadcast packet ordering for initial and combo restart start branches. Live task scheduling and callback dispatch remain unported. |
+| `com.aionemu.gameserver.skillengine.task.CraftingTask.sendInteractionUpdate` | `Aion.GameServer.Services.CraftingTaskPacketPlanService.CreateProgressUpdatePlan` | Deterministic Packet-Sequence Planner | Partial | Unit Tested | Partial Parity | The planner now carries Java progress-action ids and supplied execution timing fields into `SM_CRAFT_UPDATE`. No live runtime comparison yet. |
+| `com.aionemu.gameserver.skillengine.task.CraftingTask.onInteractionAbort` / `onFailureFinish` / non-crit `onSuccessFinish` | `Aion.GameServer.Services.CraftingTaskPacketPlanService.CreateAbortPlan` / `CreateFailureFinishPlan` / `CreateSuccessFinishPlan` | Deterministic Packet-Sequence Planner | Partial | Unit Tested | Partial Parity | Java packet branches are now source-shaped and unit-tested, but still not wired into a live `CraftingTask` runtime shell. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateInteractionStartPlan_UsesJavaInitOrderingForFirstCraftStep` | Unit Added | Java `CraftingTask.onInteractionStart` | The non-live planner emits the Java start packet order and branch ids for a first craft step. | Source-derived deterministic planner regression. | No live runtime dispatch. |
+| `CreateInteractionStartPlan_UsesCritProcActionForComboRestart` | Unit Added | Java `CraftingTask.onInteractionStart` combo branch | Combo restart uses Java action `3` before the normal progress update. | Source-derived deterministic planner regression. | No crit-roll/runtime loop. |
+| `CreateProgressUpdatePlan_UsesProvidedProgressActionAndTimings` | Unit Added | Java `CraftingTask.sendInteractionUpdate` | Progress action ids and timing fields are forwarded to `SM_CRAFT_UPDATE` unchanged. | Source-derived deterministic planner regression. | No live task callback evidence. |
+| `CreateAbortAndFinishPlans_MirrorJavaPacketBranches` | Unit Added | Java `CraftingTask.onInteractionAbort`, `onFailureFinish`, non-crit `onSuccessFinish` | Abort, failure, and success finish branches emit the expected self/broadcast packet pairs. | Source-derived deterministic planner regression. | Does not cover crit continuation into a new craft step. |
+| `CharacterSelectionServerPackets_WriteJavaShapedPayloads` craft packet additions | Regression Updated | Java `SM_CRAFT_UPDATE` / `SM_CRAFT_ANIMATION` | Packet payloads serialize with the reviewed Java field order, action/message mapping, and morph delay override. | Direct packet serialization regression. | Does not prove live craft ordering. |
+
+Remaining risks:
+- C# still lacks the live `CraftingTask` scheduler/callback shell and any `CM_CRAFT` runtime entry point.
+- The crit-roll branch in Java `onSuccessFinish()` still is not represented beyond the deterministic combo restart packet sequence.
+- Craft XP, player XP, recipe deletion, cooldown persistence, and craft logging remain outside this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 2 craft runtime packet classes, 1 deterministic packet-sequence planner, and 5 focused tests/regressions.
+- Total artifacts with verified parity: 2 grouped rows in this unit (`SM_CRAFT_ANIMATION`, `SM_CRAFT_UPDATE`).
+- Total artifacts needing verification: 3 grouped rows.
+- Total blocked artifacts: live `CraftingTask` / `CM_CRAFT` runtime wiring and broader `finishCrafting` XP/cooldown/log branches.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes the craft runtime packet surface without overstating the still-missing live crafting loop.
+
+Next recommended unit of work:
+- Next sequential task: port the smallest live Java crafting runtime shell that can consume both `CraftingTaskPacketPlanService` and `CraftService.CreateFinishRewardPlan`, ideally the completion/abort/start packet application boundary before widening into skill XP or craft cooldown persistence.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- return to the deferred `TemperingEffect.apply/endEffect` ownership surface only if a narrower deterministic slice becomes obvious
