@@ -80626,3 +80626,48 @@ Next recommended unit of work:
 	- begin a live-safe CM_CRAFT start side-effect boundary that still does not mutate/send by default
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1818 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1817 completion and handoff, confirmed a clean UOW-1817 commit, then re-inspected Java `ItemPacketService.sendItemDeletePacket`, Java `SM_CUBE_UPDATE.cubeSize`, C# `SmCubeUpdate`, C# `CraftStartInventoryPacketPlan`, C# `CmCraftStartCompositionPlanService`, and existing craft packet tests.
+- Chose the next smallest packet-intent slice: non-live `SM_CUBE_UPDATE` planning after deleted craft-consumption stacks. Kept live packet sending, live inventory mutation, persistence, DP spend, live task creation, scheduler startup, exact Java interleaving, and craft completion outside this unit.
+- Updated `CraftService.CreateStartInventoryPacketPlan(...)` to accept an optional player snapshot.
+- Added `CraftStartInventoryPacketStatus.MissingCubeSizeSnapshot` for deleted-stack plans that cannot compute Java cube-size refreshes.
+- Appended `SmCubeUpdate.CubeSizeSnapshot(...)` after each planned `SmDeleteItem` when a player snapshot is available.
+- Updated `CmCraftStartCompositionPlanService` to pass the player snapshot into packet planning.
+- Added focused tests that decode projected cube update payloads and verify real CM_CRAFT observer composition now includes delete plus cube-update intent.
+
+#### Migration Parity Table - Session 1818
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemPacketService.sendItemDeletePacket` cube delete follow-up | `Aion.GameServer.Services.CraftService.CreateStartInventoryPacketPlan` / `SmCubeUpdate.CubeSizeSnapshot` | Packet Planner | Partial | Unit/Integration Tested | Partial Parity | C# now plans `SmCubeUpdate` after craft-consumption deletes when a player snapshot is available; no live send occurs. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CUBE_UPDATE.cubeSize(StorageType.CUBE, player)` | `Aion.GameServer.Network.Aion.ServerPackets.SmCubeUpdate.CubeSizeSnapshot` from craft packet plan | Packet Planner | Partial | Unit Tested | Partial Parity | Tests decode C# cube payload fields and projected counts; no Java golden packet comparison was captured in this unit. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseItemCount` delete packet side effects during `checkCraft` consumption | `Aion.GameServer.Services.CraftStartInventoryPacketPlan.Packets` | Packet Planner | Partial | Unit/Integration Tested | Partial Parity | C# plans delete plus cube update for deleted stacks, but packet ordering still follows current mutation-plan grouping rather than Java's exact per-stack emission order. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 312 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4564 tests.
+
+Remaining risks:
+- No live inventory mutation is applied to `Player.InventoryItems`.
+- No live inventory packets are sent.
+- Packet intent ordering still follows current mutation-plan grouping rather than Java's exact per-stack decrease side-effect order.
+- No item persistence state changes are written.
+- No DP spend, live `CraftingTask`, scheduler startup, or craft completion is wired.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: cube-update packet planning after craft-consumption deletes, one conservative status, and focused packet/composition tests.
+- Total artifacts with verified parity: 0 rows; this is non-live packet-planner partial parity only.
+- Total artifacts needing verification: 3 rows pending Java golden/runtime packet comparison, exact per-stack ordering, live packet sending, persistence, live mutation, and handler dispatch.
+- Total blocked artifacts: live start-craft execution, DP spend, live inventory mutation, persistence, packet fanout, live task creation, scheduler startup, and full craft completion.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves packet intent coverage without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add an ordered craft-consumption mutation/packet operation plan so update/delete/cube packet intent can preserve Java's per-stack emission order across bonus and component decreases.
+- Safe alternative candidates for the next session:
+	- add a live-safe craft finish cooldown application mutation plan
+	- begin a live-safe CM_CRAFT start side-effect boundary that still does not mutate/send by default
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
