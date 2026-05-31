@@ -80145,3 +80145,49 @@ Next recommended unit of work:
 	- start live CM_CRAFT selected-material/craft-type adapter work
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1808 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the required migration/orchestration/parity docs, UOW-1807 completion and handoff, latest Phase 6 progress, confirmed the clean UOW-1807 commit, then re-inspected Java `CraftService.startCrafting`, `checkCraft`, `sendCancelCraft`, C# validation and cancel planners, and existing craft tests.
+- Chose a non-live failure orchestration slice: compose existing validation failure packets and cancel packet plans in Java `startCrafting` order. Kept live sending, inventory mutation, DP spend, scheduler startup, and craft completion outside this unit.
+- Added `CraftService.CreateStartFailureOrchestrationPlan(...)`.
+- Added `CraftStartFailureOrchestrationPlan` and `CraftStartFailureOrchestrationStatus`.
+- Composed ordered packets for failed validation:
+	- optional `checkCraft` failure packet
+	- `SM_CRAFT_UPDATE` cancel packet
+	- `SM_CRAFT_ANIMATION` cancel broadcast packet
+- Added `CancelNotPlanned` status for validation failures where cancel packet prerequisites are unavailable.
+- Added focused `CraftServiceTests` coverage for failure-message-before-cancel ordering, audit-only failures, ready validation no-op behavior, and missing cancel prerequisites.
+
+#### Migration Parity Table - Session 1808
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` failure branch | `Aion.GameServer.Services.CraftService.CreateStartFailureOrchestrationPlan` | Orchestration Planner | Partial | Unit Tested | Partial Parity | C# composes non-live packet order for `checkCraft` failure then `sendCancelCraft`; no live sending occurs. |
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` failure packet ordering | `Aion.GameServer.Services.CraftStartFailureOrchestrationPlan.OrderedPackets` | Packet Ordering | Partial | Unit Tested | Partial Parity | Tests prove failure packet precedes cancel update/animation when present; failures without system messages plan cancel packets only. |
+| `com.aionemu.gameserver.services.craft.CraftService.sendCancelCraft` reuse | `Aion.GameServer.Services.CraftStartCancelPacketPlan` through orchestration planner | Packet Planner | Partial | Unit Tested | Partial Parity | Existing cancel update/animation packet plan is reused; live broadcast/send remains pending. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 276 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4541 tests.
+
+Remaining risks:
+- C# still does not execute Java `CraftService.startCrafting`.
+- No live packet sending or broadcasting is wired.
+- Validation, cancellation, material/bonus consumption, DP spend, task interval, scheduler startup, and craft completion are still separate planner surfaces.
+- `CancelNotPlanned` documents C# planner prerequisite gaps; Java may still attempt `sendCancelCraft` and fail later for null prerequisites.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one orchestration planner, one status enum, one plan record, and focused test updates.
+- Total artifacts with verified parity: 0 rows; this is planner-level partial parity only.
+- Total artifacts needing verification: 3 rows pending live sending/orchestration.
+- Total blocked artifacts: live start-craft execution, live packet fanout, material/bonus consumption, DP spend, and scheduler startup.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds failure orchestration planning without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: start material and bonus item consumption planning for the successful `checkCraft` path, still without mutating live player inventory.
+- Safe alternative candidates for the next session:
+	- start live CM_CRAFT selected-material/craft-type adapter work
+	- add start-craft success task interval planning
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
