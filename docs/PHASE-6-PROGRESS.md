@@ -81273,3 +81273,62 @@ Next recommended unit of work:
 	- begin live logout craft cooldown save design only after explicit connection/error behavior scoping
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1830 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1829 handoff/completion, progress/parity/orchestration docs, then inspected Java `SM_RECIPE_COOLDOWN` send sites, Java `CraftService.finishCrafting`, Java `PlayerEnterWorldService`, C# `SmRecipeCooldown`, C# enter-world send path, and existing craft XP helpers/tests.
+- Confirmed Java does not send `SM_RECIPE_COOLDOWN` during or after `CraftService.finishCrafting`; Java sends it on enter-world only when `player.getCraftCooldowns()` is non-empty.
+- Did not add a finish-time cooldown packet plan because that would not match Java behavior.
+- Chose the next Java-backed finish-craft slice instead: disabled skill/common XP application planning from Java `finishCrafting` and `PlayerSkillList.addSkillXp`.
+- Added `CraftService.CreateFinishXpPlan(...)`.
+- Added `CraftFinishXpPlan`.
+- Added `CraftFinishXpStatus`.
+- Modeled Java XP behavior without live mutation:
+	- base/bonus crafting XP from existing `CraftingXpFormulaService`
+	- `Rates.SKILL_XP_CRAFTING` multiplier input
+	- crafting boost-stat percent input, skipped for morphing skill `40009`
+	- `Math.max(1, gainedCraftXp)`
+	- `PlayerSkillList.addSkillXp` skill-level difference gate
+	- crafting rank caps at 99/199/299/399/449/499/549
+	- required skill XP formula `(int)(0.23 * (skillLvl + 17.2)^2)`
+	- projected skill XP increment or level-up with XP reset
+	- common XP intent only when skill XP would be accepted
+	- no-production-XP message intent when skill XP would be rejected
+- Kept live skill XP mutation, skill level mutation, common XP mutation, skill-learn side effects, and packet dispatch disabled.
+- Added focused tests for accepted skill XP projection, skill level-up projection, and Java craft rank-cap rejection.
+
+#### Migration Parity Table - Session 1830
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_RECIPE_COOLDOWN` finish-craft send-site absence | Documentation / no C# finish-time packet plan added | Packet Discovery | Partial | Manual Only | Partial Parity | Java search found no finish-time cooldown packet send; C# intentionally does not add one. Existing enter-world `SmRecipeCooldown` path remains separate. |
+| `com.aionemu.gameserver.services.craft.CraftService.finishCrafting` XP branch | `Aion.GameServer.Services.CraftService.CreateFinishXpPlan` | XP Planner | Partial | Unit Tested | Partial Parity | C# plans Java base/bonus skill XP, rate/boost inputs, common XP intent, and no-production-XP intent; no live mutation occurs. |
+| `com.aionemu.gameserver.model.skill.PlayerSkillList.addSkillXp` accepted XP / level-up behavior | `CraftFinishXpPlan.ProjectedSkill` | XP Planner | Partial | Unit Tested | Partial Parity | C# projects skill XP increment or skill level-up with XP reset using Java required-XP formula; `SkillLearnService.onLearnSkill` remains non-live. |
+| `com.aionemu.gameserver.model.skill.PlayerSkillList.addSkillXp` craft rank cap rejection | `CraftFinishXpStatus.CraftRankCap` | XP Planner | Partial | Unit Tested | Partial Parity | C# records rank-cap rejection and no-production-XP message intent; live packet dispatch remains disabled. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 340 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4584 tests.
+
+Remaining risks:
+- Finish XP planning is disabled and does not mutate `Player.Skills` or `Player.Exp`.
+- Java `Rates.SKILL_XP_CRAFTING` and `Rates.XP_CRAFTING` membership/stat/legion rate lookup is represented by explicit inputs, not wired to live player/account/game-stat state.
+- Java `SkillLearnService.onLearnSkill` side effects on skill level-up are not executed.
+- No-production-XP system message intent is recorded but not sent.
+- Finish-craft reward insertion, work-order recipe deletion, quest callback, logging, and full runtime execution remain incomplete or separately planned.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one finish XP planner method, one XP plan record, one status enum, packet-send absence documentation, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is disabled XP-planning partial parity only.
+- Total artifacts needing verification: 4 rows pending live XP mutation, live rate lookup, level-up side effects, packet dispatch, and Java runtime comparison.
+- Total blocked artifacts: live finish-craft XP mutation, skill level-up side effects, common XP add, no-production-XP packet send, crafted item insertion, recipe deletion/quest callbacks, and full craft runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves finish-craft XP evidence without claiming live runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add disabled finish-craft work-order recipe deletion and fail-craft quest callback planning from Java `CraftService.finishCrafting` `maxProductionCount` branch.
+- Safe alternative candidates for the next session:
+	- begin live logout craft cooldown save design only after explicit connection/error behavior scoping
+	- add finish-craft logging intent planning from Java `LoggingConfig.LOG_CRAFT`
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
