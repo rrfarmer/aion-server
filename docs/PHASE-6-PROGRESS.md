@@ -82468,3 +82468,53 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1854 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1853 handoff/completion, progress/parity/orchestration docs, then inspected Java `EffectController`, Java `Effect`, Java `CreatureGameStats`, Java `Stat2`, C# `Player` effect-state placeholders, C# known-list abnormal-effect reporting, C# `WorldNpcDropModifierService`, C# `WorldNpcDropBoostStatProviderReadinessReportService`, and C# `SkillStatChangeConditionReadinessReportService`.
+- Confirmed Java drop-boost runtime parity requires a live chain, not only static template math: `EffectController.addEffect` tracks active effects, `Effect` is the `StatOwner`, `BufEffect.startEffect` adds generated modifiers to `CreatureGameStats`, and `CreatureGameStats.getStat(...).getCurrent()` evaluates live stat functions at drop time.
+- Added `WorldNpcDropBoostActiveStatProviderReadinessReportService`.
+- Added active-stat readiness report/status records that compose the existing static drop-boost metadata report and condition-readiness report.
+- Split the live Java stat-provider dependency into explicit disabled gates: active `EffectController` provider, `Effect` stat-owner provider, `CreatureGameStats` stat-function registry, `CreatureGameStats.getStat` query provider, and `Conditions.validate` provider when condition metadata exists.
+- Kept the report readiness-only; it does not wire `WorldNpcDropRegistrationWorkflowService`, does not aggregate static skill templates into a live value, and does not claim verified runtime parity.
+- Added focused tests for missing skill templates, missing live active-effect/stat providers, missing static metadata, conditioned changes without validators, and the explicit all-providers-ready state.
+
+#### Migration Parity Table - Session 1854
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `EffectController.addEffect` active effect tracking | `WorldNpcDropBoostActiveStatProviderReadinessReportService.HasLiveActiveEffectControllerProvider` | Provider Gate | Partial | Unit Tested | Partial Parity | C# now names this live dependency and blocks drop-boost readiness without an explicit provider. No active effect controller is ported here. |
+| `Effect implements StatOwner` / `CreatureGameStats.addEffect` | `HasLiveEffectStatOwnerProvider` and `HasLiveStatFunctionRegistryProvider` | Provider Gate | Partial | Unit Tested | Partial Parity | C# now separates effect ownership from stat-function registration readiness. It does not add live stat functions or owner removal semantics. |
+| `CreatureGameStats.getStat(...).getCurrent()` | `HasLiveCreatureGameStatsStatQueryProvider` | Provider Gate | Partial | Unit Tested | Partial Parity | C# now requires an explicit live stat query provider before a drop workflow can be marked ready. Static previews remain report-only. |
+| `Conditions.validate` for conditioned stat changes | composed `SkillStatChangeConditionReadinessReport` | Provider Gate | Partial | Unit Tested | Partial Parity | Active drop-boost readiness remains blocked for conditioned metadata until a live condition validator provider exists. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests" --no-restore` passed with 73 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 496 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` completed with 4646 passed and one unrelated random-walk timing failure in `WorldNpcRandomWalkServiceTests.StartRandomWalkingAsync_InterpolatesToTargetAndSchedulesNextRandomPointAfterArrival`.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcRandomWalkServiceTests.StartRandomWalkingAsync_InterpolatesToTargetAndSchedulesNextRandomPointAfterArrival" --no-restore` passed with 1 test on rerun.
+
+Remaining risks:
+- This report is readiness-only; C# still does not port live Java active-effect storage, effect conflict/stacking behavior, stat-function owner lifecycle, stat cap recalculation, or stat removal semantics.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks individual Java condition validators.
+- Static previews and the pure evaluator still do not represent live active effects.
+- C# still lacks a modeled/persisted player salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one disabled active-stat-provider readiness report and focused tests.
+- Total artifacts with verified parity: 0 rows; this remains readiness/reporting parity only.
+- Total artifacts needing verification: 4 rows pending live effect controller state, stat owner lifecycle, stat-function registry/query semantics, condition validators, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves provider-gap reporting but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java `CreatureGameStats.addEffect/endEffect/getStat` and C# stat-like services to design the first narrow, non-live stat-owner DTO/registry contract for drop-boost readiness without wiring workflow execution.
+- Safe alternative candidates for the next session:
+	- inspect Java `WeaponCondition` / high-frequency condition classes to scope validator ports
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- investigate and stabilize the observed `WorldNpcRandomWalkServiceTests.StartRandomWalkingAsync_InterpolatesToTargetAndSchedulesNextRandomPointAfterArrival` timing failure
