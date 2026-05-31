@@ -80770,3 +80770,56 @@ Next recommended unit of work:
 	- begin wiring the boundary into a disabled live executor facade with tests proving no side effects dispatch by default
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1821 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1820 handoff, confirmed a clean UOW-1820 commit, then re-inspected Java `Storage.decreaseItemCount`, `Storage.delete`, `Item.decreaseItemCount`, `Item.setPersistentState`, `InventoryDAO.store`, C# persistent-state helpers, ordered craft mutation operations, and CM_CRAFT start composition.
+- Chose the next smallest persistence slice: non-live craft-consumption persistence-state planning for ordered update/delete operations. Kept live DB writes, transactions, object-id release, live inventory mutation, live packet sending, DP spend, task creation/start, and craft completion outside this unit.
+- Added `CraftStartInventoryPersistencePlan`, `CraftStartInventoryPersistenceOperation`, `CraftStartInventoryPersistenceStatus`, and `CraftStartInventoryPersistenceOperationKind`.
+- Added `CraftService.CreateStartInventoryPersistencePlan(...)`.
+- Extended deleted craft mutation operations with a deleted item snapshot so the persistence plan can apply Java `Item.setPersistentState(...)` transition rules.
+- Planned Java persistence outcomes:
+	- updated consumed stacks transition to `UpdateRequired`
+	- persisted deleted stacks map to `Deleted` / `InventoryDAO.deleteItems`
+	- newly created stacks deleted before persistence map to `NoAction` and no delete write
+- Extended `CmCraftStartCompositionPlan` with `InventoryPersistencePlan`.
+- Added `CreateInventoryPersistencePlan` to CM_CRAFT composition ordering after inventory mutation planning and before inventory packet intent.
+- Added focused tests for persistence descriptors, `NEW -> NOACTION`, mutation-not-planned guard behavior, and CM_CRAFT composition coverage.
+
+#### Migration Parity Table - Session 1821
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseItemCount` dirty item state transitions | `Aion.GameServer.Services.CraftService.CreateStartInventoryPersistencePlan` | Persistence Planner | Partial | Unit Tested | Partial Parity | C# maps non-live ordered mutation operations to update/delete/no-action descriptors; no storage mutation or DB write occurs. |
+| `com.aionemu.gameserver.model.gameobjects.Item.setPersistentState` `NEW -> NOACTION` delete behavior | `Aion.GameServer.Services.CraftStartInventoryPersistenceOperationKind.NoAction` | Persistence Planner | Partial | Unit Tested | Partial Parity | C# preserves Java's newly created then deleted item no-op persistence outcome for planned deleted stacks. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store` update/delete grouping | `Aion.GameServer.Services.CraftStartInventoryPersistencePlan.UpdatedItems` / `DeletedObjectIds` | Persistence Planner | Partial | Unit Tested | Partial Parity | C# exposes DAO method intent for `deleteItems` and `updateItems`; exact SQL execution, transaction behavior, and ID release remain pending. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CRAFT.runImpl -> CraftService.startCrafting` composed start intent | `Aion.GameServer.Services.CmCraftStartCompositionPlan.InventoryPersistencePlan` | Orchestration Planner | Partial | Unit Tested | Partial Parity | C# CM_CRAFT composition now carries persistence-state intent after mutation planning; live dispatch remains disabled. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 315 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4567 tests.
+
+Remaining risks:
+- No live inventory mutation is applied to `Player.InventoryItems`.
+- No live inventory packets are sent.
+- No item persistence state is written to the database.
+- No transaction, commit/rollback, or Java autocommit behavior is executed.
+- Java `InventoryDAO.store` releases deleted object ids after successful delete; C# only records delete intent.
+- Java storage delete quest callbacks/logging are not executed.
+- No live DP spend, `CraftingTask` creation, scheduler startup, or craft completion is wired.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one craft inventory persistence plan, one operation descriptor, two persistence enums, mutation snapshot enrichment, composition integration, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is non-live persistence-state partial parity only.
+- Total artifacts needing verification: 4 rows pending live mutation, DB writes, transaction behavior, object-id release, packet sending, DP spend, live task creation/start, and Java runtime comparison.
+- Total blocked artifacts: live start-craft execution, inventory mutation, persistence writes, transaction behavior, packet fanout, DP spend, live task creation, scheduler startup, and full craft completion.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves craft-start persistence intent evidence without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: begin a disabled live craft-start executor facade that consumes the existing boundary, mutation, persistence, packet, DP, and task plans but proves by default that no live side effects dispatch until explicitly enabled.
+- Safe alternative candidates for the next session:
+	- add a live-safe craft finish cooldown application mutation plan
+	- add exact Java SQL descriptor planning for craft inventory update/delete rows
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
