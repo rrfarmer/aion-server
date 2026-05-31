@@ -79161,6 +79161,73 @@ Next recommended unit of work:
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
 
+### Session 1793 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, and `Phase-6-Session-1792-Handoff.md`, then re-inspected Java `TamperingAction`, Java `ItemTemplate`, Java item static data under `game-server/data/static_data/items/item_templates.xml`, and the current C# `StaticData`, `ItemTemplateTable`, `InventoryItem`, `Player`, and nearby service/test surfaces.
+- Confirmed the next honest adjacent slice after UOW-1792 was not broad live tampering runtime wiring. The C# port still lacked the Java `max_tampering` template surface entirely, and no source-shaped deterministic helper existed for the core `TamperingAction.setTemperingLevel(...)` mutation branch.
+- Added the missing static-data surface:
+	- `ItemTemplateSummary` now carries `MaxTampering`
+	- `StaticData` now parses `max_tampering` from Java item XML and preserves it through `ItemTemplateBuilder`
+- Added `TamperingMutationService` as a narrow non-live parity helper for Java `TamperingAction.setTemperingLevel(...)`:
+	- updates `InventoryItem.Tempering`
+	- preserves non-plume `RandomPlumeBonus`
+	- resets plume `RandomPlumeBonus` when the resulting tempering level is `<= 4`
+	- applies inclusive per-level random plume bonus increments when plume tempering rises above `4`
+	- uses the Java-shaped `TSHIRT_PHYSICAL` `0..3` roll range and the non-physical plume `0..12` roll range
+	- reports whether the mutation should dirty inventory storage or equipment based on `item.IsEquipped`
+- Added focused parity evidence in `TamperingMutationServiceTests`:
+	- real Java static-data audit for `max_tampering`
+	- equipped non-plume mutation preserves existing random bonus and marks equipment dirty intent
+	- plume mutation above `+4` accumulates per-level random bonus
+	- plume mutation at or below `+4` resets random bonus
+- Kept scope intentionally narrow:
+	- no live `TamperingAction.act(...)` port
+	- no `TemperingEffect.applyEffect/endEffect` runtime side-effect claim
+	- no item-use packet flow, delay, or consume-path wiring
+	- no claim that tampering is now live end to end
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~TamperingMutationServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~GamePacketTests"` passed with 264 tests.
+	- The first `dotnet test dotnetConversion\AionServer.slnx` attempt hit the command timeout boundary before completion.
+	- The second full-suite run failed in the recurring unrelated transient `GameServerConnectionInventoryExpansionUseItemTests.ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate`.
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate"` then passed in isolation with 1 test.
+	- The third `dotnet test dotnetConversion\AionServer.slnx` rerun passed cleanly with 4774 total tests (`57` commons, `29` chat, `121` login, `4567` game).
+
+#### Migration Parity Table - Session 1793
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.ItemTemplate.maxTampering` | `Aion.GameServer.Dataholders.ItemTemplateSummary.MaxTampering` + `Aion.GameServer.Dataholders.StaticData` | Item Static Data Surface | Partial | Unit Tested | Partial Parity | Java source and real static data reviewed; C# now parses and retains `max_tampering` from Java item XML. This unit does not yet prove downstream live runtime consumers beyond the focused static-data audit. |
+| `com.aionemu.gameserver.model.templates.item.actions.TamperingAction.setTemperingLevel` | `Aion.GameServer.Services.TamperingMutationService.SetTemperingLevel` | Deterministic Tampering Mutation Helper | Partial | Unit Tested | Partial Parity | C# now mirrors the Java tempering-level mutation branch, including plume random-bonus reset and per-level bonus accumulation rules. Runtime effect application and live item-use orchestration remain future work. |
+| `com.aionemu.gameserver.model.templates.item.actions.TamperingAction.act` tempering payload prerequisites | `Aion.GameServer.Services.TamperingMutationService` + `InventoryItem.Tempering` / `RandomPlumeBonus` | Tampering Runtime Foundation | Partial | Unit Tested | Partial Parity | This unit only ports the reusable mutation core and template prerequisite, not the full delayed tampering action, item consumption, or effect broadcast path. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `SetTemperingLevel_ParsesStaticDataMaxTamperingForRealJavaWingItem` | Unit Added | Java `ItemTemplate.maxTampering` plus checked-in `item_templates.xml` | A real Java static-data item with `max_tampering="10"` is parsed and exposed through the C# template table. | Source-derived static-data audit against checked-in Java XML. | Only proves parsing and retention, not live runtime use. |
+| `SetTemperingLevel_EquippedNonPlumeMarksEquipmentDirtyAndPreservesRandomBonus` | Unit Added | Java `TamperingAction.setTemperingLevel` | Non-plume tampering updates tempering without rewriting existing random plume bonus and reports equipment dirty intent when equipped. | Source-shaped deterministic mutation regression. | No live `TamperingAction.act` wiring. |
+| `SetTemperingLevel_UnequippedPlumeAboveFourAddsPhysicalRandomBonusPerLevel` | Unit Added | Java `TamperingAction.setTemperingLevel` | Physical plume tempering above `+4` rolls inclusive `0..3` bonus once per raised level and reports inventory-storage dirty intent when unequipped. | Source-shaped deterministic mutation regression with controlled rolls. | No runtime plume effect application. |
+| `SetTemperingLevel_PlumeAtOrBelowFourResetsRandomBonus` | Unit Added | Java `TamperingAction.setTemperingLevel` | Lowered or capped plume tempering at `+4` or below resets the random plume bonus. | Source-shaped deterministic mutation regression. | No delayed action/consume path coverage. |
+
+Remaining risks:
+- Live tampering runtime still appears absent on the C# side; this unit only ports the deterministic mutation core and template prerequisite.
+- Java `TamperingAction.act(...)` side effects such as delayed use flow, effect application, and item consumption are still unported.
+- The dirty-target result is modeled through `Player` storage/equipment state rather than a first-class Java `Equipment` or `Storage` object graph.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: 1 static-data surface, 1 deterministic tampering mutation helper, and 4 focused unit tests.
+- Total artifacts with verified parity: 0 grouped rows in this unit.
+- Total artifacts needing verification: 3 grouped rows.
+- Total blocked artifacts: live tampering action orchestration, tempering effect runtime behavior, and broader equipment/storage container parity.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit adds tampering foundation coverage without overstating live runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: port the narrow live `TamperingAction.act(...)` runtime boundary, starting with the smallest safe slice that wires the new mutation helper into delayed use / consume behavior without widening into unrelated item-action refactors.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
+
 ### Session 1791 (May 30, 2026)
 - Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1790-Completion.md`, and `Phase-6-Session-1790-Handoff.md`, then re-inspected Java `Equipment.persistentState`, Java `Equipment.setPersistentState`, Java `Equipment.equip`, Java `Equipment.unEquip`, Java `Equipment.switchHands`, Java `Equipment.increaseEquippedItemCount`, Java `Equipment.decreaseEquippedItemCount`, Java `Equipment.usePowerShard`, and the current C# `EquipmentService`, `PowerShardDamageService`, `GameServerConnection.ApplyEquipmentChangeAsync`, `PlayerEnterWorldRepository`, and `PlayerEnterWorldService`.
 - Confirmed the next honest gap after UOW-1790 was not just adding more producer marks, but fixing the live immediate-save boundary: `ApplyEquipmentChangeAsync` persisted equipment changes immediately, then reassigned `change.InventoryItems` back onto the player with `PersistentState=UpdateRequired`, which re-dirtied modeled equipment and cube state by inference even though the rows had already been saved.
