@@ -78887,3 +78887,72 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout persistence test path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1787 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1786-Completion.md`, and `Phase-6-Session-1786-Handoff.md`, then re-inspected Java `Storage.delete`, Java `Storage.getDeletedItems`, Java `Storage.decreaseItemCount`, Java `Player.getDirtyItemsToUpdate`, Java `InventoryDAO.store(List<Item>, ...)`, and the current C# `Player`, `SavePlayerLogoutAsync`, item-removal patterns, and repository delete helpers.
+- Confirmed the smallest honest follow-up after UOW-1786 was the missing deleted-row representation itself: Java keeps removed inventory rows in `Storage.deletedItems` long enough for `getDirtyItemsToUpdate()` and `InventoryDAO.store(...)` to flush them, while C# had no equivalent modeled queue.
+- Added modeled deleted-item tracking on `Player` for the currently represented player-owned storages:
+	- `DeletedInventoryItems`
+	- `DeletedWarehouseItems`
+	- `DeletedAccountWarehouseItems`
+	- `TrackDeletedItem(InventoryItem item)` now mirrors the Java delete transition boundary for the touched storages
+- Preserved Java item-state semantics for deleted-row tracking:
+	- tracked deletes use `InventoryItem.TransitionPersistentState(..., Deleted)`
+	- `NEW -> DELETED` becomes `NOACTION` and is not queued as a persisted delete
+	- non-`NEW` items become `Deleted` and are queued once per object id for the matching modeled storage
+- Updated `Player.GetDirtyItemsToUpdate()` and `MarkDirtyItemsPersisted()`:
+	- dirty harvest now includes the modeled deleted-item queues in addition to current dirty rows
+	- persist-reset now clears the modeled deleted-item queues after the save boundary completes
+- Updated logout persistence to flush tracked deletes explicitly:
+	- `SavePlayerLogoutAsync` now deletes tracked deleted rows through the existing `DELETE FROM inventory WHERE item_unique_id = ? AND item_owner = ?` path before snapshot-updating current cube/warehouse/account-warehouse rows
+	- kept the rest of the logout path conservative: current rows still use snapshot updates rather than a full Java filtered insert/update/delete port
+- Added focused evidence:
+	- `PlayerInventoryPersistentStateTests.GetDirtyItemsToUpdate_IncludesTrackedDeletedItemsAcrossModeledStorages`
+	- `PlayerInventoryPersistentStateTests.TrackDeletedItem_DropsNewItemsAsNoAction`
+	- `PlayerInventoryPersistentStateTests.MarkDirtyItemsPersisted_ClearsTrackedDeletedItems`
+	- `PlayerEnterWorldRepositoryDatabaseIntegrationTests.SavePlayerLogoutAsync_DeletesTrackedInventoryRowsAgainstJavaSchema_WhenEnabled`
+- Kept scope intentionally narrow:
+	- no broad repo-wide pass across every live item-removal call site yet
+	- no Java storage-level `PersistentState` model yet
+	- no Java `InventoryDAO.store(player)` filtered insert/update batching yet
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerInventoryPersistentStateTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passed with 42 tests.
+	- `dotnet test dotnetConversion\AionServer.slnx` then passed cleanly on the first full-suite run with 4762 total tests (`57` commons, `29` chat, `121` login, `4555` game).
+
+#### Migration Parity Table - Session 1787
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.items.storage.Storage.deletedItems` + `Storage.delete(Item, ...)` | `Aion.GameServer.Model.GameObjects.Player.TrackDeletedItem` + modeled deleted-item collections | Deleted-Row Tracking | Partial | Unit Tested | Partial Parity | Java source reviewed; C# now tracks deleted rows for the currently modeled player-owned storages and preserves the Java `NEW -> DELETED => NOACTION` behavior through the item transition helper. Java queue ownership still lives on `Player` rather than a full storage abstraction, and no broad runtime producer sweep was done in this unit. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getDirtyItemsToUpdate` deleted-item participation | `Aion.GameServer.Model.GameObjects.Player.GetDirtyItemsToUpdate` + `MarkDirtyItemsPersisted` | Dirty-State Harvest | Partial | Unit Tested | Partial Parity | C# dirty harvest now includes tracked deleted rows and clears them after the persistence boundary. Java storage-level `PersistentState` and equipment-level participation are still missing. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store(List<Item>, ...)` delete branch | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.SavePlayerLogoutAsync` + `DeleteInventoryItemSnapshotAsync` | Logout Delete Flush | Partial | Regression Tested | Partial Parity | C# logout now flushes tracked deleted inventory rows through the existing inventory delete helper before snapshot-updating current rows. This is still a narrow delete-only slice, not a full Java-shaped filtered insert/update/delete store pipeline. |
+| `com.aionemu.gameserver.services.player.PlayerLeaveWorldService.leaveWorld` + `PlayerService.storePlayer` deleted-item persistence boundary | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.SavePlayerLogoutAsync` | Logout Persistence Boundary | Partial | Regression Tested | Partial Parity | The logout path now covers both current-row snapshot updates and tracked delete flushes for modeled storages. Java `ItemStoneListDAO.save(player)` and broader storage-state filtering remain future work. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GetDirtyItemsToUpdate_IncludesTrackedDeletedItemsAcrossModeledStorages` | Unit Added | Java `Player.getDirtyItemsToUpdate` + `Storage.getDeletedItems` | Dirty harvest includes tracked deleted rows for cube, warehouse, and account warehouse storages. | Source-derived unit regression for the modeled deleted-row slice. | No equipment/storage-state coverage. |
+| `TrackDeletedItem_DropsNewItemsAsNoAction` | Unit Added | Java `Storage.delete` + `Item.setPersistentState` | Deleting a newly created modeled item does not queue a persisted delete row. | Source-derived unit regression for `NEW -> DELETED => NOACTION`. | Does not prove broader runtime producers. |
+| `MarkDirtyItemsPersisted_ClearsTrackedDeletedItems` | Unit Added | Java `Player.getDirtyItemsToUpdate` post-store behavior | Persist-reset clears modeled deleted-row queues after the save boundary. | Source-derived unit regression. | No storage-level `PersistentState` reset proof. |
+| `SavePlayerLogoutAsync_DeletesTrackedInventoryRowsAgainstJavaSchema_WhenEnabled` | Integration Added | Java `PlayerLeaveWorldService.leaveWorld` + `PlayerService.storePlayer` + `InventoryDAO.store(player)` delete path | Logout persistence removes a tracked deleted inventory row from the Java schema before final player-row save. | Opt-in DB-backed repository regression added at the logout boundary. | Requires `AION_GAMESERVER_DB_INTEGRATION=1` for runtime DB evidence. |
+
+Remaining risks:
+- C# still does not model Java storage-level `PersistentState`, so the deleted-row queue exists without the full Java storage dirtiness gate.
+- Only the player surface and logout persistence boundary know about modeled deleted rows so far; a broader live producer sweep across item-removal paths remains future work.
+- The logout path is still not a full Java `InventoryDAO.store(player)` equivalent because current inserts/updates remain snapshot-based.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 3 modeled deleted-item collections, 1 deleted-row tracking helper, 1 logout delete-flush helper, and 4 focused tests.
+- Total artifacts with verified parity: 0 grouped rows in this unit.
+- Total artifacts needing verification: 4 grouped rows.
+- Total blocked artifacts: storage-level persistent-state participation, broader live deleted-row producers, and a full filtered inventory store pipeline.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the deleted-row representation gap for the modeled logout path without overstating the still-missing storage architecture.
+
+Next recommended unit of work:
+- Next sequential task: port the minimum storage-level dirty gate needed for the modeled storages so current-row updates and tracked deleted rows can be harvested more like Java `Storage.getPersistentState() == UPDATE_REQUIRED`.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
