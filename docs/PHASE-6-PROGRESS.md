@@ -81052,3 +81052,60 @@ Next recommended unit of work:
 	- begin live-enabled persistence adapter design only after explicit transaction/rollback scope
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1826 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1825 handoff/completion, progress/parity/orchestration docs, then re-inspected `CraftStartLiveExecutorFacadePlanService`, `CraftStartInventoryPacketSendAdapterPlanService`, `CraftStartInventoryPersistenceAdapterPlanService`, and current CM_CRAFT facade tests.
+- Chose the next smallest facade-integration slice: have the disabled craft-start executor facade consume the concrete disabled persistence and packet-send adapter plans.
+- Extended `CraftStartLiveExecutorFacadePlan` with:
+	- `InventoryPersistenceAdapterPlan`
+	- `InventoryPacketSendAdapterPlan`
+- Updated `CraftStartLiveExecutorFacadePlanService.CreateDisabledPlan(...)` to create:
+	- `CraftStartInventoryPersistenceAdapterPlanService.CreateDisabledPlan(compositionPlan.InventoryPersistencePlan)`
+	- `CraftStartInventoryPacketSendAdapterPlanService.CreateDisabledPlan(compositionPlan.InventoryPacketPlan, compositionPlan.ValidationPlan.ObjectId)`
+- Derived facade persistence and packet would/did flags from the adapter plans instead of only checking high-level planner readiness.
+- Preserved Java success operation order:
+	- inventory mutation
+	- persistence boundary
+	- packet send boundary
+	- optional DP spend
+	- task creation
+	- task start
+- Kept the facade non-live and dispatch-disabled; no adapter executes live side effects.
+
+#### Migration Parity Table - Session 1826
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` live success side-effect sequence | `Aion.GameServer.Services.CraftStartLiveExecutorFacadePlanService.CreateDisabledPlan` | Execution Facade | Partial | Unit Tested | Partial Parity | C# facade now carries concrete disabled persistence and packet-send adapter plans; no side effects dispatch. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store` persistence execution boundary | `CraftStartLiveExecutorFacadePlan.InventoryPersistenceAdapterPlan` | Execution Facade | Partial | Unit Tested | Partial Parity | Facade consumes the disabled persistence adapter and derives write flags from it; no DB connection, transaction, SQL, commit, or object-id release occurs. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseItemCount` / `Storage.delete` packet send boundary | `CraftStartLiveExecutorFacadePlan.InventoryPacketSendAdapterPlan` | Execution Facade | Partial | Unit Tested | Partial Parity | Facade consumes the disabled packet-send adapter and derives send flags from it; no live packet dispatch occurs. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 321 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4573 tests.
+
+Remaining risks:
+- The live executor facade and both adapter plans remain disabled and non-live.
+- No live inventory mutation is applied to `Player.InventoryItems`.
+- No live inventory packets are sent.
+- No item persistence is written to the database.
+- No transaction, commit/rollback, Java autocommit behavior, or object-id release is executed.
+- No DP spend, live `CraftingTask` creation, scheduler startup, or craft completion is wired.
+- Java storage delete quest callbacks/logging are not executed.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: facade integration for two disabled adapter plans plus focused tests.
+- Total artifacts with verified parity: 0 rows; this is disabled facade integration partial parity only.
+- Total artifacts needing verification: 3 rows pending live mutation, packet dispatch, DB writes, transaction behavior, object-id release, DP spend, live task creation/start, and Java runtime comparison.
+- Total blocked artifacts: live start-craft execution, inventory mutation, persistence writes, transaction behavior, packet fanout, DP spend, live task creation, scheduler startup, object-id release, and full craft completion.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves craft-start live-boundary composition evidence without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add a live-safe craft finish cooldown application mutation plan using Java `CraftService.finishCrafting` cooldown behavior as source of truth, without executing live cooldown updates by default.
+- Safe alternative candidates for the next session:
+	- begin live-enabled craft persistence adapter design only after explicit transaction/rollback scope
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- add disabled DP-spend adapter wiring into the craft-start facade
