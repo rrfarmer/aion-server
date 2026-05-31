@@ -84836,6 +84836,50 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1917 (May 31, 2026)
+- Performed fresh Work Discovery after UOW-1916: re-read latest handoff context and inspected Java `CM_BUY_ITEM.runImpl`, C# `GameServerConnection.HandleBuyItem`, existing C# `CmBuyItemHandlerCompositionPlan` observer wiring, `CmBuyItemSideEffectOutcomePlanService`, and socket-level buy-item tests.
+- Confirmed `GameServerConnection` already had a non-live handler-composition observer and returned without side effects when no observer was configured.
+- Added an optional `CmBuyItemSideEffectOutcomePlan` observer to `GameServerConnection`.
+- Updated `HandleBuyItem` so it creates the existing non-live handler composition plan when either observer is present, then invokes the existing handler observer and the new disabled side-effect outcome observer.
+- Added socket-level tests proving skipped and selected `CM_BUY_ITEM` branches emit diagnostic outcome plans without packet sends or live side effects.
+- Kept this unit non-live. No live `CM_BUY_ITEM` handler dispatch, target state hydration, private-store purchase facts, pet merchant facts, inventory mutation, repurchase mutation, Kinah mutation, packet dispatch, transaction commit, rollback, repository write, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1917
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM.runImpl` diagnostic side-effect outcome visibility | `Aion.GameServer.Network.Aion.GameServerConnection` optional `CmBuyItemSideEffectOutcomePlan` observer | Socket Diagnostic Hook | Partial | Unit Tested | Partial Parity | Socket processing can now expose disabled side-effect outcome plans from the non-live handler composition plan. The default live path remains unchanged when observers are absent; no repository writes, packets, transactions, or Java runtime comparison are enabled. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM.runImpl` Player action `0` observer path | `GameServerConnection.HandleBuyItem` + `CmBuyItemSideEffectOutcomePlanService` | Diagnostic Composition Path | Partial | Unit Tested | Partial Parity | A known player-target action `0` packet now records a disabled private-store outcome diagnostic from socket processing. The test intentionally uses empty private-store facts, so the outcome remains blocked before writes/sends. Live private-store state hydration and execution remain unwired. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests" --no-restore` passed with 27 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests|FullyQualifiedName~PetMerchantSellLiveExecutorFacadePlanServiceTests|FullyQualifiedName~PrivateStoreLiveExecutorFacadePlanServiceTests|FullyQualifiedName~TradeSellToShopPlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~CmBuyItemTests|FullyQualifiedName~CmBuyItemSellToShopCompositionPlanServiceTests|FullyQualifiedName~TradeSellForApToShopPlanServiceTests" --no-restore` passed with 86 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4918 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- The observer is diagnostic-only and does not enable live `CM_BUY_ITEM` execution.
+- `GameServerConnection` still supplies only target-kind facts to `CmBuyItemHandlerCompositionPlanService`; live private-store item lists, purchase plans, pet merchant sell plans, NPC trade templates, repurchase facts, and inventory snapshots are not hydrated from socket state.
+- Live private-store and pet merchant inventory mutations, repurchase state, Kinah mutation, packet dispatch, transaction/rollback behavior, repository writes, and pet auto-sell notification behavior remain unwired.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: disabled socket diagnostic outcome observer for `CM_BUY_ITEM` plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 22 rows pending Java runtime/golden comparison, Java-equivalent known-list object population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN wiring, live private-store action `0` execution, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item mutation, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live pet auto-sell notification behavior, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, private-store/pet merchant branch execution, live AP-sell mutation wiring, live buy transaction mutation wiring, live repurchase state and send wiring, live source-item clone caller integration, live pet auto-sell notification wiring, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled `CM_BUY_ITEM` diagnostic observability from socket processing but does not complete live execution or runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add source-reviewed disabled outcome/detail planning for a remaining `CM_BUY_ITEM` branch, preferably buy-from-shop or AP-sell, before live execution is attempted.
+- Safe alternative candidates for the next session:
+	- inspect Java `PetService.sell` auto-sell notification path as a separate disabled notification planner
+	- hydrate safe private-store listed-item facts into the diagnostic path only if no live mutation is enabled
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1916 (May 31, 2026)
 - Performed fresh Work Discovery after UOW-1915: re-read required orchestration/parity docs, latest completion, and latest handoff; inspected Java `CM_BUY_ITEM.runImpl` pet action `17`, Java `TradeService.performSellToShop`, Java `PetService.sell`, and C# `TradeSellToShopPlanService`, `PetMerchantSellLiveExecutorFacadePlanService`, `PetMerchantSellOutcomePlanService`, and `CmBuyItemSideEffectOutcomePlanService`.
 - Confirmed the Java runtime/golden path remains blocked locally by Java/Maven availability, so this unit stayed source-reviewed and C#-tested only.
