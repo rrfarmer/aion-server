@@ -82922,3 +82922,57 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1863 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1862 handoff/completion, progress/parity/orchestration docs, then inspected Java `StatCapUtil.calculateBaseValue`, Java `CreatureGameStats.getStat` / `onStatsChange`, C# `SkillBuffStatCapRecalculationReadinessReportService`, C# `WorldNpcDropBoostActiveStatProviderReadinessReportService`, and their focused tests.
+- Integrated `SkillBuffStatCapRecalculationReadinessReportService` into `WorldNpcDropBoostActiveStatProviderReadinessReportService` as nested cap/recalculation evidence.
+- Added `StatCapRecalculationReadinessReport` to the active drop-boost readiness report.
+- Added `BlockedMissingStatCapRecalculationReadiness`, so active drop-boost readiness now requires explicit stat-cap and MAXHP/MAXMP recalculation provider evidence after Stat2 runtime evaluation and before live `CreatureGameStats.getStat` query readiness can be considered complete.
+- Added explicit active-readiness provider gates for:
+	- live `StatCapUtil.calculateBaseValue`
+	- live creature-aware lower/upper cap calculation
+	- live `ATTACK_SPEED` bonus clamp when relevant
+	- live `CreatureGameStats.onStatsChange` MAXHP/MAXMP recalculation
+- Kept this unit readiness-only; no live stat cap, HP/MP rescale, effect lifecycle, stat storage, or drop workflow execution was enabled.
+- Added focused active-readiness coverage for the new blocked state and nested report evidence.
+
+#### Migration Parity Table - Session 1863
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `DropRegistrationService.calculateBoostDropRate` -> `CreatureGameStats.getStat` -> `StatCapUtil.calculateBaseValue` | `WorldNpcDropBoostActiveStatProviderReadinessReport.StatCapRecalculationReadinessReport` | Readiness Evidence | Partial | Unit Tested | Partial Parity | Active drop-boost readiness now carries nested stat-cap/recalculation evidence. It still does not query live creature stats or clamp live `Stat2` values. |
+| `StatCapUtil.calculateBaseValue` live dependency | `WorldNpcDropBoostActiveStatProviderReadinessStatus.BlockedMissingStatCapRecalculationReadiness` | Provider Gate | Partial | Unit Tested | Partial Parity | C# now blocks drop-workflow readiness when Stat2 evaluation is otherwise ready but detailed stat-cap providers are absent. The gate is source-derived from Java; no runtime comparison was run. |
+| `CreatureGameStats.onStatsChange` MAXHP/MAXMP rescale dependency | `hasLiveMaxHpMpRecalculationProvider` flowing into nested active readiness | Provider Gate | Partial | Unit Tested | Partial Parity | Active drop-boost readiness now requires explicit max-stat recalculation evidence. No live HP/MP proportional rescale or synchronization behavior is ported. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatCapRecalculationReadinessReportServiceTests|FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests" --no-restore` passed with 20 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStatCapRecalculationReadinessReportServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionRegistryReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 524 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4675 tests.
+
+Remaining risks:
+- Active drop-boost readiness remains report-only; C# still does not port live `CreatureGameStats` storage, function insertion/removal, snapshot locking/copying, `Stat2` runtime evaluation, stat caps, max-stat synchronization, or active-effect lifecycle.
+- Nested stat-cap readiness remains report-only; C# still does not execute Java `StatCapUtil.calculateBaseValue`, creature-aware lower/upper caps, `ATTACK_SPEED` bonus clamp, or MAXHP/MAXMP proportional rescaling in this path.
+- The broad `hasLiveStatCapProvider` flag and detailed stat-cap recalculation gates are intentionally separate. Future live work must prove both before claiming drop workflow readiness.
+- C# still lacks Java `StatRateFunction` special negative `SPEED` handling in a live runtime evaluator.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks live condition validators and Java active-effect storage/conflict behavior.
+- C# still lacks a modeled/persisted player salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: nested stat-cap/recalculation readiness integration into active drop-boost readiness and focused tests.
+- Total artifacts with verified parity: 0 rows; this remains readiness/reporting parity only.
+- Total artifacts needing verification: 6 rows pending live stat caps, HP/MP rescaling, live `Stat2`, function apply behavior, condition validators, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit tightens readiness gating but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java `StatRateFunction` negative `SPEED` handling and add focused readiness/evaluator evidence so future live Stat2 work does not miss Java's speed edge cases.
+- Safe alternative candidates for the next session:
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+	- start a tiny live `StatCapUtil` formula slice only if it can be compared against Java source-derived cases without touching active drop workflow execution
