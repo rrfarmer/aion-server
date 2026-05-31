@@ -82004,3 +82004,51 @@ Next recommended unit of work:
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1844 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1843 handoff/completion, progress/parity/orchestration docs, then inspected Java `DropRegistrationService.calculateBoostDropRate`, Java `HousingService.findActiveHouse`, Java `HouseType.PALACE`, C# `PlayerHouse`, C# `HousingTemplateTable`, and C# active-house call sites.
+- Chose the narrow active-palace source slice because C# already carries loaded player houses and housing templates, while live stat and salvation sources remain unavailable.
+- Added `PlayerActiveHouseResolverService.FindActiveHouse(...)`.
+- Added `PlayerActiveHouseResolverService.HasActivePalace(...)`, using `HousingTemplateTable.IsPalaceBuilding(...)` to mirror Java `HouseType.PALACE`.
+- Updated `WorldNpcDropBoostRateContextPlanService.CreateDisabledPlan(...)` to consume `HousingTemplateTable` when supplied and treat the resolved active-palace value as objective source evidence for that one input.
+- Added `WorldNpcDropBoostRateContextPlan.HasActivePalace`.
+- Added focused tests proving:
+	- the resolver returns the first non-inactive loaded house, matching the current C# login ordering contract for Java `HousingService.findActiveHouse`
+	- a resolved active palace removes only the active-palace-source blocker and contributes the Java +5 boost in the disabled plan context
+
+#### Migration Parity Table - Session 1844
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `HousingService.findActiveHouse` | `PlayerActiveHouseResolverService.FindActiveHouse` | Source Resolver | Partial | Unit Tested | Partial Parity | C# resolves the first non-inactive loaded player house. This matches current C# login ordering comments but does not independently model Java's separate studio/custom-house maps. |
+| `HouseType.PALACE` active-house boost branch | `PlayerActiveHouseResolverService.HasActivePalace` | Drop Boost Input Source | Partial | Unit Tested | Partial Parity | C# uses `HousingTemplateTable.IsPalaceBuilding` to resolve the active-palace boolean from loaded houses/templates. |
+| `DropRegistrationService.calculateBoostDropRate` active-palace input | `WorldNpcDropBoostRateContextPlanService.CreateDisabledPlan(..., housingTemplates)` | Readiness Planner Input | Partial | Unit Tested | Partial Parity | Planner now consumes one real modeled source and removes the active-palace-source blocker only when `Player` and `HousingTemplateTable` are supplied. Other Java live inputs still block workflow readiness. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 71 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 469 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4620 tests.
+
+Remaining risks:
+- The planner is still disabled/readiness-only and is not wired into `WorldNpcDropRegistrationWorkflowService`.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat sources for this workflow.
+- C# still lacks a modeled salvation percent source on `Player`.
+- Configured `RatesConfig.DROP_RATES` still needs a live options/config path into drop registration.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one reusable active-house resolver, one active-palace source helper, planner consumption, and focused tests.
+- Total artifacts with verified parity: 0 rows; this remains partial source/readiness parity.
+- Total artifacts needing verification: 3 rows pending live stat/rate/salvation provider wiring and runtime comparison.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/rate/salvation drop boost provider, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit removes one readiness blocker when housing templates are available, but does not complete live drop modifier parity.
+
+Next recommended unit of work:
+- Next sequential task: add the next narrow missing input source for drop boost readiness, preferably configured `RatesConfig.DROP_RATES` options binding or a modeled salvation-percent source, then keep workflow wiring blocked until all Java inputs are explicit.
+- Safe alternative candidates for the next session:
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
