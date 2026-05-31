@@ -81760,3 +81760,54 @@ Next recommended unit of work:
 	- Java `DropRegistrationService.calculateBoostDropRate`
 	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1839 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1838 handoff/completion, progress/parity/orchestration docs, then inspected Java `CraftCooldownsDAO`, the `craft_cooldowns` schema, nearby C# cooldown persistence methods, and the opt-in DB integration fixture.
+- Chose the next smallest live repository slice: implement standalone craft cooldown save with Java-shaped connection/error behavior while keeping logout unwired.
+- Implemented `MySqlPlayerEnterWorldRepository.SavePlayerCraftCooldownsAsync(...)`.
+- Added private helpers:
+	- `DeleteCraftCooldownsJavaStyleAsync`
+	- `InsertCraftCooldownJavaStyleAsync`
+- Modeled Java repository behavior:
+	- delete all rows for the player before inserts
+	- skip cooldowns whose reuse time is less than the supplied/current time
+	- open one connection for the delete
+	- open one connection per active insert
+	- log and swallow MySQL delete/insert failures per operation
+- Added opt-in DB integration test `SavePlayerCraftCooldownsAsync_ReplacesRowsAndKeepsOnlyActiveCooldownsAgainstJavaSchema_WhenEnabled`.
+- Kept logout unwired for craft cooldown persistence.
+
+#### Migration Parity Table - Session 1839
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.storeCraftCooldowns` | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.SavePlayerCraftCooldownsAsync` | Repository Method | Partial | Integration Tested | Partial Parity | C# standalone method deletes first, skips expired cooldowns, inserts active rows, and uses separate connections per SQL operation; logout remains unwired. |
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.deleteCraftCoolDowns` | `MySqlPlayerEnterWorldRepository.DeleteCraftCooldownsJavaStyleAsync` | Repository Helper | Partial | Integration Tested | Partial Parity | C# opens a dedicated delete connection and logs/swallows `MySqlException`; Java catches `SQLException`. |
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.storeCraftCooldowns` insert loop | `MySqlPlayerEnterWorldRepository.InsertCraftCooldownJavaStyleAsync` | Repository Helper | Partial | Integration Tested | Partial Parity | C# opens a dedicated connection per active insert and logs/swallows `MySqlException`; operation cancellation behavior remains C#-specific. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~CraftServiceTests" --no-restore` passed with 125 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 417 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4608 tests.
+
+Remaining risks:
+- Logout still does not call `SavePlayerCraftCooldownsAsync`.
+- The opt-in database integration test is skipped unless `AION_GAMESERVER_DB_INTEGRATION=1`.
+- C# catches `MySqlException` per SQL operation; Java catches `SQLException`. Cancellation exceptions are not swallowed.
+- Full logout craft cooldown persistence parity remains unverified until logout wiring and runtime/database comparison are complete.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one standalone repository save method, two Java-shaped SQL helper methods, and one opt-in database integration test.
+- Total artifacts with verified parity: 0 rows; logout persistence remains incomplete.
+- Total artifacts needing verification: 3 rows pending logout wiring, opt-in live DB execution, and runtime/database comparison.
+- Total blocked artifacts: logout craft cooldown save call order, full logout persistence parity, and runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit moves craft cooldown persistence from planned repository boundary to standalone live repository method.
+
+Next recommended unit of work:
+- Next sequential task: wire `PlayerEnterWorldRepository.SavePlayerLogoutAsync` to call `SavePlayerCraftCooldownsAsync` in Java order after portal cooldowns and before house-object cooldowns, with tests proving logout now persists craft cooldowns and still preserves existing cooldown saves.
+- Safe alternative candidates for the next session:
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
