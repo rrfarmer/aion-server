@@ -83993,3 +83993,60 @@ Next recommended unit of work:
 	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
+### Session 1883 (May 31, 2026)
+- Performed fresh Work Discovery after UOW-1882: re-read required migration/orchestration/parity docs, latest completion and handoff, rechecked Java/Maven availability, inspected Java `RepurchaseService.repurchaseFromShop`, `RepurchaseList`, `PlayerRestrictions.canTrade`, C# `InventoryAddService`, `InventoryCapacity`, kinah helpers, and the private-store source-item planner tests.
+- Confirmed the Java runtime/golden path remains blocked locally by Java `1.8.0_491` and missing Maven, so this unit stayed source-reviewed and C#-tested only.
+- Added `RepurchasePlanService`, a non-live planner for Java `RepurchaseService.repurchaseFromShop`.
+- The planner models:
+	- `PlayerRestrictions.canTrade(player)` as an explicit input gate
+	- ordered requested repurchase object ids from the Java `RepurchaseList` call site
+	- Java's per-request inventory-full precheck and `STR_MSG_DICE_INVEN_ERROR` break
+	- missing repurchase item skip
+	- insufficient Kinah skip-and-continue behavior
+	- Kinah decrease intent after affordability passes
+	- source-item buyer add through `InventoryAddService.CreateAddItemPlan(..., sourceItem, allowInventoryOverflow: true)`
+	- removal intent from the repurchase set after successful add planning
+	- conservative non-live blocks for missing templates and failed add planning
+- Added focused tests for successful non-stackable source clone repurchase, allow-overflow add planning after Java's precheck passes, inventory-full blocking before stackable merge, missing repurchase item skip, insufficient-Kinah continue, cannot-trade guard, missing-template block, and add-failure block.
+- Kept this unit non-live. No `CM_BUY_ITEM`/repurchase socket wiring, repository writes, packet send ordering, Java runtime output, audit logging, or live repurchase-set mutation was enabled.
+
+#### Migration Parity Table - Session 1883
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.RepurchaseService.repurchaseFromShop` | `Aion.GameServer.Services.RepurchasePlanService` | Service Planner | Partial | Unit Tested | Partial Parity | Non-live planner models reviewed Java guard/order behavior, inventory-full break, Kinah affordability, source-item add planning, and repurchase-set removal intent. Live socket wiring, repository writes, packet order, audit logging, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.model.trade.RepurchaseList` | `RepurchasePlan.RequestedItemObjectIds` / `RepurchasedItemObjectIds` | DTO/Plan Input | Partial | Unit Tested | Partial Parity | C# accepts the ordered object-id list produced by the Java caller shape. It does not implement the actual `LinkedHashSet`, seller object id, or `canRepurchase` gate. |
+| `com.aionemu.gameserver.services.item.ItemService.addItem(Player, Item)` repurchase caller | `InventoryAddService.CreateAddItemPlan(..., sourceItem, allowInventoryOverflow: true)` composed by `RepurchasePlanService` | Inventory Planner Composition | Partial | Unit Tested | Partial Parity | Tests prove non-stackable source metadata clone and Java allow-overflow planning after the precheck. Java runtime, expirable registration, add/update packet types, and DAO behavior remain unverified. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~RepurchasePlanServiceTests" --no-restore` passed with 14 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~RepurchasePlanServiceTests|FullyQualifiedName~PrivateStorePurchasePlanServiceTests|FullyQualifiedName~InventoryAddServiceTests|FullyQualifiedName~PrivateStoreItemValidationPlanServiceTests|FullyQualifiedName~PrivateStoreSellNotificationPlanServiceTests" --no-restore` passed with 47 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4741 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- `RepurchasePlanService` is non-live and is not wired into a socket handler or repurchase packet workflow.
+- Java `PlayerRestrictions.canTrade` is represented as a caller-supplied boolean; exact message side effects for shutdown/trade/dead/offline states remain outside this unit.
+- Live repurchase-set mutation, inventory mutation, packet fanout, audit logging for insufficient Kinah, repository persistence, transaction behavior, and rollback behavior remain unimplemented.
+- Missing-template and add-failure paths are conservative planner blocks, not verified live Java exception/partial-mutation behavior.
+- `ItemService.addItem` expirable registration, add/update packet types, and DAO persistence remain outside this unit.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: repurchase source-item planner plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 8 rows pending Java runtime/golden comparison, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for repurchase/reward persistence, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves repurchase/reward planner parity but does not complete live reward or stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: if JDK 25 and Maven are available, return to the condition preview Java capture draft and produce runtime output; otherwise inspect Java repurchase packet/state surfaces (`SM_REPURCHASE`, `RepurchaseService.addRepurchaseItems`, and any C# packet equivalents) before considering live repurchase wiring.
+- Safe alternative candidates for the next session:
+	- wire `RepurchasePlanService` only after repository/packet mutation ordering and rollback behavior are scoped
+	- wire `PrivateStorePurchasePlanService` only after repository/packet mutation ordering is scoped and tests can cover no-partial-send behavior
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
