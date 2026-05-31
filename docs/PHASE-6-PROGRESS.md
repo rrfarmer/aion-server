@@ -82095,3 +82095,47 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1846 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1845 handoff/completion, progress/parity/orchestration docs, then inspected Java `PlayerCommonData.getCurrentSalvationPercent`, Java `DropRegistrationService.calculateBoostDropRate`, C# `Player`, and C# quest XP salvation call sites.
+- Confirmed Java derives the boost condition from `PlayerCommonData.salvationPoint`: `getCurrentSalvationPercent()` returns 0 when points are absent, caps `salvationPoint / 1000` at 30, and drop boost only checks whether that percent is greater than zero.
+- Confirmed current C# has resolved salvation-percent parameters in quest XP planning, but no persisted or player-owned `salvationPoint` / current salvation percent surface.
+- Added an explicit resolved `salvationPercent` input to `WorldNpcDropBoostRateContextPlanService.CreateDisabledPlan(...)`.
+- Added `WorldNpcDropBoostRateContextPlan.SalvationPercent` and `WorldNpcDropBoostRateContextPlan.HasSalvation`.
+- Planner now treats a supplied salvation percent, including zero, as explicit source evidence while applying the Java +5 drop boost only when the percent is greater than zero.
+- Added focused tests for nonzero and zero resolved salvation percent.
+
+#### Migration Parity Table - Session 1846
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `PlayerCommonData.getCurrentSalvationPercent` | `WorldNpcDropBoostRateContextPlanService.CreateDisabledPlan(..., salvationPercent)` | Resolved Input Adapter | Partial | Unit Tested | Partial Parity | C# can consume an explicitly resolved salvation percent for drop boost planning, but still lacks a persisted/player-owned salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`. |
+| `DropRegistrationService.calculateBoostDropRate` salvation branch | `WorldNpcDropBoostRateContextPlan.HasSalvation` / `WorldNpcDropBoostRateContext.HasSalvation` | Readiness Planner Input | Partial | Unit Tested | Partial Parity | Planner applies the Java drop-boost condition `salvationPercent > 0` when supplied. Live workflow wiring remains blocked by stat sources. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests" --no-restore` passed with 54 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 472 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4623 tests.
+
+Remaining risks:
+- The planner is still disabled/readiness-only and is not wired into `WorldNpcDropRegistrationWorkflowService`.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat sources for this workflow.
+- C# still lacks a modeled/persisted player salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: one explicit resolved-salvation planner input, plan state fields, and focused tests.
+- Total artifacts with verified parity: 0 rows; this remains partial source/readiness parity.
+- Total artifacts needing verification: 2 rows pending real player salvation source, live stat provider wiring, and runtime comparison.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit makes salvation boost input explicit but does not complete live drop modifier parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect C# stat containers/effect stat models for a narrow `BOOST_DROP_RATE` / `DR_BOOST` source, then add a resolved-stat planner adapter without wiring workflow execution.
+- Safe alternative candidates for the next session:
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
