@@ -79343,3 +79343,80 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1794 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1793-Completion.md`, and `Phase-6-Session-1793-Handoff.md`, then re-inspected Java `TamperingAction`, Java `SM_SYSTEM_MESSAGE` tempering message factories, Java `RatesConfig.TEMPERING_CHANCES`, Java `Rnd.chance()`, the Java item XML `<tampering/>` marker, and the current C# `GameServerConnection`, `StaticData`, `ItemTemplateTable`, `SmSystemMessage`, `SmInventoryUpdateItem`, `TamperingMutationService`, and nearby delayed item-use paths.
+- Confirmed the next honest gap after UOW-1793 was the narrow live `TamperingAction.act(...)` runtime boundary itself, not a broader effect-engine rewrite. The smallest safe slice was to port the Java delayed-use orchestration, source consume behavior, non-plume rate lookup, and cancel/result packet flow while keeping `TemperingEffect` object parity out of scope.
+- Added the missing live tampering prerequisites:
+	- `ItemTemplateSummary` now carries `HasTamperingAction`
+	- `StaticData` now parses the Java `<tampering/>` action marker
+	- `GameServerOptions.Rates` now binds Java `gameserver.rates.tampering_chances`
+	- `SmSystemMessage` now exposes the missing Java tempering cancel/success/failure/max/destroy factories
+	- `SmInventoryUpdateItem` now names Java `STATS_CHANGE` as `StatsChange`
+- Added `TamperingActionExecutionPlanService` as the deterministic Java-shaped planner for:
+	- start delay metadata
+	- `calculateChance(...)`
+	- success mutation output
+	- non-plume reset failure output
+	- plume destroy failure output
+	- optional same-race level-10 world-announce packet intent
+- Tightened `TamperingMutationService.SetTemperingLevel(...)` so the updated item now transitions persistent state through Java-shaped `UpdateRequired`, matching the Java `setPersistentState(UPDATE_REQUIRED)` side effect more closely.
+- Wired live `CM_USE_ITEM` tampering handling in `GameServerConnection`:
+	- routes `<tampering/>` source items through the delayed item-use path
+	- uses Java `5000ms` start animation
+	- uses a dedicated tempering cancel message path
+	- consumes the source item before applying the tempering outcome
+	- preserves the Java silent branch when the target reaches/exceeds max after the delay but before the mutation branch
+	- sends Java-shaped target `STATS_CHANGE` inventory updates, success/failure system messages, and end animations
+	- sends delete packets for destroyed plume targets and cube updates for deleted unequipped rows
+	- emits same-race world announce packets at tempering level `10` when the config flag is enabled and a registry is present
+- Added focused parity evidence:
+	- `TamperingActionExecutionPlanServiceTests`
+	- `GameServerConnectionTamperingTests`
+	- `GamePacketTests` system-message regressions for the newly added tempering factories
+- Kept scope intentionally narrow:
+	- no first-class Java `TemperingEffect` runtime object port
+	- no attempt to claim effect-controller parity beyond the item update plus `SM_STATS_INFO` packet boundary already represented in C#
+	- no broad generic item-action refactor
+
+#### Migration Parity Table - Session 1794
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.TamperingAction.act` delayed item-use shell | `Aion.GameServer.Network.Aion.GameServerConnection.HandleTamperingUseItemAsync` + `CompleteTamperingUseItemAsync` | Live Runtime Boundary | Partial | Regression Tested | Partial Parity | Java source reviewed; C# now runs the Java-shaped delayed tampering start, cancel, source consume, success/failure message, and animation flow. The effect-engine object lifecycle itself is still not ported as a first-class Java `TemperingEffect`. |
+| `com.aionemu.gameserver.model.templates.item.actions.TamperingAction.calculateChance` | `Aion.GameServer.Services.TamperingActionExecutionPlanService.CalculateChance` + `GameServerOptions.Rates.TamperingChances` | Chance / Rate Surface | Complete | Unit Tested | Partial Parity | Java `+0 -> +1`, plume `max(25, 100 - tempering * 10)`, and non-plume membership-rate selection are now represented, and the Java config key `gameserver.rates.tampering_chances` is loaded. Runtime comparison against Java is still pending. |
+| Java item XML `<tampering/>` action marker | `Aion.GameServer.Dataholders.StaticData` + `ItemTemplateSummary.HasTamperingAction` | Static Data Action Metadata | Complete | Regression Tested | Partial Parity | C# now recognizes the Java tampering action marker and routes those source items into the live action boundary. This row is proven through focused live packet-path tests rather than a standalone parser-only audit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE` tempering message factories | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ItemAuthorize*` | Packet / Message Surface | Complete | Regression Tested | Verified Parity | Message ids and parameter ordering were reviewed against Java and regression-tested through packet serialization assertions. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.ItemUpdateType.STATS_CHANGE` in the tampering path | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryUpdateItem.StatsChange` | Packet Update-Type Surface | Complete | Regression Tested | Partial Parity | The tampering path now emits the Java `STATS_CHANGE` update mask `0` for target item info changes. Broader `ItemPacketService` parity remains distributed across multiple item-action slices. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateStartPlan_WritesJavaDelayAnimation` | Unit Added | Java `TamperingAction.act` start packet | The tampering start planner emits Java `5000ms` item-usage animation metadata. | Source-derived packet-shape unit regression. | No runtime dispatch by itself. |
+| `CreateMutationPlan_SuccessAtZeroTemperingRaisesLevelAndBuildsSuccessMessage` | Unit Added | Java `TamperingAction.calculateChance` + success branch | `+0 -> +1` always succeeds, marks the target dirty, and builds the Java success system message. | Source-derived deterministic mutation regression. | No Java runtime comparison. |
+| `CreateMutationPlan_FailedPlumeResetsBonusBuildsDestroyMessageAndAnnouncementAtTen` | Unit Added | Java `TamperingAction.act` + `setTemperingLevel` | Level-10 announce intent is emitted on success, and plume failure resets random bonus while producing the Java destroy message. | Source-derived deterministic branch regression. | Live plume-destroy runtime still depends on random chance and is not forced through the packet path here. |
+| `CalculateChance_UsesJavaPlumeCurveAndMembershipRates` | Unit Added | Java `TamperingAction.calculateChance` + `RatesConfig.TEMPERING_CHANCES` | The planner uses Java plume and membership-rate chance formulas. | Source-derived unit regression. | No runtime comparison against a running Java server. |
+| `ProcessPacketAsync_TamperingSuccessConsumesSourceUpdatesTargetAndSendsStatsChange` | Regression Added | Java `CM_USE_ITEM` -> `TamperingAction.act` | The live item-use path consumes the source, sends `STATS_CHANGE`, success message, and completion animation on guaranteed `+0 -> +1` success. | Source-shaped live packet-path regression. | Does not cover the same-race announce branch. |
+| `ProcessPacketAsync_TamperingFailureResetsNonPlumeAndConsumesSource` | Regression Added | Java `TamperingAction.act` failure path | A forced non-plume failure consumes the source, resets target tempering to `0`, sends `STATS_CHANGE`, failure message, and failure animation. | Source-shaped live packet-path regression with zeroed configured rate. | No Java runtime comparison. |
+| `CancelPendingTamperingUse_SendsAuthorizeCancelAndRemovesCooldown` | Regression Added | Java `ItemUseObserver.abort` | Canceling delayed tampering removes the source cooldown and sends the Java tempering cancel message plus end-state `3` animation. | Source-shaped live cancellation regression. | Current generic pending-item-use infrastructure still broadcasts the cancel animation before the cancel message for all modeled delayed item uses. |
+
+Remaining risks:
+- C# still does not port a first-class Java `TemperingEffect` object lifecycle; this unit proves the live item mutation and packet boundary, not the underlying effect-controller implementation.
+- The pathological Java branch where an originally equipped target disappears before delayed completion is still not explicitly proven in C#.
+- Full live proof for the same-race level-10 world announce branch still depends on adding a dedicated registry-based regression if we want packet-level evidence beyond the deterministic planner output.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 live tampering runtime branch, 1 deterministic execution planner, 1 static-data action marker, 1 config rate surface, 5 message factories, 1 named update-type constant, and 7 focused tests/regressions.
+- Total artifacts with verified parity: 1 grouped row in this unit (`SM_SYSTEM_MESSAGE` tempering factories).
+- Total artifacts needing verification: 4 grouped rows.
+- Total blocked artifacts: first-class `TemperingEffect` runtime lifecycle parity and deeper Java runtime comparison for the live tampering branch.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes the narrow live tampering runtime boundary without overstating the still-missing effect-engine parity.
+
+Next recommended unit of work:
+- Next sequential task: port the minimum explicit `TemperingEffect.apply/endEffect` or adjacent equipped-item side-effect proof needed so live equipped tampering can be objectively validated beyond the item blob plus `SM_STATS_INFO` boundary.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
