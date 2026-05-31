@@ -78956,3 +78956,66 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1788 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1787-Completion.md`, and `Phase-6-Session-1787-Handoff.md`, then re-inspected Java `Player.getDirtyItemsToUpdate`, Java `Storage.getItemsWithKinah`, Java `Storage.getDeletedItems`, Java `Storage.persistentState`, Java `InventoryDAO.store(List<Item>, ...)`, and the current C# deleted-item/logout slice landed in UOW-1787.
+- Confirmed the next honest gap was not just tracking deleted rows, but the Java storage dirty-gate harvest shape itself: once a storage is dirty, Java emits all current rows from that storage plus its deleted queue, not only the individually dirty item rows.
+- Updated `Player.GetDirtyItemsToUpdate()` to a modeled storage-dirty harvest:
+	- if a modeled storage has any current row with `New`, `UpdateRequired`, or `Deleted`, or has tracked deleted rows, C# now emits:
+		- all current rows from that storage
+		- all tracked deleted rows from that storage
+	- cube, warehouse, and account warehouse now behave this way
+- Updated logout persistence to consume the modeled harvest directly:
+	- `SavePlayerLogoutAsync` now computes `dirtyItems = player.GetDirtyItemsToUpdate()`
+	- deletes tracked deleted rows first
+	- then snapshot-updates only the non-deleted rows from the dirty harvest
+	- this removes the earlier “always flush every modeled current row on logout” behavior and moves the save set closer to Java `InventoryDAO.store(player)`
+- Added stronger evidence:
+	- `PlayerInventoryPersistentStateTests.GetDirtyItemsToUpdate_ReturnsAllCurrentRowsWhenOneStorageItemIsDirty`
+	- adjusted existing dirty-harvest tests to reflect Java dirty-storage behavior rather than per-item-only harvest
+	- `PlayerEnterWorldRepositoryDatabaseIntegrationTests.SavePlayerLogoutAsync_WritesAllCurrentRowsFromDirtyInventoryStorageAgainstJavaSchema_WhenEnabled`
+- Kept scope intentionally narrow:
+	- still no first-class Java `Storage` abstraction
+	- still no explicit storage persistent-state enum on C#
+	- still no broader live producer sweep across every removal/mutation path
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerInventoryPersistentStateTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passed with 44 tests.
+	- `dotnet test dotnetConversion\AionServer.slnx` then passed cleanly with 4764 total tests (`57` commons, `29` chat, `121` login, `4557` game).
+
+#### Migration Parity Table - Session 1788
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getDirtyItemsToUpdate` current-row harvest behavior | `Aion.GameServer.Model.GameObjects.Player.GetDirtyItemsToUpdate` | Dirty-State Harvest | Partial | Unit Tested | Partial Parity | Java source reviewed; C# now emits all current rows from a modeled dirty storage plus tracked deleted rows, matching the broad harvest shape for cube, warehouse, and account warehouse. Java `equipment.getPersistentState()` and explicit storage-state objects are still absent. |
+| `com.aionemu.gameserver.model.items.storage.Storage.getItemsWithKinah` participation under a dirty storage | `Aion.GameServer.Model.GameObjects.Player.GetDirtyItemsToUpdate` modeled storage harvest | Current-Row Storage Harvest | Partial | Unit Tested | Partial Parity | C# now includes companion current rows from the same dirty storage instead of returning only the individually dirty row. Kinah-specific behavior remains implicit through the current modeled item lists rather than a dedicated storage object. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store(List<Item>, ...)` filtered current-row update scope | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.SavePlayerLogoutAsync` | Logout Save-Set Filter | Partial | Regression Tested | Partial Parity | C# logout now writes only the non-deleted rows from the modeled dirty harvest rather than all modeled current rows. This is closer to Java filtered storage saving, but still lacks a first-class insert/update/delete batching pipeline and explicit storage-level state transitions. |
+| `com.aionemu.gameserver.services.player.PlayerLeaveWorldService.leaveWorld` + `PlayerService.storePlayer` modeled dirty-storage save boundary | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.SavePlayerLogoutAsync` | Logout Persistence Boundary | Partial | Regression Tested | Partial Parity | The logout path now combines modeled deleted-row flushing with dirty-storage-scoped current-row updates. Java `ItemStoneListDAO.save(player)` and broader runtime dirty producers remain future work. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GetDirtyItemsToUpdate_ReturnsAllCurrentRowsWhenOneStorageItemIsDirty` | Unit Added | Java `Player.getDirtyItemsToUpdate` + `Storage.getItemsWithKinah` | A single dirty row in a modeled storage causes all current rows from that storage to be harvested. | Source-derived unit regression for the storage-dirty gate shape. | No equipment storage coverage. |
+| `GetDirtyItemsToUpdate_ReturnsDirtyItemsAcrossModeledStorages` | Unit Updated | Java `Player.getDirtyItemsToUpdate` | Dirty modeled storages emit all current rows, not just the individual dirty row. | Source-derived unit regression. | No explicit storage-state object proof. |
+| `GetDirtyItemsToUpdate_IncludesTrackedDeletedItemsAcrossModeledStorages` | Unit Updated | Java `Player.getDirtyItemsToUpdate` + `Storage.getDeletedItems` | A dirty modeled storage emits both its current rows and its tracked deleted rows. | Source-derived unit regression. | No equipment/delete-queue interaction proof. |
+| `SavePlayerLogoutAsync_WritesAllCurrentRowsFromDirtyInventoryStorageAgainstJavaSchema_WhenEnabled` | Integration Added | Java `InventoryDAO.store(player)` dirty-storage current-row scope | Logout persistence writes companion current rows from a dirty cube storage even when only one row is individually dirty. | Opt-in DB-backed repository regression added at the logout boundary. | Requires `AION_GAMESERVER_DB_INTEGRATION=1` for runtime DB evidence. |
+
+Remaining risks:
+- C# still does not expose Java storage objects or storage-level `PersistentState`; the dirty-storage gate is inferred from item state and deleted queues.
+- Only the logout boundary currently consumes the modeled dirty-storage harvest; a broader live persistence pipeline still remains future work.
+- Broader live mutation/removal producers still need to feed or preserve the modeled dirty/deleted state consistently.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 modeled storage-dirty harvest update, 1 logout save-set filter update, and 4 focused test updates/additions.
+- Total artifacts with verified parity: 0 grouped rows in this unit.
+- Total artifacts needing verification: 4 grouped rows.
+- Total blocked artifacts: explicit storage-state modeling, equipment storage participation, broader live producers, and a fuller filtered inventory store pipeline.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the modeled dirty-storage harvest gap for logout without overstating the still-missing storage architecture.
+
+Next recommended unit of work:
+- Next sequential task: port the minimum explicit storage-state surface for the modeled storages so dirty-storage participation is no longer inferred solely from item states and deleted queues.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
