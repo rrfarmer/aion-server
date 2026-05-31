@@ -81603,3 +81603,58 @@ Next recommended unit of work:
 	- Java `DropRegistrationService.calculateBoostDropRate`
 	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1836 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1835 handoff/completion, progress/parity/orchestration docs, then reused the just-inspected Java `PlayerService.storePlayer`, Java `CraftCooldownsDAO`, and C# logout persistence path to define live-wiring gates.
+- Chose the next smallest pre-live repository slice: a disabled live-readiness checklist for logout craft cooldown persistence.
+- Added `PlayerLogoutCraftCooldownLiveReadinessPlanService.CreatePlan(...)`.
+- Added `PlayerLogoutCraftCooldownLiveReadinessPlan`.
+- Added readiness enums:
+	- `PlayerLogoutCraftCooldownLiveReadinessStatus`
+	- `PlayerLogoutCraftCooldownConnectionDecision`
+	- `PlayerLogoutCraftCooldownErrorDecision`
+	- `PlayerLogoutCraftCooldownLiveReadinessCriterion`
+- Modeled live wiring readiness without writing SQL:
+	- save plan must exist and be ready
+	- Java connection behavior must be preserved or an intentional C# difference must be documented
+	- Java SQL error behavior must be preserved or an intentional C# difference must be documented
+	- repository method must exist
+	- logout save hook must exist
+	- database integration coverage must exist
+- Added focused tests for blocked missing decisions, documented intentional connection difference that remains unwired, and all-gates-ready behavior.
+
+#### Migration Parity Table - Session 1836
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerService.storePlayer` craft cooldown persistence boundary | `Aion.GameServer.Services.PlayerLogoutCraftCooldownLiveReadinessPlanService.CreatePlan` | Live Readiness Planner | Partial | Unit Tested | Partial Parity | C# records gates required before live logout craft cooldown repository wiring; no live write occurs. |
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.storeCraftCooldowns` connection behavior | `PlayerLogoutCraftCooldownConnectionDecision` | Readiness Decision | Partial | Unit Tested | Partial Parity | C# requires either preserving Java separate connections or documenting an intentional C# connection-reuse difference. |
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.storeCraftCooldowns` SQL error behavior | `PlayerLogoutCraftCooldownErrorDecision` | Readiness Decision | Partial | Unit Tested | Partial Parity | C# requires either preserving Java per-operation logged/swallowed SQL exceptions or documenting an intentional aggregate-failure difference. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests" --no-restore` passed with 109 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 401 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4602 tests.
+
+Remaining risks:
+- Readiness planning is disabled and does not write to the database.
+- `PlayerEnterWorldRepository.SavePlayerLogoutAsync` still does not save `player.CraftCooldowns`.
+- No `SavePlayerCraftCooldownsAsync` repository method exists yet.
+- Java separate connection behavior and swallowed SQL exceptions still need a live implementation or documented intentional difference.
+- Full logout craft cooldown database parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one live-readiness planner method, one readiness plan record, four readiness enums, gating tests, and documentation.
+- Total artifacts with verified parity: 0 rows; this is disabled live-readiness partial parity only.
+- Total artifacts needing verification: 3 rows pending repository contract, live SQL execution, DB integration, and runtime/database comparison.
+- Total blocked artifacts: live logout craft cooldown persistence, repository method/interface/fake wiring, logout hook, and full logout persistence runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves live-wiring discipline without claiming runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add a disabled repository contract plan for `SavePlayerCraftCooldownsAsync`, including exact SQL, repository interface shape, fake repository capture requirements, and database integration expectations before live implementation.
+- Safe alternative candidates for the next session:
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
