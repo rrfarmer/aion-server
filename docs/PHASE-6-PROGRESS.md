@@ -79420,3 +79420,51 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1795 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1794-Completion.md`, and `Phase-6-Session-1794-Handoff.md`, then re-inspected Java `TamperingAction`, Java `TemperingEffect`, Java `ItemEquipmentListener`, Java `Item`, and the current C# `GameServerConnection`, `TamperingActionExecutionPlanService`, `TamperingMutationService`, `SmStatsInfo`, `TemperingTable`, `InventoryItem`, and existing tampering regressions.
+- Confirmed the next honest gap after UOW-1794 was mostly verification, not a broad missing implementation. The C# stats pipeline already applied tempering modifiers through `TemperingTable`, but there was no live regression proving the equipped-item `SM_STATS_INFO` side effect or the same-race level-10 announce branch from the actual tampering runtime path.
+- Expanded `GameServerConnectionTamperingTests` as a focused evidence unit rather than widening production scope:
+	- added deterministic equipped accessory success coverage for the Java level-10 announce branch using explicit `tampering_templates` test data and `tampering_chances = 100`
+	- added deterministic equipped accessory failure coverage using `tampering_chances = 0`
+	- added registry-backed capture of visible broadcasts and world broadcasts so the tests can distinguish owner-directed packets from Java-style visibility/world fanout
+	- added packet-content assertions proving equipped tampering changes the live `SM_STATS_INFO` max-HP payload by the expected tempering-template delta
+- Kept scope intentionally narrow:
+	- no production runtime rewrite
+	- no attempt to port a first-class Java `TemperingEffect` object lifecycle
+	- no random live plume-destroy runtime proof, because Java plume failure remains chance-based in the live path and would not be deterministic evidence
+
+#### Migration Parity Table - Session 1795
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.item.actions.TamperingAction.act` equipped success/reset side effects | `Aion.GameServer.Network.Aion.GameServerConnection.HandleTamperingUseItemAsync` + `CompleteTamperingUseItemAsync` | Live Equipped Runtime Boundary | Partial | Regression Tested | Partial Parity | Java source reviewed; the C# live path now has regression evidence for equipped accessory success and reset branches, including `SM_STATS_INFO` updates and the level-10 same-race announce branch. Plume failure destroy remains covered deterministically only in planner-level tests, not live runtime. |
+| `com.aionemu.gameserver.model.enchants.TemperingEffect.apply` stat fanout for equipped items | `Aion.GameServer.Network.Aion.ServerPackets.SmStatsInfo.PlayerEquipmentStats.GetTemperingModifiers` + `Aion.GameServer.Dataholders.TemperingTable` | Equipped Stat Fanout Surface | Partial | Regression Tested | Partial Parity | C# already applied tempering modifiers through the stats packet pipeline; this unit adds objective live evidence that equipped tampering changes the serialized `SM_STATS_INFO` resource payload by Java-shaped tempering-template deltas. There is still no first-class Java `TemperingEffect` object lifecycle on the C# side. |
+| `com.aionemu.gameserver.model.stats.listeners.ItemEquipmentListener.onItemEquipment` / `onItemUnequipment` tempering interaction | `Aion.GameServer.Network.Aion.GameServerConnection` + `SmStatsInfo` packet send path | Equipped Packet / Recalculation Boundary | Partial | Regression Tested | Partial Parity | The equipped tampering runtime now has explicit regression proof that owner-visible stat refresh happens after both success and reset branches. Listener-level object lifecycle and persistent `GameStats` effect ownership remain modeled indirectly through packet-time stat recomputation. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ProcessPacketAsync_TamperingSuccessOnEquippedAccessorySendsStatsInfoAndRaceAnnouncementAtTen` | Regression Added | Java `TamperingAction.act`, `TemperingEffect.apply`, and `ItemEquipmentListener.onItemEquipment` | A deterministic equipped accessory `+9 -> +10` success sends the Java success message, visible use animations, same-race world announce packet, and a changed `SM_STATS_INFO` max-HP payload. | Source-shaped live runtime regression using deterministic tampering rates and explicit tempering-template test data. | No first-class Java `TemperingEffect` object instance parity. |
+| `ProcessPacketAsync_TamperingFailureOnEquippedAccessoryResetsTemperingAndSendsStatsInfo` | Regression Added | Java `TamperingAction.act` failure/reset branch plus equipped tempering fanout | A deterministic equipped accessory failure resets tempering to `0`, sends the Java failure message, and refreshes `SM_STATS_INFO` with the expected tempering-template max-HP loss. | Source-shaped live runtime regression using deterministic zero success chance and explicit tempering-template test data. | Does not prove live plume destroy packet flow. |
+
+Remaining risks:
+- C# still does not port a first-class Java `TemperingEffect` object lifecycle or `Item.temperingEffect` ownership.
+- Live plume-destroy packet proof remains non-deterministic in the runtime path and is still only covered at planner level.
+- The current cancel path still depends on the generic delayed item-use infrastructure, which broadcasts the cancel animation before the tempering cancel message.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: no production runtime files; 1 expanded live tampering regression harness and 2 new deterministic runtime regressions.
+- Total artifacts with verified parity: 0 new grouped rows in this unit.
+- Total artifacts needing verification: 3 grouped rows.
+- Total blocked artifacts: first-class `TemperingEffect` lifecycle parity and deterministic live plume-destroy proof.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit strengthens equipped tampering evidence without overstating the still-missing effect-object lifecycle.
+
+Next recommended unit of work:
+- Next sequential task: inspect the minimum source-shaped `TemperingEffect.apply/endEffect` ownership surface still missing on `Item` / equipped-stat lifecycle, or else move to the next isolated gameplay parity slice if a deterministic live effect-object proof cannot be added without broader architectural work.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
