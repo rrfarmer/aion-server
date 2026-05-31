@@ -82052,3 +82052,46 @@ Next recommended unit of work:
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1845 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1844 handoff/completion, progress/parity/orchestration docs, then inspected Java `RatesConfig.DROP_RATES`, Java `Rates.get`, C# `GameServerOptions`, `GameServerRateOptions`, and current drop boost planner call sites.
+- Chose the configured drop-rate options slice because C# already loads Java rate arrays and only lacked the `gameserver.rates.drop` binding needed by `DropRegistrationService.calculateBoostDropRate`.
+- Added `GameServerRateOptions.DropRates` with Java default `[1f, 2f]`.
+- Updated `GameServerOptions.LoadFromJavaConfig(...)` to read `gameserver.rates.drop` from Java properties and `mygs.properties` overrides.
+- Added a `WorldNpcDropBoostRateContextPlanService.CreateDisabledPlan(Player?, GameServerRateOptions?, ...)` overload that feeds `DropRates` into the existing disabled planner.
+- Added focused tests proving default and override config loading plus options-backed planner membership-rate selection.
+
+#### Migration Parity Table - Session 1845
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `RatesConfig.DROP_RATES` | `GameServerRateOptions.DropRates` | Configuration Option | Partial | Unit Tested | Partial Parity | C# now loads `gameserver.rates.drop` with Java's `1.0, 2.0` default and `mygs.properties` override behavior. Runtime drop workflow consumption remains deferred. |
+| `Rates.get(killer, RatesConfig.DROP_RATES)` | `WorldNpcDropBoostRateContextPlanService.CreateDisabledPlan(Player?, GameServerRateOptions?, ...)` | Readiness Planner Input | Partial | Unit Tested | Partial Parity | Planner can consume options-backed drop rates and clamps membership selection through the existing list path. Other Java live inputs still block workflow readiness. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerOptionsTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests" --no-restore` passed with 56 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerOptionsTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 474 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4621 tests.
+
+Remaining risks:
+- The planner is still disabled/readiness-only and is not wired into `WorldNpcDropRegistrationWorkflowService`.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat sources for this workflow.
+- C# still lacks a modeled salvation percent source on `Player`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: one Java config option binding, one planner overload, and focused tests.
+- Total artifacts with verified parity: 0 rows; this remains partial source/readiness parity.
+- Total artifacts needing verification: 2 rows pending live workflow wiring and runtime comparison.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation drop boost provider, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit removes the configured drop-rate options gap for the readiness planner but does not complete live drop modifier parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect and add the narrowest available source for killer salvation percent, or, if no C# surface exists, add a disabled readiness adapter documenting the missing Java `PlayerCommonData.getCurrentSalvationPercent` dependency.
+- Safe alternative candidates for the next session:
+	- inspect C# stat containers for a narrow `BOOST_DROP_RATE` / `DR_BOOST` source without wiring workflow execution
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
