@@ -78818,3 +78818,72 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout persistence test path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1786 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, and `Phase-6-Session-1785-Handoff.md`, then re-inspected Java `Item.setPersistentState`, Java `Player.getDirtyItemsToUpdate`, Java `Storage`, Java `Equipment`, Java `Equipment.equipItem`, Java `Equipment.unEquipItem`, Java `Equipment.switchHands`, Java `Equipment.usePowerShard`, Java `ItemActionService.identifyItem`, Java `ItemActionService.applyTuneResult`, and Java `TuningAction.act`, alongside the current C# `InventoryItem`, `Player`, `EquipmentService`, and the identify/reidentify planner copies.
+- Confirmed the smallest safe follow-up after UOW-1785 was not a broad storage rewrite, but the missing Java item-state transition semantics plus the adjacent equipment/item copy path that was silently dropping `PersistentState` back to the default `Updated`.
+- Added Java-shaped item transition semantics in C#:
+	- introduced `InventoryItem.TransitionPersistentState(currentState, requestedState)`
+	- mirrored Java `Item.setPersistentState` behavior for:
+		- `NEW -> UPDATE_REQUIRED` staying `NEW`
+		- `NEW -> DELETED` becoming `NOACTION`
+		- non-`NEW` `UPDATE_REQUIRED` becoming `UPDATE_REQUIRED`
+		- non-`NEW` `DELETED` becoming `DELETED`
+- Updated the current identify/reidentify/tuning mutation planners to use the Java-shaped transition helper instead of assigning `UpdateRequired` directly:
+	- `IdentifyItemExecutionPlanService`
+	- `TuneResultApplicationPlanService`
+	- `TuningActionExecutionPlanService`
+- Updated `EquipmentService.CopyInventoryItem` to preserve parity-relevant item state across live equipment mutations:
+	- preserved `PendingTuneResult`
+	- preserved the existing `PersistentState` when no modeled field changed
+	- applied Java-shaped `UpdateRequired` transitions when count, slot, equip state, or soul-bind state changed
+- Added focused evidence:
+	- `PlayerInventoryPersistentStateTests.TransitionPersistentState_MirrorsJavaItemStateRules`
+	- `EquipmentServiceTests.ChangeEquipment_EquipsOneHandWeaponInMainHandWithoutDualWieldSkill` now asserts a `NEW` item stays `NEW`
+	- `EquipmentServiceTests.ChangeEquipment_UnequipsUpdatedItemAndMarksItUpdateRequired`
+- Kept scope intentionally narrow:
+	- no Java `Storage.deletedItems` side-list port yet
+	- no Java filtered dirty-row save path yet
+	- no broad repo-wide pass across every `InventoryItem` copy helper yet
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerInventoryPersistentStateTests|FullyQualifiedName~EquipmentServiceTests|FullyQualifiedName~IdentifyItemExecutionPlanServiceTests|FullyQualifiedName~TuneResultApplicationPlanServiceTests|FullyQualifiedName~TuningActionExecutionPlanServiceTests"` passed with 51 tests.
+	- A first `dotnet test dotnetConversion\AionServer.slnx` run failed in `GameServerConnectionInventoryExpansionUseItemTests.ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate`.
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~ProcessPacketAsync_CompositeStonesMergesRewardWithoutCubeUpdate"` then passed in isolation with 1 test.
+	- A second `dotnet test dotnetConversion\AionServer.slnx` run then passed cleanly with 4758 total tests (`57` commons, `29` chat, `121` login, `4551` game).
+
+#### Migration Parity Table - Session 1786
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.Item.setPersistentState` | `Aion.GameServer.Model.GameObjects.InventoryItem.TransitionPersistentState` | Item Dirty-State Transition Helper | Complete | Unit Tested | Verified Parity | Java source reviewed; the C# helper now mirrors the Java `NEW -> UPDATE_REQUIRED`, `NEW -> DELETED`, and non-`NEW` transition rules with direct unit coverage. The helper only covers the item-level state transition logic itself; broader storage side effects remain separate work. |
+| `com.aionemu.gameserver.services.item.ItemActionService.identifyItem` + `com.aionemu.gameserver.services.item.ItemActionService.applyTuneResult` + `com.aionemu.gameserver.model.templates.item.actions.TuningAction.act` dirty-item transition behavior | `Aion.GameServer.Services.IdentifyItemExecutionPlanService` + `TuneResultApplicationPlanService` + `TuningActionExecutionPlanService` | Runtime Mutation Dirty-State Bridge | Partial | Regression Tested | Partial Parity | C# planner copies now request dirty-state changes through the Java-shaped transition helper, so newly created items remain `New` rather than being over-promoted to `UpdateRequired`. The wider storage-state lifecycle and delete handling are still incomplete. |
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment.equipItem` + `unEquipItem` + `switchHands` + `usePowerShard` item mutation boundary | `Aion.GameServer.Services.EquipmentService` | Equipment Item Mutation Service | Partial | Regression Tested | Partial Parity | C# equipment item copies now preserve `PendingTuneResult`, preserve existing dirty state when no modeled field changed, and apply Java-shaped `UpdateRequired` transitions when equip-related fields mutate. Java `Equipment`-level persistent state and storage aggregation behavior are still absent. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getDirtyItemsToUpdate` equipment participation assumption | `Aion.GameServer.Model.GameObjects.Player.GetDirtyItemsToUpdate` + `Aion.GameServer.Services.EquipmentService` | Dirty-State Harvest Participation | Partial | Regression Tested | Partial Parity | Equipped items represented inside `Player.InventoryItems` now retain correct item-level dirty state through the current equipment mutation service, which narrows one source of parity loss in the modeled harvest path. Java `equipment.getPersistentState()` and deleted-item side lists are still not modeled directly. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `TransitionPersistentState_MirrorsJavaItemStateRules` | Unit Added | Java `Item.setPersistentState` | The C# item-state helper follows the Java transition rules for `NEW`, `UPDATE_REQUIRED`, `DELETED`, and `UPDATED`. | Source-derived unit regression over the exact transition table in Java. | Does not cover storage-level side effects. |
+| `ChangeEquipment_EquipsOneHandWeaponInMainHandWithoutDualWieldSkill` | Regression Updated | Java `Equipment.equipItem` + `Item.setPersistentState` | Equipping a `NEW` item keeps it `NEW` after the equip mutation rather than over-promoting it to `UpdateRequired`. | Source-derived regression on the adjacent equipment path. | Does not prove storage-level dirty-state aggregation. |
+| `ChangeEquipment_UnequipsUpdatedItemAndMarksItUpdateRequired` | Regression Added | Java `Equipment.unEquipItem` + `Item.setPersistentState` | Unequipping an already persisted item marks it `UpdateRequired` after its equip fields change. | Source-derived regression on the live equipment mutation path. | No delete-side-list proof. |
+
+Remaining risks:
+- C# still does not model Java `Storage.deletedItems`, storage-level `PersistentState`, or `equipment.getPersistentState()`, so dirty harvest is still a narrowed approximation.
+- The new transition helper closes the item-state semantic gap, but many non-equipment `InventoryItem` copy helpers still do not explicitly preserve or transition `PersistentState`; only the touched retuning/identify/equipment paths are covered in this unit.
+- The first full-suite attempt hit the recurring transient inventory-expansion failure area, so this unit relies on the isolated rerun plus the second completed all-green full-suite run for evidence.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 item transition helper, 3 planner transition updates, 1 equipment copy-path preservation update, and 3 focused test updates/additions.
+- Total artifacts with verified parity: 1 grouped row in this unit.
+- Total artifacts needing verification: 3 grouped rows.
+- Total blocked artifacts: storage deleted-item queues, storage/equipment-level dirty-state participation, and Java-shaped filtered persistence writes.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the direct item-state transition gap and the adjacent equipment copy regression without overstating the still-missing storage lifecycle.
+
+Next recommended unit of work:
+- Next sequential task: port the minimum modeled `Storage.deletedItems` / filtered dirty-row behavior needed for `Player.getDirtyItemsToUpdate` to represent Java deletions and removals more honestly for cube, warehouse, and account warehouse items.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout persistence test path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
