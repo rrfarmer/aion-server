@@ -82976,3 +82976,50 @@ Next recommended unit of work:
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
 	- start a tiny live `StatCapUtil` formula slice only if it can be compared against Java source-derived cases without touching active drop workflow execution
+
+### Session 1864 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1863 handoff/completion, progress/parity/orchestration docs, then inspected Java `StatRateFunction.apply`, Java `Stat2`, C# `SkillBuffStat2EvaluationReadinessReportService`, C# `SkillBuffStatFunctionPlanService`, C# active drop-boost readiness, and nearby tests.
+- Confirmed Java `StatRateFunction.apply` has a special branch only for bonus `SPEED` rate functions with a negative value when the current stat bonus is already negative. In that case Java uses `stat.getCurrent()` as the rate base instead of `stat.getBaseWithoutBaseRate()` to avoid stacking negative speed rates down to non-positive run speed.
+- Added negative-speed-rate readiness evidence to `SkillBuffStat2EvaluationReadinessReportService`.
+- Added `NegativeSpeedRateFunctionCount`, `RequiresNegativeSpeedRateFunctionHandling`, and `HasLiveNegativeSpeedRateFunctionProvider`.
+- Added `BlockedMissingNegativeSpeedRateFunctionProvider`, ordered after general stat-function apply and stat-cap readiness because it is a narrower Java `StatRateFunction` branch.
+- Kept this unit readiness-only; no live `StatRateFunction` evaluator or live `Stat2` mutation was enabled.
+
+#### Migration Parity Table - Session 1864
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `StatRateFunction.apply` negative bonus `SPEED` branch | `SkillBuffStat2EvaluationReadinessReport.RequiresNegativeSpeedRateFunctionHandling` | Readiness Evidence | Partial | Unit Tested | Partial Parity | C# now reports when planned stat functions require Java's current-value base special case. It does not execute the rate function. |
+| `StatRateFunction.apply` live branch dependency | `SkillBuffStat2EvaluationReadinessStatus.BlockedMissingNegativeSpeedRateFunctionProvider` | Provider Gate | Partial | Unit Tested | Partial Parity | C# blocks runtime-evaluation readiness for negative bonus `SPEED` rate plans unless an explicit live provider is present. No runtime Java comparison was run. |
+| `Stat2.getCurrent` current-value base dependency | `SkillBuffStat2EvaluationReadinessReport.JavaSource` / `CurrentValueFormula` | Formula Evidence | Partial | Unit Tested | Partial Parity | Existing current-value formula evidence now documents its role in the negative speed branch. Live truncation/order behavior still needs implementation before verified parity. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests" --no-restore` passed with 23 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionRegistryReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 521 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4677 tests.
+
+Remaining risks:
+- Negative speed-rate handling remains report-only; C# still does not execute Java `StatRateFunction.apply`.
+- C# still lacks live `Stat2` storage/formula mutation, Java truncation-order proof, and rate-function application ordering.
+- Active drop-boost readiness remains report-only; C# still does not port live `CreatureGameStats` storage, function insertion/removal, snapshot locking/copying, stat caps, max-stat synchronization, condition validators, or active-effect lifecycle.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks a modeled/persisted player salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: negative `SPEED` rate readiness evidence and focused tests.
+- Total artifacts with verified parity: 0 rows; this remains readiness/reporting parity only.
+- Total artifacts needing verification: 6 rows pending live Stat2 state, function apply behavior, negative speed-rate execution, stat caps, condition validators, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves live Stat2 readiness evidence but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java `StatAddFunction`, `StatSetFunction`, `AdditionStat`, and `ReverseStat` apply/math differences and decide whether a small source-derived formula-readiness report or a narrow live formula test helper can be added without wiring active gameplay.
+- Safe alternative candidates for the next session:
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+	- start a tiny live `StatCapUtil` formula slice only if it can be compared against Java source-derived cases without touching active drop workflow execution
