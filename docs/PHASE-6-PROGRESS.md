@@ -79827,3 +79827,60 @@ Next recommended unit of work:
 	- investigate and stabilize the order-sensitive `GameServerConnectionInventoryExpansionUseItemTests` failures seen during full-suite runs
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1802 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the required migration/orchestration/parity docs plus the latest UOW-1801 handoff, checked the clean post-UOW-1801 commit, then re-inspected Java `CraftService.startCrafting`, `checkCraft`, `sendCancelCraft`, `SM_CRAFT_UPDATE`, `SM_CRAFT_ANIMATION`, current C# `CraftService`, packet plan services, and craft tests.
+- Chose the smallest deterministic Java `startCrafting` slice after early target validation: DP requirement failure planning and cancel-craft packet composition. Kept live `startCrafting`, DP mutation, stance/inventory/recipe/cooldown/skill/material validation, bonus item consumption, scheduler work, and task startup outside this unit.
+- Extended `CraftService.CreateStartCraftingValidationPlan(...)` with the Java DP requirement guard after non-morph static target validation.
+- Added `CraftStartValidationStatus.NotEnoughDp` and recorded `RequiredDp` / `CurrentDp` on `CraftStartValidationPlan`.
+- Added `CraftService.CreateStartCancelPacketPlan(...)` plus `CraftStartCancelPacketPlan` / `CraftStartCancelPacketPlanStatus`.
+- Planned Java `sendCancelCraft` packet composition:
+	- self `SM_CRAFT_UPDATE(skillId, itemTemplate, 0, 0, 4, 0, 0)`
+	- broadcast `SM_CRAFT_ANIMATION(playerObjId, targetObjId, 0, 2)`
+- Added focused `CraftServiceTests` proving DP guard ordering, sufficient-DP continuation, cancel update/animation serialized payload fields, and missing-input no-plan behavior.
+
+#### Migration Parity Table - Session 1802
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` DP requirement guard | `Aion.GameServer.Services.CraftService.CreateStartCraftingValidationPlan` `NotEnoughDp` branch | Validation Guard | Partial | Unit Tested | Partial Parity | Java source reviewed; C# checks DP after target validation and records required/current DP. Audit logging and later `checkCraft` branches remain pending. |
+| `com.aionemu.gameserver.services.craft.CraftService.sendCancelCraft` | `Aion.GameServer.Services.CraftService.CreateStartCancelPacketPlan` | Packet Plan | Partial | Unit Tested | Partial Parity | Java source reviewed; C# creates the same cancel update and animation packets, but does not send them live from start-craft failure handling yet. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CRAFT_UPDATE` action `4` cancel payload | `Aion.GameServer.Network.Aion.ServerPackets.SmCraftUpdate` serialized by cancel plan | Server Packet | Complete for this action | Unit Tested | Verified Parity | Byte-level evidence covers skill id, action `4`, item id, zero success/failure/speed/delay, and message id `1330051`. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CRAFT_ANIMATION` cancel animation payload | `Aion.GameServer.Network.Aion.ServerPackets.SmCraftAnimation` serialized by cancel plan | Server Packet | Complete for this action | Unit Tested | Verified Parity | Byte-level evidence covers player object id, target object id, skill id `0`, and action `2`. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateStartCraftingValidationPlan_ChecksDpAfterTargetValidation` | Unit Added | Java `checkCraft` target guards before DP guard | Invalid non-morph target still wins before insufficient DP, and valid target reaches `NotEnoughDp`. | Source-derived planner regression. | Audit logging and later guards remain pending. |
+| `CreateStartCraftingValidationPlan_AllowsSufficientDpToContinue` | Unit Added | Java `checkCraft` DP guard continuation | Sufficient DP records required/current DP and proceeds to later unported guards. | Source-derived planner regression. | Does not spend DP. |
+| `CreateStartCancelPacketPlan_PlansJavaCancelUpdateAndAnimation` | Unit Added | Java `sendCancelCraft`, `SM_CRAFT_UPDATE`, `SM_CRAFT_ANIMATION` | Cancel plan creates the expected packet pair and serialized payload fields. | Byte-level packet evidence for modeled fields. | Plan is not live fanout yet. |
+| `CreateStartCancelPacketPlan_MissingInputsDoesNotPlan` | Unit Added | Java `sendCancelCraft` data requirements | Missing player/recipe/product template returns conservative no-plan state. | Source-derived planner regression. | Java call path usually has these values earlier in `startCrafting`. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests" --no-restore` passed with 22 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --no-restore` was attempted but exceeded the 3-minute command timeout before returning results.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4528 tests.
+
+Remaining risks:
+- C# still does not execute Java `CraftService.startCrafting`.
+- Cancel packet pair is planned but not yet sent on live validation failure.
+- DP mutation remains separate; `SpendRecipeDpForCraftStartAsync` must only be consumed after all Java pre-spend guards pass.
+- Stance, inventory full, recipe ownership, cooldown, skill, material validation/consumption, bonus item consumption, interval selection, task scheduling, and craft completion remain pending.
+- No first-class C# `StaticObject` craft-station model yet.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 1 DP validation branch, 1 cancel packet planner, 2 plan/status models, and 4 focused unit tests.
+- Total artifacts with verified parity: 2 grouped packet-action rows for serialized cancel payloads.
+- Total artifacts needing verification: 2 grouped rows for live DP/cancel integration.
+- Total blocked artifacts: live start-craft execution, first-class static craft targets, live cancel fanout, materials/DP/cooldown/skill validation, and scheduler startup.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit narrows start-craft validation and cancellation behavior without claiming live runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: port the next smallest `CraftService.startCrafting` validation slice after DP/cancel planning, likely stance/hide guard planning and inventory-full planning, still without material mutation or scheduler startup.
+- Safe alternative candidates for the next session:
+	- wire cancel packet fanout into a non-live start-craft failure orchestration helper with tests, if the validation branches remain deterministic
+	- investigate and stabilize the order-sensitive `GameServerConnectionInventoryExpansionUseItemTests`
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `DropRegistrationService.calculateBoostDropRate`
