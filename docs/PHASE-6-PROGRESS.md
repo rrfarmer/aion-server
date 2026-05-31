@@ -81440,3 +81440,66 @@ Next recommended unit of work:
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
 	- inspect Java finish-craft exception/null behavior around missing combo products and item templates before any live execution wiring
+
+### Session 1833 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1832 handoff/completion, progress/parity/orchestration docs, then inspected Java `CraftService.finishCrafting` full operation order and the existing C# work-order, XP, reward, logging, and cooldown planners/tests.
+- Chose the next smallest finish-craft composition slice: a non-live Java-ordered finish orchestration plan that composes already-disabled planners without adding live mutation.
+- Added `CraftService.CreateFinishOrchestrationPlan(...)`.
+- Added `CraftFinishOrchestrationPlan`.
+- Added `CraftFinishOrchestrationStatus`.
+- Added `CraftFinishOrchestrationStep`.
+- Modeled Java finish-craft order as descriptor data:
+	- work-order recipe delete and fail-craft quest callback
+	- skill/common XP
+	- crafted item reward
+	- craft logging
+	- craft cooldown
+- Composed existing non-live plans:
+	- `CraftFinishWorkOrderPlan`
+	- `CraftFinishXpPlan`
+	- `CraftFinishRewardPlan`
+	- `CraftFinishLoggingPlan`
+	- `CraftFinishCooldownCompositionPlan`
+- Preserved disabled behavior throughout:
+	- no recipe deletion or recipe packet send
+	- no quest callback execution
+	- no skill/common XP mutation
+	- no live reward insertion or packet send
+	- no log emission
+	- no cooldown mutation or persistence
+- Added focused tests for full Java-ordered composition and inactive optional branches.
+
+#### Migration Parity Table - Session 1833
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.finishCrafting` operation order | `Aion.GameServer.Services.CraftService.CreateFinishOrchestrationPlan` | Orchestration Planner | Partial | Unit Tested | Partial Parity | C# composes existing disabled work-order, XP, reward, logging, and cooldown plans in Java order; no live side effects are executed. |
+| `CraftService.finishCrafting` work-order/XP/reward/logging/cooldown side effects | `CraftFinishOrchestrationPlan` | Orchestration Descriptor | Partial | Unit Tested | Partial Parity | C# records would-flags and child plan statuses while keeping `DidExecuteAnyLiveSideEffect == false`; live runtime execution remains future work. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests" --no-restore` passed with 76 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 368 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4592 tests.
+
+Remaining risks:
+- Finish orchestration remains non-live and does not execute any Java side effect.
+- Reward planning can create item/packet descriptors, but no storage mutation, object-id persistence, packet send, or DB write occurs.
+- Java exception/null behavior for missing combo products or missing item templates remains conservatively handled by plan statuses instead of live exceptions.
+- Live config/rate lookup, recipe deletion, quest callbacks, XP/common XP mutation, reward insertion, logging, cooldown mutation/persistence, and full runtime execution remain incomplete.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: one finish orchestration planner method, one orchestration plan record, one status enum, one step enum, Java operation-order descriptor, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is disabled orchestration-composition partial parity only.
+- Total artifacts needing verification: 2 rows pending live side effects, exception/null behavior, runtime ordering, and Java runtime comparison.
+- Total blocked artifacts: live finish-craft execution, live recipe deletion, quest callback execution, crafted item insertion, live XP mutation, logging, cooldown mutation/persistence, and full craft runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves finish-craft orchestration evidence without claiming live runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java finish-craft exception/null behavior around missing combo products and missing item templates, then add conservative tests/documentation for the C# disabled planners before any live execution wiring.
+- Safe alternative candidates for the next session:
+	- begin live logout craft cooldown save design only after explicit connection/error behavior scoping
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- start a live finish-craft execution design only after explicitly scoping recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and error behavior
