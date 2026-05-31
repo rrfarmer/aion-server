@@ -82187,3 +82187,50 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1848 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1847 handoff/completion, progress/parity/orchestration docs, then inspected Java `CreatureGameStats`, Java `BufEffect`, Java `BoostDropRateEffect`, Java `DRBoostEffect`, Java stat function classes, C# `SkillTemplateTable`, and C# static skill parsing.
+- Confirmed Java `BoostDropRateEffect` and `DRBoostEffect` are empty `BufEffect` subclasses whose stat behavior comes from `<change>` entries under `boostdroprate` and `drboost` XML nodes.
+- Confirmed C# skill-template parsing preserved some passive mastery stat changes, but did not preserve `boostdroprate` / `drboost` buff stat effect metadata.
+- Added `SkillBuffStatEffectSummary` and exposed `SkillTemplateSummary.BuffStatEffects`.
+- Updated static data parsing to preserve `boostdroprate` and `drboost` effect nodes and their `SkillStatChange` entries.
+- Added a focused XML fixture test proving both Java effect element names and their `change` entries are retained.
+- Added real static-data assertions for known Java skills `8472` (`BOOST_DROP_RATE`) and `9878` (`DR_BOOST`).
+
+#### Migration Parity Table - Session 1848
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `BoostDropRateEffect extends BufEffect` | `SkillBuffStatEffectSummary` / `SkillTemplateSummary.BuffStatEffects` | Static Skill Effect Metadata | Partial | Unit Tested | Partial Parity | C# now preserves `boostdroprate` XML effect nodes and `BOOST_DROP_RATE` change entries. Runtime application to live stats remains absent. |
+| `DRBoostEffect extends BufEffect` | `SkillBuffStatEffectSummary` / `SkillTemplateSummary.BuffStatEffects` | Static Skill Effect Metadata | Partial | Unit Tested | Partial Parity | C# now preserves `drboost` XML effect nodes and `DR_BOOST` change entries. Runtime application to live stats remains absent. |
+| `BufEffect.getModifiers` change entries | `StaticData` skill-template parser / `SkillStatChange` | XML Change Parsing | Partial | Unit Tested | Partial Parity | C# stores stat name, function, value, and delta for these drop boost effect nodes, but does not yet model conditions, priority, owner, or live stat calculation. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests" --no-restore` passed with 52 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 475 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4626 tests.
+
+Remaining risks:
+- This unit preserves static metadata only; it does not add a live `CreatureGameStats` equivalent or apply effects to players/NPCs.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks `BufEffect` conditions, stat function ordering, owner removal, and stat recalculation side effects for these effects.
+- C# still lacks a modeled/persisted player salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one static buff-stat effect summary, `boostdroprate` / `drboost` XML parsing, and focused/real-data tests.
+- Total artifacts with verified parity: 0 rows; this remains static metadata parity only.
+- Total artifacts needing verification: 3 rows pending live stat provider, effect runtime application, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit preserves missing static drop boost effect inputs but does not complete live drop modifier parity.
+
+Next recommended unit of work:
+- Next sequential task: add a disabled drop boost stat-provider readiness report that consumes `SkillTemplateSummary.BuffStatEffects`, distinguishes available static metadata from missing live effect/state providers, and keeps workflow execution blocked until a real `CreatureGameStats` equivalent exists.
+- Safe alternative candidates for the next session:
+	- inspect Java `BufEffect` conditions/stat-function ordering deeply before any live provider design
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
