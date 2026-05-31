@@ -81503,3 +81503,52 @@ Next recommended unit of work:
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
 	- start a live finish-craft execution design only after explicitly scoping recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and error behavior
+
+### Session 1834 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1833 handoff/completion, progress/parity/orchestration docs, then inspected Java `RecipeTemplate.getComboProduct`, Java `CraftService.finishCrafting`, Java `ItemService.addItem`, and current C# finish-craft planners/tests.
+- Chose the next smallest pre-live wiring slice: a disabled exception-risk diagnostic for Java finish-craft combo-product and item-template failure edges.
+- Added `CraftService.CreateFinishExceptionRiskPlan(...)`.
+- Added `CraftFinishExceptionRiskPlan`.
+- Added `CraftFinishExceptionRiskStatus`.
+- Modeled Java exception-shaped behavior without throwing:
+	- `RecipeTemplate.getComboProduct(1)` can throw `IndexOutOfBoundsException` before `QuestEngine.onFailCraft` when a max-production failed craft has a present but empty combo-product list.
+	- `RecipeTemplate.getComboProduct(critCount)` can throw `IndexOutOfBoundsException` during product selection when the combo-product list exists but does not contain the requested critical index.
+	- `CraftService.finishCrafting` can throw `NullPointerException` by unboxing a null `Integer` combo product into `int productItemId` when `critCount > 0` and no combo-product list exists.
+	- `ItemService.addItem` can throw `NullPointerException` via `Objects.requireNonNull(DataManager.ITEM_DATA.getItemTemplate(itemId), "No item with id " + itemId)`.
+- Added focused tests for fail-craft combo index failure, critical combo null unboxing, missing item template at `ItemService.addItem`, and no-known-risk behavior.
+
+#### Migration Parity Table - Session 1834
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.recipe.RecipeTemplate.getComboProduct` exception behavior | `Aion.GameServer.Services.CraftService.CreateFinishExceptionRiskPlan` | Exception Diagnostic | Partial | Unit Tested | Partial Parity | C# records Java `IndexOutOfBoundsException` and null-unbox `NullPointerException` edges without throwing; disabled planners remain conservative until live execution is explicitly scoped. |
+| `com.aionemu.gameserver.services.craft.CraftService.finishCrafting` product selection | `CraftFinishExceptionRiskPlan` | Exception Diagnostic | Partial | Unit Tested | Partial Parity | C# records the product-selection null/index risks that Java does not guard; existing product/reward planners continue to return statuses rather than throwing. |
+| `com.aionemu.gameserver.services.item.ItemService.addItem` missing-template guard | `CraftFinishExceptionRiskStatus.JavaWouldThrowMissingItemTemplateAtAddItem` | Exception Diagnostic | Partial | Unit Tested | Partial Parity | C# records Java `Objects.requireNonNull` missing item-template behavior; live add-item exception behavior remains unwired. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests" --no-restore` passed with 80 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 372 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4596 tests.
+
+Remaining risks:
+- Exception-risk planning is disabled and does not throw.
+- Existing finish product/reward/logging/orchestration planners still use conservative statuses for some Java exception-shaped edges.
+- Live finish-craft execution, including exact Java exception propagation, remains unwired.
+- Full recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown mutation/persistence, and runtime comparison remain incomplete.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one finish exception-risk diagnostic method, one diagnostic plan record, one status enum, Java exception breadcrumbs, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is disabled diagnostic partial parity only.
+- Total artifacts needing verification: 3 rows pending live exception propagation, live finish-craft execution, and Java runtime comparison.
+- Total blocked artifacts: live finish-craft execution, recipe deletion, quest callback execution, crafted item insertion, live XP mutation, logging, cooldown mutation/persistence, and full craft runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves pre-live finish-craft failure evidence without claiming runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: begin live logout craft cooldown save design only after explicit connection/error behavior scoping, using the existing disabled `CraftCooldownPersistencePlanService` and `CraftCooldownPersistenceAdapterPlanService` as evidence.
+- Safe alternative candidates for the next session:
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
