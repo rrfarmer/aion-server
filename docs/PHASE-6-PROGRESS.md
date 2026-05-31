@@ -84050,3 +84050,54 @@ Next recommended unit of work:
 	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
+### Session 1884 (May 31, 2026)
+- Performed fresh Work Discovery after UOW-1883: re-read required migration/orchestration/parity docs, latest completion and handoff, rechecked Java/Maven availability, inspected Java `SM_REPURCHASE`, `CM_BUY_ITEM`, `RepurchaseService`, `RepurchaseList`, `TradeService.performSellToShop`, and C# server-packet/item-info blob helpers.
+- Confirmed the Java runtime/golden path remains blocked locally by Java `1.8.0_491` and missing Maven, so this unit stayed source-reviewed and C#-tested only.
+- Added `SmRepurchase`, the C# server packet shape for Java `SM_REPURCHASE`.
+- Added `RepurchasePacketItem` as an explicit packet snapshot carrying the item, item template, and repurchase price.
+- Reused `SmInventoryInfo.WriteItemInfoBlob` so repurchase packet item payloads follow the same item-info blob path as inventory packets.
+- Added focused packet tests for:
+	- Java server opcode `167`
+	- empty repurchase-list header order: target object id, constant `1`, item count
+	- single-item order: object id, template id, l10n string, item-info blob, repurchase price
+- Kept this unit non-live. No `DialogService` wiring, `RepurchaseService` state store, `CM_BUY_ITEM` run path, repository writes, packet send trigger, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1884
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_REPURCHASE` | `Aion.GameServer.Network.Aion.ServerPackets.SmRepurchase` | Server Packet | Partial | Unit Tested | Partial Parity | C# packet writes reviewed Java field order and opcode 167, and reuses the shared item-info blob writer. It accepts packet snapshots instead of reading a live singleton `RepurchaseService`; no Java runtime/golden bytes, live send trigger, or real-client validation were produced. |
+| `com.aionemu.gameserver.services.DialogService` BUY_AGAIN branch | `NpcDialogServiceSelectPlanService` descriptor plus future `SmRepurchase` packet | Service/Packet Boundary | Partial | Source Reviewed | Needs Verification | Java sends `SM_REPURCHASE(player, npc.getObjectId())` from BUY_AGAIN. C# now has the packet artifact, but live descriptor-to-packet composition remains unwired and untested. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM` repurchase action `2` | existing `RepurchasePlanService` plus future live handler wiring | Client Packet/Workflow | Not Started | Source Reviewed | Needs Verification | Java constructs `RepurchaseList`, validates amount/item/count, checks target NPC and `npc.canBuy()`, then calls `RepurchaseService.repurchaseFromShop`. No C# client-packet handler or live target validation was changed in this unit. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmRepurchaseTests" --no-restore` passed with 3 tests. Initial fixture assertions were corrected to avoid synthetic embedded-NUL l10n behavior; the final test validates source-reviewed field ordering.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmRepurchaseTests|FullyQualifiedName~RepurchasePlanServiceTests" --no-restore` passed with 17 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4744 tests.
+
+Remaining risks:
+- No Java runtime/golden packet bytes were captured.
+- `SmRepurchase` is not wired into `DialogService`/BUY_AGAIN or any live socket send path.
+- C# has no live `RepurchaseService` state store equivalent for Java's singleton map.
+- Java `CM_BUY_ITEM` action `2` read/run validation, target NPC checks, audit logging, and `npc.canBuy()` gating remain unwired.
+- Item-info blob parity is inherited from existing shared packet helpers and remains only as strong as those tests; no Java `SM_REPURCHASE` blob bytes were compared.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: repurchase server packet shape plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 9 rows pending Java runtime/golden comparison, live repurchase packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for repurchase/reward persistence, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves repurchase packet coverage but does not complete live repurchase or stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java `RepurchaseService.addRepurchaseItems`, `TradeService.performSellToShop`, and C# sell-to-shop surfaces to decide whether a small non-live sell-to-shop repurchase-capture planner can be added without touching live packet/repository ordering.
+- Safe alternative candidates for the next session:
+	- wire `SmRepurchase` into a non-live dialog composition plan only if existing `NpcDialogServiceSelectPlanService` boundaries make it safe
+	- wire `RepurchasePlanService` only after repository/packet mutation ordering and rollback behavior are scoped
+	- wire `PrivateStorePurchasePlanService` only after repository/packet mutation ordering is scoped and tests can cover no-partial-send behavior
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
