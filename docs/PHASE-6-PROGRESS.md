@@ -79761,3 +79761,69 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `DropRegistrationService.calculateBoostDropRate`
 	- return to the deferred `TemperingEffect.apply/endEffect` ownership surface only if a narrower deterministic slice becomes obvious
+
+### Session 1801 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: checked the clean post-UOW-1800 commit, then re-inspected Java `CraftService.startCrafting`, `checkCraft`, `StaticObject`, `PositionUtil`, current C# `CraftService`, `RecipeTemplateSummary`, `Player` craft fields, and existing craft tests.
+- Chose the smallest deterministic Java `startCrafting` slice below live mutation: recipe/product readiness, in-progress crafting guard, morph target bypass, and non-morph static-tool target validation. Kept DP, stance, inventory, recipe ownership, cooldowns, skills, materials, bonus item consumption, task interval, and scheduler startup outside this unit.
+- Added `CraftService.CreateStartCraftingValidationPlan(...)` plus `CraftStartValidationPlan` / `CraftStartValidationStatus`.
+- Modeled Java early guard ordering for:
+	- missing player
+	- missing recipe
+	- missing product item template
+	- existing in-progress crafting task
+	- non-morph missing/non-static target
+	- non-morph tool range failure
+	- morph recipe bypass for skill `40009`
+	- ready-for-next-validation continuation
+- Added focused `CraftServiceTests` for each modeled branch.
+- Kept scope intentionally narrow:
+	- no live `CraftService.startCrafting` execution
+	- no `sendCancelCraft` packet fanout
+	- no DP, stance, inventory, recipe-list, cooldown, skill, material, bonus-item, interval, or scheduler behavior
+	- no first-class C# `StaticObject` craft-station model
+
+#### Migration Parity Table - Session 1801
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` recipe/product lookup and early `checkCraft` guards | `Aion.GameServer.Services.CraftService.CreateStartCraftingValidationPlan` | Deterministic Validation Planner | Partial | Unit Tested | Partial Parity | Java source reviewed; C# planner covers missing recipe/product, in-progress crafting, morph target bypass, non-morph static-target and range guard branches. It does not execute Java `sendCancelCraft`, DP, stance, inventory, recipe-list, cooldown, skill, material, bonus-item, task interval, or scheduler behavior. Java `recipeTemplate` null behavior is conservative in C# because Java dereferences the recipe before `checkCraft`. |
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` morph target bypass for skill `40009` | `Aion.GameServer.Services.CraftStartValidationPlan.MorphSubstancesSkillId` branch | Validation Guard | Complete for this branch | Unit Tested | Verified Parity | Java source reviewed; morph recipes skip static-object target validation and continue to later guards. |
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` non-morph static tool guard | `Aion.GameServer.Services.CraftService.CreateStartCraftingValidationPlan` target facts | Validation Guard | Partial | Unit Tested | Partial Parity | C# represents target existence/static/range facts supplied by callers. First-class Java `StaticObject` identity and bound-radius overload details remain pending. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateStartCraftingValidationPlan_ReportsMissingRecipeOrProductTemplate` | Unit Added | Java `startCrafting` / `checkCraft` null guards | Missing recipe/product template resolves to cancel-ready failure plans. | Source-derived planner regression. | C# handles missing recipe conservatively because Java dereferences earlier. |
+| `CreateStartCraftingValidationPlan_RejectsInProgressBeforeTargetValidation` | Unit Added | Java `checkCraft` crafting task guard | Existing in-progress crafting fails before target validation. | Source-derived planner regression. | No live `CraftingTask` object yet. |
+| `CreateStartCraftingValidationPlan_AllowsMorphRecipeWithoutStaticTarget` | Unit Added | Java `checkCraft` morph branch | Skill `40009` bypasses static-object target checks. | Source-derived planner regression. | Later material/DP/skill guards not included. |
+| `CreateStartCraftingValidationPlan_RejectsNonMorphMissingOrNonStaticTarget` | Unit Added | Java `checkCraft` non-morph target guard | Non-morph crafting requires a static target fact. | Source-derived planner regression. | StaticObject identity is represented by an input fact. |
+| `CreateStartCraftingValidationPlan_RejectsNonMorphTargetTooFar` | Unit Added | Java `PositionUtil.isInRange(player, target, 5, false)` branch | Non-morph crafting fails when the static tool is too far. | Source-derived planner regression. | Range calculation itself is supplied by caller. |
+| `CreateStartCraftingValidationPlan_NonMorphStaticTargetContinuesToLaterGuards` | Unit Added | Java `checkCraft` continuation after static target guard | Valid non-morph target proceeds to later unported guards. | Source-derived planner regression. | Later validation branches remain pending. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests" --no-restore` passed with 18 tests.
+- `dotnet test dotnetConversion\AionServer.slnx --no-restore` was attempted twice. Both attempts built successfully and passed commons/chat/login, but each failed two unrelated tests in `GameServerConnectionInventoryExpansionUseItemTests` during the game test run.
+- The initially failed inventory tests passed when rerun directly with 2 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4524 tests.
+
+Remaining risks:
+- C# still does not execute Java `CraftService.startCrafting`.
+- There is no `sendCancelCraft` packet fanout from this planner.
+- DP, stance, inventory, recipe-list, cooldown, skill, material, bonus-item, task interval, and scheduler behavior remain unported in the start-craft runtime.
+- Full-suite validation currently exposes unrelated order-sensitive failures in `GameServerConnectionInventoryExpansionUseItemTests`; the failed tests passed in isolation, and the broad game-server suite excluding that class passed.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: 1 deterministic craft start validation planner, 1 validation status model, and 6 focused unit tests.
+- Total artifacts with verified parity: 1 grouped row for the isolated morph target bypass branch.
+- Total artifacts needing verification: 2 grouped rows.
+- Total blocked artifacts: live start-craft execution, first-class static craft targets, cancel packet fanout, materials/DP/cooldown/skill validation, and scheduler startup.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes the earliest deterministic start-craft guard surface without overstating live runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: port the next smallest `CraftService.startCrafting` validation slice after the early target planner, likely DP requirement planning and cancel-craft packet plan composition, reusing existing `SpendRecipeDpForCraftStartAsync` only after validation succeeds.
+- Safe alternative candidates for the next session:
+	- investigate and stabilize the order-sensitive `GameServerConnectionInventoryExpansionUseItemTests` failures seen during full-suite runs
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `DropRegistrationService.calculateBoostDropRate`
