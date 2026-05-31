@@ -80881,3 +80881,60 @@ Next recommended unit of work:
 	- add a disabled inventory packet send adapter for craft-start packet intent
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1823 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1822 handoff, progress/parity/orchestration docs, then re-inspected Java `InventoryDAO.UPDATE_QUERY`, `InventoryDAO.DELETE_QUERY`, `InventoryDAO.store`, `InventoryDAO.deleteItems`, `InventoryDAO.updateItems`, C# craft persistence planning, and craft persistence tests.
+- Chose the next smallest non-live persistence slice: exact Java SQL descriptor planning for craft-consumed inventory update/delete rows.
+- Added exact Java `InventoryDAO.DELETE_QUERY` and `InventoryDAO.UPDATE_QUERY` constants to `CraftStartInventoryPersistencePlan`.
+- Added `CraftStartInventoryPersistenceSqlDescriptor`.
+- Added `CraftStartInventoryPersistenceSqlOperationKind`.
+- Planned Java DAO SQL descriptors in `InventoryDAO.store` grouping order:
+	- delete descriptors first through `InventoryDAO.deleteItems`
+	- update descriptors second through `InventoryDAO.updateItems`
+- Preserved ordered mutation operations separately; SQL descriptor order intentionally follows Java DAO batching, not the original consumption order.
+- Added object-id release intent fields:
+	- `ObjectIdsPendingRelease`
+	- `WouldReleaseObjectIdsAfterSuccessfulDelete`
+	- `DidReleaseObjectIds`
+- Kept all SQL descriptors non-live; `WouldExecuteSql` is true for persisted update/delete rows and `DidExecuteSql` is false.
+- Confirmed `NEW -> NOACTION` deleted stacks produce no SQL descriptor and no object-id release intent.
+
+#### Migration Parity Table - Session 1823
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dao.InventoryDAO.DELETE_QUERY` | `Aion.GameServer.Services.CraftStartInventoryPersistencePlan.JavaInventoryDeleteSql` | SQL Descriptor | Partial | Unit Tested | Partial Parity | C# records the exact Java delete SQL for craft-consumed persisted deleted rows; no DB execution occurs. |
+| `com.aionemu.gameserver.dao.InventoryDAO.UPDATE_QUERY` | `Aion.GameServer.Services.CraftStartInventoryPersistencePlan.JavaInventoryUpdateSql` | SQL Descriptor | Partial | Unit Tested | Partial Parity | C# records the exact Java update SQL for craft-consumed updated rows; parameter extraction is breadcrumbed, not executed. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store` delete-before-update grouping | `Aion.GameServer.Services.CraftStartInventoryPersistencePlan.SqlDescriptors` | Persistence Planner | Partial | Unit Tested | Partial Parity | C# groups delete descriptors before update descriptors like Java `store`; inserts, transaction behavior, commits, rollback, and live writes remain pending. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store` object-id release after successful delete | `ObjectIdsPendingRelease` / `WouldReleaseObjectIdsAfterSuccessfulDelete` / `DidReleaseObjectIds` | Persistence Planner | Partial | Unit Tested | Partial Parity | C# records the Java release boundary but does not call `IDFactory.releaseObjectIds`; release still depends on future successful live delete execution. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 318 tests.
+- First broad run timed out before returning a result.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4570 tests on rerun with a longer timeout.
+
+Remaining risks:
+- SQL descriptors are non-live and do not execute database writes.
+- No transaction, commit/rollback, or Java autocommit behavior is executed.
+- Java `insertItems` is intentionally not modeled for craft-consumption rows in this unit because craft start only consumes existing inventory.
+- Object ids are not released; the C# plan only records the Java post-delete release boundary.
+- No live inventory mutation is applied to `Player.InventoryItems`.
+- No live inventory packets are sent.
+- No DP spend, live `CraftingTask` creation, scheduler startup, or craft completion is wired.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one SQL descriptor record, one SQL operation enum, two exact Java SQL constants, descriptor grouping, object-id release intent fields, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is non-live SQL descriptor partial parity only.
+- Total artifacts needing verification: 4 rows pending live DB writes, transaction behavior, successful delete result propagation, object-id release, packet sending, DP spend, live task creation/start, and Java runtime comparison.
+- Total blocked artifacts: live start-craft execution, inventory mutation, persistence writes, transaction behavior, packet fanout, DP spend, live task creation, scheduler startup, object-id release, and full craft completion.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves craft-start persistence SQL evidence without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add a disabled inventory packet send adapter for craft-start packet intent so the existing `SmInventoryUpdateItem`, `SmDeleteItem`, and `SmCubeUpdate` packet plan can be consumed by an adapter that proves no packets dispatch unless explicitly enabled.
+- Safe alternative candidates for the next session:
+	- add a live-safe craft finish cooldown application mutation plan
+	- begin a live-disabled craft inventory persistence adapter around the new SQL descriptors
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
