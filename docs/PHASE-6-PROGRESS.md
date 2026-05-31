@@ -83554,3 +83554,55 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1875 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read required migration/orchestration/parity docs, latest UOW-1874 completion and handoff, then inspected C# `SkillTemplateTable`, `SkillStatConditionEvaluatorService`, `SkillBuffStatChangeEvaluatorService`, `SkillStatChangeConditionReadinessReportService`, existing readiness/report tests, and Java condition/effect breadcrumbs already reviewed in prior units.
+- Added isolated `SkillStatConditionPreviewCoverageReportService` to enumerate conditioned stat-change combinations from `SkillTemplateTable` static metadata.
+- The new report classifies static preview coverage without wiring live gameplay:
+	- `PreviewEvaluable` when every child condition is supported by the isolated stat-condition preview path and required static XML attributes are present.
+	- `BlockedStaticMetadata` when required static attributes such as `weapon` or integer `value` are missing/invalid.
+	- `BlockedUnsupportedConditions` when the condition name is not covered by audited stat-condition override or pass-through behavior.
+- Added combination-level details: skill id, effect name, stat, function, condition sequence, per-condition analysis, required runtime snapshot inputs, and missing static inputs.
+- Added tests for missing templates, no conditioned changes, preview-evaluable `weapon -> front` and `onfly` combinations, missing/invalid static attributes, and unsupported condition names.
+- Kept this unit isolated; no live `Conditions.validate` provider, gameplay condition registry, active-effect runtime, `CreatureGameStats` integration, stat cap path, or drop workflow execution was enabled.
+
+#### Migration Parity Table - Session 1875
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.effect.BufEffect.getModifiers` conditioned `Change` metadata | `SkillStatConditionPreviewCoverageReportService.CreateReport` | Static Metadata Readiness Report | Partial | Unit Tested | Partial Parity | C# can now enumerate conditioned stat-change combinations from parsed static skill metadata and report whether they can be evaluated by the isolated preview path. This does not execute live effects or stat registration. |
+| `com.aionemu.gameserver.skillengine.condition.Conditions.validate(Stat2, IStatFunction)` child-condition coverage | `SkillStatConditionPreviewCombination` / `SkillStatConditionPreviewConditionResult` | Static Metadata Coverage | Partial | Unit Tested | Partial Parity | Report preserves XML/list-order condition sequences and distinguishes preview-evaluable, unsupported, and bad-static-attribute conditions. No live `Conditions.validate` provider is wired. |
+| `WeaponCondition`, `ItemChargeCondition`, `OnFlyCondition`, and mapped base-pass-through stat conditions | `SkillStatConditionPreviewCoverageReportService.AnalyzeCondition` | Isolated Preview Coverage Classifier | Partial | Unit Tested | Partial Parity | Report uses the isolated evaluator's audited support boundary and required runtime snapshot notes. No Java runtime/golden comparison was produced. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillStatConditionPreviewCoverageReportServiceTests|FullyQualifiedName~SkillStatConditionEvaluatorServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests" --no-restore` passed with 38 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillStatConditionPreviewCoverageReportServiceTests|FullyQualifiedName~SkillStatConditionEvaluatorServiceTests|FullyQualifiedName~SkillStatConditionInputSnapshotServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFormulaServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionRegistryReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 560 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4716 tests.
+
+Remaining risks:
+- The coverage report is static metadata/readiness only and is not live gameplay parity.
+- Preview-evaluable means the isolated pure evaluator has enough static metadata plus identified runtime snapshot requirements; it does not mean runtime snapshots are available or correct in live gameplay.
+- No live `Conditions.validate` provider, Java condition subclass registry, `CreatureGameStats` storage, insertion/removal, snapshot locking/copying, stat caps, max-stat synchronization, or active-effect lifecycle was enabled.
+- The pure evaluator still does not model Java `CreatureGameStats` owner-specific `EnchantEffect` hand filtering or `StatCapUtil.calculateBaseValue`.
+- No Java runtime/golden comparison was produced.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks modeled/persisted player salvation points and Java's exact lifecycle around reset after 10 minutes offline.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: isolated static condition preview coverage report plus focused tests.
+- Total artifacts with verified parity: 0 rows; this remains isolated source-derived partial parity, not live runtime parity.
+- Total artifacts needing verification: 6 rows pending Java runtime/golden comparison, live condition validators, live Stat2 state, stat caps, active-effect registry, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves static preview coverage visibility but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: feed `SkillStatConditionPreviewCoverageReportService` into the active drop-boost/stat readiness reporting so Phase 6 readiness can surface preview-evaluable versus blocked conditioned stat metadata next to the existing live-provider blockers.
+- Safe alternative candidates for the next session:
+	- produce Java runtime/golden values for the isolated condition/stat formula preview path
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
