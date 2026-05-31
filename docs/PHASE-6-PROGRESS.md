@@ -84836,6 +84836,48 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1912 (May 31, 2026)
+- Performed fresh Work Discovery after UOW-1911: re-read required orchestration/parity docs, latest completion, and latest handoff; inspected Java `CM_BUY_ITEM.runImpl` action `0`, Java `PrivateStoreService.sellStoreItem`, and C# `PrivateStorePurchasePlanService`, `PrivateStorePersistenceAdapterPlanService`, `PrivateStoreSendAdapterPlanService`, and `PrivateStoreLiveExecutorFacadePlanService`.
+- Confirmed the Java runtime/golden path remains blocked locally by Java/Maven availability, so this unit stayed source-reviewed and C#-tested only.
+- Composed the disabled persistence and send/log adapter plans into `PrivateStoreLiveExecutorFacadePlan`.
+- Updated the disabled live facade service so successful purchase plans carry `DisabledNoWrites` and `DisabledNoPackets` sub-plans, while terminal/missing/blocked purchase states carry matching terminal adapter plans.
+- Added tests proving the facade exposes the split disabled adapter state for successful, missing, non-private-store, bought-items-blocked, and purchase-plan-blocked paths.
+- Kept this unit non-live. No repository write, packet construction, packet dispatch, transaction, rollback, exchange-log write, store-state mutation, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1912
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.PrivateStoreService.sellStoreItem` side-effect ordering boundary | `Aion.GameServer.Services.PrivateStoreLiveExecutorFacadePlanService` | Disabled Facade Composer | Partial | Unit Tested | Partial Parity | The facade now exposes disabled persistence and send/log adapter plans alongside the existing side-effect operation list. It still dispatches no live side effects and has no Java runtime/golden verification. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM.runImpl` private-store action `0` execution boundary | `Aion.GameServer.Services.PrivateStoreLiveExecutorFacadePlan` | Disabled Outcome Plan | Partial | Unit Tested | Partial Parity | Successful and terminal facade plans now carry explicit disabled write/send sub-plan state. Live action `0` inventory/Kinah/store/persistence/packet/log execution remains unwired. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PrivateStorePurchasePlanServiceTests|FullyQualifiedName~PrivateStoreLiveExecutorFacadePlanServiceTests|FullyQualifiedName~PrivateStoreBoughtItemsPlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests" --no-restore` passed with 37 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PrivateStorePurchasePlanServiceTests|FullyQualifiedName~PrivateStoreLiveExecutorFacadePlanServiceTests|FullyQualifiedName~PrivateStoreBoughtItemsPlanServiceTests|FullyQualifiedName~PrivateStoreSellNotificationPlanServiceTests|FullyQualifiedName~PrivateStoreClosePlanServiceTests|FullyQualifiedName~PrivateStoreOpenPlanServiceTests|FullyQualifiedName~PrivateStoreItemValidationPlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~CmBuyItemTests" --no-restore` passed with 83 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4903 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- The facade and adapters are disabled descriptors only; live repository writes, packet dispatch, exchange logging, transaction/rollback behavior, and close-store state mutation remain unwired.
+- The private-store `CM_BUY_ITEM` action `0` path still does not perform live seller/buyer inventory, Kinah, store-state, packet, or log side effects.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: disabled private-store facade composition of persistence and send/log sub-plans plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 21 rows pending Java runtime/golden comparison, Java-equivalent known-list object population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN wiring, live private-store action `0` execution, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item mutation, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, private-store/pet merchant branch execution, live AP-sell mutation wiring, live buy transaction mutation wiring, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves private-store action `0` disabled outcome composition but does not complete live private-store execution or runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add a disabled final private-store purchase outcome/transaction plan that groups the facade, persistence adapter, send adapter, and live-dispatch flags into a single opt-in result for future `CM_BUY_ITEM` action `0` wiring.
+- Safe alternative candidates for the next session:
+	- add disabled persistence/send adapter plans for pet merchant sell outputs before any live execution attempt
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1911 (May 31, 2026)
 - Performed fresh Work Discovery after UOW-1910: re-read required orchestration/parity docs and latest handoff, inspected Java `CM_BUY_ITEM.runImpl` action `0`, Java `PrivateStoreService.sellStoreItem`, `decreaseItemFromPlayer`, and `getBoughtItems`, plus C# `PrivateStorePurchasePlanService`, `PrivateStoreLiveExecutorFacadePlanService`, `CmBuyItemHandlerCompositionPlanService`, and private-store tests.
 - Confirmed the Java runtime/golden path remains blocked locally by Java/Maven availability, so this unit stayed source-reviewed and C#-tested only.
