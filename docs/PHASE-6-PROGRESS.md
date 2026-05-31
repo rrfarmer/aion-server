@@ -79160,3 +79160,67 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1791 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1790-Completion.md`, and `Phase-6-Session-1790-Handoff.md`, then re-inspected Java `Equipment.persistentState`, Java `Equipment.setPersistentState`, Java `Equipment.equip`, Java `Equipment.unEquip`, Java `Equipment.switchHands`, Java `Equipment.increaseEquippedItemCount`, Java `Equipment.decreaseEquippedItemCount`, Java `Equipment.usePowerShard`, and the current C# `EquipmentService`, `PowerShardDamageService`, `GameServerConnection.ApplyEquipmentChangeAsync`, `PlayerEnterWorldRepository`, and `PlayerEnterWorldService`.
+- Confirmed the next honest gap after UOW-1790 was not just adding more producer marks, but fixing the live immediate-save boundary: `ApplyEquipmentChangeAsync` persisted equipment changes immediately, then reassigned `change.InventoryItems` back onto the player with `PersistentState=UpdateRequired`, which re-dirtied modeled equipment and cube state by inference even though the rows had already been saved.
+- Added explicit producer intent and immediate-save normalization:
+	- `EquipmentChangeResult` now exposes `MarksEquipmentPersistentState`
+	- `PowerShardUseResult` now exposes `MarksEquipmentPersistentState`
+	- `EquipmentService.UsePowerShard(...)` now sets the flag on changed results
+	- `PowerShardDamageService` now explicitly calls `workingPlayer.MarkEquipmentDirty()` when a shard-use result marks equipment state
+- Added `EquipmentService.NormalizeImmediatelySavedItems(...)` so the live immediate-save path can convert persisted equipment and kinah rows back to `Updated` before they are reassigned onto the player.
+- Updated `GameServerConnection.ApplyEquipmentChangeAsync(...)` to use that normalization helper after the repository save succeeds, instead of reassigning the still-dirty result rows directly to `player.InventoryItems`.
+- Added focused parity evidence:
+	- `EquipmentServiceTests.NormalizeImmediatelySavedItems_ClearsDirtyStateForPersistedEquipmentAndKinahRows`
+	- updated `EquipmentServiceTests` equipment-change assertions to require `MarksEquipmentPersistentState`
+	- updated `PowerShardDamageServiceTests` shard-consumption assertions to require `MarksEquipmentPersistentState`
+	- updated `PlayerEnterWorldServiceTests` helper result construction for the source-shaped `PowerShardUseResult`
+- Kept scope intentionally narrow:
+	- still no first-class Java `Equipment` object port
+	- still no broad persistence pipeline rewrite beyond the immediate-save normalization boundary
+	- still no claim that all live equipment mutation paths are now fully covered; this unit only closes the direct equipment-change and shard-consumption path examined in discovery
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~EquipmentServiceTests|FullyQualifiedName~PowerShardDamageServiceTests|FullyQualifiedName~PlayerInventoryPersistentStateTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passed with 91 tests.
+	- The first `dotnet test dotnetConversion\AionServer.slnx` run hit one unrelated transient failure in `GameServerConnectionInventoryExpansionUseItemTests.HandleUseItemAsync_ExtractDeletesLastSourceWithUseDeleteAndCubeUpdate`.
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests.HandleUseItemAsync_ExtractDeletesLastSourceWithUseDeleteAndCubeUpdate"` then passed in isolation with 1 test.
+	- The second `dotnet test dotnetConversion\AionServer.slnx` rerun passed cleanly with 4770 total tests (`57` commons, `29` chat, `121` login, `4563` game).
+
+#### Migration Parity Table - Session 1791
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment.setPersistentState` direct mutation intent during equip/unequip flows | `Aion.GameServer.Services.EquipmentService.EquipmentChangeResult.MarksEquipmentPersistentState` + `Aion.GameServer.Network.Aion.GameServerConnection.ApplyEquipmentChangeAsync` | Immediate Equipment Save Boundary | Partial | Unit Tested + Regression Tested | Partial Parity | Java source reviewed; C# now carries explicit equipment-dirty intent through the direct change result and prevents already-persisted equipment/kinah rows from re-dirtying the player after the immediate save returns. Broader runtime equipment producers still remain future work. |
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment.usePowerShard` dirty-state participation | `Aion.GameServer.Services.EquipmentService.UsePowerShard` + `Aion.GameServer.Services.PowerShardDamageService` | Power Shard Equipment Dirty Producer | Partial | Unit Tested | Partial Parity | C# shard use now exposes and consumes an explicit equipment-dirty signal instead of relying only on later assignment inference. This does not yet prove all shard-adjacent runtime paths. |
+| Java immediate DAO update followed by in-memory normalized state expectations for already-saved item rows | `Aion.GameServer.Services.EquipmentService.NormalizeImmediatelySavedItems` | Post-Persist Runtime Normalization | Partial | Unit Tested | Partial Parity | C# now normalizes persisted equipment and kinah rows back to `Updated` before reapplying them to the live player after an immediate save. The helper is currently scoped to the direct equipment-change path identified in discovery. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store(Player)` / direct item save interplay with equipment runtime state | `Aion.GameServer.Network.Aion.GameServerConnection.ApplyEquipmentChangeAsync` | Live Persistence / Runtime Reassignment Boundary | Partial | Regression Tested | Partial Parity | The immediate-save live boundary no longer re-dirties modeled equipment state simply because the returned item copies still carried `UpdateRequired`. A fuller Java-shaped inventory store pipeline remains future work. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `NormalizeImmediatelySavedItems_ClearsDirtyStateForPersistedEquipmentAndKinahRows` | Unit Added | Java immediate-save semantics around `Equipment.setPersistentState` and saved item rows | Persisted equipment and kinah rows are normalized back to `Updated`, while untouched rows preserve their prior state. | Source-derived unit regression for the post-save normalization helper. | No direct live packet-path assertion yet. |
+| `ChangeEquipment_EquipsOneHandWeaponInMainHandWithoutDualWieldSkill` | Unit Updated | Java `Equipment.equip` / `setPersistentState` | Direct equipment changes now advertise explicit equipment dirty-state intent. | Source-shaped assertion on the direct change result contract. | No first-class `Equipment` object. |
+| `ChangeEquipment_UnequipsUpdatedItemAndMarksItUpdateRequired` | Unit Updated | Java `Equipment.unEquip` / `setPersistentState` | Unequip results also advertise explicit equipment dirty-state intent. | Source-shaped assertion on the direct change result contract. | No broader runtime producer sweep. |
+| `GetPowerShardDamage_ConsumesMainHandShardWhenRequested` | Unit Updated | Java `Equipment.usePowerShard` | Shard consumption results carry explicit equipment dirty-state intent. | Source-shaped assertion on shard mutation output. | No end-to-end persistence proof for all shard flows. |
+| `GetPowerShardDamage_UsesLeftShardForOffHandWeapon` | Unit Updated | Java `Equipment.usePowerShard` | Off-hand shard consumption also marks explicit equipment dirty-state intent. | Source-shaped assertion on shard mutation output. | No broader combat-path coverage. |
+
+Remaining risks:
+- C# still does not port a first-class Java `Equipment` object; modeled equipment dirtiness still lives on `Player`.
+- Other live equipment mutation paths may still rely on assignment-driven promotion if they do not yet flow through the direct result contracts touched in this unit.
+- The full inventory store pipeline remains only partially modeled relative to Java DAO behavior.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 2 explicit result-surface dirty-intent flags, 1 immediate-save normalization helper, 1 live reassignment fix, and 5 focused test updates/additions.
+- Total artifacts with verified parity: 0 grouped rows in this unit.
+- Total artifacts needing verification: 4 grouped rows.
+- Total blocked artifacts: broader live equipment dirty producers, first-class storage/equipment container modeling, and a fuller Java-shaped inventory store pipeline.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the direct immediate equipment-save redirty gap without overstating broader persistence parity.
+
+Next recommended unit of work:
+- Next sequential task: port the next minimum live producer sweep for modeled `EquipmentPersistentState`, focusing on any remaining equipment mutation surfaces that still depend on assignment-driven promotion outside the direct equipment-change and shard-use path.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
