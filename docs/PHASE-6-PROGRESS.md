@@ -79884,3 +79884,58 @@ Next recommended unit of work:
 	- investigate and stabilize the order-sensitive `GameServerConnectionInventoryExpansionUseItemTests`
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1803 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the required migration/orchestration/parity docs plus the UOW-1802 handoff and completion notes, confirmed the clean UOW-1802 commit, then re-inspected Java `CraftService.checkCraft`, Java `SM_SYSTEM_MESSAGE`, C# `CraftService`, C# `Player` ride/hide state, C# `InventoryCapacity`, and existing packet/craft tests.
+- Chose the next smallest deterministic Java `checkCraft` slice after target and DP validation: current-stance rejection and inventory-full rejection. Kept live `startCrafting`, live failure fanout, recipe ownership, cooldown, skills, materials, bonus item consumption, DP spend, task interval, and scheduler startup outside this unit.
+- Extended `CraftService.CreateStartCraftingValidationPlan(...)` with Java guard ordering for:
+	- `player.isInPlayerMode(PlayerMode.RIDE) || player.isInAnyHide()`
+	- `player.getInventory().isFull()`
+- Added `CraftStartValidationStatus.InvalidCurrentStance` and `CraftStartValidationStatus.InventoryFull`.
+- Added `FailurePacket` to `CraftStartValidationPlan` so deterministic Java system-message packets are included in planner output.
+- Added `SmSystemMessage.CraftCannotCombineWhileInCurrentStance()` for Java message id `1300122`.
+- Added `SmSystemMessage.CombineInventoryFull()` for Java message id `1330037`.
+- Added focused `CraftServiceTests` and `GamePacketTests` coverage for guard ordering and exact message IDs.
+
+#### Migration Parity Table - Session 1803
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` current-stance guard | `Aion.GameServer.Services.CraftService.CreateStartCraftingValidationPlan` `InvalidCurrentStance` branch | Validation Guard | Partial | Unit Tested | Partial Parity | Java source reviewed; C# checks ride mode and any hide after DP guard and attaches `STR_SKILL_CAN_NOT_COMBINE_WHILE_IN_CURRENT_STANCE`. Live packet sending still waits for start-craft orchestration. |
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` inventory-full guard | `Aion.GameServer.Services.CraftService.CreateStartCraftingValidationPlan` `InventoryFull` branch | Validation Guard | Partial | Unit Tested | Partial Parity | Java source reviewed; C# checks current cube capacity after stance guard and attaches `STR_COMBINE_INVENTORY_IS_FULL`. Java storage internals are approximated through current `InventoryCapacity`. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_SKILL_CAN_NOT_COMBINE_WHILE_IN_CURRENT_STANCE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.CraftCannotCombineWhileInCurrentStance` | Server Packet Factory | Complete | Unit Tested | Verified Parity | Message id `1300122` verified through packet/system-message tests. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_COMBINE_INVENTORY_IS_FULL` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.CombineInventoryFull` | Server Packet Factory | Complete | Unit Tested | Verified Parity | Message id `1330037` verified through packet/system-message tests. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateStartCraftingValidationPlan_RejectsRideOrHideAfterDpValidation` | Unit Added | Java `checkCraft` DP guard before ride/hide guard | Insufficient DP wins before stance; sufficient-DP ride and hide both produce current-stance failure with message id `1300122`. | Source-derived planner regression plus system-message ID evidence. | Live send/cancel orchestration remains pending. |
+| `CreateStartCraftingValidationPlan_RejectsInventoryFullAfterStanceValidation` | Unit Added | Java `checkCraft` stance guard before inventory-full guard | Ride status wins before inventory-full; full cube produces inventory-full failure with message id `1330037`. | Source-derived planner regression plus system-message ID evidence. | Inventory full uses current C# cube capacity model. |
+| `GamePacketTests` system-message assertions | Unit Updated | Java `SM_SYSTEM_MESSAGE` constants | New C# factories preserve Java message ids `1300122` and `1330037`. | Packet/system-message assertion evidence. | No runtime Java packet capture in this unit. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 265 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4530 tests.
+
+Remaining risks:
+- C# still does not execute Java `CraftService.startCrafting`.
+- `FailurePacket` is planner evidence only; no live system-message or cancel packet fanout is wired.
+- Recipe ownership, cooldown, skill presence/level, material validation/consumption, bonus item consumption, DP spend, task interval, scheduler startup, and craft completion remain pending.
+- Inventory fullness uses the current C# `InventoryCapacity` model; first-class Java storage behavior is still incomplete.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 2 validation branches, 2 status values, 2 system-message factories, and 3 focused test updates.
+- Total artifacts with verified parity: 2 system-message factory rows.
+- Total artifacts needing verification: 2 grouped validation rows pending live orchestration.
+- Total blocked artifacts: live start-craft execution, live validation failure fanout, recipe/cooldown/skill/material validation, DP spend, and scheduler startup.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds the next guard slice without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: port recipe ownership and cooldown guard planning from `CraftService.checkCraft`, including system messages `STR_COMBINE_CAN_NOT_FIND_RECIPE` and `STR_ITEM_CANT_USE_UNTIL_DELAY_TIME`.
+- Safe alternative candidates for the next session:
+	- wire non-live validation failure orchestration that combines `FailurePacket` and cancel packet plans without live sending
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- execute the opt-in MySQL logout delete/retuning persistence path with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `DropRegistrationService.calculateBoostDropRate`
