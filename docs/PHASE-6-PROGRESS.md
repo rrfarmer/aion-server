@@ -82374,3 +82374,51 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1852 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1851 handoff/completion, progress/parity/orchestration docs, then inspected Java `Change`, Java `Conditions`, Java `Condition`, Java `BufEffect.getModifiers`, C# `SkillTemplateTable`, C# `StaticData` skill parsing, and C# `SkillBuffStatChangeEvaluatorService`.
+- Confirmed Java `Change` can contain a `<conditions>` child and `BufEffect.getModifiers` attaches those conditions to the generated stat function.
+- Confirmed Java `Conditions.validate(...)` requires every child condition to pass, so condition-bearing stat changes must not be treated as unconditional by a pure evaluator.
+- Added `SkillStatChangeConditionSummary` and condition metadata storage on `SkillStatChange`.
+- Updated static skill parsing to preserve child condition element names and attributes under `<change><conditions>...`.
+- Kept `SkillStatChange` scalar equality based on Java `Change` stat/func/value/delta so existing unconditioned static-data assertions remain stable.
+- Updated `SkillBuffStatChangeEvaluatorService` to return `UnsupportedConditions` without applying a conditioned change, preserving conservative reporting until live `Conditions.validate` can be ported.
+- Added focused parser/evaluator tests for a conditioned drop-boost change.
+
+#### Migration Parity Table - Session 1852
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.change.Change.conditions` | `SkillStatChange.Conditions` / `SkillStatChangeConditionSummary` | Static Metadata | Partial | Unit Tested | Partial Parity | C# now preserves condition element names and attributes under stat changes. It does not evaluate condition behavior. |
+| `com.aionemu.gameserver.skillengine.condition.Conditions.validate` | `SkillBuffStatChangeEvaluatorService` `UnsupportedConditions` status | Pure Evaluator Guard | Partial | Unit Tested | Partial Parity | C# refuses to apply conditioned stat changes in the pure evaluator because runtime Java condition validation is not ported. |
+| `BufEffect.getModifiers` condition attachment | `StaticData` skill-template parser / `SkillStatChange` | XML Change Parsing | Partial | Unit Tested | Partial Parity | C# preserves condition metadata attached to change entries, but live stat functions with condition predicates remain absent. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropModifierServiceTests" --no-restore` passed with 64 tests after one initial equality-shape fix.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 487 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4638 tests.
+
+Remaining risks:
+- C# preserves condition metadata only; it does not port individual Java condition validators.
+- Static previews and the pure evaluator still do not represent live active effects, stat owners, stat cap calculations, or stat recalculation side effects.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks a modeled/persisted player salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one condition metadata summary, static parser condition preservation, and a conservative pure-evaluator guard.
+- Total artifacts with verified parity: 0 rows; this remains partial metadata/evaluator-guard parity only.
+- Total artifacts needing verification: 3 rows pending individual condition validators, live stat provider, effect runtime application, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit reduces condition metadata loss but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: add a disabled condition-readiness report for preserved `SkillStatChangeConditionSummary` entries, enumerating condition names found in static skill data and explicitly blocking live stat provider use until validators exist.
+- Safe alternative candidates for the next session:
+	- inspect C# live effect controller/stat surfaces for a future narrow active-effect provider, without wiring drop workflow execution
+	- inspect Java `WeaponCondition` / high-frequency condition classes to scope validator ports
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
