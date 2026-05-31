@@ -81552,3 +81552,54 @@ Next recommended unit of work:
 	- Java `DropRegistrationService.calculateBoostDropRate`
 	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1835 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1834 handoff/completion, progress/parity/orchestration docs, then inspected Java `PlayerService.storePlayer`, Java `CraftCooldownsDAO`, Java `Cooldowns`, C# `PlayerEnterWorldService.LeaveWorldAsync`, C# `PlayerEnterWorldRepository.SavePlayerLogoutAsync`, and existing disabled craft cooldown persistence planners/tests.
+- Chose the next smallest logout persistence slice: a disabled logout craft cooldown save plan that records Java connection/error behavior and call-order readiness without wiring live SQL.
+- Added `PlayerLogoutCraftCooldownSavePlanService.CreateDisabledPlan(...)`.
+- Added `PlayerLogoutCraftCooldownSavePlan`.
+- Added `PlayerLogoutCraftCooldownSavePlanStatus`.
+- Modeled Java logout craft cooldown save behavior as descriptor data:
+	- `PlayerService.storePlayer` calls `CraftCooldownsDAO.storeCraftCooldowns` after portal cooldown storage and before house-object cooldown storage
+	- `CraftCooldownsDAO.storeCraftCooldowns` deletes all craft cooldown rows before active inserts
+	- expired cooldowns are skipped
+	- Java opens one connection for delete and one connection per active insert
+	- Java logs and swallows delete/insert `SQLException`s
+	- all C# live writes remain disabled
+- Added focused tests for active/expired planning, delete-only planning, and missing-player behavior.
+
+#### Migration Parity Table - Session 1835
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerService.storePlayer` craft cooldown call order | `Aion.GameServer.Services.PlayerLogoutCraftCooldownSavePlanService.CreateDisabledPlan` | Logout Persistence Planner | Partial | Unit Tested | Partial Parity | C# records Java call order after portal cooldowns and before house-object cooldowns; live logout save remains unwired. |
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.storeCraftCooldowns` | `PlayerLogoutCraftCooldownSavePlan` plus `CraftCooldownPersistencePlanService` | Persistence Descriptor | Partial | Unit Tested | Partial Parity | C# records delete-first and active-insert SQL intent using existing descriptors; no SQL is executed. |
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO` connection/error handling | `PlayerLogoutCraftCooldownSavePlan` | Persistence Diagnostic | Partial | Unit Tested | Partial Parity | C# records Java one-connection-per-operation and swallowed/logged `SQLException` behavior; live exception handling remains future work. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests" --no-restore` passed with 106 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 398 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4599 tests.
+
+Remaining risks:
+- Logout craft cooldown persistence remains disabled and does not write to the database.
+- C# `SavePlayerLogoutAsync` still saves skill, item, house-object, and portal cooldowns but not craft cooldowns.
+- Java opens separate connections for delete and each insert; current C# cooldown saves usually reuse one connection, so live craft wiring needs an explicit intentional-difference decision or a Java-shaped adapter.
+- Java logs and swallows SQL errors per operation; live C# error propagation/return behavior is not wired.
+- Full logout persistence parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one logout craft cooldown save planner method, one plan record, one status enum, Java call-order/connection/error breadcrumbs, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is disabled logout persistence planning partial parity only.
+- Total artifacts needing verification: 3 rows pending live SQL execution, exact connection/error behavior, and Java runtime/database comparison.
+- Total blocked artifacts: live logout craft cooldown persistence, repository wiring, intentional-difference decision for connection reuse if chosen, and full logout persistence runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves logout craft cooldown persistence readiness without claiming live runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add a live-execution readiness checklist for logout craft cooldown persistence that gates whether to preserve Java's separate connection/error-swallowing behavior or document an intentional C# repository difference before adding `SavePlayerCraftCooldownsAsync`.
+- Safe alternative candidates for the next session:
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
