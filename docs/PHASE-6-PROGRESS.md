@@ -82710,3 +82710,62 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1859 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1858 handoff/completion, progress/parity/orchestration docs, then inspected Java `Stat2`, `AdditionStat`, `ReverseStat`, `StatAddFunction`, `StatRateFunction`, `StatSetFunction`, `CreatureGameStats.getStat`, C# `SkillBuffStatChangeEvaluatorService`, C# `SkillBuffStatFunctionPlanService`, and registry readiness tests.
+- Confirmed Java `Stat2.getCurrent` truncates `(base * baseRate + bonus * bonusRate + base * fixedBonusRate)` to `int`, while `getExactCurrent` keeps the float result.
+- Confirmed Java `AdditionStat` adds to base and adds `bonusRate * bonus`; `ReverseStat` subtracts and clamps base at zero while calculating percent as `(100 - delta) / 100f` clamped at zero.
+- Confirmed Java `CreatureGameStats.getStat` creates `AdditionStat` or `ReverseStat`, applies sorted functions after `validate(stat)`, then calls `StatCapUtil.calculateBaseValue`.
+- Added `SkillBuffStat2EvaluationReadinessReportService`.
+- Added `SkillBuffStat2EvaluationReadinessReport` and `SkillBuffStat2EvaluationReadinessStatus`.
+- The report exposes the Java current-value formula, stat names, add/rate/set counts, base/bonus counts, conditioned function count, and explicit live runtime gates for:
+	- `Stat2` state
+	- current-value formula
+	- `AdditionStat`
+	- `ReverseStat`
+	- stat-function `apply`
+	- `StatCapUtil.calculateBaseValue`
+- Kept the report disabled/readiness-only; no live `Stat2`, stat mutation, stat caps, conditions, active-effect lifecycle, or drop workflow execution was enabled.
+- Added focused tests for no plans/formula evidence, function count evidence, unsupported function blocking, each live runtime gate, and all-gates-ready state.
+
+#### Migration Parity Table - Session 1859
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `Stat2` | `SkillBuffStat2EvaluationReadinessReport` | Readiness Report | Partial | Unit Tested | Partial Parity | C# now records the Java current-value formula and missing live state/formula providers. It does not implement a live `Stat2` model. |
+| `AdditionStat` / `ReverseStat` | `BlockedMissingAdditionStatProvider` / `BlockedMissingReverseStatProvider` | Provider Gate | Partial | Unit Tested | Partial Parity | C# now tracks missing additive and reverse runtime semantics. No live add/subtract/clamp behavior is ported in this unit. |
+| `StatAddFunction` / `StatRateFunction` / `StatSetFunction.apply` | `SkillBuffStat2EvaluationReadinessReport` function evidence and `BlockedMissingStatFunctionApplyProvider` | Readiness Evidence | Partial | Unit Tested | Partial Parity | C# counts planned Java function types and blocks runtime readiness without an apply provider. Special Java branches such as negative speed rate handling still need live implementation. |
+| `CreatureGameStats.getStat` / `StatCapUtil.calculateBaseValue` | `BlockedMissingStatCapProvider` | Provider Gate | Partial | Unit Tested | Partial Parity | C# tracks that Java applies stat caps after sorted function application. No live stat-cap recalculation or HP/MP synchronization is ported here. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionRegistryReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests" --no-restore` passed with 23 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionRegistryReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 516 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4667 tests.
+
+Remaining risks:
+- Stat2 evaluation readiness remains report-only; C# still does not port live `Stat2` state, `AdditionStat`, `ReverseStat`, function application, current-value math, stat caps, max-stat synchronization, or active-effect lifecycle.
+- C# still lacks Java `StatRateFunction` special negative `SPEED` handling in a live runtime evaluator.
+- C# still lacks live `CreatureGameStats` storage, function insertion/removal, and snapshot locking/copying.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks individual Java condition validators.
+- C# still lacks Java active-effect storage and conflict/stacking behavior.
+- C# still lacks a modeled/persisted player salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one disabled Stat2 runtime-evaluation readiness report and focused tests.
+- Total artifacts with verified parity: 0 rows; this remains readiness/reporting parity only.
+- Total artifacts needing verification: 6 rows pending live `Stat2`, additive/reverse stat semantics, function apply behavior, stat caps, condition validators, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2 evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit makes runtime stat-evaluation blockers explicit but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: integrate `SkillBuffStat2EvaluationReadinessReportService` into the active drop-boost readiness report as nested runtime-evaluation evidence, while keeping workflow readiness blocked without live providers.
+- Safe alternative candidates for the next session:
+	- inspect Java `WeaponCondition` / high-frequency condition classes to scope validator ports
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
