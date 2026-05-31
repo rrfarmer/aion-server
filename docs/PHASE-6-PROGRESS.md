@@ -82326,3 +82326,51 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1851 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1850 handoff/completion, progress/parity/orchestration docs, then inspected Java `DropRegistrationService.calculateBoostDropRate`, Java `BufEffect`, Java `BoostDropRateEffect`, Java `DRBoostEffect`, C# `WorldNpcDropBoostStatProviderReadinessReportService`, C# `SkillBuffStatChangeEvaluatorService`, and C# `SkillTemplateSummary.BuffStatEffects`.
+- Confirmed Java live drop boost reads active stat state through `CreatureGameStats.getStat`, while static `boostdroprate` / `drboost` skill effects only describe the `BufEffect` stat changes that may contribute to that live state.
+- Connected `SkillBuffStatChangeEvaluatorService` to the disabled `WorldNpcDropBoostStatProviderReadinessReportService` as a static evaluation preview for `BOOST_DROP_RATE` and `DR_BOOST`.
+- Added `WorldNpcDropBoostStaticEvaluationPreview`, including skill id, effect name, stat name, skill level, base value, and the evaluator result.
+- Report previews remain template/effect-scoped and do not aggregate all static templates into one live stat, matching the fact that Java only applies active effect instances at runtime.
+- Readiness status and `IsReadyForWorkflow` remain blocked unless explicit live effect-state and `CreatureGameStats` provider flags are supplied.
+- Added tests proving previews are produced, Java ADD math is surfaced for the known drop boost stats, previews do not unblock the workflow, and multiple static templates are not aggregated.
+
+#### Migration Parity Table - Session 1851
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `BoostDropRateEffect extends BufEffect` static change metadata | `WorldNpcDropBoostStaticEvaluationPreview` for `BOOST_DROP_RATE` | Readiness Preview | Partial | Unit Tested | Partial Parity | C# now evaluates static `boostdroprate` metadata through the pure evaluator for report visibility. This is not live active-effect state and does not supply workflow execution. |
+| `DRBoostEffect extends BufEffect` static change metadata | `WorldNpcDropBoostStaticEvaluationPreview` for `DR_BOOST` | Readiness Preview | Partial | Unit Tested | Partial Parity | C# now evaluates static `drboost` metadata through the pure evaluator for report visibility. Live player stat state remains absent. |
+| `DropRegistrationService.calculateBoostDropRate` stat-provider dependency | `WorldNpcDropBoostStatProviderReadinessReport.StaticEvaluationPreviews` | Provider Gate Evidence | Partial | Unit Tested | Partial Parity | Report shows template-scoped preview values but keeps missing live effect-state and `CreatureGameStats` provider blockers. It does not aggregate static templates or wire `WorldNpcDropRegistrationWorkflowService`. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests" --no-restore` passed with 63 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 486 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4637 tests.
+
+Remaining risks:
+- Static previews are report-only and do not represent live active effects, stat owners, condition validation, or stat recalculation side effects.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks condition metadata for `boostdroprate` / `drboost` changes.
+- C# still lacks Java stat owner removal, stat cap calculations, and max-stat recalculation side effects for these effects.
+- C# still lacks a modeled/persisted player salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one static drop boost evaluation preview record, readiness report preview wiring, and focused tests.
+- Total artifacts with verified parity: 0 rows; this remains partial static/readiness parity only.
+- Total artifacts needing verification: 3 rows pending conditions, live stat provider, effect runtime application, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves stat-provider readiness evidence but does not complete live drop modifier parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java `Conditions.validate` and C# skill-effect static parsing to decide whether condition metadata under `boostdroprate` / `drboost` changes must be preserved before any live stat provider design.
+- Safe alternative candidates for the next session:
+	- inspect C# live effect controller/stat surfaces for a future narrow active-effect provider, without wiring drop workflow execution
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
