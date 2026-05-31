@@ -84836,6 +84836,52 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1919 (May 31, 2026)
+- Performed fresh Work Discovery after UOW-1918: re-read required orchestration/parity docs, latest completion, and latest handoff; inspected Java `CM_BUY_ITEM.runImpl` buy-from-shop actions `13`-`16`, Java `TradeService.performBuyFromShop`, Java `TradeService.performBuyTransaction`, C# `CmBuyItemHandlerCompositionPlanService`, `CmBuyItemBuyFromShopCompositionPlanService`, `CmBuyItemSideEffectOutcomePlanService`, and `TradeBuyTransactionOutcomePlanService`.
+- Confirmed the Java runtime/golden path remains blocked locally by Java/Maven availability, so this unit stayed source-reviewed and C#-tested only.
+- Threaded an optional `TradeBuyTransactionPlan` through the selected buy-from-shop handler-composition input and dispatch plan.
+- Extended `CmBuyItemSideEffectOutcomePlanService` so selected NPC buy-from-shop actions `13`-`16` compose the disabled `TradeBuyTransactionOutcomePlan` created in UOW-1918.
+- Added high-level outcome flags for buy-from-shop persistence, buyer inventory mutation, Kinah mutation, packet sends, audit logging, and transaction-boundary intent while leaving all live execution disabled.
+- Updated socket-level `CM_BUY_ITEM` diagnostics so selected NPC buy-from-shop packets now surface a missing-transaction disabled outcome instead of a generic non-outcome status; unknown-target packets remain non-outcome diagnostics.
+- Kept this unit non-live. No live `CM_BUY_ITEM` handler dispatch, AP mutation, Kinah mutation, required-item deletion, item add, limited-item counter mutation, packet dispatch, audit write, transaction commit, rollback, repository write, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1919
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM.runImpl` actions `13`-`16` side-effect outcome branch | `Aion.GameServer.Services.CmBuyItemSideEffectOutcomePlanService` buy-from-shop outcome branch | Disabled Outcome Composition Service | Partial | Unit Tested | Partial Parity | Selected NPC buy-from-shop handler plans now compose disabled buy transaction outcome diagnostics from `TradeBuyTransactionOutcomePlanService`. Live dispatch, mutation, packet send, transaction behavior, and Java runtime/golden comparison remain unwired. |
+| `com.aionemu.gameserver.services.TradeService.performBuyFromShop` transaction-plan handoff | `Aion.GameServer.Services.CmBuyItemHandlerCompositionInput.BuyTransactionPlan` and `CmBuyItemBuyFromShopCompositionInput` forwarding | Diagnostic Plan Payload Wiring | Partial | Unit Tested | Partial Parity | Handler composition can carry an optional disabled buy transaction plan into the buy-from-shop dispatch descriptor so later outcome composition can classify success, missing-plan, and audit branches. Production runtime still does not hydrate or execute live buy transactions. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~TradeBuyTransactionPlanServiceTests|FullyQualifiedName~CmBuyItemBuyFromShopCompositionPlanServiceTests" --no-restore` passed with 58 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~TradeBuyTransactionPlanServiceTests|FullyQualifiedName~CmBuyItemBuyFromShopCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests|FullyQualifiedName~PetMerchantSellLiveExecutorFacadePlanServiceTests|FullyQualifiedName~PrivateStoreLiveExecutorFacadePlanServiceTests|FullyQualifiedName~TradeSellToShopPlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~CmBuyItemTests|FullyQualifiedName~CmBuyItemSellToShopCompositionPlanServiceTests|FullyQualifiedName~TradeSellForApToShopPlanServiceTests" --no-restore` passed with 123 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4926 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- The buy-from-shop outcome composition is disabled diagnostic plumbing only and is not live `CM_BUY_ITEM` execution.
+- Live AP mutation, Kinah mutation, required-item deletion, item add, limited-item counter mutation, packet dispatch, audit logging, transaction/rollback behavior, repository writes, and real client behavior remain unwired.
+- Production socket processing still lacks real buy-transaction fact hydration for selected NPC buy-from-shop actions, so selected socket diagnostics currently surface the missing-transaction branch.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: disabled buy-from-shop outcome composition and transaction-plan diagnostic handoff wiring plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 24 rows pending Java runtime/golden comparison, Java-equivalent known-list object population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN wiring, live private-store action `0` execution, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction fact hydration, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item mutation, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live pet auto-sell notification behavior, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, private-store/pet merchant branch execution, live AP-sell mutation wiring, live buy transaction mutation wiring, live buy-from-shop transaction fact hydration, live repurchase state and send wiring, live source-item clone caller integration, live pet auto-sell notification wiring, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled buy-from-shop diagnostic outcome visibility but does not complete live execution or runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add disabled AP-sell outcome planning over `TradeSellForApToShopPlan`, then compose it into the high-level `CM_BUY_ITEM` side-effect outcome surface without enabling live execution.
+- Safe alternative candidates for the next session:
+	- inspect Java `PetService.sell` auto-sell notification path as a separate disabled notification planner
+	- hydrate safe private-store listed-item facts into the diagnostic path only if no live mutation is enabled
+	- add production-safe buy-transaction fact hydration for selected NPC buy-from-shop diagnostics without dispatching live effects
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1918 (May 31, 2026)
 - Performed fresh Work Discovery after UOW-1917: re-read required orchestration/parity docs, latest completion, and latest handoff; inspected Java `CM_BUY_ITEM.runImpl` buy-from-shop actions `13`-`16`, Java `TradeService.performBuyFromShop`, Java `TradeService.performBuyTransaction`, C# `TradeBuyTransactionPlanService`, and C# `CmBuyItemBuyFromShopCompositionPlanService`.
 - Confirmed the Java runtime/golden path remains blocked locally by Java/Maven availability, so this unit stayed source-reviewed and C#-tested only.
