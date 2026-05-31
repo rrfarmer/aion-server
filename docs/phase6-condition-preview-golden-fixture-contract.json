@@ -4,6 +4,7 @@
   "evidenceLevel": "contract-only",
   "javaRuntimeEvidenceCaptured": false,
   "javaCaptureStatus": "blocked-local-toolchain",
+  "harnessDesignDocument": "docs/Phase-6-ConditionPreviewJavaGoldenHarnessDesign.md",
   "javaCaptureBlockers": [
     "Local java -version reports 1.8.0_491 while the repository Maven compiler release is 25",
     "Local mvn command is unavailable"
