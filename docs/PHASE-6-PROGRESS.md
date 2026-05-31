@@ -81856,3 +81856,54 @@ Next recommended unit of work:
 	- Java `DropRegistrationService.calculateBoostDropRate`
 	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1841 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1840 handoff/completion, progress/parity/orchestration docs, checked DB integration environment availability, then inspected Java `DropRegistrationService.calculateBoostDropRate` and C# `WorldNpcDropModifierService`.
+- Determined the sequential live DB verification unit was not runnable in this workspace because no `AION_GAMESERVER_DB_*` variables were set and Docker daemon access failed.
+- Chose the next safe candidate: a pure drop boost-rate formula slice.
+- Added `WorldNpcDropModifierService.CalculateBoostDropRate(...)`.
+- Modeled Java boost-rate behavior:
+	- NPC `BOOST_DROP_RATE` default starts at `100`
+	- killer `BOOST_DROP_RATE` defaults to the NPC value
+	- killer `DR_BOOST` defaults to the killer boost value
+	- repose energy adds `5`
+	- salvation percent adds `5`
+	- active palace adds `5`
+	- final multiplier is configured drop rate times boost percent divided by `100f`
+- Added focused tests for default rate, NPC boost, killer boost override, DR_BOOST override, and full bonus stacking.
+
+#### Migration Parity Table - Session 1841
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `DropRegistrationService.calculateBoostDropRate` | `WorldNpcDropModifierService.CalculateBoostDropRate` | Formula Helper | Partial | Unit Tested | Partial Parity | Pure formula mirrors the Java stat-default chain and additive +5 repose/salvation/palace bonuses. Live stat containers, `RatesConfig.DROP_RATES`, and active house lookup are not wired. |
+| `Rates.get(killer, RatesConfig.DROP_RATES)` | `CalculateBoostDropRate(configuredDropRate, ...)` | Formula Input | Partial | Unit Tested | Partial Parity | C# accepts the resolved configured drop rate as input. Membership/rate-array resolution remains handled elsewhere and is not integrated into drop registration yet. |
+| `killer.getActiveHouse().getHouseType() == HouseType.PALACE` | `CalculateBoostDropRate(..., hasActivePalace)` | Formula Input | Partial | Unit Tested | Partial Parity | C# models the boolean palace bonus only; live active-house resolution is not part of this unit. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests" --no-restore` passed with 45 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 463 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4614 tests.
+
+Remaining risks:
+- Live game stats are not wired into drop registration; callers must supply resolved stat values.
+- `RatesConfig.DROP_RATES` membership resolution is not wired into this helper.
+- Active house lookup is represented as a boolean input only.
+- Full drop registration runtime parity remains incomplete until live NPC/player stat and rate sources feed the modifier service.
+- Live DB verification from UOW-1840 remains pending.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one pure boost-rate formula helper and focused unit tests.
+- Total artifacts with verified parity: 0 rows; this is partial formula parity, not live drop-registration parity.
+- Total artifacts needing verification: 3 rows pending live stat/rate/house integration and runtime comparison.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/rate/house drop boost wiring, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds formula coverage but does not complete live drop modifier parity.
+
+Next recommended unit of work:
+- Next sequential task: add a narrow resolved-stat context or planner for drop boost modifier inputs, then integrate `CalculateBoostDropRate` into `CreateModifiers` without inventing unavailable live stat data.
+- Safe alternative candidates for the next session:
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
