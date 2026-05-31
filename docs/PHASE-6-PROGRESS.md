@@ -83501,3 +83501,56 @@ Next recommended unit of work:
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
 	- produce Java runtime/golden values for the isolated stat formula helper before using it in broader live code
+
+### Session 1874 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1873 handoff, inspected Java base `Condition.validate(Stat2, IStatFunction)`, C# pass-through classifications in `SkillStatChangeConditionReadinessReportService`, and existing condition evaluator/stat preview tests.
+- Confirmed Java base stat-condition behavior: mapped condition subclasses that do not override `validate(Stat2, IStatFunction)` inherit `Condition.validate` and return true for stat-function validation, even when they implement separate Skill/Effect validation.
+- Added isolated pass-through support in `SkillStatConditionEvaluatorService` for the mapped non-overriding stat-condition names classified during UOW-1870.
+- Updated unsupported-condition coverage to use a truly unsupported condition name.
+- Added source-derived tests for `front`, `back`, and `chargeweapon` pass-through condition results.
+- Added pure-preview stat evaluator coverage showing a `front` condition can apply through the opt-in condition context while preserving Java's base stat-validation pass-through behavior.
+- Kept this unit isolated; no live `Conditions.validate` provider, gameplay condition registry, active-effect runtime, `CreatureGameStats` integration, stat cap path, or drop workflow execution was enabled.
+
+#### Migration Parity Table - Session 1874
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.condition.Condition.validate(Stat2, IStatFunction)` | `SkillStatConditionEvaluatorService` known pass-through path | Isolated Condition Evaluator | Partial | Unit Tested | Partial Parity | C# now returns satisfied for mapped stat-condition classes that inherit Java base stat validation. This is isolated source-derived behavior and does not provide a live Java condition registry. |
+| Mapped Java condition subclasses without `validate(Stat2, IStatFunction)` overrides | `SkillStatConditionEvaluatorService.IsKnownStatPassThroughCondition` | Isolated Condition Mapping | Partial | Unit Tested | Partial Parity | `front`, `back`, and `chargeweapon` are covered directly; the mapped list mirrors the readiness classification from UOW-1870. Skill/Effect validation behavior remains separate and is not modeled here. |
+| `Conditions.validate(Stat2, IStatFunction)` pass-through child behavior | `SkillBuffStatChangeEvaluatorService` opt-in condition context with pass-through result | Pure Evaluator | Partial | Unit Tested | Partial Parity | Pure preview can now apply a conditioned stat step when the child condition inherits Java base stat-validation true. Still disconnected from live `CreatureGameStats` and active effects. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~SkillStatConditionEvaluatorServiceTests|FullyQualifiedName~SkillStatConditionInputSnapshotServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests" --no-restore` passed with 41 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillStatConditionEvaluatorServiceTests|FullyQualifiedName~SkillStatConditionInputSnapshotServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFormulaServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionRegistryReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 555 tests.
+- Initial broad run failed once in unrelated `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` with two broadcasts instead of one.
+- The isolated walker-route test rerun passed with 1 test.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` then passed with 4711 tests on broad rerun.
+
+Remaining risks:
+- Pass-through condition support remains isolated and pure-preview only; it is not live gameplay parity.
+- The pass-through mapping is source-derived from reviewed mapped condition classes, but not Java runtime/golden compared.
+- Skill/Effect condition validation for these same Java classes remains separate and is not modeled in stat-function evaluation.
+- No live `Conditions.validate` provider, Java condition subclass registry, `CreatureGameStats` storage, insertion/removal, snapshot locking/copying, stat caps, max-stat synchronization, or active-effect lifecycle was enabled.
+- The pure evaluator does not model Java `CreatureGameStats` owner-specific `EnchantEffect` hand filtering or `StatCapUtil.calculateBaseValue`.
+- Broad validation observed one transient unrelated walker-route test failure before passing on isolated and broad reruns.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks modeled/persisted player salvation points and Java's exact lifecycle around reset after 10 minutes offline.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: isolated pass-through stat-condition mapping plus pure-preview tests.
+- Total artifacts with verified parity: 0 rows; this remains isolated source-derived partial parity, not live runtime parity.
+- Total artifacts needing verification: 6 rows pending Java runtime/golden comparison, live condition validators, live Stat2 state, stat caps, active-effect registry, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit broadens pure condition preview but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: produce Java runtime/golden values for the isolated condition/stat formula preview path, or add a readiness report that enumerates exactly which static-data condition combinations are now preview-evaluable versus still blocked.
+- Safe alternative candidates for the next session:
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
