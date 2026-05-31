@@ -80481,3 +80481,51 @@ Next recommended unit of work:
 	- broaden CM_CRAFT handler composition coverage for non-morph target facts when StaticObject modeling is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1815 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1814 handoff, confirmed a clean UOW-1814 commit, then re-inspected Java `CraftService.checkCraft`, Java `Storage.decreaseByItemId`, Java `Storage.decreaseItemCount`, Java `Item.decreaseItemCount`, C# `CraftStartConsumptionPlan`, and existing inventory packet/mutation helpers.
+- Chose the next smallest successful-path slice: non-live inventory mutation planning for craft material/bonus consumption. Kept live inventory mutation, persistence, packet sending, DP spend, task creation, scheduler startup, and craft completion outside this unit.
+- Added `CraftService.CreateStartInventoryMutationPlan(...)`.
+- Added `CraftStartInventoryMutationPlan` and `CraftStartInventoryMutationStatus`.
+- Planned Java stack behavior:
+	- walk matching cube, unequipped item stacks in inventory order
+	- decrease each stack until the requested count is satisfied
+	- record updated item snapshots when a stack remains
+	- record deleted object ids when a non-kinah stack reaches zero
+- Added focused tests for multi-stack decreases, bonus/component order flowing from the consumption plan, insufficient inventory, and no-op behavior when consumption was not planned.
+- Verified original inventory item counts are not mutated by the planner.
+
+#### Migration Parity Table - Session 1815
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` bonus/component decrease order | `Aion.GameServer.Services.CraftService.CreateStartInventoryMutationPlan` | Inventory Planner | Partial | Unit Tested | Partial Parity | C# consumes the prior consumption plan order; no live inventory mutation occurs. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseByItemId` stack walking | `Aion.GameServer.Services.CraftStartInventoryMutationPlan.UpdatedItems` / `DeletedObjectIds` | Inventory Planner | Partial | Unit Tested | Partial Parity | C# plans ordered stack decreases, updates, and deletes for cube unequipped items; persistence and packets remain pending. |
+| `com.aionemu.gameserver.model.gameobjects.Item.decreaseItemCount` zero-stack delete behavior | `Aion.GameServer.Services.CraftStartInventoryMutationPlan.DeletedObjectIds` | Inventory Planner | Partial | Unit Tested | Partial Parity | C# records deleted object ids when planned counts reach zero; no item state is mutated live. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 308 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4560 tests.
+
+Remaining risks:
+- No live inventory mutation is applied to `Player.InventoryItems`.
+- No item persistence state changes are written.
+- No `SM_INVENTORY_UPDATE_ITEM` or `SM_DELETE_ITEM` packets are sent.
+- The mutation planner is not yet composed into `CmCraftStartCompositionPlan`.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one inventory mutation planner, one supporting record/status enum, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is non-live inventory-planner partial parity only.
+- Total artifacts needing verification: 3 rows pending packet intents, persistence, live mutation, and handler composition.
+- Total blocked artifacts: live start-craft execution, DP spend, live inventory mutation, persistence, packet fanout, live task creation, scheduler startup, and full craft completion.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds inventory mutation intent planning without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add a non-live craft start inventory packet plan for the mutation intent so updated stacks map to `SM_INVENTORY_UPDATE_ITEM` and deleted stacks map to `SM_DELETE_ITEM` without sending them.
+- Safe alternative candidates for the next session:
+	- compose the new inventory mutation planner into `CmCraftStartCompositionPlan`
+	- add a live-safe craft finish cooldown application mutation plan
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
