@@ -84658,6 +84658,56 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1896 (May 31, 2026)
+- Performed fresh Work Discovery after UOW-1895: read the latest handoff, inspected C# `CmBuyItemSellToShopCompositionPlanService`, `TradeSellForApToShopPlanService`, sell composition tests, and Java `CM_BUY_ITEM` action `1` AP-sell branch notes.
+- Confirmed this unit could stay narrow by carrying the AP-sell planner as an optional non-live payload, without wiring live `TradeService`, socket handlers, inventory, or AP state.
+- Updated `CmBuyItemSellToShopCompositionPlanService` to accept an optional `TradeSellForApToShopPlan` and attach it only when Java branch selection dispatches to `TradeService.performSellForAPToShop`.
+- Updated `CmBuyItemSellToShopCompositionPlanServiceTests`.
+- The composition update models:
+	- AP-sell payload attachment for ABYSS purchase-template action `1`
+	- normal sell-to-shop branch ignoring AP-sell payloads
+	- AP-sell dispatch retaining `SellToShopPlan = null`
+	- explicit `ShouldDispatchLiveSideEffects = false`
+- Kept this unit non-live. No live config read, live `PlayerRestrictions`, live goods-list lookup, live inventory deletion, live AP mutation, packet send, audit logging side effect, repository write, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1896
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM` action `1` AP-sell dispatch payload | `Aion.GameServer.Services.CmBuyItemSellToShopCompositionPlanService` | Client Packet Composition Planner | Partial | Unit Tested | Partial Parity | Non-live composition now carries optional `TradeSellForApToShopPlan` only for ABYSS purchase-template dispatch. Live handler execution, AP mutation, inventory deletion, packet fanout, and Java runtime comparison remain unwired. |
+| `com.aionemu.gameserver.services.TradeService.performSellForAPToShop` planned AP-sell result | `CmBuyItemSellToShopDispatchDescriptor.SellForApToShopPlan` | Dispatch Composition Payload | Partial | Unit Tested | Partial Parity | C# can carry AP-sell planner output through the action `1` composition descriptor. It does not execute the planner or mutate live state. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemSellToShopCompositionPlanServiceTests" --no-restore` passed with 11 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemSellToShopCompositionPlanServiceTests|FullyQualifiedName~TradeSellForApToShopPlanServiceTests|FullyQualifiedName~TradeSellToShopPlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~TradeApFormulaServiceTests" --no-restore` passed with 46 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4850 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- `CmBuyItemSellToShopCompositionPlanService` remains non-live and is not invoked by `GameServerConnection`.
+- `TradeSellForApToShopPlanService` remains non-live and is not executed by `TradeService`.
+- Java config, `PlayerRestrictions`, trade-list template lookup, goods-list lookup, item-template acquisition lookup, inventory state, AP state, and transaction boundaries remain represented by supplied facts or nested planners.
+- Live inventory deletion, AP mutation, packet sends, audit logging, and transaction boundaries remain unimplemented.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: non-live AP-sell payload composition in `CM_BUY_ITEM` action `1` planner plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 20 rows pending Java runtime/golden comparison, live `CM_BUY_ITEM` handler wiring, live BUY_AGAIN wiring, live private-store action `0`, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item mutation, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy persistence, live `CM_BUY_ITEM` handler wiring, private-store/pet merchant branch ports, live AP-sell mutation wiring, live buy transaction mutation wiring, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves source-reviewed AP-sell composition chaining but does not complete live trade/repurchase/private-store/pet or stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: connect `TradeBuyTransactionPlanService` as an optional non-live payload inside `CmBuyItemBuyFromShopCompositionPlanService` for buy-from-shop dispatch, without invoking live side effects.
+- Safe alternative candidates for the next session:
+	- inspect Java `PrivateStoreService.sellStoreItem` action `0` as a gap-scoped non-live planner
+	- inspect Java pet merchant action `17` sell-rate branch as a gap-scoped non-live planner
+	- wire `CmBuyItemHandlerCompositionPlanService` into a no-op diagnostic path only if live side effects remain disabled and handler ownership is scoped
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1895 (May 31, 2026)
 - Performed fresh Work Discovery after UOW-1894: re-read required orchestration/parity docs and the latest handoff, inspected Java `TradeService.performSellForAPToShop`, Java `CM_BUY_ITEM` action `1` AP-sell call site, C# `TradeSellToShopPlanService`, C# `CmBuyItemSellToShopCompositionPlanService`, C# `TradeApFormulaService`, item-template summaries, and AP service usage.
 - Confirmed the Java runtime/golden path remains blocked locally by Java `1.8.0_491` and missing Maven, so this unit stayed source-reviewed and C#-tested only.
