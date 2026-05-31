@@ -81388,3 +81388,55 @@ Next recommended unit of work:
 	- add a non-live finish-craft orchestration composition that gathers work-order, XP, reward, logging, and cooldown plans once logging intent exists
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1832 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1831 handoff/completion, progress/parity/orchestration docs, then inspected Java `CraftService.finishCrafting` logging branch, Java `LoggingConfig.LOG_CRAFT`, C# `CraftService` product/item-template paths, and existing craft tests.
+- Chose the next smallest finish-craft logging slice: disabled craft log intent planning from Java `LoggingConfig.LOG_CRAFT` branch.
+- Added `CraftService.CreateFinishLoggingPlan(...)`.
+- Added `CraftFinishLoggingPlan`.
+- Added `CraftFinishLoggingStatus`.
+- Modeled Java craft logging behavior without live logging:
+	- skip item-template lookup and log write when `LOG_CRAFT` is false
+	- use Java logger name `CRAFT_LOG`
+	- use the product item id selected by the existing finish product plan
+	- read item name from item templates when logging is enabled
+	- build Java message text: `Player {name} crafted item {itemId} [{itemName}] (count: {quantity})`
+	- append ` - critical` when `critCount > 0`
+	- keep `DidWriteLog == false`
+- Added focused tests for normal log message planning, critical-suffix planning, and disabled config skip behavior.
+
+#### Migration Parity Table - Session 1832
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.configs.main.LoggingConfig.LOG_CRAFT` finish branch | `Aion.GameServer.Services.CraftService.CreateFinishLoggingPlan` | Logging Planner | Partial | Unit Tested | Partial Parity | C# records whether Java would enter the craft logging branch; live config binding and live log emission remain disabled. |
+| `org.slf4j.LoggerFactory.getLogger("CRAFT_LOG")` | `CraftFinishLoggingPlan.JavaLoggerName` | Logging Descriptor | Partial | Unit Tested | Partial Parity | C# records the Java logger category exactly as descriptor data; no logger instance is created and no message is emitted. |
+| `CraftService.finishCrafting` craft log message | `CraftFinishLoggingPlan.Message` | Logging Planner | Partial | Unit Tested | Partial Parity | C# builds the Java message shape including player name, product id, item name, quantity, and critical suffix; item-template lookup remains conservative when missing. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests" --no-restore` passed with 74 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 366 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4590 tests.
+
+Remaining risks:
+- Finish logging planning is disabled and does not write to any logger.
+- Live `LoggingConfig.LOG_CRAFT` binding is represented by an explicit method input, not wired to runtime config.
+- Java `DataManager.ITEM_DATA.getItemTemplate(productItemId).getName()` is represented by C# `ItemTemplateSummary.Name`; missing-template behavior is conservative and does not emulate a Java null dereference.
+- Finish-craft live XP/common XP mutation, recipe deletion/callback execution, reward insertion, cooldown mutation/persistence, logging, and full runtime execution remain incomplete or separately planned.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one finish logging planner method, one logging plan record, one status enum, exact logger-name descriptor, message construction, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is disabled logging-intent partial parity only.
+- Total artifacts needing verification: 3 rows pending live config lookup, live logger emission, item-template null behavior, and Java runtime comparison.
+- Total blocked artifacts: live finish-craft logging, live finish-craft recipe deletion, fail-craft quest callback execution, crafted item insertion, live XP mutation, cooldown mutation/persistence, and full craft runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves finish-craft logging evidence without claiming live runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add a non-live finish-craft orchestration composition that gathers the existing work-order, XP, reward, logging, and cooldown plans in Java operation order without executing live side effects.
+- Safe alternative candidates for the next session:
+	- begin live logout craft cooldown save design only after explicit connection/error behavior scoping
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- inspect Java finish-craft exception/null behavior around missing combo products and item templates before any live execution wiring
