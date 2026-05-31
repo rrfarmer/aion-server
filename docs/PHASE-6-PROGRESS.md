@@ -79705,3 +79705,59 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `DropRegistrationService.calculateBoostDropRate`
 	- return to the deferred `TemperingEffect.apply/endEffect` ownership surface only if a narrower deterministic slice becomes obvious
+
+### Session 1800 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1799-Completion.md`, and `Phase-6-Session-1799-Handoff.md`, then re-inspected Java `CM_CRAFT`, Java `CraftService.startCrafting`, Java `GameServer.isShuttingDownSoon`, Java `PositionUtil`, the current C# `CmCraft`, `CmCraftRuntimePlanService`, `GameServerConnection`, world object model, and craft tests.
+- Confirmed the next smallest safe scope was the live `CM_CRAFT` dispatch shell, not downstream `CraftService.startCrafting`: the C# port could route opcode `141` into the existing planner without material mutation, DP spend, cooldown writes, or scheduler work.
+- Added live dispatch in `GameServerConnection`:
+	- routes `CmCraft` packets through `HandleCraftAsync`
+	- preserves missing-player / not-spawned silent guard planning
+	- preserves shutdown-soon guard ordering before target validation
+	- resolves current C# world-visible target metadata for non-morph target existence, 10m range, same world/instance, and template-id checks
+	- preserves Java morph-substance target bypass when `unk == 129`
+	- records a deferred `StartCrafting` intent but intentionally does not call `CraftService.startCrafting`
+- Added a socket-level craft plan observer for focused regression evidence.
+- Added `GameServerConnectionCraftTests` proving live packet dispatch reaches the planner and sends no packets for the currently modeled silent/deferred branches.
+- Kept scope intentionally narrow:
+	- no live `CraftService.startCrafting` execution
+	- no material or DP mutation
+	- no `CraftingTask` scheduling
+	- no first-class Java `StaticObject` craft-station model
+
+#### Migration Parity Table - Session 1800
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CRAFT.runImpl` live dispatch guard shell | `Aion.GameServer.Network.Aion.GameServerConnection.HandleCraftAsync` + `Aion.GameServer.Services.CmCraftRuntimePlanService.CreatePlan` | Client Packet Dispatch / Runtime Guard | Partial | Regression Tested | Partial Parity | Java source reviewed; live C# dispatch now reaches the planner and preserves missing-player, shutdown-soon, non-morph target validation, and morph bypass branches. C# still does not call `CraftService.startCrafting`, and static object identity is approximated through current world-visible object metadata until a first-class `StaticObject` model exists. |
+| `com.aionemu.gameserver.GameServer.isShuttingDownSoon` guard precedence in `CM_CRAFT.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` injected shutdown-soon gate | Runtime Guard | Partial | Regression Tested | Partial Parity | Socket-level regression proves shutdown-soon produces a silent plan before target validation. The injected hook is not yet wired to the production `ShutdownHook` countdown. |
+| `com.aionemu.gameserver.utils.PositionUtil.isInRange(player, staticObject, 10)` pre-start craft guard | `Aion.GameServer.Network.Aion.GameServerConnection.IsInCraftTargetRange` | Range Check | Partial | Regression Tested | Partial Parity | C# uses existing PositionUtil-style strict squared-distance checks and same world/instance validation. Java bound-radius/static-object overload details remain future verification when static objects are modeled directly. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ProcessPacketAsync_CmCraftWithoutActivePlayerRecordsJavaSilentNoPlayerPlan` | Regression Added | Java `CM_CRAFT.runImpl` opening guard | Socket dispatch records the Java silent no-player/not-spawned plan and sends no packets. | Source-derived live dispatch regression. | Uses C# active-player absence as the missing-player case. |
+| `ProcessPacketAsync_CmCraftShutdownSoonReturnsBeforeTargetValidation` | Regression Added | Java `CM_CRAFT.runImpl` shutdown guard | Shutdown-soon short-circuits before target validation and sends no packets. | Source-derived live dispatch regression with injected shutdown hook. | Production shutdown hook is not wired yet. |
+| `ProcessPacketAsync_CmCraftNonMorphInvalidTargetRecordsSilentInvalidPlan` | Regression Added | Java `CM_CRAFT.runImpl` non-morph target validation | Non-morph craft with an out-of-range target resolves to the silent invalid-target plan. | Source-derived live dispatch regression. | Uses current C# world-visible object metadata, not a Java-equivalent static-object model. |
+| `ProcessPacketAsync_CmCraftMorphBypassesMissingTargetAndRecordsStartIntent` | Regression Added | Java `CM_CRAFT.runImpl` `unk == 129` branch | Morph requests bypass target validation and preserve recipe, craft type, and material payload. | Source-derived live dispatch regression. | Does not execute downstream morph crafting. |
+
+Remaining risks:
+- C# still does not execute Java `CraftService.startCrafting`.
+- `CraftingTask`, `SM_CRAFT_UPDATE` / `SM_CRAFT_ANIMATION` runtime scheduling, material consumption, DP spend, cooldown persistence, XP/reward handling, recipe deletion, craft logging, and quest/event callbacks remain outside this unit.
+- C# lacks a first-class Java `StaticObject` world model for craft stations; target validation currently uses available `IWorldNpcObject` metadata as a conservative live-dispatch boundary.
+- The shutdown-soon dependency is test-injected and still needs production `ShutdownHook` countdown integration.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: 1 live `CmCraft` dispatch shell, 1 shutdown-soon test seam, 1 target-range helper, and 4 socket-level regressions.
+- Total artifacts with verified parity: 0 new grouped rows in this unit.
+- Total artifacts needing verification: 3 grouped rows.
+- Total blocked artifacts: full `CraftService.startCrafting` runtime, first-class static craft targets, and live `CraftingTask` scheduling.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit moves `CM_CRAFT` from packet/planner-only into live dispatch without overstating the still-missing crafting runtime.
+
+Next recommended unit of work:
+- Next sequential task: port the smallest Java `CraftService.startCrafting` pre-task validation slice, likely recipe/product-template lookup plus early `checkCraft` null/in-progress/morph-target guard planning before material mutation or scheduler start.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- return to the deferred `TemperingEffect.apply/endEffect` ownership surface only if a narrower deterministic slice becomes obvious
