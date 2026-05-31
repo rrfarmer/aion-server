@@ -80191,3 +80191,48 @@ Next recommended unit of work:
 	- add start-craft success task interval planning
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1809 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1808 handoff, confirmed the clean UOW-1808 commit, then re-inspected Java `CraftService.checkCraft` successful tail, `CraftService.getBonusReqItem`, component decrease ordering, C# recipe component projection, and existing craft tests.
+- Chose the next smallest successful-path slice: non-mutating material/bonus consumption planning. Kept live inventory mutation, persistence, inventory packets, DP spend, task interval, scheduler startup, and craft completion outside this unit.
+- Added `CraftService.CreateStartConsumptionPlan(...)`.
+- Added `CraftStartConsumptionPlan`, `CraftStartConsumptionStatus`, `CraftStartConsumedItemPlan`, and `CraftStartConsumedItemKind`.
+- Reused selected component group resolution from material validation.
+- Planned Java consumption order:
+	- bonus item via `getBonusReqItem(skillId)` when `craftType == 1`
+	- selected component group items in recipe component order
+- Added focused `CraftServiceTests` coverage for bonus-before-component order, selected group behavior without bonus, and no plan when validation failed.
+
+#### Migration Parity Table - Session 1809
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` successful bonus decrease | `Aion.GameServer.Services.CraftService.CreateStartConsumptionPlan` bonus decrease row | Consumption Planner | Partial | Unit Tested | Partial Parity | C# plans bonus item decrease before material components for `craftType == 1`; no live mutation occurs. |
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` successful component decreases | `Aion.GameServer.Services.CraftService.CreateStartConsumptionPlan` component decrease rows | Consumption Planner | Partial | Unit Tested | Partial Parity | C# plans decreases for the selected component group in recipe order; no live mutation occurs. |
+| `com.aionemu.gameserver.model.templates.recipe.ComponentsData.getComponent` ordering | `Aion.GameServer.Dataholders.RecipeComponentDataSummary.Components` through consumption plan | Data Ordering | Partial | Unit Tested | Partial Parity | Tests cover selected group order with multiple components. Static data projection was added in UOW-1806. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 279 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4544 tests.
+
+Remaining risks:
+- C# still does not execute Java `CraftService.startCrafting`.
+- No live inventory mutation, persistence, or inventory update packets are wired.
+- No DP spend, task interval, scheduler startup, or craft completion.
+- Live CM_CRAFT parsing still does not feed selected materials or craft type into this planner.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one consumption planner, two supporting records/enums, and focused test updates.
+- Total artifacts with verified parity: 0 rows; this is planner-level partial parity only.
+- Total artifacts needing verification: 3 rows pending live mutation/persistence.
+- Total blocked artifacts: live start-craft execution, live inventory mutation, persistence, DP spend, task interval, and scheduler startup.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds consumption planning without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add start-craft success task interval planning from Java `CraftService.startCrafting`, including quality-based interval cap, skill-level difference, morph interval, and bonus craft crit modifier.
+- Safe alternative candidates for the next session:
+	- start live CM_CRAFT selected-material/craft-type adapter work
+	- begin non-live inventory mutation plan for material/bonus consumption
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
