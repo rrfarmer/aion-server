@@ -81907,3 +81907,47 @@ Next recommended unit of work:
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1842 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1841 handoff/completion, progress/parity/orchestration docs, then inspected C# `WorldNpcDropModifierService` and its tests.
+- Chose the next narrow boost-rate integration slice: add a resolved-input context and let modifier creation consume it without inventing live stat/rate/house providers.
+- Added `WorldNpcDropBoostRateContext` with resolved inputs for configured drop rate, NPC boost, killer boost, killer DR boost, repose, salvation, and active-palace state.
+- Added `WorldNpcDropBoostRateContext.CalculateBoostDropRate()`.
+- Updated `WorldNpcDropModifierService.CreateModifiers(...)` to use the context when provided and preserve the existing pre-resolved `boostDropRate` path for current callers.
+- Added focused tests for context calculation and `CreateModifiers` context integration.
+
+#### Migration Parity Table - Session 1842
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `DropRegistrationService.calculateBoostDropRate` resolved inputs | `WorldNpcDropBoostRateContext` | Formula Context | Partial | Unit Tested | Partial Parity | C# now has an explicit resolved-input carrier for the Java stat/default/rate/bonus inputs. It does not resolve live stat containers, rate config, or active house state. |
+| `DropRegistrationService.createDropModifiers` boost-rate assignment | `WorldNpcDropModifierService.CreateModifiers(..., boostRateContext)` | Service Integration | Partial | Unit Tested | Partial Parity | C# modifier creation can now consume Java-shaped boost-rate context when supplied, while preserving the existing pre-resolved boost path for current callers. |
+| `Rates.get(killer, RatesConfig.DROP_RATES)` | `WorldNpcDropBoostRateContext.ConfiguredDropRate` | Formula Input | Partial | Unit Tested | Partial Parity | Context accepts the already-resolved rate; membership/rate-array lookup remains deferred. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests" --no-restore` passed with 47 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 465 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4616 tests.
+
+Remaining risks:
+- Live NPC/player stat containers are not connected to `WorldNpcDropBoostRateContext`.
+- Configured drop-rate lookup through Java `Rates.get(killer, RatesConfig.DROP_RATES)` is not connected to live configuration.
+- Active house lookup remains a resolved boolean input.
+- Existing workflow callers still use the fallback pre-resolved boost value until a live boost-rate context provider is added.
+- Full drop registration runtime parity remains incomplete until real stat/rate/house inputs feed modifier creation.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one resolved boost-rate context, context calculation bridge, and `CreateModifiers` context integration.
+- Total artifacts with verified parity: 0 rows; this remains partial drop modifier parity.
+- Total artifacts needing verification: 3 rows pending live stat/rate/house provider wiring and runtime comparison.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/rate/house drop boost provider, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit moves the boost formula closer to workflow integration while keeping live-source gaps explicit.
+
+Next recommended unit of work:
+- Next sequential task: add a disabled or narrow live-context planner/provider that resolves `WorldNpcDropBoostRateContext` inputs from currently modeled C# player/NPC/rate surfaces, documenting unavailable Java inputs before any workflow wiring.
+- Safe alternative candidates for the next session:
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
