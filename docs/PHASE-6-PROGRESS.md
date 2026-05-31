@@ -79094,3 +79094,69 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1790 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1789-Completion.md`, and `Phase-6-Session-1789-Handoff.md`, then re-inspected Java `Player.getDirtyItemsToUpdate`, Java `Equipment.persistentState`, Java `Equipment.setPersistentState`, Java `Equipment.getEquippedItems`, Java `Equipment.equip`, Java `Equipment.unEquip`, Java `Equipment.switchHands`, and Java `Equipment.increaseEquippedItemCount` / `decreaseEquippedItemCount`, alongside the current C# `Player`, `EquipmentService`, and logout persistence path.
+- Confirmed the next honest gap after UOW-1789 was not only adding a modeled equipment flag, but also separating equipped rows from the modeled cube-storage harvest: Java inventory storage and Java equipment are distinct dirty sources, while the C# `InventoryItems` list still mixed both.
+- Added modeled equipment dirty-state on `Player`:
+	- `EquipmentPersistentState`
+	- `MarkEquipmentDirty()`
+- Updated `Player.InventoryItems` assignment to split promotion logic:
+	- non-equipped dirty rows now promote only `InventoryStoragePersistentState`
+	- equipped dirty rows now promote `EquipmentPersistentState`
+	- an already-dirty modeled storage/equipment flag is still preserved on later assignments
+- Updated `Player.GetDirtyItemsToUpdate()` to mirror the Java split more closely:
+	- cube-storage harvest now emits only non-equipped inventory rows plus tracked deleted cube rows
+	- equipped rows now come from a separate equipment dirty branch keyed off `EquipmentPersistentState`
+	- the equipment dirty flag resets to `Updated` after harvest, like the Java equipment branch
+- Updated `MarkDirtyItemsPersisted()` to reset `EquipmentPersistentState` alongside the modeled storage-state flags.
+- Added stronger focused evidence:
+	- `PlayerInventoryPersistentStateTests.GetDirtyItemsToUpdate_HarvestsDirtyEquippedItemsThroughEquipmentState`
+	- `PlayerInventoryPersistentStateTests.MarkEquipmentDirty_HarvestsEquippedRowsEvenWhenTheyAreUpdated`
+	- `PlayerInventoryPersistentStateTests.AssigningDirtyEquippedRows_PromotesEquipmentStateWithoutDirtyingInventoryStorage`
+	- updated existing dirty-harvest tests to assert that an equipped row no longer leaks into the modeled cube-storage harvest
+- Kept scope intentionally narrow:
+	- still no first-class Java `Equipment` object port
+	- still no dedicated live producers calling `MarkEquipmentDirty()` yet beyond assignment-driven promotion
+	- still no broader persistence-pipeline rewrite beyond the modeled logout harvest boundary
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerInventoryPersistentStateTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~EquipmentServiceTests"` passed with 83 tests.
+	- `dotnet test dotnetConversion\AionServer.slnx` then passed cleanly on the first full-suite run with 4769 total tests (`57` commons, `29` chat, `121` login, `4562` game).
+
+#### Migration Parity Table - Session 1790
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment.persistentState` + `Equipment.setPersistentState` | `Aion.GameServer.Model.GameObjects.Player.EquipmentPersistentState` + `MarkEquipmentDirty` | Modeled Equipment Dirty-State Surface | Partial | Unit Tested | Partial Parity | Java source reviewed; C# now has an explicit modeled equipment dirty flag and a direct promotion helper. The state still lives on `Player` rather than a first-class `Equipment` object, and broader live producers beyond assignment-driven promotion remain future work. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getDirtyItemsToUpdate` equipment branch | `Aion.GameServer.Model.GameObjects.Player.GetDirtyItemsToUpdate` | Dirty-State Harvest | Partial | Unit Tested | Partial Parity | C# dirty harvest now emits equipped rows through a separate equipment branch keyed off modeled equipment state and resets that state after harvest. Java pet bag, cabinet, and legion storage coverage remain absent. |
+| `com.aionemu.gameserver.model.items.storage.Storage.getItemsWithKinah` cube-storage participation excluding equipped rows | `Aion.GameServer.Model.GameObjects.Player.GetDirtyItemsToUpdate` modeled cube-storage harvest | Cube Storage Harvest Separation | Partial | Unit Tested | Partial Parity | C# cube harvest now excludes equipped rows, bringing the modeled cube-storage branch closer to Java inventory storage behavior. The underlying item list is still shared rather than split into first-class inventory/equipment containers. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store(Player)` inventory-plus-equipment harvest boundary | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.SavePlayerLogoutAsync` + `Player.GetDirtyItemsToUpdate` | Logout Persistence Boundary | Partial | Regression Tested | Partial Parity | Logout persistence now consumes a harvest that distinguishes modeled storage rows from equipped rows. A fuller Java inventory store pipeline and explicit runtime equipment dirty producers remain future work. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `GetDirtyItemsToUpdate_HarvestsDirtyEquippedItemsThroughEquipmentState` | Unit Added | Java `Player.getDirtyItemsToUpdate` + `Equipment.getEquippedItems` | Dirty equipped rows are harvested through the modeled equipment branch rather than the cube-storage branch. | Source-derived unit regression for the Java equipment harvest split. | No first-class `Equipment` object proof. |
+| `MarkEquipmentDirty_HarvestsEquippedRowsEvenWhenTheyAreUpdated` | Unit Added | Java `Equipment.setPersistentState` + `Player.getDirtyItemsToUpdate` | Explicitly dirty modeled equipment harvests all equipped rows even when they are individually `Updated`, and resets the equipment flag after harvest. | Source-derived unit regression for the equipment dirty gate. | No broader runtime producer sweep. |
+| `AssigningDirtyEquippedRows_PromotesEquipmentStateWithoutDirtyingInventoryStorage` | Unit Added | Java inventory/equipment separation in `Player.getDirtyItemsToUpdate` | Assigning a dirty equipped row promotes modeled equipment state without incorrectly dirtying the cube-storage flag. | Source-derived unit regression for the inventory-vs-equipment split. | No pet bag/cabinet coverage. |
+| `GetDirtyItemsToUpdate_ReturnsDirtyItemsAcrossModeledStorages` | Unit Updated | Java `Player.getDirtyItemsToUpdate` | Equipped rows no longer leak into the modeled cube-storage harvest when only cube storage is dirty. | Source-derived unit regression. | No legion warehouse coverage. |
+
+Remaining risks:
+- C# still does not port a first-class Java `Equipment` object; modeled equipment dirtiness still lives on `Player`.
+- Most live equipment mutation paths still rely on assignment-driven promotion rather than explicitly calling a dedicated equipment-state mutation API.
+- Pet bag, cabinet, and legion warehouse harvest branches remain unmodeled.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 modeled equipment-state property, 1 equipment dirty-marking helper, 1 inventory-vs-equipment harvest split update, and 4 focused test updates/additions.
+- Total artifacts with verified parity: 0 grouped rows in this unit.
+- Total artifacts needing verification: 4 grouped rows.
+- Total blocked artifacts: broader live equipment dirty producers, first-class storage/equipment container modeling, and a fuller Java-shaped inventory store pipeline.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the modeled equipment dirty-gate split for logout harvest without overstating the still-missing runtime producer and container architecture.
+
+Next recommended unit of work:
+- Next sequential task: port the minimum live producer sweep for modeled `EquipmentPersistentState`, starting with the current direct `EquipmentService` and power-shard mutation surfaces so equipment dirtiness is not inferred only from reassignment.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
