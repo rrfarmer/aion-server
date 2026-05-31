@@ -80993,3 +80993,62 @@ Next recommended unit of work:
 	- integrate the disabled packet send adapter into `CraftStartLiveExecutorFacadePlanService`
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1825 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1824 handoff/completion, progress/parity/orchestration docs, then re-inspected Java `InventoryDAO.store`, Java `deleteItems`, Java `updateItems`, C# SQL descriptors, and existing disabled persistence execution patterns.
+- Chose the next smallest persistence-boundary slice: a disabled adapter around craft-start inventory SQL descriptors.
+- Added `CraftStartInventoryPersistenceAdapterPlanService.CreateDisabledPlan(...)`.
+- Added `CraftStartInventoryPersistenceAdapterPlan`.
+- Added `CraftStartInventoryPersistenceAdapterOperation`.
+- Added `CraftStartInventoryPersistenceAdapterStatus`.
+- Recorded Java `InventoryDAO.store` execution boundaries without live DB I/O:
+	- open connection
+	- begin transaction / autocommit disabled
+	- execute delete/update SQL descriptors
+	- commit batches
+	- release object ids after successful delete
+- Kept every live execution flag false:
+	- `DidOpenConnection`
+	- `DidBeginTransaction`
+	- `DidExecuteSql`
+	- `DidCommitBatches`
+	- `DidReleaseObjectIds`
+- Added missing/not-ready/no-SQL guard behavior.
+
+#### Migration Parity Table - Session 1825
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dao.InventoryDAO.store` connection and transaction boundary | `Aion.GameServer.Services.CraftStartInventoryPersistenceAdapterPlanService.CreateDisabledPlan` | Persistence Adapter | Partial | Unit Tested | Partial Parity | C# records would-open-connection and would-begin-transaction flags; no connection is opened and no transaction is started. |
+| `com.aionemu.gameserver.dao.InventoryDAO.deleteItems` / `updateItems` SQL execution boundary | `Aion.GameServer.Services.CraftStartInventoryPersistenceAdapterOperation` | Persistence Adapter | Partial | Unit Tested | Partial Parity | C# consumes delete/update SQL descriptors and records would-execute SQL; no SQL is executed. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store` post-delete object-id release | `CraftStartInventoryPersistenceAdapterPlan.WouldReleaseObjectIdsAfterSuccessfulDelete` / `DidReleaseObjectIds` | Persistence Adapter | Partial | Unit Tested | Partial Parity | C# records Java's release boundary after successful delete; `IDFactory.releaseObjectIds` remains uncalled. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 321 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4573 tests.
+
+Remaining risks:
+- The persistence adapter is disabled and does not execute database writes.
+- No connection, transaction, batch commit, rollback, or Java autocommit behavior is executed.
+- Object ids are not released; the C# plan only records release intent.
+- No live inventory mutation is applied to `Player.InventoryItems`.
+- No live inventory packets are sent.
+- No DP spend, live `CraftingTask` creation, scheduler startup, or craft completion is wired.
+- Java storage delete quest callbacks/logging are not executed.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one disabled persistence adapter plan service, one adapter plan, one adapter operation record, one adapter status enum, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is disabled persistence-boundary partial parity only.
+- Total artifacts needing verification: 3 rows pending live DB writes, transaction behavior, commit/rollback, object-id release, packet sending, DP spend, live task creation/start, and Java runtime comparison.
+- Total blocked artifacts: live start-craft execution, inventory mutation, persistence writes, transaction behavior, packet fanout, DP spend, live task creation, scheduler startup, object-id release, and full craft completion.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves craft-start persistence execution boundary evidence without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: integrate the disabled packet-send and persistence adapters into `CraftStartLiveExecutorFacadePlanService` so the facade consumes concrete adapter plans rather than only high-level boundary flags.
+- Safe alternative candidates for the next session:
+	- add a live-safe craft finish cooldown application mutation plan
+	- begin live-enabled persistence adapter design only after explicit transaction/rollback scope
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
