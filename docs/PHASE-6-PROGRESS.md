@@ -79939,3 +79939,61 @@ Next recommended unit of work:
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- execute the opt-in MySQL logout delete/retuning persistence path with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1804 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1803 handoff and latest Phase 6 progress, confirmed the clean UOW-1803 commit, then re-inspected Java `CraftService.checkCraft`, `RecipeList.isRecipePresent`, `Cooldowns.hasCooldown`, `RecipeTemplate` craft-delay attributes, C# `Player.Recipes`, `Player.CraftCooldowns`, static recipe loading, and existing craft/packet tests.
+- Chose the next smallest deterministic Java `checkCraft` slice after target, DP, stance, and inventory validation: learned-recipe validation and craft-cooldown validation. Kept live `startCrafting`, live failure fanout, skill validation, material validation/consumption, bonus item consumption, DP spend, task interval, and scheduler startup outside this unit.
+- Added `CraftDelayId` and `CraftDelayTime` to `RecipeTemplateSummary`.
+- Updated static recipe XML loading to project Java `craft_delay_id` and `craft_delay_time`.
+- Extended `CraftService.CreateStartCraftingValidationPlan(...)` with Java guard ordering for:
+	- `!player.getRecipeList().isRecipePresent(recipeTemplate.getId())`
+	- `recipeTemplate.getCraftDelayId() != null && player.getCraftCooldowns().hasCooldown(recipeTemplate.getCraftDelayId())`
+- Added `CraftStartValidationStatus.MissingKnownRecipe` and `CraftStartValidationStatus.CraftCooldownActive`.
+- Added `SmSystemMessage.CombineCannotFindRecipe()` for Java message id `1330043`.
+- Added `SmSystemMessage.ItemCantUseUntilDelayTime()` for Java message id `1300494`.
+- Added focused `CraftServiceTests` and `GamePacketTests` coverage for guard ordering and exact message IDs.
+
+#### Migration Parity Table - Session 1804
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` recipe ownership guard | `Aion.GameServer.Services.CraftService.CreateStartCraftingValidationPlan` `MissingKnownRecipe` branch | Validation Guard | Partial | Unit Tested | Partial Parity | Java source reviewed; C# checks `Player.Recipes` after inventory guard and attaches `STR_COMBINE_CAN_NOT_FIND_RECIPE`. Live packet/cancel fanout remains pending. |
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` craft cooldown guard | `Aion.GameServer.Services.CraftService.CreateStartCraftingValidationPlan` `CraftCooldownActive` branch | Validation Guard | Partial | Unit Tested | Partial Parity | Java source reviewed; C# checks `RecipeTemplateSummary.CraftDelayId` presence in `Player.CraftCooldowns`, matching Java `Cooldowns.hasCooldown` presence semantics for this branch. Live packet/cancel fanout remains pending. |
+| `com.aionemu.gameserver.model.templates.recipe.RecipeTemplate` `craft_delay_id` / `craft_delay_time` attributes | `Aion.GameServer.Dataholders.RecipeTemplateSummary.CraftDelayId` / `CraftDelayTime` | Static Data Projection | Partial | Regression Tested | Partial Parity | XML attributes are now projected into C# summaries. Broader recipe component and max-production data remain outside this unit. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_COMBINE_CAN_NOT_FIND_RECIPE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.CombineCannotFindRecipe` | Server Packet Factory | Complete | Unit Tested | Verified Parity | Message id `1330043` verified through packet/system-message tests. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_ITEM_CANT_USE_UNTIL_DELAY_TIME` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.ItemCantUseUntilDelayTime` | Server Packet Factory | Complete | Unit Tested | Verified Parity | Message id `1300494` verified through packet/system-message tests. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateStartCraftingValidationPlan_RejectsMissingKnownRecipeAfterInventoryValidation` | Unit Added | Java `checkCraft` inventory guard before recipe-list guard | Inventory-full failure wins before missing recipe; missing learned recipe attaches message id `1330043`. | Source-derived planner regression plus system-message ID evidence. | Live send/cancel orchestration remains pending. |
+| `CreateStartCraftingValidationPlan_RejectsCraftCooldownAfterRecipeValidation` | Unit Added | Java `checkCraft` recipe-list guard before cooldown guard | Missing recipe wins before cooldown; learned recipe with active craft cooldown attaches message id `1300494`. | Source-derived planner regression plus system-message ID evidence. | Cooldown expiration cleanup semantics outside this branch remain broader than this planner. |
+| `GamePacketTests` system-message assertions | Unit Updated | Java `SM_SYSTEM_MESSAGE` constants | New C# factories preserve Java message ids `1330043` and `1300494`. | Packet/system-message assertion evidence. | No runtime Java packet capture in this unit. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 287 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4532 tests.
+
+Remaining risks:
+- C# still does not execute Java `CraftService.startCrafting`.
+- `FailurePacket` is planner evidence only; no live system-message or cancel packet fanout is wired.
+- Skill presence, skill level, material validation/consumption, bonus item consumption, DP spend, task interval, scheduler startup, and craft completion remain pending.
+- Recipe components and max-production recipe data are still not modeled in `RecipeTemplateSummary`.
+- Java cooldown expiration cleanup is broader than this branch; this unit only matches the `hasCooldown` presence check used by `checkCraft`.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: 2 validation branches, 2 status values, 2 system-message factories, recipe delay metadata projection, and 3 focused test updates.
+- Total artifacts with verified parity: 2 system-message factory rows.
+- Total artifacts needing verification: 3 grouped validation/static-data rows pending live orchestration and broader recipe data.
+- Total blocked artifacts: live start-craft execution, live validation failure fanout, skill/material validation, DP spend, and scheduler startup.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds recipe/cooldown guard planning without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: port skill presence and skill level guard planning from `CraftService.checkCraft`, including `STR_COMBINE_CANT_USE` and `STR_COMBINE_OUT_OF_SKILL_POINT`.
+- Safe alternative candidates for the next session:
+	- wire non-live validation failure orchestration that combines `FailurePacket` and cancel packet plans without live sending
+	- start recipe component projection needed for material validation
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
