@@ -83934,3 +83934,62 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
+### Session 1882 (May 31, 2026)
+- Performed fresh Work Discovery after UOW-1881: re-read required migration/orchestration/parity docs, latest completion and handoff, rechecked Java/Maven availability, inspected Java `RepurchaseService`, `PrivateStoreService`, `TradePSItem`, `TradeList`, `TradeItem`, C# private-store planner slices, `InventoryAddService`, `InventoryCapacity`, and kinah mutation helpers.
+- Confirmed the Java runtime/golden path remains blocked locally by Java `1.8.0_491` and missing Maven, so this unit stayed source-reviewed and C#-tested only.
+- Added `PrivateStorePurchasePlanService`, a non-live planner for Java `PrivateStoreService.sellStoreItem`.
+- The planner models:
+	- seller/buyer online and race guard
+	- empty bought-item guard
+	- buyer free-slot guard and Java dice-inventory message
+	- Java-style unchecked `long` price accumulation followed by `price < 0` dupe guard
+	- buyer Kinah affordability guard
+	- seller item lookup and changed-count audit guard
+	- target template lookup before `ItemService.addItem`
+	- seller item decrement/delete intent
+	- packed-item `packCount - 1` source passed to buyer add planning
+	- buyer reward add through `InventoryAddService.CreateAddItemPlan(..., sourceItem)`
+	- seller private-store sell notification messages
+	- buyer/seller Kinah update intent
+	- seller-store close intent when the sold item list becomes empty
+- Added focused tests for successful non-stackable source clone purchase, partial stackable purchase, inventory-full guard ordering, Java-style negative price overflow guard, insufficient Kinah guard, and seller-count-changed guard.
+- Kept this unit non-live. No socket handler wiring, repository writes, packet send ordering, Java runtime output, or real private-store mutation was enabled.
+
+#### Migration Parity Table - Session 1882
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.PrivateStoreService.sellStoreItem` | `Aion.GameServer.Services.PrivateStorePurchasePlanService` | Service Planner | Partial | Unit Tested | Partial Parity | Non-live planner models reviewed Java guard/order behavior, source-item buyer add planning, seller item decrement, Kinah transfer intent, seller messages, and close-store intent. Live socket wiring, repository writes, packet order, concurrency, and Java runtime comparison remain unverified. |
+| `com.aionemu.gameserver.model.trade.TradePSItem.decreaseCount` / `PrivateStoreService.decreaseItemFromPlayer` | `PrivateStorePurchasePlanService` seller update/delete outputs | Mutation Planner | Partial | Unit Tested | Partial Parity | Tests cover partial stackable seller remainder and sold-out delete intent. Java live store map mutation and persistence are not executed. |
+| `com.aionemu.gameserver.services.item.ItemService.addItem(Player, Item, long)` private-store caller | `InventoryAddService.CreateAddItemPlan(..., sourceItem)` composed by `PrivateStorePurchasePlanService` | Inventory Planner Composition | Partial | Unit Tested | Partial Parity | Successful purchase test proves non-stackable buyer row receives reviewed source-item metadata through the new planner path. Java runtime, expirable registration, add/update packet types, and DAO behavior remain unverified. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PrivateStorePurchasePlanServiceTests" --no-restore` passed with 6 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PrivateStorePurchasePlanServiceTests|FullyQualifiedName~PrivateStoreItemValidationPlanServiceTests|FullyQualifiedName~PrivateStoreSellNotificationPlanServiceTests|FullyQualifiedName~PrivateStoreOpenGuardPlanServiceTests|FullyQualifiedName~PrivateStoreOpenPlanServiceTests|FullyQualifiedName~PrivateStoreClosePlanServiceTests|FullyQualifiedName~InventoryAddServiceTests" --no-restore` passed with 60 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4733 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- `PrivateStorePurchasePlanService` is non-live and is not wired into `CM_BUY_ITEM` or a socket handler.
+- The live private-store map, seller/buyer inventory mutation, packet fanout, audit logging, repository persistence, transaction behavior, and rollback behavior remain unimplemented.
+- Java partial-processing behavior when one bought item succeeds and a later seller item is missing is intentionally not live in this planner; the planner blocks that edge until runtime mutation ordering can be staged safely.
+- `ItemService.addItem` add/update packet types, expirable registration, and DAO persistence remain outside this unit.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: private-store purchase planner plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 7 rows pending Java runtime/golden comparison, live private-store caller wiring, DAO/packet behavior, live reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for private-store/reward persistence, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves private-store/reward planner parity but does not complete live reward or stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: if JDK 25 and Maven are available, return to the condition preview Java capture draft and produce runtime output; otherwise inspect Java `RepurchaseService.repurchaseFromShop` and add a small non-live repurchase source-item clone planner using the same `InventoryAddService` source-item path.
+- Safe alternative candidates for the next session:
+	- wire `PrivateStorePurchasePlanService` only after repository/packet mutation ordering is scoped and tests can cover no-partial-send behavior
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
