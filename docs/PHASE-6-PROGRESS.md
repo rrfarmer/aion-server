@@ -84371,3 +84371,56 @@ Next recommended unit of work:
 	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
+### Session 1890 (May 31, 2026)
+- Performed fresh Work Discovery after UOW-1889: read the latest completion and handoff documents, inspected Java `CM_BUY_ITEM.readImpl`/`runImpl`, C# `CmBuyItem`, `CmBuyItemRepurchaseReadPlanService`, `CmBuyItemRepurchaseRunPlanService`, and existing composition-plan patterns.
+- Confirmed the Java runtime/golden path remains blocked locally by Java `1.8.0_491` and missing Maven, so this unit stayed source-reviewed and C#-tested only.
+- Added `CmBuyItemRepurchaseCompositionPlanService`, a non-live planner that chains parsed `CmBuyItem` values into the repurchase read plan and then the repurchase run plan.
+- Added `CmBuyItemRepurchaseCompositionPlanServiceTests`.
+- The composition planner models:
+	- Java packet read output being consumed before run-side target gates
+	- parser audit propagation into read/run audit outcomes
+	- action `2` repurchasable object filtering through the existing read planner
+	- Java run-side dispatch gates through the existing run planner
+	- non-repurchase actions producing run-skip intent without repurchase dispatch
+	- interaction audit ordering before NPC `canBuy()`
+	- optional carry-through of the existing non-live `RepurchasePlan`
+	- explicit `ShouldDispatchLiveSideEffects = false`
+- Kept this unit non-live. No socket handler, actual known-list lookup, live `DialogService` call, live NPC state query, singleton repurchase mutation, repository writes, packet fanout, audit logging side effect, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1890
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM` action `2` read-to-run flow | `Aion.GameServer.Services.CmBuyItemRepurchaseCompositionPlanService` | Client Packet Composition Planner | Partial | Unit Tested | Partial Parity | Non-live composition chains parser values through read and run planners, including audit propagation and would-dispatch intent. Live handler execution, known-list lookup, audit logging side effects, inventory mutation, and Java runtime comparison remain unwired. |
+| `com.aionemu.gameserver.services.RepurchaseService.repurchaseFromShop` action `2` dispatch intent | `CmBuyItemRepurchaseCompositionPlan.RunPlan.Dispatch` | Dispatch Composition | Partial | Unit Tested | Partial Parity | C# carries requested object ids and optional non-live `RepurchasePlan`; it explicitly does not mutate live repurchase state or dispatch side effects. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemRepurchaseCompositionPlanServiceTests" --no-restore` passed with 6 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemRepurchaseCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemTests|FullyQualifiedName~CmBuyItemRepurchaseReadPlanServiceTests|FullyQualifiedName~CmBuyItemRepurchaseRunPlanServiceTests|FullyQualifiedName~RepurchasePlanServiceTests|FullyQualifiedName~SmRepurchaseTests" --no-restore` passed with 53 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4789 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- `CmBuyItemRepurchaseCompositionPlanService` is non-live and is not invoked by `GameServerConnection`.
+- Java active-player retrieval, known-list lookup, interaction checks, NPC `canBuy()`, and repurchase singleton access are represented by supplied facts and existing planners.
+- Live socket handling, packet fanout, repository persistence, transaction behavior, audit logging side effects, and real-client validation remain unimplemented.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: non-live `CM_BUY_ITEM` action `2` parser/read/run composition planner plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 15 rows pending Java runtime/golden comparison, live `CM_BUY_ITEM` handler wiring, live BUY_AGAIN wiring, live sell-to-shop wiring, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase persistence, live `CM_BUY_ITEM` handler wiring, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves source-reviewed action `2` composition coverage but does not complete live trade/repurchase or stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java `CM_BUY_ITEM` action `1` sell-to-shop read/run composition and add a non-live composition plan only if it can reuse existing parser and `TradeSellToShopPlanService` without live inventory/repository mutation.
+- Safe alternative candidates for the next session:
+	- wire `RepurchasePlanService` only after repository/packet mutation ordering and rollback behavior are scoped
+	- inspect Java action `13`-`16` buy-from-shop run gating if staying non-live
+	- inspect live `GameServerConnection` handler gaps for `CmBuyItem` without enabling side effects
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
