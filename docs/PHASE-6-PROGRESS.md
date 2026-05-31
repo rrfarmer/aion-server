@@ -79646,3 +79646,62 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `DropRegistrationService.calculateBoostDropRate`
 	- return to the deferred `TemperingEffect.apply/endEffect` ownership surface only if a narrower deterministic slice becomes obvious
+
+### Session 1799 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, and `Phase-6-Session-1798-Handoff.md`, then re-inspected Java `CM_CRAFT`, `CraftService.startCrafting`, `CraftingTask`, `AbstractCraftTask`, and the current C# packet factory, connection runtime, and craft services.
+- Confirmed the next smallest honest live-crafting slice was still below scheduler/runtime wiring: C# had no `CM_CRAFT` client packet model, no opcode registration, and no source-shaped representation of Java `CM_CRAFT.runImpl` guard ordering.
+- Added the missing Java-shaped craft client packet surface:
+	- `CmCraft` now mirrors Java `CM_CRAFT.readImpl` with fields for `unk`, `targetTemplateId`, `recipeId`, `targetObjId`, `materialsCount`, `craftType`, and repeated material `(itemId, count)` pairs
+	- `GameClientPacketFactory` now registers opcode `141` as `InGame` only for `CmCraft`, matching Java `AionClientPacketFactory`
+- Added a non-live `CmCraftRuntimePlanService` to preserve the Java `CM_CRAFT.runImpl` boundary without widening into `CraftService.startCrafting(...)`:
+	- missing player or unspawned player returns a silent `NoPlayerOrNotSpawned` plan
+	- shutdown-soon returns a silent `ShuttingDownSoon` plan before any target validation
+	- non-morph requests (`unk != 129`) enforce the Java static-target existence, range, and template-id match gate
+	- morph-substance requests (`unk == 129`) bypass static-target validation and produce a `StartCrafting` intent carrying recipe, target object id, craft type, and material pairs
+- Added focused parity evidence:
+	- `CmCraftTests` prove opcode `141` registration/state gating and direct payload parsing order for Java `CM_CRAFT`
+	- `CmCraftRuntimePlanServiceTests` prove the silent guard ordering, non-morph target gate, morph bypass, and start-intent payload preservation
+- Kept scope intentionally narrow:
+	- no live `GameServerConnection` dispatch for `CmCraft`
+	- no `CraftService.startCrafting` port, no material or DP mutation, and no scheduler/callback work
+	- no claim that the runtime planner alone proves live crafting parity
+
+#### Migration Parity Table - Session 1799
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CRAFT.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmCraft` | Packet / Parsing | Complete | Regression Tested | Verified Parity | Java field order, material-pair parsing, and opcode `141` in-game registration are represented directly and packet-tested. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` `CM_CRAFT` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `141` registration | Packet Factory / Registration | Complete | Regression Tested | Verified Parity | `CmCraft` is now registered at opcode `141` as `InGame` only, matching the reviewed Java packet factory entry. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CRAFT.runImpl` pre-`CraftService.startCrafting` guard flow | `Aion.GameServer.Services.CmCraftRuntimePlanService.CreatePlan` | Deterministic Runtime Planner | Partial | Unit Tested | Partial Parity | Silent player/shutdown/target-validation branches and the morph-substance bypass are represented source-shaped, but live dispatch and `CraftService.startCrafting` remain unported. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `TryCreatePacket_RegistersJavaCraftOpcodeAsInGameOnly` | Regression Added | Java `AionClientPacketFactory` `CM_CRAFT` entry | Opcode `141` resolves to `CmCraft` only in `InGame` state. | Direct packet-factory regression. | Does not prove live dispatch. |
+| `ReadFrom_ReadsJavaCraftFieldsAndMaterials` | Regression Added | Java `CM_CRAFT.readImpl` | `CmCraft` preserves the Java field order and repeated material-pair payload. | Direct parsing regression. | No runtime behavior. |
+| `CreatePlan_ReturnsNoPlayerOrNotSpawnedWhenPlayerMissingOrUnspawned` | Unit Added | Java `CM_CRAFT.runImpl` opening guard | Missing or unspawned player returns a silent no-op plan. | Source-derived deterministic planner regression. | No connection wiring. |
+| `CreatePlan_ReturnsShuttingDownSoonBeforeTargetValidation` | Unit Added | Java `CM_CRAFT.runImpl` shutdown guard | Shutdown-soon short-circuits before static-target validation. | Source-derived deterministic planner regression. | No live server state integration. |
+| `CreatePlan_ReturnsInvalidNonMorphTargetForJavaStaticObjectGuardFailures` | Unit Added | Java `CM_CRAFT.runImpl` non-morph target validation | Non-morph craft requests fail silently when target existence, range, or template match fails. | Source-derived deterministic planner regression. | No static object runtime lookup. |
+| `CreatePlan_AllowsMorphMarkerToBypassStaticTargetChecks` | Unit Added | Java `CM_CRAFT.runImpl` `unk == 129` branch | Morph-substance requests bypass static-target checks and still produce a start intent. | Source-derived deterministic planner regression. | No live morph crafting flow. |
+| `CreatePlan_StartCraftingPreservesRecipeTargetCraftTypeAndMaterials` | Unit Added | Java `CM_CRAFT.runImpl` call into `CraftService.startCrafting` | The planner carries recipe id, target object id, craft type, and materials into a start intent unchanged. | Source-derived deterministic planner regression. | No downstream `CraftService.startCrafting` parity yet. |
+
+Remaining risks:
+- C# still lacks live `CmCraft` dispatch in `GameServerConnection`.
+- The much larger Java `CraftService.startCrafting` guard, material-consumption, DP-spend, cooldown, and scheduler path is still unported.
+- Java `CM_CRAFT` silent-return behavior is modeled only in a planner, so live side effects and packet ordering remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: 1 craft client packet model, 1 packet-factory registration, 1 deterministic runtime planner, and 7 focused tests/regressions.
+- Total artifacts with verified parity: 2 grouped rows in this unit (`CM_CRAFT.readImpl`, `AionClientPacketFactory` opcode registration).
+- Total artifacts needing verification: 1 grouped row.
+- Total blocked artifacts: live `CmCraft` dispatch and the broader `CraftService.startCrafting` / `CraftingTask` runtime shell.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes the `CM_CRAFT` packet and guard-planning foundation without overstating the still-missing live crafting loop.
+
+Next recommended unit of work:
+- Next sequential task: port the narrow live `CmCraft` dispatch shell in `GameServerConnection`, consuming `CmCraftRuntimePlanService` and preserving the silent Java guard behavior before widening into `CraftService.startCrafting`.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- return to the deferred `TemperingEffect.apply/endEffect` ownership surface only if a narrower deterministic slice becomes obvious
