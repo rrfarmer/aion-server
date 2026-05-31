@@ -82279,3 +82279,50 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1850 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1849 handoff/completion, progress/parity/orchestration docs, then inspected Java `StatFunction`, `StatAddFunction`, `StatRateFunction`, `StatSetFunction`, `Stat2`, `AdditionStat`, `Conditions`, and C# `SkillStatChange` / buff stat metadata surfaces.
+- Confirmed Java `BufEffect.getModifiers` computes `value + delta * skillLvl`, maps `ADD` and `PERCENT` to bonus stat functions, maps `REPLACE` to a base set function, applies functions by priority, and truncates `AdditionStat.getCurrent()` to `int`.
+- Added `SkillBuffStatChangeEvaluatorService`, a pure evaluator for unconditioned `SkillStatChange` entries.
+- Evaluator supports Java `ADD`, `PERCENT`, and `REPLACE` function semantics for an `AdditionStat`-style stat.
+- Evaluator orders `REPLACE` before `PERCENT` before `ADD`, matching Java priorities 40, 50, and 60 for this slice.
+- Evaluator reports no matching stat and unsupported function statuses without applying unsupported changes.
+- Added focused tests for delta scaling, Java priority order, Java truncation, no applicable changes, and unsupported functions.
+
+#### Migration Parity Table - Session 1850
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `BufEffect.getModifiers` value/delta handling | `SkillBuffStatChangeEvaluatorService.Evaluate` | Pure Stat Evaluator | Partial | Unit Tested | Partial Parity | C# computes `value + delta * skillLevel` for matching `SkillStatChange` entries. Conditions and live effect ownership remain out of scope. |
+| `StatAddFunction`, `StatRateFunction`, `StatSetFunction` priorities | `SkillBuffStatChangeStep.Priority` / evaluator ordering | Pure Stat Evaluator | Partial | Unit Tested | Partial Parity | C# orders REPLACE/PERCENT/ADD as Java priority 40/50/60 for this buff-stat slice. Other stat function kinds such as ABS and condition-aware functions are not modeled. |
+| `AdditionStat.getCurrent` | `SkillBuffStatChangeEvaluation.Current` | Numeric Calculation | Partial | Unit Tested | Partial Parity | C# truncates final base+bonus to `int`, matching Java's cast behavior for this unconditioned addition-stat slice. Live `StatCapUtil` and owner side effects are not modeled. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests" --no-restore` passed with 61 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 484 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4635 tests.
+
+Remaining risks:
+- This evaluator is pure/readiness infrastructure and is not wired into live effect state, live stat containers, or drop registration workflow.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks `BufEffect` conditions, stat owner removal, stat cap calculations, and max-stat recalculation side effects for these effects.
+- C# still lacks a modeled/persisted player salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one pure buff-stat change evaluator and focused tests.
+- Total artifacts with verified parity: 0 rows; this remains partial pure-calculation parity only.
+- Total artifacts needing verification: 3 rows pending conditions, live stat provider, effect runtime application, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds a calculation primitive but does not complete live drop modifier parity.
+
+Next recommended unit of work:
+- Next sequential task: connect `SkillBuffStatChangeEvaluatorService` to `WorldNpcDropBoostStatProviderReadinessReportService` as an optional static evaluation preview for `BOOST_DROP_RATE` and `DR_BOOST`, while keeping live workflow execution blocked.
+- Safe alternative candidates for the next session:
+	- inspect Java `Conditions.validate` and preserve condition metadata for `boostdroprate` / `drboost` if needed before any live provider design
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
