@@ -79019,3 +79019,78 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1789 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1788-Completion.md`, and `Phase-6-Session-1788-Handoff.md`, then re-inspected Java `Player.getDirtyItemsToUpdate`, Java `Storage.persistentState`, Java `Storage.setPersistentState`, Java `Storage.delete`, and Java `InventoryDAO.store(player)` alongside the current C# `Player`, `SavePlayerLogoutAsync`, and the modeled dirty-storage harvest landed in UOW-1788.
+- Confirmed the next honest gap after UOW-1788 was not a broader persistence rewrite, but the missing explicit storage-state surface itself: Java dirty harvest is keyed off `Storage.getPersistentState() == UPDATE_REQUIRED`, while C# still inferred that state from current item rows and deleted queues.
+- Added an explicit modeled storage-state surface on `Player` for the currently modeled player-owned storages:
+	- `StoragePersistentState`
+	- `InventoryStoragePersistentState`
+	- `WarehouseStoragePersistentState`
+	- `AccountWarehouseStoragePersistentState`
+	- `MarkStorageDirty(int location)` for the currently modeled storage ids
+- Updated the modeled storage collections to promote storage dirtiness when Java-shaped dirty rows are assigned:
+	- `InventoryItems`
+	- `WarehouseItems`
+	- `AccountWarehouseItems`
+	- assignment now preserves an already-dirty storage and promotes `Updated -> UpdateRequired` when any assigned row is `New`, `UpdateRequired`, or `Deleted`
+- Updated `Player.GetDirtyItemsToUpdate()` to consume the explicit storage-state surface instead of rescanning items for dirtiness:
+	- a modeled storage now harvests only when its explicit storage state is `UpdateRequired`
+	- harvest still emits all current rows plus tracked deleted rows for that storage
+	- like Java `Player.getDirtyItemsToUpdate`, the modeled storage state is reset to `Updated` after harvest
+- Updated adjacent state-reset behavior conservatively:
+	- `TrackDeletedItem` now marks the touched modeled storage `UpdateRequired`
+	- `MarkDirtyItemsPersisted()` now resets the modeled storage states to `Updated` while still normalizing item row states and clearing tracked deleted queues
+- Added stronger focused evidence:
+	- `PlayerInventoryPersistentStateTests.MarkStorageDirty_HarvestsAllCurrentRowsEvenWhenTheyAreUpdated`
+	- `PlayerInventoryPersistentStateTests.AssigningDirtyRows_PromotesTheModeledStorageState`
+	- updated existing dirty-harvest tests to assert modeled storage-state reset behavior after harvest
+- Kept scope intentionally narrow:
+	- still no first-class Java `Storage` object port
+	- still no modeled `Equipment.persistentState` / equipped-item dirty harvest branch
+	- still no broader live producer sweep across every item mutation/removal path
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerInventoryPersistentStateTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passed with 46 tests.
+	- A first `dotnet test dotnetConversion\AionServer.slnx` run hit the command timeout boundary before completion.
+	- A second `dotnet test dotnetConversion\AionServer.slnx` run failed in `PlayerProtectionActiveTaskScheduledTaskHandleAdapterTests.Cancel_ForwardsToScheduledTaskCancelAndMarksHandleDone`.
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerProtectionActiveTaskScheduledTaskHandleAdapterTests.Cancel_ForwardsToScheduledTaskCancelAndMarksHandleDone"` then passed in isolation with 1 test.
+	- A third `dotnet test dotnetConversion\AionServer.slnx` run then passed cleanly with 4766 total tests (`57` commons, `29` chat, `121` login, `4559` game).
+
+#### Migration Parity Table - Session 1789
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.items.storage.Storage.persistentState` + `Storage.setPersistentState` for cube / regular warehouse / account warehouse | `Aion.GameServer.Model.GameObjects.StoragePersistentState` + `Player.InventoryStoragePersistentState` + `WarehouseStoragePersistentState` + `AccountWarehouseStoragePersistentState` + `MarkStorageDirty` | Modeled Storage Dirty-State Surface | Partial | Unit Tested | Partial Parity | Java source reviewed; C# now exposes explicit modeled dirty-state for the currently represented player-owned storages and promotes it through assignment and tracked deletes. This still lives on `Player` rather than a first-class storage object and does not yet cover pet bag, cabinet, legion warehouse, or equipment. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getDirtyItemsToUpdate` explicit storage-state gate and reset behavior | `Aion.GameServer.Model.GameObjects.Player.GetDirtyItemsToUpdate` | Dirty-State Harvest | Partial | Unit Tested | Partial Parity | C# dirty harvest is now keyed off explicit modeled storage state rather than item rescans and resets that state to `Updated` after harvest like Java. The equipped-item branch from Java `equipment.getPersistentState()` is still absent. |
+| `com.aionemu.gameserver.model.items.storage.Storage.delete(Item, ...)` dirty-storage side effect | `Aion.GameServer.Model.GameObjects.Player.TrackDeletedItem` | Deleted-Row Dirty-State Bridge | Partial | Unit Tested | Partial Parity | Tracked deletes now mark the touched modeled storage dirty in addition to queueing the deleted row. Broader live deletion producers still remain incomplete. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store(Player)` storage-driven harvest boundary | `Aion.GameServer.Data.MySqlPlayerEnterWorldRepository.SavePlayerLogoutAsync` + `Player.GetDirtyItemsToUpdate` | Logout Persistence Boundary | Partial | Regression Tested | Partial Parity | Logout persistence now consumes a storage-state-driven harvest for cube, warehouse, and account warehouse rows. The broader Java inventory store pipeline and equipment participation remain future work. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `MarkStorageDirty_HarvestsAllCurrentRowsEvenWhenTheyAreUpdated` | Unit Added | Java `Storage.setPersistentState` + `Player.getDirtyItemsToUpdate` | Explicitly marking a modeled storage dirty causes harvest of all current rows even when every row is individually `Updated`, and the storage flag resets after harvest. | Source-derived unit regression for the explicit storage-state gate. | No equipment branch coverage. |
+| `AssigningDirtyRows_PromotesTheModeledStorageState` | Unit Added | Java `Storage.persistentState` mutation intent + item dirty-row participation | Assigning dirty rows to the modeled storage collections promotes their explicit storage state to `UpdateRequired`. | Source-derived unit regression for the modeled promotion surface. | No broader runtime producer sweep. |
+| `GetDirtyItemsToUpdate_ReturnsDirtyItemsAcrossModeledStorages` | Unit Updated | Java `Player.getDirtyItemsToUpdate` | Dirty modeled storages reset their explicit storage-state flags to `Updated` after harvest. | Source-derived unit regression for post-harvest state reset. | No pet bag / cabinet / legion storage proof. |
+| `GetDirtyItemsToUpdate_IncludesTrackedDeletedItemsAcrossModeledStorages` | Unit Updated | Java `Player.getDirtyItemsToUpdate` + `Storage.getDeletedItems` | Dirty modeled storages still emit both current rows and tracked deleted rows while using the explicit storage-state gate. | Source-derived unit regression. | No equipment/delete-queue interaction proof. |
+
+Remaining risks:
+- C# still does not port first-class Java `Storage` objects, so modeled storage dirtiness lives on `Player` rather than the storage instances themselves.
+- Java `equipment.getPersistentState()` and the equipped-item harvest branch are still absent from `GetDirtyItemsToUpdate()`.
+- Many live mutation/removal producers still rely on assignment-driven promotion rather than dedicated storage-object mutations, so broader runtime coverage remains future work.
+- Full-suite evidence for this unit relies on a timeout boundary, one isolated rerun of an unrelated failing test, and a subsequent clean all-green full-suite rerun.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 modeled storage-state enum, 3 explicit storage-state properties, 1 storage dirty-marking helper, 1 dirty-harvest gate/reset update, and 4 focused test updates/additions.
+- Total artifacts with verified parity: 0 grouped rows in this unit.
+- Total artifacts needing verification: 4 grouped rows.
+- Total blocked artifacts: equipment persistent-state participation, broader live storage dirty/deleted producers, and a fuller Java-shaped inventory store pipeline.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the explicit modeled storage-state gap for the currently represented player-owned storages without overstating the still-missing storage and equipment architecture.
+
+Next recommended unit of work:
+- Next sequential task: port the minimum modeled `Equipment.persistentState` participation so `Player.getDirtyItemsToUpdate()` can include equipped-item harvest through a Java-shaped equipment dirty gate.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
