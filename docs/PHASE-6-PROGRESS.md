@@ -83128,3 +83128,51 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1867 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1866 handoff/completion, progress/parity/orchestration docs, then inspected C# `SkillBuffStatFormulaService`, C# `SkillBuffStatChangeEvaluatorService`, evaluator tests, Java `StatFunction`, Java `StatAddFunction`, Java `StatRateFunction`, Java `StatSetFunction`, Java `AdditionStat`, Java `ReverseStat`, and Java `Stat2`.
+- Refactored the isolated pure `SkillBuffStatChangeEvaluatorService` to delegate formula application to `SkillBuffStatFormulaService`.
+- Preserved existing disabled/report-only evaluator behavior for default calls.
+- Added an optional `initialBonus` parameter so the pure evaluator can exercise Java's negative bonus `SPEED` `StatRateFunction` branch without introducing live `CreatureGameStats` state.
+- Added a regression test proving the evaluator now uses Java's current-value base for negative bonus `SPEED` rate functions.
+- Kept this unit isolated; no gameplay, active effects, active drop boosts, live stat registry, conditions, stat caps, or drop workflow execution was enabled.
+
+#### Migration Parity Table - Session 1867
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `BufEffect.getModifiers` preview path through sorted stat functions | `SkillBuffStatChangeEvaluatorService` using `SkillBuffStatFormulaService` | Pure Evaluator | Partial | Unit Tested | Partial Parity | Existing isolated evaluator now delegates Java-shaped formulas to the helper. It remains disconnected from live effects, conditions, stat owners, stat caps, and `CreatureGameStats`. |
+| `StatRateFunction.apply` negative bonus `SPEED` branch | `SkillBuffStatChangeEvaluatorService.Evaluate(..., initialBonus)` | Pure Evaluator Edge Case | Partial | Unit Tested | Partial Parity | Source-derived test covers current-value base behavior in the pure evaluator. No Java runtime/golden comparison was produced. |
+| `Stat2.getCurrent` | `SkillBuffStatFormulaService.GetCurrent` via evaluator | Formula Dependency | Partial | Unit Tested | Partial Parity | Evaluator current values now use the shared helper's Java truncation formula. Live stat state, synchronization, and cap application remain absent. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~SkillBuffStatFormulaServiceTests|FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests" --no-restore` passed with 18 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStatFormulaServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionRegistryReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 526 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4682 tests.
+
+Remaining risks:
+- `SkillBuffStatChangeEvaluatorService` remains an isolated preview/evaluator and is not live gameplay parity.
+- C# still lacks live `CreatureGameStats` storage, insertion/removal, snapshot locking/copying, condition validators, stat caps, max-stat synchronization, and active-effect lifecycle.
+- Conditions still short-circuit to `UnsupportedConditions` in this pure evaluator.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- No Java runtime/golden comparison was produced for the evaluator.
+- C# still lacks modeled/persisted player salvation points and Java's exact lifecycle around reset after 10 minutes offline.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: pure evaluator delegation to isolated formula helper plus negative speed regression.
+- Total artifacts with verified parity: 0 rows; this remains isolated source-derived partial parity, not live runtime parity.
+- Total artifacts needing verification: 6 rows pending Java runtime/golden comparison, live Stat2 state, condition validation, stat caps, active-effect registry, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves the isolated evaluator but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: add more detailed readiness evidence for `StatFunction.validate` / `Conditions.validate` ordering before live evaluator work, including how conditioned functions are skipped before `apply`.
+- Safe alternative candidates for the next session:
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+	- produce Java runtime/golden values for the isolated stat formula helper before using it in broader live code
