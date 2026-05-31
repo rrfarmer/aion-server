@@ -81658,3 +81658,54 @@ Next recommended unit of work:
 	- Java `DropRegistrationService.calculateBoostDropRate`
 	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1837 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1836 handoff/completion, progress/parity/orchestration docs, then inspected C# `IPlayerEnterWorldRepository`, fake repository cooldown capture patterns, `CapturingEnterWorldRepository`, and opt-in `PlayerEnterWorldRepositoryDatabaseIntegrationTests`.
+- Chose the next smallest repository contract slice: a disabled contract descriptor for future `SavePlayerCraftCooldownsAsync` work, without changing the repository interface or wiring live SQL.
+- Added `PlayerLogoutCraftCooldownRepositoryContractPlanService.CreateDisabledPlan(...)`.
+- Added `PlayerLogoutCraftCooldownRepositoryContractPlan`.
+- Added `PlayerLogoutCraftCooldownRepositoryContractPlanStatus`.
+- Modeled future repository contract requirements as descriptor data:
+	- future method signature
+	- Java delete SQL and insert SQL
+	- target repository interface and implementation names
+	- fake repository capture property name
+	- future opt-in database integration test name
+	- Java separate-connection/per-operation SQL exception behavior requirements or intentional-difference documentation flags
+- Added focused tests for Java-shaped contract planning, intentional-difference documentation requirements, and missing behavior-decision blocking.
+
+#### Migration Parity Table - Session 1837
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.INSERT_QUERY` and `DELETE_QUERY` | `Aion.GameServer.Services.PlayerLogoutCraftCooldownRepositoryContractPlan` | Repository Contract Descriptor | Partial | Unit Tested | Partial Parity | C# records exact Java SQL for future `SavePlayerCraftCooldownsAsync`; no interface or SQL implementation is added. |
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.storeCraftCooldowns` repository boundary | `PlayerLogoutCraftCooldownRepositoryContractPlanService.CreateDisabledPlan` | Repository Contract Planner | Partial | Unit Tested | Partial Parity | C# records future interface/fake/integration-test expectations and blocks when connection/error decisions are missing. |
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.storeCraftCooldowns` connection/error behavior | `PlayerLogoutCraftCooldownRepositoryContractPlan` | Repository Diagnostic | Partial | Unit Tested | Partial Parity | C# records whether live implementation must preserve Java separate connections/per-operation swallowed SQL exceptions or document intentional differences. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests" --no-restore` passed with 112 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 404 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4605 tests.
+
+Remaining risks:
+- Repository contract planning is disabled and does not alter `IPlayerEnterWorldRepository`.
+- No `SavePlayerCraftCooldownsAsync` method or implementation exists yet.
+- No fake repository capture or database integration test exists yet.
+- Logout still does not persist craft cooldowns.
+- Full logout craft cooldown database parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one repository contract planner method, one contract plan record, one status enum, future method/SQL/test descriptors, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is disabled repository-contract partial parity only.
+- Total artifacts needing verification: 3 rows pending interface/fake implementation, live SQL execution, DB integration, and runtime/database comparison.
+- Total blocked artifacts: live logout craft cooldown persistence, repository interface/fake/implementation wiring, logout hook, and full logout persistence runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves repository contract clarity without claiming runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add the disabled repository interface/fake capture slice for `SavePlayerCraftCooldownsAsync` without live MySQL implementation, using the contract plan as the checklist and keeping logout unwired.
+- Safe alternative candidates for the next session:
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- add a disabled finish-craft live-execution readiness checklist that gates recipe DB writes, quest callbacks, item insertion, packet sends, logging, cooldown persistence, and exception behavior
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
