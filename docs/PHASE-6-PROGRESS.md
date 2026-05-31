@@ -83658,3 +83658,56 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1877 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1876 handoff, then inspected Java `WeaponCondition`, `ItemChargeCondition`, `OnFlyCondition`, base `Condition`, `Conditions`, Java `Item.getChargeLevel`, C# `SkillStatConditionInputSnapshotService`, `SkillStatConditionEvaluatorService`, and existing condition preview/evaluator tests.
+- Added `SkillStatConditionPreviewGoldenFixturePlanService`, a source-derived fixture plan for later Java runtime/golden capture.
+- The plan enumerates ten exact comparison cases for:
+	- `weapon` player match, player mismatch, and non-player pass-through
+	- `front` base stat-validation pass-through
+	- `charge` Item-owner satisfied, Item-owner failed, and non-Item-owner failed
+	- `onfly` flying and not-flying owners
+	- mixed `weapon -> charge` short-circuit ordering
+- Each fixture records Java source artifacts, required Java inputs, expected child-condition statuses, expected pure-preview status, and the Java source rule used to derive the expectation.
+- The plan explicitly reports missing evidence: a Java runtime harness for `Stat2`/`IStatFunction` condition validation and golden output capture for each fixture.
+- Kept this unit as a plan/report only. No Java runtime execution, golden output capture, live `Conditions.validate` provider, gameplay condition registry, active-effect runtime, `CreatureGameStats` integration, stat cap path, or drop workflow execution was enabled.
+
+#### Migration Parity Table - Session 1877
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `WeaponCondition.validate(Stat2, IStatFunction)` | `SkillStatConditionPreviewGoldenFixturePlanService` weapon fixture cases | Golden Fixture Plan | Partial | Unit Tested | Partial Parity | Source-derived plan covers player main-hand match, player main-hand mismatch, and non-player pass-through. No Java runtime/golden output has been captured. |
+| `ItemChargeCondition.validate(Stat2, IStatFunction)` / `Item.getChargeLevel` | `SkillStatConditionPreviewGoldenFixturePlanService` charge fixture cases | Golden Fixture Plan | Partial | Unit Tested | Partial Parity | Source-derived plan covers charge-level satisfied, charge-level too low, and non-Item-owner false behavior. No Java runtime/golden output has been captured. |
+| `OnFlyCondition.validate(Stat2, IStatFunction)` plus base `Condition.validate` and `Conditions.validate` ordering | `SkillStatConditionPreviewGoldenFixturePlanService` onfly, front, and mixed fixture cases | Golden Fixture Plan | Partial | Unit Tested | Partial Parity | Source-derived plan covers flying/not-flying, base pass-through, and Java list-order first-failure short-circuit. No Java runtime/golden output has been captured. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillStatConditionPreviewGoldenFixturePlanServiceTests|FullyQualifiedName~SkillStatConditionEvaluatorServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~SkillStatConditionPreviewCoverageReportServiceTests" --no-restore` passed with 36 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillStatConditionPreviewGoldenFixturePlanServiceTests|FullyQualifiedName~SkillStatConditionPreviewCoverageReportServiceTests|FullyQualifiedName~SkillStatConditionEvaluatorServiceTests|FullyQualifiedName~SkillStatConditionInputSnapshotServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFormulaServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionRegistryReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 566 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4722 tests.
+
+Remaining risks:
+- This unit produced a fixture plan only. It is not Java runtime/golden evidence.
+- Planned fixture expectations are source-derived from reviewed Java code; they still need execution against Java `Conditions.validate(Stat2, IStatFunction)`.
+- No live `Conditions.validate` provider, Java condition subclass registry, `CreatureGameStats` storage, insertion/removal, snapshot locking/copying, stat caps, max-stat synchronization, or active-effect lifecycle was enabled.
+- The pure evaluator still does not model Java `CreatureGameStats` owner-specific `EnchantEffect` hand filtering or `StatCapUtil.calculateBaseValue`.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks modeled/persisted player salvation points and Java's exact lifecycle around reset after 10 minutes offline.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: source-derived condition preview golden fixture plan plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 6 rows pending Java runtime/golden comparison, live condition validators, live Stat2 state, stat caps, active-effect registry, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves the Java comparison plan but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: implement or script Java-side runtime/golden capture for the planned isolated condition preview fixtures, starting with `weapon`, `front`, `charge`, `onfly`, and mixed short-circuit cases, then compare captured outputs to the C# preview path.
+- Safe alternative candidates for the next session:
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
