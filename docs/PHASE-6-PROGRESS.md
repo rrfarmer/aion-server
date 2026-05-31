@@ -80718,3 +80718,55 @@ Next recommended unit of work:
 	- add persistence-state planning for craft-consumed item updates/deletes
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1820 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1819 handoff, confirmed a clean UOW-1819 commit, then re-inspected Java `CraftService.startCrafting`, Java `CraftService.checkCraft`, C# CM_CRAFT composition, existing DP spend behavior, ordered inventory mutation/packet plans, and current task planning.
+- Chose the next smallest orchestration slice: add a non-live craft-start side-effect boundary plan that records Java's successful side-effect order without executing live state changes.
+- Added `CraftStartSideEffectBoundaryPlan`, `CraftStartSideEffectBoundaryStatus`, and `CraftStartSideEffectBoundaryStep`.
+- Extended `CmCraftStartCompositionPlan` with `SideEffectBoundaryPlan`.
+- Planned Java's success path order:
+	- `checkCraft` inventory mutation intent
+	- `checkCraft` inventory packet intent
+	- optional recipe DP spend
+	- `CraftingTask` creation
+	- `CraftingTask.start`
+- Kept live inventory mutation, live packet sending, item persistence writes, live DP spend, live task creation, scheduler startup, and craft completion outside this unit.
+- Added focused tests for ready, no-DP, validation-failed, and runtime-blocked boundary behavior.
+
+#### Migration Parity Table - Session 1820
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` success side-effect order | `Aion.GameServer.Services.CmCraftStartCompositionPlan.SideEffectBoundaryPlan` | Orchestration Planner | Partial | Unit Tested | Partial Parity | C# records non-live success ordering for checkCraft inventory mutation/packets, optional DP spend, task creation, and task start; no live mutation/send/task execution occurs. |
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` DP branch | `Aion.GameServer.Services.CraftStartSideEffectBoundaryStep.SpendRecipeDp` | Orchestration Planner | Partial | Unit Tested | Partial Parity | C# includes the DP step only when the current model has a positive DP cost; the C# recipe summary does not distinguish Java nullable zero-cost DP from absent DP. |
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` validation-failure boundary | `Aion.GameServer.Services.CraftStartSideEffectBoundaryStatus.ValidationFailed` | Orchestration Planner | Partial | Unit Tested | Partial Parity | C# records that success side effects are not planned after `checkCraft` failure; live cancel packet dispatch remains non-live intent only. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 313 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4565 tests.
+
+Remaining risks:
+- No live inventory mutation is applied to `Player.InventoryItems`.
+- No live inventory packets are sent.
+- No item persistence state changes are written.
+- Java storage delete quest callbacks/logging are not modeled.
+- No live DP spend occurs through this boundary.
+- No live `CraftingTask` is created or started.
+- The C# recipe summary uses an integer DP value and cannot distinguish Java `null` DP from zero DP.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one non-live side-effect boundary plan, two boundary enums, composition integration, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is non-live orchestration partial parity only.
+- Total artifacts needing verification: 3 rows pending live mutation, live packet sending, persistence, live DP spend, live task creation/start, and Java runtime comparison.
+- Total blocked artifacts: live start-craft execution, inventory mutation, persistence, packet fanout, DP spend, live task creation, scheduler startup, and full craft completion.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves craft-start orchestration evidence without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add persistence-state planning for craft-consumed item updates/deletes so ordered mutation operations can map to future Java-compatible persistence without writing live state by default.
+- Safe alternative candidates for the next session:
+	- add a live-safe craft finish cooldown application mutation plan
+	- begin wiring the boundary into a disabled live executor facade with tests proving no side effects dispatch by default
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
