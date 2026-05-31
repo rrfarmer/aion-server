@@ -82422,3 +82422,49 @@ Next recommended unit of work:
 	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+
+### Session 1853 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1852 handoff/completion, progress/parity/orchestration docs, then inspected Java `Conditions`, preserved C# `SkillStatChangeConditionSummary`, C# skill-change surfaces, and the prior stat-provider readiness report style.
+- Added `SkillStatChangeConditionReadinessReportService`.
+- Added `SkillStatChangeConditionReadinessReport`, `SkillStatChangeConditionReadinessStatus`, and `SkillStatChangeConditionNameCount`.
+- Report enumerates preserved condition metadata from currently parsed skill stat-change surfaces: armor mastery, weapon mastery, shield mastery, and drop-boost buff stat effects.
+- Report counts conditioned changes, total condition entries, and condition names in deterministic ordinal order.
+- Report stays blocked when condition metadata exists but no live `Conditions.validate` provider is available.
+- Added focused tests for missing skill templates, unconditioned changes, missing validators with multiple condition names, and explicit validator readiness.
+
+#### Migration Parity Table - Session 1853
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `Conditions.validate` validator dependency | `SkillStatChangeConditionReadinessReportService` | Readiness Report | Partial | Unit Tested | Partial Parity | C# now reports preserved condition metadata and blocks conditioned stat-change use until a live validator provider exists. It does not evaluate any Java condition classes. |
+| `Change.conditions` static metadata | `SkillStatChangeConditionReadinessReport.ConditionNameCounts` | Static Metadata Report | Partial | Unit Tested | Partial Parity | C# enumerates condition names from preserved metadata in deterministic order. Attribute-level validation and runtime semantics remain absent. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropModifierServiceTests" --no-restore` passed with 68 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 491 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4642 tests.
+
+Remaining risks:
+- This report is readiness-only; C# still does not port individual Java condition validators.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- Static previews and the pure evaluator still do not represent live active effects, stat owners, stat cap calculations, or stat recalculation side effects.
+- C# still lacks a modeled/persisted player salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: one disabled condition-readiness report and focused tests.
+- Total artifacts with verified parity: 0 rows; this remains readiness/reporting parity only.
+- Total artifacts needing verification: 2 rows pending individual condition validators, live stat provider, effect runtime application, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves condition-provider gap reporting but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect C# live effect controller/stat surfaces for a future narrow active-effect provider, without wiring drop workflow execution.
+- Safe alternative candidates for the next session:
+	- inspect Java `WeaponCondition` / high-frequency condition classes to scope validator ports
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
