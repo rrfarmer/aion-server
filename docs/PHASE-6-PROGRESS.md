@@ -80671,3 +80671,50 @@ Next recommended unit of work:
 	- begin a live-safe CM_CRAFT start side-effect boundary that still does not mutate/send by default
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1819 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1818 handoff, confirmed a clean UOW-1818 commit, then re-inspected Java `CraftService.checkCraft`, Java `Storage.decreaseByItemId`, Java `Storage.decreaseItemCount`, C# `CraftStartInventoryMutationPlan`, C# `CraftStartInventoryPacketPlan`, and existing craft tests.
+- Chose the next smallest ordering slice: add non-live ordered craft-consumption mutation operations so packet intent can preserve Java's per-stack `decreaseItemCount` side-effect order. Kept live inventory mutation, live packet sending, persistence, DP spend, live task creation, scheduler startup, and craft completion outside this unit.
+- Added `CraftStartInventoryMutationOperation` and `CraftStartInventoryMutationOperationKind`.
+- Extended `CraftStartInventoryMutationPlan` with `OrderedOperations`.
+- Updated mutation planning to record ordered per-stack operations while preserving existing summary fields:
+	- `UpdatedItems`
+	- `DeletedObjectIds`
+- Updated packet planning to emit from `OrderedOperations` instead of grouped summary lists.
+- Added focused tests proving ordered bonus/component stack operations, partial operation retention on insufficient inventory, and ordered packet intent through direct planner/composition coverage.
+
+#### Migration Parity Table - Session 1819
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` bonus/component decrease order | `Aion.GameServer.Services.CraftStartInventoryMutationPlan.OrderedOperations` | Inventory Planner | Partial | Unit Tested | Partial Parity | C# records ordered non-live operations for bonus first, then selected component decreases; no live inventory mutation occurs. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseByItemId` stack-walk order | `Aion.GameServer.Services.CraftStartInventoryMutationOperation` | Inventory Planner | Partial | Unit Tested | Partial Parity | C# records per-stack update/delete operations in working inventory order; persistence and quest callbacks remain pending. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseItemCount` packet side-effect order | `Aion.GameServer.Services.CraftService.CreateStartInventoryPacketPlan` | Packet Planner | Partial | Unit Tested | Partial Parity | C# packet intent now follows ordered operations for update/delete/cube packets; no live send or Java golden packet comparison occurs. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 312 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4564 tests.
+
+Remaining risks:
+- No live inventory mutation is applied to `Player.InventoryItems`.
+- No live inventory packets are sent.
+- No item persistence state changes are written.
+- Java storage delete quest callbacks/logging are not modeled.
+- No DP spend, live `CraftingTask`, scheduler startup, or craft completion is wired.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one ordered mutation operation record, one operation-kind enum, plan/test updates for ordered packet intent.
+- Total artifacts with verified parity: 0 rows; this is non-live ordered intent partial parity only.
+- Total artifacts needing verification: 3 rows pending live mutation, live packet sending, persistence, Java golden/runtime packet comparison, and handler dispatch.
+- Total blocked artifacts: live start-craft execution, DP spend, live inventory mutation, persistence, packet fanout, live task creation, scheduler startup, and full craft completion.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves ordering evidence without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add a live-safe craft-start side-effect boundary plan that can sequence DP spend, ordered inventory mutation/packet intent, and task-start intent without executing live side effects by default.
+- Safe alternative candidates for the next session:
+	- add a live-safe craft finish cooldown application mutation plan
+	- add persistence-state planning for craft-consumed item updates/deletes
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
