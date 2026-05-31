@@ -80286,3 +80286,50 @@ Next recommended unit of work:
 	- plan craft cooldown application after successful finish
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1811 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1810 handoff, confirmed the clean UOW-1810 commit, then re-inspected Java `CraftService.finishCrafting`, Java `RecipeTemplate` craft delay fields, C# `RecipeTemplateSummary`, C# `Player.CraftCooldowns`, and existing craft tests.
+- Chose the next smallest successful-finish slice: non-live craft cooldown application planning. Kept live craft completion, cooldown mutation, persistence, packet fanout, and scheduler integration outside this unit.
+- Added `CraftService.CreateFinishCooldownPlan(...)`.
+- Added `CraftFinishCooldownPlan` and `CraftFinishCooldownStatus`.
+- Ported Java cooldown branch behavior:
+	- no cooldown when `recipeTemplate.getCraftDelayId() == null`
+	- planned cooldown when `craftDelayId` exists
+- Ported Java reuse timestamp formula:
+	- `reuseTimeMillis = currentTimeMillis + craftDelayTime * 1000`
+- Added focused `CraftServiceTests` coverage for planned cooldown timestamp arithmetic, no-cooldown recipes, missing delay time, and no-mutation behavior against existing player cooldown state.
+
+#### Migration Parity Table - Session 1811
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.finishCrafting` cooldown branch | `Aion.GameServer.Services.CraftService.CreateFinishCooldownPlan` | Cooldown Planner | Partial | Unit Tested | Partial Parity | C# detects recipes with and without `craftDelayId`; no live finish path is wired. |
+| `com.aionemu.gameserver.services.craft.CraftService.finishCrafting` reuse timestamp formula | `Aion.GameServer.Services.CraftFinishCooldownPlan.ReuseTimeMillis` | Cooldown Planner | Complete | Unit Tested | Verified Parity | C# computes `currentTimeMillis + craftDelayTime * 1000` with deterministic test input. |
+| `com.aionemu.gameserver.model.gameobjects.player.Player.getCraftCooldowns().put` | `Aion.GameServer.Services.CraftFinishCooldownPlan` planned mutation fields | Cooldown Planner | Partial | Unit Tested | Partial Parity | C# records the intended cooldown put without mutating `Player.CraftCooldowns`. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 286 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4551 tests after rerunning with a 300s timeout. The first 120s attempt timed out without a result.
+
+Remaining risks:
+- C# still does not execute Java `CraftService.finishCrafting`.
+- No live cooldown mutation, persistence, or packet fanout is wired.
+- No craft completion scheduler path invokes this planner.
+- No live `CraftingTask` completion path exists.
+- Live CM_CRAFT parsing still does not feed selected materials or craft type into the start planners.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one cooldown planner, one supporting record/status enum, and focused test updates.
+- Total artifacts with verified parity: 1 timestamp formula row.
+- Total artifacts needing verification: 2 planner rows pending live finish execution/mutation.
+- Total blocked artifacts: live finish-craft execution, live cooldown mutation, persistence, packet fanout, scheduler completion, and full start-to-finish craft runtime.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds finish cooldown planning without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: start live CM_CRAFT selected-material/craft-type adapter planning so client inputs can feed existing validation/consumption/task planners.
+- Safe alternative candidates for the next session:
+	- begin non-live inventory mutation plan for material/bonus consumption
+	- add a live-safe craft finish cooldown application mutation plan
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
