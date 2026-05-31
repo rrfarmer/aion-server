@@ -81163,3 +81163,60 @@ Next recommended unit of work:
 	- add disabled finish-craft skill XP/common XP application planning from Java `finishCrafting`
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1828 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1827 handoff/completion, progress/parity/orchestration docs, then re-inspected Java `CraftCooldownsDAO.storeCraftCooldowns`, Java `deleteCraftCoolDowns`, C# craft cooldown loading, C# logout cooldown saves, and current craft tests.
+- Confirmed C# currently loads craft cooldowns on enter-world but does not yet save craft cooldowns in `SavePlayerLogoutAsync`.
+- Chose the next smallest persistence slice: exact Java SQL descriptors and a disabled adapter for craft cooldown persistence without live repository wiring.
+- Added exact Java SQL constants:
+	- ``INSERT INTO `craft_cooldowns` (`player_id`, `delay_id`, `reuse_time`) VALUES (?,?,?)``
+	- ``DELETE FROM `craft_cooldowns` WHERE `player_id`=?``
+- Added `CraftCooldownPersistencePlanService.CreateDisabledPlan(...)`.
+- Added `CraftCooldownPersistencePlan`.
+- Added `CraftCooldownPersistenceSqlDescriptor`.
+- Added `CraftCooldownPersistenceAdapterPlanService.CreateDisabledPlan(...)`.
+- Added `CraftCooldownPersistenceAdapterPlan`.
+- Added `CraftCooldownPersistenceAdapterOperation`.
+- Added status/operation enums for the new plan and adapter.
+- Modeled Java `storeCraftCooldowns` order:
+	- delete all existing player craft cooldown rows first
+	- insert active cooldown entries second
+	- skip entries where `reuseTime < System.currentTimeMillis()`
+- Kept all SQL execution disabled; descriptors and adapter operations have `DidExecuteSql == false`.
+- Added focused tests for SQL shape/order, disabled adapter boundary, and delete-only behavior when all cooldown entries are expired.
+
+#### Migration Parity Table - Session 1828
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.DELETE_QUERY` | `Aion.GameServer.Services.CraftCooldownPersistencePlanService.JavaCraftCooldownDeleteSql` | SQL Descriptor | Partial | Unit Tested | Partial Parity | C# records the exact Java delete-all SQL for player craft cooldown rows; no DB execution occurs. |
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.INSERT_QUERY` | `Aion.GameServer.Services.CraftCooldownPersistencePlanService.JavaCraftCooldownInsertSql` | SQL Descriptor | Partial | Unit Tested | Partial Parity | C# records the exact Java active-cooldown insert SQL and parameter identity fields; no DB execution occurs. |
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.storeCraftCooldowns` delete-before-insert behavior | `CraftCooldownPersistencePlan.SqlDescriptors` | Persistence Planner | Partial | Unit Tested | Partial Parity | C# plans delete-all before active inserts and skips expired entries using Java's `< currentTimeMillis` check; live logout persistence remains unwired. |
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.storeCraftCooldowns` SQL execution boundary | `CraftCooldownPersistenceAdapterPlanService.CreateDisabledPlan` | Persistence Adapter | Partial | Unit Tested | Partial Parity | C# records would-open-connection and would-execute-SQL flags; no connection is opened and no SQL is executed. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 327 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4579 tests.
+
+Remaining risks:
+- The craft cooldown persistence adapter is disabled and does not execute database writes.
+- `SavePlayerLogoutAsync` still does not call a live craft cooldown save path.
+- No transaction/rollback behavior is modeled for craft cooldown persistence; Java opens separate connections for delete and each insert.
+- No `SM_RECIPE_COOLDOWN` finish-time packet/fanout has been verified or sent.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: exact craft cooldown SQL constants, persistence descriptors, disabled persistence plan, disabled adapter plan, operations/status enums, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is disabled persistence-descriptor partial parity only.
+- Total artifacts needing verification: 4 rows pending live DB writes, logout-save wiring, persistence error behavior, packet fanout, and Java runtime comparison.
+- Total blocked artifacts: live craft cooldown save, finish-craft packet fanout, live finish-craft execution, skill XP application, crafted item insertion, recipe deletion/quest callbacks, and full craft runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves craft cooldown persistence evidence without claiming live persistence parity.
+
+Next recommended unit of work:
+- Next sequential task: integrate the disabled craft cooldown persistence descriptor/adapter into a non-live finish-craft cooldown composition plan so application projection and persistence intent can be inspected together without wiring live logout/database writes.
+- Safe alternative candidates for the next session:
+	- add a disabled `SM_RECIPE_COOLDOWN` finish-time packet/fanout plan if Java evidence confirms packet dispatch timing
+	- add disabled finish-craft skill XP/common XP application planning from Java `finishCrafting`
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
