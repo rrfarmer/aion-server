@@ -80102,3 +80102,46 @@ Next recommended unit of work:
 	- start live CM_CRAFT selected-material data adapter work
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1807 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1806 handoff and latest Phase 6 progress, confirmed the clean UOW-1806 commit, then re-inspected Java `CraftService.checkCraft`, `CraftService.getBonusReqItem`, C# craft validation planner state, and existing craft tests.
+- Chose the next smallest deterministic Java `checkCraft` slice after material validation: bonus craft item requirement planning for `craftType == 1`. Kept live `startCrafting`, live failure fanout, material/bonus item consumption, DP spend, task interval, and scheduler startup outside this unit.
+- Added optional `craftType` input to `CraftService.CreateStartCraftingValidationPlan(...)`.
+- Ported Java `CraftService.getBonusReqItem(skillId)` mapping for craft skills `40001`, `40002`, `40003`, `40004`, `40007`, `40008`, and `40010`.
+- Added `CraftStartValidationStatus.MissingBonusItem`.
+- Planned Java `STR_COMBINE_NO_COMPONENT_ITEM_SINGLE` failure when the bonus item is missing.
+- Added focused `CraftServiceTests` coverage for material-before-bonus ordering, missing bonus item failure, and ready continuation when the bonus item exists.
+
+#### Migration Parity Table - Session 1807
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` bonus item guard | `Aion.GameServer.Services.CraftService.CreateStartCraftingValidationPlan` `MissingBonusItem` branch | Validation Guard | Partial | Unit Tested | Partial Parity | C# checks missing bonus item after material validation when `craftType == 1`, but does not consume the item. |
+| `com.aionemu.gameserver.services.craft.CraftService.getBonusReqItem` | `Aion.GameServer.Services.CraftService.GetBonusRequiredItemId` | Mapping | Complete | Unit Tested | Verified Parity | Java skill-to-item mapping ported for known craft skills. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_COMBINE_NO_COMPONENT_ITEM_SINGLE` reuse | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.CombineNoComponentItemSingle` | Server Packet Factory | Complete | Unit Tested | Verified Parity | Message id was verified in UOW-1806 and reused by this branch. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 272 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4537 tests.
+
+Remaining risks:
+- C# still does not execute Java `CraftService.startCrafting`.
+- The Java branch consumes the bonus item as part of the check; C# only plans the missing-item failure and does not mutate inventory.
+- `FailurePacket` is planner evidence only; no live system-message or cancel packet fanout is wired.
+- Material consumption, DP spend, task interval, scheduler startup, and craft completion remain pending.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one validation branch, one status value, one bonus-item mapping, and focused test updates.
+- Total artifacts with verified parity: 2 mapping/packet rows.
+- Total artifacts needing verification: 1 validation branch pending live orchestration and mutation.
+- Total blocked artifacts: live start-craft execution, live validation failure fanout, material/bonus consumption, DP spend, and scheduler startup.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds bonus item guard planning without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: port non-live validation failure orchestration that combines `FailurePacket` and `CreateStartCancelPacketPlan(...)` outputs in Java order, still without live sending.
+- Safe alternative candidates for the next session:
+	- start material and bonus item consumption planning
+	- start live CM_CRAFT selected-material/craft-type adapter work
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
