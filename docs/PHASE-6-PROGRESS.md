@@ -83821,3 +83821,67 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1880 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read required migration/orchestration/parity docs, the UOW-1879 completion and handoff, rechecked the local Java/Maven toolchain, inspected the condition preview harness design, the fixture contract, C# fixture-plan tests, and Java stat/condition seams including `AdditionStat`, `IStatFunction`, and `StatEnum`.
+- Confirmed the local environment still cannot produce Java runtime/golden output for this unit:
+	- `java -version` reports Java `1.8.0_491`.
+	- The repository root `pom.xml` configures `maven.compiler.release` as `25`.
+	- `mvn -version` fails because `mvn` is not available on PATH.
+- Added `docs/Phase-6-ConditionPreviewJavaGoldenCaptureDraft.md`, an explicitly uncompiled Java source draft for the future condition preview golden capture harness.
+- Linked the draft from `docs/phase6-condition-preview-golden-fixture-contract.json` with `harnessDraftDocument`.
+- The draft documents:
+	- intended Java location under `game-server/test/com/aionemu/gameserver/skillengine/condition/ConditionPreviewGoldenCaptureTest.java`
+	- opt-in write mode using `Boolean.getBoolean("aion.conditionPreview.capture")`
+	- all ten planned fixture methods
+	- direct `Conditions.validate(Stat2, IStatFunction)` assertion against manually captured condition statuses
+	- first-failure short-circuit behavior with `NotEvaluated`
+	- private `WeaponCondition.itemGroups` setup
+	- protected `ChargeCondition.value` setup
+	- real `Player.getEquipment().getMainHandWeaponType()` branch coverage requirement
+	- real `Item.getChargeLevel()`/`ChargeInfo` path preference
+	- writer sketch and unresolved compile/runtime risks
+- Added a C# guard test that requires the draft document to remain explicitly uncompiled, cover every planned fixture name, and name the critical Java seams before future capture work can promote it into Java test source.
+- Kept this unit documentation/draft only. No Java runtime execution, golden output capture, live `Conditions.validate` provider, gameplay condition registry, active-effect runtime, `CreatureGameStats` integration, stat cap path, or drop workflow execution was enabled.
+
+#### Migration Parity Table - Session 1880
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `Conditions.validate(Stat2, IStatFunction)` / future `ConditionPreviewGoldenCaptureTest` | `docs/Phase-6-ConditionPreviewJavaGoldenCaptureDraft.md` | Uncompiled Java Draft | Partial | Unit Tested | Partial Parity | Draft source sketches the future capture harness, but it is not compiled or run and produces no Java output. Local Java runtime comparison remains blocked by Java 8 plus missing Maven. |
+| `WeaponCondition`, `ItemChargeCondition`, `OnFlyCondition`, base `Condition`, `Item.getChargeLevel`, `Player.getEquipment().getMainHandWeaponType` fixture seams | `SkillStatConditionPreviewGoldenFixturePlanServiceTests.JavaCaptureDraftDocument_CoversAllFixturesAndStaysUncompiled` | Draft Guard Test | Partial | Unit Tested | Partial Parity | C# test verifies the draft names every planned fixture and critical seam while preserving the explicit uncompiled status. No Java runtime evidence has been captured. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillStatConditionPreviewGoldenFixturePlanServiceTests" --no-restore` passed with 7 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillStatConditionPreviewGoldenFixturePlanServiceTests|FullyQualifiedName~SkillStatConditionPreviewCoverageReportServiceTests|FullyQualifiedName~SkillStatConditionEvaluatorServiceTests|FullyQualifiedName~SkillStatConditionInputSnapshotServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFormulaServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionRegistryReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 569 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4725 tests.
+
+Remaining risks:
+- This unit produced an uncompiled docs-only Java draft. It is not Java runtime/golden evidence.
+- Local Java execution remains blocked until JDK 25-compatible Java and Maven are available.
+- The draft may need concrete Java enum/static-data setup fixes before compiling.
+- Real player/equipment setup and item charge setup may require Java static data or runtime context beyond plain JUnit construction.
+- Planned fixture expectations remain source-derived and still need execution against Java `Conditions.validate(Stat2, IStatFunction)`.
+- No live `Conditions.validate` provider, Java condition subclass registry, `CreatureGameStats` storage, insertion/removal, snapshot locking/copying, stat caps, max-stat synchronization, or active-effect lifecycle was enabled.
+- The pure evaluator still does not model Java `CreatureGameStats` owner-specific `EnchantEffect` hand filtering or `StatCapUtil.calculateBaseValue`.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks modeled/persisted player salvation points and Java's exact lifecycle around reset after 10 minutes offline.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: condition preview Java capture draft plus focused draft guard test.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 6 rows pending Java runtime/golden comparison, live condition validators, live Stat2 state, stat caps, active-effect registry, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, possible Java player/static-data/charge setup, live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves capture readiness but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: if JDK 25 and Maven are available, copy/adapt the draft into `game-server/test/com/aionemu/gameserver/skillengine/condition/ConditionPreviewGoldenCaptureTest.java`, resolve compile/runtime setup, run it, and only then update the contract with captured Java outputs.
+- Safe alternative candidates for the next session:
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
