@@ -80434,3 +80434,50 @@ Next recommended unit of work:
 	- add a live-safe craft finish cooldown application mutation plan
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1814 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1813 handoff, confirmed a clean UOW-1813 commit, inspected real recipe XML, and identified recipe `155000001` as a small morph recipe with product and component templates available in loaded static data.
+- Chose the next smallest evidence slice: static-data-backed CM_CRAFT handler composition coverage for a real recipe/product. Kept live `CraftService.startCrafting`, DP spend, inventory mutation, packet sending, `CraftingTask` creation, and scheduler startup outside this unit.
+- Added an integration test that loads real `DataManager` static data.
+- Sent a real CM_CRAFT packet for recipe `155000001` through `GameServerConnection.ProcessPacketAsync`.
+- Verified the `CmCraftStartCompositionPlan` observer reaches `ReadyForDpSpendAndTaskStart`.
+- Verified ready-path planner details:
+	- validation ready
+	- component decrease for `152000901 x1`
+	- morph task interval `200`
+	- required DP `200`
+- Verified no packets are sent and no live side effects are dispatched.
+
+#### Migration Parity Table - Session 1814
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CRAFT.runImpl` successful guard forwarding for real recipe `155000001` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleCraftAsync` + `CmCraftStartCompositionPlan` observer | Handler Adapter | Partial | Integration Tested | Partial Parity | Real packet processing with loaded static data reaches ready composition; live `startCrafting` remains deferred. |
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` selected material path for recipe `155000001` | `Aion.GameServer.Services.CraftStartConsumptionPlan` via handler observer | Handler Adapter | Partial | Integration Tested | Partial Parity | C# plans component decrease for `152000901 x1`; no live inventory mutation occurs. |
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` morph interval and DP requirement for recipe `155000001` | `Aion.GameServer.Services.CraftStartTaskPlan.Interval` and `CmCraftStartCompositionPlan.RequiredDp` via handler observer | Handler Adapter | Partial | Integration Tested | Partial Parity | C# records morph interval `200` and required DP `200`; no DP spend or task start occurs. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 305 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4557 tests.
+
+Remaining risks:
+- C# still does not execute Java `CraftService.startCrafting`.
+- No DP spend, live inventory mutation, persistence, packet sending, live `CraftingTask`, or scheduler startup is wired.
+- Non-morph static-object ready-path coverage remains pending because C# still lacks a direct Java `StaticObject` model.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: integration coverage for one real static-data recipe through the CM_CRAFT observer seam.
+- Total artifacts with verified parity: 0 rows; this is non-live handler-adapter partial parity only.
+- Total artifacts needing verification: 3 rows pending live runtime side effects and broader non-morph coverage.
+- Total blocked artifacts: live start-craft execution, DP spend, live inventory mutation, persistence, packet fanout, live task creation, scheduler startup, and full craft completion.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves evidence for the handler adapter without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: begin non-live inventory mutation planning for material/bonus consumption so the successful `checkCraft` consumption plan can be turned into explicit updated/deleted inventory item intents.
+- Safe alternative candidates for the next session:
+	- add a live-safe craft finish cooldown application mutation plan
+	- broaden CM_CRAFT handler composition coverage for non-morph target facts when StaticObject modeling is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
