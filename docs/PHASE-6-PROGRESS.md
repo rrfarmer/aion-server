@@ -82566,3 +82566,51 @@ Next recommended unit of work:
 	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+
+### Session 1856 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1855 handoff/completion, progress/parity/orchestration docs, then inspected C# `WorldNpcDropBoostActiveStatProviderReadinessReportService`, C# `SkillBuffStatFunctionPlanService`, their tests, Java `BufEffect.getModifiers`, and Java `CreatureGameStats.addEffect`.
+- Connected `SkillBuffStatFunctionPlanService` into `WorldNpcDropBoostActiveStatProviderReadinessReportService` as optional evidence for `boostdroprate` and `drboost` buff-stat effects.
+- Added `StatFunctionPlans` and `StatFunctionPlanCount` to the active drop-boost readiness report.
+- Added `UnsupportedStatFunctionPlan` readiness status so unsupported `BufEffect` function mappings are reported before live workflow readiness can be claimed.
+- Function plans inherit the explicit live provider flags from the active readiness report, so plan statuses mirror missing effect-owner, stat-registry, and condition-validator providers without enabling execution.
+- Kept the integration readiness-only; no live `CreatureGameStats`, active-effect controller, condition validator, or drop workflow wiring was added.
+- Added focused tests proving missing-template reports have no function plans, drop-boost/drboost plans are attached with Java function evidence, conditioned plans remain blocked without validators, unsupported plans block readiness, and all-provider readiness marks nested plans ready.
+
+#### Migration Parity Table - Session 1856
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `BufEffect.getModifiers` evidence for drop-boost effects | `WorldNpcDropBoostActiveStatProviderReadinessReport.StatFunctionPlans` | Readiness Evidence | Partial | Unit Tested | Partial Parity | C# active readiness now includes function-plan evidence for `boostdroprate` / `drboost`. It still does not execute or register live functions. |
+| `StatAddFunction` / `StatRateFunction` / `StatSetFunction` unsupported mapping guard | `WorldNpcDropBoostActiveStatProviderReadinessStatus.UnsupportedStatFunctionPlan` | Provider Gate | Partial | Unit Tested | Partial Parity | Unsupported function metadata blocks readiness conservatively before any live provider can be considered ready. |
+| `CreatureGameStats.addEffect(effect, modifiers)` provider flags | nested `SkillBuffStatFunctionRegistryPlan` inside active readiness report | Provider Contract | Partial | Unit Tested | Partial Parity | Function-plan evidence inherits live effect-owner/stat-registry/condition-provider flags. No live registry behavior or owner removal semantics are ported. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests" --no-restore` passed with 81 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 504 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4655 tests.
+
+Remaining risks:
+- Function plans remain report evidence only; C# still does not port live `CreatureGameStats` storage, function sorting/insertion/removal, `Stat2` runtime evaluation, stat caps, or max-stat synchronization.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks individual Java condition validators.
+- C# still lacks Java active-effect storage and conflict/stacking behavior.
+- C# still lacks a modeled/persisted player salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: active readiness report integration for non-live function-plan evidence and focused tests.
+- Total artifacts with verified parity: 0 rows; this remains readiness/evidence parity only.
+- Total artifacts needing verification: 5 rows pending live stat registry behavior, owner lifecycle, runtime stat evaluation, condition validators, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves report evidence but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java `CreatureGameStats.getStatsSorted` / stat-function sorting and design a disabled live-registry readiness report for insertion/removal/order semantics, without creating a live registry.
+- Safe alternative candidates for the next session:
+	- inspect Java `WeaponCondition` / high-frequency condition classes to scope validator ports
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
