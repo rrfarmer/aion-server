@@ -80236,3 +80236,53 @@ Next recommended unit of work:
 	- begin non-live inventory mutation plan for material/bonus consumption
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1810 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1809 handoff, confirmed the clean UOW-1809 commit, then re-inspected Java `CraftService.startCrafting`, Java `CraftingTask`, Java `AbstractCraftTask`, C# `ItemTemplateSummary.Quality`, and existing craft tests.
+- Chose the next smallest successful-path slice: non-live craft task interval planning. Kept live `CraftingTask` creation, scheduler startup, packet loop, DP spend, inventory mutation, and craft completion outside this unit.
+- Added `CraftService.CreateStartTaskPlan(...)`.
+- Added `CraftStartTaskPlan` and `CraftStartTaskPlanStatus`.
+- Ported Java interval cap rules:
+	- default `1200`
+	- `UNIQUE` / `EPIC` cap `1500`
+	- `MYTHIC` cap `1700`
+- Ported Java interval formula:
+	- morph skill `40009` uses fixed interval `200`
+	- other craft skills use `max(intervalCap, 2500 - skillLvlDiff * 60)`
+- Ported bonus craft modifier value `15` when `craftType == 1`.
+- Added focused `CraftServiceTests` coverage for formula behavior, quality caps, morph interval, bonus modifier, and no-op on failed validation.
+
+#### Migration Parity Table - Session 1810
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` skill-level difference | `Aion.GameServer.Services.CraftService.CreateStartTaskPlan.SkillLevelDiff` | Task Planner | Partial | Unit Tested | Partial Parity | C# computes `CurrentSkillLevel - RequiredSkillPoint` from validation evidence; no live task is created. |
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` quality interval cap | `Aion.GameServer.Services.CraftService.CreateStartTaskPlan.IntervalCap` | Task Planner | Complete | Unit Tested | Verified Parity | Java cap values for default, `UNIQUE`/`EPIC`, and `MYTHIC` are covered by tests. |
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` interval selection | `Aion.GameServer.Services.CraftService.CreateStartTaskPlan.Interval` | Task Planner | Partial | Unit Tested | Partial Parity | C# ports formula and morph override; scheduler timing/live task startup remains pending. |
+| `com.aionemu.gameserver.skillengine.task.CraftingTask` bonus constructor argument | `Aion.GameServer.Services.CraftService.CreateStartTaskPlan.BonusCritModifier` | Task Planner | Partial | Unit Tested | Partial Parity | C# records `15` for `craftType == 1`; no live `CraftingTask` exists. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 283 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4548 tests.
+
+Remaining risks:
+- C# still does not execute Java `CraftService.startCrafting`.
+- No live `CraftingTask` instance or scheduler startup is wired.
+- No craft update/animation success/failure packet loop.
+- No DP spend, inventory mutation, persistence, or craft completion path.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one task planner, one supporting record/status enum, and focused test updates.
+- Total artifacts with verified parity: 1 interval-cap row.
+- Total artifacts needing verification: 3 planner rows pending live task startup/scheduler behavior.
+- Total blocked artifacts: live start-craft execution, live task loop, packet fanout, DP spend, inventory mutation, and craft completion.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds task interval planning without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: start live CM_CRAFT selected-material/craft-type adapter planning so client inputs can feed existing validation/consumption/task planners.
+- Safe alternative candidates for the next session:
+	- begin non-live inventory mutation plan for material/bonus consumption
+	- plan craft cooldown application after successful finish
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
