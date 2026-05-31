@@ -81332,3 +81332,59 @@ Next recommended unit of work:
 	- add finish-craft logging intent planning from Java `LoggingConfig.LOG_CRAFT`
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1831 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1830 handoff/completion, progress/parity/orchestration docs, then inspected Java `CraftService.finishCrafting`, Java `RecipeTemplate`, Java `RecipeList.deleteRecipe`, Java `QuestEngine.onFailCraft`, C# recipe static-data loading, C# recipe deletion service behavior, and current craft tests.
+- Chose the next smallest finish-craft work-order slice: disabled recipe deletion and fail-craft quest callback planning from Java `CraftService.finishCrafting` `maxProductionCount` branch.
+- Added `RecipeTemplateSummary.MaxProductionCount`.
+- Updated static recipe XML loading to read Java `max_production_count`.
+- Added `CraftService.CreateFinishWorkOrderPlan(...)`.
+- Added `CraftFinishWorkOrderPlan`.
+- Added `CraftFinishWorkOrderStatus`.
+- Modeled Java work-order finish behavior without live mutation:
+	- enter branch only when `recipeTemplate.getMaxProductionCount() != null`
+	- attempt `player.getRecipeList().deleteRecipe(player, recipeTemplate.getId())`
+	- project known recipe removal and `SM_RECIPE_DELETE` intent only when the player currently knows the recipe
+	- keep `Player.Recipes` unchanged
+	- when `critCount == 0`, record `QuestEngine.onFailCraft(new QuestEnv(null, player, 0), comboProduct(1) == null ? 0 : comboProduct(1))` intent
+	- skip fail-craft quest intent on critical success
+- Added focused tests for failed work-order delete + quest intent, critical-success delete without quest intent, and non-work-order skip behavior.
+- Added static-data coverage for a real recipe with `max_production_count="1"`.
+
+#### Migration Parity Table - Session 1831
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.recipe.RecipeTemplate.maxProductionCount` | `Aion.GameServer.Dataholders.RecipeTemplateSummary.MaxProductionCount` | Static Data Model | Partial | Unit Tested | Partial Parity | C# now reads Java XML `max_production_count` and exposes it on recipe summaries; broader JAXB/default parity remains governed by static-data coverage. |
+| `com.aionemu.gameserver.services.craft.CraftService.finishCrafting` work-order branch | `Aion.GameServer.Services.CraftService.CreateFinishWorkOrderPlan` | Work-Order Planner | Partial | Unit Tested | Partial Parity | C# records the Java finish-craft branch for max-production recipes, but live recipe deletion, DB write, packet send, and quest callback execution remain disabled. |
+| `com.aionemu.gameserver.model.gameobjects.player.RecipeList.deleteRecipe` finish-craft call site | `CraftFinishWorkOrderPlan.ProjectedRecipes` / delete flags | Recipe Deletion Planner | Partial | Unit Tested | Partial Parity | C# projects removing a known recipe and `SM_RECIPE_DELETE` intent; it does not mutate `Player.Recipes` or call `PlayerRecipesDAO.delRecipe`. |
+| `com.aionemu.gameserver.questEngine.QuestEngine.onFailCraft` finish-craft call site | `CraftFinishWorkOrderPlan.WouldCallQuestEngineOnFailCraft` | Quest Callback Planner | Partial | Unit Tested | Partial Parity | C# records fail-craft quest callback intent only for failed work orders and captures Java combo-product fallback to `0`; registered quest lookup and inventory-count gating remain non-live. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 91 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 363 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4587 tests.
+
+Remaining risks:
+- Finish work-order planning is disabled and does not mutate `Player.Recipes`.
+- No `PlayerRecipesDAO.delRecipe` equivalent write is executed.
+- No `SM_RECIPE_DELETE` packet is sent from the finish-craft work-order branch.
+- `QuestEngine.onFailCraft` is not executed; registered handler lookup, quest id assignment, and Java inventory-count gate remain future work.
+- Finish-craft reward insertion, logging, live XP/common XP mutation, recipe deletion/callback execution, cooldown mutation/persistence, and full runtime execution remain incomplete or separately planned.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one recipe static-data field, static loader mapping, one finish work-order planner method, one work-order plan record, one status enum, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is disabled work-order-planning partial parity only.
+- Total artifacts needing verification: 4 rows pending live recipe mutation, live DB write, packet dispatch, quest-engine execution, and Java runtime comparison.
+- Total blocked artifacts: live finish-craft recipe deletion, fail-craft quest callback execution, crafted item insertion, logging, live XP mutation, cooldown mutation/persistence, and full craft runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves finish-craft work-order evidence without claiming live runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add disabled finish-craft logging intent planning from Java `CraftService.finishCrafting` `LoggingConfig.LOG_CRAFT` branch.
+- Safe alternative candidates for the next session:
+	- begin live logout craft cooldown save design only after explicit connection/error behavior scoping
+	- add a non-live finish-craft orchestration composition that gathers work-order, XP, reward, logging, and cooldown plans once logging intent exists
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
