@@ -79224,3 +79224,55 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1792 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, and `Phase-6-Session-1791-Handoff.md`, then re-inspected Java `Equipment.usePowerShard`, Java `Equipment.decreaseEquippedItemCount`, Java `Equipment.setPersistentState`, Java `ChargeInfo.updateChargePoints`, and the current C# `ItemChargeService`, `ItemChargeBurnApplicationService`, `EquipmentObserverBurnWorkflowService`, `EquipmentObserverBurnFanoutService`, `PlayerIncomingDamageObserverFanoutService`, and `WorldNpcSkillDamageService`.
+- Confirmed the next honest adjacent gap after UOW-1791 was not another immediate-save normalization branch. The charge-item copies in the C# observer-burn path already reapply as `PersistentState=Updated`, so the remaining mismatch was narrower: Java `ChargeInfo.updateChargePoints` marks the owning equipment container dirty before later persistence, while the C# observer-burn workflow could leave the player modeled as clean if the charge persistence boundary failed after applying the in-memory burn.
+- Updated `EquipmentObserverBurnWorkflowService` so observer-driven charge burn now calls `player.MarkEquipmentDirty()` when:
+	- the charge-burn plan changed, and
+	- the immediate charge-burn persistence boundary reported failure
+- Added focused parity evidence in `EquipmentObserverBurnWorkflowServiceTests`:
+	- `ApplyObserverBurnsAsync_ChargePersistenceFailureMarksEquipmentDirty`
+	- `ApplyObserverBurnsAsync_ChargePersistenceSuccessLeavesEquipmentStateClean`
+- Kept scope intentionally narrow:
+	- no change to the existing immediate-save success path for observer charge burn
+	- no change to the current `saveItemChargeBurnAsync == null` modeled semantics
+	- no attempt to sweep idian, enchant, tampering, or dye equipment-state producers in the same unit
+- Validation:
+	- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~EquipmentObserverBurnWorkflowServiceTests|FullyQualifiedName~ItemChargeBurnApplicationServiceTests|FullyQualifiedName~PlayerInventoryPersistentStateTests|FullyQualifiedName~PlayerEnterWorldServiceTests"` passed with 50 tests.
+	- `dotnet test dotnetConversion\AionServer.slnx` passed cleanly on the first full-suite run with 4772 total tests (`57` commons, `29` chat, `121` login, `4565` game).
+
+#### Migration Parity Table - Session 1792
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.items.ChargeInfo.updateChargePoints` equipment-state side effect | `Aion.GameServer.Services.EquipmentObserverBurnWorkflowService.ApplyObserverBurnsAsync` + `Player.MarkEquipmentDirty` | Observer Charge Burn Dirty-State Fallback | Partial | Unit Tested | Partial Parity | Java source reviewed; C# now preserves modeled equipment dirtiness when observer-driven charge burn applies in memory but the immediate persistence boundary fails. The current `saveItemChargeBurnAsync == null` test-harness semantics still treat the burn as persisted and remain future review work. |
+| `com.aionemu.gameserver.model.items.ChargeInfo.attack` / `attacked` / `dotattacked` | `Aion.GameServer.Services.ItemChargeBurnApplicationService` + `EquipmentObserverBurnWorkflowService` | Observer Burn Runtime Flow | Partial | Unit Tested | Partial Parity | Charge observer mutations still apply packets and in-memory charge updates as before, but failed persistence now leaves the modeled equipment container dirty instead of silently clean. Java item-level persistent-state marking is still represented indirectly through the modeled player-owned storage/equipment surface rather than a first-class `Item` object. |
+| `com.aionemu.gameserver.model.gameobjects.player.Equipment.setPersistentState` from charge observer flow | `Aion.GameServer.Model.GameObjects.Player.EquipmentPersistentState` via observer workflow | Modeled Equipment Dirty Producer | Partial | Unit Tested | Partial Parity | This unit adds the missing failed-save producer participation for observer-driven charge burn without widening into unrelated equipment mutation surfaces. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `ApplyObserverBurnsAsync_ChargePersistenceFailureMarksEquipmentDirty` | Unit Added | Java `ChargeInfo.updateChargePoints` | When observer-driven charge burn applies and the immediate save fails, the player remains modeled as equipment-dirty. | Source-derived workflow regression for the failed persistence boundary. | No first-class Java `Equipment` object proof. |
+| `ApplyObserverBurnsAsync_ChargePersistenceSuccessLeavesEquipmentStateClean` | Unit Added | Java `ChargeInfo.updateChargePoints` plus current C# immediate-save boundary | Successful observer-burn persistence does not leave a false positive modeled equipment dirty flag in the immediate-save C# path. | Source-reviewed unit regression for the current modeled success semantics. | C# still persists immediately instead of relying solely on later DAO harvest. |
+
+Remaining risks:
+- The current observer-burn path still treats a missing `saveItemChargeBurnAsync` delegate as persisted rather than explicitly dirty; that semantics was left untouched in this unit.
+- Other Java equipment dirty producers such as charge-item service success paths, enchant, tampering, and dye remain separate slices.
+- C# still does not port a first-class Java `Equipment` object; modeled equipment dirtiness still lives on `Player`.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: 1 observer-burn dirty-state fallback branch and 2 focused workflow tests.
+- Total artifacts with verified parity: 0 grouped rows in this unit.
+- Total artifacts needing verification: 3 grouped rows.
+- Total blocked artifacts: broader live equipment dirty producers, first-class storage/equipment container modeling, and unresolved `saveItemChargeBurnAsync == null` observer semantics.
+- Estimated overall migration completion: Phase 6 remains about 72%; this unit closes the failed observer-charge persistence gap without overstating broader equipment dirty-state parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect the next smallest Java equipment dirty producer outside the already-ported direct equip/shard and observer-burn failure paths, with `ChargeInfo` immediate-success semantics or `TamperingAction` as the most natural adjacent candidates.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `CraftService.finishCrafting` product selection
+	- Java `DropRegistrationService.calculateBoostDropRate`
