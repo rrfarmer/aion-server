@@ -83885,3 +83885,52 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1881 (May 31, 2026)
+- Performed fresh Work Discovery after UOW-1880: re-read the new handoff/progress tail, rechecked Java/Maven availability, inspected Java `ItemService.addItem`, `addNonStackableItem`, `addStackableItem`, and `copyItemInfo`, and compared them with C# `InventoryAddService`, `InventoryItemFactory`, and existing inventory-add tests.
+- Confirmed the Java runtime/golden path remains blocked locally by Java `1.8.0_491` and missing Maven, so this unit stayed source-reviewed and C#-tested only.
+- Extended `InventoryAddService.CreateAddItemPlan` with an optional `sourceItem` parameter for Java `ItemService.addItem(player, sourceItem)` style non-stackable clone behavior.
+- Added `CopyNonStackableSourceItemInfo` to copy Java `copyItemInfo` fields onto newly created non-stackable reward rows while preserving the new object id, owner, count, location, slot, expiration, and activation defaults.
+- Preserved Java's stackable behavior: source item info is not copied for stackable new rows.
+- Added focused tests proving:
+	- non-stackable source clone rows preserve color, creator, soul-bind, enchant, enchant bonus, skin, optional sockets, tune count, random bonus, tempering, amplified state, buff skill, manastones, godstone, and idian stone
+	- fusion attributes, charge, and fusion stones are not copied by the `ItemService.copyItemInfo` parity path
+	- stackable rows ignore source item info and keep fresh item defaults
+- Kept this unit at the planner boundary. No caller was switched to live source-item clone wiring, no packet/persistence behavior was changed, and no Java runtime output was captured.
+
+#### Migration Parity Table - Session 1881
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `ItemService.addItem(Player, Item)` / `addNonStackableItem` / `copyItemInfo` | `InventoryAddService.CreateAddItemPlan(..., sourceItem)` / `CopyNonStackableSourceItemInfo` | Inventory Planner | Partial | Unit Tested | Partial Parity | C# planner can now copy reviewed Java non-stackable source fields onto new reward rows. This is source-reviewed and C# tested only; Java runtime, packet, DAO, expirable registration, and caller integration remain unverified. |
+| `ItemService.addStackableItem` source-item branch | `InventoryAddServiceTests.CreateAddItemPlan_DoesNotCopySourceItemInfoForStackableRows` | Inventory Planner Guard | Partial | Unit Tested | Partial Parity | Test preserves Java behavior where stackable adds merge/create stack rows without source item metadata copy. No Java runtime comparison was produced. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~InventoryAddServiceTests" --no-restore` passed with 10 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~InventoryAddServiceTests|FullyQualifiedName~AssemblyItemServiceTests|FullyQualifiedName~ExpExtractServiceTests|FullyQualifiedName~EnchantServiceTests|FullyQualifiedName~WorldNpcLootServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 472 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4727 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- The optional source-item planner parameter is not yet wired into a live caller such as repurchase/private-store style source-item cloning.
+- Java `ExpireTimerTask.registerExpirable`, `ItemPacketService` add/update types, DAO persistence, transaction behavior, and dice-inventory messaging remain outside this unit.
+- The mapping of Java `Item.setItemColor` to C# `Color`/`ColorExpires` is source-reviewed but not runtime-proved.
+- The broader live reward workflow still lacks Java runtime comparison for object-id allocation, persistence, packet bytes, and rollback behavior.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: non-stackable source-item clone support in `InventoryAddService` plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 6 rows pending Java runtime/golden comparison, live reward source-item callers, DAO/packet behavior, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for reward persistence, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves inventory planner parity but does not complete live reward or stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: if JDK 25 and Maven are available, return to the condition preview Java capture draft and produce runtime output; otherwise inspect a concrete Java source-item clone caller (`RepurchaseService` or `PrivateStoreService`) and decide whether the new planner parameter can be wired safely with packet/persistence tests.
+- Safe alternative candidates for the next session:
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
