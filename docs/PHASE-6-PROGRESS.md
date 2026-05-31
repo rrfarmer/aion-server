@@ -82139,3 +82139,51 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1847 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1846 handoff/completion, progress/parity/orchestration docs, then inspected Java `DropRegistrationService.calculateBoostDropRate`, Java `StatEnum.BOOST_DROP_RATE`, Java `StatEnum.DR_BOOST`, Java `BoostDropRateEffect`, static skill stat changes, and C# stat/effect surfaces.
+- Confirmed Java computes the drop boost stat chain by reading NPC `BOOST_DROP_RATE` with default 100, then killer `BOOST_DROP_RATE`, then killer `DR_BOOST`, before applying repose, salvation, and active-palace increments.
+- Confirmed current C# has stat-like static data and effect models but no live `CreatureGameStats`-equivalent query surface available to the disabled drop boost planner or drop registration workflow.
+- Added explicit resolved `npcBoostDropRate`, `killerBoostDropRate`, and `killerDrBoost` inputs to `WorldNpcDropBoostRateContextPlanService.CreateDisabledPlan(...)`.
+- Added `WorldNpcDropBoostRateContextPlan.NpcBoostDropRate`, `KillerBoostDropRate`, and `KillerDrBoost`.
+- Planner now treats supplied resolved stat values as objective source evidence for only the matching Java stat dependency.
+- Planner still reports missing killer stat sources when only the NPC boost stat is supplied.
+- Added focused tests for the full resolved stat chain and for NPC-only partial stat source evidence.
+
+#### Migration Parity Table - Session 1847
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `CreatureGameStats.getStat(StatEnum.BOOST_DROP_RATE, 100)` for NPCs | `WorldNpcDropBoostRateContextPlanService.CreateDisabledPlan(..., npcBoostDropRate)` | Resolved Input Adapter | Partial | Unit Tested | Partial Parity | C# can consume an explicit NPC boost stat value and remove only that source blocker. A live NPC stat provider is still absent. |
+| `CreatureGameStats.getStat(StatEnum.BOOST_DROP_RATE, boostDropRate)` for killers | `WorldNpcDropBoostRateContextPlanService.CreateDisabledPlan(..., killerBoostDropRate)` | Resolved Input Adapter | Partial | Unit Tested | Partial Parity | C# can consume an explicit killer boost stat value and remove only that source blocker. A live player stat provider is still absent. |
+| `CreatureGameStats.getStat(StatEnum.DR_BOOST, boostDropRate)` for killers | `WorldNpcDropBoostRateContextPlanService.CreateDisabledPlan(..., killerDrBoost)` | Resolved Input Adapter | Partial | Unit Tested | Partial Parity | C# can consume an explicit killer DR boost stat value and remove only that source blocker. A live player stat provider is still absent. |
+| `BoostDropRateEffect extends BufEffect` / static skill stat changes | C# stat/effect static data surfaces | Discovery | Not Started | Manual Only | Needs Verification | C# has parsed stat-like surfaces, but no verified live effect-to-stat-container path for the drop workflow. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests" --no-restore` passed with 56 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 474 tests.
+- Initial broad run timed out at the 3-minute tool limit without a result; rerunning with a longer limit completed successfully.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4625 tests.
+
+Remaining risks:
+- The planner is still disabled/readiness-only and is not wired into `WorldNpcDropRegistrationWorkflowService`.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for this workflow.
+- C# still lacks a modeled/persisted player salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: three explicit resolved-stat planner inputs, plan state fields, and focused tests.
+- Total artifacts with verified parity: 0 rows; this remains partial source/readiness parity.
+- Total artifacts needing verification: 4 rows pending real live stat provider wiring, workflow integration, and runtime comparison.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit makes Java stat-chain inputs explicit for planning but does not complete live drop modifier parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect C# static skill/effect stat-change parsing and runtime effect application to determine whether a reusable live stat-provider service can safely supply `BOOST_DROP_RATE` and `DR_BOOST`; if not, document the provider gap in a disabled readiness report.
+- Safe alternative candidates for the next session:
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
