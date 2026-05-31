@@ -84836,6 +84836,49 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1914 (May 31, 2026)
+- Performed fresh Work Discovery after UOW-1913: re-read required orchestration/parity docs, latest completion, and latest handoff; inspected Java `CM_BUY_ITEM.runImpl` action `17`, Java `PetService.sell`, Java `TradeService.performSellToShop`, and C# `CmBuyItemHandlerCompositionPlanService`, `TradeSellToShopPlanService`, and `PetMerchantSellLiveExecutorFacadePlanService`.
+- Confirmed the Java runtime/golden path remains blocked locally by Java/Maven availability, so this unit stayed source-reviewed and C#-tested only.
+- Added `PetMerchantSellOutcomePlanService`, a disabled final outcome planner that groups the pet merchant sell facade and underlying sell-to-shop plan side-effect boundaries into one opt-in result.
+- Added `PetMerchantSellOutcomePlan`, `PetMerchantSellOutcomeStepPlan`, and status/step enums for disabled final pet merchant sell execution.
+- Added tests for successful disabled outcome grouping, missing facade terminal behavior, and blocked facade terminal behavior.
+- Kept this unit non-live. No inventory mutation, repurchase mutation, Kinah mutation, packet construction, packet dispatch, transaction commit, rollback, repository write, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1914
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM.runImpl` pet merchant action `17` final outcome | `Aion.GameServer.Services.PetMerchantSellOutcomePlanService` | Disabled Outcome/Transaction Plan Service | Partial | Unit Tested | Partial Parity | Groups the disabled pet merchant facade and `TradeService.performSellToShop` sell plan into one result. It records inventory, repurchase, Kinah, and transaction-boundary steps only; no live mutation, packet send, transaction commit, or Java runtime comparison is performed. |
+| `com.aionemu.gameserver.services.TradeService.performSellToShop(player, tradeList, null, pf.getRatePrice())` final pet merchant side-effect result | `Aion.GameServer.Services.PetMerchantSellOutcomePlan` | Disabled Final Outcome Plan | Partial | Unit Tested | Partial Parity | Successful and terminal final outcome plans expose inventory/repurchase/Kinah/transaction-boundary flags while keeping all `Did*`, `ShouldCommitTransactionBoundary`, and `ShouldDispatchLiveSideEffects` false. Java runtime/golden verification remains absent. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PetMerchantSellLiveExecutorFacadePlanServiceTests|FullyQualifiedName~TradeSellToShopPlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests" --no-restore` passed with 32 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PetMerchantSellLiveExecutorFacadePlanServiceTests|FullyQualifiedName~PrivateStoreLiveExecutorFacadePlanServiceTests|FullyQualifiedName~TradeSellToShopPlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~CmBuyItemTests|FullyQualifiedName~CmBuyItemSellToShopCompositionPlanServiceTests|FullyQualifiedName~TradeSellForApToShopPlanServiceTests" --no-restore` passed with 77 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4909 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- The final outcome and facade plans are disabled descriptors only; live inventory mutation, repurchase state, Kinah mutation, packet dispatch, transaction/rollback behavior, repository writes, and pet auto-sell notification behavior remain unwired.
+- Java transaction behavior for pet merchant sell is not runtime-verified; the C# transaction boundary is an explicit disabled intent, not a claimed Java-equivalent implementation.
+- The pet merchant `CM_BUY_ITEM` action `17` path still does not perform live seller inventory, repurchase, Kinah, packet, or persistence side effects.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: disabled final pet merchant sell outcome/transaction planner plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 21 rows pending Java runtime/golden comparison, Java-equivalent known-list object population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN wiring, live private-store action `0` execution, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item mutation, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, private-store/pet merchant branch execution, live AP-sell mutation wiring, live buy transaction mutation wiring, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves pet merchant action `17` disabled final outcome planning but does not complete live pet merchant execution or runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect whether `CM_BUY_ITEM` action `0` and action `17` can expose their disabled final outcome plans through handler composition or a higher-level diagnostic result without enabling live execution.
+- Safe alternative candidates for the next session:
+	- add disabled persistence/send adapter plans for pet merchant sell outputs before any live execution attempt
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1913 (May 31, 2026)
 - Performed fresh Work Discovery after UOW-1912: re-read required orchestration/parity docs, latest completion, and latest handoff; inspected Java `CM_BUY_ITEM.runImpl` action `0`, Java `PrivateStoreService.sellStoreItem`, and C# `PrivateStorePurchasePlanService`, `PrivateStorePersistenceAdapterPlanService`, `PrivateStoreSendAdapterPlanService`, and `PrivateStoreLiveExecutorFacadePlanService`.
 - Confirmed the Java runtime/golden path remains blocked locally by Java/Maven availability, so this unit stayed source-reviewed and C#-tested only.
