@@ -81220,3 +81220,56 @@ Next recommended unit of work:
 	- add disabled finish-craft skill XP/common XP application planning from Java `finishCrafting`
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1829 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1828 handoff/completion, progress/parity/orchestration docs, then re-inspected Java `CraftService.finishCrafting`, Java `Cooldowns.put`, Java `CraftCooldownsDAO.storeCraftCooldowns`, and the new C# cooldown application/persistence plans.
+- Chose the next smallest composition slice: join finish cooldown timestamp planning, disabled cooldown application projection, disabled persistence descriptors, and the disabled persistence adapter into one non-live composition.
+- Added `CraftService.CreateFinishCooldownCompositionPlan(...)`.
+- Added `CraftFinishCooldownCompositionPlan`.
+- Added `CraftFinishCooldownCompositionStatus`.
+- The composition creates:
+	- `CraftFinishCooldownPlan`
+	- `CraftFinishCooldownApplicationPlan`
+	- `CraftCooldownPersistencePlan`
+	- `CraftCooldownPersistenceAdapterPlan`
+- Preserved disabled behavior throughout:
+	- no `Player.CraftCooldowns` mutation
+	- no DB connection
+	- no SQL execution
+- Added focused tests for delayed-recipe composition readiness and no-delay recipe inert/not-ready behavior.
+
+#### Migration Parity Table - Session 1829
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.finishCrafting` craft delay branch | `Aion.GameServer.Services.CraftService.CreateFinishCooldownCompositionPlan` | Cooldown Composition Planner | Partial | Unit Tested | Partial Parity | C# composes timestamp, application, and persistence intent for delayed recipes; no live cooldown mutation or persistence occurs. |
+| `com.aionemu.gameserver.model.gameobjects.player.Cooldowns.put` projection boundary | `CraftFinishCooldownCompositionPlan.ApplicationPlan` | Cooldown Composition Planner | Partial | Unit Tested | Partial Parity | Composition carries the disabled `Cooldowns.put` projection and did/would flags; player state remains unchanged. |
+| `com.aionemu.gameserver.dao.CraftCooldownsDAO.storeCraftCooldowns` persistence boundary | `CraftFinishCooldownCompositionPlan.PersistenceAdapterPlan` | Cooldown Composition Planner | Partial | Unit Tested | Partial Parity | Composition carries delete-all/insert-active SQL intent through the disabled adapter; no live database execution occurs. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 329 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4581 tests.
+
+Remaining risks:
+- The finish cooldown composition is disabled and does not mutate `Player.CraftCooldowns`.
+- No live craft cooldown DB writes occur.
+- `SavePlayerLogoutAsync` still does not save `Player.CraftCooldowns`.
+- No finish-time cooldown packet/fanout has been verified or sent.
+- Finish-craft skill XP/common XP, reward insertion, recipe deletion, quest callback, and logging behavior remain incomplete or separately planned.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one finish cooldown composition method, one composition record, one status enum, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is non-live composition partial parity only.
+- Total artifacts needing verification: 3 rows pending live cooldown mutation, live DB writes, packet fanout, finish-craft execution, and Java runtime comparison.
+- Total blocked artifacts: live finish-craft cooldown mutation/persistence, finish-craft packet fanout, skill XP application, crafted item insertion, recipe deletion/quest callbacks, and full craft runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves finish-craft cooldown composition evidence without claiming live runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java finish-craft packet behavior around craft cooldowns and add a disabled `SM_RECIPE_COOLDOWN` finish-time packet/fanout plan only if Java evidence confirms a packet is sent during or after `finishCrafting`.
+- Safe alternative candidates for the next session:
+	- add disabled finish-craft skill XP/common XP application planning from Java `finishCrafting`
+	- begin live logout craft cooldown save design only after explicit connection/error behavior scoping
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
