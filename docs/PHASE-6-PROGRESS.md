@@ -82817,3 +82817,54 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+
+### Session 1861 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1860 handoff/completion, progress/parity/orchestration docs, then inspected Java `Conditions`, `WeaponCondition`, `FrontCondition`, `BackCondition`, C# `SkillStatChangeConditionReadinessReportService`, condition summary loading, and active drop-boost readiness tests.
+- Confirmed Java `Conditions.validate` iterates child `Condition` instances for `Skill`, `Stat2`/`IStatFunction`, or `Effect`, returning false on the first child validator failure.
+- Confirmed Java `WeaponCondition.validate(Stat2, IStatFunction)` checks player main-hand weapon item group and returns true for NPC owners; `FrontCondition` / `BackCondition` use positional checks for `Skill` and `Effect` paths.
+- Extended `SkillStatChangeConditionReadinessReportService` with per-condition validator plans.
+- Added `SkillStatChangeConditionValidatorPlan` and `SkillStatChangeConditionValidatorPlanStatus`.
+- Added Java condition-name mapping for the condition children declared in Java `Conditions`.
+- Added `UnsupportedConditionMetadata` status so unknown condition XML metadata blocks readiness even if a broad validator provider flag is supplied.
+- Kept this readiness-only; no live condition validators, position checks, weapon equipment checks, or workflow execution were enabled.
+- Added focused tests for Java condition class mapping, per-condition entry counts, blocked live validator provider, ready validator plans, and unsupported condition metadata.
+
+#### Migration Parity Table - Session 1861
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `Conditions` | `SkillStatChangeConditionReadinessReport.ValidatorPlans` | Readiness Evidence | Partial | Unit Tested | Partial Parity | C# now maps parsed condition names to Java condition classes and records per-condition readiness. It does not execute validators. |
+| `WeaponCondition` | `SkillStatChangeConditionValidatorPlan` mapping for `weapon` | Provider Gate | Partial | Unit Tested | Partial Parity | C# records `weapon -> WeaponCondition`; live player equipment/main-hand group validation remains missing. |
+| `FrontCondition` / `BackCondition` | `SkillStatChangeConditionValidatorPlan` mapping for `front` / `back` | Provider Gate | Partial | Unit Tested | Partial Parity | C# records Java positional condition classes; no live position validation is ported for stat-change conditions. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests" --no-restore` passed with 14 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionRegistryReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 518 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4669 tests.
+
+Remaining risks:
+- Condition-validator plans remain report-only; C# still does not port live `Conditions.validate`, individual Java `Condition` classes, weapon equipment checks, position checks, or short-circuit validation side effects.
+- Active drop-boost readiness remains report-only; C# still does not port live `CreatureGameStats` storage, function insertion/removal, snapshot locking/copying, `Stat2` runtime evaluation, stat caps, max-stat synchronization, or active-effect lifecycle.
+- C# still lacks Java `StatRateFunction` special negative `SPEED` handling in a live runtime evaluator.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks Java active-effect storage and conflict/stacking behavior.
+- C# still lacks a modeled/persisted player salvation-point source equivalent to Java `PlayerCommonData.salvationPoint`.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: condition-validator readiness plan evidence and focused tests.
+- Total artifacts with verified parity: 0 rows; this remains readiness/reporting parity only.
+- Total artifacts needing verification: 6 rows pending live condition validators, live `Stat2`, additive/reverse stat semantics, function apply behavior, stat caps, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2 evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves condition-validator evidence but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java `StatCapUtil.calculateBaseValue`, `CreatureGameStats.onStatsChange`, and C# stat-cap helpers to add a narrow stat-cap/recalculation readiness report for the drop-boost stat path without live stat mutation.
+- Safe alternative candidates for the next session:
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- inspect Java `StatRateFunction` negative `SPEED` handling before designing live evaluator edge-case coverage
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
