@@ -79468,3 +79468,63 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `CraftService.finishCrafting` product selection
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1796 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, and `Phase-6-Session-1795-Handoff.md`, then re-inspected Java `CraftService.finishCrafting`, Java `RecipeTemplate`, the current C# `CraftService`, `CraftingXpFormulaService`, `RecipeTemplateTable`, `StaticData`, and existing crafting/inventory-expansion tests.
+- Chose the smallest coherent Java crafting slice instead of widening into first-class `TemperingEffect` ownership: recipe `comboproduct` data ingestion plus the deterministic `finishCrafting` product-selection branch.
+- Extended recipe static-data shape:
+	- `RecipeTemplateSummary` now carries Java-ordered `ComboProducts`
+	- `RecipeTemplateSummary.GetComboProduct(int)` now mirrors Java’s 1-based combo-product lookup contract
+	- `StaticData` now parses nested Java `<comboproduct itemid=\"...\"/>` children
+	- fixed the loader to flush both normal and self-closing `<recipe_template .../>` forms after an initial craft-learn regression exposed the empty-element case
+- Added a non-live `CraftService.CreateFinishProductPlan(...)` parity slice for Java `CraftService.finishCrafting`:
+	- selects `ProductId` when `critCount == 0`
+	- selects Java combo product `critCount` when `critCount > 0`
+	- preserves Java recipe quantity
+	- models the Java `changeItem(...)` creator-name intent for weapon/armor crafted outputs when item-template metadata is available
+	- reports missing combo-product data conservatively instead of claiming live parity for malformed recipe metadata
+- Added focused parity evidence:
+	- `CraftServiceTests` now cover base product, combo product, Java combo index ordering, creator-name intent on weapon outputs, and conservative missing-combo reporting
+	- `StaticDataLoadingTests` now prove that real Java recipe `155000078` retains both base `productid` and first combo product `100200209`
+- Kept scope intentionally narrow:
+	- no live `ItemService.addItem(...)` crafting persistence/runtime port
+	- no quest fail hook, recipe deletion, skill-xp grant, player-exp grant, craft cooldown, or craft log integration in this unit
+	- no attempt to merge the existing `CraftingXpFormulaService` into a larger finish-crafting pipeline
+
+#### Migration Parity Table - Session 1796
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.recipe.RecipeTemplate.comboproduct` + `getComboProduct(int)` | `Aion.GameServer.Dataholders.RecipeTemplateSummary.ComboProducts` + `GetComboProduct(int)` + `Aion.GameServer.Dataholders.StaticData` recipe parsing | Static Data / Lookup Surface | Complete | Regression Tested | Verified Parity | Java source reviewed; the C# recipe summary now stores combo products in Java order, uses a 1-based lookup, and is proven against real Java static data plus fixture data, including self-closing recipe nodes. |
+| `com.aionemu.gameserver.services.craft.CraftService.finishCrafting` product-selection branch | `Aion.GameServer.Services.CraftService.CreateFinishProductPlan` | Deterministic Result Planner | Partial | Unit Tested | Partial Parity | The C# planner now mirrors Java `critCount > 0 ? getComboProduct(critCount) : getProductId()` and quantity/creator intent selection. Live crafted-item persistence, XP, cooldowns, and recipe deletion remain outside this unit. |
+| Java crafted equipment `changeItem(...)` creator-name branch | `Aion.GameServer.Services.CraftService.CreateFinishProductPlan` creator-name output | Deterministic Item-Mutation Intent | Partial | Unit Tested | Partial Parity | Weapon/armor crafted outputs now carry Java-shaped creator-name intent when item-template metadata is present. This is planner-level evidence only; no live `ItemService.addItem(...)` mutation path was ported here. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateFinishProductPlan_UsesBaseProductWhenCraftDoesNotCrit` | Unit Added | Java `CraftService.finishCrafting` | Non-critical crafting uses the base `productid`, preserves quantity, and does not mark creator intent for non-equipment outputs. | Source-derived deterministic planner regression. | No live item creation. |
+| `CreateFinishProductPlan_UsesComboProductAndMarksCreatorForWeapons` | Unit Added | Java `CraftService.finishCrafting` + `changeItem(...)` | Critical crafting uses combo product `1` and carries creator-name intent for weapon outputs. | Source-derived deterministic planner regression. | No live persistence path. |
+| `CreateFinishProductPlan_UsesComboIndexInJavaOrder` | Unit Added | Java `RecipeTemplate.getComboProduct(int)` | Combo-product lookup remains Java-ordered and 1-based. | Source-derived deterministic planner regression. | No malformed-data Java runtime comparison. |
+| `CreateFinishProductPlan_ReportsMissingComboProductConservatively` | Unit Added | Java `CraftService.finishCrafting` precondition review | Missing combo-product data is surfaced conservatively instead of overstating parity. | Conservative planner regression. | This is intentionally not a Java runtime-equivalent malformed-data branch. |
+| `DataManager_LoadsRealJavaStaticDataManifestCounts` | Regression Updated | Real Java `recipe_templates.xml` | Java recipe `155000078` keeps base and combo product data after static-data load. | Real-data static-data bridge regression. | Only one real combo recipe is spot-checked here. |
+
+Remaining risks:
+- C# still does not port the live `CraftService.finishCrafting` branch that deletes max-production recipes, applies fail-craft quest hooks, grants skill XP / player XP, writes craft cooldowns, logs crafted items, and persists the crafted output through `ItemService.addItem(...)`.
+- The current planner treats missing combo-product metadata conservatively instead of reproducing any malformed-data Java failure mode.
+- Only a representative real Java combo recipe is explicitly asserted in static-data tests; broader combo recipe corpus auditing remains future work if needed.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: 1 recipe combo-product static-data surface, 1 deterministic craft-result planner, 1 creator-name intent branch, and 5 focused tests/regressions.
+- Total artifacts with verified parity: 1 grouped row in this unit (`RecipeTemplate.comboproduct` parsing and lookup).
+- Total artifacts needing verification: 2 grouped rows.
+- Total blocked artifacts: live `finishCrafting` persistence/xp/cooldown integration.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes the deterministic crafting product-selection gap without overstating the broader finish-crafting runtime still missing.
+
+Next recommended unit of work:
+- Next sequential task: port the next smallest live Java `CraftService.finishCrafting` boundary, most likely the crafted-item add/creator mutation path before widening into skill XP, player XP, or cooldown persistence.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- return to the deferred `TemperingEffect.apply/endEffect` ownership surface only if a narrower deterministic slice becomes obvious
