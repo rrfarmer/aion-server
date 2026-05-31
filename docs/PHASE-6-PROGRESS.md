@@ -84836,6 +84836,55 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1906 (May 31, 2026)
+- Performed fresh Work Discovery after UOW-1905: re-read required orchestration/parity docs and latest handoff, inspected Java `KnownList.knownObjects`, Java `KnownList.getObject`, Java `KnownList.findVisibleObjects`, Java `CM_BUY_ITEM.runImpl`, C# `World`, C# `IWorldNpcObject`, C# `CmBuyItemKnownListTargetFactAdapterService`, C# `CmBuyItemKnownListMembershipResolverAdapterService`, and C# buy-item diagnostic tests.
+- Confirmed the Java runtime/golden path remains blocked locally by Java/Maven availability, so this unit stayed source-reviewed and C#-tested only.
+- Added `CmBuyItemKnownVisibleObjectMembershipService`, plus generic known-object candidates, entries, snapshots, update reasons, and object-kind metadata for player, NPC, pet, and other seller targets.
+- Added `CmBuyItemKnownVisibleObjectResolverAdapterService`.
+- The resolver adapter projects generic known-object snapshots into the existing tri-state `buyItemKnownObjectResolver` shape.
+- Added `CmBuyItemKnownVisibleObjectMembershipServiceTests`.
+- Added connection-level proof that a known NPC fact allows existing non-live buy-from-shop planner selection and an unknown NPC fact rejects before planner selection.
+- Exposed narrow internal helpers on `GameServerConnectionBuyItemTests` so adapter-focused tests can reuse the existing socket fixture.
+- Kept this unit non-live. No Java region scan, known-list mutation, NPC/pet spawn ownership, trade/private-store/pet execution, inventory mutation, Kinah/AP mutation, packet send, repository write, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1906
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.world.knownlist.KnownList.knownObjects` / `KnownList.getObject` generic object membership | `Aion.GameServer.Services.CmBuyItemKnownVisibleObjectMembershipService` | Fact Snapshot Service | Partial | Unit Tested | Partial Parity | C# can store supplied known-object facts for player, NPC, pet, and other object IDs and expose them as non-live snapshots. Java region population, two-way relation enforcement, and visibility updates remain unwired. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM.runImpl` NPC target known-list gate | `CmBuyItemKnownVisibleObjectResolverAdapterService` + `GameServerConnection.ResolveBuyItemTargetKind` | Diagnostic Resolver Adapter | Partial | Unit Tested | Partial Parity | The non-live diagnostic connection path can accept/reject NPC seller targets from supplied generic known-object facts. No live Java `KnownList.findVisibleObjects` population or Java runtime comparison exists. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemKnownVisibleObjectMembershipServiceTests|FullyQualifiedName~CmBuyItemKnownListTargetFactAdapterServiceTests|FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests" --no-restore` passed with 31 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemKnownVisibleObjectMembershipServiceTests|FullyQualifiedName~CmBuyItemKnownListMembershipResolverAdapterServiceTests|FullyQualifiedName~CmBuyItemKnownListTargetFactAdapterServiceTests|FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemTests|FullyQualifiedName~CmBuyItemSellToShopCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemBuyFromShopCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemRepurchaseCompositionPlanServiceTests|FullyQualifiedName~PrivateStoreLiveExecutorFacadePlanServiceTests|FullyQualifiedName~PetMerchantSellLiveExecutorFacadePlanServiceTests|FullyQualifiedName~PlayerKnownListMembershipServiceTests|FullyQualifiedName~PlayerKnownListMembershipRefreshServiceTests|FullyQualifiedName~PlayerKnownListMembershipRegistryRefreshAdapterServiceTests" --no-restore` passed with 102 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4888 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- The generic known-object membership service is disabled and non-live by design.
+- Java-equivalent `KnownList.findVisibleObjects`, map-region neighbor traversal, two-way add/remove, visibility state updates, pet visibility ordering, and real known-list mutation remain unwired.
+- The resolver can consume supplied generic object facts, but no live code populates those facts yet.
+- Existing callers without resolver-backed facts still use an explicitly marked world-object-only approximation and must not be treated as verified known-list parity.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: non-live generic known-object membership fact snapshot/resolver plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 21 rows pending Java runtime/golden comparison, Java-equivalent known-list object population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN wiring, live private-store action `0` execution, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item mutation, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, private-store/pet merchant branch execution, live AP-sell mutation wiring, live buy transaction mutation wiring, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves source-reviewed generic known-object fact coverage but does not complete live known-list population, live trade/repurchase/private-store/pet, or known-list runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add a disabled known-object population input adapter that can build `CmBuyItemKnownVisibleObjectMembershipService` snapshots from supplied world/player/NPC facts without enabling live region traversal.
+- Safe alternative candidates for the next session:
+	- add disabled persistence/send adapter plans for private-store purchase outputs before any live execution attempt
+	- add disabled persistence/send adapter plans for pet merchant sell outputs before any live execution attempt
+	- connect `TradeSellForApToShopPlanService` as an optional non-live payload inside `CmBuyItemSellToShopCompositionPlanService` for ABYSS purchase-template dispatch if not already covered in the active branch ordering
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1894 (May 31, 2026)
 - Performed fresh Work Discovery after UOW-1893: read the latest handoff, inspected Java `TradeService.performBuyTransaction`, Java `TradeService.validateBuyItems`, Java `TradeList.calculateBuyListPrice`, Java `TradeList.calculateAbyssRewardBuyList`, C# trade-list summaries, C# `PricesService`, and C# `TradeApFormulaService`.
 - Confirmed the Java runtime/golden path remains blocked locally by Java `1.8.0_491` and missing Maven, so this unit stayed source-reviewed and C#-tested only.
