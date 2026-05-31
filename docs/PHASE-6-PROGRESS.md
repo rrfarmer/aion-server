@@ -80938,3 +80938,58 @@ Next recommended unit of work:
 	- begin a live-disabled craft inventory persistence adapter around the new SQL descriptors
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1824 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1823 handoff/completion, progress/parity/orchestration docs, then re-inspected Java `Storage.decreaseItemCount`, Java `Storage.delete`, Java inventory packet classes, C# `CraftStartInventoryPacketPlan`, and existing disabled send-adapter patterns.
+- Chose the next smallest packet-boundary slice: a disabled adapter that consumes craft-start inventory packet intent and proves no live packet dispatch occurs.
+- Added `CraftStartInventoryPacketSendAdapterPlanService.CreateDisabledPlan(...)`.
+- Added `CraftStartInventoryPacketSendAdapterPlan`.
+- Added `CraftStartInventoryPacketSendOperation`.
+- Added `CraftStartInventoryPacketSendAdapterStatus`.
+- Preserved existing packet order from `CraftStartInventoryPacketPlan`:
+	- `SmDeleteItem`
+	- `SmCubeUpdate`
+	- `SmDeleteItem`
+	- `SmCubeUpdate`
+	- `SmInventoryUpdateItem`
+	- `SmInventoryUpdateItem`
+- Recorded `ItemPacketService -> PacketSendUtility.sendPacket` as the Java send boundary for each planned packet.
+- Kept live packet dispatch disabled; `WouldCallSendPacketAsync` is true when planned packet intent exists and `DidCallSendPacketAsync` remains false.
+- Added missing/not-ready packet-plan guards that do not create send operations.
+
+#### Migration Parity Table - Session 1824
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseItemCount` update packet send boundary | `Aion.GameServer.Services.CraftStartInventoryPacketSendAdapterPlanService.CreateDisabledPlan` | Packet Adapter | Partial | Unit Tested | Partial Parity | C# consumes planned `SmInventoryUpdateItem` intent and records the Java send boundary; no live send occurs. |
+| `com.aionemu.gameserver.model.items.storage.Storage.delete` delete packet send boundary | `Aion.GameServer.Services.CraftStartInventoryPacketSendOperation` | Packet Adapter | Partial | Unit Tested | Partial Parity | C# records `SmDeleteItem` and follow-up `SmCubeUpdate` packet operations in existing plan order; storage removal, quest callbacks, and live dispatch remain pending. |
+| `com.aionemu.gameserver.utils.PacketSendUtility.sendPacket` craft inventory packet dispatch | `CraftStartInventoryPacketSendAdapterPlan.WouldCallSendPacketAsync` / `DidCallSendPacketAsync` | Packet Adapter | Partial | Unit Tested | Partial Parity | C# records would-send and did-send flags; the disabled adapter never calls a live connection registry. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 320 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4572 tests.
+
+Remaining risks:
+- The packet send adapter is disabled and does not send packets.
+- No live connection registry integration is wired for craft-start inventory packet dispatch.
+- No live inventory mutation is applied to `Player.InventoryItems`.
+- No item persistence is written to the database.
+- No DP spend, live `CraftingTask` creation, scheduler startup, or craft completion is wired.
+- Java storage delete quest callbacks/logging are not executed.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one disabled packet send adapter plan service, one adapter plan, one send operation record, one adapter status enum, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is disabled packet-boundary partial parity only.
+- Total artifacts needing verification: 3 rows pending live packet dispatch, live inventory mutation, DB writes, DP spend, live task creation/start, and Java runtime comparison.
+- Total blocked artifacts: live start-craft execution, inventory mutation, persistence writes, packet fanout, DP spend, live task creation, scheduler startup, object-id release, and full craft completion.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves craft-start packet-send boundary evidence without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: begin a live-disabled craft inventory persistence adapter around the SQL descriptors so future live DB execution can be gated behind a disabled-by-default adapter with transaction/result boundaries.
+- Safe alternative candidates for the next session:
+	- add a live-safe craft finish cooldown application mutation plan
+	- integrate the disabled packet send adapter into `CraftStartLiveExecutorFacadePlanService`
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
