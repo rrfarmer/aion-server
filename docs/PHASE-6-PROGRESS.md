@@ -84738,6 +84738,54 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1904 (May 31, 2026)
+- Performed fresh Work Discovery after UOW-1903: re-read required orchestration/parity docs and latest handoff, inspected Java `CM_BUY_ITEM.runImpl`, Java `KnownList.getObject` / `knows`, C# `GameServerConnection.ResolveBuyItemTargetKind`, existing `CM_BUY_ITEM` diagnostic observer tests, and C# known-list membership services.
+- Confirmed the Java runtime/golden path remains blocked locally by Java/Maven availability, so this unit stayed source-reviewed and C#-tested only.
+- Added `CmBuyItemKnownListTargetFactAdapterService`, plus adapter status and plan records.
+- The adapter records whether target classification came from an explicit per-player known-list fact or from the existing world-object-only approximation.
+- Updated the `GameServerConnection` non-live `CM_BUY_ITEM` observer path with an optional `buyItemKnownObjectResolver`.
+- When the resolver reports `false`, the diagnostic path now classifies the target as unknown, matching Java's `player.getKnownList().getObject(sellerObjId) == null` early-return shape.
+- Added `CmBuyItemKnownListTargetFactAdapterServiceTests`.
+- Added a `GameServerConnectionBuyItemTests` case proving a known-list fact can reject an otherwise present world NPC target.
+- Kept this unit non-live. No trade/private-store/pet execution, inventory mutation, Kinah/AP mutation, repurchase mutation, packet send, repository write, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1904
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM.runImpl -> player.getKnownList().getObject(sellerObjId)` | `Aion.GameServer.Services.CmBuyItemKnownListTargetFactAdapterService` | Target Fact Adapter | Partial | Unit Tested | Partial Parity | C# now accepts an explicit known-list membership fact for `CM_BUY_ITEM` target classification and marks resolver-backed decisions as Java-shape evidence. Full Java known-list runtime population and Java golden comparison remain unwired. |
+| `com.aionemu.gameserver.model.knownlist.KnownList.getObject` null target gate | `GameServerConnection.ResolveBuyItemTargetKind` + optional `buyItemKnownObjectResolver` | Diagnostic Connection Adapter | Partial | Unit Tested | Partial Parity | The non-live diagnostic connection path can reject an otherwise present world object when the resolver reports the seller is not known by the player. Callers without a resolver still use the explicitly marked world-object-only approximation. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemKnownListTargetFactAdapterServiceTests|FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests" --no-restore` passed with 25 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemKnownListTargetFactAdapterServiceTests|FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemTests|FullyQualifiedName~CmBuyItemSellToShopCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemBuyFromShopCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemRepurchaseCompositionPlanServiceTests|FullyQualifiedName~PrivateStoreLiveExecutorFacadePlanServiceTests|FullyQualifiedName~PetMerchantSellLiveExecutorFacadePlanServiceTests" --no-restore` passed with 79 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4877 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- The known-list target fact adapter is disabled and non-live by design.
+- Full Java-equivalent known-list population, refresh timing, region ownership, visibility authorization, live resolver wiring, live `CM_BUY_ITEM` handler execution, and real client behavior remain unwired.
+- Existing callers without `buyItemKnownObjectResolver` still use an explicitly marked world-object-only approximation and must not be treated as verified known-list parity.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: non-live `CM_BUY_ITEM` known-list target fact adapter plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 21 rows pending Java runtime/golden comparison, Java-equivalent known-list runtime wiring, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN wiring, live private-store action `0` execution, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item mutation, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target facts, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, private-store/pet merchant branch execution, live AP-sell mutation wiring, live buy transaction mutation wiring, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves source-reviewed known-list target fact handling but does not complete live trade/repurchase/private-store/pet or known-list runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: wire `buyItemKnownObjectResolver` to an existing C# player known-list membership snapshot in a disabled/non-live runtime-owned adapter, with tests for known, unknown, and missing snapshot behavior.
+- Safe alternative candidates for the next session:
+	- add disabled persistence/send adapter plans for private-store purchase outputs before any live execution attempt
+	- add disabled persistence/send adapter plans for pet merchant sell outputs before any live execution attempt
+	- connect `TradeSellForApToShopPlanService` as an optional non-live payload inside `CmBuyItemSellToShopCompositionPlanService` for ABYSS purchase-template dispatch if not already covered in the active branch ordering
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1894 (May 31, 2026)
 - Performed fresh Work Discovery after UOW-1893: read the latest handoff, inspected Java `TradeService.performBuyTransaction`, Java `TradeService.validateBuyItems`, Java `TradeList.calculateBuyListPrice`, Java `TradeList.calculateAbyssRewardBuyList`, C# trade-list summaries, C# `PricesService`, and C# `TradeApFormulaService`.
 - Confirmed the Java runtime/golden path remains blocked locally by Java `1.8.0_491` and missing Maven, so this unit stayed source-reviewed and C#-tested only.
