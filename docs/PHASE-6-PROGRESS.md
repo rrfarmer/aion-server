@@ -79528,3 +79528,61 @@ Next recommended unit of work:
 	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
 	- Java `DropRegistrationService.calculateBoostDropRate`
 	- return to the deferred `TemperingEffect.apply/endEffect` ownership surface only if a narrower deterministic slice becomes obvious
+
+### Session 1797 (May 30, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read `csharp-port.md`, `orchestration-rules.md`, `parity-verification.md`, `PHASE-6-PROGRESS.md`, `Phase-6-Session-1796-Completion.md`, and `Phase-6-Session-1796-Handoff.md`, then re-inspected Java `CraftService.finishCrafting`, Java `ItemService.addItem`, Java `ItemPacketService`, Java `SM_INVENTORY_ADD_ITEM`, and the current C# `CraftService`, `InventoryAddService`, `SmInventoryAddItem`, `WorldNpcLootService`, and existing item-add packet tests.
+- Confirmed the next smallest honest crafting slice was not XP/cooldown work yet, but the live crafted-item add boundary inside Java `finishCrafting`: use the existing inventory-add semantics, preserve `INC_ITEM_COLLECT` merge behavior, emit `CRAFTED_ITEM` packet metadata for newly added rows, and apply the Java creator mutation on newly created equipment outputs.
+- Extended the crafting reward boundary in C#:
+	- `SmInventoryAddItem` now exposes Java `ItemAddType.CRAFTED_ITEM` mask `0x2D` through `CreateCraftedItem(...)`
+	- `CraftService` now adds `CreateFinishRewardPlan(...)`, which composes:
+		- the existing Java-shaped product-selection plan
+		- `InventoryAddService.CreateAddItemPlan(...)`
+		- Java-equivalent crafted-item packet metadata (`CRAFTED_ITEM` adds, `INC_ITEM_COLLECT` updates)
+		- Java equipment creator-name intent on newly added weapon/armor rows only
+		- conservative overflow/full-inventory reporting for the still-missing live craft runtime
+- Added focused parity evidence:
+	- `CraftServiceTests` now cover crafted equipment add rows with creator-name ownership, crafted add packet type `0x2D`, stack-merge update packets using `IncreaseItemCollect`, partial merge + inventory-full reporting, and missing-item-template handling
+	- `GamePacketTests` now verify `SmInventoryAddItem.CreateCraftedItem(...)` serializes Java add-type `0x2D` and retains the cleanup-seal flag shape
+- Kept scope intentionally narrow:
+	- no live `CraftingTask` / `SM_CRAFT_UPDATE` / `SM_CRAFT_ANIMATION` runtime wiring
+	- no recipe deletion, quest fail hook, skill XP, player XP, craft log, or craft cooldown integration
+	- no broad refactor of `InventoryAddService` for general item-mutation callbacks
+
+#### Migration Parity Table - Session 1797
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemService.addItem` crafted reward path | `Aion.GameServer.Services.CraftService.CreateFinishRewardPlan` + `Aion.GameServer.Services.InventoryAddService` | Deterministic Inventory Mutation Planner | Partial | Unit Tested | Partial Parity | Java source reviewed; the C# craft reward planner now reuses the existing add-item semantics for stack merge/new-row creation and preserves overflow reporting. Live runtime application through `CraftingTask` is still missing. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.ItemAddType.CRAFTED_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmInventoryAddItem.CraftedItem` + `CreateCraftedItem(...)` | Packet Metadata Surface | Complete | Regression Tested | Verified Parity | Java mask `0x2D` and packet shape were reviewed against Java `ItemPacketService` and `SM_INVENTORY_ADD_ITEM` and are regression-tested through direct packet serialization. |
+| Java crafted equipment `ItemUpdatePredicate.changeItem(...)` inside `CraftService.finishCrafting` | `Aion.GameServer.Services.CraftService.CreateFinishRewardPlan` creator-name application | Deterministic Mutation Intent | Partial | Unit Tested | Partial Parity | Creator-name mutation is now applied to newly added weapon/armor reward rows only, matching the Java placement of `predicate.changeItem(newItem)` on newly created items. Live inventory persistence remains future work. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.ItemUpdateType.INC_ITEM_COLLECT` merge path during crafted add | `Aion.GameServer.Services.CraftService.CreateFinishRewardPlan` update-packet output | Packet / Update-Type Surface | Partial | Unit Tested | Partial Parity | When crafting merges into an existing stack, the planner emits `SmInventoryUpdateItem.IncreaseItemCollect`, matching the Java predicate update type. Full runtime comparison against Java crafting output is still pending. |
+
+Tests added or updated:
+
+| Test Name | Type | Java Behavior Source | What It Validates | Parity Evidence | Gaps |
+|---|---|---|---|---|---|
+| `CreateFinishRewardPlan_AddsCraftedEquipmentWithCreatorAndCraftedAddPacket` | Unit Added | Java `CraftService.finishCrafting` + `ItemService.addItem` + `changeItem(...)` | New crafted equipment rows receive creator-name ownership and serialize as crafted-item add packets. | Source-derived planner and packet regression. | No live craft runtime dispatch. |
+| `CreateFinishRewardPlan_MergesStackUsingIncreaseItemCollectUpdate` | Unit Added | Java `ItemService.addItem` stackable merge branch | Crafting into an existing stack emits `IncreaseItemCollect` rather than a crafted add packet. | Source-derived deterministic planner regression. | No live inventory persistence. |
+| `CreateFinishRewardPlan_ReportsInventoryFullAndPreservesPartialMerge` | Unit Added | Java `ItemService.addItem` remaining-count/full-inventory behavior | Partial merges are preserved and the planner reports full-inventory overflow conservatively. | Source-derived deterministic planner regression. | No Java runtime comparison for message fanout yet. |
+| `CreateFinishRewardPlan_ReportsMissingItemTemplate` | Unit Added | Java precondition review around `DataManager.ITEM_DATA.getItemTemplate` | Missing reward template stays conservative and does not emit packets. | Conservative planner regression. | Not a direct malformed-data runtime clone. |
+| `SmInventoryAddItem_CraftedItemWritesCraftedAddTypeAndCleanupSealFlagLikeJava` | Regression Added | Java `ItemPacketService.ItemAddType.CRAFTED_ITEM` + `SM_INVENTORY_ADD_ITEM` | Crafted-item packets serialize add type `0x2D` while keeping the cleanup-seal blob shape. | Direct packet serialization regression. | Does not by itself prove craft runtime ordering. |
+
+Remaining risks:
+- C# still lacks the live `CraftingTask` finish path that would actually apply this plan, persist inventory changes, and send the packets to the client.
+- Recipe deletion, quest fail hook, skill XP, player XP, craft log output, and craft cooldown persistence remain unported in the Java `finishCrafting` runtime.
+- The current craft reward planner reports full-inventory overflow conservatively but does not yet model the Java `STR_MSG_DICE_INVEN_ERROR` system-message side effect.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: 1 craft reward planner, 1 crafted-item packet metadata surface, 1 creator-name mutation branch, and 5 focused tests/regressions.
+- Total artifacts with verified parity: 1 grouped row in this unit (`ItemAddType.CRAFTED_ITEM` packet metadata).
+- Total artifacts needing verification: 3 grouped rows.
+- Total blocked artifacts: live `CraftingTask` runtime wiring and the remaining `finishCrafting` XP/cooldown/log branches.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes the crafted reward mutation boundary without overstating the still-missing live crafting runtime.
+
+Next recommended unit of work:
+- Next sequential task: port the smallest live Java crafting runtime shell that can consume the new reward plan, most likely the `CraftingTask` completion boundary and packet send/application path before widening into XP grants or craft cooldown persistence.
+- Safe alternative candidates for the next session:
+	- execute the opt-in MySQL logout delete/retuning persistence path in an environment with `AION_GAMESERVER_DB_INTEGRATION=1`
+	- Java `DropRegistrationService.calculateBoostDropRate`
+	- return to the deferred `TemperingEffect.apply/endEffect` ownership surface only if a narrower deterministic slice becomes obvious
