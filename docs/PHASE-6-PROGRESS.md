@@ -80333,3 +80333,56 @@ Next recommended unit of work:
 	- add a live-safe craft finish cooldown application mutation plan
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1812 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1811 handoff and completion, confirmed the clean UOW-1811 commit, then re-inspected Java `CM_CRAFT.readImpl`, Java `CM_CRAFT.runImpl`, Java `CraftService.startCrafting`, C# `CmCraft`, C# `CmCraftRuntimePlanService`, C# `GameServerConnection.HandleCraftAsync`, and existing CM_CRAFT/craft tests.
+- Chose the next smallest adapter slice: non-live CM_CRAFT start composition planning. Kept live `CraftService.startCrafting`, DP spend, inventory mutation, packet sending, `CraftingTask` creation, and scheduler startup outside this unit.
+- Added `CmCraftStartCompositionPlanService.CreatePlan(...)`.
+- Added `CmCraftStartCompositionPlan`, `CmCraftStartCompositionPlanStatus`, and `CmCraftStartCompositionPlanStep`.
+- Composed existing non-live craft planner surfaces from `CmCraftRuntimePlan.StartIntent`:
+	- `CraftStartValidationPlan`
+	- `CraftStartCancelPacketPlan`
+	- `CraftStartFailureOrchestrationPlan`
+	- `CraftStartConsumptionPlan`
+	- `CraftStartTaskPlan`
+- Preserved Java CM_CRAFT client inputs into downstream planners:
+	- `recipeId`
+	- `targetObjId`
+	- `craftType`
+	- `materialsData`
+- Added focused tests for successful composition, validation failure/cancel orchestration composition, and runtime guard blocked behavior.
+
+#### Migration Parity Table - Session 1812
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CRAFT.runImpl` forwarding to `CraftService.startCrafting(player, recipeId, targetObjId, craftType, materialsData)` | `Aion.GameServer.Services.CmCraftStartCompositionPlanService.CreatePlan` | Adapter Planner | Partial | Unit Tested | Partial Parity | C# composes existing planners with the same packet inputs after runtime guard success; no live service dispatch occurs. |
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` failed `checkCraft` branch then `sendCancelCraft` | `Aion.GameServer.Services.CmCraftStartCompositionPlan` validation failure path | Adapter Planner | Partial | Unit Tested | Partial Parity | C# composes validation, cancel packet planning, and failure orchestration without sending packets. |
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` successful `checkCraft` path before DP spend/task start | `Aion.GameServer.Services.CmCraftStartCompositionPlan` ready path | Adapter Planner | Partial | Unit Tested | Partial Parity | C# composes validation, consumption, and task planners; DP spend, inventory mutation, live task creation, and scheduler start remain pending. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 302 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4554 tests.
+
+Remaining risks:
+- C# still does not execute Java `CraftService.startCrafting`.
+- `GameServerConnection.HandleCraftAsync` still only records `CmCraftRuntimePlan`; it does not compose `CmCraftStartCompositionPlan`.
+- No DP spend, live inventory mutation, persistence, packet sending, live `CraftingTask`, or scheduler startup is wired.
+- C# target facts still depend on current world/NPC abstractions and do not yet model Java `StaticObject` directly.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one CM_CRAFT composition adapter planner, two supporting record/enums, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is planner-level partial parity only.
+- Total artifacts needing verification: 3 planner rows pending live handler wiring and runtime side effects.
+- Total blocked artifacts: live start-craft execution, DP spend, live inventory mutation, persistence, packet fanout, live task creation, scheduler startup, and full craft completion.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds adapter composition planning without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: wire a non-live `GameServerConnection` observer/composition seam for `CmCraftStartCompositionPlan` so real CM_CRAFT packet processing can be tested through the adapter without dispatching live side effects.
+- Safe alternative candidates for the next session:
+	- begin non-live inventory mutation plan for material/bonus consumption
+	- add a live-safe craft finish cooldown application mutation plan
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
