@@ -80055,3 +80055,50 @@ Next recommended unit of work:
 	- start recipe max-production/static-data projection needed by later craft result planning
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1806 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1805 handoff and latest Phase 6 progress, confirmed the clean UOW-1805 commit, then re-inspected Java `CraftService.checkCraft`, `RecipeTemplate.getComponents`, `ComponentsData`, `Component`, Java material failure messages, C# recipe static-data loading, C# inventory item surfaces, and existing craft/packet/static-data tests.
+- Chose the next smallest deterministic Java `checkCraft` slice after skill validation: recipe component projection and non-mutating selected material group validation. Kept live `startCrafting`, live failure fanout, material consumption, bonus item consumption, DP spend, task interval, and scheduler startup outside this unit.
+- Added `RecipeComponentDataSummary` and `RecipeComponentSummary` for Java `components_data/component` rows.
+- Updated static recipe XML loading to project component groups and nested component `itemid`/`quantity` values.
+- Extended `CraftService.CreateStartCraftingValidationPlan(...)` with optional selected-material data matching Java `sendMaterialsData` group selection.
+- Added `CraftStartValidationStatus.MissingComponentItem` and missing-component evidence fields to `CraftStartValidationPlan`.
+- Added `SmSystemMessage.CombineNoComponentItemSingle()` for Java message id `1330046`.
+- Added `SmSystemMessage.CombineNoComponentItemMultiple()` for Java message id `1330047`.
+- Added focused `CraftServiceTests`, `GamePacketTests`, and `StaticDataLoadingTests` coverage for guard ordering, selected group validation, exact message IDs, and real static recipe component projection.
+
+#### Migration Parity Table - Session 1806
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.templates.recipe.RecipeTemplate` `components_data/component` | `Aion.GameServer.Dataholders.RecipeTemplateSummary.ComponentGroups` | Static Data Projection | Partial | Regression Tested | Partial Parity | Real static data projection verified for recipe `155000001`; broader live craft input use remains pending. |
+| `com.aionemu.gameserver.services.craft.CraftService.checkCraft` selected material group validation | `Aion.GameServer.Services.CraftService.CreateStartCraftingValidationPlan` `MissingComponentItem` branch | Validation Guard | Partial | Unit Tested | Partial Parity | C# validates only the group whose first component id appears in selected material data, matching Java `sendMaterialsData.containsKey(firstComponent.getItemId())`. Live fanout and mutation remain pending. |
+| `com.aionemu.gameserver.model.gameobjects.player.Inventory.getItemCountByItemId` for craft materials | `Aion.GameServer.Services.CraftService` cube item count helper | Inventory Read | Partial | Unit Tested | Partial Parity | Counts non-equipped cube items by item id. Full Java storage behavior and consumption are not claimed. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_COMBINE_NO_COMPONENT_ITEM_SINGLE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.CombineNoComponentItemSingle` | Server Packet Factory | Complete | Unit Tested | Verified Parity | Message id `1330046` verified through packet/system-message tests. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_COMBINE_NO_COMPONENT_ITEM_MULTIPLE` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.CombineNoComponentItemMultiple` | Server Packet Factory | Complete | Unit Tested | Verified Parity | Message id `1330047` and parameter order verified through packet/system-message tests. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests|FullyQualifiedName~StaticDataLoadingTests" --no-restore` passed with 291 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4536 tests.
+
+Remaining risks:
+- C# still does not execute Java `CraftService.startCrafting`.
+- `FailurePacket` is planner evidence only; no live system-message or cancel packet fanout is wired.
+- Material consumption, bonus item consumption, DP spend, task interval, scheduler startup, and craft completion remain pending.
+- The selected-material map is a planner input and is not yet parsed from the live client packet path.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: component static-data projection, one validation branch, one status value, two system-message factories, and focused test updates.
+- Total artifacts with verified parity: 2 system-message factory rows.
+- Total artifacts needing verification: 3 grouped validation/static-data/inventory-read rows pending live orchestration and mutation.
+- Total blocked artifacts: live start-craft execution, live validation failure fanout, material/bonus consumption, DP spend, and scheduler startup.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds material planning without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: port the bonus craft item requirement guard from Java `CraftService.checkCraft`, including `getBonusReqItem(skillId)` and missing bonus item message planning, still without consuming inventory.
+- Safe alternative candidates for the next session:
+	- wire non-live validation failure orchestration that combines `FailurePacket` and cancel packet plans without live sending
+	- start live CM_CRAFT selected-material data adapter work
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
