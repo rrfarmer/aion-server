@@ -80823,3 +80823,61 @@ Next recommended unit of work:
 	- add exact Java SQL descriptor planning for craft inventory update/delete rows
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- Java `DropRegistrationService.calculateBoostDropRate`
+
+### Session 1822 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the UOW-1821 handoff, confirmed a clean UOW-1821 commit, then re-inspected Java `CraftService.startCrafting`, Java `CraftService.checkCraft`, Java `Storage.decreaseItemCount`, Java `InventoryDAO.store`, C# side-effect boundary plans, C# persistence plans, C# DP spend planning, C# task planning, and existing disabled executor/adapter patterns.
+- Chose the next smallest live-boundary slice: a disabled craft-start executor facade that consumes existing composition output and records Java live side-effect boundaries without dispatching live work.
+- Added `CraftStartLiveExecutorFacadePlan`.
+- Added `CraftStartLiveExecutorOperation`.
+- Added `CraftStartLiveExecutorFacadeStatus`.
+- Added `CraftStartLiveExecutorOperationKind`.
+- Added `CraftStartLiveExecutorOperationStatus`.
+- Added `CraftStartLiveExecutorFacadePlanService.CreateDisabledPlan(...)`.
+- Recorded disabled Java success-path boundaries:
+	- apply inventory mutation
+	- mark inventory persistence state / write boundary
+	- send inventory packets
+	- optional recipe DP spend
+	- create `CraftingTask`
+	- start `CraftingTask`
+- Added would/did flags for each side-effect category and kept all `Did*` flags false.
+- Added focused tests for ready composition, no-DP composition, and not-ready composition.
+
+#### Migration Parity Table - Session 1822
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` live success side-effect sequence | `Aion.GameServer.Services.CraftStartLiveExecutorFacadePlanService.CreateDisabledPlan` | Execution Facade | Partial | Unit Tested | Partial Parity | C# records Java success boundaries but marks every operation `NotAttemptedDisabled`; no live side effect dispatch occurs. |
+| `com.aionemu.gameserver.model.items.storage.Storage.decreaseItemCount` inventory mutation and packet side effects | `Aion.GameServer.Services.CraftStartLiveExecutorOperationKind.ApplyInventoryMutation` / `SendInventoryPackets` | Execution Facade | Partial | Unit Tested | Partial Parity | C# records would-mutate and would-send boundaries from existing plans; live mutation and packet sending remain disabled. |
+| `com.aionemu.gameserver.dao.InventoryDAO.store` delayed persistence boundary | `Aion.GameServer.Services.CraftStartLiveExecutorOperationKind.MarkInventoryPersistenceState` | Execution Facade | Partial | Unit Tested | Partial Parity | C# records persistence-state/write boundary intent; no DAO call, transaction, or object-id release occurs. |
+| `com.aionemu.gameserver.services.craft.CraftService.startCrafting` DP and task boundaries | `Aion.GameServer.Services.CraftStartLiveExecutorOperationKind.SpendRecipeDp` / `CreateCraftingTask` / `StartCraftingTask` | Execution Facade | Partial | Unit Tested | Partial Parity | C# records optional DP spend and task lifecycle boundaries; no DP mutation, task allocation, interval mutation, or scheduler start occurs. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCraft|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~GamePacketTests" --no-restore` passed with 318 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4570 tests.
+
+Remaining risks:
+- The executor facade is disabled and does not execute live side effects.
+- No live inventory mutation is applied to `Player.InventoryItems`.
+- No live inventory packets are sent.
+- No item persistence is written to the database.
+- No DP spend is executed by the facade.
+- No live `CraftingTask` is created or started.
+- Java transaction behavior and object-id release after successful delete remain pending.
+- Full start-to-finish craft runtime parity remains unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one disabled executor facade plan, one operation descriptor, three facade enums, and focused tests.
+- Total artifacts with verified parity: 0 rows; this is disabled execution-boundary partial parity only.
+- Total artifacts needing verification: 4 rows pending live mutation, DB writes, transaction behavior, object-id release, packet sending, DP spend, live task creation/start, and Java runtime comparison.
+- Total blocked artifacts: live start-craft execution, inventory mutation, persistence writes, transaction behavior, packet fanout, DP spend, live task creation, scheduler startup, and full craft completion.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves craft-start live-boundary evidence without claiming live craft runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add exact Java SQL descriptor planning for craft inventory update/delete rows, including `InventoryDAO.DELETE_QUERY`, `InventoryDAO.UPDATE_QUERY`, delete-before-update grouping, and the known gap around object-id release after successful delete.
+- Safe alternative candidates for the next session:
+	- add a live-safe craft finish cooldown application mutation plan
+	- add a disabled inventory packet send adapter for craft-start packet intent
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- Java `DropRegistrationService.calculateBoostDropRate`
