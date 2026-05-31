@@ -83395,3 +83395,55 @@ Next recommended unit of work:
 	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
 	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
 	- produce Java runtime/golden values for the isolated stat formula helper before using it in broader live code
+
+### Session 1872 (May 31, 2026)
+- Performed fresh Work Discovery before selecting scope: re-read the required migration/orchestration/parity docs, latest UOW-1871 completion and handoff, then inspected Java `WeaponCondition`, Java `ItemChargeCondition`, Java `OnFlyCondition`, C# `SkillStatConditionInputSnapshotService`, C# `SkillStatChangeConditionReadinessReportService`, and existing condition snapshot/readiness tests.
+- Added isolated `SkillStatConditionEvaluatorService` for the three mapped Java stat-condition override classes already audited:
+	- `weapon` evaluates Java's player main-hand `ItemGroup` membership and preserves the non-player pass-through rule only when creature input is known.
+	- `charge` evaluates Java's Item owner requirement and `item.getChargeLevel() >= value` threshold.
+	- `onfly` evaluates the projected creature flying state.
+- Added explicit `Satisfied`, `NotSatisfied`, `MissingInput`, and `UnsupportedCondition` outcomes so missing snapshot/XML data is not treated as failed parity evidence.
+- Added source-derived tests for matching and non-matching weapon groups, non-player weapon pass-through, missing weapon inputs, charge pass/fail/non-Item/missing-value behavior, on-fly pass/fail/missing-owner behavior, and unsupported conditions.
+- Kept this unit isolated; no live `Conditions.validate` provider, gameplay condition subclass registration, `CreatureGameStats` integration, active-effect runtime, stat cap path, or drop workflow execution was enabled.
+
+#### Migration Parity Table - Session 1872
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.skillengine.condition.WeaponCondition.validate(Stat2, IStatFunction)` | `SkillStatConditionEvaluatorService.Evaluate` for `weapon` | Isolated Condition Evaluator | Partial | Unit Tested | Partial Parity | C# now has an isolated source-derived evaluator for player main-hand `ItemGroup` matching and Java's non-player pass-through rule. It is not wired into live `Conditions.validate`, and no Java runtime/golden comparison was produced. |
+| `com.aionemu.gameserver.skillengine.condition.ItemChargeCondition.validate(Stat2, IStatFunction)` | `SkillStatConditionEvaluatorService.Evaluate` for `charge` | Isolated Condition Evaluator | Partial | Unit Tested | Partial Parity | C# now has an isolated evaluator for Item-owner charge-level comparison and non-Item false behavior. It relies on snapshot input and XML summaries; no live `IStatFunction`/`StatOwner` integration exists. |
+| `com.aionemu.gameserver.skillengine.condition.OnFlyCondition.validate(Stat2, IStatFunction)` | `SkillStatConditionEvaluatorService.Evaluate` for `onfly` | Isolated Condition Evaluator | Partial | Unit Tested | Partial Parity | C# now has an isolated evaluator for projected flying state. It is not connected to live `Stat2` owners or active stat validation. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillStatConditionEvaluatorServiceTests|FullyQualifiedName~SkillStatConditionInputSnapshotServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests" --no-restore` passed with 36 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SkillStatConditionEvaluatorServiceTests|FullyQualifiedName~SkillStatConditionInputSnapshotServiceTests|FullyQualifiedName~SkillStatChangeConditionReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFormulaServiceTests|FullyQualifiedName~SkillBuffStatChangeEvaluatorServiceTests|FullyQualifiedName~SkillBuffStat2EvaluationReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionRegistryReadinessReportServiceTests|FullyQualifiedName~SkillBuffStatFunctionPlanServiceTests|FullyQualifiedName~WorldNpcDropBoostActiveStatProviderReadinessReportServiceTests|FullyQualifiedName~WorldNpcDropBoostStatProviderReadinessReportServiceTests|FullyQualifiedName~StaticDataLoadingTests|FullyQualifiedName~WorldNpcDropModifierServiceTests|FullyQualifiedName~DropChanceFormulaServiceTests|FullyQualifiedName~WorldNpcGlobalDropServiceTests|FullyQualifiedName~PlayerEnterWorldRepositoryDatabaseIntegrationTests|FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CraftServiceTests|FullyQualifiedName~CmCraft|FullyQualifiedName~GamePacketTests|FullyQualifiedName~CraftingXpFormulaServiceTests" --no-restore` passed with 547 tests.
+- Initial broad run timed out at the 3-minute tool limit before returning a test result; it was rerun with a longer timeout.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4703 tests on rerun.
+
+Remaining risks:
+- The evaluator remains isolated and is not live gameplay parity.
+- No live `Conditions.validate` provider, Java condition subclass registry, `CreatureGameStats` storage, insertion/removal, snapshot locking/copying, stat caps, max-stat synchronization, or active-effect lifecycle was enabled.
+- `SkillBuffStatChangeEvaluatorService` still returns `UnsupportedConditions` for conditioned changes.
+- Unsupported/pass-through condition names are not evaluated by this helper; only `weapon`, `charge`, and `onfly` are implemented.
+- No Java runtime/golden comparison was produced; tests are source-derived from reviewed Java logic.
+- C# still lacks live NPC/player `BOOST_DROP_RATE` and `DR_BOOST` stat providers for the drop registration workflow.
+- C# still lacks modeled/persisted player salvation points and Java's exact lifecycle around reset after 10 minutes offline.
+- Active-house parity depends on C# login house ordering, not a separate Java-style studio/custom-house map.
+- UOW-1840 live DB verification remains pending because Docker/MySQL was unavailable in prior work.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: isolated condition evaluator helper for `weapon`, `charge`, and `onfly` plus focused tests.
+- Total artifacts with verified parity: 0 rows; this remains isolated source-derived partial parity, not live runtime parity.
+- Total artifacts needing verification: 6 rows pending Java runtime/golden comparison, live condition validators, live Stat2 state, stat caps, active-effect registry, and workflow integration.
+- Total blocked artifacts: live DB proof for logout craft cooldown persistence, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds a small isolated evaluator stepping stone but does not complete live stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: integrate the isolated `SkillStatConditionEvaluatorService` into a pure preview/evaluation path for conditioned stat changes only if it remains disconnected from live gameplay, applies Java list-order/short-circuit semantics, and continues to report missing inputs conservatively.
+- Safe alternative candidates for the next session:
+	- add a real player salvation-point/current-percent surface only if persistence and lifecycle sources are identified from Java and C#
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- investigate and stabilize `GameServerConnectionInventoryExpansionUseItemTests`
+	- inspect Java `ItemService.addItem` storage insertion/packet behavior in more detail before reward live wiring
+	- produce Java runtime/golden values for the isolated stat formula helper before using it in broader live code
