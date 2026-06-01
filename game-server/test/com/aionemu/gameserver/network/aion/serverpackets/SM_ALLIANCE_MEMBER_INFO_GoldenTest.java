@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -23,6 +24,10 @@ import com.aionemu.gameserver.model.stats.container.PlayerGameStats;
 import com.aionemu.gameserver.model.stats.container.PlayerLifeStats;
 import com.aionemu.gameserver.model.team.alliance.PlayerAllianceMember;
 import com.aionemu.gameserver.model.team.common.legacy.PlayerAllianceEvent;
+import com.aionemu.gameserver.skillengine.model.ActivationAttribute;
+import com.aionemu.gameserver.skillengine.model.Effect;
+import com.aionemu.gameserver.skillengine.model.SkillTargetSlot;
+import com.aionemu.gameserver.skillengine.model.SkillTemplate;
 import com.aionemu.gameserver.world.WorldPosition;
 
 import sun.misc.Unsafe;
@@ -216,6 +221,19 @@ public class SM_ALLIANCE_MEMBER_INFO_GoldenTest {
 			"AllianceReconnect", PlayerAllianceEvent.RECONNECT);
 	}
 
+	@Test
+	public void writeImpl_enterAndUpdateEffectsWriteNonEmptyEffectPayloads() throws Exception {
+		Player player = player(2016, "AllianceEffected", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		Player effector = player(7016, "AllianceCaster", PlayerClass.CLERIC, Gender.MALE, 10, true);
+		setField(player, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+		Effect effect = new Effect(effector, player, skillTemplate(12345, SkillTargetSlot.BUFF), 3, 0, null);
+		seedAbnormalEffect(player, effect);
+		PlayerAllianceMember member = member(player, 88011);
+
+		assertNonEmptyEffectPayload(write(new SM_ALLIANCE_MEMBER_INFO(member, PlayerAllianceEvent.ENTER)), true);
+		assertNonEmptyEffectPayload(write(new SM_ALLIANCE_MEMBER_INFO(member, PlayerAllianceEvent.UPDATE_EFFECTS, SkillTargetSlot.BUFF.getId())), false);
+	}
+
 	private static Player player(int objectId, String name, PlayerClass playerClass, Gender gender, int level, boolean online) throws Exception {
 		PlayerCommonData commonData = new PlayerCommonData(objectId);
 		commonData.setName(name);
@@ -291,6 +309,43 @@ public class SM_ALLIANCE_MEMBER_INFO_GoldenTest {
 		for (int i = 0; i < 8; i++)
 			assertEquals(0, buffer.getInt());
 		assertEquals(0, buffer.remaining());
+	}
+
+	private static void assertNonEmptyEffectPayload(byte[] payload, boolean writesName) {
+		ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+		assertOnlinePrefix(buffer, 88011, 2016, writesName ? PlayerAllianceEvent.ENTER : PlayerAllianceEvent.UPDATE_EFFECTS);
+		if (writesName)
+			assertEquals("AllianceEffected", readS(buffer));
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(writesName ? SkillTargetSlot.FULLSLOTS : SkillTargetSlot.BUFF.getId(), Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Short.toUnsignedInt(buffer.getShort()));
+		assertEquals(7016, buffer.getInt());
+		assertEquals(12345, Short.toUnsignedInt(buffer.getShort()));
+		assertEquals(3, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(SkillTargetSlot.BUFF.ordinal(), Byte.toUnsignedInt(buffer.get()));
+		assertEquals(-1, buffer.getInt());
+		for (int i = 0; i < 8; i++)
+			assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.remaining());
+	}
+
+	private static SkillTemplate skillTemplate(int skillId, SkillTargetSlot targetSlot) throws Exception {
+		SkillTemplate template = new SkillTemplate();
+		setField(template, "skillId", skillId);
+		setField(template, "name", "Unit Alliance Effect");
+		setField(template, "stack", "unit-alliance-effect-stack-" + skillId);
+		setField(template, "targetSlot", targetSlot);
+		setField(template, "activationAttribute", ActivationAttribute.ACTIVE);
+		return template;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static void seedAbnormalEffect(Player player, Effect effect) throws Exception {
+		Field field = findField(player.getEffectController().getClass(), "abnormalEffectMap");
+		field.setAccessible(true);
+		Map<String, Effect> abnormalEffectMap = (Map<String, Effect>) field.get(player.getEffectController());
+		abnormalEffectMap.put(effect.getStack(), effect);
 	}
 
 	private static String readS(ByteBuffer buffer) {

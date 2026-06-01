@@ -87913,6 +87913,39 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2052 (June 1, 2026)
+- Performed Work Discovery after UOW-2051: re-read the required migration/orchestration/parity docs plus the latest UOW-2051 completion/handoff, inspected Java `SM_ALLIANCE_MEMBER_INFO.writeImpl`, Java `SM_GROUP_MEMBER_INFO_GoldenTest` non-empty effect fixture, C# `SmAllianceMemberInfo`, `PlayerAllianceMemberInfoPacketPlan`, and `PlayerAllianceMemberInfoTests`.
+- Scoped this unit to Java golden evidence for non-empty `SM_ALLIANCE_MEMBER_INFO` abnormal-effect serialization.
+- Extended the Java `SM_ALLIANCE_MEMBER_INFO` golden fixture with one controlled permanent BUFF effect seeded into `PlayerEffectController`, then verified both online `ENTER` and targeted `UPDATE_EFFECTS` payloads.
+- Aligned the existing C# alliance non-empty effect test to the Java golden values: alliance `88011`, subject `2016`, effector `7016`, skill `12345`, skill level `3`, BUFF slot ordinal `0`, and remaining display time `-1`.
+- Kept this as packet-writer evidence only; no live effect-controller lifecycle, production filtering, scheduler timing, socket framing, or real-client behavior is claimed.
+
+#### Migration Parity Table - Session 2052
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO.writeImpl` online name/effect branch with one abnormal effect | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` name/effect branch with injected `PlayerGroupMemberEffectInfo` | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2052 verifies one online `ENTER` vector with a seeded permanent BUFF effect: name payload, `FULLSLOTS=127`, effect count `1`, effector id, skill id, skill level, target-slot ordinal, remaining time `-1`, and eight zero timer dwords. Live effect lifecycle and multiple effects remain unproven. |
+| `SM_ALLIANCE_MEMBER_INFO.writeImpl` targeted `UPDATE_EFFECTS` branch with one abnormal effect | `SmAllianceMemberInfo` `UpdateEffects` with injected `PlayerGroupMemberEffectInfo` | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2052 verifies one targeted BUFF-slot vector with slot byte `1`, no name payload, the same effect entry, and eight zero timer dwords. It does not prove production `PlayerEffectController.getAbnormalEffectsToTargetSlot` filtering beyond the seeded fixture. |
+| `com.aionemu.gameserver.skillengine.model.SkillTargetSlot.BUFF` id/ordinal | `PlayerGroupMemberEffectInfo.TargetSlotOrdinal` and explicit targeted slot byte | Packet Constants / DTO Boundary | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | Java golden evidence confirms BUFF `getId()` is serialized as targeted slot byte `1` while `ordinal()` is serialized inside the effect entry as `0`. Broader slot-mask behavior remains pending. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_ALLIANCE_MEMBER_INFO_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 9 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_NonEmptyEffectsMatchJavaGoldenPayloads|FullyQualifiedName~PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_ReconnectMatchesJavaGoldenZeroEffectPayload|FullyQualifiedName~PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_UpdateEffectsMatchesJavaGoldenZeroEffectPayload" --no-restore` passed with 3 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_ALLIANCE_MEMBER_INFO_GoldenTest,SM_GROUP_MEMBER_INFO_GoldenTest,SM_GROUP_DATA_EXCHANGE_GoldenTest,CM_GROUP_DATA_EXCHANGE_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 19 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests" --no-restore` passed with 41 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 126 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5177 C# tests.
+
+Known gaps:
+- This unit does not prove live alliance effect fanout, production `PlayerEffectController` mutation/filtering, effect ordering with multiple entries, scheduler timing, production alliance membership attachment, known-list/team recipient filtering, socket encryption/frame ordering, or real-client behavior.
+- Java golden evidence for `SM_ALLIANCE_MEMBER_INFO` now covers movement, online join, offline-enter name, targeted zero-effect `UPDATE_EFFECTS`, member-group-change name-only, online enter, online update, reconnect, captain/vice-captain zero-effect skeletons, and one seeded non-empty BUFF effect for `ENTER`/targeted `UPDATE_EFFECTS`.
+- Broader non-empty effect combinations, timer values, multiple effects, and live effect-controller integration still need objective evidence before broader packet-branch claims.
+- The Java fixture uses controlled reflection/Unsafe setup to avoid full player/network/bootstrap state; it proves packet bytes for configured vectors, not production lifecycle parity.
+
+Next candidates:
+- Next sequential task: inspect a narrow non-live `FindGroupService` planner or another alliance/group recipient-filtering boundary only if objective packet/fanout evidence can be gathered without enabling live behavior.
+- Safe alternatives: inspect live alliance reconnect/role assignment planning only if it remains non-live and source-reviewed; add additional alliance non-empty effect slot combinations if a controlled Java fixture is useful; return to private-store/CM_BUY_ITEM parser signedness if packet-golden work should pause.
+
 ### Session 2051 (June 1, 2026)
 - Performed Work Discovery after UOW-2050: re-read the required migration/orchestration/parity docs plus the latest UOW-2050 completion/handoff, inspected Java `SM_ALLIANCE_MEMBER_INFO.writeImpl`, `PlayerAllianceEvent`, C# `SmAllianceMemberInfo`, `PlayerAllianceMemberInfoPacketPlan`, and `PlayerAllianceMemberInfoTests`.
 - Scoped this unit to Java golden evidence for the online `RECONNECT` zero-effect skeleton that shares wire id `13`.
