@@ -87626,3 +87626,50 @@ Next recommended unit of work:
 	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
 	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+
+### Session 1958 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1957: re-read required migration/orchestration/parity docs, latest completion and handoff, inspected Java `DialogService.onDialogSelect` BUY_AGAIN, Java `DialogAction.BUY_AGAIN`, Java `SM_REPURCHASE(Player, npcId)`, C# `GameServerConnection.CreateNonLiveTradeDialogSelectPlan`, C# dialog branch/controller/services, and existing BUY_AGAIN/repurchase tests.
+- Threaded the disabled `RepurchasePacketSnapshotPlan` from the non-live connection dialog path through `QuestDialogNpcTargetBranchInputAssemblyPlanService` and `NpcDialogControllerDispatchPlanService`.
+- `GameServerConnection` now composes a disabled `RepurchasePacketSnapshotPlan` for BUY_AGAIN when static item templates are available, while preserving the existing raw `SmRepurchase` fallback when the richer diagnostic cannot be composed.
+- BUY_AGAIN dialog plans now expose both the packet and the Java-constructor snapshot diagnostic through the branch plan and final `NpcDialogServiceDescriptor`.
+- Kept this unit non-live. No socket send, live `PacketSendUtility.sendPacket`, singleton map query, Java `HashSet` bucket-order emulation, inventory/Kinah mutation, repository write, transaction behavior, encrypted-frame proof, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1958
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.DialogService.onDialogSelect` BUY_AGAIN branch | `Aion.GameServer.Network.Aion.GameServerConnection.CreateNonLiveTradeDialogSelectPlan` plus dialog plan services | Dialog Diagnostic Integration | Partial | Unit Tested + Source Reviewed | Partial Parity | Non-live BUY_AGAIN planning now carries a disabled `SM_REPURCHASE(Player, npcId)` snapshot diagnostic through the full dialog descriptor path. Live packet send and target/controller runtime dispatch remain disabled. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_REPURCHASE(Player, int)` constructor boundary | `Aion.GameServer.Services.RepurchasePacketSnapshotPlan` propagated through branch/controller descriptors | Packet Snapshot Diagnostic | Partial | Unit Tested + Golden Byte Reuse | Partial Parity | The descriptor can now expose the snapshot plan that would query repurchase items and compose the packet. It still uses supplied `Player.RepurchaseItems` facts and does not query a live singleton map. |
+| `com.aionemu.gameserver.services.RepurchaseService.getRepurchaseItems` as consumed by BUY_AGAIN | `Player.RepurchaseItems` supplied to `RepurchasePacketSnapshotPlanService.CreateDisabledPlan` | State Source Boundary | Partial | Unit Tested + Source Reviewed | Needs Verification | C# supplies current player facts only. Java map lookup timing, returned set mutability, `HashSet` iteration, and concurrent state behavior remain unmodeled. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionStorageExpansionDialogTests|FullyQualifiedName~NpcDialogServiceSelectPlanServiceTests|FullyQualifiedName~QuestDialogNpcTargetBranchInputAssemblyPlanServiceTests|FullyQualifiedName~NpcDialogControllerDispatchPlanServiceTests|FullyQualifiedName~RepurchasePacketSnapshotPlanServiceTests|FullyQualifiedName~SmRepurchaseTests" --no-restore` passed with 67 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_REPURCHASE_GoldenTest,CM_BUY_ITEM_ReadGuardGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 11 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` first timed out at 240 seconds without a test failure report, then passed with 5007 tests when rerun with a longer timeout.
+- `mvn test "-Dmaven.test.skip=false" "-DskipTests=false"` passed commons, chat-server, and game-server tests, then failed compiling login-server at `login-server/src/com/aionemu/loginserver/service/PlayerTransferService.java:42` with `illegal start of expression`.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 23 game-server tests.
+
+Remaining risks:
+- BUY_AGAIN repurchase packet planning remains disabled and informational only; it does not send `SM_REPURCHASE` or dispatch live `DialogService` socket side effects.
+- C# still has no live `RepurchaseService` singleton map equivalent.
+- Java `HashSet` bucket iteration is explicitly not emulated, so packet snapshot ordering still depends on caller-supplied order until live state is ported or a safe ordering adapter is proven.
+- Returned Java set mutability, concurrent map/set timing, live `CM_BUY_ITEM` repurchase execution, inventory/Kinah mutation, repository persistence, transaction behavior, encrypted frame capture, and real-client validation remain pending.
+- Full Maven reactor validation is blocked by the current login-server compile error in `PlayerTransferService.java:42`.
+- Full item-info blob parity for advanced item states remains partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one disabled BUY_AGAIN dialog diagnostic propagation path using the existing repurchase packet snapshot planner plus focused tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit is source-reviewed and C# unit-tested but remains non-live and does not prove Java runtime mutation/concurrency/socket parity.
+- Total artifacts needing verification: live repurchase singleton state, live set/map mutation timing, live BUY_AGAIN packet dispatch, live `CM_BUY_ITEM` repurchase execution, DAO/packet behavior, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full Maven reactor proof while login-server does not compile.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled BUY_AGAIN repurchase packet diagnostics but does not complete live repurchase or dialog parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java `RepurchaseService.repurchaseFromShop` success mutation ordering and C# `RepurchaseOutcomePlanService`/`CmBuyItemSideEffectOutcomePlanService` to add a disabled success-bundle diagnostic for Kinah/item/state mutation ordering, without enabling live `CM_BUY_ITEM` action 2 execution.
+- Safe alternative candidates for the next session:
+	- add a focused Java/C# diagnostic for BUY_AGAIN missing-template behavior before the packet can be composed
+	- inspect `PetService.activateAutoSell` plus `SM_PET(AUTOSELL, activate)` as a disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
+	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
+	- fix or isolate the login-server `PlayerTransferService.java:42` compile error so full Maven reactor validation can run again
