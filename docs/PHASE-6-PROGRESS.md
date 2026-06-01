@@ -87913,6 +87913,36 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2025 (June 1, 2026)
+- Performed Work Discovery after UOW-2024: re-read the latest handoff, inspected Java `CM_FIND_GROUP`, Java packet factory opcode `77`, searched C# for existing find-group coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
+- Found a parser/factory parity gap: Java registers `CM_FIND_GROUP` at opcode `77` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
+- Added Java golden coverage for a narrow representative parser slice: action `0` reads only UC `action`, action `2` reads D `playerOrTeamId`, S `message`, UC `groupType`, and action `8` reads D `instanceMaskId`, skips UC unknown, reads S `message`, and UC `minMembers`.
+- Added C# `CmFindGroup` with the full Java `readImpl` action switch represented, registered opcode `77` for `InGame`, and added a documented no-op handler boundary because Java live behavior dispatches `FindGroupService` actions.
+- Added C# parser/factory coverage for action `0`, action `2`, action `8`, valid `InGame`, and invalid `Authed`.
+
+#### Migration Parity Table - Session 2025
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_FIND_GROUP.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmFindGroup.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# implements the Java action switch and focused tests cover action `0`, action `2`, and action `8`. Untested parser branches still need direct vectors before stronger parity claims. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `77` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `77` | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# accepts opcode `77` only in `InGame`; encrypted-frame/socket dispatch remains unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_FIND_GROUP.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java dispatches actions `0`, `1`, `2`, `3`, `4`, `5`, `6`, `7`, `8`, `9`, `10`, `11`, `12`, `13`, `15`, and `17` to `FindGroupService`. C# does not wire live find-group service behavior in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_FIND_GROUP_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 3 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesFindGroupPacket" --no-restore` passed with 1 C# test. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 87 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5131 tests.
+
+Known gaps:
+- Java `CM_FIND_GROUP.runImpl` side effects remain unported: all `FindGroupService` recruitment, application, instance-group, world-broadcast, applicant-response, and member-info behavior.
+- Parser branches beyond action `0`, `2`, and `8` are implemented from Java source but do not yet have focused Java golden vectors.
+- This unit proves parser/factory behavior only; no verified live find-group parity is claimed.
+
+Next candidates:
+- Next sequential task: either add Java/C# parser vectors for remaining `CM_FIND_GROUP` actions (`1`, `3`, `5`, `6`/`7`, `9`, `11`, `12`, `15`, `17`, `20`, `25`) without enabling live service behavior, or inspect `SM_FIND_GROUP`/`SM_GROUP_DATA_EXCHANGE` writer parity as a server-packet-only unit.
+- Safe alternatives: inspect another compact registered parser boundary with Java golden evidence; inspect Java `SM_UNWRAP_ITEM` writer parity as a server-packet-only unit; inspect `SM_GROUP_DATA_EXCHANGE` writer parity before any live group-data fanout work.
+
 ### Session 2024 (June 1, 2026)
 - Performed Work Discovery after UOW-2023: re-read the latest completion and handoff, inspected Java `CM_GROUP_DATA_EXCHANGE`, Java packet factory opcode `79`, searched C# for existing group-data exchange coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, `PacketBuffer.ReadB`, and packet factory tests.
 - Found a compact parser/factory parity gap: Java registers `CM_GROUP_DATA_EXCHANGE` at opcode `79` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
