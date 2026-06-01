@@ -158,6 +158,24 @@ public class CM_BUY_ITEM_ReadGuardGoldenTest {
 	}
 
 	@Test
+	public void readImpl_highBitTradeActionIdReadsAsSignedShort() throws Exception {
+		CM_BUY_ITEM packet = new CM_BUY_ITEM(51, Set.of(State.IN_GAME));
+		packet.setConnection(allocateConnection());
+		packet.setBuffer(header(7001, 0xFFFF, 0));
+
+		packet.readImpl();
+
+		assertEquals(7001, getField(packet, "sellerObjId"));
+		assertEquals((short) -1, getField(packet, "tradeActionId"));
+		assertEquals(0, getField(packet, "amount"));
+		assertFalse((boolean) getField(packet, "isAudit"));
+		assertEquals(null, getField(packet, "repurchaseList"));
+		TradeList tradeList = (TradeList) getField(packet, "tradeList");
+		assertEquals(7001, tradeList.getSellerObjId());
+		assertEquals(0, tradeList.size());
+	}
+
+	@Test
 	public void readImpl_negativeCountSetsAuditAndLeavesPriorTradeListItems() throws Exception {
 		boolean originalPunishmentEnable = PunishmentConfig.PUNISHMENT_ENABLE;
 		boolean originalLogAudit = LoggingConfig.LOG_AUDIT;
