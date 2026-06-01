@@ -84882,6 +84882,55 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1930 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1929: re-read required orchestration/parity docs, latest completion, latest handoff, and current progress context; inspected Java `TradeService.canBuyLimitItem`, Java `LimitedItemTradeService.start` / `getLimitedItem`, Java `LimitedItem`, Java `LimitedTradeNpc`, Java `GoodsList.getLimitedItems`, C# `NpcDialogLimitedItemFactAdapterService`, C# `TradeBuyTransactionPlanService`, and C# `GameServerConnection.ResolveBuyItemBuyTransactionPlan`.
+- Confirmed Java creates limited-item runtime state from trade-list tabs and goods lists, treats only goods-list rows with both `buyLimit` and `sellLimit` as limited items, and rejects a purchase before mutation when remaining sell limit or per-player buy limit would be exceeded.
+- Reused the existing C# limited-item fact adapter inside the disabled buy-from-shop socket diagnostic path so selected `CM_BUY_ITEM` action `13`-`16` requests now feed limited-item availability into `TradeBuyTransactionPlanService`.
+- Added a socket regression proving an NPC buy-from-shop request for a limited item over the sell/buy limit records a disabled `BlockedLimitedItem` transaction plan, would send the Java-style limited-buy denial intent, and still performs no live side effects.
+- Kept this unit non-live. No live item add/delete, AP/Kinah mutation, limited-item counter mutation, cron reset, packet dispatch, transaction commit, repository write, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1930
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.LimitedItemTradeService.start` limited-item discovery | `NpcDialogLimitedItemFactAdapterService` consumed by `GameServerConnection.ResolveBuyItemBuyTransactionPlan` | Diagnostic Fact Adapter | Partial | Regression Tested | Partial Parity | C# reuses loaded trade-list/goods-list facts to identify limited items for selected buy-from-shop diagnostics. Live service startup state, scheduled resets, and mutable sell/buy counters are not wired. |
+| `com.aionemu.gameserver.model.templates.goods.GoodsList.getLimitedItems` | `GoodsListItemSummary.IsLimitedItem` via limited-item fact adapter | Static Data Projection | Partial | Regression Tested | Partial Parity | C# preserves the Java rule that limited rows require both buy and sell limits before entering the limited-item diagnostic facts. Runtime XML comparison was not produced in this unit. |
+| `com.aionemu.gameserver.services.TradeService.canBuyLimitItem` | `GameServerConnection.CanBuyLimitedItem` + `TradeBuyTransactionPlanService` limited-item branch | Diagnostic Guard | Partial | Regression Tested | Partial Parity | C# now blocks disabled buy transaction plans when requested count exceeds available sell limit or per-player buy limit. It uses static/default sell-limit facts and default player buy counts because live `LimitedItem` state and `buyCounts` mutation are not wired. |
+| `com.aionemu.gameserver.model.limiteditems.LimitedItem` | `NpcDialogLimitedItemFact` | Diagnostic DTO | Partial | Regression Tested | Partial Parity | C# carries item ID, sell limit, buy limit, sales time, and optional player buy count for diagnostics. Java `setSellLimit`, `setToDefault`, and mutable `buyCounts` behavior remain pending. |
+
+Validation:
+- Focused buy-item/limited-item composition slice passed with 83 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~TradeBuyTransactionPlanServiceTests|FullyQualifiedName~CmBuyItemBuyFromShopCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests|FullyQualifiedName~NpcDialogLimitedItemFactAdapterServiceTests" --no-restore`
+- Broad game-server suite excluding `GameServerConnectionInventoryExpansionUseItemTests` passed with 4957 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore`
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- Local Java execution remains blocked until compatible Java and Maven are available.
+- Live `CM_BUY_ITEM` buy-from-shop execution remains disabled.
+- Live `LimitedItemTradeService` startup state, scheduled cron resets, sell-limit decrementing, and per-player buy-count mutation remain unwired.
+- The diagnostic path uses loaded static/default sell-limit facts and default player buy counts unless an adapter caller supplies buy-count state; it does not prove parity with a long-running Java server after previous purchases.
+- Full Java NPC dialog/known-list/range validation remains pending.
+- Live AP/Kinah/item mutation, item-add overflow behavior, repository writes, transaction boundaries, and packet fanout remain unwired.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: source-reviewed limited-item diagnostic fact hydration for selected buy-from-shop requests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 24 rows pending Java runtime/golden comparison, Java-equivalent known-list object population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN wiring, live private-store action `0`, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item service state/counter persistence, live sell-limit map mutation/rate source, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live normal/AP sell mutation wiring, live buy transaction mutation wiring, live limited-item counter mutation/cron reset, live sell-limit map mutation, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves source-reviewed buy-from-shop limited-item diagnostics but does not complete live trade execution or runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java `PetService.sell` auto-sell notification behavior and add a separate disabled notification planner if it can remain non-live.
+- Safe alternative candidates for the next session:
+	- hydrate safe private-store listed-item facts into the diagnostic path only if no live mutation is enabled
+	- add Java-runtime golden capture for `CM_BUY_ITEM` once compatible Java and Maven are available
+	- continue buy-from-shop diagnostics around Java `PricesService.getBuyPrice(price, race)` global influence/tax facts without enabling live execution
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1929 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1928: re-read required orchestration/parity docs, latest completion, latest handoff, and current progress context; inspected Java `TradeService.performBuyFromShop`, Java `TradeService.performBuyTransaction`, Java `TradeList.calculateBuyListPrice`, Java `TradeList.calculateAbyssRewardBuyList`, Java `Acquisition`, C# `TradeBuyTransactionPlanService`, C# `CmBuyItemBuyFromShopCompositionPlanService`, C# `GameServerConnection.HandleBuyItem`, C# `TradeListTable`, C# `GoodsListTable`, and C# item-template static data parsing.
 - Confirmed Java buy-from-shop action `13`-`16` creates a packet `TradeList`, validates packet item IDs against the NPC's trade goods lists, derives Kinah/AP/required-item costs from item templates, checks free cube slots and limited-item counters, then mutates AP/Kinah/items only after all guards pass.
