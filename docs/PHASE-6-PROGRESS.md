@@ -87913,6 +87913,48 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2002 (June 1, 2026)
+- Performed Work Discovery after UOW-2001: re-read the migration/orchestration/parity docs and latest handoff, compared Java/C# packet factory registrations, inspected Java `CM_STOP_TRAINING`, inspected C# empty-payload packet patterns, `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
+- Found a compact parser/factory parity gap: Java registers `CM_STOP_TRAINING` at opcode `84` for `IN_GAME`, while C# had no parser or registration for that client packet.
+- Added Java golden coverage for `CM_STOP_TRAINING.readImpl`, proving the packet consumes no payload bytes.
+- Added C# `CmStopTraining`, registered opcode `84` for `InGame`, added C# factory parser coverage for valid `InGame` and invalid `Authed`, and documented the live instance-handler boundary as deferred.
+- No live training or instance behavior was enabled; Java `runImpl` delegates to `player.getPosition().getWorldMapInstance().getInstanceHandler().onStopTraining(player)`, which remains outside this parser/factory unit.
+
+#### Migration Parity Table - Session 2002
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_STOP_TRAINING.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmStopTraining.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Java reads no payload bytes; C# parser intentionally consumes nothing. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `84` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `84` registration | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# factory now accepts opcode `84` only in `InGame`, matching the Java registration state. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_STOP_TRAINING.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java delegates to the current world-map instance handler `onStopTraining(player)`. C# does not wire live instance-handler dispatch in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_STOP_TRAINING_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesStopTrainingPacket" --no-restore` passed with 1 C# test. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5109 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 60 game-server tests.
+
+Remaining risks:
+- This unit proves only empty parser consumption and opcode registration. It does not prove live instance-handler dispatch, training state mutation, encrypted frame handling, socket dispatch, or real-client behavior.
+- Java `CM_STOP_TRAINING.runImpl` side effects remain unported: active player lookup through the connection, world-map instance resolution, instance-handler lookup, and `onStopTraining(player)` dispatch.
+- Exact instance handler implementations and any downstream state/packet effects remain unreviewed for this route.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one C# empty-payload client packet parser plus one opcode registration and one Java golden parser test.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser/golden evidence for one stop-training packet boundary.
+- Total artifacts needing verification: live stop-training instance-handler dispatch, live disconnect socket lifecycle, live summon command/execution surfaces, live summon movement/emotion/combat controller dispatch, live pet/common-data mutation and packet send, live dialog/private-store/buy/repurchase persistence, condition validators, active-effect/stat runtime, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for dialog/private-store/pet/summon/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy persistence, live dialog controller/AI dispatch proof, live private-store mutation/fanout proof, live pet/common-data/reward mutation and packet send, live summon command/movement/emotion/combat controller dispatch, live instance-handler dispatch, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes one stop-training parser/factory gap but does not complete live instance training parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect another compact unregistered packet boundary with Java golden evidence, such as Java `CM_CLOSE_DIALOG` opcode `53`, before deciding whether parser-only coverage is safe despite its live `DialogService.onCloseDialog` dependency.
+- Safe alternative candidates for the next session:
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+	- inspect BUY_AGAIN live-send ordering only if a stronger deterministic Java runtime vector can be added without broad object graph setup
+	- inspect another compact unported enum/model dependency with Java golden evidence
+
 ### Session 2001 (June 1, 2026)
 - Performed Work Discovery after UOW-2000: re-read the required migration docs and latest handoff context, compared Java/C# packet factory registrations, inspected Java `CM_DISCONNECT`, C# quit/mayquit packet handling, `GameClientPacketFactory`, `GameServerConnection`, and existing packet factory tests.
 - Found a compact parser/factory parity gap: Java registers `CM_DISCONNECT` at opcode `2` for `AUTHED` and `IN_GAME`, while C# had no parser or registration for that client disconnect packet.
