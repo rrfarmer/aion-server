@@ -84882,6 +84882,56 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1933 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1932: re-read required orchestration/parity docs, latest completion, latest handoff, and current progress context; inspected Java `PricesService.getBuyPrice`, Java `PricesService.getGlobalPrices` / `getTaxes`, Java `TradeList.calculateBuyListPrice`, Java `TradeService.performBuyTransaction`, C# `PricesService`, C# `TradeBuyTransactionPlanService`, and C# `GameServerConnection.ResolveBuyItemBuyTransactionPlan`.
+- Confirmed Java buy-from-shop Kinah cost uses `PricesService.getBuyPrice(itemTemplate.price, player.race)` first, then multiplies by packet count and the trade-list sell-price modifier, flooring the integer division at each Java step.
+- Updated the C# socket buy-from-shop diagnostic hydration so each trade item now carries Java's effective unit buy price instead of the raw template price.
+- Added a `PriceSnapshot` diagnostic fact to `TradeBuyTransactionPlan` so disabled buy transaction plans can record the global price, global modifier, taxes, vendor buy modifier, and vendor sell modifier used for the calculation.
+- Added optional injected buy-item price influence rates to `GameServerConnection` tests; this remains a diagnostic stand-in until Java `Influence`/siege state has a live C# runtime source.
+- Added socket regression coverage proving an Asmodian buy-from-shop request with lower influence records Java-shaped `GlobalPrices=110`, `Taxes=105`, `VendorBuyModifier=125`, effective unit buy price `16039`, final required Kinah `16039`, and no live side effects.
+- Kept this unit non-live. No live buy transaction execution, AP/Kinah/item mutation, limited-item counter mutation, packet dispatch, repository write, transaction commit/rollback, Java runtime output, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1933
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.trade.PricesService.getBuyPrice` | `Aion.GameServer.Services.PricesService.GetBuyPrice` consumed by `GameServerConnection.ResolveBuyItemBuyTransactionPlan` | Price Formula / Socket Diagnostic Hydration | Partial | Regression Tested | Partial Parity | C# now feeds Java's effective unit buy price into selected buy-from-shop diagnostics. Existing unit tests cover floor-after-each-step math; no Java runtime/golden vector was captured. |
+| `com.aionemu.gameserver.model.trade.TradeList.calculateBuyListPrice` | `TradeBuyTransactionPlanService.CalculateRequiredKinah` with effective unit buy prices | Buy-List Kinah Planner | Partial | Regression Tested | Partial Parity | C# preserves the Java order of effective unit price, count, and sell-price-rate multiplication for diagnostics. Overflow/runtime Java long behavior beyond covered values remains not runtime-compared. |
+| `com.aionemu.gameserver.services.trade.PricesService.getGlobalPrices` / `getTaxes` | `PriceSnapshot` on `TradeBuyTransactionPlan` | Diagnostic Fact Snapshot | Partial | Regression Tested | Partial Parity | C# records the price/tax facts used by the disabled transaction plan. Influence rates are injected diagnostic facts until Java `Influence`/siege state is ported. |
+| `com.aionemu.gameserver.services.TradeService.performBuyTransaction` buy-from-shop Kinah branch | `GameServerConnection.ResolveBuyItemBuyTransactionPlan` + `TradeBuyTransactionPlanService` | Disabled Transaction Planner | Partial | Regression Tested | Partial Parity | C# socket diagnostics now use Java-priced unit costs before the disabled transaction plan evaluates Kinah. Live mutation, packet dispatch, transaction behavior, and Java runtime comparison remain pending. |
+
+Validation:
+- Focused price/buy-item slice passed with 38 tests after an initial compile correction in the new regression:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PricesServiceTests|FullyQualifiedName~TradeBuyTransactionPlanServiceTests|FullyQualifiedName~GameServerConnectionBuyItemTests" --no-restore`
+- Broad game-server suite excluding `GameServerConnectionInventoryExpansionUseItemTests` passed with 4962 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore`
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- Local Java execution remains blocked until compatible Java and Maven are available.
+- The C# socket path still uses injected price influence rates for diagnostics; live Java `Influence.getInstance()` / siege state is not ported as a buy-price source.
+- Live `CM_BUY_ITEM` buy-from-shop transaction execution remains disabled.
+- Live AP/Kinah/item mutation, limited-item counter mutation, repository writes, packet dispatch, audit/log behavior, and transaction/rollback behavior remain disabled.
+- Buy-from-shop target validation still depends on the current known-list resolver and function facts; full Java NPC known-list/function ownership remains pending.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: source-reviewed buy-from-shop diagnostic hydration now consumes Java effective unit buy price and records price/tax facts.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 24 rows pending Java runtime/golden comparison, Java-equivalent known-list object population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN wiring, live private-store action `0`, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item service state/counter persistence, live price influence/siege state source, live pet auto-sell activation/state/item selection, live pet auto-sell execution/notification dispatch, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live normal/AP sell mutation wiring, live buy transaction mutation wiring, live influence/siege state wiring, live limited-item counter mutation/cron reset, live private-store model/runtime wiring, live pet common-data/service wiring, live pet auto-sell inventory/drop caller integration, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves source-reviewed buy-price diagnostics but does not complete live transaction execution or runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add a disabled `BUY_AGAIN` repurchase socket diagnostic slice for Java `CM_BUY_ITEM` action `18`, reusing existing repurchase/outcome planners without enabling live execution.
+- Safe alternative candidates for the next session:
+	- add Java-runtime golden capture for `CM_BUY_ITEM`, buy price, private-store, or pet auto-sell once compatible Java and Maven are available
+	- inspect `PetService.activateAutoSell` and `SM_PET(AUTOSELL, activate)` runtime state wiring as a separate disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full socket cases without enabling live mutation
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1932 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1931: re-read required orchestration/parity docs, latest completion, latest handoff, and current progress context; inspected Java `CM_BUY_ITEM` private-store action `0`, Java `PrivateStoreService.getBoughtItems`, Java `PrivateStoreService.sellStoreItem`, Java `PrivateStore`/`TradePSItem`, C# private-store bought-items and purchase planners, C# `CmBuyItemHandlerCompositionPlanService`, and C# socket buy-item tests.
 - Confirmed Java `CM_BUY_ITEM` action `0` treats each packet item ID as an index into `seller.getStore().getSoldItems().values()` after snapshotting the `LinkedHashMap` values into an array, then delegates to `PrivateStoreService.sellStoreItem(targetPlayer, player, tradeList)`.
