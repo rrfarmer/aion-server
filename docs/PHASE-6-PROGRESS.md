@@ -87395,3 +87395,51 @@ Next recommended unit of work:
 	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
 	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+
+### Session 1953 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1952: re-read required migration/orchestration/parity docs, latest completion and handoff, inspected Java `RepurchaseService`, Java `RepurchaseList`, Java `AionObject.hashCode/equals`, Java repurchase packet/client parser tests, C# `RepurchasePlanService`, C# `RepurchasePacketSnapshotPlanService`, and existing repurchase tests.
+- Added `RepurchaseStatePlanService`, a disabled non-live state lifecycle planner for the Java `RepurchaseService` singleton map boundary.
+- The planner records Java `addRepurchaseItems` replacement semantics as a supplied-facts map-entry replacement with a new snapshot, including nonzero object-id dedupe that mirrors Java `HashSet<Item>` equality through `AionObject`.
+- The planner records Java `getRepurchaseItems` found/missing behavior, including the missing-key `Collections.emptySet()` result.
+- The planner records Java `removeRepurchaseItems` present/absent behavior and Java `canRepurchase` object-id membership checks.
+- Kept this unit non-live. No C# singleton map, `Player.RepurchaseItems` mutation, Java `HashSet` bucket-order emulation, socket dispatch, repository write, transaction behavior, encrypted-frame proof, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1953
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.RepurchaseService.addRepurchaseItems` | `Aion.GameServer.Services.RepurchaseStatePlanService.CreateReplaceDisabledPlan` | State Planner | Partial | Unit Tested + Source Reviewed | Partial Parity | Disabled planner records map replacement and nonzero object-id dedupe from Java `new HashSet<>(items)`. It does not emulate Java `HashSet` iteration order, maintain a live singleton `ConcurrentHashMap`, or mutate player state. |
+| `com.aionemu.gameserver.services.RepurchaseService.getRepurchaseItems` | `Aion.GameServer.Services.RepurchaseStatePlanService.CreateGetDisabledPlan` | State Planner | Partial | Unit Tested + Source Reviewed | Partial Parity | Disabled planner returns supplied snapshot or empty snapshot for missing player key, matching Java `getOrDefault(..., Collections.emptySet())` at the boundary. Live concurrent map reads and returned set mutability are not ported. |
+| `com.aionemu.gameserver.services.RepurchaseService.removeRepurchaseItems` | `Aion.GameServer.Services.RepurchaseStatePlanService.CreateRemoveDisabledPlan` | State Planner | Partial | Unit Tested + Source Reviewed | Partial Parity | Disabled planner records present-key removal and absent-key no-op. No live singleton mutation, logout integration, or concurrent remove behavior is enabled. |
+| `com.aionemu.gameserver.services.RepurchaseService.canRepurchase` | `Aion.GameServer.Services.RepurchaseStatePlanService.CreateCanRepurchaseDisabledPlan` | State Planner | Partial | Unit Tested + Source Reviewed | Partial Parity | Disabled planner checks supplied snapshot membership by `InventoryItem.ObjectId`, matching Java's `item.getObjectId() == itemObjectId` stream predicate. It depends on supplied snapshot facts and does not query live player state. |
+| `com.aionemu.gameserver.model.gameobjects.AionObject.hashCode/equals` | `Aion.GameServer.Services.RepurchaseStatePlanService` nonzero object-id dedupe | Model Equality Dependency | Partial | Unit Tested + Source Reviewed | Needs Verification | Java object equality is object-id based except dummy object id `0`; C# dedupes nonzero IDs and preserves supplied dummy-object facts without claiming Java object identity or `HashSet` bucket order. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~RepurchaseStatePlanServiceTests|FullyQualifiedName~RepurchasePacketSnapshotPlanServiceTests|FullyQualifiedName~RepurchasePlanServiceTests" --no-restore` passed with 23 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_REPURCHASE_GoldenTest,CM_BUY_ITEM_ReadGuardGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 11 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4999 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 23 game-server tests.
+
+Remaining risks:
+- `RepurchaseStatePlanService` is disabled and supplied-facts only; it does not introduce a live singleton map or mutate `Player.RepurchaseItems`.
+- Java `HashSet` bucket iteration is explicitly not emulated, so packet snapshot ordering still depends on caller-supplied order until live state is ported or a safe ordering adapter is proven.
+- Java dummy object-id `0` equality/identity behavior is not fully modeled; repurchase items should normally have nonzero object IDs.
+- Returned Java set mutability, concurrent map timing, logout removal integration, live BUY_AGAIN dispatch, live `CM_BUY_ITEM` repurchase execution, inventory/Kinah mutation, repository persistence, transaction behavior, encrypted frame capture, and real-client validation remain pending.
+- Full item-info blob parity for advanced item states remains partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: one disabled repurchase state lifecycle planner plus focused tests.
+- Total artifacts with verified parity: 0 full artifacts; the unit is source-reviewed and unit-tested but remains non-live and does not emulate Java `HashSet` iteration or singleton concurrency.
+- Total artifacts needing verification: live repurchase singleton state, live map mutation timing, live logout removal, live BUY_AGAIN wiring, live `CM_BUY_ITEM` repurchase execution, DAO/packet behavior, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves repurchase state lifecycle planning but does not complete live repurchase or trade parity.
+
+Next recommended unit of work:
+- Next sequential task: integrate `RepurchaseStatePlanService` into the existing disabled sell-to-shop diagnostic snapshot path so `TradeService.performSellToShop -> RepurchaseService.addRepurchaseItems` can carry an explicit replacement plan, while still avoiding live singleton mutation.
+- Safe alternative candidates for the next session:
+	- add another narrow Java golden item-info vector only if the fixture remains simple, such as equipped-slot nonzero or one basic manastone socket
+	- inspect `PetService.activateAutoSell` plus `SM_PET(AUTOSELL, activate)` as a disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
+	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
