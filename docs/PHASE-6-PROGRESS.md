@@ -87913,6 +87913,48 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2005 (June 1, 2026)
+- Performed Work Discovery after UOW-2004: re-read the latest handoff, inspected Java `CM_HOUSE_TELEPORT_BACK`, Java packet factory opcode `95`, C# teleport packet boundaries, `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
+- Found a compact parser/factory parity gap: Java registers `CM_HOUSE_TELEPORT_BACK` at opcode `95` for `IN_GAME`, while C# had no parser or registration for that client packet.
+- Added Java golden coverage for `CM_HOUSE_TELEPORT_BACK.readImpl`, proving the packet consumes no payload bytes.
+- Added C# `CmHouseTeleportBack`, registered opcode `95` for `InGame`, added C# factory parser coverage for valid `InGame` and invalid `Authed`, and documented the live battle-return teleport boundary as deferred.
+- No live house-teleport-back behavior was enabled; Java `runImpl` checks battle-return coords/map, teleports with `TeleportAnimation.FADE_OUT_BEAM`, and clears battle-return state, which remains outside this parser/factory unit.
+
+#### Migration Parity Table - Session 2005
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_HOUSE_TELEPORT_BACK.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmHouseTeleportBack.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Java reads no payload bytes; C# parser intentionally consumes nothing. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `95` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `95` registration | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# factory now accepts opcode `95` only in `InGame`, matching the Java registration state. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_HOUSE_TELEPORT_BACK.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java reads battle-return coords/map, calls `TeleportService.teleportTo(..., FADE_OUT_BEAM)`, and clears battle-return coords. C# does not wire live teleport behavior in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_HOUSE_TELEPORT_BACK_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesHouseTeleportBackPacket" --no-restore` passed with 1 C# test. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5111 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 63 game-server tests.
+
+Remaining risks:
+- This unit proves only empty parser consumption and opcode registration. It does not prove battle-return state handling, teleport dispatch, state clearing, encrypted frame handling, socket dispatch, or real-client behavior.
+- Java `CM_HOUSE_TELEPORT_BACK.runImpl` side effects remain unported: active player lookup through the connection, battle-return coordinate/map guards, `TeleportService.teleportTo` call, teleport animation selection, and `setBattleReturnCoords(0, null)` mutation.
+- Exact teleport state, map instance, and downstream packet effects remain unverified for this route.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one C# empty-payload client packet parser plus one opcode registration and one Java golden parser test.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser/golden evidence for one house-teleport-back packet boundary.
+- Total artifacts needing verification: live house-teleport-back battle-return teleport, live instance-leave handler dispatch, live stop-training instance-handler dispatch, live close-dialog dialog-service dispatch, live disconnect socket lifecycle, live summon command/execution surfaces, live summon movement/emotion/combat controller dispatch, live pet/common-data mutation and packet send, live dialog/private-store/buy/repurchase persistence, condition validators, active-effect/stat runtime, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for dialog/private-store/pet/summon/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy persistence, live teleport/battle-return dispatch, live dialog controller/AI dispatch proof, live private-store mutation/fanout proof, live pet/common-data/reward mutation and packet send, live summon command/movement/emotion/combat controller dispatch, live instance-handler dispatch, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes one house-teleport-back parser/factory gap but does not complete live teleport parity.
+
+Next recommended unit of work:
+- Next sequential task: continue packet-factory discovery for another compact unregistered parser boundary with Java golden evidence. Consider source-reviewing opcode `100` `CM_VIEW_PLAYER_DETAILS` or another small read-only packet before selecting.
+- Safe alternative candidates for the next session:
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+	- inspect BUY_AGAIN live-send ordering only if a stronger deterministic Java runtime vector can be added without broad object graph setup
+	- inspect another compact unported enum/model dependency with Java golden evidence
+
 ### Session 2004 (June 1, 2026)
 - Performed Work Discovery after UOW-2003: re-read the required migration docs and latest handoff, confirmed the worktree was clean, compared Java/C# packet factory registrations, inspected Java `CM_INSTANCE_LEAVE`, C# empty-payload packet patterns, `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
 - Found a compact parser/factory parity gap: Java registers `CM_INSTANCE_LEAVE` at opcode `46` for `IN_GAME`, while C# had no parser or registration for that client packet.
