@@ -87913,6 +87913,39 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2049 (June 1, 2026)
+- Performed Work Discovery after UOW-2048: re-read the required migration/orchestration/parity docs plus the latest UOW-2048 completion/handoff, inspected Java `SM_ALLIANCE_MEMBER_INFO.writeImpl`, `PlayerAllianceEvent`, C# `SmAllianceMemberInfo`, `PlayerAllianceMemberInfoPacketPlan`, and `PlayerAllianceMemberInfoTests`.
+- Scoped this unit to Java golden evidence for the online `ENTER` and online `UPDATE` zero-effect name/effect skeletons.
+- Extended the Java `SM_ALLIANCE_MEMBER_INFO` golden fixture with one online `ENTER` packet and one online `UPDATE` packet. Both serialize wire event id `13`, member name, two zero dwords, `FULLSLOTS` byte `127`, zero effect count, and eight zero timer dwords.
+- Added the matching C# exact payload test using explicit `PlayerAllianceMemberInfoEvent.Enter` and `PlayerAllianceMemberInfoEvent.Update` values so the same-wire-id `UPDATE` branch does not collapse into the legacy numeric `Enter` identity.
+- Kept this as packet-writer evidence only; no live alliance enter/update fanout, recipient filtering, socket framing, or real-client behavior is claimed.
+
+#### Migration Parity Table - Session 2049
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO.writeImpl` online `ENTER` branch | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` `Enter` branch | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2049 verifies one online `ENTER` vector with fixed prefix, event id `13`, member name, two zero dwords, full-slots byte, zero effect count, and eight zero timer dwords. Live enter fanout and lifecycle remain unproven. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO.writeImpl` online `UPDATE` branch | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` explicit `Update` branch | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2049 verifies one online `UPDATE` vector with the same wire event id `13` and the same zero-effect skeleton. The C# test uses explicit `PlayerAllianceMemberInfoEvent.Update`; legacy numeric callers still need care because id `13` is shared. |
+| `com.aionemu.gameserver.model.team.common.legacy.PlayerAllianceEvent.ENTER` / `UPDATE` shared id | `Aion.GameServer.Services.PlayerAllianceMemberInfoEvent.Enter` / `Update` | Enum / Packet Event Identity | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | The serialized bytes verify both Java events use wire id `13`, while C# keeps explicit event identity for branch selection. This does not prove production caller selection, alliance membership attachment, or dispatch ordering. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_ALLIANCE_MEMBER_INFO_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 6 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_EnterAndUpdateMatchJavaGoldenZeroEffectPayloads|FullyQualifiedName~PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_MemberGroupChangeMatchesJavaGoldenNameOnlyPayload|FullyQualifiedName~PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_UpdateEffectsMatchesJavaGoldenZeroEffectPayload" --no-restore` passed with 3 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_ALLIANCE_MEMBER_INFO_GoldenTest,SM_GROUP_MEMBER_INFO_GoldenTest,SM_GROUP_DATA_EXCHANGE_GoldenTest,CM_GROUP_DATA_EXCHANGE_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 16 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests" --no-restore` passed with 39 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 123 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5175 C# tests.
+
+Known gaps:
+- This unit does not prove live alliance enter/update fanout, reconnect/offline lifecycle, production alliance membership attachment, group-slot mutation, known-list/team recipient filtering, socket encryption/frame ordering, or real-client behavior.
+- Java golden evidence for `SM_ALLIANCE_MEMBER_INFO` now covers movement, online join, offline-enter name, targeted zero-effect `UPDATE_EFFECTS`, member-group-change name-only, online enter, and online update zero-effect skeletons.
+- Captain/vice-captain branches and non-empty alliance effects still need Java-side vectors before broader parity claims.
+- The Java fixture uses controlled reflection/Unsafe setup to avoid full player/network/bootstrap state; it proves packet bytes for configured vectors, not production lifecycle parity.
+
+Next candidates:
+- Next sequential task: add Java golden evidence for `SM_ALLIANCE_MEMBER_INFO` captain/vice-captain same-id branches (`APPOINT_VICE_CAPTAIN`, `DEMOTE_VICE_CAPTAIN`, `APPOINT_CAPTAIN`) or targeted `UPDATE_EFFECTS` with non-empty effects if a controlled fixture is practical.
+- Safe alternatives: inspect non-empty alliance effects with controlled Java fixture; inspect a narrow non-live `FindGroupService` planner; inspect live alliance effect update planning only if it remains non-live and source-reviewed.
+
 ### Session 2048 (June 1, 2026)
 - Performed Work Discovery after UOW-2047: re-read the required migration/orchestration/parity docs plus the latest UOW-2047 completion/handoff, inspected Java `SM_ALLIANCE_MEMBER_INFO.writeImpl`, `PlayerAllianceEvent`, `ChangeMemberGroupEvent`, C# `SmAllianceMemberInfo`, `PlayerAllianceMemberInfoPacketPlan`, and `PlayerAllianceMemberInfoTests`.
 - Scoped this unit to Java golden evidence for the `MEMBER_GROUP_CHANGE` same-wire-id branch.

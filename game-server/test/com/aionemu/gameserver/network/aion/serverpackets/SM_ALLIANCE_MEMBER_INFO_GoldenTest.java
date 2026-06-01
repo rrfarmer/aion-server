@@ -177,6 +177,19 @@ public class SM_ALLIANCE_MEMBER_INFO_GoldenTest {
 		assertEquals(0, buffer.remaining());
 	}
 
+	@Test
+	public void writeImpl_enterAndUpdateWriteOnlineNameZeroEffectPayloads() throws Exception {
+		Player enterPlayer = player(2010, "AllianceEnter", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		setField(enterPlayer, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+		Player updatePlayer = player(2011, "AllianceUpdate", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		setField(updatePlayer, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+
+		assertOnlineNameZeroEffectPayload(write(new SM_ALLIANCE_MEMBER_INFO(member(enterPlayer, 88005), PlayerAllianceEvent.ENTER)), 88005, 2010,
+			"AllianceEnter", PlayerAllianceEvent.ENTER);
+		assertOnlineNameZeroEffectPayload(write(new SM_ALLIANCE_MEMBER_INFO(member(updatePlayer, 88006), PlayerAllianceEvent.UPDATE)), 88006, 2011,
+			"AllianceUpdate", PlayerAllianceEvent.UPDATE);
+	}
+
 	private static Player player(int objectId, String name, PlayerClass playerClass, Gender gender, int level, boolean online) throws Exception {
 		PlayerCommonData commonData = new PlayerCommonData(objectId);
 		commonData.setName(name);
@@ -239,6 +252,19 @@ public class SM_ALLIANCE_MEMBER_INFO_GoldenTest {
 		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
 		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
 		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+	}
+
+	private static void assertOnlineNameZeroEffectPayload(byte[] payload, int allianceId, int objectId, String name, PlayerAllianceEvent event) {
+		ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+		assertOnlinePrefix(buffer, allianceId, objectId, event);
+		assertEquals(name, readS(buffer));
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(127, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Short.toUnsignedInt(buffer.getShort()));
+		for (int i = 0; i < 8; i++)
+			assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.remaining());
 	}
 
 	private static String readS(ByteBuffer buffer) {
