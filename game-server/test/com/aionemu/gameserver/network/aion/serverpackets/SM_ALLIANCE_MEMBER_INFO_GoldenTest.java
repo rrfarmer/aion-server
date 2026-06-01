@@ -190,6 +190,23 @@ public class SM_ALLIANCE_MEMBER_INFO_GoldenTest {
 			"AllianceUpdate", PlayerAllianceEvent.UPDATE);
 	}
 
+	@Test
+	public void writeImpl_captainRoleEventsWriteOnlineNameZeroEffectPayloads() throws Exception {
+		Player appointVicePlayer = player(2012, "AllianceVice", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		setField(appointVicePlayer, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+		Player demoteVicePlayer = player(2013, "AllianceDemote", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		setField(demoteVicePlayer, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+		Player appointCaptainPlayer = player(2014, "AllianceCaptain", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		setField(appointCaptainPlayer, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+
+		assertOnlineNameZeroEffectPayload(write(new SM_ALLIANCE_MEMBER_INFO(member(appointVicePlayer, 88007), PlayerAllianceEvent.APPOINT_VICE_CAPTAIN)),
+			88007, 2012, "AllianceVice", PlayerAllianceEvent.APPOINT_VICE_CAPTAIN);
+		assertOnlineNameZeroEffectPayload(write(new SM_ALLIANCE_MEMBER_INFO(member(demoteVicePlayer, 88008), PlayerAllianceEvent.DEMOTE_VICE_CAPTAIN)),
+			88008, 2013, "AllianceDemote", PlayerAllianceEvent.DEMOTE_VICE_CAPTAIN);
+		assertOnlineNameZeroEffectPayload(write(new SM_ALLIANCE_MEMBER_INFO(member(appointCaptainPlayer, 88009), PlayerAllianceEvent.APPOINT_CAPTAIN)),
+			88009, 2014, "AllianceCaptain", PlayerAllianceEvent.APPOINT_CAPTAIN);
+	}
+
 	private static Player player(int objectId, String name, PlayerClass playerClass, Gender gender, int level, boolean online) throws Exception {
 		PlayerCommonData commonData = new PlayerCommonData(objectId);
 		commonData.setName(name);

@@ -87913,6 +87913,41 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2050 (June 1, 2026)
+- Performed Work Discovery after UOW-2049: re-read the required migration/orchestration/parity docs plus the latest UOW-2049 completion/handoff, inspected Java `SM_ALLIANCE_MEMBER_INFO.writeImpl`, `PlayerAllianceEvent`, C# `SmAllianceMemberInfo`, `PlayerAllianceMemberInfoPacketPlan`, and `PlayerAllianceMemberInfoTests`.
+- Scoped this unit to Java golden evidence for the online captain/vice-captain role events that share wire id `13`.
+- Extended the Java `SM_ALLIANCE_MEMBER_INFO` golden fixture with online `APPOINT_VICE_CAPTAIN`, `DEMOTE_VICE_CAPTAIN`, and `APPOINT_CAPTAIN` vectors. Each writes the same name plus zero-effect skeleton as Java's other online id-13 name branches.
+- Added the matching C# exact payload test using explicit `PlayerAllianceMemberInfoEvent.AppointViceCaptain`, `DemoteViceCaptain`, and `AppointCaptain` values so same-wire-id role identity remains visible.
+- Tightened the existing C# same-wire-id identity test to include the role events and to document that legacy numeric id `13` conversion still maps to `Enter`.
+- Kept this as packet-writer evidence only; no live role assignment fanout, recipient filtering, socket framing, or real-client behavior is claimed.
+
+#### Migration Parity Table - Session 2050
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO.writeImpl` `APPOINT_VICE_CAPTAIN` branch | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` explicit `AppointViceCaptain` branch | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2050 verifies one online vector with fixed prefix, event id `13`, member name, two zero dwords, full-slots byte, zero effect count, and eight zero timer dwords. Live vice-captain promotion fanout remains unproven. |
+| `SM_ALLIANCE_MEMBER_INFO.writeImpl` `DEMOTE_VICE_CAPTAIN` branch | `SmAllianceMemberInfo` explicit `DemoteViceCaptain` branch | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2050 verifies one online demotion vector with the same wire id `13` and zero-effect skeleton. Live role mutation, message ordering, and recipients remain unproven. |
+| `SM_ALLIANCE_MEMBER_INFO.writeImpl` `APPOINT_CAPTAIN` branch | `SmAllianceMemberInfo` explicit `AppointCaptain` branch | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2050 verifies one online captain vector with the same id-13 name/effect skeleton. It does not prove full captain handoff service behavior. |
+| `com.aionemu.gameserver.model.team.common.legacy.PlayerAllianceEvent` same-id role constants | `Aion.GameServer.Services.PlayerAllianceMemberInfoEvent` role constants | Enum / Packet Event Identity | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | The serialized bytes verify all three role constants use wire id `13`; C# keeps explicit event identities for branch selection. Legacy numeric conversion for id `13` still maps to `Enter` and requires explicit event values for role branches. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_ALLIANCE_MEMBER_INFO_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 7 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_CaptainRoleEventsMatchJavaGoldenZeroEffectPayloads|FullyQualifiedName~PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_EnterAndUpdateMatchJavaGoldenZeroEffectPayloads|FullyQualifiedName~PlayerAllianceMemberInfoTests.PlayerAllianceMemberInfoEvent_PreservesJavaConstantIdentityForSameWireIds" --no-restore` passed with 3 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_ALLIANCE_MEMBER_INFO_GoldenTest,SM_GROUP_MEMBER_INFO_GoldenTest,SM_GROUP_DATA_EXCHANGE_GoldenTest,CM_GROUP_DATA_EXCHANGE_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 17 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests" --no-restore` passed with 40 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 124 game-server tests. Existing Unsafe warnings were emitted.
+- First broad C# validation hit a transient unrelated `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` duplicate-broadcast assertion. The exact test passed on rerun, and the repeated broad command `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5176 C# tests.
+
+Known gaps:
+- This unit does not prove live captain or vice-captain assignment fanout, alliance role mutation, production alliance membership attachment, known-list/team recipient filtering, socket encryption/frame ordering, or real-client behavior.
+- Java golden evidence for `SM_ALLIANCE_MEMBER_INFO` now covers movement, online join, offline-enter name, targeted zero-effect `UPDATE_EFFECTS`, member-group-change name-only, online enter, online update, and captain/vice-captain zero-effect skeletons.
+- `RECONNECT` zero-effect skeleton and non-empty alliance effects still need Java-side vectors before broader packet-branch claims.
+- The Java fixture uses controlled reflection/Unsafe setup to avoid full player/network/bootstrap state; it proves packet bytes for configured vectors, not production lifecycle parity.
+
+Next candidates:
+- Next sequential task: add Java golden evidence for `SM_ALLIANCE_MEMBER_INFO` `RECONNECT` zero-effect skeleton or non-empty alliance effects if a controlled fixture is practical.
+- Safe alternatives: inspect non-empty alliance effects with controlled Java fixture; inspect a narrow non-live `FindGroupService` planner; inspect live alliance role assignment planning only if it remains non-live and source-reviewed.
+
 ### Session 2049 (June 1, 2026)
 - Performed Work Discovery after UOW-2048: re-read the required migration/orchestration/parity docs plus the latest UOW-2048 completion/handoff, inspected Java `SM_ALLIANCE_MEMBER_INFO.writeImpl`, `PlayerAllianceEvent`, C# `SmAllianceMemberInfo`, `PlayerAllianceMemberInfoPacketPlan`, and `PlayerAllianceMemberInfoTests`.
 - Scoped this unit to Java golden evidence for the online `ENTER` and online `UPDATE` zero-effect name/effect skeletons.
