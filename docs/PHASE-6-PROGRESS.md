@@ -87913,6 +87913,38 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2040 (June 1, 2026)
+- Performed Work Discovery after UOW-2039: re-read the required migration/orchestration/parity docs plus the latest UOW-2039 completion/handoff, inspected Java `CM_GROUP_DATA_EXCHANGE.runImpl` routing feasibility, existing Java packet golden-test patterns, Java `SM_GROUP_MEMBER_INFO.writeImpl`, C# `SmGroupMemberInfo`, and existing `PlayerGroupRuntimeTests`.
+- Scoped this unit to adjacent packet-writer evidence for `SM_GROUP_MEMBER_INFO` movement prefix because Java-side `CM_GROUP_DATA_EXCHANGE.runImpl` live-routing tests would require static `PacketSendUtility` interception that is not present in the current Java test stack.
+- Added a Java `SM_GROUP_MEMBER_INFO_GoldenTest` movement fixture for an online level-10 gladiator member, including Java default `CustomConfig.BASE_FLYTIME`, online `Player.isOnline()` branch coverage, life stats, position, class/gender/level, event, fly state, and mentor bytes.
+- Added the matching C# `SmGroupMemberInfo_MovementMatchesJavaGoldenPrefixPayload` packet-writer test against the same group/member/stat/position values.
+- Kept this as packet serialization evidence only; no production group-data dispatch, group member known-list fanout, abnormal-effect branch parity, or real-client behavior is claimed.
+
+#### Migration Parity Table - Session 2040
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO.writeImpl` movement fixed prefix | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` movement prefix | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2040 verifies one online movement prefix vector: ids, HP/MP/FP, map/instance, coordinates, class, gender, level, event, always-one byte, fly state, mentor byte, and no trailing payload. Name/effect/update/offline branches remain separately covered only by existing C# tests or still need Java golden evidence. |
+| Java `Player.isOnline()` branch in `SM_GROUP_MEMBER_INFO` | C# `PlayerGroupMemberInfoPrefixSnapshot.FromMember` online prefix path | Packet Prefix Planning | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | Java online behavior is proven for this fixture by setting the runtime connection field enough to enter the online serialization branch. This does not validate production connection lifecycle, disconnect/reconnect behavior, or team fanout filtering. |
+| Java `CM_GROUP_DATA_EXCHANGE.runImpl` test-double feasibility | Deferred for this unit | Client Packet Runtime Boundary | Deferred | Source Reviewed | High | Static `PacketSendUtility` fanout is not readily intercepted by the current Java test stack, so UOW-2040 avoided a brittle live-routing test and added adjacent member-info packet evidence instead. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_GROUP_MEMBER_INFO_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests.SmGroupMemberInfo_MovementMatchesJavaGoldenPrefixPayload|FullyQualifiedName~PlayerGroupRuntimeTests.SmGroupMemberInfo_WritesBranchlessFixedPrefixLikeJava" --no-restore` passed with 2 C# tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests" --no-restore` passed with 41 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_GROUP_MEMBER_INFO_GoldenTest,SM_GROUP_DATA_EXCHANGE_GoldenTest,CM_GROUP_DATA_EXCHANGE_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 5 Java test methods.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 112 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5166 C# tests after a longer rerun; the first broad attempt timed out before returning a result.
+
+Known gaps:
+- This unit does not prove live `CM_GROUP_DATA_EXCHANGE` dispatch, socket encryption/frame ordering, Java known-list/team recipient filtering, or real-client behavior.
+- `SM_GROUP_MEMBER_INFO` Java golden evidence now covers one movement prefix only; join, enter/offline, update, update-effects, non-empty abnormal effects, and slot-timer payloads still need Java-side vectors if they are claimed later.
+- The Java fixture uses controlled reflection/Unsafe setup to avoid full player/network bootstrap; it proves packet bytes for the configured vector, not production lifecycle parity.
+
+Next candidates:
+- Next sequential task: add Java golden evidence for another `SM_GROUP_MEMBER_INFO` branch, preferably `JOIN` or `ENTER_OFFLINE`, then mirror the C# packet payload if useful.
+- Safe alternatives: inspect `SM_ALLIANCE_MEMBER_INFO` movement/member prefix parity; inspect a narrow non-live `FindGroupService` planner with service mutation and broadcast side effects deferred; return to group-data known-list/team online filtering only if it can remain diagnostic and disabled.
+
 ### Session 2039 (June 1, 2026)
 - Performed Work Discovery after UOW-2038: re-read the required migration/orchestration/parity docs plus the latest UOW-2038 completion/handoff, confirmed a clean tree, inspected Java `CM_GROUP_DATA_EXCHANGE.runImpl`, existing C# `CmGroupDataExchange`, `GroupDataExchangeFanoutPlanService`, `GroupDataExchangeFanoutSocketAdapterService`, `GameServerConnection`'s deferred branch, and existing disabled composition-observer patterns.
 - Scoped this unit to a guarded `GameServerConnection` composition seam for `CM_GROUP_DATA_EXCHANGE`; production socket sends remain disabled and no live dispatch parity is claimed.
