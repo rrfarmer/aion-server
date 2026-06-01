@@ -87913,6 +87913,49 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1969 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1968: re-read the latest handoff, inspected Java `CM_PET.readImpl`/`runImpl` FOOD actionType parsing, Java `PetService.activateAutoSell`, C# `CmPet`, C# `PetAutoSellActivationPlanService`, C# `SmPet` special-function serializer coverage, and existing pet autosell activation tests.
+- Added a disabled `CmPetAutoSellActivationCompositionPlanService` that composes an already-parsed `CmPet` FOOD/actionType `4` payload into the existing disabled `PetAutoSellActivationPlanService`.
+- The composition bridge records Java routing boundaries without enabling live mutation: non-FOOD actions stop before activation composition, FOOD action types other than `4` stop before autosell activation, and FOOD/actionType `4` maps `activateSpecialFunction != 0` into the disabled activation planner.
+- Added C# tests proving parsed activation values `1` and `0` become target selling states `true` and `false`, missing-pet composition records Java's early `if (pet == null) return`, and actionType `3`/non-FOOD actions are not routed into autosell activation.
+- Kept this unit non-live. No live `CM_PET` handler dispatch, pet common-data mutation, audit logging, `SM_PET(AUTOSELL)` send, persistence, encrypted frame capture, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1969
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PET.runImpl` FOOD actionType `4` dispatch | `Aion.GameServer.Services.CmPetAutoSellActivationCompositionPlanService` | Client Handler Composition Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | C# now has a non-live bridge from parsed `CmPet` FOOD/actionType `4` payloads to the disabled autosell activation planner. Live handler wiring remains unverified. |
+| `CM_PET.readImpl` `activateSpecialFunction != 0` | `CmPet.ActivateSpecialFunction` -> `PetAutoSellActivationInput.Activate` | Parser-to-Service Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | Tests prove parsed activation values `1` and `0` become true/false target selling-state intent. Encrypted frame and live connection dispatch remain unverified. |
+| `CM_PET.runImpl` non-autosell branches | `CmPetAutoSellActivationCompositionPlanStatus.NotFoodAction` / `NotAutoSellAction` | Guard/Branch Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | Composition stops before autosell activation for non-FOOD actions and FOOD actionType `3`, matching Java's branch routing. Other pet branches remain separate work. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmPetTests|FullyQualifiedName~PetMerchantSellLiveExecutorFacadePlanServiceTests" --no-restore` passed with 39 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5026 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 24 game-server tests.
+
+Remaining risks:
+- This unit proves disabled parser-to-planner composition only. It does not verify live `CM_PET` runtime dispatch, pet common-data mutation, `AuditLogger.log`, `SM_PET(AUTOSELL)` socket send, persistence, threading, encrypted frame behavior, or real-client behavior.
+- Java `Pet.toString()` audit text remains approximated by the existing disabled activation planner; no runtime comparison was added.
+- Full Maven reactor validation was not rerun in this unit; the game-server reactor passed.
+- Other `CM_PET` branches, including actionType `3` autoloot, doping, feeding, mood, rename, spawn, dismiss, surrender, and adoption, remain outside this unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one disabled `CM_PET` autosell activation composition bridge plus focused C# tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies source-reviewed and C# unit-tested diagnostic evidence but does not complete live pet autosell parity.
+- Total artifacts needing verification: live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, signed `readH` call sites, and workflow integration.
+- Total blocked artifacts: live DB proof for pet/craft/sell/repurchase/buy/private-store persistence, live pet common-data mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled `CM_PET` autosell composition diagnostics but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: audit signed Java `readH()` call sites where C# currently uses unsigned `PacketBuffer.ReadH()`, then choose one high-bit field with a deterministic Java/C# parser test.
+- Safe alternative candidates for the next session:
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+	- run a full Maven reactor validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
+
 ### Session 1968 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1967: re-read required migration/orchestration/parity docs and latest handoff, inspected Java `Storage.delete`, `Storage.decreaseByItemId`, `ItemPacketService.sendItemPacket`, `ItemPacketService.sendItemDeletePacket`, `SM_CUBE_UPDATE.cubeSize`, `Storage.size`, C# `CraftService.CreateStartInventoryPacketPlan`, `SmDeleteItem`, `SmCubeUpdate`, and existing craft packet-plan/send-adapter tests.
 - Confirmed Java delete-path behavior for craft component consumption: zero-count non-Kinah stack decreases route to `sendItemDeletePacket`, emit `SM_DELETE_ITEM(..., ItemDeleteType.USE)` for normal cube storage, then immediately emit `SM_CUBE_UPDATE.cubeSize(StorageType.CUBE, player)`.
