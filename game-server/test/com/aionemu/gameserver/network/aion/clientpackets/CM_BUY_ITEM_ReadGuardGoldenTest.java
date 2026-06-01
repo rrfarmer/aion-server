@@ -6,18 +6,25 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
+import com.aionemu.gameserver.model.gameobjects.AionObject;
+import com.aionemu.gameserver.model.gameobjects.Item;
 import com.aionemu.gameserver.configs.main.ThreadConfig;
 import com.aionemu.gameserver.configs.network.NetworkConfig;
 import com.aionemu.gameserver.model.gameobjects.player.Player;
+import com.aionemu.gameserver.model.trade.RepurchaseList;
 import com.aionemu.gameserver.model.trade.TradeItem;
 import com.aionemu.gameserver.model.trade.TradeList;
 import com.aionemu.gameserver.network.aion.AionConnection;
 import com.aionemu.gameserver.network.aion.AionConnection.State;
+import com.aionemu.gameserver.services.RepurchaseService;
 
 import sun.misc.Unsafe;
 
@@ -51,6 +58,40 @@ public class CM_BUY_ITEM_ReadGuardGoldenTest {
 		int[] tradeListActions = { 1, 13, 14, 15, 16, 17 };
 		for (int tradeActionId : tradeListActions) {
 			assertTradeListActionStoresItemsInReadOrder(tradeActionId);
+		}
+	}
+
+	@Test
+	public void readImpl_repurchaseActionFiltersItemsThroughRepurchaseServiceInFirstSeenOrder() throws Exception {
+		RepurchaseService repurchaseService = RepurchaseService.getInstance();
+		Object originalRepurchaseItems = getField(repurchaseService, "repurchaseItems");
+		try {
+			Map<Integer, Set<Item>> repurchaseItems = new ConcurrentHashMap<>();
+			repurchaseItems.put(5001, Set.of(item(101), item(102)));
+			setField(repurchaseService, "repurchaseItems", repurchaseItems);
+
+			CM_BUY_ITEM packet = new CM_BUY_ITEM(51, Set.of(State.IN_GAME));
+			packet.setConnection(allocateConnection(player(5001)));
+			packet.setBuffer(payload(7001, 2, new int[] { 101, 999, 102, 101 }, new long[] { 1, 1, 5, 7 }));
+
+			packet.readImpl();
+
+			assertEquals(7001, getField(packet, "sellerObjId"));
+			assertEquals((short) 2, getField(packet, "tradeActionId"));
+			assertEquals(4, getField(packet, "amount"));
+			assertFalse((boolean) getField(packet, "isAudit"));
+			assertEquals(101, getField(packet, "itemId"));
+			assertEquals(7L, getField(packet, "count"));
+
+			RepurchaseList repurchaseList = (RepurchaseList) getField(packet, "repurchaseList");
+			assertEquals(7001, repurchaseList.getSellerObjId());
+			assertEquals(2, repurchaseList.size());
+			LinkedHashSet<Integer> expectedItems = new LinkedHashSet<>();
+			expectedItems.add(101);
+			expectedItems.add(102);
+			assertEquals(expectedItems, repurchaseList.getRepurchaseItems());
+		} finally {
+			setField(repurchaseService, "repurchaseItems", originalRepurchaseItems);
 		}
 	}
 
@@ -102,6 +143,10 @@ public class CM_BUY_ITEM_ReadGuardGoldenTest {
 	}
 
 	private static AionConnection allocateConnection() throws Exception {
+		return allocateConnection(null);
+	}
+
+	private static AionConnection allocateConnection(Player player) throws Exception {
 		NetworkConfig.PACKET_PROCESSOR_MIN_THREADS = 1;
 		NetworkConfig.PACKET_PROCESSOR_MAX_THREADS = 1;
 		NetworkConfig.PACKET_PROCESSOR_THREAD_KILL_THRESHOLD = 1;
@@ -109,8 +154,26 @@ public class CM_BUY_ITEM_ReadGuardGoldenTest {
 		ThreadConfig.MAXIMUM_RUNTIME_IN_MILLISEC_WITHOUT_WARNING = 5000;
 		Unsafe unsafe = unsafe();
 		AionConnection connection = (AionConnection) unsafe.allocateInstance(AionConnection.class);
-		setField(connection, "activePlayer", new AtomicReference<Player>());
+		setField(connection, "activePlayer", new AtomicReference<>(player));
 		return connection;
+	}
+
+	private static Player player(int objectId) throws Exception {
+		Player player = (Player) unsafe().allocateInstance(Player.class);
+		setAionObjectId(player, objectId);
+		return player;
+	}
+
+	private static Item item(int objectId) throws Exception {
+		Item item = (Item) unsafe().allocateInstance(Item.class);
+		setAionObjectId(item, objectId);
+		return item;
+	}
+
+	private static void setAionObjectId(AionObject object, int objectId) throws Exception {
+		Field field = AionObject.class.getDeclaredField("objectId");
+		long offset = unsafe().objectFieldOffset(field);
+		unsafe().putInt(object, offset, objectId);
 	}
 
 	private static Unsafe unsafe() throws Exception {
