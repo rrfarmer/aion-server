@@ -84882,6 +84882,55 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1942 (June 1, 2026)
+- Performed Work Discovery after UOW-1941: re-read the required migration/orchestration/parity docs and latest handoff, inspected Java `CM_BUY_ITEM.readImpl`, Java `TradeList`/`TradeItem`, the existing Java read-capture test, C# `CmBuyItem`, C# `CmBuyItemTests`, and current buy-item composition tests.
+- Identified that the broad C# parser test was using action `2`, while Java action `2` creates a `RepurchaseList`; the Java trade-list branch is represented by actions such as `13`.
+- Extended Java `CM_BUY_ITEM_ReadGuardGoldenTest` with action `13` source-capture coverage proving multi-item buy-from-shop reads create a `TradeList` for seller `7001`, keep insertion order, preserve item ids/counts, and leave `isAudit=false`.
+- Updated the C# `CmBuyItemTests.ReadFrom_ReadsSellerActionAmountAndItemsLikeJava` case to use Java action `13` with the same two item ids/counts, aligning the test claim with the Java `TradeList.addItem` branch.
+- Kept this unit parser-only. No `runImpl`, target lookup, `TradeService.performBuyFromShop`, inventory/Kinah/AP mutation, packet dispatch, audit logging, socket frame decode, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1942
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM.readImpl` action `13` buy-from-shop trade-list read | `Aion.GameServer.Network.Aion.ClientPackets.CmBuyItem.ReadPayload` action `13` item reads | Client Packet Parser | Partial | Runtime Compared | Partial Parity | Java runtime/source-capture test confirms action `13` reads two item/count pairs into `TradeList` in packet order with no audit. C# parser test now uses the same action and values. This does not cover runImpl target validation, trade-template lookup, buy transaction mutation, packet sends, encrypted frame decoding, or live client behavior. |
+| `com.aionemu.gameserver.model.trade.TradeList.addItem` / `TradeItem` action `13` payload storage | `CmBuyItem.Items` for action `13` | Parsed DTO Evidence | Partial | Unit Tested | Partial Parity | Java test observes `TradeList` entries `(100000001, 1)` and `(100000002, 5)` in read order. C# stores equivalent parsed `CmBuyItemEntry` DTOs, but Java `TradeList` and C# DTO remain partial equivalents and live service consumers remain separate. |
+
+Validation:
+- Focused Java read-capture test passed with 2 tests:
+  `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_BUY_ITEM_ReadGuardGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"`
+- Focused C# parser tests passed with 9 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemTests" --no-restore`
+- Wider C# buy-item slice passed with 67 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemTests|FullyQualifiedName~CmBuyItemBuyFromShopCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~GameServerConnectionBuyItemTests" --no-restore`
+- Java/Maven reactor test run passed with tests explicitly enabled:
+  `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` ran 1 commons test and 15 game-server tests with 0 failures.
+- Broad game-server C# suite excluding the known inventory expansion use-item slice passed with 4972 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore`
+
+Remaining risks:
+- Java audit branches for invalid amount, invalid item id, negative count, and count above 20000 remain source-reviewed/C#-tested but do not have Java runtime capture because isolated Java audit logging reaches staff/static-data services.
+- The Java test uses test-only `Unsafe.allocateInstance` plus reflection to allocate an `AionConnection` shell and inspect private packet fields. This is evidence for `readImpl` behavior, not production connection lifecycle parity.
+- Java action `2` repurchase-list filtering is intentionally outside this unit and remains covered only by previous non-live planners/source review, not by this `CmBuyItem` trade-list parser assertion.
+- `CM_BUY_ITEM.runImpl`, live NPC target validation, `TradeService.performBuyFromShop`, buy transaction persistence, limited-item state, packet sends, encrypted frame decoding, and real-client validation remain pending.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported/verified: Java source-capture coverage for action `13` multi-item trade-list read formation, aligned with C# parser tests.
+- Total artifacts with verified parity: 0 rows at full artifact scope; the specific action `13` read-list boundary has Java runtime/source-capture evidence, but full `CM_BUY_ITEM` remains Partial Parity.
+- Total artifacts needing verification: 26 rows pending Java runtime/golden comparison for remaining `CM_BUY_ITEM` read guards, action `2` live repurchase-list filtering, non-empty repurchase item blobs, live repurchase singleton state, live BUY_AGAIN packet dispatch, live `CM_BUY_ITEM` handler execution, Java-equivalent known-list object population, live known-list resolver ownership, live private-store action `0`, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item service state/counter persistence, live price influence/siege state source, live pet auto-sell activation/state/item selection, live pet auto-sell execution/notification dispatch, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN packet dispatch, live normal/AP sell mutation wiring, live buy transaction mutation wiring, live influence/siege state wiring, live limited-item counter mutation/cron reset, live private-store model/runtime wiring, live pet common-data/service wiring, live pet auto-sell inventory/drop caller integration, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves objective `CM_BUY_ITEM` parser evidence for the buy-from-shop read branch but does not complete live trade/repurchase/private-store or pet parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect whether action `2` repurchase-list read behavior can be captured safely with a minimal player/repurchase singleton fixture; if not, add Java-runtime/source-capture coverage for another non-audit `CM_BUY_ITEM` trade-list action such as sell-to-shop action `1` or pet sell action `17`.
+- Safe alternative candidates for the next session:
+	- extend Java golden coverage to a non-empty `SM_REPURCHASE` item entry if a minimal Java `Item`/`ItemTemplate` fixture can be created safely
+	- inspect `PetService.activateAutoSell` and `SM_PET(AUTOSELL, activate)` runtime state wiring as a separate disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full socket cases without enabling live mutation
+	- continue repurchase toward live singleton-state adapter boundaries without enabling live mutation
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+
 ### Session 1941 (June 1, 2026)
 - Performed Work Discovery after UOW-1940: read the new handoff, inspected Java `CM_BUY_ITEM.readImpl`, Java `TradeList`/`TradeItem`, Java client-packet buffer mechanics, C# `CmBuyItem`, and C# `CmBuyItemTests`.
 - Determined non-empty `SM_REPURCHASE` golden coverage remains too invasive for a safe small unit because Java `ItemInfoBlob` depends on item templates, item state, and player context.

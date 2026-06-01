@@ -46,6 +46,30 @@ public class CM_BUY_ITEM_ReadGuardGoldenTest {
 		assertEquals(20000L, item.getCount());
 	}
 
+	@Test
+	public void readImpl_buyFromShopActionStoresTradeListItemsInReadOrder() throws Exception {
+		CM_BUY_ITEM packet = new CM_BUY_ITEM(51, Set.of(State.IN_GAME));
+		packet.setConnection(allocateConnection());
+		packet.setBuffer(payload(7001, 13, new int[] { 100000001, 100000002 }, new long[] { 1, 5 }));
+
+		packet.readImpl();
+
+		assertEquals(7001, getField(packet, "sellerObjId"));
+		assertEquals((short) 13, getField(packet, "tradeActionId"));
+		assertEquals(2, getField(packet, "amount"));
+		assertFalse((boolean) getField(packet, "isAudit"));
+		assertEquals(100000002, getField(packet, "itemId"));
+		assertEquals(5L, getField(packet, "count"));
+
+		TradeList tradeList = (TradeList) getField(packet, "tradeList");
+		assertEquals(7001, tradeList.getSellerObjId());
+		assertEquals(2, tradeList.size());
+		assertEquals(100000001, tradeList.getTradeItems().get(0).getItemId());
+		assertEquals(1L, tradeList.getTradeItems().get(0).getCount());
+		assertEquals(100000002, tradeList.getTradeItems().get(1).getItemId());
+		assertEquals(5L, tradeList.getTradeItems().get(1).getCount());
+	}
+
 	private static ByteBuffer payload(int sellerObjectId, int tradeActionId, int amount, int itemId, long count) {
 		ByteBuffer buffer = ByteBuffer.allocate(20).order(ByteOrder.LITTLE_ENDIAN);
 		buffer.putInt(sellerObjectId);
@@ -53,6 +77,19 @@ public class CM_BUY_ITEM_ReadGuardGoldenTest {
 		buffer.putShort((short) amount);
 		buffer.putInt(itemId);
 		buffer.putLong(count);
+		buffer.flip();
+		return buffer;
+	}
+
+	private static ByteBuffer payload(int sellerObjectId, int tradeActionId, int[] itemIds, long[] counts) {
+		ByteBuffer buffer = ByteBuffer.allocate(8 + itemIds.length * 12).order(ByteOrder.LITTLE_ENDIAN);
+		buffer.putInt(sellerObjectId);
+		buffer.putShort((short) tradeActionId);
+		buffer.putShort((short) itemIds.length);
+		for (int i = 0; i < itemIds.length; i++) {
+			buffer.putInt(itemIds[i]);
+			buffer.putLong(counts[i]);
+		}
 		buffer.flip();
 		return buffer;
 	}
