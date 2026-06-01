@@ -87913,6 +87913,34 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2026 (June 1, 2026)
+- Performed Work Discovery after UOW-2025: re-read the latest completion and handoff, inspected Java `CM_FIND_GROUP.readImpl`/`runImpl`, reviewed the C# `CmFindGroup` parser, checked existing Java golden/C# factory coverage, and confirmed the worktree was clean before edits.
+- Extended Java golden parser coverage for the remaining distinct `CM_FIND_GROUP.readImpl` action layouts: action `1`, action `3`, action `5`, action `6`, action `9`, action `12`, action `17`, action `20`, and action `25`.
+- Extended C# factory/parser coverage for the same added layouts, keeping the already-registered opcode `77` and documented no-op handler boundary unchanged.
+- Made no production-code changes in this unit. Live `FindGroupService` behavior, `SM_FIND_GROUP` serialization, socket dispatch, encrypted frames, and real-client behavior remain deferred.
+
+#### Migration Parity Table - Session 2026
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_FIND_GROUP.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmFindGroup.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Focused Java/C# vectors now cover action layouts `0`, `1`, `2`, `3`, `5`, `6`, `8`, `9`, `12`, `17`, `20`, and `25`. Source review confirms actions `4`, `10`, and `13` share the action-only layout, action `7` shares action `6`, and actions `11`/`15` share action `9`; those repeated action values are not separately golden-tested. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_FIND_GROUP.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java dispatches live recruitment, application, instance-group, applicant-response, and member-info behavior through `FindGroupService`. C# intentionally keeps this route as a no-op boundary in this parser-only unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_FIND_GROUP_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 12 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesRemainingFindGroupLayouts" --no-restore` passed with 1 C# test. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 96 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5132 tests.
+
+Known gaps:
+- Java `CM_FIND_GROUP.runImpl` side effects remain unported: all `FindGroupService` recruitment, application, instance-group, world-broadcast, applicant-response, and member-info behavior.
+- This unit proves parser/factory layout behavior only. It does not verify `SM_FIND_GROUP`, encrypted-frame handling, socket dispatch, world broadcast behavior, or real-client behavior.
+- Repeated-layout action values `4`, `7`, `10`, `11`, `13`, and `15` are source-reviewed via their shared parser branches but do not have separate action-value golden vectors.
+
+Next candidates:
+- Next sequential task: inspect `SM_FIND_GROUP` writer parity as a server-packet-only unit before any live find-group dispatch work.
+- Safe alternatives: inspect `SM_GROUP_DATA_EXCHANGE` writer parity before live group-data fanout; inspect another compact registered parser boundary with Java golden evidence; inspect a narrow live `FindGroupService` planner only if service side effects can remain non-live and well documented.
+
 ### Session 2025 (June 1, 2026)
 - Performed Work Discovery after UOW-2024: re-read the latest handoff, inspected Java `CM_FIND_GROUP`, Java packet factory opcode `77`, searched C# for existing find-group coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
 - Found a parser/factory parity gap: Java registers `CM_FIND_GROUP` at opcode `77` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
