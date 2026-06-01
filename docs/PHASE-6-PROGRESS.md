@@ -87580,3 +87580,49 @@ Next recommended unit of work:
 	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
 	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+
+### Session 1957 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1956: re-read required migration/orchestration/parity docs, latest completion and handoff, inspected Java `PlayerLeaveWorldService.leaveWorld`, Java `RepurchaseService.removeRepurchaseItems`, C# `PlayerEnterWorldService.LeaveWorldAsync`, C# `RepurchaseStatePlanService`, and existing logout/repurchase tests.
+- Added an optional observer-only logout repurchase-state cleanup diagnostic to `PlayerEnterWorldService`.
+- `LeaveWorldAsync` now records a disabled `RepurchaseStateRemovePlan` through the observer, using `Player.RepurchaseItems` as supplied facts when present.
+- Empty C# `Player.RepurchaseItems` facts are conservatively recorded as `NoSnapshot` because the C# player list cannot prove whether Java's singleton map contained an empty set or no entry.
+- Existing runtime behavior is unchanged when no observer is registered, and the hook never clears `Player.RepurchaseItems` or mutates a singleton map.
+- Kept this unit non-live. No C# singleton map, Java `HashSet` bucket-order emulation, socket dispatch, repository write, transaction behavior, encrypted-frame proof, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1957
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.player.PlayerLeaveWorldService.leaveWorld` repurchase cleanup step | `Aion.GameServer.Services.PlayerEnterWorldService.LeaveWorldAsync` optional repurchase-state observer | Logout Diagnostic Integration | Partial | Unit Tested + Source Reviewed | Partial Parity | Logout can now emit a disabled plan for `RepurchaseService.removeRepurchaseItems(player)`. The plan is observer-only and does not mutate live player state or a singleton map. |
+| `com.aionemu.gameserver.services.RepurchaseService.removeRepurchaseItems` | `Aion.GameServer.Services.RepurchaseStatePlanService.CreateRemoveDisabledPlan` through logout observer | State Planner Integration | Partial | Unit Tested + Source Reviewed | Partial Parity | Present supplied player repurchase facts produce a `SnapshotRemoved` diagnostic. Empty player facts are conservatively treated as `NoSnapshot`, so Java empty-set map entries remain unproven. |
+| `com.aionemu.gameserver.model.gameobjects.AionObject.hashCode/equals` repurchase set dependency | `RepurchaseStateSnapshot` supplied by logout observer | Model Equality Dependency | Partial | Unit Tested + Source Reviewed | Needs Verification | The logout observer carries supplied `RepurchaseSourceItem` facts only. Java `HashSet` bucket order, dummy object-id identity behavior, returned set mutability, and concurrent map timing remain unmodeled. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~RepurchaseStatePlanServiceTests" --no-restore` passed with 42 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_REPURCHASE_GoldenTest,CM_BUY_ITEM_ReadGuardGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 11 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5007 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 23 game-server tests.
+
+Remaining risks:
+- Logout repurchase-state cleanup remains disabled and informational only; it does not update live player repurchase state or a singleton map.
+- Empty player repurchase facts cannot distinguish a Java empty set map entry from an absent player key.
+- Java `HashSet` bucket iteration is explicitly not emulated, so packet snapshot ordering still depends on caller-supplied order until live state is ported or a safe ordering adapter is proven.
+- Returned Java set mutability, concurrent map/set timing, live BUY_AGAIN dispatch, live `CM_BUY_ITEM` repurchase execution, inventory/Kinah mutation, repository persistence, transaction behavior, encrypted frame capture, and real-client validation remain pending.
+- Full item-info blob parity for advanced item states remains partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one disabled logout observer integration using the existing repurchase state-removal planner plus focused tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit is source-reviewed and C# unit-tested but remains non-live and does not prove Java runtime mutation/concurrency parity.
+- Total artifacts needing verification: live repurchase singleton state, live set/map mutation timing, live BUY_AGAIN wiring, live `CM_BUY_ITEM` repurchase execution, DAO/packet behavior, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled logout repurchase-state diagnostics but does not complete live repurchase or logout parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect `DialogService`/BUY_AGAIN (`DialogAction.BUY_AGAIN`) and C# dialog repurchase packet paths to add a disabled side-effect diagnostic for opening the repurchase list, without changing packet bytes or live state.
+- Safe alternative candidates for the next session:
+	- add another narrow Java golden item-info vector only if the fixture remains simple, such as equipped-slot nonzero or one basic manastone socket
+	- inspect `PetService.activateAutoSell` plus `SM_PET(AUTOSELL, activate)` as a disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
+	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
