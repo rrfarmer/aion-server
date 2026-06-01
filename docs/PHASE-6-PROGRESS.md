@@ -87913,6 +87913,36 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2021 (June 1, 2026)
+- Performed Work Discovery after UOW-2020: re-read required migration/orchestration/parity docs, latest completion/handoff, inspected Java `CM_WINDSTREAM`, Java packet factory opcode `70`, searched C# for existing windstream packet coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, packet factory tests, and existing flight/windstream model references.
+- Found a compact parser/factory parity gap: Java registers `CM_WINDSTREAM` at opcode `70` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
+- Added Java golden coverage for `CM_WINDSTREAM.readImpl`, proving Java reads D `teleportId`, D `distance`, and D `state` in order and consumes the payload.
+- Added C# `CmWindstream` and registered opcode `70` for `InGame`; added a documented no-op handler boundary because Java live windstream behavior mutates flight/player state, emits emotion/windstream/transform packets, and invokes quest hooks.
+- Added C# parser/factory coverage proving teleport-id/distance/state parsing, valid `InGame`, and invalid `Authed`.
+- Source-reviewed the next compact registered packet candidates and identified `CM_LEGION_WH_KINAH` as a safer next parser candidate than broader `CM_FIND_GROUP` or group data exchange runtime surfaces.
+
+#### Migration Parity Table - Session 2021
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_WINDSTREAM.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmWindstream.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# reads D `teleportId`, D `distance`, and D `state` in Java order. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `70` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `70` | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# accepts opcode `70` only in `InGame`; encrypted-frame/socket dispatch remains unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_WINDSTREAM.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java handles windstream state `0`, `1`, `2`, `3`, `4`, `7`, and `8`, mutating flight/player state, broadcasting `SM_EMOTION`, invoking quest hooks, optionally sending `SM_TRANSFORM`, and sending `SM_WINDSTREAM`. C# does not wire live windstream behavior in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_WINDSTREAM_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesWindstreamPacket" --no-restore` passed with 1 C# test.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5127 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 80 game-server tests.
+
+Known gaps:
+- Java `CM_WINDSTREAM.runImpl` side effects remain unported: ride-mode clearing, flight-path/state/fly-state mutation, FP restore trigger, quest hook, `SM_EMOTION` broadcast variants, optional transform broadcast, `SM_WINDSTREAM` send, unknown-state warning logs, encrypted-frame handling, and real-client behavior.
+- This unit proves parser/factory behavior only; no verified live windstream parity is claimed.
+
+Next candidates:
+- Next sequential task: continue packet-factory gap discovery with source-reviewed opcode `76` `CM_LEGION_WH_KINAH` as a compact parser candidate (`readQ amount`, `readC actionType`) while keeping legion warehouse permission checks, Kinah mutation, and legion history side effects deferred unless separately scoped.
+- Safe alternatives: inspect another compact unregistered parser boundary with Java golden evidence; inspect Java `SM_UNWRAP_ITEM` writer parity as a server-packet-only unit; inspect `CM_GODSTONE_SOCKET` as parser-only with NPC/range/socket side effects deferred; inspect `CM_FIND_GROUP` only if a small action-specific parser vector is selected.
+
 ### Session 2020 (June 1, 2026)
 - Performed Work Discovery after UOW-2019: re-read the latest handoff, inspected Java `CM_OPEN_STATICDOOR`, Java packet factory opcode `23`, searched C# for existing static-door packet coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
 - Found a compact parser/factory parity gap: Java registers `CM_OPEN_STATICDOOR` at opcode `23` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
