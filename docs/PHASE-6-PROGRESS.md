@@ -87913,6 +87913,34 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2028 (June 1, 2026)
+- Performed Work Discovery after UOW-2027: re-read the latest handoff/completion, inspected Java `ServerWideGroup`, `GroupRecruitment`, `GroupApplication`, `Player`, `AionObject`, existing Java unsafe test setup, and the C# `SmFindGroup` writer slice.
+- Confirmed `SM_FIND_GROUP` actions `18` and `22` are deterministic server-wide-group window branches that write only action, group entry ID, and instance mask ID.
+- Extended the Java `SM_FIND_GROUP` golden test with action `18` and action `22` payload vectors using a minimal unsafe test `Player` only to provide the recruiter object ID.
+- Extended C# `SmFindGroup` with a small `FindGroupInstanceGroupWindowSnapshot` plus writer factories for action `18` and action `22`, and added C# byte-for-byte tests against the Java golden payloads.
+
+#### Migration Parity Table - Session 2028
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_FIND_GROUP.writeImpl` actions `18`, `22` | `Aion.GameServer.Network.Aion.ServerPackets.SmFindGroup` | Server Packet Writer | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# writes Java-matching payloads for `showEnterButtonInPrepareForEntryWindow` and `showPrepareForEntryWindow`. The richer list/member/update branches still need separate snapshot work. |
+| `com.aionemu.gameserver.model.gameobjects.findGroup.ServerWideGroup` ID/mask access | `Aion.GameServer.Network.Aion.ServerPackets.FindGroupInstanceGroupWindowSnapshot` | Packet DTO | Partial | Unit Tested + Java Golden Tested | Partial Parity | Snapshot captures only `getId()` and `getInstanceMaskId()` values needed by actions `18`/`22`; it does not represent members, recruiter names, levels, timestamps, readiness, or messages. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_FIND_GROUP_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 5 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmFindGroupTests" --no-restore` passed with 6 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 101 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5138 tests.
+
+Known gaps:
+- `SM_FIND_GROUP` actions `0`, `4`, `10`, `11`, `14`, `16`, `23`, and `24` remain unported.
+- `FindGroupInstanceGroupWindowSnapshot` is intentionally narrow and does not model full `ServerWideGroup` semantics.
+- Live `FindGroupService` dispatch, world broadcasts, encrypted-frame handling, socket dispatch, and real-client behavior remain unverified.
+
+Next candidates:
+- Next sequential task: build deterministic snapshot records for `SM_FIND_GROUP` action `10` or `14` if Java setup remains small, or inspect action `11` as a player-only writer vector.
+- Safe alternatives: inspect `SM_GROUP_DATA_EXCHANGE` writer parity before live group-data fanout; inspect another compact registered parser/writer boundary with Java golden evidence; inspect a non-live `FindGroupService` planner only if side effects remain explicitly deferred.
+
 ### Session 2027 (June 1, 2026)
 - Performed Work Discovery after UOW-2026: re-read required migration docs and the latest handoff/completion, inspected Java `SM_FIND_GROUP`, Java `FindGroupService` call sites, server opcode registration, existing Java server-packet golden-test patterns, and searched the C# server-packet surface for an existing find-group writer.
 - Found that C# had no `SM_FIND_GROUP` writer. Scoped the unit to dependency-free Java branches only: action `1` remove recruitment, action `5` remove application, and action `26` enable instance registration.

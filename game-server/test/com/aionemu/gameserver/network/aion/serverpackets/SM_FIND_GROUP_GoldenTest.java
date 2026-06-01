@@ -2,11 +2,18 @@ package com.aionemu.gameserver.network.aion.serverpackets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+
+import com.aionemu.gameserver.model.gameobjects.AionObject;
+import com.aionemu.gameserver.model.gameobjects.findGroup.ServerWideGroup;
+import com.aionemu.gameserver.model.gameobjects.player.Player;
+
+import sun.misc.Unsafe;
 
 public class SM_FIND_GROUP_GoldenTest {
 
@@ -34,6 +41,24 @@ public class SM_FIND_GROUP_GoldenTest {
 		assertEquals("1A0200B050E311F0ECE311", toHex(payload));
 	}
 
+	@Test
+	public void writeImpl_showEnterButtonWritesActionGroupIdAndInstanceMask() throws Exception {
+		ServerWideGroup group = simpleInstanceGroup();
+		SM_FIND_GROUP packet = new SM_FIND_GROUP(18, List.of(group));
+		byte[] payload = write(packet);
+
+		assertEquals("120403020144332211", toHex(payload));
+	}
+
+	@Test
+	public void writeImpl_showPrepareWindowWritesActionGroupIdAndInstanceMask() throws Exception {
+		ServerWideGroup group = simpleInstanceGroup();
+		SM_FIND_GROUP packet = new SM_FIND_GROUP(22, List.of(group));
+		byte[] payload = write(packet);
+
+		assertEquals("160403020144332211", toHex(payload));
+	}
+
 	private static byte[] write(SM_FIND_GROUP packet) {
 		ByteBuffer buffer = ByteBuffer.allocate(64).order(ByteOrder.LITTLE_ENDIAN);
 		packet.setBuf(buffer);
@@ -50,5 +75,22 @@ public class SM_FIND_GROUP_GoldenTest {
 		for (byte value : bytes)
 			hex.append(String.format("%02X", value));
 		return hex.toString();
+	}
+
+	private static ServerWideGroup simpleInstanceGroup() throws Exception {
+		Player recruiter = (Player) unsafe().allocateInstance(Player.class);
+		setAionObjectId(recruiter, 0x01020304);
+		return new ServerWideGroup(recruiter, 0x11223344, 3, "Entry");
+	}
+
+	private static void setAionObjectId(AionObject object, int objectId) throws Exception {
+		Field field = AionObject.class.getDeclaredField("objectId");
+		unsafe().putInt(object, unsafe().objectFieldOffset(field), objectId);
+	}
+
+	private static Unsafe unsafe() throws Exception {
+		Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+		unsafeField.setAccessible(true);
+		return (Unsafe) unsafeField.get(null);
 	}
 }
