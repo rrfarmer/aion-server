@@ -87913,6 +87913,54 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1974 (June 1, 2026)
+- Performed Work Discovery after UOW-1973: re-read required docs, latest completion and handoff, inspected Java `CM_LEGION.readImpl`/`runImpl`, Java opcode registration (`AionClientPacketFactory` opcode `45`, `IN_GAME`), C# game client packet factory, C# handler dispatch boundaries, and existing C# legion packet/service surfaces.
+- Added parser-only C# `CmLegion` for Java opcode `45`.
+- Registered opcode `45` as `IN_GAME`, matching Java `[C_GUILD]`.
+- Modeled Java `CM_LEGION.readImpl` branch parsing for create/invite/leave/kick/brigade-general/rank/notice/announcement/self-intro/permissions/level/nickname/dominion request shapes.
+- Matched Java signed `readH()` permission semantics for exOpcode `0x0D`: high-bit permission values now parse as signed shorts.
+- Added an explicit `GameServerConnection` parser-only no-op boundary documenting that Java `CM_LEGION.runImpl` dispatches `LegionService` calls by exOpcode.
+- Added Java golden and C# parser/factory coverage for signed permission fields, plus C# coverage for a string/rank branch to guard non-permission branch consumption.
+- Kept this unit parser-only. No legion creation, invite, rank change, permission mutation, announcement, dominion join, packet dispatch, persistence, encrypted frame capture, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1974
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_LEGION.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmLegion.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Parser now models known Java exOpcode read branches and has focused Java/C# evidence for signed permission shorts under exOpcode `0x0D`. Live `runImpl` legion behavior is not ported. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `45` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `45` | Packet Factory Registration | Partial | Unit Tested | Partial Parity | C# factory now registers `CmLegion` for `IN_GAME`, matching Java. Live `GameServerConnection` handling remains an explicit parser-only no-op. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_LEGION.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` explicit parser-only no-op | Client Packet Handler Boundary | Partial | Source Reviewed | Partial Parity | Java dispatches to `LegionService` for create/invite/leave/kick/rank/notice/permission/dominion branches. C# does not yet mutate legion state, persist DB rows, or send legion responses. |
+| `com.aionemu.commons.network.packet.BaseClientPacket.readH` permission callers in `CM_LEGION` | `Aion.Commons.Network.PacketBuffer.ReadSignedH` via `CmLegion` permissions | Packet Buffer Primitive Use | Partial | Unit Tested + Java Golden Tested | Partial Parity | This unit adds the signed permission short caller group. Other signed-short call sites outside the audited packet parsers remain incomplete. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmLegionTests" --no-restore` passed with 3 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_LEGION_ReadSignedPermissionsGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5037 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 31 game-server tests.
+
+Remaining risks:
+- This unit proves parser/factory behavior only. It does not verify Java `LegionService` branches, active-player legion membership checks, name normalization, announcement packet responses, permission persistence, legion warehouse permissions, encrypted client frames, or real-client behavior.
+- Unknown `exOpcode` Java warning behavior is not modeled in C#.
+- C# registered opcode `45` currently parses but does not dispatch legion execution in `GameServerConnection`; this is intentionally documented as partial parity.
+- Other Java signed `readH()` call sites outside this audited parser set still need separate review.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one parser-only `CM_LEGION` branch/signed permission slice plus factory registration, explicit handler boundary, and Java/C# tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies parser-level evidence only and does not complete legion runtime parity.
+- Total artifacts needing verification: legion runtime execution/persistence, item move execution/persistence, Atreian passport reward execution/persistence, remaining signed `readH()` call sites, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for legion/item move/Atreian passport/passkey/pet/craft/sell/repurchase/buy/private-store persistence, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves parser/signedness coverage but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: continue the signed Java `readH()` audit by scanning remaining client packet call sites and selecting the smallest surface with either an existing C# parser or a safe parser-only registration.
+- Safe alternative candidates for the next session:
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+	- run a full Maven reactor validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
+
 ### Session 1973 (June 1, 2026)
 - Performed Work Discovery after UOW-1972: inspected the latest handoff, Java `CM_MOVE_ITEM.readImpl`, Java opcode registration (`AionClientPacketFactory` opcode `156`, `IN_GAME`), C# packet factory coverage, C# handler dispatch boundaries, and absence of an existing C# `CmMoveItem` parser.
 - Added parser-only C# `CmMoveItem` for Java opcode `156`.
