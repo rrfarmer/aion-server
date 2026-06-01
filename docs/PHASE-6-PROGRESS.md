@@ -87913,6 +87913,36 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2031 (June 1, 2026)
+- Performed Work Discovery after UOW-2030: re-read the required migration/orchestration/parity docs and latest handoff, inspected Java `SM_FIND_GROUP` actions `23` and `24`, Java `FindGroupService` call sites, Java `ServerWideGroup`, reflected Java packet-test setup, and the current C# `SmFindGroup` writer/tests.
+- Scoped this unit to the deterministic prepare-for-entry window writer tail, leaving live `FindGroupService` dispatch and world/socket behavior deferred.
+- Extended Java `SM_FIND_GROUP_GoldenTest` with action `23` destroy-prepare-window and action `24` update-prepare-window payload vectors.
+- Extended C# `SmFindGroup` with destroy/update prepare-window factories, `FindGroupInstanceGroupPrepareWindowSnapshot`, member snapshots, and byte-for-byte C# tests against the Java-emitted payloads.
+
+#### Migration Parity Table - Session 2031
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_FIND_GROUP.writeImpl` action `23` | `Aion.GameServer.Network.Aion.ServerPackets.SmFindGroup.DestroyPrepareForEntryWindow` | Server Packet Writer | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# writes the Java-matching destroy-prepare-window payload for the deterministic false enter-message flag path. Java's standalone boolean constructor does not populate `entries`; live action `23` dispatch was not found in current `FindGroupService` call sites. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_FIND_GROUP.writeImpl` action `24` | `Aion.GameServer.Network.Aion.ServerPackets.SmFindGroup.UpdatePrepareForEntryWindow` | Server Packet Writer | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# writes the Java-matching single-member prepare-window update payload, including ready byte `1`, online byte, class ID, level, and tagged-name string field with admin tags disabled. |
+| `com.aionemu.gameserver.model.gameobjects.findGroup.ServerWideGroup` prepare-window fields | `Aion.GameServer.Network.Aion.ServerPackets.FindGroupInstanceGroupPrepareWindowSnapshot` | Packet DTO | Partial | Unit Tested + Java Golden Tested | Partial Parity | Snapshot captures only fields serialized by actions `23`/`24`; it does not model live team membership lookup, player online connection state, service mutation, broadcast routing, or real-time team changes. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_FIND_GROUP_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 9 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmFindGroupTests" --no-restore` passed with 10 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 105 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5142 tests.
+
+Known gaps:
+- `SM_FIND_GROUP` actions `0`, `4`, `10`, and `16` remain unported in C#.
+- Action `23` is byte-tested only for the false enter-message flag path reachable through the `action, entries` constructor shape; Java's separate boolean constructor does not provide the required entries list in current source.
+- Action `24` is tested with one deterministic offline member only; multi-member ordering, online-state derivation from `AionConnection`, and live team-backed `ServerWideGroup.getMembers()` behavior remain unverified.
+- Live `FindGroupService` dispatch, world broadcasts, encrypted-frame handling, socket dispatch, and real-client behavior remain unverified.
+
+Next candidates:
+- Next sequential task: inspect `SM_FIND_GROUP` action `16` member-info writer with a minimal member snapshot, accepting the current-time header as parsed/tested shape rather than exact fixed bytes unless a deterministic seam is found.
+- Safe alternatives: inspect action `10` instance-group list with parsed timestamp-header assertions; inspect actions `0`/`4` recruitment/application lists; inspect `SM_GROUP_DATA_EXCHANGE` writer parity before live group-data fanout.
+
 ### Session 2030 (June 1, 2026)
 - Performed Work Discovery after UOW-2029: re-read the latest handoff, inspected Java `SM_FIND_GROUP` action `14`, Java `ServerWideGroup`, reflected Java packet-test setup, and the current C# `SmFindGroup` snapshot writer.
 - Confirmed action `14` can be covered deterministically with a single-member `ServerWideGroup` when `lastUpdate` and admin name tags are fixed in the Java golden test.

@@ -97,6 +97,32 @@ public class SM_FIND_GROUP_GoldenTest {
 		}
 	}
 
+	@Test
+	public void writeImpl_destroyPrepareWindowWritesGroupAndEnterMessageFlag() throws Exception {
+		ServerWideGroup group = simpleInstanceGroup();
+		SM_FIND_GROUP packet = new SM_FIND_GROUP(23, List.of(group));
+		byte[] payload = write(packet);
+
+		assertEquals("17040302014433221100", toHex(payload));
+	}
+
+	@Test
+	public void writeImpl_updatePrepareWindowWritesMemberSnapshot() throws Exception {
+		String[] originalNameTags = AdminConfig.NAME_TAGS;
+		try {
+			AdminConfig.NAME_TAGS = new String[0];
+			ServerWideGroup group = simpleInstanceGroup();
+			SM_FIND_GROUP packet = new SM_FIND_GROUP(24, List.of(group));
+			byte[] payload = write(packet);
+
+			assertEquals(
+				"180403020144332211010000000000000000040302014100000001000000000001005200650063007200750069007400650072000000",
+				toHex(payload));
+		} finally {
+			AdminConfig.NAME_TAGS = originalNameTags;
+		}
+	}
+
 	private static byte[] write(SM_FIND_GROUP packet) {
 		ByteBuffer buffer = ByteBuffer.allocate(256).order(ByteOrder.LITTLE_ENDIAN);
 		packet.setBuf(buffer);
