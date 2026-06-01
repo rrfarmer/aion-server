@@ -87913,6 +87913,49 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1977 (June 1, 2026)
+- Performed Work Discovery after UOW-1976: inspected remaining Java client packet `readH()` call sites and selected Java `CM_HOUSE_KICK.readImpl`, a small existing parser surface with an option byte plus ignored signed padding word.
+- Reviewed Java `CM_HOUSE_KICK.readImpl`/`runImpl`, Java opcode registration (`AionClientPacketFactory` opcode `72`, `IN_GAME`), C# `CmHouseKick`, C# opcode registration, and C# `GameServerConnection.HandleHouseKickAsync`.
+- Updated C# `CmHouseKick` to consume the ignored padding word with `PacketBuffer.ReadSignedH()` instead of unsigned `ReadH()`, matching Java's signed `readH()` primitive even though the value is discarded.
+- Added Java golden and C# parser/factory coverage proving a high-bit padding word does not shift the `option` field and is fully consumed.
+- Kept live house kick execution out of scope. No visitor movement/removal, full house-controller behavior, audit sink parity, encrypted frame capture, or real-client validation was enabled or newly claimed.
+
+#### Migration Parity Table - Session 1977
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_HOUSE_KICK.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmHouseKick.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Parser now consumes the ignored Java signed padding `readH()` with `ReadSignedH()` and has focused Java/C# evidence that high-bit padding preserves `option` parsing and full consumption. Live house-kick execution remains partial. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `72` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `72` | Packet Factory Registration | Partial | Unit Tested | Partial Parity | Existing C# factory registration for `CmHouseKick` remains `IN_GAME`, matching Java; this unit adds focused state-gate coverage in a dedicated parser test. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_HOUSE_KICK.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleHouseKickAsync` | Client Packet Handler Boundary | Partial | Existing Regression + Source Reviewed | Partial Parity | Java checks active player/active house, audits missing house, and calls `HouseController.kickVisitors` for options `1` and `2`. C# has owner-notification behavior but does not verify full visitor kick/controller side effects in this unit. |
+| `com.aionemu.commons.network.packet.BaseClientPacket.readH` padding caller in `CM_HOUSE_KICK` | `Aion.Commons.Network.PacketBuffer.ReadSignedH` via `CmHouseKick` ignored padding | Packet Buffer Primitive Use | Partial | Unit Tested + Java Golden Tested | Partial Parity | This unit covers another ignored signed-short padding caller. Because Java discards the value, evidence is limited to field alignment and complete consumption, not an exposed signed value. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmHouseKickSignedPaddingTests" --no-restore` passed with 2 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_HOUSE_KICK_ReadSignedPaddingGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5043 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 34 game-server tests.
+
+Remaining risks:
+- This unit proves only parser padding consumption and opcode state gating for the focused slice. It does not verify Java `CM_HOUSE_KICK.runImpl` visitor kick behavior or exact `HouseController.kickVisitors` side effects.
+- Active-house lookup differences, audit logging, visitor filtering, friend exclusion, packet fanout, encrypted client frames, and real-client behavior remain unverified.
+- Other Java signed `readH()` call sites outside this audited parser set still need separate review.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one ignored-padding signed `readH()` parser slice plus Java/C# tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies parser-alignment evidence only and does not complete house-kick runtime parity.
+- Total artifacts needing verification: house-kick runtime execution, appearance rename/cosmetic runtime execution, split-item runtime execution/persistence, legion runtime execution/persistence, item move execution/persistence, Atreian passport reward execution/persistence, remaining signed `readH()` call sites, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/pet/craft/sell/repurchase/buy/private-store persistence, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves parser/signedness coverage but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: continue the signed Java `readH()` audit by inspecting another ignored-padding or parser-only call site, with `CM_MANASTONE`, `CM_QUESTION_RESPONSE`, `CM_PING`, `CM_TELEPORT_SELECT`, `CM_UI_SETTINGS`, and unported `CM_TOGGLE_SKILL_DEACTIVATE` as candidates.
+- Safe alternative candidates for the next session:
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+
 ### Session 1976 (June 1, 2026)
 - Performed Work Discovery after UOW-1975: inspected the remaining Java client packet `readH()` call sites, then selected the smallest safe existing parser surface: Java `CM_APPEARANCE.readImpl` has an ignored signed `readH()` padding field before `itemObjId` and optional rename text.
 - Reviewed Java `CM_APPEARANCE.readImpl`/`runImpl`, Java opcode registration (`AionClientPacketFactory` opcode `197`, `IN_GAME`), C# `CmAppearance`, C# opcode registration, C# `GameServerConnection.HandleAppearanceAsync`, and existing appearance packet tests.
