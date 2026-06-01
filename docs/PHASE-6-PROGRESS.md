@@ -87913,6 +87913,49 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1970 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1969: re-read required migration/orchestration/parity docs, latest completion and handoff, inspected Java `BaseClientPacket.readH`/`readUH`, C# `PacketBuffer.ReadH`, Java signed `readH()` client-packet call sites, Java `CM_CHARACTER_PASSKEY`, C# `CmCharacterPasskey`, and existing passkey parser coverage.
+- Added `PacketBuffer.ReadSignedH()` so C# can distinguish Java signed `readH()` from Java unsigned `readUH()` without changing existing unsigned call sites.
+- Updated `CmCharacterPasskey` to parse `type` through `ReadSignedH()`, matching Java's `private short type`.
+- Added Java golden coverage and C# parser coverage for `CM_CHARACTER_PASSKEY.type = 0xFFFF`: Java and C# both read it as `-1`, do not enter the update-type `2` branch, and do not read the trailing new-passkey bytes.
+- Kept this unit parser-only. No passkey DAO mutation, character-select packet dispatch, login-server ban side effect, encrypted frame capture, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1970
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.commons.network.packet.BaseClientPacket.readH` | `Aion.Commons.Network.PacketBuffer.ReadSignedH` | Packet Buffer Primitive | Partial | Unit Tested Indirectly + Java Golden Tested | Partial Parity | C# now has a signed 16-bit reader for Java `readH()` callers. Existing `PacketBuffer.ReadH()` remains unsigned and still needs per-caller audits before broad replacement. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CHARACTER_PASSKEY.readImpl` type field | `Aion.GameServer.Network.Aion.ClientPackets.CmCharacterPasskey.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Java golden and C# unit tests cover high-bit type `0xFFFF` reading as `-1` and skipping the update-only new-passkey read. Live passkey runImpl side effects remain unverified. |
+| `CM_CHARACTER_PASSKEY.readImpl` update type branch | `CmCharacterPasskey.ReadPayload` type `2` branch | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Matching tests also keep the normal type `2` branch covered so the signed-reader change does not regress update new-passkey parsing. DAO update and response packet behavior remain outside this unit. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmCharacterPasskeyTests" --no-restore` passed with 2 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_CHARACTER_PASSKEY_ReadSignedTypeGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 2 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5028 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 26 game-server tests.
+
+Remaining risks:
+- This unit proves only `CM_CHARACTER_PASSKEY.type` parser signedness. It does not verify passkey DAO writes, wrong-count/ban behavior, response packet dispatch, encrypted client frames, or real-client behavior.
+- Many other Java `readH()` call sites still use C# `PacketBuffer.ReadH()` and need separate source review/tests before changing because some C# callers intentionally model unsigned Java `readUH()` behavior.
+- Full Maven reactor validation was not rerun in this unit; the game-server reactor passed.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one signed packet-buffer primitive plus one character-passkey parser correction and Java/C# tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies parser-level evidence for one signed field but does not complete live passkey parity.
+- Total artifacts needing verification: remaining signed `readH()` call sites, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for passkey/pet/craft/sell/repurchase/buy/private-store persistence, live pet common-data mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves signed parser primitive coverage but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: continue the signed Java `readH()` audit and pick another high-bit parser field with deterministic Java/C# evidence, likely `CM_BUY_ITEM.tradeActionId` or a low-risk skipped/ignored field.
+- Safe alternative candidates for the next session:
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+	- run a full Maven reactor validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
+
 ### Session 1969 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1968: re-read the latest handoff, inspected Java `CM_PET.readImpl`/`runImpl` FOOD actionType parsing, Java `PetService.activateAutoSell`, C# `CmPet`, C# `PetAutoSellActivationPlanService`, C# `SmPet` special-function serializer coverage, and existing pet autosell activation tests.
 - Added a disabled `CmPetAutoSellActivationCompositionPlanService` that composes an already-parsed `CmPet` FOOD/actionType `4` payload into the existing disabled `PetAutoSellActivationPlanService`.
