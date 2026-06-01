@@ -87443,3 +87443,49 @@ Next recommended unit of work:
 	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
 	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+
+### Session 1954 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1953: re-read required migration/orchestration/parity docs, latest completion and handoff, inspected Java `TradeService.performSellToShop`, Java `RepurchaseService.addRepurchaseItems`, C# `TradeSellToShopPlanService`, C# `RepurchaseDiagnosticSnapshotPlanService`, C# `RepurchaseStatePlanService`, and existing sell/repurchase tests.
+- Integrated the disabled `RepurchaseStatePlanService` replacement payload into `RepurchaseDiagnosticSnapshotPlan`.
+- `RepurchaseDiagnosticSnapshotPlanService.CreateDisabledPlan` now carries an optional `RepurchaseStateReplacePlan` for successful sell-to-shop plans, preserving the existing supplied-facts/non-live behavior.
+- The integration infers the player object id from existing sell-plan facts when a caller does not pass it explicitly, and tests cover explicit current-snapshot replacement as well as empty successful sell lists.
+- Existing callers remain source-compatible because `CreateDisabledPlan(TradeSellToShopPlan?)` still works; the extra state replacement payload is optional and disabled.
+- Kept this unit non-live. No C# singleton map, `Player.RepurchaseItems` mutation, Java `HashSet` bucket-order emulation, socket dispatch, repository write, transaction behavior, encrypted-frame proof, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1954
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.TradeService.performSellToShop` repurchase snapshot boundary | `Aion.GameServer.Services.RepurchaseDiagnosticSnapshotPlanService` | Diagnostic Planner | Partial | Unit Tested + Source Reviewed | Partial Parity | Successful sell-to-shop diagnostics now carry a disabled state replacement plan for `RepurchaseService.addRepurchaseItems`. Live inventory/Kinah mutation, transaction ordering, singleton state, packet sends, and DB writes remain unwired. |
+| `com.aionemu.gameserver.services.RepurchaseService.addRepurchaseItems` | `Aion.GameServer.Services.RepurchaseStatePlanService` via `RepurchaseDiagnosticSnapshotPlan.StateReplacementPlan` | State Planner Integration | Partial | Unit Tested + Source Reviewed | Partial Parity | Integration records map-entry replacement after sell success and can replace a supplied current snapshot. Java `HashSet` iteration order, live `ConcurrentHashMap`, returned set mutability, and concurrency timing remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.AionObject.hashCode/equals` repurchase dedupe dependency | `RepurchaseStateReplacePlan` carried by sell diagnostics | Model Equality Dependency | Partial | Unit Tested + Source Reviewed | Needs Verification | Dedupe remains the UOW-1953 nonzero object-id approximation. Dummy object-id `0` identity behavior and Java bucket iteration are still not modeled. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~TradeSellToShopPlanServiceTests|FullyQualifiedName~RepurchaseStatePlanServiceTests|FullyQualifiedName~PetMerchantSellLiveExecutorFacadePlanServiceTests|FullyQualifiedName~GameServerConnectionStorageExpansionDialogTests" --no-restore` passed with 46 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_REPURCHASE_GoldenTest,CM_BUY_ITEM_ReadGuardGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 11 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5000 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 23 game-server tests.
+
+Remaining risks:
+- `RepurchaseDiagnosticSnapshotPlan.StateReplacementPlan` is disabled and informational only; it does not update live player or singleton state.
+- Java `HashSet` bucket iteration is explicitly not emulated, so packet snapshot ordering still depends on caller-supplied order until live state is ported or a safe ordering adapter is proven.
+- Player object-id inference uses sell-plan facts when no explicit id is supplied; future live integration should pass the player object id directly.
+- Returned Java set mutability, concurrent map timing, logout removal integration, live BUY_AGAIN dispatch, live `CM_BUY_ITEM` repurchase execution, inventory/Kinah mutation, repository persistence, transaction behavior, encrypted frame capture, and real-client validation remain pending.
+- Full item-info blob parity for advanced item states remains partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one disabled state replacement payload integration into sell-to-shop repurchase diagnostics plus focused tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit is source-reviewed and C# unit-tested but remains non-live and does not prove Java runtime mutation/concurrency parity.
+- Total artifacts needing verification: live repurchase singleton state, live map mutation timing, live logout removal, live BUY_AGAIN wiring, live `CM_BUY_ITEM` repurchase execution, DAO/packet behavior, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled sell-to-shop repurchase state diagnostics but does not complete live repurchase or trade parity.
+
+Next recommended unit of work:
+- Next sequential task: add an equivalent disabled state-removal payload to `RepurchaseOutcomePlanService` so successful `RepurchaseService.repurchaseFromShop -> items.remove(repurchaseItem)` outcomes can carry the post-repurchase snapshot plan without mutating live state.
+- Safe alternative candidates for the next session:
+	- add another narrow Java golden item-info vector only if the fixture remains simple, such as equipped-slot nonzero or one basic manastone socket
+	- inspect `PetService.activateAutoSell` plus `SM_PET(AUTOSELL, activate)` as a disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
+	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
