@@ -87913,6 +87913,50 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1968 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1967: re-read required migration/orchestration/parity docs and latest handoff, inspected Java `Storage.delete`, `Storage.decreaseByItemId`, `ItemPacketService.sendItemPacket`, `ItemPacketService.sendItemDeletePacket`, `SM_CUBE_UPDATE.cubeSize`, `Storage.size`, C# `CraftService.CreateStartInventoryPacketPlan`, `SmDeleteItem`, `SmCubeUpdate`, and existing craft packet-plan/send-adapter tests.
+- Confirmed Java delete-path behavior for craft component consumption: zero-count non-Kinah stack decreases route to `sendItemDeletePacket`, emit `SM_DELETE_ITEM(..., ItemDeleteType.USE)` for normal cube storage, then immediately emit `SM_CUBE_UPDATE.cubeSize(StorageType.CUBE, player)`.
+- Added focused C# coverage that craft delete-path cube-size snapshots exclude the separate Kinah row and decrement only by deleted non-Kinah stacks: a cube containing Kinah plus three non-Kinah items emits delete/cube snapshots with item counts `2` then `1`.
+- Tightened disabled packet-send diagnostics so `SmDeleteItem`, `SmCubeUpdate`, and `SmInventoryUpdateItem` operations record their specific Java `ItemPacketService`/`PacketSendUtility.sendPacket` boundaries instead of a single generic send label.
+- Kept this unit non-live. No live craft-start inventory mutation, DB persistence, packet dispatch, transaction, encrypted frame capture, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1968
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemPacketService.sendItemDeletePacket` cube delete branch | `Aion.GameServer.Services.CraftService.CreateStartInventoryPacketPlan` | Packet Plan Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | C# craft-start packet planning now has focused evidence that each deleted cube stack emits `SM_DELETE_ITEM(USE)` followed by `SM_CUBE_UPDATE` with a post-delete count. Live send/mutation remains disabled. |
+| `com.aionemu.gameserver.model.items.storage.Storage.size` / Kinah side storage | `CraftService` projected cube count and `SmCubeUpdate.CubeSizeSnapshot` | Storage Size Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | New test proves Kinah item id `182400001` is excluded from craft delete cube-size snapshots, matching Java storage keeping Kinah outside `itemStorage`. |
+| `ItemPacketService.sendItemPacket` / `sendItemDeletePacket` send boundary | `CraftStartInventoryPacketSendAdapterPlanService` | Disabled Send Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | Disabled send operations now identify specific Java packet fanout methods for delete, cube-size refresh, and inventory-update packets. No `SendPacketAsync` call is made. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CraftServiceTests" --no-restore` passed with 81 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- First broad C# run timed out at the command limit before producing a pass/fail result; rerun with a longer timeout passed.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5021 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 24 game-server tests.
+
+Remaining risks:
+- This unit proves disabled packet-plan diagnostics only. It does not verify live craft-start stack mutation, item deletion persistence, packet dispatch, encrypted frame behavior, transaction boundaries, movement/cancel task timing, or real-client behavior.
+- Java `Storage.size()` evidence was source-reviewed for the Kinah exclusion path; no new Java golden packet fixture was added in this unit.
+- C# cube-count logic in other non-craft delete paths was not exhaustively audited by this unit.
+- Full Maven reactor validation was not rerun in this unit; the game-server reactor passed.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one disabled send diagnostic refinement and one focused C# craft delete cube-size test.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies source-reviewed and C# unit-tested diagnostic evidence but does not complete live craft inventory parity.
+- Total artifacts needing verification: live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live audit/logging, live store item ordering/mutation timing, live pet autosell activation handler wiring, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, signed `readH` call sites, and workflow integration.
+- Total blocked artifacts: live DB proof for craft/sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live pet common-data persistence, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled craft delete-path diagnostics but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: inspect live `CM_PET` actionType 4 composition only if it can remain disabled and source-reviewed, focusing on packet/mutation boundary diagnostics rather than enabling pet autosell.
+- Safe alternative candidates for the next session:
+	- audit signed Java `readH()` call sites where C# currently uses unsigned `PacketBuffer.ReadH()`
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- run a full Maven reactor validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
+
 ### Session 1967 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1966: re-read required migration/orchestration/parity docs, latest completion/handoff, inspected Java `CM_BUY_ITEM.readImpl`, Java `BaseClientPacket.readUH`, existing Java `CM_BUY_ITEM_ReadGuardGoldenTest`, C# `CmBuyItem`, C# `PacketBuffer.ReadH`, and existing C# buy-item parser tests.
 - Added explicit Java and C# parser evidence for `CM_BUY_ITEM` amount high-bit handling: a payload amount of `0xFFFF` is read as unsigned `65535`, triggers the Java/C# amount audit guard, and returns before creating/reading item lists.
