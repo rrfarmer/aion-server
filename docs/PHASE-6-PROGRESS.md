@@ -87913,6 +87913,36 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2032 (June 1, 2026)
+- Performed Work Discovery after UOW-2031: re-read the latest UOW-2031 handoff/completion, confirmed a clean tree, inspected Java `SM_FIND_GROUP` action `16`, Java `ServerWideGroup`, Java `Player.getWorldId`/`WorldPosition`, and current C# `SmFindGroup` writer/tests.
+- Scoped this unit to the timestamped instance-group member-info writer. The Java test parses and validates the payload shape because the header uses `System.currentTimeMillis() / 1000`.
+- Extended Java `SM_FIND_GROUP_GoldenTest` with action `16` parsed packet evidence for member count, bounded timestamp, world ID, object ID, level, class ID, fixed unknown fields, and name.
+- Extended C# `SmFindGroup` with `FindGroupInstanceGroupMemberInfoSnapshot`, member snapshots, and a deterministic C# byte test for the same writer shape with an injected timestamp.
+
+#### Migration Parity Table - Session 2032
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_FIND_GROUP.writeImpl` action `16` | `Aion.GameServer.Network.Aion.ServerPackets.SmFindGroup.ShowInstanceGroupMemberInfo` | Server Packet Writer | Partial | Unit Tested + Java Parsed Packet Tested | Partial Parity | C# writes the Java member-info layout with count/count/timestamp header and one or more member rows. Java timestamp is objectively bounded in the Java test rather than fixed byte-compared. |
+| `com.aionemu.gameserver.model.gameobjects.findGroup.ServerWideGroup.getMembers` action `16` dependency | `Aion.GameServer.Network.Aion.ServerPackets.FindGroupInstanceGroupMemberInfoSnapshot` | Packet DTO | Partial | Unit Tested + Java Parsed Packet Tested | Partial Parity | Snapshot captures only serialized member fields. Live team-backed member lookup, online team changes, world-position lifecycle, and service dispatch remain unverified. |
+| `com.aionemu.gameserver.model.gameobjects.VisibleObject.getWorldId` via `Player` | `Aion.GameServer.Network.Aion.ServerPackets.FindGroupInstanceGroupMemberInfoMemberSnapshot.WorldId` | Packet Field | Partial | Unit Tested + Java Parsed Packet Tested | Partial Parity | Java test sets `WorldPosition(300110000)` and verifies the serialized world ID. C# expects the caller to provide an already-derived world ID snapshot. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_FIND_GROUP_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 10 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmFindGroupTests" --no-restore` passed with 11 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 106 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5143 tests.
+
+Known gaps:
+- `SM_FIND_GROUP` actions `0`, `4`, and `10` remain unported in C#.
+- Action `16` timestamp bytes are not fixed Java-golden bytes; the Java test verifies the timestamp lies between before/after capture bounds and validates the remaining payload fields.
+- Action `16` is tested with one deterministic member only; multi-member ordering, live team-backed `ServerWideGroup.getMembers()`, and live world-position changes remain unverified.
+- Live `FindGroupService` dispatch, world broadcasts, encrypted-frame handling, socket dispatch, and real-client behavior remain unverified.
+
+Next candidates:
+- Next sequential task: inspect `SM_FIND_GROUP` action `10` instance-group list with parsed timestamp-header assertions, likely reusing the existing group registration snapshot fields with the action `10` header shape.
+- Safe alternatives: inspect actions `0`/`4` recruitment/application lists with parsed timestamp-header assertions; inspect `SM_GROUP_DATA_EXCHANGE` writer parity before live group-data fanout; inspect a non-live `FindGroupService` planner only if side effects remain explicitly deferred.
+
 ### Session 2031 (June 1, 2026)
 - Performed Work Discovery after UOW-2030: re-read the required migration/orchestration/parity docs and latest handoff, inspected Java `SM_FIND_GROUP` actions `23` and `24`, Java `FindGroupService` call sites, Java `ServerWideGroup`, reflected Java packet-test setup, and the current C# `SmFindGroup` writer/tests.
 - Scoped this unit to the deterministic prepare-for-entry window writer tail, leaving live `FindGroupService` dispatch and world/socket behavior deferred.

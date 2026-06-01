@@ -1,6 +1,7 @@
 package com.aionemu.gameserver.network.aion.serverpackets;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
@@ -18,6 +19,7 @@ import com.aionemu.gameserver.model.account.PlayerAccountData;
 import com.aionemu.gameserver.model.gameobjects.player.Player;
 import com.aionemu.gameserver.model.gameobjects.player.PlayerAppearance;
 import com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData;
+import com.aionemu.gameserver.world.WorldPosition;
 
 import sun.misc.Unsafe;
 
@@ -123,6 +125,39 @@ public class SM_FIND_GROUP_GoldenTest {
 		}
 	}
 
+	@Test
+	public void writeImpl_showInstanceGroupMemberInfoWritesTimestampedMemberSnapshot() throws Exception {
+		String[] originalNameTags = AdminConfig.NAME_TAGS;
+		try {
+			AdminConfig.NAME_TAGS = new String[0];
+			ServerWideGroup group = simpleInstanceGroup();
+			SM_FIND_GROUP packet = new SM_FIND_GROUP(16, List.of(group));
+
+			int before = (int) (System.currentTimeMillis() / 1000);
+			byte[] payload = write(packet);
+			int after = (int) (System.currentTimeMillis() / 1000);
+
+			ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+			assertEquals(16, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(1, Short.toUnsignedInt(buffer.getShort()));
+			assertEquals(1, Short.toUnsignedInt(buffer.getShort()));
+			int lastUpdate = buffer.getInt();
+			assertTrue(lastUpdate >= before && lastUpdate <= after);
+			assertEquals(0, buffer.getInt());
+			assertEquals(300110000, buffer.getInt());
+			assertEquals(0x01020304, buffer.getInt());
+			assertEquals(65, buffer.getInt());
+			assertEquals(PlayerClass.GLADIATOR.getClassId(), buffer.getInt());
+			assertEquals(1, Short.toUnsignedInt(buffer.getShort()));
+			assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+			assertEquals("Recruiter", readS(buffer));
+			assertEquals(0, buffer.remaining());
+		} finally {
+			AdminConfig.NAME_TAGS = originalNameTags;
+		}
+	}
+
 	private static byte[] write(SM_FIND_GROUP packet) {
 		ByteBuffer buffer = ByteBuffer.allocate(256).order(ByteOrder.LITTLE_ENDIAN);
 		packet.setBuf(buffer);
@@ -139,6 +174,17 @@ public class SM_FIND_GROUP_GoldenTest {
 		for (byte value : bytes)
 			hex.append(String.format("%02X", value));
 		return hex.toString();
+	}
+
+	private static String readS(ByteBuffer buffer) {
+		StringBuilder value = new StringBuilder();
+		while (buffer.remaining() >= 2) {
+			char c = buffer.getChar();
+			if (c == 0)
+				return value.toString();
+			value.append(c);
+		}
+		throw new IllegalStateException("String terminator not found");
 	}
 
 	private static ServerWideGroup simpleInstanceGroup() throws Exception {
@@ -160,6 +206,7 @@ public class SM_FIND_GROUP_GoldenTest {
 		setAionObjectId(player, objectId);
 		setField(player, "playerAccountData", accountData);
 		setField(player, "playerAccount", account);
+		setField(player, "position", new WorldPosition(300110000));
 		return player;
 	}
 
