@@ -87913,6 +87913,49 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1994 (June 1, 2026)
+- Performed Work Discovery after UOW-1993: re-read the required migration docs, latest completion/handoff, progress file, Java `CM_PRIVATE_STORE`/`CM_PRIVATE_STORE_NAME`, Java `PrivateStoreService` private-store methods, C# `GameServerConnection`, `CmPrivateStore`, `CmPrivateStoreName`, and the disabled private-store planners/tests.
+- Selected the private-store client handler boundary as a safe non-live wiring slice because the packet parsers and disabled service planners already exist, while live store mutation, inventory validation, state changes, and broadcast fanout remain deferred.
+- Added observer-only private-store diagnostics to `GameServerConnection`: `CmPrivateStore` now hydrates a disabled `PrivateStoreCreatePlan` from the active-player snapshot, and `CmPrivateStoreName` now hydrates a disabled `PrivateStoreNameOpenCompositionPlan`.
+- Added connection-level tests proving the handler records zero-item close composition, store-name open composition, and missing-store precondition diagnostics without sending packets or mutating live state.
+- The handler still performs no live Java side effects. Inventory item tradeability for non-empty create-store diagnostics remains conservative and snapshot-based; full Java `Item.isTradeable(player)`/template-state parity is not claimed.
+
+#### Migration Parity Table - Session 1994
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PRIVATE_STORE.runImpl` handler boundary | `Aion.GameServer.Network.Aion.GameServerConnection` observer-only `CmPrivateStore` branch | Client Handler Boundary | Partial | Unit Tested + Source Reviewed | Partial Parity | C# now selects the disabled private-store create/close planner from the packet handler when an active player snapshot exists. It does not call live `PrivateStoreService`, mutate store/state, dispatch denial packets, or persist inventory. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PRIVATE_STORE_NAME.runImpl` handler boundary | `Aion.GameServer.Network.Aion.GameServerConnection` observer-only `CmPrivateStoreName` branch | Client Handler Boundary | Partial | Unit Tested + Source Reviewed | Partial Parity | C# now selects the disabled name-open composition planner from the packet handler. Live store-message mutation and `SM_PRIVATE_STORE_NAME` known-list broadcast remain deferred. |
+| `com.aionemu.gameserver.services.PrivateStoreService.createStoreWithItems` handler input hydration | `Aion.GameServer.Network.Aion.GameServerConnection.CreatePrivateStoreCreatePlan` | Diagnostic Adapter | Partial | Unit Tested + Source Reviewed | Needs Verification | Handler snapshots active-player state and inventory into the disabled planner. Tradeability, template state, concurrent inventory changes, and Java exception behavior remain unverified. |
+| `com.aionemu.gameserver.services.PrivateStoreService.openPrivateStore` handler input hydration | `Aion.GameServer.Network.Aion.GameServerConnection.CreatePrivateStoreNameOpenPlan` | Diagnostic Adapter | Partial | Unit Tested + Source Reviewed | Partial Parity | Handler maps the C# private-shop state/list snapshot into the disabled open-name planner. Missing-store behavior is recorded as a precondition instead of throwing. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionPrivateStoreTests|FullyQualifiedName~PrivateStoreCreatePlanServiceTests|FullyQualifiedName~PrivateStoreNameOpenCompositionPlanServiceTests|FullyQualifiedName~PrivateStoreOpenPlanServiceTests" --no-restore` passed with 19 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_PRIVATE_STORE_NAME_ReadPayloadGoldenTest,CM_PRIVATE_STORE_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 3 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5100 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 51 game-server tests.
+
+Remaining risks:
+- Private-store handler branches remain observer-only diagnostics; live `GameServerConnection` still does not execute store mutation, inventory mutation, private-shop state mutation, or packet fanout.
+- Non-empty create-store handler hydration does not prove Java `Item.isTradeable(player)`, template restrictions, live object identity, concurrent inventory changes, or Java runtime exception behavior.
+- Store-name mutation, `SM_PRIVATE_STORE_NAME` broadcast fanout, encrypted frame capture, and real-client private-store behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one observer-only private-store handler diagnostic boundary plus focused connection tests.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies handler selection evidence only.
+- Total artifacts needing verification: live private-store close/open/create-store execution, live store-message mutation, store state mutation, broadcast ordering, known-list fanout, persistence/threading, live private-store sale execution, live store item ordering/mutation timing, live pet autoloot activation handler wiring, live pet common-data mutation, live LOOT function lookup, NPC autoloot/drop flow, `SM_VERSION_CHECK` success writer parity, remaining parser-only packet surfaces, live pet autosell activation handler wiring, live craft-start inventory mutation/persistence/send ordering, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for private-store/pet/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy persistence, live private-store mutation/fanout proof, live item tradeability/template proof for private-store create, live `SM_VERSION_CHECK` dynamic success payload proof, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves private-store handler diagnostics but does not complete live private-store parity.
+
+Next recommended unit of work:
+- Next sequential task: move away from private-store live mutation until item tradeability/store-state proof is stronger; inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely, or choose another compact parser/factory/model boundary with Java golden evidence.
+- Safe alternative candidates for the next session:
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect another `CM_PET` sub-branch only if it can remain disabled and source-reviewed
+	- inspect another compact unported parser/factory or enum/model dependency with Java golden evidence
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+
 ### Session 1993 (June 1, 2026)
 - Performed Work Discovery after UOW-1992: re-read the required migration docs and latest handoff, inspected Java `CM_PRIVATE_STORE_NAME.runImpl`, `PrivateStoreService.openPrivateStore`, `PrivateStore.getStoreMessage`, `SM_PRIVATE_STORE_NAME`, C# `CmPrivateStoreName`, `PrivateStoreOpenPlanService`, `SmPrivateStoreName`, focused private-store tests, and the latest progress/handoff state.
 - Selected the `CM_PRIVATE_STORE_NAME.runImpl` open-store-name boundary as a safe disabled composition slice because the packet parser and server-packet intent already exist, while live store-message mutation and known-list broadcast fanout remain deferred.
