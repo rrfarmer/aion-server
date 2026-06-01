@@ -87913,6 +87913,48 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1988 (June 1, 2026)
+- Performed Work Discovery after UOW-1987: re-read required migration docs and latest handoff, confirmed no obvious unregistered Java client packets remained, inspected Java `EventTheme`, and traced its use as the `SM_VERSION_CHECK` scene-status source.
+- Selected Java `EventTheme` because its constructor ID mapping is a compact deterministic dependency for future `SM_VERSION_CHECK` writer parity and can be objectively tested without live server state.
+- Added C# `EventTheme` with all Java enum values and IDs: `NONE`, `CHRISTMAS`, `HALLOWEEN`, `VALENTINE`, `BRAXCAFE`, and the four `TEST_BASIC_*` values.
+- Added `EventThemeExtensions.GetId()` to mirror Java `EventTheme.getId()` for future `SM_VERSION_CHECK` SceneStatus serialization.
+- Added Java golden and C# unit coverage proving all event-theme IDs match Java.
+
+#### Migration Parity Table - Session 1988
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.EventTheme` | `Aion.GameServer.Model.EventTheme` | Enum / Model | Complete | Unit Tested + Java Golden Tested | Partial Parity | C# now includes every Java enum value with matching numeric IDs. XML/JAXB annotations and live event-service integration remain unported, so this is not full runtime parity. |
+| `com.aionemu.gameserver.model.EventTheme.getId` | `Aion.GameServer.Model.EventThemeExtensions.GetId` | Utility / Enum Method | Complete | Unit Tested + Java Golden Tested | Partial Parity | C# extension returns the underlying numeric ID, matching Java constructor IDs for all values. Evidence is deterministic enum-ID coverage only. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_VERSION_CHECK.writeImpl` SceneStatus dependency | Future C# `SmVersionCheck` SceneStatus source | Server Packet Dependency | Partial | Source Reviewed + Unit Tested dependency | Needs Verification | Event theme IDs are now represented for future `SM_VERSION_CHECK` writer parity, but the writer and runtime event-theme source remain unported. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~EventThemeTests" --no-restore` passed with 9 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=EventThemeIdGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5073 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 46 game-server tests.
+
+Remaining risks:
+- This unit proves only Java `EventTheme` ID mapping. It does not verify XML/JAXB enum behavior, `EventService` runtime state, `SM_VERSION_CHECK` SceneStatus bytes, encrypted frame capture, or real-client behavior.
+- C# still has no live `SM_VERSION_CHECK` writer or event-theme runtime source.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one `EventTheme` enum/ID mapping slice plus Java/C# tests.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies deterministic enum-ID evidence only.
+- Total artifacts needing verification: `SM_VERSION_CHECK` writer parity, event-theme runtime source, version-check runtime response, house-script runtime execution, buy-trade-in runtime execution, remove-altered-state runtime execution, toggle-skill deactivate runtime execution, teleport-select runtime execution, ping anti-cheat runtime execution, manastone runtime execution, UI-settings runtime persistence, question-response runtime execution, house-kick runtime execution, appearance rename/cosmetic runtime execution, split-item runtime execution/persistence, legion runtime execution/persistence, item move execution/persistence, Atreian passport reward execution/persistence, remaining parser-only packet surfaces, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for event-theme/version-check/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/pet/craft/sell/repurchase/buy/private-store persistence, live `SM_VERSION_CHECK` dynamic payload proof, live housing script service execution, live trade-in service execution, live EffectController mutation, live SkillEngine effect-controller and stance-controller mutation, live NPC/known-list teleporter validation, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves deterministic model coverage but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: continue Work Discovery for a deterministic `SM_VERSION_CHECK` sub-slice only if it can be proven with Java bytes without requiring live dynamic state, or choose another compact planner/parser boundary with Java golden evidence.
+- Safe alternative candidates for the next session:
+	- inspect another compact unported parser/factory or enum/model dependency with Java golden evidence
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+
 ### Session 1987 (June 1, 2026)
 - Performed Work Discovery after UOW-1986: re-read required migration docs and latest handoff, inspected Java `CM_VERSION_CHECK`, Java `SM_VERSION_CHECK`, C# packet/factory coverage, and recent parser-boundary notes.
 - Selected Java `CM_VERSION_CHECK` because its `readImpl` is compact and objectively testable while the dynamic `SM_VERSION_CHECK` response can remain explicitly out of scope.
