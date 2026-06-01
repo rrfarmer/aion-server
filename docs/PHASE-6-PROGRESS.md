@@ -84882,6 +84882,52 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1935 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1934: re-read the latest handoff and current progress context; inspected Java `TradeService.performSellToShop`, Java `RepurchaseService.addRepurchaseItems`, Java `SM_REPURCHASE`, C# `TradeSellToShopPlanService`, C# `Player.RepurchaseItems`, and the BUY_AGAIN dialog diagnostics.
+- Confirmed Java `TradeService.performSellToShop` calls `RepurchaseService.getInstance().addRepurchaseItems(player, items)` after the successful sell loop and before `inventory.increaseKinah`, including the Java-success case where the collected item list is empty.
+- Added `RepurchaseDiagnosticSnapshotPlanService`, a disabled diagnostic planner that carries successful `TradeSellToShopPlan.RepurchaseItems` into a future `Player.RepurchaseItems` snapshot without mutating player state.
+- The planner explicitly records `WouldReplacePlayerSnapshot=true`, `DidReplacePlayerSnapshot=false`, and `ShouldDispatchLiveSideEffects=false` only when the sell-to-shop plan reached `PlanCreated`.
+- Added tests for successful repurchase item snapshot creation, successful empty-list snapshot creation, and blocked sell plans not replacing the snapshot.
+- Kept this unit non-live. No live `RepurchaseService` singleton state, player snapshot mutation, inventory mutation, Kinah mutation, socket send, repository write, Java runtime output, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1935
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.TradeService.performSellToShop` success boundary before Kinah increase | `RepurchaseDiagnosticSnapshotPlanService.CreateDisabledPlan` | Disabled State Snapshot Planner | Partial | Unit Tested | Partial Parity | C# records the source-reviewed repurchase snapshot boundary for successful sell-to-shop plans without mutating player state. Java runtime ordering and live singleton effects remain unverified. |
+| `com.aionemu.gameserver.services.RepurchaseService.addRepurchaseItems(Player, List<Item>)` | `RepurchaseDiagnosticSnapshotPlan.RepurchaseItems` / `Player.RepurchaseItems` future snapshot | Diagnostic State Surface | Partial | Unit Tested | Needs Verification | Successful sell plans can now produce a non-live snapshot payload, including empty item lists. Live singleton replacement semantics, clear/remove lifecycle, persistence, and packet send comparison remain pending. |
+
+Validation:
+- Focused sell/repurchase/dialog slice passed with 29 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~TradeSellToShopPlanServiceTests|FullyQualifiedName~SmRepurchaseTests|FullyQualifiedName~GameServerConnectionStorageExpansionDialogTests" --no-restore`
+- Broad game-server suite excluding `GameServerConnectionInventoryExpansionUseItemTests` passed with 4967 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore`
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- Local Java execution remains blocked until compatible Java and Maven are available.
+- The new planner is disabled diagnostics only; it does not mutate `Player.RepurchaseItems` automatically.
+- Live `RepurchaseService` singleton add/remove/get lifecycle, sell-to-shop state writes, BUY_AGAIN packet dispatch, `CM_BUY_ITEM` action `2` execution, inventory/Kinah mutation, repository writes, and transaction behavior remain disabled.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: disabled sell-to-shop repurchase snapshot planner plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 25 rows pending Java runtime/golden comparison, Java-equivalent known-list object population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN packet dispatch, live private-store action `0`, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item service state/counter persistence, live price influence/siege state source, live pet auto-sell activation/state/item selection, live pet auto-sell execution/notification dispatch, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN packet dispatch, live normal/AP sell mutation wiring, live buy transaction mutation wiring, live influence/siege state wiring, live limited-item counter mutation/cron reset, live private-store model/runtime wiring, live pet common-data/service wiring, live pet auto-sell inventory/drop caller integration, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves source-reviewed repurchase-state diagnostics but does not complete live repurchase execution or runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add a disabled BUY_AGAIN packet snapshot test that uses a `RepurchaseDiagnosticSnapshotPlan` payload to build a non-empty `SmRepurchase` descriptor, proving the sell-to-shop snapshot and dialog descriptor compose without live socket dispatch.
+- Safe alternative candidates for the next session:
+	- add Java-runtime golden capture for BUY_AGAIN/`SM_REPURCHASE`, `CM_BUY_ITEM`, buy price, private-store, or pet auto-sell once compatible Java and Maven are available
+	- inspect `PetService.activateAutoSell` and `SM_PET(AUTOSELL, activate)` runtime state wiring as a separate disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full socket cases without enabling live mutation
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1934 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1933: re-read required orchestration/parity docs, latest handoff, current progress context, Java `CM_BUY_ITEM`, Java `DialogService` BUY_AGAIN, Java `SM_REPURCHASE`, Java `RepurchaseService`, C# dialog select planners, C# `SmRepurchase`, and C# repurchase planners.
 - Corrected the handoff assumption against Java source: current Java `CM_BUY_ITEM` has repurchase action `2` and no action `18`; Java `BUY_AGAIN` is `DialogAction.BUY_AGAIN = 70` in the NPC dialog flow and sends `new SM_REPURCHASE(player, npc.getObjectId())`.
