@@ -87913,6 +87913,53 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1975 (June 1, 2026)
+- Performed Work Discovery after UOW-1974: re-read required orchestration/parity docs, latest completion and handoff, inspected Java `CM_SPLIT_ITEM.readImpl`/`runImpl`, Java opcode registration (`AionClientPacketFactory` opcode `157`, `IN_GAME`), C# packet factory registrations, C# handler dispatch boundaries, and the absence of an existing C# `CmSplitItem` parser.
+- Added parser-only C# `CmSplitItem` for Java opcode `157`.
+- Registered opcode `157` as `IN_GAME`, matching Java `[C_SPLIT_ITEM]`.
+- Matched Java `CM_SPLIT_ITEM.readImpl` layout: source item object ID, item amount, source storage byte, destination item object ID, destination storage byte, and signed `slotNum = readH()`.
+- Used `PacketBuffer.ReadSignedH()` for `slotNum`, so high-bit values such as `0xFFFF` parse as signed `-1`, matching Java `short`.
+- Added an explicit `GameServerConnection` parser-only no-op boundary documenting that Java `CM_SPLIT_ITEM.runImpl` calls `ItemSplitService.splitItem`.
+- Added Java golden and C# parser/factory coverage for the signed slot field and surrounding packet fields.
+- Kept this unit parser-only. No stack split storage mutation, item persistence, inventory/warehouse packet dispatch, encrypted frame capture, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1975
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SPLIT_ITEM.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmSplitItem.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Parser now covers Java field order and signed `slotNum = readH()`. Java `runImpl` stack-split behavior is not ported. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `157` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `157` | Packet Factory Registration | Partial | Unit Tested | Partial Parity | C# factory now registers `CmSplitItem` for `IN_GAME`, matching Java. Live `GameServerConnection` handling remains an explicit parser-only no-op. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SPLIT_ITEM.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` explicit parser-only no-op | Client Packet Handler Boundary | Partial | Source Reviewed | Partial Parity | Java calls `ItemSplitService.splitItem(player, sourceItemObjId, destinationItemObjId, itemAmount, slotNum, sourceStorageType, destinationStorageType)`. C# does not yet split stacks, mutate storage, persist items, or emit storage updates. |
+| `com.aionemu.commons.network.packet.BaseClientPacket.readH` slot caller in `CM_SPLIT_ITEM` | `Aion.Commons.Network.PacketBuffer.ReadSignedH` via `CmSplitItem.SlotNumber` | Packet Buffer Primitive Use | Partial | Unit Tested + Java Golden Tested | Partial Parity | This unit adds another source-proven signed `readH()` caller. Broader signed-short call-site audit remains incomplete. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmSplitItemTests" --no-restore` passed with 2 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_SPLIT_ITEM_ReadSignedSlotGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5039 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 32 game-server tests.
+
+Remaining risks:
+- This unit proves parser/factory behavior only. It does not verify Java `ItemSplitService.splitItem`, storage selection, stack creation, item count validation, inventory/warehouse persistence, packet dispatch, encrypted client frames, or real-client behavior.
+- C# registered opcode `157` currently parses but does not dispatch split-item execution in `GameServerConnection`; this is intentionally documented as partial parity.
+- Other Java signed `readH()` call sites outside this audited parser set still need separate review.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one parser-only `CM_SPLIT_ITEM` signed-slot slice plus factory registration, explicit handler boundary, and Java/C# tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies parser-level evidence only and does not complete split-item runtime parity.
+- Total artifacts needing verification: split-item runtime execution/persistence, legion runtime execution/persistence, item move execution/persistence, Atreian passport reward execution/persistence, remaining signed `readH()` call sites, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for split-item/legion/item move/Atreian passport/passkey/pet/craft/sell/repurchase/buy/private-store persistence, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves parser/signedness coverage but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: continue the signed Java `readH()` audit by scanning remaining client packet call sites and selecting the smallest surface with either an existing C# parser or a safe parser-only registration.
+- Safe alternative candidates for the next session:
+	- inspect ignored-padding signedness candidates such as `CM_APPEARANCE`, `CM_HOUSE_KICK`, `CM_MANASTONE`, `CM_QUESTION_RESPONSE`, or `CM_PING` without over-claiming behavioral impact
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+
 ### Session 1974 (June 1, 2026)
 - Performed Work Discovery after UOW-1973: re-read required docs, latest completion and handoff, inspected Java `CM_LEGION.readImpl`/`runImpl`, Java opcode registration (`AionClientPacketFactory` opcode `45`, `IN_GAME`), C# game client packet factory, C# handler dispatch boundaries, and existing C# legion packet/service surfaces.
 - Added parser-only C# `CmLegion` for Java opcode `45`.
