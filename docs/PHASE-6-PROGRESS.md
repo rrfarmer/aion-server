@@ -87913,6 +87913,40 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2044 (June 1, 2026)
+- Performed Work Discovery after UOW-2043: re-read the required migration/orchestration/parity docs plus the latest UOW-2043 completion/handoff, inspected Java `SM_GROUP_MEMBER_INFO.writeImpl`, Java `Effect`, `SkillTemplate`, `EffectController`, `SkillTargetSlot`, the current Java golden fixture, C# `SmGroupMemberInfo`, and `PlayerGroupRuntimeTests`.
+- Scoped this unit to the next recommended `SM_GROUP_MEMBER_INFO` non-empty abnormal-effect packet shape.
+- Extended the Java golden fixture with a controlled permanent `Effect` seeded into `PlayerEffectController` to cover exact non-empty `ENTER` and targeted `UPDATE_EFFECTS` payloads.
+- Added the matching C# exact payload test for the same effect DTO: effector id `7010`, skill id `12345`, skill level `3`, `BUFF` target-slot ordinal `0`, and permanent remaining-time value `-1`.
+- Kept this as packet-writer evidence only; the test does not start the Java effect lifecycle or prove production effect creation, mutation, filtering, persistence, or socket fanout.
+
+#### Migration Parity Table - Session 2044
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO.writeImpl` non-empty `ENTER` effect branch | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` `Enter` with injected `PlayerGroupMemberEffectInfo` | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2044 verifies one online `ENTER` vector with one permanent BUFF effect, including name payload, `FULLSLOTS=127`, effect count `1`, effector id, skill id, skill level, target-slot ordinal, remaining time `-1`, and eight zero timer dwords. Live effect lifecycle and multiple effects remain unproven. |
+| `SM_GROUP_MEMBER_INFO.writeImpl` non-empty `UPDATE_EFFECTS` effect branch | `SmGroupMemberInfo` `UpdateEffects` with injected `PlayerGroupMemberEffectInfo` | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2044 verifies one targeted `UPDATE_EFFECTS` vector with slot byte `1`, no name payload, the same effect entry, and eight zero timer dwords. It does not prove live `EffectController.getAbnormalEffectsToTargetSlot` production filtering beyond the seeded fixture. |
+| `com.aionemu.gameserver.skillengine.model.Effect` serialized getters | `Aion.GameServer.Services.PlayerGroupMemberEffectInfo` | Packet DTO Dependency | Partial | Java Golden Tested + C# Unit Tested | Needs Verification | The Java fixture uses a direct permanent `Effect` with reflected `SkillTemplate` fields and does not call `startEffect` or scheduler paths. C# DTO matches the serialized fields only. |
+| `com.aionemu.gameserver.controllers.effect.EffectController` abnormal effect map | C# caller-provided `AbnormalEffects` collection | Controller / DTO Boundary | Partial | Java Golden Tested + C# Unit Tested | Needs Verification | Java map seeding proves packet readout shape for one controlled effect. Production controller mutation, conflict handling, ordering with multiple effects, no-show filtering, and target-slot lifecycle remain pending. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_GROUP_MEMBER_INFO_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` initially failed with a test buffer overflow in the new longer fixture, then passed after increasing the local golden buffer to 256 bytes with 6 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests.SmGroupMemberInfo_NonEmptyEffectsMatchJavaGoldenPayloads|FullyQualifiedName~PlayerGroupRuntimeTests.SmGroupMemberInfo_WritesNonEmptyEffectEntriesLikeJava|FullyQualifiedName~PlayerGroupRuntimeTests.SmGroupMemberInfo_UpdateEffectsZeroEffectsMatchesJavaGoldenPayload" --no-restore` passed with 3 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_GROUP_MEMBER_INFO_GoldenTest,SM_GROUP_DATA_EXCHANGE_GoldenTest,CM_GROUP_DATA_EXCHANGE_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 10 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests" --no-restore` passed with 45 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 117 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5170 C# tests.
+
+Known gaps:
+- This unit does not prove live group membership event fanout, `TeamStatUpdater`, production skill/effect application, effect-controller conflict/replacement behavior, no-show filtering, multiple effect ordering, known-list/team recipient filtering, socket encryption/frame ordering, or real-client behavior.
+- Remaining-time evidence covers only Java's permanent-effect display value `-1`; timed countdown behavior remains unverified because it is time-dependent.
+- Slot-timer payload evidence remains zero-placeholder only; nonzero slot timer semantics are not implemented or proven.
+- The Java fixture uses controlled reflection/Unsafe setup and direct abnormal-effect map seeding to avoid full player/skill/network bootstrap; it proves packet bytes for configured vectors, not production lifecycle parity.
+
+Next candidates:
+- Next sequential task: inspect `SM_ALLIANCE_MEMBER_INFO` movement/member prefix Java golden feasibility, then add a focused alliance packet golden if the fixture can reuse the controlled player setup.
+- Safe alternatives: inspect `SM_ALLIANCE_MEMBER_INFO` targeted `UPDATE_EFFECTS` Java golden feasibility; inspect a narrow non-live `FindGroupService` planner with service mutation and broadcast side effects deferred; return to group-data known-list/team online filtering only if it can remain diagnostic and disabled.
+
 ### Session 2043 (June 1, 2026)
 - Performed Work Discovery after UOW-2042: re-read the required migration/orchestration/parity docs plus the latest UOW-2042 completion/handoff, inspected Java `SM_GROUP_MEMBER_INFO.writeImpl`, Java `SkillTargetSlot`, the current Java golden fixture, C# `SmGroupMemberInfo`, `PlayerGroupMemberInfoPacketPlan`, and `PlayerGroupRuntimeTests`.
 - Scoped this unit to the next recommended `SM_GROUP_MEMBER_INFO` online `UPDATE_EFFECTS` zero-effect skeleton branch.

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -25,6 +26,10 @@ import com.aionemu.gameserver.model.team.TeamType;
 import com.aionemu.gameserver.model.team.common.legacy.GroupEvent;
 import com.aionemu.gameserver.model.team.group.PlayerGroup;
 import com.aionemu.gameserver.model.team.group.PlayerGroupMember;
+import com.aionemu.gameserver.skillengine.model.ActivationAttribute;
+import com.aionemu.gameserver.skillengine.model.Effect;
+import com.aionemu.gameserver.skillengine.model.SkillTargetSlot;
+import com.aionemu.gameserver.skillengine.model.SkillTemplate;
 import com.aionemu.gameserver.world.WorldPosition;
 
 import sun.misc.Unsafe;
@@ -186,6 +191,19 @@ public class SM_GROUP_MEMBER_INFO_GoldenTest {
 		assertEquals(0, buffer.remaining());
 	}
 
+	@Test
+	public void writeImpl_enterAndUpdateEffectsWriteNonEmptyEffectPayloads() throws Exception {
+		Player player = player(1010, "Effected", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		Player effector = player(7010, "Caster", PlayerClass.CLERIC, Gender.MALE, 10, true);
+		setField(player, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+		Effect effect = new Effect(effector, player, skillTemplate(12345, SkillTargetSlot.BUFF), 3, 0, null);
+		seedAbnormalEffect(player, effect);
+		PlayerGroup group = new PlayerGroup(new PlayerGroupMember(player), TeamType.GROUP, 99001);
+
+		assertNonEmptyEffectPayload(write(new SM_GROUP_MEMBER_INFO(group, player, GroupEvent.ENTER)), true);
+		assertNonEmptyEffectPayload(write(new SM_GROUP_MEMBER_INFO(group, player, GroupEvent.UPDATE_EFFECTS, SkillTargetSlot.BUFF.getId())), false);
+	}
+
 	private static Player player(int objectId, String name, PlayerClass playerClass, Gender gender, int level, boolean online) throws Exception {
 		PlayerCommonData commonData = new PlayerCommonData(objectId);
 		commonData.setName(name);
@@ -209,7 +227,7 @@ public class SM_GROUP_MEMBER_INFO_GoldenTest {
 	}
 
 	private static byte[] write(SM_GROUP_MEMBER_INFO packet) {
-		ByteBuffer buffer = ByteBuffer.allocate(128).order(ByteOrder.LITTLE_ENDIAN);
+		ByteBuffer buffer = ByteBuffer.allocate(256).order(ByteOrder.LITTLE_ENDIAN);
 		packet.setBuf(buffer);
 
 		packet.writeImpl(null);
@@ -252,6 +270,64 @@ public class SM_GROUP_MEMBER_INFO_GoldenTest {
 		for (int i = 0; i < 8; i++)
 			assertEquals(0, buffer.getInt());
 		assertEquals(0, buffer.remaining());
+	}
+
+	private static void assertNonEmptyEffectPayload(byte[] payload, boolean writesName) {
+		ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+
+		assertEquals(99001, buffer.getInt());
+		assertEquals(1010, buffer.getInt());
+		assertEquals(819, buffer.getInt());
+		assertEquals(819, buffer.getInt());
+		assertEquals(840, buffer.getInt());
+		assertEquals(840, buffer.getInt());
+		assertEquals(60, buffer.getInt());
+		assertEquals(60, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(220010000, buffer.getInt());
+		assertEquals(220010000, buffer.getInt());
+		assertEquals(10.5f, buffer.getFloat());
+		assertEquals(20.25f, buffer.getFloat());
+		assertEquals(30.75f, buffer.getFloat());
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(10, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(writesName ? GroupEvent.ENTER.getId() : GroupEvent.UPDATE_EFFECTS.getId(), Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		if (writesName)
+			assertEquals("Effected", readS(buffer));
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(writesName ? SkillTargetSlot.FULLSLOTS : SkillTargetSlot.BUFF.getId(), Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Short.toUnsignedInt(buffer.getShort()));
+		assertEquals(7010, buffer.getInt());
+		assertEquals(12345, Short.toUnsignedInt(buffer.getShort()));
+		assertEquals(3, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(SkillTargetSlot.BUFF.ordinal(), Byte.toUnsignedInt(buffer.get()));
+		assertEquals(-1, buffer.getInt());
+		for (int i = 0; i < 8; i++)
+			assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.remaining());
+	}
+
+	private static SkillTemplate skillTemplate(int skillId, SkillTargetSlot targetSlot) throws Exception {
+		SkillTemplate template = new SkillTemplate();
+		setField(template, "skillId", skillId);
+		setField(template, "name", "Unit Effect");
+		setField(template, "stack", "unit-effect-stack-" + skillId);
+		setField(template, "targetSlot", targetSlot);
+		setField(template, "activationAttribute", ActivationAttribute.ACTIVE);
+		return template;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static void seedAbnormalEffect(Player player, Effect effect) throws Exception {
+		Field field = findField(player.getEffectController().getClass(), "abnormalEffectMap");
+		field.setAccessible(true);
+		Map<String, Effect> abnormalEffectMap = (Map<String, Effect>) field.get(player.getEffectController());
+		abnormalEffectMap.put(effect.getStack(), effect);
 	}
 
 	private static String readS(ByteBuffer buffer) {
