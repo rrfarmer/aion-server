@@ -147,6 +147,45 @@ public class SM_GROUP_MEMBER_INFO_GoldenTest {
 		assertZeroEffectSkeleton(write(new SM_GROUP_MEMBER_INFO(group, player, GroupEvent.UPDATE)), GroupEvent.UPDATE);
 	}
 
+	@Test
+	public void writeImpl_updateEffectsWritesTargetSlotZeroEffectSkeletonPayload() throws Exception {
+		Player player = player(1009, "TargetSlot", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		setField(player, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+		PlayerGroup group = new PlayerGroup(new PlayerGroupMember(player), TeamType.GROUP, 99001);
+
+		byte[] payload = write(new SM_GROUP_MEMBER_INFO(group, player, GroupEvent.UPDATE_EFFECTS, 4));
+		ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+
+		assertEquals(99001, buffer.getInt());
+		assertEquals(1009, buffer.getInt());
+		assertEquals(819, buffer.getInt());
+		assertEquals(819, buffer.getInt());
+		assertEquals(840, buffer.getInt());
+		assertEquals(840, buffer.getInt());
+		assertEquals(60, buffer.getInt());
+		assertEquals(60, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(220010000, buffer.getInt());
+		assertEquals(220010000, buffer.getInt());
+		assertEquals(10.5f, buffer.getFloat());
+		assertEquals(20.25f, buffer.getFloat());
+		assertEquals(30.75f, buffer.getFloat());
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(10, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(GroupEvent.UPDATE_EFFECTS.getId(), Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(4, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Short.toUnsignedInt(buffer.getShort()));
+		for (int i = 0; i < 8; i++)
+			assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.remaining());
+	}
+
 	private static Player player(int objectId, String name, PlayerClass playerClass, Gender gender, int level, boolean online) throws Exception {
 		PlayerCommonData commonData = new PlayerCommonData(objectId);
 		commonData.setName(name);

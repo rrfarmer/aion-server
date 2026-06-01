@@ -87913,6 +87913,38 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2043 (June 1, 2026)
+- Performed Work Discovery after UOW-2042: re-read the required migration/orchestration/parity docs plus the latest UOW-2042 completion/handoff, inspected Java `SM_GROUP_MEMBER_INFO.writeImpl`, Java `SkillTargetSlot`, the current Java golden fixture, C# `SmGroupMemberInfo`, `PlayerGroupMemberInfoPacketPlan`, and `PlayerGroupRuntimeTests`.
+- Scoped this unit to the next recommended `SM_GROUP_MEMBER_INFO` online `UPDATE_EFFECTS` zero-effect skeleton branch.
+- Extended the Java golden fixture to cover one exact `UPDATE_EFFECTS` payload: fixed prefix, event id `65`, no name payload, two zero dwords, requested target slot byte `4`, zero abnormal-effect count, and eight zero slot-timer dwords.
+- Added the matching C# exact payload test for the same `UPDATE_EFFECTS` zero-effect vector while keeping the existing branch-tail skeleton test.
+- Kept this as packet-writer evidence only; no live group effect mutation, `EffectController.getAbnormalEffectsToTargetSlot`, recipient fanout, slot-timer semantics beyond zeros, or real-client behavior is claimed.
+
+#### Migration Parity Table - Session 2043
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO.writeImpl` `UPDATE_EFFECTS` zero-effect branch | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` `UpdateEffects` zero-effect branch | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2043 verifies one online `UPDATE_EFFECTS` vector with Java event id `65`, no name payload, requested slot byte `4`, zero effect count, and eight zero slot-timer dwords. Live effect-controller extraction and non-empty effects remain unproven. |
+| `com.aionemu.gameserver.controllers.effect.EffectController.getAbnormalEffectsToTargetSlot` constructor dependency | `PlayerGroupMemberInfoPacketPlan.FromMember(..., slot: 4)` with injected/empty `AbnormalEffects` | Packet Data Dependency | Partial | Java Golden Tested + C# Unit Tested | Needs Verification | The Java fixture installs a `PlayerEffectController` and verifies the empty target-slot path through the packet constructor. C# still depends on caller-provided effect DTOs and does not prove live effect state extraction. |
+| `com.aionemu.gameserver.skillengine.model.SkillTargetSlot.values()` slot timer placeholder count | `SmGroupMemberInfo.JavaSkillTargetSlotIds` placeholder loop | Packet Constants | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | The targeted branch now verifies the eight trailing zero dwords for `UPDATE_EFFECTS`. Actual timer values remain unimplemented on the tested vectors and are not claimed. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_GROUP_MEMBER_INFO_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 5 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests.SmGroupMemberInfo_UpdateEffectsZeroEffectsMatchesJavaGoldenPayload|FullyQualifiedName~PlayerGroupRuntimeTests.SmGroupMemberInfo_WritesUpdateEffectsZeroEffectSkeletonLikeJava|FullyQualifiedName~PlayerGroupRuntimeTests.SmGroupMemberInfo_EnterAndUpdateZeroEffectsMatchJavaGoldenPayloads" --no-restore` passed with 3 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_GROUP_MEMBER_INFO_GoldenTest,SM_GROUP_DATA_EXCHANGE_GoldenTest,CM_GROUP_DATA_EXCHANGE_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 9 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests" --no-restore` passed with 44 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 116 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5169 C# tests.
+
+Known gaps:
+- This unit does not prove live group membership event fanout, `TeamStatUpdater`, production effect-controller mutation, target-slot filtering for non-empty abnormal effects, known-list/team recipient filtering, socket encryption/frame ordering, or real-client behavior.
+- `SM_GROUP_MEMBER_INFO` Java golden evidence now covers movement, join, enter-offline/name, enter/update zero-effect skeleton, and update-effects zero-effect skeleton vectors only; non-empty abnormal effects and nonzero slot-timer payload semantics still need Java-side vectors if broader parity is claimed later.
+- The Java fixture uses controlled reflection/Unsafe setup to avoid full player/network bootstrap; it proves packet bytes for configured vectors, not production lifecycle parity.
+
+Next candidates:
+- Next sequential task: inspect whether a practical Java golden can cover one non-empty `SM_GROUP_MEMBER_INFO` abnormal-effect entry; if effect-object construction is too invasive, pivot to `SM_ALLIANCE_MEMBER_INFO` movement/member prefix Java golden evidence.
+- Safe alternatives: inspect `SM_ALLIANCE_MEMBER_INFO` targeted `UPDATE_EFFECTS` Java golden feasibility; inspect a narrow non-live `FindGroupService` planner with service mutation and broadcast side effects deferred; return to group-data known-list/team online filtering only if it can remain diagnostic and disabled.
+
 ### Session 2042 (June 1, 2026)
 - Performed Work Discovery after UOW-2041: re-read the required migration/orchestration/parity docs plus the latest UOW-2041 completion/handoff, inspected Java `SM_GROUP_MEMBER_INFO.writeImpl`, Java `SkillTargetSlot`, the current Java golden fixture, C# `SmGroupMemberInfo`, and `PlayerGroupRuntimeTests`.
 - Scoped this unit to the next recommended `SM_GROUP_MEMBER_INFO` online `ENTER`/`UPDATE` zero-effect skeleton branches.
