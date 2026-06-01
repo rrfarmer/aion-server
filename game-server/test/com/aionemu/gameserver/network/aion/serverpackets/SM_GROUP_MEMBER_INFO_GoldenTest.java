@@ -137,6 +137,16 @@ public class SM_GROUP_MEMBER_INFO_GoldenTest {
 		assertEquals(0, buffer.remaining());
 	}
 
+	@Test
+	public void writeImpl_enterAndUpdateWriteZeroEffectSkeletonPayloads() throws Exception {
+		Player player = player(1008, "Effectless", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		setField(player, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+		PlayerGroup group = new PlayerGroup(new PlayerGroupMember(player), TeamType.GROUP, 99001);
+
+		assertZeroEffectSkeleton(write(new SM_GROUP_MEMBER_INFO(group, player, GroupEvent.ENTER)), GroupEvent.ENTER);
+		assertZeroEffectSkeleton(write(new SM_GROUP_MEMBER_INFO(group, player, GroupEvent.UPDATE)), GroupEvent.UPDATE);
+	}
+
 	private static Player player(int objectId, String name, PlayerClass playerClass, Gender gender, int level, boolean online) throws Exception {
 		PlayerCommonData commonData = new PlayerCommonData(objectId);
 		commonData.setName(name);
@@ -169,6 +179,40 @@ public class SM_GROUP_MEMBER_INFO_GoldenTest {
 		buffer.flip();
 		buffer.get(payload);
 		return payload;
+	}
+
+	private static void assertZeroEffectSkeleton(byte[] payload, GroupEvent expectedEvent) {
+		ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+
+		assertEquals(99001, buffer.getInt());
+		assertEquals(1008, buffer.getInt());
+		assertEquals(819, buffer.getInt());
+		assertEquals(819, buffer.getInt());
+		assertEquals(840, buffer.getInt());
+		assertEquals(840, buffer.getInt());
+		assertEquals(60, buffer.getInt());
+		assertEquals(60, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(220010000, buffer.getInt());
+		assertEquals(220010000, buffer.getInt());
+		assertEquals(10.5f, buffer.getFloat());
+		assertEquals(20.25f, buffer.getFloat());
+		assertEquals(30.75f, buffer.getFloat());
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(10, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(expectedEvent.getId(), Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals("Effectless", readS(buffer));
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(127, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Short.toUnsignedInt(buffer.getShort()));
+		for (int i = 0; i < 8; i++)
+			assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.remaining());
 	}
 
 	private static String readS(ByteBuffer buffer) {
