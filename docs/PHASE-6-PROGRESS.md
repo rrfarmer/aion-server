@@ -87913,6 +87913,48 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1999 (June 1, 2026)
+- Performed Work Discovery after UOW-1998: confirmed the worktree was clean, compared Java/C# packet factory registrations, inspected Java `CM_SUMMON_EMOTION`, Java `CM_SUMMON_COMMAND`, existing C# summon packet parsers, `GameServerConnection`, and progress references for summon command planning.
+- Found a compact parser/factory parity gap adjacent to UOW-1998: Java registers `CM_SUMMON_EMOTION` at opcode `202`, while C# had no parser or registration.
+- Added Java golden coverage for `CM_SUMMON_EMOTION.readImpl`, proving `objId` is read as a D field and `emotionTypeId` uses Java `readUC()` unsigned byte semantics.
+- Added C# `CmSummonEmotion`, registered opcode `202` for `InGame`, added C# factory parser coverage with high-bit emotion id `255`, and documented the live `runImpl` side-effect boundary as unported.
+- No production summon emotion behavior was enabled; summon/mercenary lookup, emotion type mapping, selected state mutation, `SM_EMOTION` broadcast fanout, and unknown-emotion logging remain deferred.
+
+#### Migration Parity Table - Session 1999
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_EMOTION.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmSummonEmotion.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# now parses summon object id and unsigned emotion type id in Java field order. Java golden and C# tests cover `0xFF -> 255` unsigned byte semantics. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `202` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `202` registration | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# factory now accepts opcode `202` only in `InGame`, matching the Java registration table. Java reflection construction differs from C# explicit factory lambdas. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_EMOTION.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java live behavior resolves the summon/mercenary, maps `EmotionType`, mutates weapon-equipped state for selected emotions, broadcasts `SM_EMOTION`, and logs unknown non-zero emotion ids. C# does none of those in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_SUMMON_EMOTION_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesSummonEmotion" --no-restore` passed with 1 C# test. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5106 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 57 game-server tests.
+
+Remaining risks:
+- This unit proves only parser consumption and opcode registration. It does not prove live summon emotion execution, encrypted frame handling, socket dispatch, or real-client behavior.
+- Java `CM_SUMMON_EMOTION.runImpl` side effects remain unported: active-player summon/mercenary lookup, `EmotionType` mapping, FLY/LAND change-speed sequencing, jump broadcasts, attack/neutral state mutation, and unknown-emotion logging.
+- Exact `SM_EMOTION` broadcast recipients and ordering remain source-reviewed only for this route.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one C# client packet parser plus one opcode registration and one Java golden parser test.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser/golden evidence for one summon emotion packet boundary.
+- Total artifacts needing verification: live summon emotion execution, live summon movement execution, live summon/mercenary ownership lookup, live `SM_EMOTION`/`SM_MOVE` broadcast fanout, live summon cast/attack controller execution, live pet/common-data mutation and packet send, live dialog/private-store/buy/repurchase persistence, condition validators, active-effect/stat runtime, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for dialog/private-store/pet/summon/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy persistence, live dialog controller/AI dispatch proof, live private-store mutation/fanout proof, live pet/common-data/reward mutation and packet send, live summon movement/emotion/combat controller dispatch, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes one summon emotion parser/factory gap but does not complete live summon emotion parity.
+
+Next recommended unit of work:
+- Next sequential task: choose another compact parser/factory/model boundary with Java golden evidence and no broad live mutation. `CM_SUMMON_COMMAND` is a nearby candidate, but its runtime ties into summon mode scheduling already represented elsewhere, so keep any parser work strictly scoped.
+- Safe alternative candidates for the next session:
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+	- inspect BUY_AGAIN live-send ordering only if a stronger deterministic Java runtime vector can be added without broad object graph setup
+	- inspect another compact unported enum/model dependency with Java golden evidence
+
 ### Session 1998 (June 1, 2026)
 - Performed Work Discovery after UOW-1997: re-read the required migration docs, latest handoff/progress context, inspected Java `CM_SUMMON_MOVE`, Java `MovementMask`, C# movement parsers, C# packet factory registrations, `GameServerConnection` packet boundaries, and existing summon packet tests.
 - Found a compact parser/factory parity gap: Java registers `CM_SUMMON_MOVE` at opcode `201`, while C# only had summon attack/cast-spell opcodes `203` and `205`.
