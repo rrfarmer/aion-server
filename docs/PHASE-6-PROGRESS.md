@@ -84882,6 +84882,55 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1926 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1925: re-read required orchestration/parity docs and the latest handoff, inspected Java `TradeService.performSellToShop`, Java `Item.isSellable`, Java `ItemMask.SELLABLE`, Java `PlayerLimitService.updateSellLimit`, C# `GameServerConnection.HandleBuyItem`, C# `TradeSellToShopPlanService`, C# `PlayerSellLimitPlanService`, C# `SellLimitLookupService`, and buy-item socket diagnostics.
+- Confirmed the Java runtime/golden path remains blocked locally, so this unit stayed source-reviewed and C#-tested only.
+- Wired NPC action `1` normal sell socket diagnostics to hydrate a disabled `TradeSellToShopPlan` when item-template facts are available.
+- The normal sell diagnostic now derives Java `ItemMask.SELLABLE` from `ItemTemplateSummary.Mask`, applies the existing non-live sell-limit formula against a diagnostic current-limit/base-limit fact, uses `_options.Prices.VendorSellModifier`, and attaches the resulting sell-to-shop plan to the existing action `1` composition descriptor.
+- Added socket-level regression coverage for:
+	- a sellable full-stack item creating a disabled normal sell plan with seller deletion, repurchase entry, Kinah update, and disabled persistence/send intent
+	- a non-sellable item mask blocking before mutation while recording the Java not-sellable packet intent
+- Kept this unit non-live. No live inventory deletion/decrease, Kinah mutation, repurchase mutation, packet dispatch, transaction commit, repository write, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1926
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.TradeService.performSellToShop` normal sell mutation plan from socket facts | `GameServerConnection.ResolveBuyItemSellToShopPlan` + `TradeSellToShopPlanService` | Diagnostic Socket Planner | Partial | Regression Tested | Partial Parity | NPC action `1` diagnostics can now attach a disabled normal sell-to-shop plan from active inventory/template facts. Live mutation, repository writes, packet fanout, transaction semantics, and Java runtime comparison remain unwired. |
+| `com.aionemu.gameserver.model.gameobjects.Item.isSellable` / `ItemMask.SELLABLE` | `GameServerConnection.IsItemTemplateSellable` | Diagnostic Fact Adapter | Partial | Regression Tested | Partial Parity | C# derives sellability from mask bit `1 << 2` and blocks disabled normal sell plans with the Java not-sellable packet intent. This is source-reviewed only and not Java-runtime verified. |
+| `com.aionemu.gameserver.services.player.PlayerLimitService.updateSellLimit` in normal sell socket diagnostics | `PlayerSellLimitPlanService` consumed by `GameServerConnection.ResolveBuyItemSellToShopPlan` | Diagnostic Limit Planner | Partial | Regression Tested | Partial Parity | The socket diagnostic applies the existing deterministic sell-limit formula to packet item counts before disabled sell planning. Live account sell-limit map lookup/deduction, account max-level source, SELL_LIMIT rate application, and Java runtime comparison remain pending. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~TradeSellToShopPlanServiceTests|FullyQualifiedName~PlayerSellLimitPlanServiceTests|FullyQualifiedName~CmBuyItemSellActionFactAdapterServiceTests|FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemSellToShopCompositionPlanServiceTests" --no-restore` passed with 79 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4948 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- Live `CM_BUY_ITEM` action `1` execution remains disabled.
+- Normal sell diagnostics still do not allocate object IDs for partial-stack repurchase items or missing Kinah rows; the disabled planner blocks those no-allocation cases rather than creating live state.
+- NPC `canBuy()` / `canPurchase()` function facts still use diagnostic defaults in this socket path.
+- Sell-limit hydration uses the loaded player level/base limit or an injected current-limit diagnostic fact; Java's account max-level lookup, membership-clamped `Rates.SELL_LIMIT`, and live account sell-limit map mutation remain unwired.
+- Existing non-live `CM_BUY_ITEM` paths still must not be treated as verified Java execution.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: disabled normal sell-to-shop socket plan hydration with sellability and sell-limit facts plus focused tests.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 22 rows pending Java runtime/golden comparison, live `CM_BUY_ITEM` handler execution, live normal/AP sell mutation wiring, live BUY_AGAIN wiring, live private-store action `0`, live pet action `17`, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live sell-limit map mutation/rate source, live limited-item mutation, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent NPC function facts, live `CM_BUY_ITEM` handler execution, live normal/AP sell mutation wiring, live buy transaction mutation wiring, live sell-limit map mutation, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves source-reviewed normal sell diagnostics but does not complete live trade/repurchase/private-store/pet or stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: safely expand normal sell diagnostics to cover partial-stack repurchase object ID allocation and missing-Kinah-row creation as disabled facts, without enabling live mutation.
+- Safe alternative candidates for the next session:
+	- expose NPC buy/purchase function facts to the socket diagnostic path if static metadata can be proven equivalent to Java `npc.canBuy()` / `npc.canPurchase()`
+	- inspect Java `PetService.sell` auto-sell notification path as a separate disabled notification planner
+	- hydrate safe private-store listed-item facts into the diagnostic path only if no live mutation is enabled
+	- add production-safe buy-transaction fact hydration for selected NPC buy-from-shop diagnostics without dispatching live effects
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1925 (May 31, 2026)
 - Performed fresh Work Discovery after UOW-1924: re-read required orchestration/parity docs, latest completion, and latest handoff; inspected Java `TradeService.performSellForAPToShop`, Java `TradeService.performSellToShop`, C# `GameServerConnection.HandleBuyItem`, C# `TradeSellForApToShopPlanService`, C# `TradeSellToShopPlanService`, and buy-item socket diagnostics.
 - Confirmed the AP-sell branch can safely hydrate a disabled mutation plan from read-only facts: packet item requests, active player inventory snapshot, item templates, purchase-template goods-list membership, AP-sell config, and `PlayerRestrictions.canTrade` baseline.
