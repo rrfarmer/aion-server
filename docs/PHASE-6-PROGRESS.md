@@ -87913,6 +87913,52 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1966 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1965: inspected Java `PrivateStoreService.sellStoreItem`, C# `PrivateStorePurchasePlanService`, C# private-store persistence/send/live-executor diagnostics, existing private-store purchase tests, and the Session 1965 handoff.
+- Added focused disabled diagnostics coverage for mixed private-store purchases where one seller inventory item is present and another bought entry is missing.
+- Confirmed Java computes total price before the loop, mutates/logs only inside the `item != null` branch, skips missing seller items without returning, then transfers the full precomputed Kinah price after the loop.
+- Tightened the C# disabled persistence adapter so private-store sold-item store update intent is recorded only for seller item updates/deletes that came from the Java `decreaseItemFromPlayer` branch, not for skipped missing seller items.
+- Kept this unit non-live. No seller/buyer inventory mutation, Kinah transfer, store mutation, packet send, exchange-log write, transaction, encrypted frame capture, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1966
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.PrivateStoreService.sellStoreItem` mixed present/missing seller item loop | `Aion.GameServer.Services.PrivateStorePurchasePlanService` | Service Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | C# disabled planning now has focused evidence that present seller items produce seller/buyer item diagnostics while missing seller items are skipped, with full Java pre-loop Kinah price still applied after the loop. Live mutation and race timing remain unverified. |
+| `com.aionemu.gameserver.services.PrivateStoreService.decreaseItemFromPlayer` store item update boundary | `Aion.GameServer.Services.PrivateStorePersistenceAdapterPlanService` | Persistence Intent Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | Persistence diagnostics now record private-store sold-item update intent from seller item updates/deletes only, matching Java's store mutation being reached only through the present-item branch. Repository writes remain disabled and not DB-verified. |
+| `com.aionemu.gameserver.services.PrivateStoreService.sellStoreItem` seller notification/exchange-log branch | `Aion.GameServer.Services.PrivateStoreSendAdapterPlanService` / `PrivateStoreLiveExecutorFacadePlanService` | Send/Log Intent Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | Mixed-case diagnostics now prove notification and exchange-log intent remain present for the bought item that Java would move, while skipped missing items do not add store-close or missing-item send/log intent. Exact live packet/log formatting remains unverified. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PrivateStorePurchasePlanServiceTests|FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests|FullyQualifiedName~PrivateStoreLiveExecutorFacadePlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~PrivateStoreBoughtItemsPlanServiceTests" --no-restore` passed with 62 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- First broad C# run timed out at the command limit before producing a pass/fail result; rerun with a longer timeout passed.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5019 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 23 game-server tests.
+- `mvn test "-Dmaven.test.skip=false" "-DskipTests=false"` passed the full Maven reactor in the current workspace. This run did not force a clean login-server recompile.
+
+Remaining risks:
+- Mixed private-store present/missing item behavior remains diagnostic only; no live inventory, Kinah, store, packet, log, or transaction side effects are dispatched.
+- Java can charge the buyer and credit the seller for skipped missing seller items because price is computed before the loop. C# records this reviewed behavior but does not prove real-client or DB impact.
+- Java `LinkedHashMap` insertion ordering, live store mutation timing, invalid-index warning logs, race behavior, encrypted frame capture, and real-client validation remain pending.
+- Full clean Maven validation can still be rerun if the prior login-server compile observation needs root-cause proof.
+- Full item-info blob parity for advanced item state remains partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one disabled mixed private-store missing/present item diagnostic test set plus a persistence store-update intent refinement.
+- Total artifacts with verified parity: 0 full artifacts; this unit is source-reviewed and C# unit-tested but remains non-live and does not prove Java runtime mutation, socket, transaction, logging, DB, or concurrency parity.
+- Total artifacts needing verification: live private-store sale execution, live audit/logging, live store item ordering/mutation timing, live pet autosell activation handler wiring, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live pet common-data persistence, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled mixed private-store race diagnostics but does not complete live private-store parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect `CM_BUY_ITEM` amount signedness (`readUH()` in Java versus C# unsigned packet reads), then add a focused parser/planner parity test if a Java runtime vector is practical.
+- Safe alternative candidates for the next session:
+	- inspect Java delete-path cube-size sends for another non-repurchase inventory diagnostic where `sendItemDeletePacket` is already represented by a C# planner
+	- inspect live `CM_PET` actionType 4 composition only if it can remain disabled and source-reviewed
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+
 ### Session 1965 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1964: re-read required migration/orchestration/parity docs, latest handoff, inspected Java `PrivateStoreService.sellStoreItem`, Java `getBoughtItems`, C# `PrivateStorePurchasePlanService`, C# private-store send/facade diagnostics, `GameServerConnection` private-store purchase-plan assembly, and existing private-store tests.
 - Changed the disabled C# private-store purchase planner to record Java's missing-seller-item loop behavior instead of hard-blocking the whole purchase.
