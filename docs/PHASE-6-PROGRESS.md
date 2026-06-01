@@ -84882,6 +84882,54 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1936 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1935: re-read the latest handoff and current progress context; inspected Java `SM_REPURCHASE`, Java `RepurchaseService.getRepurchaseItems`, C# `RepurchaseDiagnosticSnapshotPlanService`, C# `GameServerConnection.CreateDialogRepurchasePacket`, C# `SmRepurchase`, and the existing BUY_AGAIN socket diagnostics.
+- Added a disabled BUY_AGAIN composition regression that creates a successful sell-to-shop repurchase snapshot, assigns its payload to the non-live `Player.RepurchaseItems` diagnostic surface, and verifies BUY_AGAIN builds a non-empty `SmRepurchase` descriptor without sending packets.
+- Added a minimal item template to the dialog fixture static data so the non-live dialog packet builder can materialize the repurchase packet item through the same template lookup used by `CreateDialogRepurchasePacket`.
+- Verified the packet snapshot header carries the target NPC id, Java constant payload discriminator `1`, and one repurchase item. Full item-blob/price Java-golden parity remains unclaimed because no Java runtime capture was produced.
+- Kept this unit non-live. No live `RepurchaseService` singleton state, player snapshot mutation by production code, socket send, inventory mutation, Kinah mutation, item add/remove, repository write, Java runtime output, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1936
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_REPURCHASE(Player, npcId)` snapshots `RepurchaseService.getRepurchaseItems(player.getObjectId())` | `GameServerConnection.CreateDialogRepurchasePacket` fed by `Player.RepurchaseItems` from `RepurchaseDiagnosticSnapshotPlan` | Disabled Packet Composition | Partial | Regression Tested | Partial Parity | C# now proves a successful sell-to-shop diagnostic snapshot can compose into a non-empty BUY_AGAIN `SmRepurchase` descriptor without live socket dispatch. Exact Java item blob/price bytes and live singleton state remain unverified. |
+| `com.aionemu.gameserver.services.DialogService` BUY_AGAIN branch sends `new SM_REPURCHASE(player, npc.getObjectId())` | `HandleDialogSelectAsync_BuyAgainComposesRepurchaseSnapshotPacketWithoutSending` | Socket Diagnostic Regression | Partial | Regression Tested | Needs Verification | The disabled dialog path creates the packet descriptor and serializes a non-empty header. Live packet send and Java runtime comparison remain disabled. |
+
+Validation:
+- Focused sell/repurchase/dialog slice passed with 30 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionStorageExpansionDialogTests|FullyQualifiedName~TradeSellToShopPlanServiceTests|FullyQualifiedName~SmRepurchaseTests" --no-restore`
+- Initial broad game-server suite attempt timed out before a result and was not counted.
+- Broad game-server suite rerun excluding `GameServerConnectionInventoryExpansionUseItemTests` first exposed one unrelated transient `WorldNpcRandomWalkServiceTests.StartRandomWalkingAsync_InterpolatesToTargetAndSchedulesNextRandomPointAfterArrival` timeout after 4967 passes.
+- Isolated rerun of that random-walk test passed with 1 test.
+- Final broad game-server suite excluding `GameServerConnectionInventoryExpansionUseItemTests` passed with 4968 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore`
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- Local Java execution remains blocked until compatible Java and Maven are available.
+- The new coverage is a disabled diagnostic composition only; it assigns the test snapshot to `Player.RepurchaseItems` and does not enable production mutation.
+- Live `RepurchaseService` singleton add/remove/get lifecycle, sell-to-shop snapshot writes, BUY_AGAIN socket dispatch, `CM_BUY_ITEM` action `2` execution, inventory/Kinah mutation, repository writes, and transaction behavior remain disabled.
+- Full `SM_REPURCHASE` item blob and repurchase price byte parity remain covered only by C# packet-shape tests, not Java-golden comparison.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: disabled BUY_AGAIN repurchase snapshot composition regression.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 25 rows pending Java runtime/golden comparison, live repurchase singleton state, live BUY_AGAIN packet dispatch, live `CM_BUY_ITEM` handler execution, Java-equivalent known-list object population, live known-list resolver ownership, live private-store action `0`, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item service state/counter persistence, live price influence/siege state source, live pet auto-sell activation/state/item selection, live pet auto-sell execution/notification dispatch, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN packet dispatch, live normal/AP sell mutation wiring, live buy transaction mutation wiring, live influence/siege state wiring, live limited-item counter mutation/cron reset, live private-store model/runtime wiring, live pet common-data/service wiring, live pet auto-sell inventory/drop caller integration, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled repurchase packet composition coverage but does not complete live repurchase execution or runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add disabled `CM_BUY_ITEM` action `2` repurchase execution diagnostics over `RepurchaseService.repurchaseFromShop` source branches, without enabling live inventory/Kinah mutation or singleton state.
+- Safe alternative candidates for the next session:
+	- add Java-runtime golden capture for BUY_AGAIN/`SM_REPURCHASE`, `CM_BUY_ITEM`, buy price, private-store, or pet auto-sell once compatible Java and Maven are available
+	- inspect `PetService.activateAutoSell` and `SM_PET(AUTOSELL, activate)` runtime state wiring as a separate disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full socket cases without enabling live mutation
+	- investigate transient world-walk timing tests if they recur
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1935 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1934: re-read the latest handoff and current progress context; inspected Java `TradeService.performSellToShop`, Java `RepurchaseService.addRepurchaseItems`, Java `SM_REPURCHASE`, C# `TradeSellToShopPlanService`, C# `Player.RepurchaseItems`, and the BUY_AGAIN dialog diagnostics.
 - Confirmed Java `TradeService.performSellToShop` calls `RepurchaseService.getInstance().addRepurchaseItems(player, items)` after the successful sell loop and before `inventory.increaseKinah`, including the Java-success case where the collected item list is empty.
