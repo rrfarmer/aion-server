@@ -47,15 +47,22 @@ public class CM_BUY_ITEM_ReadGuardGoldenTest {
 	}
 
 	@Test
-	public void readImpl_buyFromShopActionStoresTradeListItemsInReadOrder() throws Exception {
+	public void readImpl_tradeListActionsStoreItemsInReadOrder() throws Exception {
+		int[] tradeListActions = { 1, 13, 14, 15, 16, 17 };
+		for (int tradeActionId : tradeListActions) {
+			assertTradeListActionStoresItemsInReadOrder(tradeActionId);
+		}
+	}
+
+	private static void assertTradeListActionStoresItemsInReadOrder(int tradeActionId) throws Exception {
 		CM_BUY_ITEM packet = new CM_BUY_ITEM(51, Set.of(State.IN_GAME));
 		packet.setConnection(allocateConnection());
-		packet.setBuffer(payload(7001, 13, new int[] { 100000001, 100000002 }, new long[] { 1, 5 }));
+		packet.setBuffer(payload(7001, tradeActionId, new int[] { 100000001, 100000002 }, new long[] { 1, 5 }));
 
 		packet.readImpl();
 
 		assertEquals(7001, getField(packet, "sellerObjId"));
-		assertEquals((short) 13, getField(packet, "tradeActionId"));
+		assertEquals((short) tradeActionId, getField(packet, "tradeActionId"));
 		assertEquals(2, getField(packet, "amount"));
 		assertFalse((boolean) getField(packet, "isAudit"));
 		assertEquals(100000002, getField(packet, "itemId"));
