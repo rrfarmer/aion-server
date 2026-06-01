@@ -87913,6 +87913,52 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1990 (June 1, 2026)
+- Performed Work Discovery after UOW-1989: re-read the required migration docs and latest handoff, inspected Java `CM_PET`, Java `PetService.activateLoot`, C# `CmPet`, existing `SmPet` special-function serialization, the prior pet autosell diagnostic planner, focused pet tests, and Phase 6 progress notes.
+- Selected the Java `CM_PET` FOOD actionType `3` autoloot activation path as a compact disabled boundary because its read layout and service guard order can be represented without enabling live pet mutation, socket sends, audit logging, or persistence.
+- Added a disabled C# `CmPetAutoLootActivationCompositionPlanService` that maps parsed `CM_PET` FOOD/actionType `3` packets into an activation planner and leaves other pet branches routed elsewhere.
+- Added `PetAutoLootActivationPlanService` to mirror Java `PetService.activateLoot` guard order as diagnostics: missing pet return before service, missing LOOT function audit-only block, free-for-all loot rule system-message block, and enabled/disabled `SM_PET(AUTOLOOT, activate)` plus looting-state intents.
+- Added Java golden coverage for `CM_PET.readImpl` FOOD/actionType `3` activation reads and C# unit coverage for composition, guard order, system-message IDs, packet intents, and skipped non-autoloot branches.
+- Kept all behavior disabled and non-live: no pet common-data mutation, no audit write, no socket send, no persistence, and no handler wiring were enabled.
+
+#### Migration Parity Table - Session 1990
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PET.readImpl` FOOD actionType `3` | `Aion.GameServer.Network.Aion.ClientPackets.CmPet` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Java golden proves FOOD/actionType `3` reads `activateSpecialFunction` after the action-type field and consumes the two padding ints. C# parser coverage exercises the same branch through the disabled composition boundary. Other `CM_PET` branches remain separately scoped. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PET.runImpl` FOOD actionType `3` dispatch | `Aion.GameServer.Services.CmPetAutoLootActivationCompositionPlanService` | Client Handler Boundary | Partial | Unit Tested + Source Reviewed | Needs Verification | C# composes a disabled activation plan only for FOOD/actionType `3` and skips Java-routed branches. The live `CM_PET` handler is not wired to mutate pet state or send packets. |
+| `com.aionemu.gameserver.services.toypet.PetService.activateLoot` | `Aion.GameServer.Services.PetAutoLootActivationPlanService` | Service Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | Disabled planner records Java guard order: missing pet pre-service, missing LOOT function audit, free-for-all message `1400878`, enable message `1400876`, looting-state mutation intent, and `SM_PET(AUTOLOOT, activate)` intent. Live pet common-data mutation, audit logging, loot-rule lookup, socket dispatch, persistence, and concurrency remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PET(PetSpecialFunction.AUTOLOOT, boolean)` intent | `Aion.GameServer.Network.Aion.ServerPackets.SmPet.SpecialFunction` via `PetAutoLootActivationPlan.PacketIntent` | Packet Intent Boundary | Partial | Unit Tested + Existing Packet Regression + Source Reviewed | Partial Parity | Diagnostic emits a concrete `SmPet` AUTOLOOT packet intent for enable/disable. It does not send the packet or prove encrypted-frame/client runtime behavior. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmPetTests|FullyQualifiedName~PetAutoLoot" --no-restore` passed with 27 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_PET_AutoLootReadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5082 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 48 game-server tests.
+
+Remaining risks:
+- Pet autoloot activation remains disabled and informational only; no pet common-data looting flag is changed and no `SM_PET(AUTOLOOT)` packet is sent.
+- The missing-LOOT-function audit string is recorded as a diagnostic approximation of Java's `"tried to enable auto-loot on non-looting " + pet`; exact Java `Pet.toString()` text was not runtime-compared.
+- Live `CM_PET` actionType `3` handler wiring, pet template/function lookup, team loot-rule source, audit logging, system-message socket send, `SM_PET(AUTOLOOT)` socket send, persistence/threading, encrypted frame capture, real-client validation, and NPC autoloot/drop integration remain pending.
+- Existing pet autosell and pet sell-to-shop diagnostics remain non-live and do not prove repository writes, transaction boundaries, inventory/Kinah mutation, or packet-send ordering.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one disabled pet autoloot activation diagnostic planner plus focused Java/C# tests.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser and disabled planner evidence only.
+- Total artifacts needing verification: live pet autoloot activation handler wiring, live pet common-data mutation, live LOOT function lookup, live team loot-rule lookup, live audit/system-message/socket dispatch, live pet persistence/threading, NPC autoloot/drop flow, `SM_VERSION_CHECK` success writer parity, event-theme runtime source, version-check success runtime response, remaining parser-only packet surfaces, live passkey side effects, live pet autosell activation handler wiring, live `SM_PET(AUTOSELL)` dispatch, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for pet/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy/private-store persistence, live `SM_VERSION_CHECK` dynamic success payload proof, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled pet autoloot activation diagnostics but does not complete live pet or autoloot parity.
+
+Next recommended unit of work:
+- Next sequential task: continue Work Discovery for another compact planner/parser/model boundary with Java golden evidence, or revisit deterministic `SM_VERSION_CHECK` success sub-slices only if Java bytes can be produced by controlling dynamic dependencies.
+- Safe alternative candidates for the next session:
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect another `CM_PET` sub-branch only if it can remain disabled and source-reviewed
+	- inspect another compact unported parser/factory or enum/model dependency with Java golden evidence
+
 ### Session 1989 (June 1, 2026)
 - Performed Work Discovery after UOW-1988: re-read required migration docs and latest handoff, inspected Java `SM_VERSION_CHECK`, Java server opcode registration, C# server-packet infrastructure, C# `CM_VERSION_CHECK` boundary, and the newly ported `EventTheme` dependency.
 - Selected the deterministic incompatible-client branch of Java `SM_VERSION_CHECK.writeImpl`: when `version != INTERNAL_VERSION`, Java writes only answer id `1` and returns before dynamic server state is used.
