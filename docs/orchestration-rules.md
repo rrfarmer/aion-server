@@ -42,7 +42,7 @@ For each Unit of Work:
 2. Identify Java source artifacts.
 3. Identify target C# artifacts.
 4. Identify dependencies and blockers.
-95. Review all changes.
+5. Review all changes.
 6. Run relevant build/tests.
 7. Compare behavior against Java where possible.
 8. Update parity documentation inside the session completion/handoff docs.
@@ -70,8 +70,8 @@ Do not clutter obvious code, but document anything where parity may matter.
 The Java project is the source of truth.
 
 Do not assume behavior.
-Do not “improve” Java behavior unless intentionally documented.
-Do not mark “Verified Parity” unless there is objective evidence.
+Do not "improve" Java behavior unless intentionally documented.
+Do not mark "Verified Parity" unless there is objective evidence.
 
 Allowed Parity Status values:
 - Unknown
@@ -87,7 +87,7 @@ Verified Parity requires at least one:
 - Golden file comparison
 - Deterministic manual confirmation from reviewed Java logic
 
-If behavior is uncertain, use “Needs Verification.”
+If behavior is uncertain, use "Needs Verification."
 
 ## Migration Parity Table
 
@@ -163,6 +163,8 @@ Do not claim a test proves parity unless it actually validates Java-equivalent b
 
 Prefer focused validation by default. The normal Unit of Work validation target is the smallest test set that exercises the changed artifact and its directly related packet/parser/service surface.
 
+Do not use the full .NET test suite or full solution build as a routine session heartbeat. They cost too much for ordinary parity slices and should be reserved for the broad-validation triggers below.
+
 Run focused C# tests for:
 - The edited test class or service area.
 - Directly related packet/parser tests when packet shape or client/server action selection is affected.
@@ -181,7 +183,7 @@ Do not run the broad .NET suite by default. Run broad C# validation only when:
 - The user explicitly asks for broad validation.
 - A release/readiness checkpoint requires it.
 
-If broad validation is skipped, document that decision in the completion/handoff notes with the focused commands that did run and why they were sufficient for the scoped risk.
+If broad validation is skipped, document that decision in the completion/handoff notes with the focused commands that did run and why they were sufficient for the scoped risk. If a Unit of Work is documentation-only, run repository hygiene checks such as `git diff --check` and state that runtime tests were not applicable.
 
 ## Summary Metrics
 
@@ -225,7 +227,7 @@ Use the latest session completion/handoff documents as the progress and parity r
 1. Run relevant tests/builds.
 2. Update the latest session completion/handoff docs.
 3. Update the unit parity table there.
-4. Update “what’s next.”
+4. Update "what's next."
 5. Commit code and docs together.
 
 Commit message format:

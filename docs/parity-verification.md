@@ -502,11 +502,13 @@ Before committing a Unit of Work, the Orchestrator must answer:
 
 1. Did the build pass?
 2. Did relevant tests pass?
-3. Were touched Java artifacts documented?
-4. Were touched C# artifacts documented?
-5. Was parity status conservative?
-6. Were gaps explicitly listed?
-7. Were next verification steps documented?
+3. Was focused validation chosen for the changed surface, or was a broad-validation trigger documented?
+4. If the broad .NET suite/build was skipped, were the focused commands and rationale documented?
+5. Were touched Java artifacts documented?
+6. Were touched C# artifacts documented?
+7. Was parity status conservative?
+8. Were gaps explicitly listed?
+9. Were next verification steps documented?
 
 If not, either fix it or document the blocker.
 
