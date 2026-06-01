@@ -87913,6 +87913,36 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2024 (June 1, 2026)
+- Performed Work Discovery after UOW-2023: re-read the latest completion and handoff, inspected Java `CM_GROUP_DATA_EXCHANGE`, Java packet factory opcode `79`, searched C# for existing group-data exchange coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, `PacketBuffer.ReadB`, and packet factory tests.
+- Found a compact parser/factory parity gap: Java registers `CM_GROUP_DATA_EXCHANGE` at opcode `79` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
+- Added Java golden coverage for both `readImpl` branches: action `1` reads UC action, D data size, B data; non-`1` actions read UC action, UC groupType, UC unk2, D data size, B data.
+- Added C# `CmGroupDataExchange`, registered opcode `79` for `InGame`, and added a documented no-op handler boundary because Java live behavior validates payload length and fans data out to nearby/group/alliance/league recipients.
+- Added C# parser/factory coverage proving both Java read branches, byte-array payload preservation, valid `InGame`, and invalid `Authed`.
+- Source-reviewed `CM_FIND_GROUP` as a possible next parser candidate, but its action matrix is broad; the next unit should choose a narrow action subset if it touches that packet.
+
+#### Migration Parity Table - Session 2024
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_GROUP_DATA_EXCHANGE.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmGroupDataExchange.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# reads action `1` and non-`1` layouts in Java order, preserving raw data bytes. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `79` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `79` | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# accepts opcode `79` only in `InGame`; encrypted-frame/socket dispatch remains unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_GROUP_DATA_EXCHANGE.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java checks active player and empty data, rejects data over `AionServerPacket.MAX_USABLE_PACKET_BODY_SIZE - 6`, broadcasts action `1` to nearby recipients, and sends other actions to group/alliance/league online members except self. C# does not wire live broadcast behavior in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_GROUP_DATA_EXCHANGE_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 2 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesGroupDataExchangePacket" --no-restore` passed with 1 C# test. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 84 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5130 tests.
+
+Known gaps:
+- Java `CM_GROUP_DATA_EXCHANGE.runImpl` side effects remain unported: active-player guard, empty-data return, maximum payload error logging, `SM_GROUP_DATA_EXCHANGE` serialization/fanout, group/alliance/league recipient lookup, self exclusion, encrypted-frame handling, and real-client behavior.
+- This unit proves parser/factory behavior only; no verified live group-data exchange parity is claimed.
+
+Next candidates:
+- Next sequential task: inspect `CM_FIND_GROUP` with a narrow parser-only slice, preferably action `0` plus one data-bearing action such as action `2` or `8`, while deferring `FindGroupService` runtime behavior.
+- Safe alternatives: inspect another compact registered parser boundary with Java golden evidence; inspect Java `SM_UNWRAP_ITEM` writer parity as a server-packet-only unit; inspect `SM_GROUP_DATA_EXCHANGE` writer parity if a server-packet-only unit is desired before live fanout.
+
 ### Session 2023 (June 1, 2026)
 - Performed Work Discovery after UOW-2022: re-read the latest completion and handoff, inspected Java `CM_GODSTONE_SOCKET`, Java `AionClientPacketFactory`, C# `GameClientPacketFactory`, existing C# godstone/manastone service surfaces, and relevant packet tests.
 - Corrected the prior next-candidate assumption: Java still contains `CM_GODSTONE_SOCKET`, but opcode `91` is commented out in `AionClientPacketFactory` with the source note that `C_GIVE_ITEM_PROC` now happens via `CM_MANASTONE`.
