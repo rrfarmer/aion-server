@@ -124,6 +124,45 @@ public class SM_ALLIANCE_MEMBER_INFO_GoldenTest {
 		assertEquals(0, buffer.remaining());
 	}
 
+	@Test
+	public void writeImpl_updateEffectsWritesTargetSlotZeroEffectPayload() throws Exception {
+		Player player = player(2008, "AllianceEffects", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		setField(player, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+		PlayerAllianceMember member = member(player, 88003);
+
+		byte[] payload = write(new SM_ALLIANCE_MEMBER_INFO(member, PlayerAllianceEvent.UPDATE_EFFECTS, 4));
+		ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+
+		assertEquals(88003, buffer.getInt());
+		assertEquals(2008, buffer.getInt());
+		assertEquals(819, buffer.getInt());
+		assertEquals(819, buffer.getInt());
+		assertEquals(840, buffer.getInt());
+		assertEquals(840, buffer.getInt());
+		assertEquals(60, buffer.getInt());
+		assertEquals(60, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(220010000, buffer.getInt());
+		assertEquals(220010000, buffer.getInt());
+		assertEquals(10.5f, buffer.getFloat());
+		assertEquals(20.25f, buffer.getFloat());
+		assertEquals(30.75f, buffer.getFloat());
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(10, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(PlayerAllianceEvent.UPDATE_EFFECTS.getId(), Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(4, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Short.toUnsignedInt(buffer.getShort()));
+		for (int i = 0; i < 8; i++)
+			assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.remaining());
+	}
+
 	private static Player player(int objectId, String name, PlayerClass playerClass, Gender gender, int level, boolean online) throws Exception {
 		PlayerCommonData commonData = new PlayerCommonData(objectId);
 		commonData.setName(name);
