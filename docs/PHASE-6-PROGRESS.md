@@ -11,7 +11,7 @@
 
 ## Resume Snapshot
 
-Last updated: May 23, 2026
+Last updated: June 1, 2026
 
 - Phase 5 is complete for automated infrastructure parity. Real-client validation is intentionally deferred to later readiness validation.
 - Housing known-list work now has a first-pass C# world-house store: Java `gameserver.housing.visibility.distance` loads as 200m by default, persistent custom `houses` rows are loaded into `World` at `HouseAddress` map coordinates during bootstrap, owner-entered houses refresh their world snapshots, and `SM_HOUSE_RENDER`/`SM_DELETE_HOUSE` deltas are sent on enter/movement using housing distance instead of the generic 95m creature distance. `CM_HOUSE_SETTINGS` appearance updates now broadcast from the house snapshot/position when available.
@@ -87912,6 +87912,36 @@ Next recommended unit of work:
 	- inspect live `CM_PET` actionType 4 composition only if it can remain disabled and source-reviewed
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
+
+### Session 2023 (June 1, 2026)
+- Performed Work Discovery after UOW-2022: re-read the latest completion and handoff, inspected Java `CM_GODSTONE_SOCKET`, Java `AionClientPacketFactory`, C# `GameClientPacketFactory`, existing C# godstone/manastone service surfaces, and relevant packet tests.
+- Corrected the prior next-candidate assumption: Java still contains `CM_GODSTONE_SOCKET`, but opcode `91` is commented out in `AionClientPacketFactory` with the source note that `C_GIVE_ITEM_PROC` now happens via `CM_MANASTONE`.
+- Added Java factory-registration golden coverage proving opcode `91` remains unregistered while opcode `74` remains registered.
+- Added C# packet-factory regression coverage proving opcode `91` is rejected in `InGame`, and that opcode `74` action `4` still parses the modern godstone socketing path.
+- No C# opcode `91` packet class or handler was added; accepting the retired packet would diverge from Java source-truth behavior.
+- Source-reviewed `CM_GROUP_DATA_EXCHANGE` as the next compact registered packet candidate: action `1` reads only UC action, D size, B data; other actions read UC action/groupType/unk2, D size, B data. Runtime max-size logging and group/alliance/league broadcast behavior should remain deferred unless separately scoped.
+
+#### Migration Parity Table - Session 2023
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `91` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `91` absence | Client Packet Registration | Complete for non-registration boundary | Unit Tested + Java Golden Tested | Partial Parity | Java packet table has `packets[91] == null`; C# also rejects opcode `91` in `InGame`. Encrypted-frame unknown-packet logging/socket side effects are not verified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_GODSTONE_SOCKET` | No C# equivalent by design in this unit | Retired Client Packet Class | Not Ported | Source Reviewed | Needs Verification | Java class remains in source but is not factory-registered. Adding a C# parser would be a behavior divergence unless Java re-enables the opcode. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_MANASTONE` action `4` | `Aion.GameServer.Network.Aion.ClientPackets.CmManastone` action `4` | Client Packet Parser | Partial | Unit Tested | Partial Parity | C# factory test confirms the modern godstone path remains opcode `74` action `4`. Existing live `CM_MANASTONE` godstone socketing behavior remains separate and broader than this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=AionClientPacketFactoryRegistrationGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_RejectsRetiredGodstoneSocketOpcode" --no-restore` passed with 1 C# test. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 82 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5129 tests after rerunning with an extended timeout; the first 120s tool run timed out before completion.
+
+Known gaps:
+- This unit proves only the opcode-registration boundary and modern opcode `74` parser route. It does not prove live unknown-packet logging, encrypted-frame handling, socket dispatch, NPC/range validation, `ItemSocketService.socketGodstone` live mutation, persistence, or real-client behavior.
+- Java `CM_GODSTONE_SOCKET.readImpl` and `runImpl` remain source-only and unregistered. No C# equivalent is intentionally added in this unit.
+
+Next candidates:
+- Next sequential task: port `CM_GROUP_DATA_EXCHANGE` parser/factory coverage for Java opcode `79`, with Java golden vectors for action `1` and a non-`1` action, while leaving max-size logging and group/alliance/league packet fanout deferred.
+- Safe alternatives: inspect `CM_FIND_GROUP` only if a narrow action vector is selected; inspect another compact registered parser boundary with Java golden evidence; inspect Java `SM_UNWRAP_ITEM` writer parity as a server-packet-only unit.
 
 ### Session 2022 (June 1, 2026)
 - Performed Work Discovery after UOW-2021: re-read the latest handoff, inspected Java `CM_LEGION_WH_KINAH`, Java packet factory opcode `76`, searched C# for existing legion warehouse Kinah packet coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
