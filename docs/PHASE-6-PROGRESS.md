@@ -84882,6 +84882,53 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1946 (June 1, 2026)
+- Performed Work Discovery after UOW-1945: read the latest handoff, inspected Java `CM_BUY_ITEM.readImpl` item guard, the neutralized audit setup, and C# `CmBuyItemTests` negative-count coverage.
+- Selected the negative-count item guard as the next safe audit capture. Used action `13` to avoid repurchase singleton filtering while exercising the shared Java `count < 0` guard.
+- Extended Java `CM_BUY_ITEM_ReadGuardGoldenTest` with negative-count coverage: seller `7001`, action `13`, amount `2`, first item `(101, 1)`, second item `(102, -1)` leaves the first item in `TradeList`, sets `isAudit=true`, and records the invalid last-read item/count.
+- Broadened C# `CmBuyItemTests.ReadFrom_NegativeCountAuditsAndLeavesOnlyPriorValidItems` into a theory for actions `2` and `13`, so the action `13` branch now has direct parser-test alignment with Java capture.
+- Kept this unit to the parser audit flag and partial-list behavior only. Live audit notification, punishment/logging, service mutation, socket dispatch, and real-client validation remain outside this unit.
+
+#### Migration Parity Table - Session 1946
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM.readImpl` negative-count item audit guard | `Aion.GameServer.Network.Aion.ClientPackets.CmBuyItem.ReadPayload` negative-count guard | Client Packet Parser | Partial | Runtime Compared | Partial Parity | Java runtime/source-capture test confirms action `13` keeps the prior valid `TradeList` item, sets `isAudit=true`, and leaves the invalid item/count as the last read values when count is `-1`. C# parser theory now covers the same action `13` shape plus existing action `2`. Live audit side effects, runImpl dispatch, encrypted frame decoding, and real-client behavior remain unverified. |
+| `com.aionemu.gameserver.utils.audit.AuditLogger.log` negative-count guard call path | test-only neutralized audit setup / existing C# no-side-effect parser audit flag | Audit Side-Effect Boundary | Partial | Runtime Compared | Partial Parity | Java test uses the same neutralized audit setup as UOW-1945. It proves the parser guard can cross the AuditLogger call path without live side effects, but does not validate staff notification, punishment, or audit log output. |
+
+Validation:
+- Focused Java read-capture test passed with 5 test methods:
+  `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_BUY_ITEM_ReadGuardGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"`
+- Focused C# parser tests passed with 15 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemTests" --no-restore`
+- Java/Maven reactor test run passed with tests explicitly enabled:
+  `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` ran 1 commons test and 18 game-server tests with 0 failures.
+- Broad game-server C# suite excluding the known inventory expansion use-item slice passed with 4978 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore`
+
+Remaining risks:
+- Java non-positive item id and count-above-20000 audit branches remain uncaptured in Java runtime tests.
+- Java audit side effects are still deliberately neutralized and not validated.
+- The Java test uses test-only `Unsafe.allocateInstance`, reflection, and empty `SkillData`; the expected `GMService` "No GM skills found" warning appears during the Java test.
+- `CM_BUY_ITEM.runImpl`, target validation, service mutation, packet sends, encrypted frame decoding, and real-client validation remain pending.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported/verified: Java source-capture coverage for the negative-count audit guard, aligned with C# parser tests.
+- Total artifacts with verified parity: 0 rows at full artifact scope; the negative-count audit guard boundary has Java runtime/source-capture evidence, but full `CM_BUY_ITEM` and audit side effects remain Partial Parity.
+- Total artifacts needing verification: 25 rows pending Java runtime/golden comparison for remaining `CM_BUY_ITEM` item-id/count-above-max audit guards, non-empty repurchase item blobs, live repurchase singleton state wiring, live BUY_AGAIN packet dispatch, live `CM_BUY_ITEM` handler execution, Java-equivalent known-list object population, live known-list resolver ownership, live private-store action `0`, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item service state/counter persistence, live price influence/siege state source, live pet auto-sell activation/state/item selection, live pet auto-sell execution/notification dispatch, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN packet dispatch, live normal/AP sell mutation wiring, live buy transaction mutation wiring, live influence/siege state wiring, live limited-item counter mutation/cron reset, live private-store model/runtime wiring, live pet common-data/service wiring, live pet auto-sell inventory/drop caller integration, live repurchase state and send wiring, live source-item clone caller integration, live audit notification/punishment side effects, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves objective `CM_BUY_ITEM` parser evidence for another audit guard but does not complete audit side effects or live trade/repurchase parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect whether a safe Java runtime capture can cover non-positive item id or count-above-20000 audit guard using the same neutralized audit setup.
+- Safe alternative candidates for the next session:
+	- extend Java golden coverage to a non-empty `SM_REPURCHASE` item entry if a minimal Java `Item`/`ItemTemplate` fixture can be created safely
+	- inspect `PetService.activateAutoSell` and `SM_PET(AUTOSELL, activate)` runtime state wiring as a separate disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full socket cases without enabling live mutation
+	- continue repurchase toward live singleton-state adapter boundaries without enabling live mutation
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+
 ### Session 1945 (June 1, 2026)
 - Performed Work Discovery after UOW-1944: read the latest handoff, inspected Java `AuditLogger`, `GMService`, `PunishmentConfig`, `LoggingConfig`, `DataManager.SKILL_DATA`, Java `CM_BUY_ITEM.readImpl`, and C# `CmBuyItemTests`.
 - Determined one audit guard could be safely captured by neutralizing audit side effects in the isolated Java test: disable punishment, disable audit logging, and provide empty `SkillData` so `GMService` initializes with no online staff.
