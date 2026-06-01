@@ -87913,6 +87913,38 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2057 (June 1, 2026)
+- Performed Work Discovery after UOW-2056: re-read the required migration/orchestration/parity docs plus the latest UOW-2056 completion/handoff, inspected Java `FindGroupService.sendInstanceApplication`, `sendInstanceApplicationResult`, Java group/alliance invite entry points, C# find-group planner, C# `SmFindGroup`, C# `SmMessage`, and existing invite request services.
+- Scoped this unit to disabled C# planner evidence for Java instance-group application send/result behavior.
+- Extended `FindGroupRecruitmentPlanService` with application-send planning for Java action `11`, accept-result planning as group/alliance invite intent based on `ServerWideGroup.minMembers <= 6`, denial planning as localized whisper `SM_MESSAGE` using `ChatUtil.L10n(1400217)`, and missing-recipient/applicant/instance-group no-op statuses.
+- Added focused C# coverage for online/missing application recipients, group accept, alliance accept, denial whisper, missing applicant, and missing instance-group state.
+- Kept live `World.getPlayer`, `PlayerGroupService.inviteToGroup`, `PlayerAllianceService.inviteToAlliance`, response requester mutation, actual whisper dispatch, and real world/socket sends deferred.
+
+#### Migration Parity Table - Session 2057
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.services.findgroup.FindGroupService.sendInstanceApplication` | `Aion.GameServer.Services.FindGroupRecruitmentPlanService.SendInstanceApplication` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested + Java Packet Golden Tested | Partial Parity | C# records the Java online-recipient branch as a direct `SM_FIND_GROUP` action `11` packet intent and records missing recipient as no-op. Live `World.getPlayer` lookup and socket dispatch remain unverified. |
+| `FindGroupService.sendInstanceApplicationResult` accept branch | `FindGroupRecruitmentPlanService.SendInstanceApplicationResult` / `FindGroupInstanceInviteIntent` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested | Partial Parity | C# resolves accept as group invite intent when instance-group `minMembers <= 6` and alliance invite intent otherwise, matching reviewed Java branch selection. It does not call live group/alliance invite services or mutate response requesters. |
+| `FindGroupService.sendInstanceApplicationResult` denial branch | `FindGroupRecruitmentPlanService.SendInstanceApplicationResult` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested | Partial Parity | C# records a direct whisper `SM_MESSAGE` intent using `ChatUtil.L10n(1400217)` and chat type `4`, matching the reviewed Java denial branch. Exact client rendering and live dispatch remain deferred. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~FindGroupRecruitmentPlanServiceTests" --no-restore` passed with 24 C# tests. Existing nullable/analyzer warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmFindGroupTests|FullyQualifiedName~FindGroupRecruitmentPlanServiceTests|FullyQualifiedName~GamePacketTests.CmFindGroup|FullyQualifiedName~GamePacketTests.SmMessage" --no-restore` passed with 41 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_FIND_GROUP_GoldenTest,CM_FIND_GROUP_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 25 Java test methods. Existing Unsafe warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 126 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5201 C# tests.
+
+Known gaps:
+- This unit is disabled planner evidence only; live `CM_FIND_GROUP` action dispatch remains deferred.
+- No Java `FindGroupService` singleton runtime test, actual `World.getPlayer`, actual `PacketSendUtility.sendPacket`, response requester mutation, group/alliance invite service side effects, encrypted socket frame, real-client behavior, or service concurrency parity was proven.
+- The accept branch records an invite intent only; C# group/alliance invitation services have their own parity surfaces and are not invoked here.
+- Prepare-window actions, ban action, logout cleanup, action `26` mask-list routing, and live handler composition remain outside this unit.
+
+Next candidates:
+- Next sequential task: inspect CM_FIND_GROUP action `0`-`17` composition with the disabled planner, adding handler-composition tests that choose the right planner method without live sends.
+- Safe alternatives: inspect `GroupConfig.FORM_INSTANCE_GROUP_ANYWHERE` action `26` mask-list planning; inspect prepare-window actions `18`/`22`/`23`/`24` as disabled packet-plan boundaries; return to alliance/group recipient filtering only with objective packet/fanout evidence.
+
 ### Session 2056 (June 1, 2026)
 - Performed Work Discovery after UOW-2055: re-read the required migration/orchestration/parity docs plus the latest UOW-2055 completion/handoff, inspected Java `FindGroupService` instance-group methods, Java `ServerWideGroup`, Java/C# `SM_FIND_GROUP`, C# `CmFindGroup`, and existing find-group tests.
 - Scoped this unit to disabled C# planner evidence for Java instance-group registration/update/remove/show/member-info behavior.
