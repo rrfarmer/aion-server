@@ -87913,6 +87913,48 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2001 (June 1, 2026)
+- Performed Work Discovery after UOW-2000: re-read the required migration docs and latest handoff context, compared Java/C# packet factory registrations, inspected Java `CM_DISCONNECT`, C# quit/mayquit packet handling, `GameClientPacketFactory`, `GameServerConnection`, and existing packet factory tests.
+- Found a compact parser/factory parity gap: Java registers `CM_DISCONNECT` at opcode `2` for `AUTHED` and `IN_GAME`, while C# had no parser or registration for that client disconnect packet.
+- Added Java golden coverage for `CM_DISCONNECT.readImpl`, proving Java consumes the single flag byte even though `runImpl` has no side effect.
+- Added C# `CmDisconnect`, registered opcode `2` for `Authed` and `InGame`, added C# factory parser coverage for both valid states and invalid `Connected`, and documented the no-op handler boundary in `GameServerConnection`.
+- No live disconnect/socket behavior was enabled; Java `runImpl` has no packet-level side effect and socket closure remains outside this packet handler boundary.
+
+#### Migration Parity Table - Session 2001
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_DISCONNECT.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmDisconnect.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# consumes the same single byte and exposes it as `Unknown` for testability; Java reads and ignores the byte. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `2` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `2` registration | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# factory now accepts opcode `2` in `Authed` and `InGame`, and rejects `Connected`, matching the Java registration states. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_DISCONNECT.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Partial | Source Reviewed | Partial Parity | Java `runImpl` has no side effect; C# keeps a documented no-op case. Socket lifecycle and real disconnect closure remain unverified. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_DISCONNECT_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesDisconnectPacket" --no-restore` passed with 1 C# test. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5108 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 59 game-server tests.
+
+Remaining risks:
+- This unit proves only parser consumption, opcode registration, and the documented no-op packet boundary. It does not prove encrypted frame handling, socket closure ordering, network disconnect lifecycle, or real-client behavior.
+- Java socket closure behavior is outside `CM_DISCONNECT.runImpl` and remains unverified in C#.
+- C# exposes the consumed byte as `Unknown` only for deterministic testability; Java discards it after reading.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one C# client packet parser plus one opcode registration and one Java golden parser test.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser/golden evidence and source-reviewed no-op packet-handler evidence only.
+- Total artifacts needing verification: live disconnect socket lifecycle, encrypted frame handling, live summon command/execution surfaces, live summon movement/emotion/combat controller dispatch, live pet/common-data mutation and packet send, live dialog/private-store/buy/repurchase persistence, condition validators, active-effect/stat runtime, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for dialog/private-store/pet/summon/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy persistence, live dialog controller/AI dispatch proof, live private-store mutation/fanout proof, live pet/common-data/reward mutation and packet send, live summon command/movement/emotion/combat controller dispatch, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes one disconnect parser/factory gap but does not complete live network lifecycle parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect another compact unregistered packet boundary with Java golden evidence, such as Java `CM_CLOSE_DIALOG` opcode `53` or `CM_STOP_TRAINING` opcode `84`, before deciding whether parser-only coverage is safe.
+- Safe alternative candidates for the next session:
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+	- inspect BUY_AGAIN live-send ordering only if a stronger deterministic Java runtime vector can be added without broad object graph setup
+	- inspect another compact unported enum/model dependency with Java golden evidence
+
 ### Session 2000 (June 1, 2026)
 - Performed Work Discovery after UOW-1999: confirmed the worktree was clean, inspected Java `AionClientPacketFactory` opcode `121`, Java `CM_SUMMON_COMMAND`, existing C# summon command release planners, C# packet factory registrations, `GameServerConnection`, and existing packet factory tests.
 - Found a compact parser/factory parity gap: Java registers `CM_SUMMON_COMMAND` at opcode `121`, while C# had non-live summon command release planners but no packet parser or factory registration for the client command packet.
