@@ -87913,6 +87913,52 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1992 (June 1, 2026)
+- Performed Work Discovery after UOW-1991: re-read the required migration docs and latest handoff, inspected Java `PrivateStoreService.createStoreWithItems`, `canOpenPrivateStore`, `validateItem`, `closePrivateStore`, Java `CM_PRIVATE_STORE.runImpl`, C# `CmPrivateStore`, existing open-guard/item-validation/close planners, and focused private-store tests.
+- Selected the `CM_PRIVATE_STORE.runImpl` create/close composition boundary as a safe disabled planner because the packet parser and leaf planners already exist, while live store mutation, state changes, validation integration, and broadcast fanout remain too risky to wire without stronger runtime coverage.
+- Added `PrivateStoreCreatePlanService`, which routes zero-item packets to the existing close-private-store planner before open guards, matching Java's `tradePSItems.length <= 0` branch.
+- For non-empty packets, the planner applies Java `canOpenPrivateStore` guard order through the existing `PrivateStoreOpenGuardPlanService`, then validates requested items in read order through `PrivateStoreItemValidationPlanService`, stopping on the first invalid item before store assignment and broadcast.
+- Successful create-store plans record disabled intents for `new PrivateStore(player)`, `store.addItemToSell`, `player.setStore(store)`, `player.setState(PRIVATE_SHOP, true)`, and `SM_EMOTION(OPEN_PRIVATESHOP)` broadcast without enabling live side effects.
+- Added C# tests covering zero-item close routing, open-guard blocking before validation, ordered valid-item composition, missing inventory item blocking, invalid second item short-circuit behavior, duplicate object ID detection, and the 11th-item full-basket guard. Existing Java private-store packet golden tests were rerun for packet layout evidence.
+
+#### Migration Parity Table - Session 1992
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PRIVATE_STORE.runImpl` zero-item branch | `Aion.GameServer.Services.PrivateStoreCreatePlanService` close branch | Client Handler Boundary | Partial | Unit Tested + Source Reviewed | Partial Parity | C# records Java's zero-item route to `PrivateStoreService.closePrivateStore(player)` before `canOpenPrivateStore`. It composes the existing disabled close planner and does not mutate player store/state or broadcast live packets. |
+| `com.aionemu.gameserver.services.PrivateStoreService.createStoreWithItems` | `Aion.GameServer.Services.PrivateStoreCreatePlanService` | Service Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | C# records Java create-store order: open guard, new store, validate each item in read order, add valid items, set store, set PRIVATE_SHOP state, broadcast open emotion. Live mutation, packet fanout, persistence, and concurrency remain unverified. |
+| `com.aionemu.gameserver.services.PrivateStoreService.canOpenPrivateStore` composition use | `Aion.GameServer.Services.PrivateStoreOpenGuardPlanService` via `PrivateStoreCreatePlanService` | Service Guard Composition | Partial | Unit Tested + Source Reviewed | Partial Parity | Existing guard planner is now composed by the create planner. This proves routing/short-circuit behavior for the disabled boundary, not live system-message dispatch. |
+| `com.aionemu.gameserver.services.PrivateStoreService.validateItem` composition use | `Aion.GameServer.Services.PrivateStoreItemValidationPlanService` via `PrivateStoreCreatePlanService` | Service Guard Composition | Partial | Unit Tested + Source Reviewed | Partial Parity | Existing validation planner is now applied in packet read order with duplicate tracking and first-invalid-item stop. Runtime item lookup, template state, and socket send side effects remain unverified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_EMOTION(OPEN_PRIVATESHOP)` intent | `Aion.GameServer.Network.Aion.ServerPackets.SmEmotion` via `PrivateStoreCreatePlan.OpenPrivateShopEmotionPacket` | Packet Intent Boundary | Partial | Unit Tested + Existing Packet Regression | Partial Parity | Planner emits a concrete open-private-shop packet intent. It does not broadcast the packet or prove encrypted-frame/client behavior. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PrivateStoreCreatePlanServiceTests|FullyQualifiedName~CmPrivateStoreTests|FullyQualifiedName~PrivateStoreOpenGuardPlanServiceTests|FullyQualifiedName~PrivateStoreItemValidationPlanServiceTests|FullyQualifiedName~PrivateStoreClosePlanServiceTests" --no-restore` passed with 43 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_PRIVATE_STORE_ReadPayloadGoldenTest,CM_PRIVATE_STORE_NAME_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 3 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5094 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 51 game-server tests.
+
+Remaining risks:
+- Private-store create/close remains disabled and diagnostic only; live `GameServerConnection` still does not call the planner or execute Java side effects.
+- Store mutation, `player.setStore`, `CreatureState.PRIVATE_SHOP`, `SM_EMOTION(OPEN_PRIVATESHOP)` broadcast, system-message packet dispatch, item template/runtime lookup, persistence, concurrency, encrypted frame capture, and real-client private-store behavior remain unverified.
+- Java's runtime `PrivateStore` and inventory object behavior is modeled with explicit snapshot inputs; this unit does not prove live object identity, map ordering beyond requested packet order, or live duplicate behavior under concurrent mutation.
+
+Summary metrics:
+- Total Java artifacts discovered: 5 grouped rows in this unit.
+- Total artifacts ported: one disabled private-store create/close composition planner plus focused C# tests.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies disabled composition evidence only.
+- Total artifacts needing verification: live private-store close/open/create-store execution, private-store item validation integration, store mutation/state flags, broadcast ordering, persistence/threading, live private-store sale execution, live store item ordering/mutation timing, live pet autoloot activation handler wiring, live pet common-data mutation, live LOOT function lookup, NPC autoloot/drop flow, `SM_VERSION_CHECK` success writer parity, remaining parser-only packet surfaces, live pet autosell activation handler wiring, live craft-start inventory mutation/persistence/send ordering, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for private-store/pet/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy persistence, live private-store mutation/fanout proof, live `SM_VERSION_CHECK` dynamic success payload proof, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled private-store create/close composition coverage but does not complete live private-store parity.
+
+Next recommended unit of work:
+- Next sequential task: continue Work Discovery for `CM_PRIVATE_STORE_NAME` open-store composition only if it can remain disabled/source-reviewed, or choose another compact parser/factory/model boundary with Java golden evidence.
+- Safe alternative candidates for the next session:
+	- inspect private-store live handler wiring only if it can remain non-mutating and objectively tested at the composition boundary
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect another `CM_PET` sub-branch only if it can remain disabled and source-reviewed
+	- inspect another compact unported parser/factory or enum/model dependency with Java golden evidence
+
 ### Session 1991 (June 1, 2026)
 - Performed Work Discovery after UOW-1990: re-read the required migration docs and latest handoff, inspected Java `CM_PRIVATE_STORE`, Java `CM_PRIVATE_STORE_NAME`, Java opcode registration for `119`/`120`, C# packet factory coverage, existing C# private-store open/close/item-validation/purchase planners, and focused private-store tests.
 - Selected private-store client packet entry points as a compact parser-only boundary because service-level private-store diagnostics already exist, but the client opcodes were not registered in C#.
