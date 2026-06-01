@@ -87866,3 +87866,49 @@ Next recommended unit of work:
 	- inspect Java delete-path cube-size sends for another non-repurchase inventory diagnostic where `sendItemDeletePacket` is already represented by a C# planner
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
+
+### Session 1963 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1962: re-read required migration/orchestration/parity docs, latest completion and handoff, inspected Java `PetService.activateAutoSell`, Java `CM_PET.runImpl` actionType 4 dispatch, Java `SM_PET(PetSpecialFunction, boolean)` write branch, C# `CmPet` parser, C# `SmPet` special-function serializer, C# pet merchant sell diagnostics, and existing pet packet tests.
+- Added a disabled `PetAutoSellActivationPlanService` that records Java `activateAutoSell` behavior without enabling live pet merchant autosell.
+- The planner records the Java missing-pet early return boundary from `CM_PET.runImpl`, the enable-only MERCHANT-function audit guard, the intended `pet.getCommonData().setIsSelling(activate)` state change, and the intended `SM_PET(PetSpecialFunction.AUTOSELL, activate)` packet.
+- Deactivation intentionally skips the MERCHANT guard in the diagnostic, matching Java's `if (activate && !containsFunction(MERCHANT))` condition.
+- Kept this unit non-live. No pet common-data mutation, `AuditLogger.log`, packet send, persistence, encrypted frame capture, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1963
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.toypet.PetService.activateAutoSell` | `Aion.GameServer.Services.PetAutoSellActivationPlanService` | Service Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | Disabled planner records the Java enable guard, selling-state mutation intent, and autosell packet intent. Live common-data mutation, audit logging, packet dispatch, persistence, and concurrency remain unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_PET.runImpl` FOOD actionType 4 | `Aion.GameServer.Services.PetAutoSellActivationPlanStatus.MissingPet` | Client Handler Boundary | Partial | Unit Tested + Source Reviewed | Needs Verification | C# diagnostic records the Java `if (pet == null) return` boundary before `PetService.activateAutoSell`, but the live `CM_PET` handler is not wired to execute autosell activation. Parser/dispatch timing and live connection state remain pending. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_PET(PetSpecialFunction, boolean)` AUTOSELL branch | `Aion.GameServer.Network.Aion.ServerPackets.SmPet.SpecialFunction` via `PetAutoSellActivationPlan.PacketIntent` | Packet Intent Boundary | Partial | Unit Tested + Existing Packet Regression + Source Reviewed | Partial Parity | Diagnostic emits a concrete `SmPet` packet intent and tests its Java-shaped bytes for AUTOSELL active/inactive. It does not send the packet or prove encrypted-frame/client runtime behavior. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PetMerchantSellLiveExecutorFacadePlanServiceTests|FullyQualifiedName~CmPetTests|FullyQualifiedName~GamePacketTests.SmPet|FullyQualifiedName~PetActionAndEmoteResolvers" --no-restore` passed with 79 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 23 game-server tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` first timed out at about 184 seconds, then passed on rerun with 5014 tests when given a longer timeout.
+- `mvn test "-Dmaven.test.skip=false" "-DskipTests=false"` passed the full Maven reactor in the current workspace. This run did not force a clean login-server recompile.
+
+Remaining risks:
+- Pet autosell activation remains disabled and informational only; no pet common-data selling flag is changed and no `SM_PET(AUTOSELL)` packet is sent.
+- The audit string is recorded as a diagnostic approximation of Java's `"tried to enable auto-sell on non-selling " + pet`; exact Java `Pet.toString()` text was not runtime-compared.
+- Live `CM_PET` actionType 4 handler wiring, pet template/function lookup, persistence, threading, encrypted frame capture, and real-client validation remain pending.
+- Existing pet sell-to-shop diagnostics remain non-live and do not prove repository writes, transaction boundaries, inventory/Kinah mutation, or packet-send ordering.
+- Full clean Maven validation can still be rerun if the prior login-server compile observation needs root-cause proof.
+- Full item-info blob parity for advanced item state remains partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one disabled pet autosell activation diagnostic planner plus focused packet/guard tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit is source-reviewed and C# unit-tested but remains non-live and does not prove Java runtime mutation, audit, socket, persistence, or concurrency parity.
+- Total artifacts needing verification: live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live pet sell/persistence, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live pet common-data persistence, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled pet autosell activation diagnostics but does not complete live pet or autosell parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java private-store sell/buy blocked branches and C# private-store diagnostics, then harden blocked/race/offline/cube-full diagnostics without enabling live mutation.
+- Safe alternative candidates for the next session:
+	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
+	- inspect Java delete-path cube-size sends for another non-repurchase inventory diagnostic where `sendItemDeletePacket` is already represented by a C# planner
+	- inspect live `CM_PET` actionType 4 composition only if it can remain disabled and source-reviewed
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
