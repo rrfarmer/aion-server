@@ -87913,6 +87913,48 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2003 (June 1, 2026)
+- Performed Work Discovery after UOW-2002: re-read latest handoff context, inspected Java `CM_CLOSE_DIALOG`, Java packet factory opcode `53`, C# dialog packet parsers, `GameClientPacketFactory`, `GameServerConnection`, and dialog packet factory tests.
+- Found a compact parser/factory parity gap: Java registers `CM_CLOSE_DIALOG` at opcode `53` for `IN_GAME`, while C# had `CM_SHOW_DIALOG`/`CM_DIALOG_SELECT` coverage but no close-dialog parser or registration.
+- Added Java golden coverage for `CM_CLOSE_DIALOG.readImpl`, proving Java reads one D `targetObjectId` field and consumes the payload.
+- Added C# `CmCloseDialog`, registered opcode `53` for `InGame`, extended C# dialog packet parser coverage with the target object id, and documented the live `DialogService.onCloseDialog` boundary as deferred.
+- No live close-dialog behavior was enabled; Java `runImpl` performs active-player known-list lookup and calls `DialogService.onCloseDialog(player, target)`, which remains outside this parser/factory unit.
+
+#### Migration Parity Table - Session 2003
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CLOSE_DIALOG.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmCloseDialog.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# reads the same single D `targetObjectId` field in Java order. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `53` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `53` registration | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# factory now accepts opcode `53` only in `InGame`, matching the Java registration state. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CLOSE_DIALOG.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java resolves the active player, looks up the target in the known list, and calls `DialogService.onCloseDialog`. C# does not wire that live behavior in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_CLOSE_DIALOG_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesShowDialog" --no-restore` passed with 1 C# test covering show-dialog and close-dialog parsing. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5109 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 61 game-server tests.
+
+Remaining risks:
+- This unit proves only target-object-id parser consumption and opcode registration. It does not prove active-player lookup, known-list target resolution, `DialogService.onCloseDialog`, quest/dialog side effects, encrypted frame handling, socket dispatch, or real-client behavior.
+- Java `CM_CLOSE_DIALOG.runImpl` side effects remain unported.
+- Exact downstream dialog/quest behavior remains source-reviewed only for this route.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one C# client packet parser plus one opcode registration and one Java golden parser test.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser/golden evidence for one close-dialog packet boundary.
+- Total artifacts needing verification: live close-dialog dialog-service dispatch, live stop-training instance-handler dispatch, live disconnect socket lifecycle, live summon command/execution surfaces, live summon movement/emotion/combat controller dispatch, live pet/common-data mutation and packet send, live dialog/private-store/buy/repurchase persistence, condition validators, active-effect/stat runtime, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for dialog/private-store/pet/summon/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy persistence, live dialog controller/AI dispatch proof, live private-store mutation/fanout proof, live pet/common-data/reward mutation and packet send, live summon command/movement/emotion/combat controller dispatch, live instance-handler dispatch, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes one close-dialog parser/factory gap but does not complete live dialog-service parity.
+
+Next recommended unit of work:
+- Next sequential task: perform fresh packet-factory discovery for another compact unregistered parser boundary with Java golden evidence, avoiding live mutation unless dependencies are already ported.
+- Safe alternative candidates for the next session:
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+	- inspect BUY_AGAIN live-send ordering only if a stronger deterministic Java runtime vector can be added without broad object graph setup
+	- inspect another compact unported enum/model dependency with Java golden evidence
+
 ### Session 2002 (June 1, 2026)
 - Performed Work Discovery after UOW-2001: re-read the migration/orchestration/parity docs and latest handoff, compared Java/C# packet factory registrations, inspected Java `CM_STOP_TRAINING`, inspected C# empty-payload packet patterns, `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
 - Found a compact parser/factory parity gap: Java registers `CM_STOP_TRAINING` at opcode `84` for `IN_GAME`, while C# had no parser or registration for that client packet.
