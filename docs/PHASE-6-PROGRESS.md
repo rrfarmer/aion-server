@@ -84882,6 +84882,51 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1923 (May 31, 2026)
+- Performed fresh Work Discovery after UOW-1922: re-read required orchestration/parity docs, latest completion, and latest handoff; inspected Java `CM_BUY_ITEM.runImpl` action `1`, Java `TradeListData.getPurchaseTemplate`, C# `TradeListTable.GetPurchaseTemplate`, C# `GameServerConnection.HandleBuyItem`, and existing buy-item sell composition/outcome planners.
+- Confirmed Java action `1` first checks `npc.canBuy() || npc.canPurchase()`, then reads `DataManager.TRADE_LIST_DATA.getPurchaseTemplate(npc.getNpcId())`, and dispatches AP sell only when the purchase template type is `TradeNpcType.ABYSS`; missing and non-ABYSS purchase templates fall through to normal sell-to-shop.
+- Added a disabled, read-only `CmBuyItemSellActionFactAdapterService` that classifies the Java action `1` sell/AP-sell branch from NPC buy/purchase flags and purchase-template data without inventory, Kinah, AP, packet, repository, or transaction side effects.
+- Added unit coverage for NPCs that cannot buy/purchase, ABYSS purchase-template AP-sell classification, and missing/NORMAL purchase-template normal sell-to-shop classification.
+- Kept this unit non-live. The adapter is not wired into `GameServerConnection.HandleBuyItem` and does not hydrate sell plans, inventory snapshots, goods lists, sell limits, Kinah state, repurchase state, AP state, Java runtime output, or real client validation.
+
+#### Migration Parity Table - Session 1923
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM.runImpl` action `1` sell/AP-sell branch classification | `Aion.GameServer.Services.CmBuyItemSellActionFactAdapterService` | Disabled Fact Adapter | Partial | Unit Tested | Partial Parity | Source-reviewed read-only adapter mirrors the Java can-buy/can-purchase gate and `getPurchaseTemplate(npcId)` ABYSS-vs-normal dispatch choice. It is not wired into live socket execution and does not create sell/AP-sell mutation plans. |
+| `com.aionemu.gameserver.dataholders.TradeListData.getPurchaseTemplate` call-site usage for `CM_BUY_ITEM` action `1` | `TradeListTable.GetPurchaseTemplate` consumed by `CmBuyItemSellActionFactAdapterServiceTests` | Static Data Classification Test | Partial | Unit Tested | Partial Parity | Tests prove missing/NORMAL purchase templates remain normal sell-to-shop while ABYSS purchase templates classify as AP-sell, matching Java source control flow. Java runtime/golden capture remains unavailable. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemSellActionFactAdapterServiceTests|FullyQualifiedName~CmBuyItemSellToShopCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests" --no-restore` passed with 32 tests. This build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemSellActionFactAdapterServiceTests|FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemSellToShopCompositionPlanServiceTests|FullyQualifiedName~TradeSellToShopPlanServiceTests|FullyQualifiedName~TradeSellForApToShopPlanServiceTests" --no-restore` passed with 73 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` first timed out before reporting results at 184 seconds, then passed on rerun with a longer timeout with 4942 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- The new classification adapter is disabled diagnostic plumbing only; live `CM_BUY_ITEM` action `1` execution remains disabled.
+- The adapter is not yet connected to production socket diagnostics, so `GameServerConnection.HandleBuyItem` still does not populate purchase-template classification.
+- Inventory snapshots, goods-list validation, sell limits, Kinah state, repurchase state, AP state, sell/AP-sell plan creation, live mutations, packet dispatch, transaction behavior, repository writes, and real client behavior remain unwired.
+- Existing Phase 6 blockers remain: JDK/Maven for Java capture, live DB verification, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live stat/effect/condition provider wiring, stat caps, active-effect runtime, drop workflow stat providers, and salvation-point lifecycle.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: disabled read-only sell/AP-sell classification adapter plus focused unit tests; no new live behavior.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 26 rows pending Java runtime/golden comparison, Java-equivalent known-list object population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN wiring, live private-store action `0` execution, live pet action `17`, live sell-to-shop/AP-sell fact hydration wiring, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction fact hydration, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item mutation, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live pet auto-sell notification behavior, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, private-store/pet merchant branch execution, live sell/AP-sell fact hydration integration, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy transaction mutation wiring, live buy-from-shop transaction fact hydration, live repurchase state and send wiring, live source-item clone caller integration, live pet auto-sell notification wiring, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves source-reviewed diagnostic fact classification but does not complete live execution or runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: wire the read-only sell/AP-sell classification adapter into `GameServerConnection.HandleBuyItem` diagnostics only if the static trade-list table can be supplied safely, without sell-plan hydration or live mutation.
+- Safe alternative candidates for the next session:
+	- add tests proving adapter output composes correctly with `CmBuyItemHandlerCompositionPlanService` using supplied purchase-template facts
+	- inspect Java `PetService.sell` auto-sell notification path as a separate disabled notification planner
+	- hydrate safe private-store listed-item facts into the diagnostic path only if no live mutation is enabled
+	- add production-safe buy-transaction fact hydration for selected NPC buy-from-shop diagnostics without dispatching live effects
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1922 (May 31, 2026)
 - Performed fresh Work Discovery after UOW-1921: re-read required orchestration/parity docs, latest completion, and latest handoff; inspected Java `CM_BUY_ITEM.runImpl` action `1`, C# `GameServerConnection.HandleBuyItem`, C# `CmBuyItemHandlerCompositionPlanService`, C# `CmBuyItemSideEffectOutcomePlanService`, and existing socket-level buy-item diagnostics.
 - Confirmed production socket diagnostics currently do not hydrate trade templates or inventory facts, so action `1` fact hydration was too broad for a safe unit without enabling accidental live behavior.
