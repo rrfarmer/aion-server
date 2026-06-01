@@ -9,6 +9,7 @@ import java.nio.ByteOrder;
 import org.junit.jupiter.api.Test;
 
 import com.aionemu.gameserver.configs.main.CustomConfig;
+import com.aionemu.gameserver.controllers.effect.PlayerEffectController;
 import com.aionemu.gameserver.model.Gender;
 import com.aionemu.gameserver.model.PlayerClass;
 import com.aionemu.gameserver.model.account.Account;
@@ -32,7 +33,7 @@ public class SM_GROUP_MEMBER_INFO_GoldenTest {
 
 	@Test
 	public void writeImpl_movementWritesFixedPrefixAndNoBranchPayload() throws Exception {
-		Player player = player(1004, "Mover");
+		Player player = player(1004, "Mover", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
 		setField(player, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
 		player.setFlyState(FlyState.FLYING);
 		player.setMentor(true);
@@ -68,21 +69,91 @@ public class SM_GROUP_MEMBER_INFO_GoldenTest {
 		assertEquals(0, buffer.remaining());
 	}
 
-	private static Player player(int objectId, String name) throws Exception {
+	@Test
+	public void writeImpl_joinWritesOnlinePrefixAndNamePayload() throws Exception {
+		Player player = player(1006, "Joiner", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		setField(player, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+		PlayerGroup group = new PlayerGroup(new PlayerGroupMember(player), TeamType.GROUP, 99001);
+
+		byte[] payload = write(new SM_GROUP_MEMBER_INFO(group, player, GroupEvent.JOIN));
+		ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+
+		assertEquals(99001, buffer.getInt());
+		assertEquals(1006, buffer.getInt());
+		assertEquals(819, buffer.getInt());
+		assertEquals(819, buffer.getInt());
+		assertEquals(840, buffer.getInt());
+		assertEquals(840, buffer.getInt());
+		assertEquals(60, buffer.getInt());
+		assertEquals(60, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(220010000, buffer.getInt());
+		assertEquals(220010000, buffer.getInt());
+		assertEquals(10.5f, buffer.getFloat());
+		assertEquals(20.25f, buffer.getFloat());
+		assertEquals(30.75f, buffer.getFloat());
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(10, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(GroupEvent.JOIN.getId(), Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals("Joiner", readS(buffer));
+		assertEquals(0, buffer.remaining());
+	}
+
+	@Test
+	public void writeImpl_enterOfflineWritesZeroStatsEffectiveEventAndNamePayload() throws Exception {
+		Player player = player(1007, "Offline", PlayerClass.RIDER, Gender.MALE, 20, false);
+		setField(player, "position", new WorldPosition(210010000, 1.25f, 2.5f, 3.75f, (byte) 0));
+		PlayerGroup group = new PlayerGroup(new PlayerGroupMember(player), TeamType.GROUP, 99002);
+
+		byte[] payload = write(new SM_GROUP_MEMBER_INFO(group, player, GroupEvent.ENTER));
+		ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+
+		assertEquals(99002, buffer.getInt());
+		assertEquals(1007, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(210010000, buffer.getInt());
+		assertEquals(210010000, buffer.getInt());
+		assertEquals(1.25f, buffer.getFloat());
+		assertEquals(2.5f, buffer.getFloat());
+		assertEquals(3.75f, buffer.getFloat());
+		assertEquals(13, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(20, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(GroupEvent.ENTER_OFFLINE.getId(), Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals("Offline", readS(buffer));
+		assertEquals(0, buffer.remaining());
+	}
+
+	private static Player player(int objectId, String name, PlayerClass playerClass, Gender gender, int level, boolean online) throws Exception {
 		PlayerCommonData commonData = new PlayerCommonData(objectId);
 		commonData.setName(name);
-		commonData.setPlayerClass(PlayerClass.GLADIATOR);
-		commonData.setGender(Gender.FEMALE);
-		commonData.setOnline(true);
-		setField(commonData, "level", 10);
+		commonData.setPlayerClass(playerClass);
+		commonData.setGender(gender);
+		commonData.setOnline(online);
+		setField(commonData, "level", level);
 		PlayerAppearance appearance = new PlayerAppearance();
 		appearance.setHeight(1);
 		Player player = (Player) unsafe().allocateInstance(Player.class);
 		setAionObjectId(player, objectId);
 		setField(player, "playerAccountData", new PlayerAccountData(commonData, appearance));
 		setField(player, "playerAccount", new Account(1));
-		setUnsafeReference(player, "clientConnection", new Object());
+		if (online)
+			setUnsafeReference(player, "clientConnection", new Object());
 		CustomConfig.BASE_FLYTIME = 60;
+		player.setEffectController(new PlayerEffectController(player));
 		player.setGameStats(new PlayerGameStats(player));
 		player.setLifeStats(new PlayerLifeStats(player));
 		return player;
@@ -98,6 +169,17 @@ public class SM_GROUP_MEMBER_INFO_GoldenTest {
 		buffer.flip();
 		buffer.get(payload);
 		return payload;
+	}
+
+	private static String readS(ByteBuffer buffer) {
+		StringBuilder value = new StringBuilder();
+		while (buffer.remaining() >= Short.BYTES) {
+			char c = (char) Short.toUnsignedInt(buffer.getShort());
+			if (c == 0)
+				return value.toString();
+			value.append(c);
+		}
+		throw new IllegalStateException("Unterminated string in SM_GROUP_MEMBER_INFO payload");
 	}
 
 	private static void setField(Object target, String name, Object value) throws Exception {

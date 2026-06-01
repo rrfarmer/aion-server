@@ -87913,6 +87913,38 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2041 (June 1, 2026)
+- Performed Work Discovery after UOW-2040: re-read the required migration/orchestration/parity docs plus the latest UOW-2040 completion/handoff, inspected Java `SM_GROUP_MEMBER_INFO.writeImpl`, Java `GroupEvent`, the existing Java movement golden fixture, C# `SmGroupMemberInfo`, `PlayerGroupMemberInfoPacketPlan`, and `PlayerGroupRuntimeTests`.
+- Scoped this unit to the next recommended `SM_GROUP_MEMBER_INFO` name branches: Java `JOIN` and requested `ENTER` for an offline player, which Java rewrites to effective `ENTER_OFFLINE` in `writeImpl`.
+- Extended the Java golden fixture to cover exact online `JOIN` prefix/name bytes and offline requested-`ENTER` effective-event/name bytes, including the constructor-time `PlayerEffectController` requirement for requested `ENTER`.
+- Added a matching C# exact payload test for the same join/offline vectors while leaving the existing broader branch test in place.
+- Kept this as packet-writer evidence only; no live group membership routing, known-list fanout, reconnect/offline lifecycle, or real-client behavior is claimed.
+
+#### Migration Parity Table - Session 2041
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_MEMBER_INFO.writeImpl` `JOIN` branch | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupMemberInfo` `Join` branch | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2041 verifies one online `JOIN` vector including prefix fields, event id `5`, Java UTF-16LE name payload, and no trailing bytes. It does not prove live group connect event fanout or all player stat/class combinations. |
+| `SM_GROUP_MEMBER_INFO.writeImpl` requested `ENTER` offline rewrite | `PlayerGroupMemberInfoPacketPlan.FromMember` effective `EnterOffline` branch + `SmGroupMemberInfo` name payload | Packet Branch Planning + Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2041 verifies requested `ENTER` for an offline player serializes zero resource stats, effective event id `7`, class/gender/level/position, name payload, and no trailing bytes. Constructor-time abnormal-effect lookup for requested `ENTER` is represented in the Java fixture by installing a `PlayerEffectController`; production lifecycle parity remains unproven. |
+| `com.aionemu.gameserver.model.team.common.legacy.GroupEvent` ids for `JOIN`/`ENTER_OFFLINE` | `Aion.GameServer.Model.GameObjects.PlayerGroupEvent` ids | Enum / Packet Event Ids | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | The touched ids are verified through serialized packet bytes for this scope. The enum as a whole is not newly claimed verified beyond existing branch coverage. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_GROUP_MEMBER_INFO_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 3 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests.SmGroupMemberInfo_JoinAndEnterOfflineMatchJavaGoldenPayloads|FullyQualifiedName~PlayerGroupRuntimeTests.SmGroupMemberInfo_WritesJoinAndEnterOfflineNameBranchesLikeJava|FullyQualifiedName~PlayerGroupRuntimeTests.SmGroupMemberInfo_MovementMatchesJavaGoldenPrefixPayload" --no-restore` passed with 3 C# tests. Existing nullable/analyzer warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerGroupRuntimeTests" --no-restore` passed with 42 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_GROUP_MEMBER_INFO_GoldenTest,SM_GROUP_DATA_EXCHANGE_GoldenTest,CM_GROUP_DATA_EXCHANGE_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 7 Java test methods. Existing Unsafe warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 114 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5167 C# tests.
+
+Known gaps:
+- This unit does not prove live group membership event fanout, offline/reconnect lifecycle, production known-list/team recipient filtering, socket encryption/frame ordering, or real-client behavior.
+- `SM_GROUP_MEMBER_INFO` Java golden evidence now covers movement, join, and enter-offline/name vectors only; `ENTER`/`UPDATE` zero-effect skeletons, `UPDATE_EFFECTS`, non-empty abnormal effects, and slot-timer payloads still need Java-side vectors if broader parity is claimed later.
+- The Java fixture uses controlled reflection/Unsafe setup to avoid full player/network bootstrap; it proves packet bytes for configured vectors, not production lifecycle parity.
+
+Next candidates:
+- Next sequential task: add Java golden evidence for `SM_GROUP_MEMBER_INFO` `ENTER`/`UPDATE` zero-effect skeletons or `UPDATE_EFFECTS` zero-effect skeleton, then mirror/confirm C# packet payload if useful.
+- Safe alternatives: inspect `SM_ALLIANCE_MEMBER_INFO` movement/member prefix parity; inspect a narrow non-live `FindGroupService` planner with service mutation and broadcast side effects deferred; return to group-data known-list/team online filtering only if it can remain diagnostic and disabled.
+
 ### Session 2040 (June 1, 2026)
 - Performed Work Discovery after UOW-2039: re-read the required migration/orchestration/parity docs plus the latest UOW-2039 completion/handoff, inspected Java `CM_GROUP_DATA_EXCHANGE.runImpl` routing feasibility, existing Java packet golden-test patterns, Java `SM_GROUP_MEMBER_INFO.writeImpl`, C# `SmGroupMemberInfo`, and existing `PlayerGroupRuntimeTests`.
 - Scoped this unit to adjacent packet-writer evidence for `SM_GROUP_MEMBER_INFO` movement prefix because Java-side `CM_GROUP_DATA_EXCHANGE.runImpl` live-routing tests would require static `PacketSendUtility` interception that is not present in the current Java test stack.
