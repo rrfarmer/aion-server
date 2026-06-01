@@ -87913,6 +87913,42 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2055 (June 1, 2026)
+- Performed Work Discovery after UOW-2054: re-read the required migration/orchestration/parity docs plus the latest UOW-2054 completion/handoff, inspected Java `FindGroupService.onJoinedTeam`, existing Java `SM_FIND_GROUP`/`CM_FIND_GROUP` goldens, C# `FindGroupRecruitmentPlanService`, and find-group tests.
+- Scoped this unit to a disabled C# planner slice for Java `FindGroupService.onJoinedTeam` state transitions.
+- Added joined-team planning that removes an application, removes the old solo recruitment with Java's `unknown3 = 16`, conditionally re-adds the removed solo recruitment as the current team when the joining player is team leader, and removes the current team's recruitment when the team is full and no solo re-add occurred.
+- Added a narrow instance-group threshold plan for the Java custom branch that removes `instanceGroups[player.getObjectId()]` when members meet `minMembers`.
+- Added focused C# coverage for application removal, solo removal packet payload `01 ... 05 00 00 10`, leader re-add, full-team removal packet payload `01 ... 05 00 00 00`, and instance-group threshold behavior.
+- Kept live `CM_FIND_GROUP` dispatch, Java singleton service runtime, and real world/socket sends deferred.
+
+#### Migration Parity Table - Session 2055
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.services.findgroup.FindGroupService.onJoinedTeam` | `Aion.GameServer.Services.FindGroupRecruitmentPlanService.OnJoinedTeam` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested + Java Packet Golden Tested | Partial Parity | C# records the reviewed Java callback order: optional instance-group removal plan, `removeApplication(player)`, solo `removeRecruitment(player.getObjectId(), serverId, 0, 0, 16)`, leader re-add through `addRecruitment`, else full-team removal. No live dispatch, singleton state, or Java runtime fixture is proven. |
+| `FindGroupService.onJoinedTeam` solo recruitment removal | `FindGroupRecruitmentPlanService.OnJoinedTeam` / `RemoveRecruitment(int, ..., unknown3: 16)` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested + Java Packet Golden Tested | Partial Parity | C# removes the old solo recruitment by player object id rather than current team id and records `SM_FIND_GROUP` action `1` with `unknown3 = 16`. Actual `NetworkConfig.GAMESERVER_ID` wiring remains a caller responsibility until live service wiring exists. |
+| `FindGroupService.onJoinedTeam` leader re-add branch | `FindGroupRecruitmentPlanService.OnJoinedTeam` / `AddRecruitment(..., currentTeam)` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested | Partial Parity | When the old solo recruitment existed and the player is team leader, C# re-adds a team recruitment using the removed message/group type and current team subject, with the existing posted-message/show-list intents. Java `TemporaryPlayerTeam` identity and runtime membership semantics remain unverified. |
+| `FindGroupService.onJoinedTeam` full-team removal branch | `FindGroupRecruitmentPlanService.OnJoinedTeam` / `RemoveRecruitment(currentTeam.ObjectId, ..., unknown3: 0)` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested + Java Packet Golden Tested | Partial Parity | When no solo recruitment was removed and the current team is full, C# records removal of the team recruitment with unknown bytes all zero after server id. Actual team fullness and recipient filtering remain deferred. |
+| `FindGroupService.onJoinedTeam` custom instance-group removal branch | `FindGroupInstanceGroupJoinState` / `FindGroupInstanceGroupRemovalPlan` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested | Needs Verification | C# only plans the threshold decision (`members >= minMembers`) for this callback boundary. It does not port `instanceGroups`, instance-group registration/update/show/remove, or live map mutation semantics. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~FindGroupRecruitmentPlanServiceTests" --no-restore` passed with 13 C# tests. Existing nullable/analyzer warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmFindGroupTests|FullyQualifiedName~FindGroupRecruitmentPlanServiceTests" --no-restore` passed with 27 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_FIND_GROUP_GoldenTest,CM_FIND_GROUP_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 25 Java test methods. Existing Unsafe warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 126 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5190 C# tests after rerunning with a longer timeout. An initial 244s broad C# attempt timed out before reporting.
+
+Known gaps:
+- This unit is disabled planner evidence only; live `CM_FIND_GROUP` action dispatch remains deferred.
+- No Java `FindGroupService` singleton runtime test, actual `PacketSendUtility.sendPacket`/`broadcastToWorld`, online world recipient filtering, encrypted socket frame, real-client behavior, service concurrency, or Java `TemporaryPlayerTeam` object behavior was proven.
+- The planner uses caller-supplied `serverId`, current-team subject, leader/full flags, and deterministic timestamp. Live wiring must source these from Java-equivalent runtime services.
+- Instance-group support is limited to the `onJoinedTeam` threshold decision and does not port the instance-group registration/update/remove/show flows.
+- Applicant-response, logout branches, and live find-group handler composition remain outside this unit.
+
+Next candidates:
+- Next sequential task: inspect instance-group registration/update/remove/show as a disabled planner slice, using Java `FindGroupService` as source of truth and preserving packet/broadcast intentions only.
+- Safe alternatives: inspect CM_FIND_GROUP action `0`-`7` composition with the planner while still disabled; inspect applicant-response behavior; return to alliance/group recipient filtering only with objective packet/fanout evidence.
+
 ### Session 2054 (June 1, 2026)
 - Performed Work Discovery after UOW-2053: re-read the required migration/orchestration/parity docs plus the latest UOW-2053 completion/handoff, inspected Java `FindGroupService` application methods, Java `GroupApplication`, existing Java `SM_FIND_GROUP`/`CM_FIND_GROUP` goldens, C# `FindGroupRecruitmentPlanService`, `SmFindGroup`, and find-group tests.
 - Scoped this unit to the disabled C# planner slice for Java `FindGroupService` application add/update/remove/show behavior.
