@@ -87913,6 +87913,49 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1976 (June 1, 2026)
+- Performed Work Discovery after UOW-1975: inspected the remaining Java client packet `readH()` call sites, then selected the smallest safe existing parser surface: Java `CM_APPEARANCE.readImpl` has an ignored signed `readH()` padding field before `itemObjId` and optional rename text.
+- Reviewed Java `CM_APPEARANCE.readImpl`/`runImpl`, Java opcode registration (`AionClientPacketFactory` opcode `197`, `IN_GAME`), C# `CmAppearance`, C# opcode registration, C# `GameServerConnection.HandleAppearanceAsync`, and existing appearance packet tests.
+- Updated C# `CmAppearance` to consume the ignored padding word with `PacketBuffer.ReadSignedH()` instead of unsigned `ReadH()`, matching Java's signed `readH()` primitive even though the value is discarded.
+- Added Java golden and C# parser/factory coverage proving a high-bit padding word does not shift `type`, `itemObjId`, or rename-string parsing.
+- Kept the live appearance branches out of scope. No character rename, legion rename, cosmetic item action, coupon consumption, DB persistence, broadcast packet, encrypted frame capture, or real-client validation was enabled or newly claimed.
+
+#### Migration Parity Table - Session 1976
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_APPEARANCE.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmAppearance.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Parser now consumes the ignored Java signed padding `readH()` with `ReadSignedH()` and has focused Java/C# evidence that high-bit padding preserves item ID and rename-string field alignment. Live appearance execution remains only partially ported. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `197` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `197` | Packet Factory Registration | Partial | Unit Tested | Partial Parity | Existing C# factory registration for `CmAppearance` remains `IN_GAME`, matching Java; this unit adds focused state-gate coverage in a dedicated parser test. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_APPEARANCE.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleAppearanceAsync` | Client Packet Handler Boundary | Partial | Existing Regression + Source Reviewed | Partial Parity | Java has character rename, legion rename, and cosmetic item branches. This unit does not change or verify live execution; rename/legion/coupon/DAO/broadcast parity remains incomplete. |
+| `com.aionemu.commons.network.packet.BaseClientPacket.readH` padding caller in `CM_APPEARANCE` | `Aion.Commons.Network.PacketBuffer.ReadSignedH` via `CmAppearance` ignored padding | Packet Buffer Primitive Use | Partial | Unit Tested + Java Golden Tested | Partial Parity | This unit covers an ignored signed-short padding caller. Because Java discards the value, evidence is limited to field alignment and complete consumption, not an exposed signed value. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmAppearanceSignedPaddingTests" --no-restore` passed with 2 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_APPEARANCE_ReadSignedPaddingGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5041 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 33 game-server tests.
+
+Remaining risks:
+- This unit proves only parser padding consumption and opcode state gating for the focused slice. It does not verify Java `CM_APPEARANCE.runImpl` behavior for character rename, legion rename, or cosmetic item usage.
+- Coupon consumption, name validation/reservation, old-name DAO writes, player/legion persistence, world/friend/housing broadcasts, audit logging, encrypted client frames, and real-client behavior remain unverified.
+- Other Java signed `readH()` call sites outside this audited parser set still need separate review.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one ignored-padding signed `readH()` parser slice plus Java/C# tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies parser-alignment evidence only and does not complete appearance runtime parity.
+- Total artifacts needing verification: appearance rename/cosmetic runtime execution, split-item runtime execution/persistence, legion runtime execution/persistence, item move execution/persistence, Atreian passport reward execution/persistence, remaining signed `readH()` call sites, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for appearance/split-item/legion/item move/Atreian passport/passkey/pet/craft/sell/repurchase/buy/private-store persistence, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves parser/signedness coverage but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: continue the signed Java `readH()` audit by inspecting another ignored-padding or parser-only call site, with `CM_HOUSE_KICK`, `CM_MANASTONE`, `CM_QUESTION_RESPONSE`, `CM_PING`, `CM_TELEPORT_SELECT`, `CM_UI_SETTINGS`, and unported `CM_TOGGLE_SKILL_DEACTIVATE` as candidates.
+- Safe alternative candidates for the next session:
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+
 ### Session 1975 (June 1, 2026)
 - Performed Work Discovery after UOW-1974: re-read required orchestration/parity docs, latest completion and handoff, inspected Java `CM_SPLIT_ITEM.readImpl`/`runImpl`, Java opcode registration (`AionClientPacketFactory` opcode `157`, `IN_GAME`), C# packet factory registrations, C# handler dispatch boundaries, and the absence of an existing C# `CmSplitItem` parser.
 - Added parser-only C# `CmSplitItem` for Java opcode `157`.
