@@ -87913,6 +87913,48 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2000 (June 1, 2026)
+- Performed Work Discovery after UOW-1999: confirmed the worktree was clean, inspected Java `AionClientPacketFactory` opcode `121`, Java `CM_SUMMON_COMMAND`, existing C# summon command release planners, C# packet factory registrations, `GameServerConnection`, and existing packet factory tests.
+- Found a compact parser/factory parity gap: Java registers `CM_SUMMON_COMMAND` at opcode `121`, while C# had non-live summon command release planners but no packet parser or factory registration for the client command packet.
+- Added Java golden coverage for `CM_SUMMON_COMMAND.readImpl`, proving the mode byte uses Java `readUC()` unsigned semantics, the two D padding fields are consumed, and `targetObjId` is read in Java field order.
+- Added C# `CmSummonCommand`, registered opcode `121` for `InGame`, added C# factory parser coverage with high-bit mode `255`, and documented the live `runImpl` side-effect boundary as unported.
+- No production summon mode behavior was enabled; live `activePlayer.getSummon()`, `SummonMode.getSummonModeById`, `SummonsService.doMode`, release scheduling, summon update sends, and controller/state mutation remain deferred.
+
+#### Migration Parity Table - Session 2000
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_COMMAND.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmSummonCommand.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# now parses unsigned mode, consumes the two D padding fields, and reads target object id in Java order. Java golden and C# tests cover `0xFF -> 255` unsigned mode semantics. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `121` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `121` registration | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# factory now accepts opcode `121` only in `InGame`, matching the Java registration table. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_COMMAND.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java live behavior gets the active summon, maps `SummonMode`, and calls `SummonsService.doMode(..., UnsummonType.COMMAND)`. C# keeps existing summon command planners non-live and does not dispatch the packet into live mode handling. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_SUMMON_COMMAND_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesSummonCommand" --no-restore` passed with 1 C# test. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5107 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 58 game-server tests.
+
+Remaining risks:
+- This unit proves only parser consumption and opcode registration. It does not prove live summon command execution, encrypted frame handling, socket dispatch, or real-client behavior.
+- Java `CM_SUMMON_COMMAND.runImpl` side effects remain unported: active summon lookup, summon-mode mapping, `SummonsService.doMode`, release scheduling, mode state changes, and packet fanout.
+- Existing C# summon command planners remain non-live diagnostics and are not wired to this packet.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one C# client packet parser plus one opcode registration and one Java golden parser test.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser/golden evidence for one summon command packet boundary.
+- Total artifacts needing verification: live summon command execution, live summon emotion execution, live summon movement execution, live summon/mercenary ownership lookup, live summon update/emotion/move broadcast fanout, live summon cast/attack controller execution, live pet/common-data mutation and packet send, live dialog/private-store/buy/repurchase persistence, condition validators, active-effect/stat runtime, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for dialog/private-store/pet/summon/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy persistence, live dialog controller/AI dispatch proof, live private-store mutation/fanout proof, live pet/common-data/reward mutation and packet send, live summon command/movement/emotion/combat controller dispatch, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes one summon command parser/factory gap but does not complete live summon command parity.
+
+Next recommended unit of work:
+- Next sequential task: choose another compact parser/factory/model boundary with Java golden evidence and no broad live mutation. The adjacent summon opcode cluster now has parser coverage for command, movement, emotion, attack, and cast-spell; consider a different unregistered/simple packet boundary next.
+- Safe alternative candidates for the next session:
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+	- inspect BUY_AGAIN live-send ordering only if a stronger deterministic Java runtime vector can be added without broad object graph setup
+	- inspect another compact unported enum/model dependency with Java golden evidence
+
 ### Session 1999 (June 1, 2026)
 - Performed Work Discovery after UOW-1998: confirmed the worktree was clean, compared Java/C# packet factory registrations, inspected Java `CM_SUMMON_EMOTION`, Java `CM_SUMMON_COMMAND`, existing C# summon packet parsers, `GameServerConnection`, and progress references for summon command planning.
 - Found a compact parser/factory parity gap adjacent to UOW-1998: Java registers `CM_SUMMON_EMOTION` at opcode `202`, while C# had no parser or registration.
