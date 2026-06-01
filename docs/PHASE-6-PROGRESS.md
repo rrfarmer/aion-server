@@ -87308,3 +87308,47 @@ Next recommended unit of work:
 	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
 	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+
+### Session 1951 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1950: re-read required migration/orchestration/parity docs, the latest completion and handoff, inspected Java `SM_REPURCHASE(Player, npcId)`, `RepurchaseService.getRepurchaseItems`, `DialogService` BUY_AGAIN, C# `SmRepurchase`, `NpcDialogServiceSelectPlanService`, `RepurchasePlanService`, and existing repurchase/dialog tests.
+- Added `RepurchasePacketSnapshotPlanService`, a disabled non-live adapter for the Java constructor boundary `SM_REPURCHASE(Player, npcId)`.
+- The adapter accepts supplied `RepurchaseService.getRepurchaseItems`-equivalent facts (`RepurchaseSourceItem` snapshots), resolves item templates through `ItemTemplateTable`, builds the existing `SmRepurchase` packet, and records that the live singleton query and packet send did not run.
+- Missing item templates now produce a blocked snapshot plan with explicit missing template IDs instead of constructing a partial packet.
+- `NpcDialogServiceSelectPlanService` now lets the BUY_AGAIN descriptor carry both the disabled snapshot plan and its composed `SmRepurchase` packet, while preserving the existing direct packet injection path.
+- Kept this unit non-live. No singleton map query, socket send, live dialog dispatch, encrypted frame validation, repository write, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1951
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_REPURCHASE(Player, int)` | `Aion.GameServer.Services.RepurchasePacketSnapshotPlanService` + `SmRepurchase` | Constructor/Packet Snapshot Planner | Partial | Unit Tested + Golden Byte Reuse | Partial Parity | Non-live adapter models constructor snapshot composition over supplied repurchase facts and blocks missing templates. It does not query Java/C# singleton state, preserve Java live `HashSet` iteration semantics, send packets, validate encrypted frames, or cover real-client behavior. |
+| `com.aionemu.gameserver.services.DialogService` BUY_AGAIN branch | `NpcDialogServiceSelectPlanService` descriptor with `RepurchasePacketSnapshotPlan` | Dialog Descriptor Planner | Partial | Unit Tested | Partial Parity | BUY_AGAIN can now carry a disabled snapshot adapter plus packet descriptor. Live `PacketSendUtility.sendPacket`, current target/NPC state, and socket dispatch remain unwired. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~RepurchasePacketSnapshotPlanServiceTests|FullyQualifiedName~NpcDialogServiceSelectPlanServiceTests|FullyQualifiedName~SmRepurchaseTests" --no-restore` passed with 26 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_REPURCHASE_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 3 Java test methods.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 22 game-server tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4994 tests.
+
+Remaining risks:
+- The adapter uses supplied facts and does not query live singleton repurchase state.
+- Java `RepurchaseService.addRepurchaseItems` stores a `HashSet`; live iteration order for non-test repurchase packets remains unverified and should not be assumed.
+- Live BUY_AGAIN dispatch, live `CM_BUY_ITEM` repurchase execution, inventory/Kinah mutation, repository persistence, transaction behavior, encrypted frame capture, and real-client validation remain pending.
+- Full item-info blob parity for advanced equipment states remains partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: one disabled repurchase packet snapshot adapter plus dialog descriptor integration.
+- Total artifacts with verified parity: 0 full artifacts; the adapter reuses existing Java golden byte vectors for its composed packet output but live constructor/state parity remains partial.
+- Total artifacts needing verification: live `SM_REPURCHASE` singleton state query and iteration order, live BUY_AGAIN wiring, live `CM_BUY_ITEM` repurchase execution, DAO/packet behavior, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves non-live repurchase packet snapshot composition but does not complete live repurchase, trade, or item-info blob parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect whether Java live `RepurchaseService` snapshot iteration order can be captured safely with a focused Java runtime test, then either document/order-proof the behavior or keep the C# adapter explicitly supplied-order only.
+- Safe alternative candidates for the next session:
+	- add another narrow Java golden item-info vector only if the fixture remains simple, such as equipped-slot nonzero or one basic manastone socket
+	- inspect `PetService.activateAutoSell` plus `SM_PET(AUTOSELL, activate)` as a disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
+	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
