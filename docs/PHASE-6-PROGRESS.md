@@ -84882,6 +84882,55 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1940 (June 1, 2026)
+- Performed Work Discovery after UOW-1939: re-read the latest handoff/completion notes, inspected Java `SM_REPURCHASE`, Java `AionServerPacket`/`BaseServerPacket` write mechanics, Java test/capture helpers, C# `SmRepurchase`, C# `SmRepurchaseTests`, and the current repurchase diagnostic chain.
+- Confirmed Java/Maven are available, so this unit added a Java-side golden test rather than relying only on reviewed source for `SM_REPURCHASE` empty-list serialization.
+- Added Java `SM_REPURCHASE_GoldenTest`, which invokes `SM_REPURCHASE.writeImpl` with a little-endian `ByteBuffer` and asserts the empty repurchase-list payload for target object `9001` is exactly `29230000010000000000`.
+- Updated C# `SmRepurchaseTests.WritePayload_WritesEmptyRepurchaseListHeader` to assert the same Java-captured payload bytes before structural field reads.
+- Kept the unit tightly scoped to empty-list payload bytes. Item-list blobs, encrypted frame bytes, live `RepurchaseService` state, socket dispatch, and real-client validation remain unverified.
+
+#### Migration Parity Table - Session 1940
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_REPURCHASE.writeImpl` empty repurchase list | `Aion.GameServer.Network.Aion.ServerPackets.SmRepurchase.WritePayload` empty list | Server Packet Serialization | Partial | Golden File Tested | Partial Parity | Java golden test and C# test now agree on exact unencrypted payload bytes `29230000010000000000` for target object `9001` and zero items. This verifies only empty-list payload bytes, not item blob serialization, full encrypted frame bytes, constructor state lookup, packet send timing, or live repurchase state. |
+| `com.aionemu.gameserver.network.aion.AionServerPacket` / `BaseServerPacket` little-endian write path | `Aion.Commons.Network.PacketBuffer` payload serialization in `SmRepurchaseTests` | Packet Buffer Evidence | Partial | Golden File Tested | Partial Parity | Java test uses a little-endian `ByteBuffer` and test-only constructor bypass to isolate deterministic payload bytes. Reflection/Unsafe is limited to test setup and is documented as a runtime-dependency avoidance, not production behavior parity. |
+
+Validation:
+- Focused Java golden test passed:
+  `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_REPURCHASE_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` ran 1 game-server test with 0 failures. The first focused Maven attempt without `surefire.failIfNoSpecifiedTests=false` failed in `commons` because that reactor module has no matching test; the rerun succeeded.
+- Focused C# packet test passed with 3 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmRepurchaseTests" --no-restore`
+- Wider C# repurchase packet/socket slice passed with 44 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmRepurchaseTests|FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~CmBuyItemRepurchaseCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests" --no-restore`
+- Java/Maven reactor test run passed with tests explicitly enabled:
+  `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` ran 1 commons test and 13 game-server tests with 0 failures.
+- Broad game-server C# suite excluding the known inventory expansion use-item slice passed with 4972 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore`
+
+Remaining risks:
+- The Java golden test covers empty `SM_REPURCHASE` payload bytes only. It does not cover item entries, `ItemInfoBlob`, repurchase prices, encrypted frame headers, or socket dispatch.
+- The Java test uses `Unsafe.allocateInstance` and reflection to avoid constructing a full `Player`, because Java `Player` construction reaches DB/static-data dependencies. This is acceptable for empty-list payload evidence but not a proof of constructor/live-state parity.
+- No Java runtime/golden comparison was captured for `CM_BUY_ITEM` action `2`, `RepurchaseService.repurchaseFromShop`, audit output, item-add packets, Kinah updates, or singleton repurchase state.
+- Live `CM_BUY_ITEM` repurchase execution, BUY_AGAIN socket dispatch, NPC function validation, repository transaction behavior, and real-client validation remain pending.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported/verified: empty `SM_REPURCHASE` unencrypted payload golden for zero repurchase items.
+- Total artifacts with verified parity: 0 rows at full artifact scope; the empty-list payload case has golden evidence, but full `SM_REPURCHASE` remains Partial Parity.
+- Total artifacts needing verification: 26 rows pending Java runtime/golden comparison for non-empty repurchase item blobs, live repurchase singleton state, live BUY_AGAIN packet dispatch, live `CM_BUY_ITEM` handler execution, Java-equivalent known-list object population, live known-list resolver ownership, live private-store action `0`, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item service state/counter persistence, live price influence/siege state source, live pet auto-sell activation/state/item selection, live pet auto-sell execution/notification dispatch, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN packet dispatch, live normal/AP sell mutation wiring, live buy transaction mutation wiring, live influence/siege state wiring, live limited-item counter mutation/cron reset, live private-store model/runtime wiring, live pet common-data/service wiring, live pet auto-sell inventory/drop caller integration, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves objective `SM_REPURCHASE` packet evidence but does not complete live repurchase execution or full packet parity.
+
+Next recommended unit of work:
+- Next sequential task: extend Java golden coverage to a non-empty `SM_REPURCHASE` item entry if a minimal Java `Item`/`ItemTemplate` fixture can be created safely, otherwise add Java-runtime/source-capture coverage for `CM_BUY_ITEM` action `2` read guards.
+- Safe alternative candidates for the next session:
+	- inspect `PetService.activateAutoSell` and `SM_PET(AUTOSELL, activate)` runtime state wiring as a separate disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full socket cases without enabling live mutation
+	- continue repurchase toward live singleton-state adapter boundaries without enabling live mutation
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime golden capture is still not practical for the targeted behavior
+
 ### Session 1939 (June 1, 2026)
 - Performed Work Discovery after UOW-1938: read the latest handoff, inspected Java `CM_BUY_ITEM` action `2`, Java `RepurchaseService.repurchaseFromShop`, Java `SM_REPURCHASE`, C# `CmBuyItemSideEffectOutcomePlanService`, C# `RepurchasePlanService`, C# repurchase composition/run plans, and the socket-level buy-item diagnostics.
 - Confirmed the disabled handler now hydrates a repurchase execution plan, but the side-effect outcome layer still treated the selected repurchase branch as handler-not-outcome-eligible.
