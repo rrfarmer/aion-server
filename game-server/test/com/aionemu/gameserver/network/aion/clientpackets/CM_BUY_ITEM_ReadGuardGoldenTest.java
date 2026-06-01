@@ -163,6 +163,39 @@ public class CM_BUY_ITEM_ReadGuardGoldenTest {
 		}
 	}
 
+	@Test
+	public void readImpl_nonPositiveItemIdSetsAuditForNonPrivateStoreAction() throws Exception {
+		boolean originalPunishmentEnable = PunishmentConfig.PUNISHMENT_ENABLE;
+		boolean originalLogAudit = LoggingConfig.LOG_AUDIT;
+		SkillData originalSkillData = DataManager.SKILL_DATA;
+		try {
+			PunishmentConfig.PUNISHMENT_ENABLE = false;
+			LoggingConfig.LOG_AUDIT = false;
+			DataManager.SKILL_DATA = new SkillData();
+
+			CM_BUY_ITEM packet = new CM_BUY_ITEM(51, Set.of(State.IN_GAME));
+			packet.setConnection(allocateConnection());
+			packet.setBuffer(payload(7001, 13, 1, 0, 1));
+
+			packet.readImpl();
+
+			assertEquals(7001, getField(packet, "sellerObjId"));
+			assertEquals((short) 13, getField(packet, "tradeActionId"));
+			assertEquals(1, getField(packet, "amount"));
+			assertEquals(true, getField(packet, "isAudit"));
+			assertEquals(0, getField(packet, "itemId"));
+			assertEquals(1L, getField(packet, "count"));
+
+			TradeList tradeList = (TradeList) getField(packet, "tradeList");
+			assertEquals(7001, tradeList.getSellerObjId());
+			assertEquals(0, tradeList.size());
+		} finally {
+			PunishmentConfig.PUNISHMENT_ENABLE = originalPunishmentEnable;
+			LoggingConfig.LOG_AUDIT = originalLogAudit;
+			DataManager.SKILL_DATA = originalSkillData;
+		}
+	}
+
 	private static void assertTradeListActionStoresItemsInReadOrder(int tradeActionId) throws Exception {
 		CM_BUY_ITEM packet = new CM_BUY_ITEM(51, Set.of(State.IN_GAME));
 		packet.setConnection(allocateConnection());
