@@ -87913,6 +87913,36 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2036 (June 1, 2026)
+- Performed Work Discovery after UOW-2035: re-read the latest UOW-2035 handoff, confirmed a clean tree, inspected Java `SM_GROUP_DATA_EXCHANGE`, Java `CM_GROUP_DATA_EXCHANGE` dispatch, Java server opcode registration, the existing Java client parser golden test, and the C# `CmGroupDataExchange`/server-packet surface.
+- Scoped this unit to packet-writer parity only for `SM_GROUP_DATA_EXCHANGE`; live group/neighborhood fanout and client dispatch remain deferred.
+- Added Java `SM_GROUP_DATA_EXCHANGE_GoldenTest` coverage for the action `1` constructor, which writes action, size, and raw data without `unk2`.
+- Added Java and C# packet evidence for the non-action-`1` constructor shape, which writes action, `unk2`, size, and raw data. Java `groupType` from `CM_GROUP_DATA_EXCHANGE` is not serialized by the server packet.
+- Added C# `SmGroupDataExchange` with opcode `178`, `NearbyBroadcast`, `GroupBroadcast`, and deterministic payload tests matching the Java golden byte sequences.
+
+#### Migration Parity Table - Session 2036
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_DATA_EXCHANGE.writeImpl` action `1` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupDataExchange.NearbyBroadcast` | Server Packet Writer | Partial | Unit Tested + Java Golden Packet Tested | Partial Parity | C# writes action `1`, data length, and raw data bytes with no `unk2`, matching Java packet bytes. Live nearby broadcast routing is not wired or verified. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GROUP_DATA_EXCHANGE.writeImpl` non-action-`1` | `Aion.GameServer.Network.Aion.ServerPackets.SmGroupDataExchange.GroupBroadcast` | Server Packet Writer | Partial | Unit Tested + Java Golden Packet Tested | Partial Parity | C# writes action, `unk2`, data length, and raw data bytes. Java client `groupType` is consumed before constructing the server packet and is not serialized. Live group/alliance member fanout remains unverified. |
+| `com.aionemu.gameserver.network.aion.ServerPacketsOpcodes` opcode `178` | `SmGroupDataExchange.PacketOpCode` | Packet Opcode | Partial | Unit Tested + Source Reviewed | Partial Parity | Opcode constant matches Java registration for `SM_GROUP_DATA_EXCHANGE`; encrypted frame/socket behavior remains outside this packet writer slice. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_GROUP_DATA_EXCHANGE_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 2 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmGroupDataExchangeTests" --no-restore` passed with 3 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 111 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5149 tests.
+
+Known gaps:
+- This is packet-writer evidence only, not live `CM_GROUP_DATA_EXCHANGE` runtime parity.
+- C# currently parses `CmGroupDataExchange`; no verified live handler routes the parsed action/groupType/unk2/data through Java-style nearby/group/alliance fanout.
+- Live group/alliance membership resolution, exclusion of the sender, neighborhood broadcast routing, socket dispatch, encrypted frame handling, packet ordering under real clients, and real-client behavior remain unverified.
+
+Next candidates:
+- Next sequential task: inspect a non-live `CM_GROUP_DATA_EXCHANGE` fanout planner only if it can stay side-effect-free and explicitly record the Java nearby/group/alliance routing branches without enabling production dispatch.
+- Safe alternatives: inspect nearby group/alliance server packet boundaries with Java packet evidence; add deterministic multi-entry/order diagnostics for existing packet writers where Java source can provide objective vectors; defer live find-group or group-data service wiring until planner evidence exists.
+
 ### Session 2035 (June 1, 2026)
 - Performed Work Discovery after UOW-2034: re-read the latest UOW-2034 handoff, confirmed a clean tree, inspected Java `SM_FIND_GROUP` action `4`, Java `GroupApplication`, and current C# `SmFindGroup` writer/tests.
 - Scoped this unit to the application list writer, completing objective packet evidence for the current `SM_FIND_GROUP.writeImpl` action branches while still leaving live service dispatch unverified.
