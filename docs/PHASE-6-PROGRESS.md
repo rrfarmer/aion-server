@@ -87913,6 +87913,34 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2030 (June 1, 2026)
+- Performed Work Discovery after UOW-2029: re-read the latest handoff, inspected Java `SM_FIND_GROUP` action `14`, Java `ServerWideGroup`, reflected Java packet-test setup, and the current C# `SmFindGroup` snapshot writer.
+- Confirmed action `14` can be covered deterministically with a single-member `ServerWideGroup` when `lastUpdate` and admin name tags are fixed in the Java golden test.
+- Extended Java `SM_FIND_GROUP_GoldenTest` with an action `14` registration payload vector, including group ID, instance mask, member/min-member counts, recruiter ID/name, min/max level, fixed timestamp, and message.
+- Extended C# `SmFindGroup` with `FindGroupInstanceGroupRegistrationSnapshot`, a registration factory for action `14`, and a byte-for-byte test against the Java-emitted payload.
+
+#### Migration Parity Table - Session 2030
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_FIND_GROUP.writeImpl` action `14` | `Aion.GameServer.Network.Aion.ServerPackets.SmFindGroup` | Server Packet Writer | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# writes Java-matching payload for `registerInstanceGroup` with a deterministic one-group snapshot. |
+| `com.aionemu.gameserver.model.gameobjects.findGroup.ServerWideGroup` action `14` registration fields | `Aion.GameServer.Network.Aion.ServerPackets.FindGroupInstanceGroupRegistrationSnapshot` | Packet DTO | Partial | Unit Tested + Java Golden Tested | Partial Parity | Snapshot captures only the fields serialized by action `14`; it does not model live team membership lookup, race, service mutation, broadcast routing, or real-time timestamp creation. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_FIND_GROUP_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 7 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmFindGroupTests" --no-restore` passed with 8 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 103 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5140 tests.
+
+Known gaps:
+- `SM_FIND_GROUP` actions `0`, `4`, `10`, `16`, `23`, and `24` remain unported.
+- Action `14` is tested with one deterministic group only; multi-group ordering and live team-backed member lookup remain unverified.
+- Live `FindGroupService` dispatch, world broadcasts, encrypted-frame handling, socket dispatch, and real-client behavior remain unverified.
+
+Next candidates:
+- Next sequential task: inspect `SM_FIND_GROUP` action `16` member-info writer with a minimal member snapshot, or action `10` instance-group list if the current registration snapshot can be reused safely.
+- Safe alternatives: inspect `SM_GROUP_DATA_EXCHANGE` writer parity before live group-data fanout; inspect another compact registered parser/writer boundary with Java golden evidence; inspect a non-live `FindGroupService` planner only if side effects remain explicitly deferred.
+
 ### Session 2029 (June 1, 2026)
 - Performed Work Discovery after UOW-2028: re-read the required migration docs and latest handoff, inspected Java `SM_FIND_GROUP` action `11`, `Player.getName(boolean)`, `Player.getPlayerClass()`, `Player.getLevel()`, `PlayerCommonData`, `PlayerAccountData`, `Account`, `PlayerClass`, the existing Java unsafe packet setup, and the C# `SmFindGroup` writer/tests.
 - Confirmed action `11` is a compact player-snapshot writer branch: action, applicant object ID, fixed zero fields, applicant class ID, applicant level as D, and applicant display name.

@@ -79,8 +79,26 @@ public class SM_FIND_GROUP_GoldenTest {
 		assertEquals("160403020144332211", toHex(payload));
 	}
 
+	@Test
+	public void writeImpl_registerInstanceGroupWritesGroupSnapshot() throws Exception {
+		String[] originalNameTags = AdminConfig.NAME_TAGS;
+		try {
+			AdminConfig.NAME_TAGS = new String[0];
+			ServerWideGroup group = simpleInstanceGroup();
+			setField(group, "lastUpdate", 0x01020305);
+			SM_FIND_GROUP packet = new SM_FIND_GROUP(14, List.of(group));
+			byte[] payload = write(packet);
+
+			assertEquals(
+				"0E0104030201443322110100000001030000040302010100010000000000414100000503020100000000520065006300720075006900740065007200000045006E007400720079000000",
+				toHex(payload));
+		} finally {
+			AdminConfig.NAME_TAGS = originalNameTags;
+		}
+	}
+
 	private static byte[] write(SM_FIND_GROUP packet) {
-		ByteBuffer buffer = ByteBuffer.allocate(64).order(ByteOrder.LITTLE_ENDIAN);
+		ByteBuffer buffer = ByteBuffer.allocate(256).order(ByteOrder.LITTLE_ENDIAN);
 		packet.setBuf(buffer);
 		packet.writeImpl(null);
 
@@ -131,8 +149,20 @@ public class SM_FIND_GROUP_GoldenTest {
 	}
 
 	private static void setField(Object target, String name, Object value) throws Exception {
-		Field field = target.getClass().getDeclaredField(name);
+		Field field = findField(target.getClass(), name);
 		field.setAccessible(true);
 		field.set(target, value);
+	}
+
+	private static Field findField(Class<?> type, String name) throws NoSuchFieldException {
+		Class<?> current = type;
+		while (current != null) {
+			try {
+				return current.getDeclaredField(name);
+			} catch (NoSuchFieldException ignored) {
+				current = current.getSuperclass();
+			}
+		}
+		throw new NoSuchFieldException(name);
 	}
 }
