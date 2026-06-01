@@ -398,4 +398,5 @@ The C# port is not considered ready until all of these are true:
 6. Keep the Java project building and runnable for mixed-mode validation.
 7. Add or extend parity tests before changing shared protocol behavior.
 8. Add short implementation notes as each phase discovers differences from Java.
+9. Use focused test selection from `orchestration-rules.md` for ordinary Phase 6 units; reserve full .NET suite/build runs for documented broad-validation triggers.
 

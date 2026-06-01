@@ -502,13 +502,18 @@ Before committing a Unit of Work, the Orchestrator must answer:
 
 1. Did the build pass?
 2. Did relevant tests pass?
-3. Was focused validation chosen for the changed surface, or was a broad-validation trigger documented?
-4. If the broad .NET suite/build was skipped, were the focused commands and rationale documented?
-5. Were touched Java artifacts documented?
-6. Were touched C# artifacts documented?
-7. Was parity status conservative?
-8. Were gaps explicitly listed?
-9. Were next verification steps documented?
+3. Were the exact focused C# command(s) documented, including filters where used?
+4. Were the exact focused Java/Maven command(s) documented when Java parity evidence was available?
+5. If Java/Maven was skipped, was the reason documented?
+6. Was focused validation chosen for the changed surface, or was a broad-validation trigger documented?
+7. If the broad .NET suite/build was skipped, were the focused commands and rationale documented?
+8. If a broad .NET suite/build was run, was the trigger documented?
+9. For documentation-only units, was a repository hygiene check documented and were runtime tests marked not applicable?
+10. Were touched Java artifacts documented?
+11. Were touched C# artifacts documented?
+12. Was parity status conservative?
+13. Were gaps explicitly listed?
+14. Were next verification steps documented?
 
 If not, either fix it or document the blocker.
 
