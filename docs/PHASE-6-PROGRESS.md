@@ -87913,6 +87913,38 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2039 (June 1, 2026)
+- Performed Work Discovery after UOW-2038: re-read the required migration/orchestration/parity docs plus the latest UOW-2038 completion/handoff, confirmed a clean tree, inspected Java `CM_GROUP_DATA_EXCHANGE.runImpl`, existing C# `CmGroupDataExchange`, `GroupDataExchangeFanoutPlanService`, `GroupDataExchangeFanoutSocketAdapterService`, `GameServerConnection`'s deferred branch, and existing disabled composition-observer patterns.
+- Scoped this unit to a guarded `GameServerConnection` composition seam for `CM_GROUP_DATA_EXCHANGE`; production socket sends remain disabled and no live dispatch parity is claimed.
+- Added `GroupDataExchangeHandlerCompositionPlanService` to compose the UOW-2037 fanout plan and UOW-2038 disabled socket adapter result from the parsed client packet and active-player/team runtimes.
+- Wired `GameServerConnection` to invoke the new composition observer only when supplied by tests/diagnostics; without an observer, the handler returns without side effects.
+- Added connection-level tests proving action `1` nearby broadcast and group action recipient boundaries are observed while `IGameClientConnectionRegistry` send/broadcast methods and local packet sends are not called.
+
+#### Migration Parity Table - Session 2039
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_GROUP_DATA_EXCHANGE.runImpl` connection dispatch boundary | `GameServerConnection.HandleGroupDataExchangeAsync` + `GroupDataExchangeHandlerCompositionPlanService` | Client Packet Runtime Composition Boundary | Partial | Unit Tested + Java Source Reviewed | Partial Parity | The C# connection can now parse and compose the Java fanout/send boundary into a disabled diagnostic plan when an observer is installed. It does not perform production sends, and default production behavior remains side-effect-free. |
+| Java action `1` `broadcastPacketAndReceive(player, new SM_GROUP_DATA_EXCHANGE(data))` branch | `GameServerConnectionGroupDataExchangeTests.ProcessPacketAsync_NearbyActionComposesDisabledBroadcastBoundaryWithoutSending` | Connection-Level Diagnostic Coverage | Partial | Unit Tested + Java Golden Packet Tested | Partial Parity | Test proves the parsed client packet reaches the disabled nearby broadcast boundary and records `WouldCallBroadcastToVisiblePlayersAsync` without calling the registry. Known-list, encrypted-frame, and real-client parity remain unverified. |
+| Java non-action group loop excluding self | `GameServerConnectionGroupDataExchangeTests.ProcessPacketAsync_GroupActionComposesDisabledRecipientBoundaryWithoutSending` | Connection-Level Diagnostic Coverage | Partial | Unit Tested + Java Golden Packet Tested | Partial Parity | Test proves the parsed client packet reaches the disabled direct-recipient boundary with group recipients except self. Java online filtering and live socket availability remain approximated by the current C# runtimes and disabled adapter result. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionGroupDataExchangeTests|FullyQualifiedName~GroupDataExchangeFanoutPlanServiceTests|FullyQualifiedName~GroupDataExchangeFanoutSocketAdapterServiceTests" --no-restore` passed with 16 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_GROUP_DATA_EXCHANGE_ReadPayloadGoldenTest,SM_GROUP_DATA_EXCHANGE_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 4 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmGroupDataExchangeTests|FullyQualifiedName~GroupDataExchangeFanoutPlanServiceTests|FullyQualifiedName~GroupDataExchangeFanoutSocketAdapterServiceTests|FullyQualifiedName~GameServerConnectionGroupDataExchangeTests" --no-restore` passed with 19 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 111 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5165 tests.
+
+Known gaps:
+- `CM_GROUP_DATA_EXCHANGE` remains non-live in production. The new connection path only creates a disabled diagnostic plan when an observer is present.
+- No production socket dispatch, encrypted-frame ordering, real-client behavior, or persistent Java known-list parity is proven.
+- Java `Player.isOnline()` and disconnect/reconnect edge cases remain approximated by the current C# runtime/registry surfaces.
+- Oversized-data Java logging remains represented as a rejected fanout plan; exact log text/runtime logging is not validated.
+
+Next candidates:
+- Next sequential task: inspect Java-side `CM_GROUP_DATA_EXCHANGE.runImpl` test-double feasibility for routing branches, or inspect `SM_GROUP_MEMBER_INFO` / nearby alliance packet writer parity with Java packet evidence before any live group-data dispatch.
+- Safe alternatives: inspect a narrow non-live `FindGroupService` planner with service mutation and broadcast side effects deferred; inspect another compact registered packet writer/parser gap with Java golden evidence; inspect known-list/team online filtering only if it can remain diagnostic and disabled.
+
 ### Session 2038 (June 1, 2026)
 - Performed Work Discovery after UOW-2037: re-read the required migration/orchestration/parity docs plus the latest UOW-2037 completion/handoff, confirmed a clean tree, inspected Java `PacketSendUtility.sendPacket` and `broadcastPacketAndReceive`, existing C# `IGameClientConnectionRegistry`, `GameServerConnection`'s deferred `CmGroupDataExchange` branch, and existing disabled/opt-in socket adapter patterns.
 - Scoped this unit to an opt-in socket adapter boundary for the UOW-2037 `GroupDataExchangeFanoutPlanService`; production `GameServerConnection` dispatch remains deferred.
