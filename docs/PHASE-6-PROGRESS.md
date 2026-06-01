@@ -87913,6 +87913,50 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1989 (June 1, 2026)
+- Performed Work Discovery after UOW-1988: re-read required migration docs and latest handoff, inspected Java `SM_VERSION_CHECK`, Java server opcode registration, C# server-packet infrastructure, C# `CM_VERSION_CHECK` boundary, and the newly ported `EventTheme` dependency.
+- Selected the deterministic incompatible-client branch of Java `SM_VERSION_CHECK.writeImpl`: when `version != INTERNAL_VERSION`, Java writes only answer id `1` and returns before dynamic server state is used.
+- Added C# `SmVersionCheck` opcode `0` with Java `InternalVersion = 207`, constructor fields for version and city decoration, and the incompatible-client writer branch.
+- Wired `CM_VERSION_CHECK` handling to send `SmVersionCheck` for incompatible versions only. The success branch remains intentionally blocked because it depends on dynamic config, server-time, chat-server, ratio, passport, and event-theme state.
+- Added C# packet coverage for the incompatible-client payload and for the explicit unported success boundary.
+- Added Java golden coverage proving the incompatible-client Java payload is exactly one byte: `01`.
+
+#### Migration Parity Table - Session 1989
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_VERSION_CHECK.INTERNAL_VERSION` | `Aion.GameServer.Network.Aion.ServerPackets.SmVersionCheck.InternalVersion` | Packet Constant | Complete | Unit Tested + Java Golden Tested | Partial Parity | C# exposes Java internal version `207`, matching Java's 4.8.0.0 compatibility constant. Full packet parity remains partial because success serialization is not ported. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_VERSION_CHECK.writeImpl` incompatible-version branch | `Aion.GameServer.Network.Aion.ServerPackets.SmVersionCheck.WritePayload` incompatible-version branch | Server Packet Writer | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# writes answer id `1` and returns for versions other than 207, matching the Java golden payload `01`. Success payload remains unported. |
+| `com.aionemu.gameserver.network.aion.ServerPacketsOpcodes` opcode `0` | `Aion.GameServer.Network.Aion.ServerPackets.SmVersionCheck.PacketOpCode` | Server Packet Opcode | Partial | Unit Tested | Partial Parity | C# uses opcode `0`, matching Java `SM_VERSION_CHECK`. No encrypted live-frame comparison was run. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_VERSION_CHECK.runImpl` incompatible-version response | `Aion.GameServer.Network.Aion.GameServerConnection` incompatible-version response boundary | Client Packet Handler Boundary | Partial | Source Reviewed + Unit Tested packet | Needs Verification | C# now sends the deterministic incompatible-version response. The Java success response with dynamic `SM_VERSION_CHECK` data remains unported and unverified. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmVersionCheckTests" --no-restore` passed with 2 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_VERSION_CHECK_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5075 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 47 game-server tests.
+
+Remaining risks:
+- This unit proves only the incompatible-client `SM_VERSION_CHECK` branch. It does not verify success response bytes, dynamic config/time/chat/passport/event-theme behavior, encrypted frame capture, or real-client behavior.
+- C# success serialization currently throws an explicit `NotSupportedException` if called to avoid silently emitting incorrect handshake data.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one deterministic `SM_VERSION_CHECK` incompatible-version writer branch plus Java/C# tests.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies packet-branch evidence only.
+- Total artifacts needing verification: `SM_VERSION_CHECK` success writer parity, event-theme runtime source, version-check success runtime response, house-script runtime execution, buy-trade-in runtime execution, remove-altered-state runtime execution, toggle-skill deactivate runtime execution, teleport-select runtime execution, ping anti-cheat runtime execution, manastone runtime execution, UI-settings runtime persistence, question-response runtime execution, house-kick runtime execution, appearance rename/cosmetic runtime execution, split-item runtime execution/persistence, legion runtime execution/persistence, item move execution/persistence, Atreian passport reward execution/persistence, remaining parser-only packet surfaces, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for version-check success/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/pet/craft/sell/repurchase/buy/private-store persistence, live `SM_VERSION_CHECK` dynamic success payload proof, live housing script service execution, live trade-in service execution, live EffectController mutation, live SkillEngine effect-controller and stance-controller mutation, live NPC/known-list teleporter validation, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves deterministic handshake error coverage but does not complete live version-check success parity.
+
+Next recommended unit of work:
+- Next sequential task: continue Work Discovery for a deterministic `SM_VERSION_CHECK` success sub-slice only if Java bytes can be produced by controlling dynamic dependencies, or choose another compact planner/parser/model boundary with Java golden evidence.
+- Safe alternative candidates for the next session:
+	- inspect another compact unported parser/factory or enum/model dependency with Java golden evidence
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+
 ### Session 1988 (June 1, 2026)
 - Performed Work Discovery after UOW-1987: re-read required migration docs and latest handoff, confirmed no obvious unregistered Java client packets remained, inspected Java `EventTheme`, and traced its use as the `SM_VERSION_CHECK` scene-status source.
 - Selected Java `EventTheme` because its constructor ID mapping is a compact deterministic dependency for future `SM_VERSION_CHECK` writer parity and can be objectively tested without live server state.
