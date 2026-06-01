@@ -11,7 +11,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import com.aionemu.gameserver.configs.administration.AdminConfig;
+import com.aionemu.gameserver.configs.network.NetworkConfig;
 import com.aionemu.gameserver.model.gameobjects.AionObject;
+import com.aionemu.gameserver.model.gameobjects.findGroup.GroupRecruitment;
 import com.aionemu.gameserver.model.gameobjects.findGroup.ServerWideGroup;
 import com.aionemu.gameserver.model.PlayerClass;
 import com.aionemu.gameserver.model.account.Account;
@@ -47,6 +49,46 @@ public class SM_FIND_GROUP_GoldenTest {
 		byte[] payload = write(packet);
 
 		assertEquals("1A0200B050E311F0ECE311", toHex(payload));
+	}
+
+	@Test
+	public void writeImpl_showRecruitmentsWritesTimestampedSoloRecruitmentSnapshot() throws Exception {
+		String[] originalNameTags = AdminConfig.NAME_TAGS;
+		int originalGameServerId = NetworkConfig.GAMESERVER_ID;
+		try {
+			AdminConfig.NAME_TAGS = new String[0];
+			NetworkConfig.GAMESERVER_ID = 1;
+			GroupRecruitment recruitment = new GroupRecruitment(simplePlayer(0x01020304, "Recruiter", PlayerClass.GLADIATOR, 65), "LFG", 2);
+			setField(recruitment, "lastUpdate", 0x01020305);
+			SM_FIND_GROUP packet = new SM_FIND_GROUP(0, List.of(recruitment));
+
+			int before = (int) (System.currentTimeMillis() / 1000);
+			byte[] payload = write(packet);
+			int after = (int) (System.currentTimeMillis() / 1000);
+
+			ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+			assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(1, Short.toUnsignedInt(buffer.getShort()));
+			assertEquals(1, Short.toUnsignedInt(buffer.getShort()));
+			int headerLastUpdate = buffer.getInt();
+			assertTrue(headerLastUpdate >= before && headerLastUpdate <= after);
+			assertEquals(0x01020304, buffer.getInt());
+			assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(16, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(2, Byte.toUnsignedInt(buffer.get()));
+			assertEquals("LFG", readS(buffer));
+			assertEquals("Recruiter", readS(buffer));
+			assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(65, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(65, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(0x01020305, buffer.getInt());
+			assertEquals(0, buffer.remaining());
+		} finally {
+			AdminConfig.NAME_TAGS = originalNameTags;
+			NetworkConfig.GAMESERVER_ID = originalGameServerId;
+		}
 	}
 
 	@Test
