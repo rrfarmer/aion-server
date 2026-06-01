@@ -87913,6 +87913,51 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1987 (June 1, 2026)
+- Performed Work Discovery after UOW-1986: re-read required migration docs and latest handoff, inspected Java `CM_VERSION_CHECK`, Java `SM_VERSION_CHECK`, C# packet/factory coverage, and recent parser-boundary notes.
+- Selected Java `CM_VERSION_CHECK` because its `readImpl` is compact and objectively testable while the dynamic `SM_VERSION_CHECK` response can remain explicitly out of scope.
+- Added C# `CmVersionCheck` with Java-shaped field parsing: unsigned Aion client version, unsigned NPC script interface version, Windows encoding, Windows version, Windows sub-version, and lite-info byte.
+- Registered opcode `0` in the C# `GameClientPacketFactory` as `CONNECTED` only, matching Java `AionClientPacketFactory`.
+- Added an explicit C# runtime boundary in `GameServerConnection`: Java live `SM_VERSION_CHECK` response generation remains unported because it depends on dynamic config, server-time, chat-server, ratio, passport, and event-theme state.
+- Added Java golden and C# parser/factory coverage proving high-bit version fields read as unsigned values and the full payload is consumed.
+
+#### Migration Parity Table - Session 1987
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_VERSION_CHECK.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmVersionCheck.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | New C# parser consumes Java unsigned client/NPC version fields, Windows encoding/version/sub-version, and lite-info byte in read order. Evidence covers high-bit unsigned version values and full payload consumption. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `0` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `0` | Packet Factory Registration | Partial | Unit Tested | Partial Parity | C# now registers opcode `0` as `CONNECTED` only, matching Java. Focused factory coverage rejects `AUTHED`. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_VERSION_CHECK.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` parser-only boundary | Client Packet Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java sends `SM_VERSION_CHECK(aionClientVersion, EventService.getInstance().getEventTheme())`; C# only documents this as an unported runtime boundary. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_VERSION_CHECK.writeImpl` | Not ported in this unit | Server Packet Writer | Not Started | Source Reviewed | Needs Verification | Java response writes compatibility failure for non-207 versions or a dynamic success payload from config, start/current time, ratio limits, chat-server IP/port, passport state, and event theme. No C# writer parity is claimed. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmVersionCheckTests" --no-restore` passed with 2 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_VERSION_CHECK_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5064 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 45 game-server tests.
+
+Remaining risks:
+- This unit proves only parser field consumption and opcode state gating. It does not verify Java `SM_VERSION_CHECK` response bytes, dynamic config/time/chat/passport/event-theme behavior, encrypted frame capture, or real-client behavior.
+- C# has no live `CM_VERSION_CHECK` response beyond an explicit documented boundary.
+- Other unported connected-state and handshake surfaces remain separate work.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one `CM_VERSION_CHECK` parser/factory slice plus Java/C# tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies parser-consumption and factory-registration evidence only and does not complete live version-check runtime parity.
+- Total artifacts needing verification: version-check runtime response, `SM_VERSION_CHECK` writer parity, house-script runtime execution, buy-trade-in runtime execution, remove-altered-state runtime execution, toggle-skill deactivate runtime execution, teleport-select runtime execution, ping anti-cheat runtime execution, manastone runtime execution, UI-settings runtime persistence, question-response runtime execution, house-kick runtime execution, appearance rename/cosmetic runtime execution, split-item runtime execution/persistence, legion runtime execution/persistence, item move execution/persistence, Atreian passport reward execution/persistence, remaining parser-only packet surfaces, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for version-check/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/pet/craft/sell/repurchase/buy/private-store persistence, live `SM_VERSION_CHECK` dynamic payload proof, live housing script service execution, live trade-in service execution, live EffectController mutation, live SkillEngine effect-controller and stance-controller mutation, live NPC/known-list teleporter validation, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves parser/factory coverage but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: continue Work Discovery for the smallest remaining evidence-backed parser/factory or deterministic planner boundary. Prefer a compact unported packet over live `SM_VERSION_CHECK` unless a deterministic Java byte vector can be produced for both failure and success branches.
+- Safe alternative candidates for the next session:
+	- inspect another compact unported parser/factory boundary with Java golden evidence
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+
 ### Session 1986 (June 1, 2026)
 - Performed Work Discovery after UOW-1985: inspected Java `CM_HOUSE_SCRIPT`, `CM_VERSION_CHECK`, C# packet/factory coverage, prior progress notes, and the latest handoff.
 - Selected Java `CM_HOUSE_SCRIPT` because its parser can be covered with focused Java golden evidence while the live housing script service remains explicitly out of scope.
