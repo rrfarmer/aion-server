@@ -9,9 +9,15 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import com.aionemu.gameserver.configs.administration.AdminConfig;
 import com.aionemu.gameserver.model.gameobjects.AionObject;
 import com.aionemu.gameserver.model.gameobjects.findGroup.ServerWideGroup;
+import com.aionemu.gameserver.model.PlayerClass;
+import com.aionemu.gameserver.model.account.Account;
+import com.aionemu.gameserver.model.account.PlayerAccountData;
 import com.aionemu.gameserver.model.gameobjects.player.Player;
+import com.aionemu.gameserver.model.gameobjects.player.PlayerAppearance;
+import com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData;
 
 import sun.misc.Unsafe;
 
@@ -39,6 +45,20 @@ public class SM_FIND_GROUP_GoldenTest {
 		byte[] payload = write(packet);
 
 		assertEquals("1A0200B050E311F0ECE311", toHex(payload));
+	}
+
+	@Test
+	public void writeImpl_instanceApplicationWhisperWritesApplicantSnapshot() throws Exception {
+		String[] originalNameTags = AdminConfig.NAME_TAGS;
+		try {
+			AdminConfig.NAME_TAGS = new String[0];
+			SM_FIND_GROUP packet = new SM_FIND_GROUP(simplePlayer(0x01020304, "Applicant", PlayerClass.RANGER, 65));
+			byte[] payload = write(packet);
+
+			assertEquals("0B04030201000000000000000000000005410000004100700070006C006900630061006E0074000000", toHex(payload));
+		} finally {
+			AdminConfig.NAME_TAGS = originalNameTags;
+		}
 	}
 
 	@Test
@@ -78,9 +98,25 @@ public class SM_FIND_GROUP_GoldenTest {
 	}
 
 	private static ServerWideGroup simpleInstanceGroup() throws Exception {
-		Player recruiter = (Player) unsafe().allocateInstance(Player.class);
-		setAionObjectId(recruiter, 0x01020304);
+		Player recruiter = simplePlayer(0x01020304, "Recruiter", PlayerClass.GLADIATOR, 65);
 		return new ServerWideGroup(recruiter, 0x11223344, 3, "Entry");
+	}
+
+	private static Player simplePlayer(int objectId, String name, PlayerClass playerClass, int level) throws Exception {
+		PlayerCommonData commonData = new PlayerCommonData(objectId);
+		commonData.setName(name);
+		commonData.setPlayerClass(playerClass);
+		setField(commonData, "level", level);
+		PlayerAppearance appearance = new PlayerAppearance();
+		appearance.setHeight(1);
+		PlayerAccountData accountData = new PlayerAccountData(commonData, appearance);
+		Account account = new Account(1);
+
+		Player player = (Player) unsafe().allocateInstance(Player.class);
+		setAionObjectId(player, objectId);
+		setField(player, "playerAccountData", accountData);
+		setField(player, "playerAccount", account);
+		return player;
 	}
 
 	private static void setAionObjectId(AionObject object, int objectId) throws Exception {
@@ -92,5 +128,11 @@ public class SM_FIND_GROUP_GoldenTest {
 		Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
 		unsafeField.setAccessible(true);
 		return (Unsafe) unsafeField.get(null);
+	}
+
+	private static void setField(Object target, String name, Object value) throws Exception {
+		Field field = target.getClass().getDeclaredField(name);
+		field.setAccessible(true);
+		field.set(target, value);
 	}
 }
