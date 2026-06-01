@@ -87913,6 +87913,54 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1972 (June 1, 2026)
+- Performed Work Discovery after UOW-1971: re-read required migration/orchestration/parity docs, latest completion and handoff, inspected Java `CM_ATREIAN_PASSPORT.readImpl`, Java opcode registration (`AionClientPacketFactory` opcode `248`, `IN_GAME`), C# game client packet factory, existing Atreian passport formula services/tests, and remaining signed Java `readH()` candidates.
+- Added parser-only C# `CmAtreianPassport` for Java opcode `248`.
+- Registered opcode `248` as `IN_GAME`, matching Java `[C_REQ_LOGIN_EVENT_REWARD]`.
+- Matched Java signed `readH()` count semantics: `0xFFFF` becomes `-1`, and `count == -1` consumes complete `(passportId, timestamp)` pairs until fewer than 8 bytes remain.
+- Preserved Java duplicate-passport collection semantics by grouping timestamps in a per-passport `HashSet<int>`.
+- Added Java golden and C# parser/factory coverage for sentinel `count = -1`, duplicate passport IDs, trailing incomplete data, and a positive count that consumes only the declared number of complete entries.
+- Kept this unit parser-only. Java `AtreianPassportService.takeReward`, account passport mutation, item reward delivery, audit logging, packet dispatch, encrypted frame capture, and real-client validation remain unported/unverified.
+
+#### Migration Parity Table - Session 1972
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_ATREIAN_PASSPORT.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmAtreianPassport.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Parser now covers signed count, `-1` sentinel streaming, complete-pair stop on trailing bytes, positive-count stop, and duplicate passport ID timestamp grouping. Java `runImpl` reward side effects are not ported. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `248` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `248` | Packet Factory Registration | Partial | Unit Tested | Partial Parity | C# factory now registers `CmAtreianPassport` for `IN_GAME`, matching Java. Live `GameServerConnection` handling is intentionally still no-op because Atreian passport reward execution is not ported. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_ATREIAN_PASSPORT.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` explicit parser-only no-op | Client Packet Handler Boundary | Partial | Source Reviewed | Partial Parity | C# now makes the unported reward execution boundary explicit. Java calls `AtreianPassportService.takeReward`; C# does not yet mutate account passports, grant rewards, or audit invalid claims. |
+| `com.aionemu.commons.network.packet.BaseClientPacket.readH` sentinel caller in `CM_ATREIAN_PASSPORT` | `Aion.Commons.Network.PacketBuffer.ReadSignedH` via `CmAtreianPassport.Count` | Packet Buffer Primitive Use | Partial | Unit Tested + Java Golden Tested | Partial Parity | This unit adds another source-proven signed `readH()` caller. Broader signed-short call-site audit remains incomplete. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmAtreianPassportTests" --no-restore` passed with 3 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_ATREIAN_PASSPORT_ReadSignedCountGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 2 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5032 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 29 game-server tests.
+
+Remaining risks:
+- This unit proves parser/factory behavior only. It does not verify `AtreianPassportService.takeReward`, reward item creation, account passport state mutation, database persistence, audit logging, live packet handling, encrypted client frames, or real-client behavior.
+- Java invalid positive-count warning text and active-player logging were not modeled because C# parser tests stop before live logging/runtime handling.
+- C# registered opcode `248` currently parses but does not dispatch reward execution in `GameServerConnection`; this is intentionally documented as partial parity.
+- Other Java signed `readH()` call sites still need separate audits, especially call sites without an existing C# parser surface.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one parser-only `CM_ATREIAN_PASSPORT` signed count/sentinel slice plus factory registration and Java/C# tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies parser-level evidence only and does not complete Atreian passport reward parity.
+- Total artifacts needing verification: Atreian passport reward execution/persistence, remaining signed `readH()` call sites, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for Atreian passport/passkey/pet/craft/sell/repurchase/buy/private-store persistence, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves signed parser coverage but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: continue the signed Java `readH()` audit by inspecting `CM_MOVE_ITEM.slot`/opcode `156` and deciding whether a parser-only C# packet plus Java golden test is safe without enabling inventory move side effects.
+- Safe alternative candidates for the next session:
+	- inspect `CM_LEGION` signed permission `readH()` fields if parser-only opcode coverage is safer than `CM_MOVE_ITEM`
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+	- run a full Maven reactor validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
+
 ### Session 1971 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1970: re-read the latest handoff, inspected Java `CM_BUY_ITEM.readImpl`, Java `BaseClientPacket.readH`/`readUH`, C# `CmBuyItem`, existing Java `CM_BUY_ITEM_ReadGuardGoldenTest`, and C# `CmBuyItemTests`.
 - Updated `CmBuyItem.TradeActionId` to parse with `PacketBuffer.ReadSignedH()`, matching Java's `private short tradeActionId = readH()`.
