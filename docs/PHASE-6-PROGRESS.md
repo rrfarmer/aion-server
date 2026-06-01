@@ -87913,6 +87913,40 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2053 (June 1, 2026)
+- Performed Work Discovery after UOW-2052: re-read the required migration/orchestration/parity docs plus the latest UOW-2052 completion/handoff, inspected Java `FindGroupService`, Java `CM_FIND_GROUP`, Java `GroupRecruitment`, existing Java `SM_FIND_GROUP`/`CM_FIND_GROUP` goldens, C# `CmFindGroup`, C# `SmFindGroup`, and existing C# find-group tests.
+- Scoped this unit to a disabled, in-memory C# planner for Java `FindGroupService` recruitment add/update/remove/show behavior.
+- Added `FindGroupRecruitmentPlanService` with deterministic timestamp injection, solo-player and caller-supplied team recruitment subjects, race-filtered show-list packet intent, posted-system-message intent, update mutation, and remove-broadcast intent.
+- Added focused C# tests for solo add, team-subject add, update, missing remove, existing remove, race filtering, Java system-message id `1400392`, and serialized `SM_FIND_GROUP` packet intents.
+- Kept live `CM_FIND_GROUP` dispatch deferred. No production world broadcast, socket send, service singleton wiring, concurrent mutation parity, client frame encryption, or real-client behavior is claimed.
+
+#### Migration Parity Table - Session 2053
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.services.findgroup.FindGroupService.addRecruitment` / `showRecruitments` | `Aion.GameServer.Services.FindGroupRecruitmentPlanService.AddRecruitment` / `ShowRecruitments` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested + Java Packet Golden Tested | Partial Parity | C# records the Java add flow as in-memory map put, `STR_PARTY_MATCH_OFFER_PARTY_POSTED` intent, then same-race `SM_FIND_GROUP` action `0` show-list intent with deterministic timestamp. Live singleton state, socket send, and `ConcurrentHashMap` runtime parity remain unverified. |
+| `FindGroupService.updateRecruitment` | `FindGroupRecruitmentPlanService.UpdateRecruitment` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested | Partial Parity | C# mutates message, group type, and last-update timestamp only when an entry exists, matching reviewed Java source. No Java runtime service fixture or live dispatch was added. |
+| `FindGroupService.removeRecruitment(Player/int, ...)` | `FindGroupRecruitmentPlanService.RemoveRecruitment` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested + Java Packet Golden Tested | Partial Parity | C# resolves player/team id, removes only an existing entry, and records race-filtered world-broadcast intent with `SM_FIND_GROUP` action `1`. Actual `PacketSendUtility.broadcastToWorld` and online world recipient filtering remain deferred. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_FIND_GROUP.runImpl` recruitment actions `0`-`3` | Existing C# `GameServerConnection` no-op boundary plus `FindGroupRecruitmentPlanService` | Client Handler Boundary / Planner Dependency | Partial | Source Reviewed + C# Unit Tested | Needs Verification | The planner is not wired into live `GameServerConnection`; C# still documents `CM_FIND_GROUP` live service dispatch as deferred. This unit provides a future dependency, not production handler parity. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~FindGroupRecruitmentPlanServiceTests" --no-restore` passed with 5 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_FIND_GROUP_GoldenTest,CM_FIND_GROUP_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 25 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~FindGroupRecruitmentPlanServiceTests|FullyQualifiedName~SmFindGroupTests|FullyQualifiedName~GamePacketTests.CmFindGroup_ReadsJavaActionPayloads" --no-restore` passed with 19 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 126 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5182 C# tests.
+
+Known gaps:
+- This unit is disabled planner evidence only; live `CM_FIND_GROUP` action dispatch remains a documented no-op boundary.
+- No Java `FindGroupService` singleton runtime test, actual `PacketSendUtility.sendPacket`/`broadcastToWorld`, online world recipient filtering, encrypted socket frame, real-client behavior, or service concurrency parity was proven.
+- The C# planner uses deterministic injected timestamps instead of Java `System.currentTimeMillis() / 1000`; this is intentional for tests and must be adapted carefully before live wiring.
+- Team recruitment uses a caller-supplied `FindGroupRecruitmentSubject`; full Java `TemporaryPlayerTeam` leader, size, min/max-level, race, and object identity behavior is not ported here.
+- Application and instance-group branches remain outside this unit.
+
+Next candidates:
+- Next sequential task: inspect `FindGroupService` application add/update/remove/show as a second disabled planner slice, reusing the same evidence style and keeping live dispatch deferred.
+- Safe alternatives: inspect `FindGroupService.onJoinedTeam` only as a disabled planning boundary; inspect CM_FIND_GROUP action `0`-`3` composition with the new planner while still disabled; return to alliance/group recipient filtering only with objective packet/fanout evidence.
+
 ### Session 2052 (June 1, 2026)
 - Performed Work Discovery after UOW-2051: re-read the required migration/orchestration/parity docs plus the latest UOW-2051 completion/handoff, inspected Java `SM_ALLIANCE_MEMBER_INFO.writeImpl`, Java `SM_GROUP_MEMBER_INFO_GoldenTest` non-empty effect fixture, C# `SmAllianceMemberInfo`, `PlayerAllianceMemberInfoPacketPlan`, and `PlayerAllianceMemberInfoTests`.
 - Scoped this unit to Java golden evidence for non-empty `SM_ALLIANCE_MEMBER_INFO` abnormal-effect serialization.
