@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import com.aionemu.gameserver.configs.administration.AdminConfig;
 import com.aionemu.gameserver.configs.network.NetworkConfig;
 import com.aionemu.gameserver.model.gameobjects.AionObject;
+import com.aionemu.gameserver.model.gameobjects.findGroup.GroupApplication;
 import com.aionemu.gameserver.model.gameobjects.findGroup.GroupRecruitment;
 import com.aionemu.gameserver.model.gameobjects.findGroup.ServerWideGroup;
 import com.aionemu.gameserver.model.PlayerClass;
@@ -41,6 +42,39 @@ public class SM_FIND_GROUP_GoldenTest {
 		byte[] payload = write(packet);
 
 		assertEquals("05C9AE0A00", toHex(payload));
+	}
+
+	@Test
+	public void writeImpl_showApplicationsWritesTimestampedApplicationSnapshot() throws Exception {
+		String[] originalNameTags = AdminConfig.NAME_TAGS;
+		try {
+			AdminConfig.NAME_TAGS = new String[0];
+			GroupApplication application = new GroupApplication(
+				simplePlayer(0x01020304, "Applicant", PlayerClass.RANGER, 65), "Apply", 1, PlayerClass.RANGER.getClassId(), 65);
+			setField(application, "lastUpdate", 0x01020305);
+			SM_FIND_GROUP packet = new SM_FIND_GROUP(4, List.of(application));
+
+			int before = (int) (System.currentTimeMillis() / 1000);
+			byte[] payload = write(packet);
+			int after = (int) (System.currentTimeMillis() / 1000);
+
+			ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+			assertEquals(4, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(1, Short.toUnsignedInt(buffer.getShort()));
+			assertEquals(1, Short.toUnsignedInt(buffer.getShort()));
+			int headerLastUpdate = buffer.getInt();
+			assertTrue(headerLastUpdate >= before && headerLastUpdate <= after);
+			assertEquals(0x01020304, buffer.getInt());
+			assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+			assertEquals("Apply", readS(buffer));
+			assertEquals("Applicant", readS(buffer));
+			assertEquals(PlayerClass.RANGER.getClassId(), Byte.toUnsignedInt(buffer.get()));
+			assertEquals(65, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(0x01020305, buffer.getInt());
+			assertEquals(0, buffer.remaining());
+		} finally {
+			AdminConfig.NAME_TAGS = originalNameTags;
+		}
 	}
 
 	@Test
