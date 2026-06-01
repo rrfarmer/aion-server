@@ -159,6 +159,30 @@ When tests are added, document:
 
 Do not claim a test proves parity unless it actually validates Java-equivalent behavior.
 
+## Test Selection
+
+Prefer focused validation by default. The normal Unit of Work validation target is the smallest test set that exercises the changed artifact and its directly related packet/parser/service surface.
+
+Run focused C# tests for:
+- The edited test class or service area.
+- Directly related packet/parser tests when packet shape or client/server action selection is affected.
+- Directly related composition/adapter tests when a planner or handler boundary changes.
+
+Run focused Java/Maven tests where possible for:
+- Java packet goldens that correspond to changed C# packet shapes.
+- Java parser goldens that correspond to changed C# client-packet parsing.
+- Java unit tests for the specific source-of-truth behavior under review.
+
+Do not run the broad .NET suite by default. Run broad C# validation only when:
+- Shared infrastructure, packet primitives, serialization helpers, crypto, scheduling, world state, persistence, or connection dispatch changes.
+- Live handler wiring or live side effects are enabled.
+- A change touches common model/state used across many systems.
+- Focused tests expose suspicious behavior and broader blast-radius checking is needed.
+- The user explicitly asks for broad validation.
+- A release/readiness checkpoint requires it.
+
+If broad validation is skipped, document that decision in the completion/handoff notes with the focused commands that did run and why they were sufficient for the scoped risk.
+
 ## Summary Metrics
 
 After every Unit of Work, update the completion/handoff docs with:
