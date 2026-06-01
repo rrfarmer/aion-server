@@ -87913,6 +87913,50 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2015 (June 1, 2026)
+- Performed Work Discovery after UOW-2014: re-read the latest handoff, inspected Java `CM_GF_WEBSHOP_TOKEN_REQUEST`, Java `SM_GF_WEBSHOP_TOKEN_RESPONSE`, Java packet factory opcode `229`, Java server opcode `274`, searched the C# port for existing GF webshop token coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, server packet patterns, and packet factory tests.
+- Found a compact request/response parity gap: Java registers `CM_GF_WEBSHOP_TOKEN_REQUEST` at opcode `229` for `IN_GAME`, reads no payload, and sends `SM_GF_WEBSHOP_TOKEN_RESPONSE("")`, while C# had no request parser, registration, response packet, or handler case.
+- Added Java golden coverage for `CM_GF_WEBSHOP_TOKEN_REQUEST.readImpl`, proving Java reads no payload.
+- Added Java golden coverage for `SM_GF_WEBSHOP_TOKEN_RESPONSE.writeImpl`, proving Java writes an empty fixed-length token as 66 zero bytes (`writeS(token, 32)`).
+- Added C# `CmGfWebshopTokenRequest`, registered opcode `229` for `InGame`, added C# factory coverage for valid `InGame` and invalid `Authed`, added C# `SmGfWebshopTokenResponse` opcode `274`, and wired the handler to send the Java-shaped empty-token response.
+
+#### Migration Parity Table - Session 2015
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_GF_WEBSHOP_TOKEN_REQUEST.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmGfWebshopTokenRequest.ReadPayload` | Client Packet Parser | Complete | Unit Tested + Java Golden Tested | Partial Parity | Java and C# read no payload; socket/encrypted-frame dispatch remains unverified. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `229` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `229` registration | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# factory accepts opcode `229` only in `InGame`, matching the Java registration state. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_GF_WEBSHOP_TOKEN_RESPONSE.writeImpl` | `Aion.GameServer.Network.Aion.ServerPackets.SmGfWebshopTokenResponse.WritePayload` | Server Packet | Partial | Unit Tested + Java Golden Tested | Partial Parity | Empty token payload matches Java golden evidence: 66 zero bytes for `writeS("", 32)`. Non-empty truncation/padding variants remain untested. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_GF_WEBSHOP_TOKEN_REQUEST.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` handler case | Client Handler Boundary | Partial | Source Reviewed | Needs Verification | C# sends `SmGfWebshopTokenResponse(string.Empty)` like Java's TODO response, but live socket dispatch and encrypted frame behavior remain unverified. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_GF_WEBSHOP_TOKEN_REQUEST_ReadPayloadGoldenTest,SM_GF_WEBSHOP_TOKEN_RESPONSE_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 2 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesGfWebshopTokenRequestPacket" --no-restore` passed with 1 C# test. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.CharacterSelectionServerPackets_WriteJavaShapedPayloads" --no-restore` passed with 1 C# test.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5121 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 74 game-server tests.
+
+Remaining risks:
+- This unit proves empty request parsing, opcode registration, and empty-token response serialization. It does not prove live encrypted frame dispatch, real-client `-st` behavior, non-empty token truncation/padding, or whether future token source configuration should differ from Java's current TODO empty string.
+- Java `CM_GF_WEBSHOP_TOKEN_REQUEST.runImpl` is intentionally minimal and sends an empty token response; C# mirrors that current behavior, but real-client behavior remains unverified.
+- The response packet has golden evidence only for Java's current empty-token call path.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one C# client packet parser, one opcode registration, one C# server packet, one handler case, one Java parser golden, and one Java server-packet golden.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser/golden evidence for the empty GF webshop token request/response boundary.
+- Total artifacts needing verification: live GF webshop token request dispatch, live weapon-break/fusion dispatch/service behavior, live auto-group dispatch and service behavior, live abyss-ranking players/legions cache/send behavior, live item deletion, live group/alliance/league Kinah distribution, live GameGuard anti-hack enforcement, live view-player-details known-list/privacy/detail-packet dispatch, live house-teleport-back battle-return teleport, live instance-leave handler dispatch, live stop-training instance-handler dispatch, live close-dialog dialog-service dispatch, live disconnect socket lifecycle, live summon command/execution surfaces, live summon movement/emotion/combat controller dispatch, live pet/common-data mutation and packet send, live dialog/private-store/buy/repurchase persistence, condition validators, active-effect/stat runtime, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for dialog/private-store/pet/summon/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy/group-distribution/delete-item/abyss-ranking/auto-group/armsfusion/GF-webshop persistence and dispatch, live ranking-cache packet send behavior, live anti-hack GameGuard enforcement, live teleport/battle-return dispatch, live dialog controller/AI dispatch proof, live private-store mutation/fanout proof, live pet/common-data/reward mutation and packet send, live summon command/movement/emotion/combat controller dispatch, live instance-handler dispatch, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes one GF webshop request/response parser/packet gap but does not prove real-client token behavior.
+
+Next recommended unit of work:
+- Next sequential task: continue packet-factory discovery with source-reviewed opcode `232` `CM_CHALLENGE_LIST` as a compact parser candidate (`readUC action`, `readD taskOwner`, `readUC ownerType`, `readD playerId`, `readD dateSince`) if `ChallengeTaskService`, legion validation, and audit logging live behavior remains deferred.
+- Safe alternative candidates for the next session:
+	- inspect opcode `237` `CM_MEGAPHONE` parser coverage only if string/readD golden evidence is needed and item-use behavior remains deferred
+	- inspect another compact unregistered parser boundary with Java golden evidence
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+
 ### Session 2014 (June 1, 2026)
 - Performed Work Discovery after UOW-2013: re-read the required migration docs and latest handoff, inspected Java `CM_BREAK_WEAPONS`, Java packet factory opcode `207`, searched the C# port for existing break-weapons client packet coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, packet factory tests, and the existing non-live armsfusion planners.
 - Found a compact parser/factory parity gap: Java registers `CM_BREAK_WEAPONS` at opcode `207` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
