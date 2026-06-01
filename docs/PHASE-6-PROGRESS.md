@@ -87913,6 +87913,38 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2045 (June 1, 2026)
+- Performed Work Discovery after UOW-2044: re-read the required migration/orchestration/parity docs plus the latest UOW-2044 completion/handoff, inspected Java `SM_ALLIANCE_MEMBER_INFO.writeImpl`, `PlayerAllianceMember`, `PlayerTeamMember`, `PlayerAllianceEvent`, C# `SmAllianceMemberInfo`, `PlayerAllianceMemberInfoPacketPlan`, and `PlayerAllianceMemberInfoTests`.
+- Scoped this unit to the next recommended `SM_ALLIANCE_MEMBER_INFO` movement fixed-prefix Java golden.
+- Added the first Java golden fixture for `SM_ALLIANCE_MEMBER_INFO`, covering one online `MOVEMENT` packet with alliance id, member object id, HP/MP/FP resource block, position/map/instance, class/gender/level, event id, always-one byte, fly state, and final alliance unknown byte.
+- Added the matching C# exact payload test for the same alliance/member/stat/position values.
+- Kept this as packet-writer evidence only; no live alliance runtime fanout, recipient filtering, socket framing, or real-client behavior is claimed.
+
+#### Migration Parity Table - Session 2045
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO.writeImpl` `MOVEMENT` fixed prefix | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` movement prefix | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2045 verifies one online movement vector: alliance id, member id, max/current HP/MP/FP, map/instance, coordinates, class, gender, level, event id `1`, always-one byte, fly state, final unknown byte `0`, and no trailing branch payload. Name/effect/update/offline branches remain separately C# tested but without Java golden bytes. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceMember.getAllianceId/getObjectId` | `PlayerAllianceMemberInfoPacketPlan.AllianceId/MemberObjectId` | Packet Data Dependency | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | The fixture sets `PlayerAllianceMember.allianceId` directly and verifies packet readout for this vector. Live alliance membership attachment and group-slot behavior remain unproven. |
+| `com.aionemu.gameserver.model.team.common.legacy.PlayerAllianceEvent.MOVEMENT` | `Aion.GameServer.Model.GameObjects.PlayerAllianceEvent.Movement` / `PlayerAllianceMemberInfoEvent.Movement` | Enum / Packet Event Id | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | The movement id `1` is verified through serialized packet bytes for this scope. Same-wire-id branch identity for other alliance events remains dependent on existing C# tests and still needs Java golden coverage. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_ALLIANCE_MEMBER_INFO_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_MovementMatchesJavaGoldenPrefixPayload|FullyQualifiedName~PlayerAllianceMemberInfoTests.CreateMovementUpdatePlan_ReturnsAllExceptPlayerIntentsLikeJavaPlayerAllianceUpdateEvent" --no-restore` passed with 2 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_ALLIANCE_MEMBER_INFO_GoldenTest,SM_GROUP_MEMBER_INFO_GoldenTest,SM_GROUP_DATA_EXCHANGE_GoldenTest,CM_GROUP_DATA_EXCHANGE_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 11 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests" --no-restore` passed with 35 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 118 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5171 C# tests.
+
+Known gaps:
+- This unit does not prove live alliance movement fanout, `TeamStatUpdater`, `TeamMoveUpdater`, production alliance membership attachment, group-slot changes, recipient filtering, socket encryption/frame ordering, or real-client behavior.
+- Java golden evidence for `SM_ALLIANCE_MEMBER_INFO` now covers only the movement fixed prefix; name/effect, offline enter rewrite, `UPDATE_EFFECTS`, `MEMBER_GROUP_CHANGE`, captain/vice-captain branches, and non-empty effects still need Java-side vectors before broader parity claims.
+- The Java fixture uses controlled reflection/Unsafe setup to avoid full player/network/bootstrap state; it proves packet bytes for the configured vector, not production lifecycle parity.
+
+Next candidates:
+- Next sequential task: add Java golden evidence for `SM_ALLIANCE_MEMBER_INFO` online `JOIN` and requested offline `ENTER`/effective `ENTER_OFFLINE` name branches, then mirror/confirm C# packet payload.
+- Safe alternatives: inspect `SM_ALLIANCE_MEMBER_INFO` targeted `UPDATE_EFFECTS` zero-effect Java golden feasibility; inspect alliance `MEMBER_GROUP_CHANGE` same-wire-id branch with Java golden evidence; inspect a narrow non-live `FindGroupService` planner with service mutation and broadcast side effects deferred.
+
 ### Session 2044 (June 1, 2026)
 - Performed Work Discovery after UOW-2043: re-read the required migration/orchestration/parity docs plus the latest UOW-2043 completion/handoff, inspected Java `SM_GROUP_MEMBER_INFO.writeImpl`, Java `Effect`, `SkillTemplate`, `EffectController`, `SkillTargetSlot`, the current Java golden fixture, C# `SmGroupMemberInfo`, and `PlayerGroupRuntimeTests`.
 - Scoped this unit to the next recommended `SM_GROUP_MEMBER_INFO` non-empty abnormal-effect packet shape.
