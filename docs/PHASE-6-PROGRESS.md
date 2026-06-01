@@ -87913,6 +87913,34 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2027 (June 1, 2026)
+- Performed Work Discovery after UOW-2026: re-read required migration docs and the latest handoff/completion, inspected Java `SM_FIND_GROUP`, Java `FindGroupService` call sites, server opcode registration, existing Java server-packet golden-test patterns, and searched the C# server-packet surface for an existing find-group writer.
+- Found that C# had no `SM_FIND_GROUP` writer. Scoped the unit to dependency-free Java branches only: action `1` remove recruitment, action `5` remove application, and action `26` enable instance registration.
+- Added Java golden vectors for those three `SM_FIND_GROUP.writeImpl` payloads and added a C# `SmFindGroup` writer with matching factories and opcode `166`.
+- Added C# packet tests comparing those branches to Java-emitted byte payloads. Broader entry-list/member/window/chat-message branches remain unported.
+
+#### Migration Parity Table - Session 2027
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_FIND_GROUP.writeImpl` actions `1`, `5`, `26` | `Aion.GameServer.Network.Aion.ServerPackets.SmFindGroup` | Server Packet Writer | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# writes Java-matching payloads for remove recruitment, remove application, and enable-register-for-instances. Actions `0`, `4`, `10`, `11`, `14`, `16`, `18`, `22`, `23`, and `24` remain unported. |
+| `com.aionemu.gameserver.network.aion.ServerPacketsOpcodes` opcode `166` | `Aion.GameServer.Network.Aion.ServerPackets.SmFindGroup.PacketOpCode` | Server Packet Opcode | Partial | Unit Tested | Partial Parity | Opcode constant matches Java `SM_FIND_GROUP`; encrypted-frame/socket delivery remains unverified. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_FIND_GROUP_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 3 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmFindGroupTests" --no-restore` passed with 4 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 99 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5136 tests.
+
+Known gaps:
+- Most `SM_FIND_GROUP` action branches remain unported because they require recruitment/application/server-wide-group/player snapshots.
+- This unit does not wire live `FindGroupService` dispatch, world broadcasts, encrypted-frame handling, socket dispatch, or real-client behavior.
+- Java action `23` has a constructor/writer mismatch that still requires source review before porting that branch.
+
+Next candidates:
+- Next sequential task: extend `SM_FIND_GROUP` writer parity to simple server-wide-group window actions `18` and `22`, or build small snapshot records for action `10`/`14` writer vectors if Java-side setup stays deterministic.
+- Safe alternatives: inspect `SM_GROUP_DATA_EXCHANGE` writer parity before live group-data fanout; inspect another compact registered parser/writer boundary with Java golden evidence; inspect a non-live `FindGroupService` planner only if side effects remain explicitly deferred.
+
 ### Session 2026 (June 1, 2026)
 - Performed Work Discovery after UOW-2025: re-read the latest completion and handoff, inspected Java `CM_FIND_GROUP.readImpl`/`runImpl`, reviewed the C# `CmFindGroup` parser, checked existing Java golden/C# factory coverage, and confirmed the worktree was clean before edits.
 - Extended Java golden parser coverage for the remaining distinct `CM_FIND_GROUP.readImpl` action layouts: action `1`, action `3`, action `5`, action `6`, action `9`, action `12`, action `17`, action `20`, and action `25`.
