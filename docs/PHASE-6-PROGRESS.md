@@ -87913,6 +87913,49 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1979 (June 1, 2026)
+- Performed Work Discovery after UOW-1978: inspected remaining Java client packet `readH()` call sites and selected Java `CM_UI_SETTINGS.readImpl`, an existing parser/runtime surface with one ignored signed padding word followed by an unsigned declared-size word and remaining settings data.
+- Reviewed Java `CM_UI_SETTINGS.readImpl`/`runImpl`, Java opcode registration (`AionClientPacketFactory` opcode `10`, `IN_GAME`), C# `CmUiSettings`, C# opcode registration, C# `GameServerConnection.HandleUiSettings`, and existing UI-settings packet tests.
+- Updated C# `CmUiSettings` to consume the ignored padding word with `PacketBuffer.ReadSignedH()` instead of unsigned `ReadH()`, matching Java's signed `readH()` primitive while preserving the following unsigned `DeclaredSize = ReadH()` mapping to Java `readUH()`.
+- Added Java golden and C# parser/factory coverage proving a high-bit ignored padding word does not shift `SettingsType`, unsigned `DeclaredSize`, or remaining data parsing.
+- Kept live UI settings behavior out of scope. No settings persistence, logout save ordering, encrypted frame capture, or real-client validation was newly claimed.
+
+#### Migration Parity Table - Session 1979
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_UI_SETTINGS.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmUiSettings.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Parser now consumes the ignored Java signed padding `readH()` with `ReadSignedH()` and preserves unsigned declared-size/data parsing. Focused Java/C# evidence covers high-bit padding plus `0x8000` declared size. Live settings mutation/persistence remains partial. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `10` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `10` | Packet Factory Registration | Partial | Unit Tested | Partial Parity | Existing C# factory registration for `CmUiSettings` remains `IN_GAME`, matching Java; this unit adds focused state-gate coverage in a dedicated parser test. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_UI_SETTINGS.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection.HandleUiSettings` | Client Packet Handler Boundary | Partial | Existing Regression + Source Reviewed | Partial Parity | Java mutates UI settings, shortcuts, or house buddies by settings type. C# has matching loaded-player state mutation, but this unit does not verify persistence, logout save ordering, or real-client settings behavior. |
+| `com.aionemu.commons.network.packet.BaseClientPacket.readH` padding caller in `CM_UI_SETTINGS` | `Aion.Commons.Network.PacketBuffer.ReadSignedH` via `CmUiSettings` ignored padding | Packet Buffer Primitive Use | Partial | Unit Tested + Java Golden Tested | Partial Parity | This unit covers the ignored signed-short padding caller while intentionally keeping the following declared-size field unsigned like Java `readUH()`. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmUiSettingsSignedPaddingTests" --no-restore` passed with 2 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_UI_SETTINGS_ReadSignedPaddingGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5047 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 36 game-server tests.
+
+Remaining risks:
+- This unit proves only parser padding consumption, unsigned declared-size preservation, data alignment, and opcode state gating for the focused slice. It does not verify Java `CM_UI_SETTINGS.runImpl` settings mutation/persistence.
+- Player settings save timing, DB persistence, packet fanout, encrypted client frames, and real-client behavior remain unverified.
+- Other Java signed `readH()` call sites outside this audited parser set still need separate review.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one ignored-padding signed `readH()` parser slice plus Java/C# tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies parser-alignment evidence only and does not complete UI-settings runtime parity.
+- Total artifacts needing verification: UI-settings runtime persistence, question-response runtime execution, house-kick runtime execution, appearance rename/cosmetic runtime execution, split-item runtime execution/persistence, legion runtime execution/persistence, item move execution/persistence, Atreian passport reward execution/persistence, remaining signed `readH()` call sites, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/pet/craft/sell/repurchase/buy/private-store persistence, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves parser/signedness coverage but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: continue the signed Java `readH()` audit by inspecting another ignored-padding or parser-only call site, with `CM_MANASTONE`, `CM_PING`, `CM_TELEPORT_SELECT`, and unported `CM_TOGGLE_SKILL_DEACTIVATE` as candidates.
+- Safe alternative candidates for the next session:
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+
 ### Session 1978 (June 1, 2026)
 - Performed Work Discovery after UOW-1977: inspected remaining Java client packet `readH()` call sites and selected Java `CM_QUESTION_RESPONSE.readImpl`, an existing parser/runtime surface with two ignored signed padding words around meaningful `questionid`, `response`, and `senderid` fields.
 - Reviewed Java `CM_QUESTION_RESPONSE.readImpl`/`runImpl`, Java opcode registration (`AionClientPacketFactory` opcode `50`, `IN_GAME`), C# `CmQuestionResponse`, C# opcode registration, C# `GameServerConnection.HandleQuestionResponseAsync`, and existing question-response runtime tests.
