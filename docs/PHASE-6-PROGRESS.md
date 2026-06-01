@@ -87913,6 +87913,48 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2014 (June 1, 2026)
+- Performed Work Discovery after UOW-2013: re-read the required migration docs and latest handoff, inspected Java `CM_BREAK_WEAPONS`, Java packet factory opcode `207`, searched the C# port for existing break-weapons client packet coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, packet factory tests, and the existing non-live armsfusion planners.
+- Found a compact parser/factory parity gap: Java registers `CM_BREAK_WEAPONS` at opcode `207` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
+- Added Java golden coverage for `CM_BREAK_WEAPONS.readImpl`, proving Java reads D `npcObjId` and D `weaponObjId` in order and consumes the payload.
+- Added C# `CmBreakWeapons`, registered opcode `207` for `InGame`, added C# factory parser coverage for valid `InGame` and invalid `Authed`, and documented the live armsfusion handler boundary as deferred.
+- No live weapon-break behavior was enabled; Java `runImpl` verifies the player targets an NPC with `DialogAction.DECOMPOUND_WEAPON`, calls `ArmsfusionService.breakWeapons`, or audit-logs invalid use.
+
+#### Migration Parity Table - Session 2014
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BREAK_WEAPONS.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmBreakWeapons.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# reads D `npcObjId` and D `weaponObjId` in Java order. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `207` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `207` registration | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# factory accepts opcode `207` only in `InGame`, matching the Java registration state. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BREAK_WEAPONS.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java checks `DialogAction.DECOMPOUND_WEAPON`, calls `ArmsfusionService.breakWeapons`, or audit-logs invalid use. C# does not wire live armsfusion behavior in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_BREAK_WEAPONS_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesBreakWeaponsPacket" --no-restore` passed with 1 C# test. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5120 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 72 game-server tests.
+
+Remaining risks:
+- This unit proves only parser consumption and opcode registration. It does not prove NPC function validation, audit logging, armsfusion break validation/mutation, item persistence, inventory packet fanout, encrypted frame handling, socket dispatch, or real-client behavior.
+- Java `CM_BREAK_WEAPONS.runImpl` side effects remain unported: active player lookup, `isTargetingNpcWithFunction(npcObjId, DialogAction.DECOMPOUND_WEAPON)`, `ArmsfusionService.breakWeapons`, and invalid-use audit logging.
+- Existing C# armsfusion planner coverage remains non-live and is not promoted to runtime parity by this parser unit.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one C# client packet parser plus one opcode registration and one Java golden parser test.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser/golden evidence for one weapon-break packet boundary.
+- Total artifacts needing verification: live weapon-break dispatch/service behavior, live weapon-fusion dispatch/service behavior, live auto-group dispatch and service behavior, live abyss-ranking players/legions cache/send behavior, live item deletion, live group/alliance/league Kinah distribution, live GameGuard anti-hack enforcement, live view-player-details known-list/privacy/detail-packet dispatch, live house-teleport-back battle-return teleport, live instance-leave handler dispatch, live stop-training instance-handler dispatch, live close-dialog dialog-service dispatch, live disconnect socket lifecycle, live summon command/execution surfaces, live summon movement/emotion/combat controller dispatch, live pet/common-data mutation and packet send, live dialog/private-store/buy/repurchase persistence, condition validators, active-effect/stat runtime, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for dialog/private-store/pet/summon/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy/group-distribution/delete-item/abyss-ranking/auto-group/armsfusion persistence and dispatch, live ranking-cache packet send behavior, live anti-hack GameGuard enforcement, live teleport/battle-return dispatch, live dialog controller/AI dispatch proof, live private-store mutation/fanout proof, live pet/common-data/reward mutation and packet send, live summon command/movement/emotion/combat controller dispatch, live instance-handler dispatch, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes one break-weapons parser/factory gap but does not complete live armsfusion parity.
+
+Next recommended unit of work:
+- Next sequential task: continue packet-factory discovery with source-reviewed opcode `229` `CM_GF_WEBSHOP_TOKEN_REQUEST` as a compact empty-payload parser candidate if `SM_GF_WEBSHOP_TOKEN_RESPONSE("")` live response behavior remains deferred or separately scoped.
+- Safe alternative candidates for the next session:
+	- inspect another compact unregistered parser boundary with Java golden evidence
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+	- inspect BUY_AGAIN live-send ordering only if a stronger deterministic Java runtime vector can be added without broad object graph setup
+
 ### Session 2013 (June 1, 2026)
 - Performed Work Discovery after UOW-2012: re-read the latest handoff, inspected Java `CM_FUSION_WEAPONS`, Java packet factory opcode `206`, searched the C# port for existing fusion-weapons client packet coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, packet factory tests, and the existing non-live armsfusion planners.
 - Found a compact parser/factory parity gap: Java registers `CM_FUSION_WEAPONS` at opcode `206` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
