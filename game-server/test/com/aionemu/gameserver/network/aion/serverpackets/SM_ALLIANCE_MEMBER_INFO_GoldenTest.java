@@ -67,6 +67,63 @@ public class SM_ALLIANCE_MEMBER_INFO_GoldenTest {
 		assertEquals(0, buffer.remaining());
 	}
 
+	@Test
+	public void writeImpl_joinWritesOnlineNameZeroEffectPayload() throws Exception {
+		Player player = player(2006, "AllianceJoin", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		setField(player, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+		PlayerAllianceMember member = member(player, 88001);
+
+		byte[] payload = write(new SM_ALLIANCE_MEMBER_INFO(member, PlayerAllianceEvent.JOIN));
+		ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+
+		assertOnlinePrefix(buffer, 88001, 2006, PlayerAllianceEvent.JOIN);
+		assertEquals("AllianceJoin", readS(buffer));
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(127, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Short.toUnsignedInt(buffer.getShort()));
+		for (int i = 0; i < 8; i++)
+			assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.remaining());
+	}
+
+	@Test
+	public void writeImpl_enterOfflineWritesEffectiveEventAndNamePayload() throws Exception {
+		Player player = player(2007, "AllianceOffline", PlayerClass.RIDER, Gender.MALE, 20, false);
+		setField(player, "position", new WorldPosition(210010000, 1.25f, 2.5f, 3.75f, (byte) 0));
+		PlayerAllianceMember member = member(player, 88002);
+
+		byte[] payload = write(new SM_ALLIANCE_MEMBER_INFO(member, PlayerAllianceEvent.ENTER));
+		ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+
+		assertEquals(88002, buffer.getInt());
+		assertEquals(2007, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(210010000, buffer.getInt());
+		assertEquals(210010000, buffer.getInt());
+		assertEquals(1.25f, buffer.getFloat());
+		assertEquals(2.5f, buffer.getFloat());
+		assertEquals(3.75f, buffer.getFloat());
+		assertEquals(13, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(20, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(PlayerAllianceEvent.ENTER_OFFLINE.getId(), Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals("AllianceOffline", readS(buffer));
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(0, Short.toUnsignedInt(buffer.getShort()));
+		assertEquals(0, buffer.remaining());
+	}
+
 	private static Player player(int objectId, String name, PlayerClass playerClass, Gender gender, int level, boolean online) throws Exception {
 		PlayerCommonData commonData = new PlayerCommonData(objectId);
 		commonData.setName(name);
@@ -90,7 +147,7 @@ public class SM_ALLIANCE_MEMBER_INFO_GoldenTest {
 	}
 
 	private static byte[] write(SM_ALLIANCE_MEMBER_INFO packet) {
-		ByteBuffer buffer = ByteBuffer.allocate(128).order(ByteOrder.LITTLE_ENDIAN);
+		ByteBuffer buffer = ByteBuffer.allocate(256).order(ByteOrder.LITTLE_ENDIAN);
 		packet.setBuf(buffer);
 
 		packet.writeImpl(null);
@@ -99,6 +156,47 @@ public class SM_ALLIANCE_MEMBER_INFO_GoldenTest {
 		buffer.flip();
 		buffer.get(payload);
 		return payload;
+	}
+
+	private static PlayerAllianceMember member(Player player, int allianceId) {
+		PlayerAllianceMember member = new PlayerAllianceMember(player);
+		member.setAllianceId(allianceId);
+		return member;
+	}
+
+	private static void assertOnlinePrefix(ByteBuffer buffer, int allianceId, int objectId, PlayerAllianceEvent event) {
+		assertEquals(allianceId, buffer.getInt());
+		assertEquals(objectId, buffer.getInt());
+		assertEquals(819, buffer.getInt());
+		assertEquals(819, buffer.getInt());
+		assertEquals(840, buffer.getInt());
+		assertEquals(840, buffer.getInt());
+		assertEquals(60, buffer.getInt());
+		assertEquals(60, buffer.getInt());
+		assertEquals(0, buffer.getInt());
+		assertEquals(220010000, buffer.getInt());
+		assertEquals(220010000, buffer.getInt());
+		assertEquals(10.5f, buffer.getFloat());
+		assertEquals(20.25f, buffer.getFloat());
+		assertEquals(30.75f, buffer.getFloat());
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(10, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(event.getId(), Byte.toUnsignedInt(buffer.get()));
+		assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+		assertEquals(0, Byte.toUnsignedInt(buffer.get()));
+	}
+
+	private static String readS(ByteBuffer buffer) {
+		StringBuilder value = new StringBuilder();
+		while (buffer.remaining() >= Short.BYTES) {
+			char c = (char) Short.toUnsignedInt(buffer.getShort());
+			if (c == 0)
+				return value.toString();
+			value.append(c);
+		}
+		throw new IllegalStateException("Unterminated string in SM_ALLIANCE_MEMBER_INFO payload");
 	}
 
 	private static void setField(Object target, String name, Object value) throws Exception {
