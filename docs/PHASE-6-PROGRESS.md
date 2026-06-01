@@ -87912,3 +87912,49 @@ Next recommended unit of work:
 	- inspect live `CM_PET` actionType 4 composition only if it can remain disabled and source-reviewed
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
+
+### Session 1964 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1963: inspected Java `PrivateStoreService.sellStoreItem`, Java `getBoughtItems`, C# `PrivateStorePurchasePlanService`, C# private-store live-executor/outcome diagnostics, C# `CmBuyItemSideEffectOutcomePlanService`, and existing private-store purchase/composition tests.
+- Added explicit disabled audit-intent diagnostics to `PrivateStorePurchasePlan`.
+- Java `price < 0` and `item.getItemCount() < boughtItem.getCount()` branches now surface `WouldWriteAuditLog` plus the Java audit message text in C# diagnostic plans.
+- Propagated private-store audit intent to the disabled `CM_BUY_ITEM` side-effect outcome when a selected private-store purchase plan is blocked by an audit-only Java branch.
+- Kept this unit non-live. No `AuditLogger.log`, seller/buyer inventory mutation, Kinah transfer, store close, packet send, transaction, encrypted frame capture, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1964
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.PrivateStoreService.sellStoreItem` audit guards | `Aion.GameServer.Services.PrivateStorePurchasePlan.WouldWriteAuditLog` / `AuditMessage` | Service Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | C# disabled plans now record Java audit intent for negative/overflowed price and seller stack-count race branches. Live audit logging, item mutation, Kinah transfer, packet send, and concurrency remain unverified. |
+| `com.aionemu.gameserver.services.PrivateStoreService.sellStoreItem` selected by `CM_BUY_ITEM` Player action 0 | `Aion.GameServer.Services.CmBuyItemSideEffectOutcomePlanService` private-store outcome | Outcome Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | High-level disabled outcome now preserves audit intent from a blocked private-store purchase plan. The facade/outcome still stops before persistence, packet dispatch, transaction, or live audit execution. |
+| `com.aionemu.gameserver.services.PrivateStoreService.getBoughtItems` as purchase-plan input | `Aion.GameServer.Services.PrivateStoreBoughtItemsPlanService` / `PrivateStorePurchasePlanService` | State Source Boundary | Partial | Existing Unit Tests + Source Reviewed | Needs Verification | Existing index-based bought-item diagnostics were reviewed as the source for this unit. LinkedHashMap insertion ordering, live store mutation timing, and invalid-index logging remain non-live and not runtime-compared. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PrivateStorePurchasePlanServiceTests|FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests|FullyQualifiedName~PrivateStoreLiveExecutorFacadePlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~PrivateStoreBoughtItemsPlanServiceTests" --no-restore` passed with 58 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5015 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 23 game-server tests.
+- `mvn test "-Dmaven.test.skip=false" "-DskipTests=false"` passed the full Maven reactor in the current workspace. This run did not force a clean login-server recompile.
+
+Remaining risks:
+- Private-store audit intent remains diagnostic only; no live `AuditLogger.log` call is made.
+- Private-store sale execution remains disabled; no seller/buyer inventory, store, Kinah, packet, transaction, or exchange-log side effects are committed.
+- Java missing-seller-item behavior skips that item and continues, while the C# diagnostic still blocks that branch because live partial-send semantics are not wired.
+- Java `LinkedHashMap` insertion ordering, live store mutation timing, invalid-index warning logs, race behavior, encrypted frame capture, and real-client validation remain pending.
+- Full clean Maven validation can still be rerun if the prior login-server compile observation needs root-cause proof.
+- Full item-info blob parity for advanced item state remains partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one disabled private-store audit-intent diagnostic extension plus focused tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit is source-reviewed and C# unit-tested but remains non-live and does not prove Java runtime audit, mutation, socket, transaction, or concurrency parity.
+- Total artifacts needing verification: live private-store sale execution, live audit logging, live store item ordering/mutation timing, live pet autosell activation handler wiring, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live private-store partial item skip semantics, live pet common-data persistence, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled private-store blocked-branch diagnostics but does not complete live private-store parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java private-store missing-seller-item partial-skip behavior and C# blocked missing-item diagnostic, then add a disabled partial-skip operation diagnostic without enabling live partial mutation.
+- Safe alternative candidates for the next session:
+	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
+	- inspect Java delete-path cube-size sends for another non-repurchase inventory diagnostic where `sendItemDeletePacket` is already represented by a C# planner
+	- inspect live `CM_PET` actionType 4 composition only if it can remain disabled and source-reviewed
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
