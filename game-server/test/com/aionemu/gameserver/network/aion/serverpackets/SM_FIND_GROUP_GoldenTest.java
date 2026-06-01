@@ -50,6 +50,47 @@ public class SM_FIND_GROUP_GoldenTest {
 	}
 
 	@Test
+	public void writeImpl_showInstanceGroupsWritesTimestampedGroupSnapshot() throws Exception {
+		String[] originalNameTags = AdminConfig.NAME_TAGS;
+		try {
+			AdminConfig.NAME_TAGS = new String[0];
+			ServerWideGroup group = simpleInstanceGroup();
+			setField(group, "lastUpdate", 0x01020305);
+			SM_FIND_GROUP packet = new SM_FIND_GROUP(10, List.of(group));
+
+			int before = (int) (System.currentTimeMillis() / 1000);
+			byte[] payload = write(packet);
+			int after = (int) (System.currentTimeMillis() / 1000);
+
+			ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+			assertEquals(10, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(1, Short.toUnsignedInt(buffer.getShort()));
+			assertEquals(1, Short.toUnsignedInt(buffer.getShort()));
+			int headerLastUpdate = buffer.getInt();
+			assertTrue(headerLastUpdate >= before && headerLastUpdate <= after);
+			assertEquals(0x01020304, buffer.getInt());
+			assertEquals(0x11223344, buffer.getInt());
+			assertEquals(1, buffer.getInt());
+			assertEquals(1, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(3, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(0, Short.toUnsignedInt(buffer.getShort()));
+			assertEquals(0x01020304, buffer.getInt());
+			assertEquals(1, buffer.getInt());
+			assertEquals(0, buffer.getInt());
+			assertEquals(65, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(65, Byte.toUnsignedInt(buffer.get()));
+			assertEquals(0, Short.toUnsignedInt(buffer.getShort()));
+			assertEquals(0x01020305, buffer.getInt());
+			assertEquals(0, buffer.getInt());
+			assertEquals("Recruiter", readS(buffer));
+			assertEquals("Entry", readS(buffer));
+			assertEquals(0, buffer.remaining());
+		} finally {
+			AdminConfig.NAME_TAGS = originalNameTags;
+		}
+	}
+
+	@Test
 	public void writeImpl_instanceApplicationWhisperWritesApplicantSnapshot() throws Exception {
 		String[] originalNameTags = AdminConfig.NAME_TAGS;
 		try {
