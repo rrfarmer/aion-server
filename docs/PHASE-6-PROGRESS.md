@@ -87913,6 +87913,39 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2051 (June 1, 2026)
+- Performed Work Discovery after UOW-2050: re-read the required migration/orchestration/parity docs plus the latest UOW-2050 completion/handoff, inspected Java `SM_ALLIANCE_MEMBER_INFO.writeImpl`, `PlayerAllianceEvent`, C# `SmAllianceMemberInfo`, `PlayerAllianceMemberInfoPacketPlan`, and `PlayerAllianceMemberInfoTests`.
+- Scoped this unit to Java golden evidence for the online `RECONNECT` zero-effect skeleton that shares wire id `13`.
+- Extended the Java `SM_ALLIANCE_MEMBER_INFO` golden fixture with one online `RECONNECT` vector that writes the member name, two zero dwords, `FULLSLOTS` byte `127`, zero effect count, and eight zero timer dwords.
+- Added the matching C# exact payload test using explicit `PlayerAllianceMemberInfoEvent.Reconnect` so the same-wire-id reconnect identity remains visible.
+- Extended the same-wire-id identity test to include `Reconnect` and document that legacy numeric id `13` conversion still maps to `Enter`.
+- Kept this as packet-writer evidence only; no live reconnect fanout, recipient filtering, socket framing, or real-client behavior is claimed.
+
+#### Migration Parity Table - Session 2051
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_ALLIANCE_MEMBER_INFO.writeImpl` `RECONNECT` branch | `Aion.GameServer.Network.Aion.ServerPackets.SmAllianceMemberInfo` explicit `Reconnect` branch | Server Packet Writer | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | UOW-2051 verifies one online reconnect vector with fixed prefix, event id `13`, member name, two zero dwords, full-slots byte, zero effect count, and eight zero timer dwords. Live reconnect fanout, lifecycle, and production recipients remain unproven. |
+| `com.aionemu.gameserver.model.team.common.legacy.PlayerAllianceEvent.RECONNECT` shared id | `Aion.GameServer.Services.PlayerAllianceMemberInfoEvent.Reconnect` | Enum / Packet Event Identity | Partial | Java Golden Tested + C# Unit Tested | Partial Parity | The serialized bytes verify `RECONNECT` uses wire id `13`; C# keeps explicit event identity for branch selection. Legacy numeric conversion for id `13` still maps to `Enter` and requires explicit event values for reconnect. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_ALLIANCE_MEMBER_INFO_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 8 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_ReconnectMatchesJavaGoldenZeroEffectPayload|FullyQualifiedName~PlayerAllianceMemberInfoTests.SmAllianceMemberInfo_CaptainRoleEventsMatchJavaGoldenZeroEffectPayloads|FullyQualifiedName~PlayerAllianceMemberInfoTests.PlayerAllianceMemberInfoEvent_PreservesJavaConstantIdentityForSameWireIds" --no-restore` passed with 3 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_ALLIANCE_MEMBER_INFO_GoldenTest,SM_GROUP_MEMBER_INFO_GoldenTest,SM_GROUP_DATA_EXCHANGE_GoldenTest,CM_GROUP_DATA_EXCHANGE_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 18 Java test methods. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PlayerAllianceMemberInfoTests" --no-restore` passed with 41 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 125 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5177 C# tests.
+
+Known gaps:
+- This unit does not prove live alliance reconnect fanout, production reconnect lifecycle, production alliance membership attachment, known-list/team recipient filtering, socket encryption/frame ordering, or real-client behavior.
+- Java golden evidence for `SM_ALLIANCE_MEMBER_INFO` now covers movement, online join, offline-enter name, targeted zero-effect `UPDATE_EFFECTS`, member-group-change name-only, online enter, online update, reconnect, and captain/vice-captain zero-effect skeletons.
+- Non-empty alliance effects still need Java-side vectors before broader packet-branch claims.
+- The Java fixture uses controlled reflection/Unsafe setup to avoid full player/network/bootstrap state; it proves packet bytes for configured vectors, not production lifecycle parity.
+
+Next candidates:
+- Next sequential task: add Java golden evidence for non-empty `SM_ALLIANCE_MEMBER_INFO` abnormal effects, preferably one online name branch and one targeted `UPDATE_EFFECTS` branch if a controlled fixture remains stable.
+- Safe alternatives: inspect a narrow non-live `FindGroupService` planner; inspect live alliance reconnect/role assignment planning only if it remains non-live and source-reviewed; return to group/alliance recipient filtering only with objective packet/fanout evidence.
+
 ### Session 2050 (June 1, 2026)
 - Performed Work Discovery after UOW-2049: re-read the required migration/orchestration/parity docs plus the latest UOW-2049 completion/handoff, inspected Java `SM_ALLIANCE_MEMBER_INFO.writeImpl`, `PlayerAllianceEvent`, C# `SmAllianceMemberInfo`, `PlayerAllianceMemberInfoPacketPlan`, and `PlayerAllianceMemberInfoTests`.
 - Scoped this unit to Java golden evidence for the online captain/vice-captain role events that share wire id `13`.

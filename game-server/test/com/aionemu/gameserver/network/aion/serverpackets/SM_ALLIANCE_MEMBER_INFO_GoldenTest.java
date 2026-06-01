@@ -207,6 +207,15 @@ public class SM_ALLIANCE_MEMBER_INFO_GoldenTest {
 			88009, 2014, "AllianceCaptain", PlayerAllianceEvent.APPOINT_CAPTAIN);
 	}
 
+	@Test
+	public void writeImpl_reconnectWritesOnlineNameZeroEffectPayload() throws Exception {
+		Player player = player(2015, "AllianceReconnect", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		setField(player, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+
+		assertOnlineNameZeroEffectPayload(write(new SM_ALLIANCE_MEMBER_INFO(member(player, 88010), PlayerAllianceEvent.RECONNECT)), 88010, 2015,
+			"AllianceReconnect", PlayerAllianceEvent.RECONNECT);
+	}
+
 	private static Player player(int objectId, String name, PlayerClass playerClass, Gender gender, int level, boolean online) throws Exception {
 		PlayerCommonData commonData = new PlayerCommonData(objectId);
 		commonData.setName(name);
