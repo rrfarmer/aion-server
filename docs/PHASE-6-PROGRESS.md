@@ -87913,6 +87913,48 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1995 (June 1, 2026)
+- Performed Work Discovery after UOW-1994: re-read the required migration docs, latest completion/handoff, progress file, Java `CM_DIALOG_SELECT`, Java `DialogService` BUY_AGAIN branch, Java `SM_REPURCHASE`, C# `CmDialogSelect`, `GameServerConnection.HandleDialogSelectAsync`, repurchase packet snapshot planning, and existing C# dialog/repurchase tests.
+- Found that BUY_AGAIN already has a non-live C# dialog-select plan boundary and Java `SM_REPURCHASE` golden coverage, so selected a smaller missing evidence slice: Java/C# `CM_DIALOG_SELECT.readImpl` unsigned field parity.
+- Added Java golden coverage for `CM_DIALOG_SELECT.readImpl`, proving `dialogActionId`, `extendedRewardIndex`, `lastPage`, and trailing unknown are read as unsigned 16-bit values in Java field order.
+- Extended C# packet factory coverage for `CmDialogSelect` with the same high-bit unsigned field values to guard the parser boundary used by BUY_AGAIN, storage expansion, charge-all, trade-in, and quest dialog branches.
+- No production dialog behavior was changed; this unit is parser/golden evidence only.
+
+#### Migration Parity Table - Session 1995
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_DIALOG_SELECT.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmDialogSelect.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Java and C# tests now cover field order and unsigned 16-bit reads for dialog action, extended reward index, last page, and trailing unknown. Live `runImpl` behavior remains only partially represented by many separate branch planners. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `54` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `54` | Client Packet Registration | Partial | Unit Tested | Partial Parity | Existing C# factory registration is covered by the expanded parser test. State handling remains `InGame`; encrypted frame/client behavior was not tested in this unit. |
+| `com.aionemu.gameserver.model.DialogAction.BUY_AGAIN` packet dependency | `Aion.GameServer.Network.Aion.ClientPackets.CmDialogSelect.BuyAgain` parser dependency | Dialog Dependency | Partial | Source Reviewed + Existing Unit Tested | Needs Verification | BUY_AGAIN already routes through a non-live C# dialog plan and `SM_REPURCHASE` snapshot. This unit strengthens only the shared `CM_DIALOG_SELECT` parser evidence, not live BUY_AGAIN packet dispatch. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_DIALOG_SELECT_ReadUnsignedFieldsGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesDialogSelect" --no-restore` passed with 2 C# tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5101 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 52 game-server tests.
+
+Remaining risks:
+- `CM_DIALOG_SELECT.runImpl` remains only partially ported; many dialog action branches are disabled, diagnostic-only, or branch-specific.
+- BUY_AGAIN live packet dispatch is still disabled at the C# dialog boundary; `SM_REPURCHASE` packet construction is represented as a non-live send intent.
+- Java admin dialog-info messages, unknown-action logging, full NPC controller dispatch, AI fallback, quest auto-reward execution, live known-list validation, socket ordering, encrypted client frames, and real-client dialog behavior remain unverified.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one Java golden parser test plus one C# unsigned parser regression.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser/golden evidence for a shared dialog packet boundary.
+- Total artifacts needing verification: live `CM_DIALOG_SELECT` branch execution, live BUY_AGAIN send ordering, live private-store close/open/create-store execution, live store-message mutation, store state mutation, broadcast ordering, known-list fanout, persistence/threading, live private-store sale execution, live pet autoloot activation handler wiring, live pet common-data mutation, live LOOT function lookup, NPC autoloot/drop flow, `SM_VERSION_CHECK` success writer parity, remaining parser-only packet surfaces, live pet autosell activation handler wiring, live craft-start inventory mutation/persistence/send ordering, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for dialog/private-store/pet/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy persistence, live dialog controller/AI dispatch proof, live private-store mutation/fanout proof, live item tradeability/template proof for private-store create, live `SM_VERSION_CHECK` dynamic success payload proof, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves dialog packet parser evidence but does not complete live dialog or BUY_AGAIN parity.
+
+Next recommended unit of work:
+- Next sequential task: choose another compact parser/factory/model boundary with Java golden evidence, or inspect another `CM_PET` sub-branch only if it can remain disabled and source-reviewed.
+- Safe alternative candidates for the next session:
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+	- inspect BUY_AGAIN live-send ordering only if a stronger deterministic Java runtime vector can be added without broad object graph setup
+	- inspect another compact unported enum/model dependency with Java golden evidence
+
 ### Session 1994 (June 1, 2026)
 - Performed Work Discovery after UOW-1993: re-read the required migration docs, latest completion/handoff, progress file, Java `CM_PRIVATE_STORE`/`CM_PRIVATE_STORE_NAME`, Java `PrivateStoreService` private-store methods, C# `GameServerConnection`, `CmPrivateStore`, `CmPrivateStoreName`, and the disabled private-store planners/tests.
 - Selected the private-store client handler boundary as a safe non-live wiring slice because the packet parsers and disabled service planners already exist, while live store mutation, inventory validation, state changes, and broadcast fanout remain deferred.
