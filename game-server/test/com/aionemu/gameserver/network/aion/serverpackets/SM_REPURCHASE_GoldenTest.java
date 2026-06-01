@@ -61,6 +61,30 @@ public class SM_REPURCHASE_GoldenTest {
 		}
 	}
 
+	@Test
+	public void writeImpl_writesSimpleEquipmentRepurchaseItemWithEquipmentBlobAndPrice() throws Exception {
+		ItemRestrictionCleanupData originalCleanup = DataManager.ITEM_CLEAN_UP;
+		try {
+			DataManager.ITEM_CLEAN_UP = emptyCleanupData();
+
+			SM_REPURCHASE packet = allocatePacket(Collections.singletonList(simpleSwordItem()));
+			ByteBuffer buffer = ByteBuffer.allocate(512).order(ByteOrder.LITTLE_ENDIAN);
+			packet.setBuf(buffer);
+
+			packet.writeImpl(null);
+
+			byte[] payload = new byte[buffer.position()];
+			buffer.flip();
+			buffer.get(payload);
+
+			assertEquals(
+				"292300000100000001005A1B000001E1F5052400813801000000CB0006000000000000000001010000000000000002000000000000000B000301E1F50500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000100010000000000000000000000000000000000000000000000000000000012003930000000000000",
+				toHex(payload));
+		} finally {
+			DataManager.ITEM_CLEAN_UP = originalCleanup;
+		}
+	}
+
 	private static SM_REPURCHASE allocatePacket() throws Exception {
 		return allocatePacket(Collections.emptyList());
 	}
@@ -85,12 +109,26 @@ public class SM_REPURCHASE_GoldenTest {
 		return item;
 	}
 
+	private static Item simpleSwordItem() throws Exception {
+		Item item = (Item) unsafe().allocateInstance(Item.class);
+		setAionObjectId(item, 7002);
+		setField(item, "itemCount", 1L);
+		setField(item, "itemTemplate", simpleTemplate(ItemGroup.SWORD));
+		setField(item, "enchantLevel", 3);
+		setField(item, "repurchasePrice", 12345L);
+		return item;
+	}
+
 	private static ItemTemplate simpleTemplate() throws Exception {
+		return simpleTemplate(ItemGroup.NONE);
+	}
+
+	private static ItemTemplate simpleTemplate(ItemGroup itemGroup) throws Exception {
 		ItemTemplate template = (ItemTemplate) unsafe().allocateInstance(ItemTemplate.class);
 		setField(template, "itemId", 100000001);
 		setField(template, "mask", 1);
 		setField(template, "description", 40000);
-		setField(template, "itemGroup", ItemGroup.NONE);
+		setField(template, "itemGroup", itemGroup);
 		return template;
 	}
 

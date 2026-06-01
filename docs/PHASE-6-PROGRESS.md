@@ -87265,3 +87265,46 @@ Next recommended unit of work:
 	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
+### Session 1950 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1949: re-read required migration/orchestration/parity docs and the latest handoff, inspected Java `SM_REPURCHASE`, Java `ItemInfoBlob` equipment blob entries (`EquippedSlotBlobEntry`, `WeaponInfoBlobEntry`, `EnchantInfoBlobEntry`, `PremiumOptionInfoBlobEntry`, `GeneralInfoBlobEntry`), Java `ItemSlot`, C# `SmRepurchase`, C# `SmInventoryInfo.WriteItemInfoBlob`, and existing `SmRepurchaseTests`.
+- Added Java runtime golden coverage for a simple equipment `SM_REPURCHASE.writeImpl` payload: one synthetic unequipped SWORD item with enchant level `3`, template id `100000001`, object id `7002`, description id `40000`, mask `1`, count `1`, and repurchase price `12345`.
+- The captured Java payload covers the equipment item-info blob chain for this narrow fixture: `EQUIPPED_SLOT`, `SLOTS_WEAPON`, `ENCHANT_INFO`, `PREMIUM_OPTION`, and `GENERAL_INFO`, followed by the repurchase price.
+- Added matching C# `SmRepurchaseTests.WritePayload_WritesEquipmentRepurchaseItemWithEquipmentBlobThenPrice`, using a SWORD template with equipment slots `3`, asserting the exact Java runtime-captured bytes.
+- Kept this unit packet/test scoped. No live repurchase singleton state, live BUY_AGAIN socket dispatch, live `CM_BUY_ITEM` repurchase execution, repository writes, encrypted-frame proof, real-client validation, or advanced equipment-state coverage was enabled.
+
+#### Migration Parity Table - Session 1950
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_REPURCHASE.writeImpl` equipment item serialization | `Aion.GameServer.Network.Aion.ServerPackets.SmRepurchase` + `SmInventoryInfo.WriteItemInfoBlob` | Server Packet | Partial | Java Golden + C# Unit Tested | Golden File Tested, Partial Parity | Exact Java runtime bytes are asserted for one simple SWORD repurchase item with default equipment state plus enchant `3`. Live constructor state, socket dispatch, persistence, encrypted frame, and real-client behavior remain unverified. |
+| `com.aionemu.gameserver.network.aion.iteminfo.ItemInfoBlob` simple weapon/equipment blob ordering | `SmInventoryInfo.WriteItemInfoBlob` equipment path | Packet Blob Writer | Partial | Java Golden + C# Unit Tested | Golden File Tested, Partial Parity | The vector verifies blob order/bytes for `EQUIPPED_SLOT`, `SLOTS_WEAPON`, `ENCHANT_INFO`, `PREMIUM_OPTION`, and `GENERAL_INFO` on a minimal SWORD. Sockets, godstones, conditioning, polish, stat bonuses, wrap, stigma, equipped-slot nonzero, and other item groups remain pending. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_REPURCHASE_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 3 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmRepurchaseTests" --no-restore` passed with 4 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 22 game-server tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4990 tests.
+
+Remaining risks:
+- Java golden fixtures still use test-only `Unsafe.allocateInstance` and reflection.
+- Equipment coverage is limited to a simple unequipped SWORD with no sockets, godstone, conditioning, polish, stat bonuses, wrapped state, stigma behavior, or real item template/static-data loading.
+- `SM_REPURCHASE(Player, npcId)` live constructor behavior through `RepurchaseService.getRepurchaseItems`, dialog dispatch, live `CM_BUY_ITEM` repurchase execution, repository mutation, transaction behavior, encrypted frame capture, and real-client validation remain pending.
+- Existing Phase 6 risks remain around live DB proof, live `CM_BUY_ITEM` handler wiring, trade/repurchase/private-store/pet mutation paths, stat/effect/condition provider wiring, active-effect runtime, Stat2/stat-cap evaluation, and full drop workflow stat providers.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: no production artifacts; added Java and C# golden/unit coverage for simple equipment `SM_REPURCHASE` serialization.
+- Total artifacts with verified parity: 2 narrowly scoped rows with Java runtime byte evidence for the simple equipment repurchase serialization slice.
+- Total artifacts needing verification: live `SM_REPURCHASE` constructor/state, live BUY_AGAIN wiring, live `CM_BUY_ITEM` repurchase execution, item-info blob advanced equipment states, DAO/packet behavior, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves runtime golden evidence for repurchase packet serialization but does not complete live repurchase, trade, or item-info blob parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect live `SM_REPURCHASE(Player, npcId)` constructor/state snapshot boundaries and add a non-live repurchase packet snapshot adapter around supplied `RepurchaseService.getRepurchaseItems`-equivalent facts, without enabling singleton mutation or socket sends.
+- Safe alternative candidates for the next session:
+	- add another narrow Java golden item-info vector only if the fixture remains simple, such as equipped-slot nonzero or one basic manastone socket
+	- inspect `PetService.activateAutoSell` plus `SM_PET(AUTOSELL, activate)` as a disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
+	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
