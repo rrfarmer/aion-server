@@ -87913,6 +87913,48 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2006 (June 1, 2026)
+- Performed Work Discovery after UOW-2005: re-read the latest handoff, inspected Java `CM_VIEW_PLAYER_DETAILS`, Java packet factory opcode `100`, searched the C# port for existing view-player-details coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
+- Found a compact parser/factory parity gap: Java registers `CM_VIEW_PLAYER_DETAILS` at opcode `100` for `IN_GAME`, while C# had no parser or registration for that client packet.
+- Added Java golden coverage for `CM_VIEW_PLAYER_DETAILS.readImpl`, proving Java reads one D `targetObjectId` field and consumes the payload.
+- Added C# `CmViewPlayerDetails`, registered opcode `100` for `InGame`, added C# factory parser coverage for valid `InGame` and invalid `Authed`, and documented the live details/denial handler boundary as deferred.
+- No live view-player-details behavior was enabled; Java `runImpl` performs known-list player lookup, denied-status/admin-access checks, and sends either `SM_VIEW_PLAYER_DETAILS` or `SM_SYSTEM_MESSAGE.STR_MSG_REJECTED_WATCH`, which remains outside this parser/factory unit.
+
+#### Migration Parity Table - Session 2006
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_VIEW_PLAYER_DETAILS.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmViewPlayerDetails.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# reads the same single D `targetObjectId` field in Java order. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `100` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `100` registration | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# factory now accepts opcode `100` only in `InGame`, matching the Java registration state. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_VIEW_PLAYER_DETAILS.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java resolves target player from known-list, checks `DeniedStatus.VIEW_DETAILS` and `AdminConfig.VIEW_PLAYER_DETAILS`, then sends detail or rejection packets. C# does not wire live behavior in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_VIEW_PLAYER_DETAILS_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesViewPlayerDetailsPacket" --no-restore` passed with 1 C# test. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5112 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 64 game-server tests.
+
+Remaining risks:
+- This unit proves only target-object-id parser consumption and opcode registration. It does not prove known-list player lookup, denied-status/admin-access gating, detail packet serialization, rejection message behavior, encrypted frame handling, socket dispatch, or real-client behavior.
+- Java `CM_VIEW_PLAYER_DETAILS.runImpl` side effects remain unported: active player lookup, known-list target lookup, denied-status checks, admin access checks, equipped-items-without-stigma extraction, `SM_VIEW_PLAYER_DETAILS` send, and rejection system-message send.
+- Exact equipment/detail packet payloads and privacy-denial behavior remain unverified for this route.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one C# client packet parser plus one opcode registration and one Java golden parser test.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser/golden evidence for one view-player-details packet boundary.
+- Total artifacts needing verification: live view-player-details known-list/privacy/detail packet behavior, live house-teleport-back battle-return teleport, live instance-leave handler dispatch, live stop-training instance-handler dispatch, live close-dialog dialog-service dispatch, live disconnect socket lifecycle, live summon command/execution surfaces, live summon movement/emotion/combat controller dispatch, live pet/common-data mutation and packet send, live dialog/private-store/buy/repurchase persistence, condition validators, active-effect/stat runtime, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for dialog/private-store/pet/summon/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy persistence, live detail-packet/equipment privacy behavior, live teleport/battle-return dispatch, live dialog controller/AI dispatch proof, live private-store mutation/fanout proof, live pet/common-data/reward mutation and packet send, live summon command/movement/emotion/combat controller dispatch, live instance-handler dispatch, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes one view-player-details parser/factory gap but does not complete live detail-view parity.
+
+Next recommended unit of work:
+- Next sequential task: continue packet-factory discovery for another compact unregistered parser boundary with Java golden evidence. Source-review opcode `104` `CM_GAMEGUARD` or another small packet before selecting, because state coverage includes both `AUTHED` and `IN_GAME`.
+- Safe alternative candidates for the next session:
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+	- inspect BUY_AGAIN live-send ordering only if a stronger deterministic Java runtime vector can be added without broad object graph setup
+	- inspect another compact unported enum/model dependency with Java golden evidence
+
 ### Session 2005 (June 1, 2026)
 - Performed Work Discovery after UOW-2004: re-read the latest handoff, inspected Java `CM_HOUSE_TELEPORT_BACK`, Java packet factory opcode `95`, C# teleport packet boundaries, `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
 - Found a compact parser/factory parity gap: Java registers `CM_HOUSE_TELEPORT_BACK` at opcode `95` for `IN_GAME`, while C# had no parser or registration for that client packet.
