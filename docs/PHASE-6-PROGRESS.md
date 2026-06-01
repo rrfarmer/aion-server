@@ -87913,6 +87913,36 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2019 (June 1, 2026)
+- Performed Work Discovery after UOW-2018: re-read the latest completion/handoff, inspected Java `CM_UPGRADE_ARCADE`, Java packet factory opcode `246`, searched C# for existing arcade packet coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, packet factory tests, and the existing non-live arcade frenzy planner.
+- Found a compact parser/factory parity gap: Java registers `CM_UPGRADE_ARCADE` at opcode `246` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
+- Added Java golden coverage for `CM_UPGRADE_ARCADE.readImpl`, proving Java reads C `action` and D `sessionId` in order and consumes the payload.
+- Added C# `CmUpgradeArcade` and registered opcode `246` for `InGame`; added a documented no-op handler boundary because Java live behavior depends on event config and `UpgradeArcadeService` dispatch.
+- Added C# parser/factory coverage proving action/session-id parsing, valid `InGame`, and invalid `Authed`.
+- Ran a broader packet-factory gap pass after the tail opcodes and source-reviewed `CM_OPEN_STATICDOOR` as a safer next compact parser candidate than the larger character edit, legion, gather, windstream, and find-group surfaces.
+
+#### Migration Parity Table - Session 2019
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_UPGRADE_ARCADE.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmUpgradeArcade.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# reads C `action` and D `sessionId` in Java order. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `246` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `246` | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# accepts opcode `246` only in `InGame`; encrypted-frame/socket dispatch remains unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_UPGRADE_ARCADE.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java returns when `EventsConfig.ENABLE_EVENT_ARCADE` is false, dispatches action `0`-`5` to `UpgradeArcadeService`, and warning-logs unknown actions. C# does not wire live arcade behavior in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_UPGRADE_ARCADE_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesUpgradeArcadePacket" --no-restore` passed with 1 C# test.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5125 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 78 game-server tests.
+
+Known gaps:
+- Java `CM_UPGRADE_ARCADE.runImpl` side effects remain unported: event enablement gate, active player usage, `UpgradeArcadeService.start/open/startTry/getReward/resume/showRewardList`, and unknown-action warning logs.
+- This unit proves parser/factory behavior only; no verified live arcade service, packet dispatch, persistence, encrypted-frame, or real-client parity is claimed.
+
+Next candidates:
+- Next sequential task: continue packet-factory discovery with source-reviewed opcode `23` `CM_OPEN_STATICDOOR` as a compact parser candidate (`readD doorId`) while keeping `StaticDoorService.openStaticDoor` runtime behavior deferred unless separately scoped.
+- Safe alternatives: inspect another compact unregistered parser boundary with Java golden evidence; inspect Java `SM_UNWRAP_ITEM` writer parity as a server-packet-only unit; inspect `CM_WINDSTREAM` parser only if its live flight/quest/emotion side effects remain deferred; inspect `CM_FIND_GROUP` only if a small action-specific parser vector is selected.
+
 ### Session 2018 (June 1, 2026)
 - Performed Work Discovery after UOW-2017: re-read required migration/orchestration/parity docs, latest completion/handoff, inspected Java `CM_UNWRAP_ITEM`, Java `SM_UNWRAP_ITEM`, Java packet factory opcode `240`, searched the C# port for existing unwrap-item packet coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
 - Found a compact parser/factory parity gap: Java registers `CM_UNWRAP_ITEM` at opcode `240` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
