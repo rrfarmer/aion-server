@@ -87913,6 +87913,51 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1982 (June 1, 2026)
+- Performed Work Discovery after UOW-1981: inspected Java `CM_TELEPORT_SELECT`, Java `CM_TOGGLE_SKILL_DEACTIVATE`, Java opcode registration, C# packet/factory coverage, and existing C# teleport service surfaces.
+- Selected Java `CM_TELEPORT_SELECT` because it was unported in C# and has a compact parser shape: `targetObjId = readD()`, `locId = readD()`, and one ignored signed `readH()` padding word.
+- Added C# `CmTeleportSelect` with Java-shaped field parsing, using `PacketBuffer.ReadSignedH()` for the ignored Java signed padding.
+- Registered opcode `148` in the C# `GameClientPacketFactory` as `IN_GAME` only, matching Java `AionClientPacketFactory`.
+- Added an explicit C# runtime boundary in `GameServerConnection`: Java live teleporter validation and `TeleportService.teleport` side effects remain unported rather than silently claimed.
+- Added Java golden and C# parser/factory coverage proving high-bit ignored padding does not shift target object id or location id parsing.
+
+#### Migration Parity Table - Session 1982
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TELEPORT_SELECT.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmTeleportSelect.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | New C# parser consumes Java target object id, location id, and ignored signed padding word. Evidence covers parser field alignment and full consumption only. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `148` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `148` | Packet Factory Registration | Partial | Unit Tested | Partial Parity | C# now registers opcode `148` as `IN_GAME` only, matching Java. Focused factory coverage rejects `AUTHED`. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_TELEPORT_SELECT.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` parser-only boundary | Client Packet Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java validates dead player, known-list/world NPC lookup, teleporter template, location id, audit/system-message branches, and calls `TeleportService.teleport`. C# only documents this as an unported runtime boundary. |
+| `com.aionemu.commons.network.packet.BaseClientPacket.readH` padding caller in `CM_TELEPORT_SELECT` | `Aion.Commons.Network.PacketBuffer.ReadSignedH` via `CmTeleportSelect` ignored padding | Packet Buffer Primitive Use | Partial | Unit Tested + Java Golden Tested | Partial Parity | This unit covers the teleport-select ignored signed-short padding caller. Because Java discards the value, evidence is limited to field alignment and complete consumption. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmTeleportSelectSignedPaddingTests" --no-restore` passed with 2 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_TELEPORT_SELECT_ReadSignedPaddingGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- Initial broad C# run `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` timed out at the 120s tool limit before reporting results.
+- Rerun with a longer timeout passed with 5053 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 39 game-server tests.
+
+Remaining risks:
+- This unit proves only parser padding consumption and opcode state gating. It does not verify Java teleporter/NPC known-list validation, dead-player guard, audit logging, invalid-route system message, actual teleport execution, encrypted frame capture, or real-client behavior.
+- C# has no live `CM_TELEPORT_SELECT` execution beyond an explicit documented boundary.
+- Other Java signed `readH()` call sites outside this audited parser set still need separate review.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one `CM_TELEPORT_SELECT` parser/factory slice plus Java/C# tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies parser-consumption and factory-registration evidence only and does not complete teleport-select runtime parity.
+- Total artifacts needing verification: teleport-select runtime execution, toggle-skill deactivate parser/runtime, ping anti-cheat runtime execution, manastone runtime execution, UI-settings runtime persistence, question-response runtime execution, house-kick runtime execution, appearance rename/cosmetic runtime execution, split-item runtime execution/persistence, legion runtime execution/persistence, item move execution/persistence, Atreian passport reward execution/persistence, remaining signed `readH()` call sites, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/pet/craft/sell/repurchase/buy/private-store persistence, live NPC/known-list teleporter validation, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves parser/factory coverage but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: continue the signed Java `readH()` audit by inspecting unported `CM_TOGGLE_SKILL_DEACTIVATE` parser/runtime boundaries.
+- Safe alternative candidates for the next session:
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+
 ### Session 1981 (June 1, 2026)
 - Performed Work Discovery after UOW-1980: inspected remaining Java client packet `readH()` call sites and selected Java `CM_PING.readImpl`, a tiny existing parser/runtime surface with one unknown signed `readH()` field that Java consumes and discards.
 - Reviewed Java `CM_PING.readImpl`/`runImpl`, Java opcode registration (`AionClientPacketFactory` opcode `44`, `AUTHED` and `IN_GAME`), C# `CmPing`, C# opcode registration, and C# `GameServerConnection.HandlePingAsync`.
