@@ -87913,6 +87913,50 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1980 (June 1, 2026)
+- Performed Work Discovery after UOW-1979: inspected remaining Java client packet `readH()` call sites and selected Java `CM_MANASTONE.readImpl` action `3`, an existing parser/runtime branch with slot/removal metadata, an ignored byte, an ignored signed padding word, and NPC object id.
+- Reviewed Java `CM_MANASTONE.readImpl`/`runImpl`, Java opcode registration (`AionClientPacketFactory` opcode `74`, `IN_GAME`), C# `CmManastone`, C# opcode registration, and existing C# manastone runtime surfaces.
+- Updated C# `CmManastone` action `3` to consume the ignored padding word with `PacketBuffer.ReadSignedH()` instead of unsigned `ReadH()`, matching Java's signed `readH()` primitive.
+- Added Java golden and C# parser/factory coverage proving high-bit ignored padding does not shift action type, fused-slot byte, target item object id, slot number, or NPC object id parsing.
+- Kept live manastone behavior out of scope. No remove-manastone NPC validation, item socket mutation, persistence, packet fanout, encrypted frame capture, or real-client validation was newly claimed.
+
+#### Migration Parity Table - Session 1980
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_MANASTONE.readImpl` action `3` | `Aion.GameServer.Network.Aion.ClientPackets.CmManastone.ReadPayload` action `3` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Remove-manastone parser branch now consumes the ignored Java signed padding `readH()` with `ReadSignedH()`. Focused Java/C# evidence covers high-bit padding plus surrounding action/slot/NPC fields. Live manastone execution remains partial. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `74` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `74` | Packet Factory Registration | Partial | Unit Tested | Partial Parity | Existing C# factory registration for `CmManastone` remains `IN_GAME`, matching Java; this unit adds focused state-gate coverage in a dedicated parser test. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_MANASTONE.runImpl` action `3` | `Aion.GameServer.Network.Aion.GameServerConnection` manastone handling | Client Packet Handler Boundary | Partial | Existing Regression + Source Reviewed | Partial Parity | Java validates current NPC target and talk range before `ItemSocketService.removeManastone`. This unit does not change or verify live remove-manastone service side effects. |
+| `com.aionemu.commons.network.packet.BaseClientPacket.readH` padding caller in `CM_MANASTONE` | `Aion.Commons.Network.PacketBuffer.ReadSignedH` via `CmManastone` action `3` ignored padding | Packet Buffer Primitive Use | Partial | Unit Tested + Java Golden Tested | Partial Parity | This unit covers the remove-manastone ignored signed-short padding caller. Because Java discards the value, evidence is limited to field alignment and complete consumption, not an exposed signed value. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmManastoneSignedPaddingTests" --no-restore` passed with 2 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- Initial focused Java golden run exposed a test-fixture buffer allocation bug before Java packet parsing; the fixture was corrected from 12 bytes to 14 bytes.
+- Corrected `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_MANASTONE_ReadSignedPaddingGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5049 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 37 game-server tests.
+
+Remaining risks:
+- This unit proves only parser padding consumption and opcode state gating for the focused action `3` slice. It does not verify Java remove-manastone NPC validation, talk-range checks, socket mutation, fee handling, persistence, or packet fanout.
+- Other `CM_MANASTONE` action branches are not changed by this unit.
+- Other Java signed `readH()` call sites outside this audited parser set still need separate review.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one remove-manastone signed `readH()` parser slice plus Java/C# tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies parser-alignment evidence only and does not complete manastone runtime parity.
+- Total artifacts needing verification: manastone runtime execution, UI-settings runtime persistence, question-response runtime execution, house-kick runtime execution, appearance rename/cosmetic runtime execution, split-item runtime execution/persistence, legion runtime execution/persistence, item move execution/persistence, Atreian passport reward execution/persistence, remaining signed `readH()` call sites, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/pet/craft/sell/repurchase/buy/private-store persistence, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves parser/signedness coverage but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: continue the signed Java `readH()` audit by inspecting another ignored-padding or parser-only call site, with `CM_PING`, `CM_TELEPORT_SELECT`, and unported `CM_TOGGLE_SKILL_DEACTIVATE` as candidates.
+- Safe alternative candidates for the next session:
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+
 ### Session 1979 (June 1, 2026)
 - Performed Work Discovery after UOW-1978: inspected remaining Java client packet `readH()` call sites and selected Java `CM_UI_SETTINGS.readImpl`, an existing parser/runtime surface with one ignored signed padding word followed by an unsigned declared-size word and remaining settings data.
 - Reviewed Java `CM_UI_SETTINGS.readImpl`/`runImpl`, Java opcode registration (`AionClientPacketFactory` opcode `10`, `IN_GAME`), C# `CmUiSettings`, C# opcode registration, C# `GameServerConnection.HandleUiSettings`, and existing UI-settings packet tests.
