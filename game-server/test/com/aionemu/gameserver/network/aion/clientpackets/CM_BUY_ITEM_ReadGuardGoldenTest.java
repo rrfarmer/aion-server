@@ -129,6 +129,35 @@ public class CM_BUY_ITEM_ReadGuardGoldenTest {
 	}
 
 	@Test
+	public void readImpl_unsignedAmountHighBitSetsAuditAs65535BeforeCreatingLists() throws Exception {
+		boolean originalPunishmentEnable = PunishmentConfig.PUNISHMENT_ENABLE;
+		boolean originalLogAudit = LoggingConfig.LOG_AUDIT;
+		SkillData originalSkillData = DataManager.SKILL_DATA;
+		try {
+			PunishmentConfig.PUNISHMENT_ENABLE = false;
+			LoggingConfig.LOG_AUDIT = false;
+			DataManager.SKILL_DATA = new SkillData();
+
+			CM_BUY_ITEM packet = new CM_BUY_ITEM(51, Set.of(State.IN_GAME));
+			packet.setConnection(allocateConnection());
+			packet.setBuffer(header(7001, 13, 0xFFFF));
+
+			packet.readImpl();
+
+			assertEquals(7001, getField(packet, "sellerObjId"));
+			assertEquals((short) 13, getField(packet, "tradeActionId"));
+			assertEquals(65535, getField(packet, "amount"));
+			assertEquals(true, getField(packet, "isAudit"));
+			assertEquals(null, getField(packet, "tradeList"));
+			assertEquals(null, getField(packet, "repurchaseList"));
+		} finally {
+			PunishmentConfig.PUNISHMENT_ENABLE = originalPunishmentEnable;
+			LoggingConfig.LOG_AUDIT = originalLogAudit;
+			DataManager.SKILL_DATA = originalSkillData;
+		}
+	}
+
+	@Test
 	public void readImpl_negativeCountSetsAuditAndLeavesPriorTradeListItems() throws Exception {
 		boolean originalPunishmentEnable = PunishmentConfig.PUNISHMENT_ENABLE;
 		boolean originalLogAudit = LoggingConfig.LOG_AUDIT;

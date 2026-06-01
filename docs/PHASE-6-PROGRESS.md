@@ -87913,6 +87913,49 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1967 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1966: re-read required migration/orchestration/parity docs, latest completion/handoff, inspected Java `CM_BUY_ITEM.readImpl`, Java `BaseClientPacket.readUH`, existing Java `CM_BUY_ITEM_ReadGuardGoldenTest`, C# `CmBuyItem`, C# `PacketBuffer.ReadH`, and existing C# buy-item parser tests.
+- Added explicit Java and C# parser evidence for `CM_BUY_ITEM` amount high-bit handling: a payload amount of `0xFFFF` is read as unsigned `65535`, triggers the Java/C# amount audit guard, and returns before creating/reading item lists.
+- No production runtime behavior was changed in this unit; the C# packet parser already reads `Amount` through unsigned `PacketBuffer.ReadH()` and audits values above `36`.
+- Kept this unit parser-only. No live buy/sell/private-store/repurchase execution, audit logging side effects, packet dispatch, transaction, encrypted frame capture, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1967
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM.readImpl` amount field | `Aion.GameServer.Network.Aion.ClientPackets.CmBuyItem.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Java golden test and C# unit test now cover `readUH()` high-bit amount behavior: `0xFFFF` becomes `65535`, audits, and stops before list creation/item reads. Live audit logger effects and encrypted client frame comparison remain unverified. |
+| `com.aionemu.commons.network.packet.BaseClientPacket.readUH` | `Aion.Commons.Network.PacketBuffer.ReadH` | Packet Buffer Primitive | Partial | Unit Tested Indirectly | Partial Parity | This unit documents the currently shared unsigned 16-bit behavior for the `CM_BUY_ITEM.amount` caller. Other Java `readH` signed-short call sites are not audited by this unit and remain separate parity surfaces. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmBuyItemTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests" --no-restore` passed with 61 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_BUY_ITEM_ReadGuardGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 8 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5020 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 24 game-server tests.
+- `mvn test "-Dmaven.test.skip=false" "-DskipTests=false"` passed the full Maven reactor in the current workspace. This run did not force a clean login-server recompile.
+
+Remaining risks:
+- This unit proves only parser guard behavior for the `amount` field. It does not verify live audit logging, run-path branch dispatch, socket encryption, malformed frame handling, or real-client behavior.
+- C# `PacketBuffer.ReadH()` is an unsigned primitive used by many call sites; Java has both signed `readH()` and unsigned `readUH()`. Other signed-short Java callers still need separate audits where high-bit values matter.
+- `CM_BUY_ITEM.tradeActionId` signedness and unsupported high-bit action behavior were reviewed only enough to avoid scope creep; they remain unverified.
+- Live `CM_BUY_ITEM` execution for buy/sell/private-store/repurchase remains disabled or diagnostic in several branches.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: one Java golden parser guard and one C# parser test for unsigned high-bit `CM_BUY_ITEM.amount`.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies parser evidence for one guard edge case but does not complete live `CM_BUY_ITEM` parity.
+- Total artifacts needing verification: live private-store sale execution, live audit/logging, live store item ordering/mutation timing, live pet autosell activation handler wiring, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, signed `readH` call sites, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live pet common-data persistence, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit adds focused parser edge-case evidence but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: inspect Java delete-path cube-size sends for a non-repurchase inventory diagnostic where `sendItemDeletePacket` is already represented by a C# planner, then add focused source-reviewed tests without enabling live mutation.
+- Safe alternative candidates for the next session:
+	- inspect live `CM_PET` actionType 4 composition only if it can remain disabled and source-reviewed
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- audit signed Java `readH()` call sites where C# currently uses unsigned `PacketBuffer.ReadH()`
+	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
+
 ### Session 1966 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1965: inspected Java `PrivateStoreService.sellStoreItem`, C# `PrivateStorePurchasePlanService`, C# private-store persistence/send/live-executor diagnostics, existing private-store purchase tests, and the Session 1965 handoff.
 - Added focused disabled diagnostics coverage for mixed private-store purchases where one seller inventory item is present and another bought entry is missing.
