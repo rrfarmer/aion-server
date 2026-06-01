@@ -87913,6 +87913,50 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1984 (June 1, 2026)
+- Performed Work Discovery after UOW-1983: inspected remaining Java client-packet `readH()`/`readUH()` call sites, existing C# client packet parsers, `CM_BUY_ITEM` Java/C# parser evidence, Java `CM_REMOVE_ALTERED_STATE`, Java opcode registration, and C# EffectController-related gaps.
+- Confirmed `CM_BUY_ITEM` already had focused Java golden and C# parser coverage for signed `tradeActionId` plus unsigned `amount`, so selected unported Java `CM_REMOVE_ALTERED_STATE` as the next compact parser/factory boundary.
+- Added C# `CmRemoveAlteredState` with Java-shaped unsigned `skillId = readUH()` parsing and two trailing byte reads.
+- Registered opcode `35` in the C# `GameClientPacketFactory` as `IN_GAME` only, matching Java `AionClientPacketFactory`.
+- Added an explicit C# runtime boundary in `GameServerConnection`: Java live EffectController lookup, debuff audit logging, and non-debuff effect ending remain unported.
+- Added Java golden and C# parser/factory coverage proving high-bit skill ids read as unsigned `65535` and the two trailing bytes are consumed/preserved.
+
+#### Migration Parity Table - Session 1984
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_REMOVE_ALTERED_STATE.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmRemoveAlteredState.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | New C# parser consumes Java unsigned skill id and two trailing bytes. Evidence covers high-bit unsigned skill id, trailing byte preservation, and full Java packet consumption. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `35` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `35` | Packet Factory Registration | Partial | Unit Tested | Partial Parity | C# now registers opcode `35` as `IN_GAME` only, matching Java. Focused factory coverage rejects `AUTHED`. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_REMOVE_ALTERED_STATE.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` parser-only boundary | Client Packet Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java finds the active effect by skill id, audits attempts to remove debuffs, and ends non-debuff effects. C# only documents this as an unported runtime boundary because live EffectController mutation is not available. |
+| `com.aionemu.commons.network.packet.BaseClientPacket.readUH` skill caller in `CM_REMOVE_ALTERED_STATE` | `Aion.Commons.Network.PacketBuffer.ReadH` via `CmRemoveAlteredState.SkillId` | Packet Buffer Primitive Use | Partial | Unit Tested + Java Golden Tested | Partial Parity | This unit covers the remove-altered-state unsigned-short skill id caller. It intentionally uses C# unsigned `ReadH()`, not `ReadSignedH()`. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmRemoveAlteredStateTests" --no-restore` passed with 2 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_REMOVE_ALTERED_STATE_ReadUnsignedSkillGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5057 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 41 game-server tests.
+
+Remaining risks:
+- This unit proves only parser unsigned-short consumption, trailing byte handling, and opcode state gating. It does not verify Java EffectController lookup, debuff audit logging, `effect.endEffect()`, encrypted frame capture, or real-client behavior.
+- C# has no live `CM_REMOVE_ALTERED_STATE` execution beyond an explicit documented boundary.
+- Other unported client packet parsers and live effect-controller surfaces remain separate work.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one `CM_REMOVE_ALTERED_STATE` parser/factory slice plus Java/C# tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies parser-consumption and factory-registration evidence only and does not complete altered-state runtime parity.
+- Total artifacts needing verification: remove-altered-state runtime execution, toggle-skill deactivate runtime execution, teleport-select runtime execution, ping anti-cheat runtime execution, manastone runtime execution, UI-settings runtime persistence, question-response runtime execution, house-kick runtime execution, appearance rename/cosmetic runtime execution, split-item runtime execution/persistence, legion runtime execution/persistence, item move execution/persistence, Atreian passport reward execution/persistence, remaining parser-only packet surfaces, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/pet/craft/sell/repurchase/buy/private-store persistence, live EffectController mutation, live SkillEngine effect-controller and stance-controller mutation, live NPC/known-list teleporter validation, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves parser/factory coverage but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: continue Work Discovery for unported compact client packets, with `CM_BUY_TRADE_IN_TRADE`, `CM_HOUSE_SCRIPT`, or `CM_VERSION_CHECK` as candidates if they can remain parser/factory-focused with Java evidence.
+- Safe alternative candidates for the next session:
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+
 ### Session 1983 (June 1, 2026)
 - Performed Work Discovery after UOW-1982: inspected Java `CM_TOGGLE_SKILL_DEACTIVATE`, Java opcode registration, C# packet/factory coverage, C# player stance fields, and existing C# skill/effect runtime surfaces.
 - Selected Java `CM_TOGGLE_SKILL_DEACTIVATE` because it was unported in C# and has a compact parser shape: unsigned `skillId = readUH()` followed by two ignored signed `readH()` padding words.
