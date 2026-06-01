@@ -87913,6 +87913,35 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2020 (June 1, 2026)
+- Performed Work Discovery after UOW-2019: re-read the latest handoff, inspected Java `CM_OPEN_STATICDOOR`, Java packet factory opcode `23`, searched C# for existing static-door packet coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
+- Found a compact parser/factory parity gap: Java registers `CM_OPEN_STATICDOOR` at opcode `23` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
+- Added Java golden coverage for `CM_OPEN_STATICDOOR.readImpl`, proving Java reads D `doorId` and consumes the payload.
+- Added C# `CmOpenStaticDoor` and registered opcode `23` for `InGame`; added a documented no-op handler boundary because Java live behavior dispatches `StaticDoorService.openStaticDoor`.
+- Added C# parser/factory coverage proving door-id parsing, valid `InGame`, and invalid `Authed`.
+
+#### Migration Parity Table - Session 2020
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_OPEN_STATICDOOR.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmOpenStaticDoor.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# reads D `doorId` in Java order. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `23` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `23` | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# accepts opcode `23` only in `InGame`; encrypted-frame/socket dispatch remains unverified. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_OPEN_STATICDOOR.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java retrieves active player and calls `StaticDoorService.openStaticDoor(player, doorId)`. C# does not wire live static-door behavior in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_OPEN_STATICDOOR_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesOpenStaticDoorPacket" --no-restore` passed with 1 C# test.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5126 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 79 game-server tests.
+
+Known gaps:
+- Java `CM_OPEN_STATICDOOR.runImpl` side effects remain unported: active player lookup, static-door validation/state mutation, packet fanout, persistence if any, encrypted-frame handling, and real-client behavior.
+- This unit proves parser/factory behavior only; no verified live static-door parity is claimed.
+
+Next candidates:
+- Next sequential task: continue packet-factory gap discovery from the missing registered-opcode list, preferring another compact parser with deferrable runtime behavior. Previously observed safe candidates include `CM_WINDSTREAM` as parser-only (`readD teleportId`, `readD distance`, `readD state`) or a narrowly selected `CM_FIND_GROUP` action vector; both have substantial live behavior and must remain deferred unless separately scoped.
+- Safe alternatives: inspect another compact unregistered parser boundary with Java golden evidence; inspect Java `SM_UNWRAP_ITEM` writer parity as a server-packet-only unit; inspect static-door service behavior read-only before any runtime wiring; inspect BUY_AGAIN live-send ordering only if a deterministic Java runtime vector can be added without broad object graph setup.
+
 ### Session 2019 (June 1, 2026)
 - Performed Work Discovery after UOW-2018: re-read the latest completion/handoff, inspected Java `CM_UPGRADE_ARCADE`, Java packet factory opcode `246`, searched C# for existing arcade packet coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, packet factory tests, and the existing non-live arcade frenzy planner.
 - Found a compact parser/factory parity gap: Java registers `CM_UPGRADE_ARCADE` at opcode `246` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
