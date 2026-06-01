@@ -87743,6 +87743,7 @@ Validation:
 - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5008 tests.
 - `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 23 game-server tests.
 - `mvn test "-Dmaven.test.skip=false" "-DskipTests=false"` passed the full Maven reactor in the current workspace. This run did not force a clean login-server recompile.
+- `mvn test "-Dmaven.test.skip=false" "-DskipTests=false"` passed the full Maven reactor in the current workspace. This run did not force a clean login-server recompile.
 
 Remaining risks:
 - Packet intents remain disabled and informational only; no live `SM_INVENTORY_UPDATE_ITEM`, `SM_INVENTORY_ADD_ITEM`, cube-size packet, or system-message send is performed.
@@ -87767,4 +87768,53 @@ Next recommended unit of work:
 	- inspect `PetService.activateAutoSell` plus `SM_PET(AUTOSELL, activate)` as a disabled activation planner
 	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
 	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
+	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
+
+### Session 1961 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1960: re-read required migration/orchestration/parity docs, latest completion and handoff, inspected Java `ItemPacketService.sendItemPacket`, `sendItemDeletePacket`, `sendItemUpdatePacket`, `sendStorageUpdatePacket`, Java `SM_CUBE_UPDATE.cubeSize`, Java `Storage.decreaseItemCount/add/delete`, Java `RepurchaseService.repurchaseFromShop`, C# `SmCubeUpdate`, C# `RepurchaseOutcomePlanService`, and existing repurchase/CM_BUY_ITEM/cube packet tests.
+- Added a disabled `SendCubeSizeUpdate` repurchase packet intent for successful new cube item adds.
+- The new intent is recorded after each disabled `SendRepurchasedItemAdd` diagnostic, matching Java `ItemPacketService.sendStorageUpdatePacket`: first `SM_INVENTORY_ADD_ITEM`, then `SM_CUBE_UPDATE.cubeSize(StorageType.CUBE, player)`.
+- Stack-merge repurchase outcomes explicitly do not record a cube-size update, matching Java `sendItemUpdatePacket` for `SM_INVENTORY_UPDATE_ITEM` only.
+- Inventory-full repurchase outcomes still record only `STR_MSG_DICE_INVEN_ERROR`; Kinah decrease still records only `DEC_KINAH_BUY`.
+- Kept this unit non-live. No packet send, inventory/Kinah mutation, cube-size snapshot construction, singleton map mutation, repository write, transaction behavior, encrypted-frame proof, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1961
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.item.ItemPacketService.sendStorageUpdatePacket` | `Aion.GameServer.Services.RepurchaseOutcomePlan.PacketIntents` | Packet Intent Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | New cube-item repurchase add diagnostics now record Java's add-then-`SM_CUBE_UPDATE.cubeSize` sequence. Live packet construction, encryption, post-mutation cube counts, and socket ordering remain unverified. |
+| `com.aionemu.gameserver.services.item.ItemPacketService.sendItemUpdatePacket` | `Aion.GameServer.Services.RepurchaseOutcomePlan.PacketIntents` | Packet Intent Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | Stack-merge repurchase diagnostics intentionally omit cube-size updates because Java update sends do not call `SM_CUBE_UPDATE`. Live storage mutation and packet dispatch remain disabled. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_CUBE_UPDATE.cubeSize` | `Aion.GameServer.Network.Aion.ServerPackets.SmCubeUpdate.PacketOpCode` referenced by `RepurchasePacketIntentPlan` | Packet Boundary | Partial | Existing Packet Regression + Source Reviewed | Needs Verification | The repurchase diagnostic records the opcode intent only, not a concrete cube-size payload. Exact item counts/expand fields require a live or snapshot post-mutation player state and are not claimed here. |
+| `com.aionemu.gameserver.services.RepurchaseService.repurchaseFromShop` success packet outcomes | `Aion.GameServer.Services.RepurchaseOutcomePlan.PacketIntents` | Repurchase Outcome Diagnostic | Partial | Unit Tested + Source Reviewed | Partial Parity | Successful new-item repurchase outcomes now expose Kinah update, item add, and cube-size packet intents. Stack merge and inventory-full branches keep their Java-shaped narrower packet intents. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~RepurchasePlanServiceTests|FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests|FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~SmInventory|FullyQualifiedName~SmCube" --no-restore` passed with 167 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_REPURCHASE_GoldenTest,CM_BUY_ITEM_ReadGuardGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 11 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5008 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 23 game-server tests.
+
+Remaining risks:
+- Packet intents remain disabled and informational only; no live `SM_CUBE_UPDATE`, inventory add/update, Kinah update, or system-message send is performed.
+- The cube-size intent stores the `SmCubeUpdate` opcode as an intent marker and does not build a concrete post-mutation cube-size packet or prove exact cube item count/expand fields.
+- Java storage/item services include additional side effects such as quest callbacks, warehouse branches, delete-path cube updates, unusual pet-feed storage capture, persistent-state flags, and deleted-item queues that are not modeled in this repurchase diagnostic slice.
+- Java `HashSet` bucket iteration and returned set mutability are not emulated.
+- Live BUY_AGAIN socket dispatch, live `CM_BUY_ITEM` repurchase execution, repository persistence, transaction behavior, encrypted frame capture, and real-client validation remain pending.
+- Full clean Maven validation should still be rerun if the prior login-server compile failure needs root-cause proof.
+- Full item-info blob parity for advanced item state remains partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one disabled repurchase cube-size packet-intent diagnostic plus focused tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit is source-reviewed and C# unit-tested but remains non-live and does not prove Java runtime packet, mutation, transaction, or concurrency parity.
+- Total artifacts needing verification: concrete `SM_CUBE_UPDATE` repurchase payload snapshots, live repurchase singleton state, live set/map mutation timing, live BUY_AGAIN packet dispatch, live `CM_BUY_ITEM` repurchase execution, DAO/packet behavior, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled repurchase cube-size packet diagnostics but does not complete live repurchase parity.
+
+Next recommended unit of work:
+- Next sequential task: add a focused Java/C# diagnostic for BUY_AGAIN missing-template behavior before `SM_REPURCHASE` can be composed, keeping the fallback packet path disabled and documenting whether Java would throw or skip from the constructor/template lookup path.
+- Safe alternative candidates for the next session:
+	- inspect `PetService.activateAutoSell` plus `SM_PET(AUTOSELL, activate)` as a disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
+	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
+	- inspect Java delete-path cube-size sends for another non-repurchase inventory diagnostic where `sendItemDeletePacket` is already represented by a C# planner
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
