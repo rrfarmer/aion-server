@@ -84882,6 +84882,54 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1927 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1926: re-read required orchestration/parity docs, latest completion, latest handoff, and current progress context; inspected Java `TradeService.performSellToShop` partial-stack and missing-Kinah allocation points, C# `GameServerConnection.ResolveBuyItemSellToShopPlan`, C# `TradeSellToShopPlanService`, and buy-item socket diagnostics.
+- Confirmed the Java runtime/golden path remains blocked locally, so this unit stayed source-reviewed and C#-tested only.
+- Added an explicit diagnostic object-ID provider for normal sell socket plan hydration.
+- The default diagnostic path still supplies no object IDs and continues to block partial-stack repurchase creation or missing-Kinah-row creation rather than consuming live `IDFactory` state.
+- Added socket-level regression coverage for:
+	- supplied diagnostic object IDs hydrating a disabled partial-stack sell plan with seller item update, repurchase item, missing-Kinah creation, disabled persistence/send intent, and no live packets
+	- missing diagnostic object IDs keeping partial-stack sell blocked at the repurchase creation guard
+- Kept this unit non-live. No live ID allocation, inventory mutation, Kinah mutation, repurchase mutation, packet dispatch, transaction commit, repository write, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1927
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.TradeService.performSellToShop` partial-stack repurchase creation | `GameServerConnection.ResolveBuyItemSellToShopPlan` + `TradeSellToShopPlanService` | Diagnostic Socket Planner | Partial | Regression Tested | Partial Parity | Socket diagnostics can now consume supplied object-ID facts to model Java `ItemFactory.newItem(itemId, count)` for partial-stack sells. Live ID allocation and inventory mutation remain disabled and Java runtime comparison is pending. |
+| `com.aionemu.gameserver.model.gameobjects.player.Storage.increaseKinah` missing-Kinah row creation during sell | `TradeSellToShopPlanService` via `GameServerConnection` diagnostic object-ID provider | Diagnostic Mutation Plan | Partial | Regression Tested | Partial Parity | Supplied diagnostic IDs allow the disabled plan to describe missing-Kinah-row creation. Without supplied IDs the planner still blocks, preserving the no-live-allocation boundary. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionBuyItemTests|FullyQualifiedName~TradeSellToShopPlanServiceTests|FullyQualifiedName~PlayerSellLimitPlanServiceTests|FullyQualifiedName~CmBuyItemSellActionFactAdapterServiceTests|FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemSellToShopCompositionPlanServiceTests" --no-restore` first failed because the test item template used `MaxStackCount=1`, which clamped the diagnostic repurchase stack; after correcting the fixture template to `MaxStackCount=10`, the slice passed with 81 tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4950 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- Live `CM_BUY_ITEM` action `1` execution remains disabled.
+- Diagnostic object IDs are supplied facts only; no production path should treat them as live `IDFactory` reservations.
+- NPC `canBuy()` / `canPurchase()` function facts still use diagnostic defaults in this socket path.
+- Sell-limit hydration still lacks Java's live account max-level source, membership-clamped `Rates.SELL_LIMIT`, and live account sell-limit map mutation.
+- Normal sell plan hydration still does not prove live inventory mutation, Kinah mutation, repurchase state mutation, packet fanout, transaction, or repository semantics.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: diagnostic object-ID fact consumption for disabled partial-stack repurchase and missing-Kinah normal sell plans.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 22 rows pending Java runtime/golden comparison, live `CM_BUY_ITEM` handler execution, live normal/AP sell mutation wiring, live BUY_AGAIN wiring, live private-store action `0`, live pet action `17`, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live sell-limit map mutation/rate source, live limited-item mutation, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent NPC function facts, live `CM_BUY_ITEM` handler execution, live normal/AP sell mutation wiring, live buy transaction mutation wiring, live sell-limit map mutation, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves source-reviewed normal sell diagnostics but does not complete live trade/repurchase/private-store/pet or stat/effect parity.
+
+Next recommended unit of work:
+- Next sequential task: expose NPC buy/purchase function facts to the socket diagnostic path if static metadata can be proven equivalent to Java `npc.canBuy()` / `npc.canPurchase()`.
+- Safe alternative candidates for the next session:
+	- inspect Java `PetService.sell` auto-sell notification path as a separate disabled notification planner
+	- hydrate safe private-store listed-item facts into the diagnostic path only if no live mutation is enabled
+	- add production-safe buy-transaction fact hydration for selected NPC buy-from-shop diagnostics without dispatching live effects
+	- add Java-runtime golden capture for `CM_BUY_ITEM` once compatible Java and Maven are available
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1926 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1925: re-read required orchestration/parity docs and the latest handoff, inspected Java `TradeService.performSellToShop`, Java `Item.isSellable`, Java `ItemMask.SELLABLE`, Java `PlayerLimitService.updateSellLimit`, C# `GameServerConnection.HandleBuyItem`, C# `TradeSellToShopPlanService`, C# `PlayerSellLimitPlanService`, C# `SellLimitLookupService`, and buy-item socket diagnostics.
 - Confirmed the Java runtime/golden path remains blocked locally, so this unit stayed source-reviewed and C#-tested only.
