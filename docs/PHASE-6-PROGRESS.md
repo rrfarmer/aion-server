@@ -87913,6 +87913,52 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1973 (June 1, 2026)
+- Performed Work Discovery after UOW-1972: inspected the latest handoff, Java `CM_MOVE_ITEM.readImpl`, Java opcode registration (`AionClientPacketFactory` opcode `156`, `IN_GAME`), C# packet factory coverage, C# handler dispatch boundaries, and absence of an existing C# `CmMoveItem` parser.
+- Added parser-only C# `CmMoveItem` for Java opcode `156`.
+- Registered opcode `156` as `IN_GAME`, matching Java `[C_MOVE_ITEM_TO_ANOTHER_SLOT]`.
+- Matched Java signed `readH()` slot semantics: `0xFFFF` becomes signed `-1`.
+- Added an explicit `GameServerConnection` parser-only no-op boundary documenting that Java `CM_MOVE_ITEM.runImpl` calls `ItemMoveService.moveItem`, while C# inventory/warehouse move side effects remain unported.
+- Added Java golden and C# parser/factory coverage for item object ID, source byte, destination byte, and high-bit signed slot.
+- Kept this unit parser-only. No inventory/warehouse movement, storage mutation, packet dispatch, persistence, encrypted frame capture, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1973
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_MOVE_ITEM.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmMoveItem.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | Parser now covers object ID, source/destination bytes, and signed `slot = readH()`. Java `runImpl` inventory/warehouse move behavior is not ported. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `156` | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `156` | Packet Factory Registration | Partial | Unit Tested | Partial Parity | C# factory now registers `CmMoveItem` for `IN_GAME`, matching Java. Live `GameServerConnection` handling remains an explicit parser-only no-op. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_MOVE_ITEM.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` explicit parser-only no-op | Client Packet Handler Boundary | Partial | Source Reviewed | Partial Parity | Java calls `ItemMoveService.moveItem(player, itemObjId, source, destination, slot)`. C# does not yet move cube/warehouse/account/legion warehouse items or emit resulting storage packets. |
+| `com.aionemu.commons.network.packet.BaseClientPacket.readH` slot caller in `CM_MOVE_ITEM` | `Aion.Commons.Network.PacketBuffer.ReadSignedH` via `CmMoveItem.Slot` | Packet Buffer Primitive Use | Partial | Unit Tested + Java Golden Tested | Partial Parity | This unit adds another source-proven signed `readH()` caller. Broader signed-short call-site audit remains incomplete. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~CmMoveItemTests" --no-restore` passed with 2 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_MOVE_ITEM_ReadSignedSlotGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5034 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 30 game-server tests.
+
+Remaining risks:
+- This unit proves parser/factory behavior only. It does not verify Java `ItemMoveService.moveItem`, cube/warehouse/account/legion warehouse storage movement, storage-size updates, item-info packets, persistence, transaction behavior, encrypted client frames, or real-client behavior.
+- C# registered opcode `156` currently parses but does not dispatch move execution in `GameServerConnection`; this is intentionally documented as partial parity.
+- Other Java signed `readH()` call sites still need separate audits, especially signed permission fields in unported client packet surfaces.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: one parser-only `CM_MOVE_ITEM` signed slot slice plus factory registration, explicit handler boundary, and Java/C# tests.
+- Total artifacts with verified parity: 0 full artifacts; this unit supplies parser-level evidence only and does not complete item move runtime parity.
+- Total artifacts needing verification: item move execution/persistence, Atreian passport reward execution/persistence, remaining signed `readH()` call sites, live passkey side effects, live pet autosell activation handler wiring, live pet common-data mutation, live `SM_PET(AUTOSELL)` dispatch, live audit logging, live craft-start inventory mutation/persistence/send ordering, live private-store sale execution, live store item ordering/mutation timing, live repurchase singleton state, live BUY_AGAIN and `CM_BUY_ITEM` execution, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for item move/Atreian passport/passkey/pet/craft/sell/repurchase/buy/private-store persistence, live pet/common-data/reward mutation and packet send, live handler wiring and transaction mutation boundaries, live private-store partial item skip side effects, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves signed parser coverage but does not move live gameplay parity materially.
+
+Next recommended unit of work:
+- Next sequential task: continue the signed Java `readH()` audit with `CM_LEGION` permission fields if a parser-only C# packet and Java golden test can be added safely without enabling legion mutation side effects.
+- Safe alternative candidates for the next session:
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- continue private-store diagnostics by isolating Java `LinkedHashMap` ordering/store mutation timing if a deterministic non-live fixture can be built
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect `CM_PET` actionType `3` autoloot composition only if it can remain disabled and source-reviewed
+	- run a full Maven reactor validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
+
 ### Session 1972 (June 1, 2026)
 - Performed Work Discovery after UOW-1971: re-read required migration/orchestration/parity docs, latest completion and handoff, inspected Java `CM_ATREIAN_PASSPORT.readImpl`, Java opcode registration (`AionClientPacketFactory` opcode `248`, `IN_GAME`), C# game client packet factory, existing Atreian passport formula services/tests, and remaining signed Java `readH()` candidates.
 - Added parser-only C# `CmAtreianPassport` for Java opcode `248`.
