@@ -163,6 +163,20 @@ public class SM_ALLIANCE_MEMBER_INFO_GoldenTest {
 		assertEquals(0, buffer.remaining());
 	}
 
+	@Test
+	public void writeImpl_memberGroupChangeWritesNameOnlyDespiteJoinWireId() throws Exception {
+		Player player = player(2009, "AllianceShift", PlayerClass.GLADIATOR, Gender.FEMALE, 10, true);
+		setField(player, "position", new WorldPosition(220010000, 10.5f, 20.25f, 30.75f, (byte) 64));
+		PlayerAllianceMember member = member(player, 88004);
+
+		byte[] payload = write(new SM_ALLIANCE_MEMBER_INFO(member, PlayerAllianceEvent.MEMBER_GROUP_CHANGE));
+		ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+
+		assertOnlinePrefix(buffer, 88004, 2009, PlayerAllianceEvent.MEMBER_GROUP_CHANGE);
+		assertEquals("AllianceShift", readS(buffer));
+		assertEquals(0, buffer.remaining());
+	}
+
 	private static Player player(int objectId, String name, PlayerClass playerClass, Gender gender, int level, boolean online) throws Exception {
 		PlayerCommonData commonData = new PlayerCommonData(objectId);
 		commonData.setName(name);
