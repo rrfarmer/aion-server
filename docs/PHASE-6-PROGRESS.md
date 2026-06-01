@@ -87913,6 +87913,48 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 1998 (June 1, 2026)
+- Performed Work Discovery after UOW-1997: re-read the required migration docs, latest handoff/progress context, inspected Java `CM_SUMMON_MOVE`, Java `MovementMask`, C# movement parsers, C# packet factory registrations, `GameServerConnection` packet boundaries, and existing summon packet tests.
+- Found a compact parser/factory parity gap: Java registers `CM_SUMMON_MOVE` at opcode `201`, while C# only had summon attack/cast-spell opcodes `203` and `205`.
+- Added Java golden coverage for `CM_SUMMON_MOVE.readImpl`, including the absolute/glide/vehicle tail and the important manual-position-without-absolute branch where Java consumes no vector or target coordinates.
+- Added C# `CmSummonMove`, registered opcode `201` for `InGame`, added factory parser coverage for both Java-shaped branches, and documented the live `runImpl` side-effect boundary as unported.
+- No production summon movement behavior was enabled; summon/mercenary lookup, effect-controller movement gates, movement-controller mutation, world position update, last-move update, and `SM_MOVE` broadcast remain deferred.
+
+#### Migration Parity Table - Session 1998
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_MOVE.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmSummonMove.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# now parses summon object id, position, heading/type, absolute target coordinates, glide flag, and vehicle fields in Java order. The Java-specific manual-position-without-absolute branch is covered and deliberately reads no vector/target tail. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `201` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `201` registration | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# factory now accepts opcode `201` only in `InGame`, matching the Java table. Java reflection construction differs from C# explicit factory lambdas. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_SUMMON_MOVE.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java live behavior looks up the summon/mercenary, rejects blocked movement states, mutates movement controller state, updates world position/last move, and may broadcast `SM_MOVE`. C# does none of those in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_SUMMON_MOVE_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 2 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesSummonMove" --no-restore` passed with 2 C# tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5105 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 56 game-server tests.
+
+Remaining risks:
+- This unit proves parser consumption and factory registration only. It does not prove live summon movement, encrypted frame handling, socket dispatch, or real-client behavior.
+- Java `CM_SUMMON_MOVE.runImpl` side effects remain unported: active-player summon/mercenary lookup, spawned checks, abnormal-state gates, movement mask/glide/vehicle mutation, controller movement callbacks, world position update, last-move update, and `SM_MOVE` fanout.
+- The Java manual-position-without-absolute branch is now parser-tested, but its runtime early return/position-update semantics are still source-reviewed only.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one C# client packet parser plus one opcode registration and one Java golden parser test.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser/golden evidence for one summon movement packet boundary.
+- Total artifacts needing verification: live summon movement execution, live summon/mercenary ownership lookup, movement-controller state mutation, world position updates, `SM_MOVE` broadcast fanout, live summon cast/attack controller execution, live pet/common-data mutation and packet send, live dialog/private-store/buy/repurchase persistence, condition validators, active-effect/stat runtime, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for dialog/private-store/pet/summon/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy persistence, live dialog controller/AI dispatch proof, live private-store mutation/fanout proof, live pet/common-data/reward mutation and packet send, live summon movement/combat controller dispatch, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes one summon movement parser/factory gap but does not complete live summon movement parity.
+
+Next recommended unit of work:
+- Next sequential task: choose another compact parser/factory/model boundary with Java golden evidence, preferably one with no live mutation until the dependent subsystem exists.
+- Safe alternative candidates for the next session:
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+	- inspect BUY_AGAIN live-send ordering only if a stronger deterministic Java runtime vector can be added without broad object graph setup
+	- inspect another compact unported enum/model dependency with Java golden evidence
+
 ### Session 1997 (June 1, 2026)
 - Performed Work Discovery after UOW-1996: re-read the latest handoff/progress context, inspected Java `CM_PET.readImpl`/`runImpl`, Java `PetAction`, C# `CmPet`, C# `PetAction`, and existing pet parser tests.
 - Found a compact parser parity gap in the `CM_PET` `EXTEND_EXPIRATION` branch: Java reads `eggObjId` and `objectId` with two `readD()` calls even though `runImpl` later no-ops the action, while C# previously documented the branch but did not consume those fields.
