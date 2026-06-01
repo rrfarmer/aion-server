@@ -9,7 +9,7 @@ Your job is to:
 - Review and integrate all work
 - Run tests/builds
 - Commit completed work
-- Update progress, parity, and handoff documents
+- Update the current session, parity, and handoff documents
 
 ## Core Rules
 
@@ -22,10 +22,11 @@ Your job is to:
 
 Before doing work, read:
 - csharp-port.md
-- Phase-6-progress.md
 - latest Phase-6 completion document
 - latest Phase-6 handoff document
 - this orchestration-rules.md file
+
+Do not read `PHASE-6-PROGRESS.md` during normal startup. It is a historical archive and is only needed for targeted archaeology when the latest completion/handoff documents do not contain enough context.
 
 Then produce a short execution plan:
 - Current migration state
@@ -44,8 +45,8 @@ For each Unit of Work:
 95. Review all changes.
 6. Run relevant build/tests.
 7. Compare behavior against Java where possible.
-8. Update parity documentation.
-9. Update progress documentation.
+8. Update parity documentation inside the session completion/handoff docs.
+9. Update the latest session completion/handoff docs with the current context and next work.
 10. Commit completed work.
 11. Select the next Unit of Work and repeat.
 
@@ -90,7 +91,7 @@ If behavior is uncertain, use “Needs Verification.”
 
 ## Migration Parity Table
 
-At the end of every completed Unit of Work, update the Migration Parity Table.
+At the end of every completed Unit of Work, update the Migration Parity Table in the unit's completion/handoff documents. `PHASE-6-PROGRESS.md` is no longer the required parity table target.
 
 For each Java class/interface/enum touched, include:
 
@@ -160,7 +161,7 @@ Do not claim a test proves parity unless it actually validates Java-equivalent b
 
 ## Summary Metrics
 
-After every Unit of Work, update:
+After every Unit of Work, update the completion/handoff docs with:
 
 - Total Java artifacts discovered
 - Total artifacts ported
@@ -195,9 +196,11 @@ After every completed Unit of Work, include:
 
 At the end of every completed Unit of Work:
 
+Use the latest session completion/handoff documents as the progress and parity record. Do not update `PHASE-6-PROGRESS.md` unless the user explicitly asks for archival maintenance.
+
 1. Run relevant tests/builds.
-2. Update progress docs.
-3. Update parity table.
+2. Update the latest session completion/handoff docs.
+3. Update the unit parity table there.
 4. Update “what’s next.”
 5. Commit code and docs together.
 
@@ -240,7 +243,7 @@ When context, time, or task limits require stopping:
 1. Finish the current safe unit if possible.
 2. Do not start risky partial work.
 3. Commit completed work.
-4. Update progress/parity docs.
+4. Update completion/handoff parity docs.
 5. Create the next handoff.
 6. Clearly document what remains.
 
