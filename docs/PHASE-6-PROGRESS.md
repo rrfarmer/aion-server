@@ -84882,6 +84882,58 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1928 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1927: re-read required orchestration/parity docs, latest completion, latest handoff, and current progress context; inspected Java `CM_BUY_ITEM.runImpl`, Java `Npc.canSell` / `Npc.canBuy` / `Npc.canPurchase`, Java `NpcTemplate.supportsAction`, C# `NpcTemplateSummary.SupportsDialogAction`, C# `TradeListTable`, C# `GameServerConnection.HandleBuyItem`, and existing buy-item diagnostic planners.
+- Confirmed Java gates NPC action `1` with `npc.canBuy() || npc.canPurchase()`, action `2` with `npc.canBuy()`, and actions `13`-`16` with `npc.canSell()`.
+- Confirmed Java `canSell()` requires both a trade-list template and `DialogAction.BUY`, `canBuy()` requires `DialogAction.SELL` or `canSell()`, and `canPurchase()` requires both a purchase template and `DialogAction.TRADE_SELL_LIST`.
+- Added a source-reviewed NPC trade-function fact adapter that derives diagnostic `NpcCanSell`, `NpcCanBuy`, and `NpcCanPurchase` facts from loaded C# NPC function dialog IDs plus `TradeListTable` presence.
+- Wired `GameServerConnection` buy-item diagnostics to resolve those function facts for world NPC targets before composing disabled `CM_BUY_ITEM` plans.
+- Updated sell-action diagnostics to use the resolved NPC function facts instead of defaulting `NpcCanBuy=true` and `NpcCanPurchase=false`.
+- Added regression coverage for sell, buy, purchase, and missing-function/missing-trade-data derivation, plus a socket-level NPC sell-action case proving unsupported NPC functions skip the diagnostic dispatch.
+- Kept this unit non-live. No live inventory mutation, AP/Kinah mutation, buy transaction, sell transaction, repurchase mutation, packet dispatch, transaction commit, repository write, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1928
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.model.gameobjects.Npc.canSell` | `CmBuyItemNpcTradeFunctionFactAdapterService.CreatePlan` | Diagnostic Fact Adapter | Partial | Regression Tested | Partial Parity | C# derives diagnostic `NpcCanSell` from loaded trade-list presence plus NPC template function dialog id `2` (`DialogAction.BUY`). Java runtime comparison and live NPC/dialog validation remain pending. |
+| `com.aionemu.gameserver.model.gameobjects.Npc.canBuy` | `CmBuyItemNpcTradeFunctionFactAdapterService.CreatePlan` consumed by `GameServerConnection.HandleBuyItem` | Diagnostic Fact Adapter | Partial | Regression Tested | Partial Parity | C# derives diagnostic `NpcCanBuy` from function dialog id `3` (`DialogAction.SELL`) or derived `canSell`, matching the Java source formula for disabled plan composition only. |
+| `com.aionemu.gameserver.model.gameobjects.Npc.canPurchase` | `CmBuyItemNpcTradeFunctionFactAdapterService.CreatePlan` consumed by sell-action diagnostics | Diagnostic Fact Adapter | Partial | Regression Tested | Partial Parity | C# derives diagnostic `NpcCanPurchase` from purchase-template presence plus function dialog id `103` (`DialogAction.TRADE_SELL_LIST`). Live purchase/sell execution remains disabled. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM.runImpl` NPC function guards | `GameServerConnection.ResolveBuyItemNpcTradeFunctionFacts` + buy-item composition input | Diagnostic Socket Planner | Partial | Regression Tested | Partial Parity | Socket diagnostics now feed source-reviewed NPC function facts into disabled `CM_BUY_ITEM` planner selection for NPC targets when static data is available. Unknown/no-static-data paths preserve prior conservative defaults. |
+
+Validation:
+- Focused buy-item/function-fact slice first failed because one socket fixture lacked the Java `TRADE_SELL_LIST` function id required for an ABYSS purchase template; after correcting the fixture, the slice passed with 74 tests.
+- Related `CM_BUY_ITEM` diagnostic branch slice passed with 126 tests.
+- Broad game-server suite excluding `GameServerConnectionInventoryExpansionUseItemTests` passed with 4955 tests.
+- After a final fixture cleanup, the related `CM_BUY_ITEM` diagnostic branch slice was rerun and passed again with 126 tests.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- Local Java execution remains blocked until compatible Java and Maven are available.
+- Live `CM_BUY_ITEM` action `1`, action `2`, and actions `13`-`16` execution remains disabled.
+- NPC function facts are diagnostic-only and depend on loaded static `FunctionDialogIds` plus `TradeListTable` data.
+- Full Java NPC dialog/known-list/range validation remains pending.
+- Buy-from-shop transaction fact hydration and live buy transaction mutation remain unwired.
+- Normal/AP sell, repurchase, private-store, and pet merchant mutation paths remain non-live.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: source-reviewed NPC trade-function fact derivation plus disabled socket diagnostic consumption.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 23 rows pending Java runtime/golden comparison, Java-equivalent known-list object population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN wiring, live private-store action `0`, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction fact hydration, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live sell-limit map mutation/rate source, live limited-item mutation, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live normal/AP sell mutation wiring, live buy transaction mutation wiring, live sell-limit map mutation, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves source-reviewed NPC function diagnostic gating but does not complete live trade execution or runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add production-safe buy-transaction fact hydration for selected NPC buy-from-shop diagnostics without dispatching live effects.
+- Safe alternative candidates for the next session:
+	- inspect Java `PetService.sell` auto-sell notification path as a separate disabled notification planner
+	- hydrate safe private-store listed-item facts into the diagnostic path only if no live mutation is enabled
+	- add Java-runtime golden capture for `CM_BUY_ITEM` once compatible Java and Maven are available
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1927 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1926: re-read required orchestration/parity docs, latest completion, latest handoff, and current progress context; inspected Java `TradeService.performSellToShop` partial-stack and missing-Kinah allocation points, C# `GameServerConnection.ResolveBuyItemSellToShopPlan`, C# `TradeSellToShopPlanService`, and buy-item socket diagnostics.
 - Confirmed the Java runtime/golden path remains blocked locally, so this unit stayed source-reviewed and C#-tested only.
