@@ -87352,3 +87352,46 @@ Next recommended unit of work:
 	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
 	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+
+### Session 1952 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1951: re-read required migration/orchestration/parity docs, latest completion and handoff, inspected Java `RepurchaseService.addRepurchaseItems`, `RepurchaseService.getRepurchaseItems`, `SM_REPURCHASE(Player, npcId)`, `SM_REPURCHASE.writeImpl`, Java `AionObject.hashCode/equals`, and C# `RepurchasePacketSnapshotPlanService` tests.
+- Added Java runtime coverage proving `SM_REPURCHASE(Player, npcId)` serializes item rows in the current `RepurchaseService.getRepurchaseItems(playerId)` set iteration order.
+- The Java test intentionally compares packet object-id order to the live service set iteration, not to the original list passed into `addRepurchaseItems`, because Java stores repurchase items in a `HashSet`.
+- Added C# coverage proving the disabled `RepurchasePacketSnapshotPlanService` preserves the supplied fact order when composing `SmRepurchase`.
+- Kept this unit test/documentation scoped. No C# live singleton state, Java `HashSet` emulation, socket send, repository mutation, encrypted-frame proof, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1952
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.RepurchaseService.addRepurchaseItems/getRepurchaseItems` ordering as consumed by `SM_REPURCHASE` | `Aion.GameServer.Services.RepurchasePacketSnapshotPlanService` supplied snapshot order | State/Packet Boundary | Partial | Java Runtime Compared + Unit Tested | Partial Parity | Java runtime test proves the packet follows current `RepurchaseService` set iteration order, and C# test proves the disabled adapter preserves supplied order. C# still does not model live `HashSet` replacement/iteration, singleton map state, or mutation timing. |
+| `com.aionemu.gameserver.model.gameobjects.AionObject.hashCode/equals` object-id based set behavior | `InventoryItem.ObjectId` supplied-order snapshots | Model/Ordering Dependency | Partial | Source Reviewed | Needs Verification | Java `HashSet<Item>` hashing is object-id based through `AionObject.hashCode`. C# adapter intentionally does not infer Java set iteration from object IDs; callers must supply the intended snapshot order until live state is ported. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_REPURCHASE_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 4 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~RepurchasePacketSnapshotPlanServiceTests|FullyQualifiedName~SmRepurchaseTests" --no-restore` passed with 8 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 23 game-server tests.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 4995 tests.
+
+Remaining risks:
+- Java runtime coverage confirms packet order follows service set iteration, but it does not prove a stable business ordering for all object-id sets or JVM implementations.
+- C# remains supplied-order only for disabled snapshot composition and does not yet port Java singleton `ConcurrentHashMap<Integer, Set<Item>>` replacement or `HashSet` iteration behavior.
+- Live BUY_AGAIN dispatch, live `CM_BUY_ITEM` repurchase execution, inventory/Kinah mutation, repository persistence, transaction behavior, encrypted frame capture, and real-client validation remain pending.
+- Full item-info blob parity for advanced item states remains partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported: no production artifacts; added Java/C# ordering tests around repurchase packet snapshot composition.
+- Total artifacts with verified parity: 0 full artifacts; ordering evidence narrows one boundary but live state parity remains partial.
+- Total artifacts needing verification: live repurchase singleton state and mutation timing, live BUY_AGAIN wiring, live `CM_BUY_ITEM` repurchase execution, DAO/packet behavior, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves objective ordering evidence for repurchase packet snapshots but does not complete live repurchase or trade parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect whether a small disabled live-state adapter can represent Java `RepurchaseService` map replacement/remove lifecycle (`addRepurchaseItems`, `removeRepurchaseItems`, `getRepurchaseItems`) without enabling socket dispatch or mutation.
+- Safe alternative candidates for the next session:
+	- add another narrow Java golden item-info vector only if the fixture remains simple, such as equipped-slot nonzero or one basic manastone socket
+	- inspect `PetService.activateAutoSell` plus `SM_PET(AUTOSELL, activate)` as a disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
+	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available

@@ -6,7 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -14,8 +17,10 @@ import com.aionemu.gameserver.dataholders.DataManager;
 import com.aionemu.gameserver.dataholders.ItemRestrictionCleanupData;
 import com.aionemu.gameserver.model.gameobjects.AionObject;
 import com.aionemu.gameserver.model.gameobjects.Item;
+import com.aionemu.gameserver.model.gameobjects.player.Player;
 import com.aionemu.gameserver.model.templates.item.ItemTemplate;
 import com.aionemu.gameserver.model.templates.item.enums.ItemGroup;
+import com.aionemu.gameserver.services.RepurchaseService;
 
 import sun.misc.Unsafe;
 
@@ -85,6 +90,37 @@ public class SM_REPURCHASE_GoldenTest {
 		}
 	}
 
+	@Test
+	public void constructor_usesRepurchaseServiceSetIterationOrderForItems() throws Exception {
+		ItemRestrictionCleanupData originalCleanup = DataManager.ITEM_CLEAN_UP;
+		Player player = simplePlayer();
+		RepurchaseService repurchaseService = RepurchaseService.getInstance();
+		try {
+			DataManager.ITEM_CLEAN_UP = emptyCleanupData();
+			repurchaseService.removeRepurchaseItems(player);
+			repurchaseService.addRepurchaseItems(player, Arrays.asList(simpleItem(7002), simpleItem(7001)));
+
+			List<Integer> expectedObjectIds = new ArrayList<>();
+			for (Item item : repurchaseService.getRepurchaseItems(player.getObjectId()))
+				expectedObjectIds.add(item.getObjectId());
+
+			SM_REPURCHASE packet = new SM_REPURCHASE(player, 9001);
+			ByteBuffer buffer = ByteBuffer.allocate(512).order(ByteOrder.LITTLE_ENDIAN);
+			packet.setBuf(buffer);
+
+			packet.writeImpl(null);
+
+			byte[] payload = new byte[buffer.position()];
+			buffer.flip();
+			buffer.get(payload);
+
+			assertEquals(expectedObjectIds, readRepurchaseItemObjectIds(payload));
+		} finally {
+			repurchaseService.removeRepurchaseItems(player);
+			DataManager.ITEM_CLEAN_UP = originalCleanup;
+		}
+	}
+
 	private static SM_REPURCHASE allocatePacket() throws Exception {
 		return allocatePacket(Collections.emptyList());
 	}
@@ -101,8 +137,12 @@ public class SM_REPURCHASE_GoldenTest {
 	}
 
 	private static Item simpleItem() throws Exception {
+		return simpleItem(7001);
+	}
+
+	private static Item simpleItem(int objectId) throws Exception {
 		Item item = (Item) unsafe().allocateInstance(Item.class);
-		setAionObjectId(item, 7001);
+		setAionObjectId(item, objectId);
 		setField(item, "itemCount", 1L);
 		setField(item, "itemTemplate", simpleTemplate());
 		setField(item, "repurchasePrice", 12345L);
@@ -130,6 +170,12 @@ public class SM_REPURCHASE_GoldenTest {
 		setField(template, "description", 40000);
 		setField(template, "itemGroup", itemGroup);
 		return template;
+	}
+
+	private static Player simplePlayer() throws Exception {
+		Player player = (Player) unsafe().allocateInstance(Player.class);
+		setAionObjectId(player, 1001);
+		return player;
 	}
 
 	private static ItemRestrictionCleanupData emptyCleanupData() throws Exception {
@@ -161,5 +207,28 @@ public class SM_REPURCHASE_GoldenTest {
 		for (byte value : bytes)
 			sb.append(String.format("%02X", value));
 		return sb.toString();
+	}
+
+	private static List<Integer> readRepurchaseItemObjectIds(byte[] payload) {
+		ByteBuffer buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+		buffer.getInt(); // targetObjectId
+		buffer.getInt(); // constant 1
+		int itemCount = Short.toUnsignedInt(buffer.getShort());
+		List<Integer> objectIds = new ArrayList<>();
+		for (int i = 0; i < itemCount; i++) {
+			objectIds.add(buffer.getInt());
+			buffer.getInt(); // template id
+			readS(buffer);
+			int blobLength = Short.toUnsignedInt(buffer.getShort());
+			buffer.position(buffer.position() + blobLength);
+			buffer.getLong(); // repurchase price
+		}
+		return objectIds;
+	}
+
+	private static void readS(ByteBuffer buffer) {
+		while (buffer.remaining() >= 2 && buffer.getChar() != 0) {
+			// Skip UTF-16LE characters until the null terminator written by writeS.
+		}
 	}
 }
