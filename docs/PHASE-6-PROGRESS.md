@@ -87913,6 +87913,41 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2056 (June 1, 2026)
+- Performed Work Discovery after UOW-2055: re-read the required migration/orchestration/parity docs plus the latest UOW-2055 completion/handoff, inspected Java `FindGroupService` instance-group methods, Java `ServerWideGroup`, Java/C# `SM_FIND_GROUP`, C# `CmFindGroup`, and existing find-group tests.
+- Scoped this unit to disabled C# planner evidence for Java instance-group registration/update/remove/show/member-info behavior.
+- Extended `FindGroupRecruitmentPlanService` with instance-group state keyed by recruiter object id, action `14` register packet intent, action `10` race-filtered show-list planning, update/remove planning, and action `16` member-info packet intent.
+- Reused the existing C# `SmFindGroup` packet snapshot types and preserved the Java `ServerWideGroup.getMinLevel` / `getMaxLevel` comparator quirk where min-level output is the highest member level and max-level output is the lowest.
+- Added focused C# coverage for register, show race filtering, update, remove, and member-info packet intentions.
+- Kept live `CM_FIND_GROUP` dispatch, Java singleton service runtime, `GroupConfig.FORM_INSTANCE_GROUP_ANYWHERE` mask-list routing, dynamic team member lookup, and real world/socket sends deferred.
+
+#### Migration Parity Table - Session 2056
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.services.findgroup.FindGroupService.registerInstanceGroup` | `Aion.GameServer.Services.FindGroupRecruitmentPlanService.RegisterInstanceGroup` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested + Java Packet Golden Tested | Partial Parity | C# stores an instance-group state keyed by recruiter object id and records a direct `SM_FIND_GROUP` action `14` packet intent. Java singleton state, live `PacketSendUtility.sendPacket`, dynamic team member lookup, and real client behavior remain unverified. |
+| `FindGroupService.showInstanceGroups` | `FindGroupRecruitmentPlanService.ShowInstanceGroups` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested + Java Packet Golden Tested | Partial Parity | C# filters stored instance groups by recruiter race and records action `10` show-list packets. Java's optional action `26` instance-mask list for `FORM_INSTANCE_GROUP_ANYWHERE` is not modeled in this service planner. |
+| `FindGroupService.updateInstanceGroup` | `FindGroupRecruitmentPlanService.UpdateInstanceGroup` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested | Partial Parity | C# updates message and deterministic last-update timestamp only when a recruiter entry exists, then plans the action `10` update show-list. Java system-clock timing and live send remain deferred. |
+| `FindGroupService.removeInstanceGroup` | `FindGroupRecruitmentPlanService.RemoveInstanceGroup` | Disabled Service Planner | Partial | Source Reviewed + C# Unit Tested | Partial Parity | C# removes by recruiter object id and always plans the post-remove action `10` show-list, matching reviewed Java source. Live map concurrency and recipient socket behavior are not proven. |
+| `FindGroupService.showInstanceGroupMembersInfo` / `ServerWideGroup.getMembers` | `FindGroupRecruitmentPlanService.ShowInstanceGroupMembersInfo` / `FindGroupInstanceGroupState` | Disabled Service Planner / DTO | Partial | Source Reviewed + C# Unit Tested + Java Packet Golden Tested | Partial Parity | C# records action `16` member-info intent for existing groups. Current members are caller-supplied or default to the recruiter; Java dynamically reads the recruiter's current team when present, which remains a live team-service dependency. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~FindGroupRecruitmentPlanServiceTests" --no-restore` passed with 18 C# tests. Existing nullable/analyzer warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmFindGroupTests|FullyQualifiedName~FindGroupRecruitmentPlanServiceTests|FullyQualifiedName~GamePacketTests.CmFindGroup" --no-restore` passed with 32 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_FIND_GROUP_GoldenTest,CM_FIND_GROUP_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 25 Java test methods. Existing Unsafe warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 126 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5195 C# tests.
+
+Known gaps:
+- This unit is disabled planner evidence only; live `CM_FIND_GROUP` action dispatch remains deferred.
+- No Java `FindGroupService` singleton runtime test, actual `PacketSendUtility.sendPacket`, online world recipient filtering, encrypted socket frame, real-client behavior, service concurrency, or Java `TemporaryPlayerTeam` dynamic member behavior was proven.
+- The planner uses caller-supplied deterministic timestamps and optional current-member snapshots; Java uses `System.currentTimeMillis() / 1000` and reads current team members dynamically through `ServerWideGroup.getMembers`.
+- `GroupConfig.FORM_INSTANCE_GROUP_ANYWHERE`, `DataManager.AUTO_GROUP` instance-mask list packets, portal NPC routing, applicant-response, prepare-window actions, ban action, logout cleanup, and live handler composition remain outside this unit.
+
+Next candidates:
+- Next sequential task: inspect instance-group applicant response behavior (`sendInstanceApplication` and `sendInstanceApplicationResult`) as a disabled planner slice, including accept-to-group/alliance intent and denial whisper intent without live invitations.
+- Safe alternatives: inspect CM_FIND_GROUP action `0`-`17` composition with the planner while still disabled; inspect `GroupConfig.FORM_INSTANCE_GROUP_ANYWHERE` action `26` mask-list planning; return to alliance/group recipient filtering only with objective packet/fanout evidence.
+
 ### Session 2055 (June 1, 2026)
 - Performed Work Discovery after UOW-2054: re-read the required migration/orchestration/parity docs plus the latest UOW-2054 completion/handoff, inspected Java `FindGroupService.onJoinedTeam`, existing Java `SM_FIND_GROUP`/`CM_FIND_GROUP` goldens, C# `FindGroupRecruitmentPlanService`, and find-group tests.
 - Scoped this unit to a disabled C# planner slice for Java `FindGroupService.onJoinedTeam` state transitions.
