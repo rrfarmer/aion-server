@@ -10,6 +10,13 @@ import java.util.Collections;
 
 import org.junit.jupiter.api.Test;
 
+import com.aionemu.gameserver.dataholders.DataManager;
+import com.aionemu.gameserver.dataholders.ItemRestrictionCleanupData;
+import com.aionemu.gameserver.model.gameobjects.AionObject;
+import com.aionemu.gameserver.model.gameobjects.Item;
+import com.aionemu.gameserver.model.templates.item.ItemTemplate;
+import com.aionemu.gameserver.model.templates.item.enums.ItemGroup;
+
 import sun.misc.Unsafe;
 
 public class SM_REPURCHASE_GoldenTest {
@@ -30,15 +37,79 @@ public class SM_REPURCHASE_GoldenTest {
 		assertArrayEquals(new byte[] { 0x29, 0x23, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00 }, payload);
 	}
 
+	@Test
+	public void writeImpl_writesSimpleRepurchaseItemWithGeneralInfoBlobAndPrice() throws Exception {
+		ItemRestrictionCleanupData originalCleanup = DataManager.ITEM_CLEAN_UP;
+		try {
+			DataManager.ITEM_CLEAN_UP = emptyCleanupData();
+
+			SM_REPURCHASE packet = allocatePacket(Collections.singletonList(simpleItem()));
+			ByteBuffer buffer = ByteBuffer.allocate(256).order(ByteOrder.LITTLE_ENDIAN);
+			packet.setBuf(buffer);
+
+			packet.writeImpl(null);
+
+			byte[] payload = new byte[buffer.position()];
+			buffer.flip();
+			buffer.get(payload);
+
+			assertEquals(
+				"29230000010000000100591B000001E1F50524008138010000002200000100010000000000000000000000000000000000000000000000000000000012003930000000000000",
+				toHex(payload));
+		} finally {
+			DataManager.ITEM_CLEAN_UP = originalCleanup;
+		}
+	}
+
 	private static SM_REPURCHASE allocatePacket() throws Exception {
+		return allocatePacket(Collections.emptyList());
+	}
+
+	private static SM_REPURCHASE allocatePacket(Iterable<Item> items) throws Exception {
 		Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
 		unsafeField.setAccessible(true);
 		Unsafe unsafe = (Unsafe) unsafeField.get(null);
 		SM_REPURCHASE packet = (SM_REPURCHASE) unsafe.allocateInstance(SM_REPURCHASE.class);
 		setField(packet, "targetObjectId", 9001);
-		setField(packet, "items", Collections.emptyList());
+		setField(packet, "items", items);
 		setField(packet, "player", null);
 		return packet;
+	}
+
+	private static Item simpleItem() throws Exception {
+		Item item = (Item) unsafe().allocateInstance(Item.class);
+		setAionObjectId(item, 7001);
+		setField(item, "itemCount", 1L);
+		setField(item, "itemTemplate", simpleTemplate());
+		setField(item, "repurchasePrice", 12345L);
+		return item;
+	}
+
+	private static ItemTemplate simpleTemplate() throws Exception {
+		ItemTemplate template = (ItemTemplate) unsafe().allocateInstance(ItemTemplate.class);
+		setField(template, "itemId", 100000001);
+		setField(template, "mask", 1);
+		setField(template, "description", 40000);
+		setField(template, "itemGroup", ItemGroup.NONE);
+		return template;
+	}
+
+	private static ItemRestrictionCleanupData emptyCleanupData() throws Exception {
+		ItemRestrictionCleanupData data = (ItemRestrictionCleanupData) unsafe().allocateInstance(ItemRestrictionCleanupData.class);
+		setField(data, "bplist", Collections.emptyList());
+		return data;
+	}
+
+	private static void setAionObjectId(AionObject object, int objectId) throws Exception {
+		Field field = AionObject.class.getDeclaredField("objectId");
+		long offset = unsafe().objectFieldOffset(field);
+		unsafe().putInt(object, offset, objectId);
+	}
+
+	private static Unsafe unsafe() throws Exception {
+		Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+		unsafeField.setAccessible(true);
+		return (Unsafe) unsafeField.get(null);
 	}
 
 	private static void setField(Object target, String name, Object value) throws Exception {

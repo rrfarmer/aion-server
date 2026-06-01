@@ -84882,6 +84882,53 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1949 (June 1, 2026)
+- Performed Work Discovery after UOW-1948: read the latest handoff, inspected Java `SM_REPURCHASE.writeImpl`, Java `ItemInfoBlob.getFullBlob`, `GeneralInfoBlobEntry`, Java `Item`/`ItemTemplate` fixture requirements, C# `SmRepurchase`, `SmInventoryInfo.WriteItemInfoBlob`, and existing C# `SmRepurchaseTests`.
+- Selected a conservative non-empty `SM_REPURCHASE` golden vector for a simple non-equipment item. This keeps the Java capture on the packet header, localized item name, general-info blob, and repurchase price without pulling in equipment slots, sockets, conditioning, polish, stat modifiers, or live player state.
+- Extended Java `SM_REPURCHASE_GoldenTest` with `writeImpl_writesSimpleRepurchaseItemWithGeneralInfoBlobAndPrice`: target object id `9001`, one item object id `7001`, template id `100000001`, description id `40000`, mask `1`, count `1`, and repurchase price `12345`.
+- Tightened C# `SmRepurchaseTests.WritePayload_WritesRepurchaseItemsWithBlobThenPrice` to compare the exact Java runtime-captured payload hex for the same simple non-equipment item.
+- Kept this unit to non-empty packet serialization only. Live `RepurchaseService` state, constructor snapshot behavior, live dialog dispatch, item creation/persistence, and richer item-info blob branches remain outside this unit.
+
+#### Migration Parity Table - Session 1949
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_REPURCHASE.writeImpl` simple non-empty item payload | `Aion.GameServer.Network.Aion.ServerPackets.SmRepurchase.WritePayload` simple non-empty item payload | Server Packet | Partial | Golden File Tested | Partial Parity | Java runtime-captured exact payload now covers target id, constant `1`, item count, item object id, template id, `ChatUtil.l10n` item name, simple general-info item blob, and repurchase price. Richer equipment/socket/conditioning/polish/stat blob branches, constructor snapshot through `RepurchaseService`, encrypted frame behavior, live dialog send, and real-client behavior remain unverified. |
+| `com.aionemu.gameserver.network.aion.iteminfo.ItemInfoBlob.getFullBlob` simple non-equipment general-info path | `SmInventoryInfo.WriteItemInfoBlob` simple non-equipment general-info path reused by `SmRepurchase` | Item Info Serialization | Partial | Golden File Tested | Partial Parity | Java golden fixture proves the simple non-equipment item emits only `GENERAL_INFO` with blob size `0x22`; C# repurchase test now asserts the same bytes through the shared blob writer. Equipment and advanced item-info blobs remain only partially verified by other tests. |
+
+Validation:
+- Focused Java golden test passed with 2 test methods:
+  `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_REPURCHASE_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"`
+- Focused C# packet tests passed with 3 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmRepurchaseTests" --no-restore`
+- Java/Maven reactor test run passed with tests explicitly enabled:
+  `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` ran 1 commons test and 21 game-server tests with 0 failures.
+- Broad game-server C# suite excluding the known inventory expansion use-item slice passed with 4989 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore`
+
+Remaining risks:
+- The Java golden test uses test-only `Unsafe.allocateInstance` and reflection to construct a minimal `SM_REPURCHASE`/`Item`/`ItemTemplate` fixture.
+- The non-empty golden vector intentionally covers only the simple non-equipment general-info blob.
+- Live `SM_REPURCHASE(Player, npcId)` constructor behavior through `RepurchaseService.getRepurchaseItems`, live dialog packet dispatch, encrypted frame behavior, item persistence, and real-client validation remain pending.
+- Full `ItemInfoBlob` parity for equipment, sockets, conditioning, polish, stat bonuses, wrapped items, and stigma shards remains partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 2 grouped rows in this unit.
+- Total artifacts ported/verified: exact Java/C# payload match for a simple non-empty `SM_REPURCHASE` item and its general-info blob.
+- Total artifacts with verified parity: 0 rows at full artifact scope; this unit adds golden evidence for a narrow non-empty serialization slice but leaves broader `SM_REPURCHASE` and item-info behavior Partial Parity.
+- Total artifacts needing verification: 24 rows pending Java runtime/golden comparison for richer repurchase item blobs, live repurchase singleton state wiring, live BUY_AGAIN packet dispatch, live `CM_BUY_ITEM` handler execution, Java-equivalent known-list object population, live known-list resolver ownership, live private-store action `0`, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item service state/counter persistence, live price influence/siege state source, live pet auto-sell activation/state/item selection, live pet auto-sell execution/notification dispatch, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN packet dispatch, live normal/AP sell mutation wiring, live buy transaction mutation wiring, live influence/siege state wiring, live limited-item counter mutation/cron reset, live private-store model/runtime wiring, live pet common-data/service wiring, live pet auto-sell inventory/drop caller integration, live repurchase state and send wiring, live source-item clone caller integration, live audit notification/punishment side effects, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit strengthens `SM_REPURCHASE` packet byte evidence but does not complete live repurchase parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect whether a safe Java golden vector can cover a simple equipment `SM_REPURCHASE` item blob, or switch to live repurchase constructor/state snapshot planning if the equipment fixture becomes too coupled.
+- Safe alternative candidates for the next session:
+	- inspect `PetService.activateAutoSell` and `SM_PET(AUTOSELL, activate)` runtime state wiring as a separate disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full socket cases without enabling live mutation
+	- continue repurchase toward live singleton-state adapter boundaries without enabling live mutation
+	- inspect whether `CM_BUY_ITEM` amount signedness can be safely captured from Java `readUH()` versus C# `ReadH()` without relying on impossible negative unsigned values
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+
 ### Session 1948 (June 1, 2026)
 - Performed Work Discovery after UOW-1947: read the latest handoff, inspected Java `CM_BUY_ITEM.readImpl` item guard, C# `CmBuyItem.ReadPayload`, and existing C# count-above-maximum coverage.
 - Selected the count-above-20000 item guard as the next safe audit capture. This is the final item-level audit branch in the shared Java guard already covered for negative count and non-positive item id.
