@@ -87913,6 +87913,48 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2016 (June 1, 2026)
+- Performed Work Discovery after UOW-2015: re-read the latest handoff, inspected Java `CM_CHALLENGE_LIST`, Java packet factory opcode `232`, searched the C# port for existing challenge-list client packet coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
+- Found a compact parser/factory parity gap: Java registers `CM_CHALLENGE_LIST` at opcode `232` for `IN_GAME`, while C# had no client packet parser or registration for that opcode.
+- Added Java golden coverage for `CM_CHALLENGE_LIST.readImpl`, proving Java reads UC `action`, D `taskOwner`, UC `ownerType`, D `playerId`, and D `dateSince` in order and consumes the payload.
+- Added C# `CmChallengeList`, registered opcode `232` for `InGame`, added C# factory parser coverage for valid `InGame` and invalid `Authed`, and documented the live challenge-task handler boundary as deferred.
+- No live challenge-task behavior was enabled; Java `runImpl` validates legion ownership for `ownerType == 1`, audit-logs invalid legion challenge requests, and calls `ChallengeTaskService.showTaskList` for legion or town challenge tasks.
+
+#### Migration Parity Table - Session 2016
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CHALLENGE_LIST.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmChallengeList.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# reads UC `action`, D `taskOwner`, UC `ownerType`, D `playerId`, and D `dateSince` in Java order. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `232` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `232` registration | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# factory accepts opcode `232` only in `InGame`, matching the Java registration state. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_CHALLENGE_LIST.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java checks legion membership for legion challenge requests, audit-logs invalid use, and dispatches `ChallengeTaskService.showTaskList`. C# does not wire live challenge behavior in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_CHALLENGE_LIST_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesChallengeListPacket" --no-restore` passed with 1 C# test. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5122 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 75 game-server tests.
+
+Remaining risks:
+- This unit proves only parser consumption and opcode registration. It does not prove legion membership validation, audit logging, challenge task service dispatch, challenge task packet serialization, encrypted frame handling, socket dispatch, or real-client behavior.
+- Java `CM_CHALLENGE_LIST.runImpl` side effects remain unported: active player lookup, legion-null audit branch, `ChallengeType.LEGION`/`TOWN` selection, and `ChallengeTaskService.showTaskList`.
+- Unsigned-byte parsing is covered for `action=255`; live behavior does not currently use the parsed `action`, `playerId`, or `dateSince` fields in Java.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one C# client packet parser plus one opcode registration and one Java golden parser test.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser/golden evidence for one challenge-list packet boundary.
+- Total artifacts needing verification: live challenge-list service behavior, live GF webshop token request dispatch, live weapon-break/fusion dispatch/service behavior, live auto-group dispatch and service behavior, live abyss-ranking players/legions cache/send behavior, live item deletion, live group/alliance/league Kinah distribution, live GameGuard anti-hack enforcement, live view-player-details known-list/privacy/detail-packet dispatch, live house-teleport-back battle-return teleport, live instance-leave handler dispatch, live stop-training instance-handler dispatch, live close-dialog dialog-service dispatch, live disconnect socket lifecycle, live summon command/execution surfaces, live summon movement/emotion/combat controller dispatch, live pet/common-data mutation and packet send, live dialog/private-store/buy/repurchase persistence, condition validators, active-effect/stat runtime, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for dialog/private-store/pet/summon/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy/group-distribution/delete-item/abyss-ranking/auto-group/armsfusion/GF-webshop/challenge-task persistence and dispatch, live ranking-cache packet send behavior, live anti-hack GameGuard enforcement, live teleport/battle-return dispatch, live dialog controller/AI dispatch proof, live private-store mutation/fanout proof, live pet/common-data/reward mutation and packet send, live summon command/movement/emotion/combat controller dispatch, live instance-handler dispatch, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes one challenge-list parser/factory gap but does not complete live challenge-task parity.
+
+Next recommended unit of work:
+- Next sequential task: continue packet-factory discovery with source-reviewed opcode `237` `CM_MEGAPHONE` as a parser candidate (`readS message`, `readD itemObjId`) if megaphone item lookup, item-use restrictions, cooldown mutation, observer notification, and action execution remain deferred.
+- Safe alternative candidates for the next session:
+	- inspect another compact unregistered parser boundary with Java golden evidence
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+	- inspect BUY_AGAIN live-send ordering only if a stronger deterministic Java runtime vector can be added without broad object graph setup
+
 ### Session 2015 (June 1, 2026)
 - Performed Work Discovery after UOW-2014: re-read the latest handoff, inspected Java `CM_GF_WEBSHOP_TOKEN_REQUEST`, Java `SM_GF_WEBSHOP_TOKEN_RESPONSE`, Java packet factory opcode `229`, Java server opcode `274`, searched the C# port for existing GF webshop token coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, server packet patterns, and packet factory tests.
 - Found a compact request/response parity gap: Java registers `CM_GF_WEBSHOP_TOKEN_REQUEST` at opcode `229` for `IN_GAME`, reads no payload, and sends `SM_GF_WEBSHOP_TOKEN_RESPONSE("")`, while C# had no request parser, registration, response packet, or handler case.
