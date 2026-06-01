@@ -87913,6 +87913,48 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2008 (June 1, 2026)
+- Performed Work Discovery after UOW-2007: re-read the latest handoff, inspected Java `CM_GROUP_DISTRIBUTION`, Java packet factory opcode `108`, searched the C# port for existing group-distribution client packet coverage, and reviewed `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests.
+- Found a compact parser/factory parity gap: Java registers `CM_GROUP_DISTRIBUTION` at opcode `108` for `IN_GAME`, while C# had no parser or registration for that client packet.
+- Added Java golden coverage for `CM_GROUP_DISTRIBUTION.readImpl`, proving Java reads Q `amount`, C `partyType`, and consumes the payload.
+- Added C# `CmGroupDistribution`, registered opcode `108` for `InGame`, added C# factory parser coverage for amount/party-type parsing and invalid `Authed`, and documented the live Kinah-distribution handler boundary as deferred.
+- No live group/alliance/league Kinah distribution behavior was enabled; Java `runImpl` validates `amount >= 2`, checks `PlayerRestrictions.canTrade`, then dispatches to group, alliance, or league distribution services based on `partyType`.
+
+#### Migration Parity Table - Session 2008
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_GROUP_DISTRIBUTION.readImpl` | `Aion.GameServer.Network.Aion.ClientPackets.CmGroupDistribution.ReadPayload` | Client Packet Parser | Partial | Unit Tested + Java Golden Tested | Partial Parity | C# reads Q `amount` then C `partyType` in Java order. |
+| `com.aionemu.gameserver.network.aion.AionClientPacketFactory` opcode `108` registration | `Aion.GameServer.Network.Aion.GameClientPacketFactory` opcode `108` registration | Client Packet Registration | Partial | Unit Tested | Partial Parity | C# factory accepts opcode `108` only in `InGame`, matching the Java registration state. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_GROUP_DISTRIBUTION.runImpl` | `Aion.GameServer.Network.Aion.GameServerConnection` documented no-op boundary | Client Handler Boundary | Not Ported | Source Reviewed | Needs Verification | Java validates amount/trade state and dispatches Kinah distribution to group, alliance, or league services. C# does not wire live distribution in this unit. |
+
+Validation:
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_GROUP_DISTRIBUTION_ReadPayloadGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 1 Java test method.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GamePacketTests.ClientPacketFactory_ParsesGroupDistributionPacket" --no-restore` passed with 1 C# test. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5114 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 66 game-server tests.
+
+Remaining risks:
+- This unit proves only amount/party-type parser consumption and opcode registration. It does not prove amount guard behavior, trade restriction checks, group/alliance/league membership resolution, Kinah mutation, distribution packet fanout, encrypted frame handling, socket dispatch, or real-client behavior.
+- Java `CM_GROUP_DISTRIBUTION.runImpl` side effects remain unported: `PlayerRestrictions.canTrade`, `PlayerGroupService.distributeKinah`, `PlayerAllianceService.distributeKinahInGroup`, `PlayerAllianceService.distributeKinah`, and `LeagueService.distributeKinah`.
+- Invalid `partyType` and low-amount live no-op semantics are only source-reviewed here, not executed in C# runtime tests.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one C# client packet parser plus one opcode registration and one Java golden parser test.
+- Total artifacts with verified parity: 0 full runtime artifacts; this unit supplies parser/golden evidence for one group-distribution packet boundary.
+- Total artifacts needing verification: live group/alliance/league Kinah distribution, live GameGuard anti-hack enforcement, live view-player-details known-list/privacy/detail-packet dispatch, live house-teleport-back battle-return teleport, live instance-leave handler dispatch, live stop-training instance-handler dispatch, live close-dialog dialog-service dispatch, live disconnect socket lifecycle, live summon command/execution surfaces, live summon movement/emotion/combat controller dispatch, live pet/common-data mutation and packet send, live dialog/private-store/buy/repurchase persistence, condition validators, active-effect/stat runtime, and workflow integration.
+- Total blocked artifacts: live DB/config/runtime proof for dialog/private-store/pet/summon/version-check/event-theme/house-script/buy-trade-in/remove-altered-state/toggle-skill/teleport-select/ping/manastone/UI-settings/question-response/house-kick/appearance/split-item/legion/item move/Atreian passport/passkey/craft/sell/repurchase/buy/group-distribution persistence, live anti-hack GameGuard enforcement, live teleport/battle-return dispatch, live dialog controller/AI dispatch proof, live private-store mutation/fanout proof, live pet/common-data/reward mutation and packet send, live summon command/movement/emotion/combat controller dispatch, live instance-handler dispatch, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit closes one group-distribution parser/factory gap but does not complete live Kinah distribution parity.
+
+Next recommended unit of work:
+- Next sequential task: continue packet-factory discovery with source-reviewed opcode `116` `CM_DELETE_ITEM` as a compact parser candidate (`readD itemObjectId`) if live inventory breakability/delete behavior remains deferred.
+- Safe alternative candidates for the next session:
+	- source-review opcode `118` `CM_ABYSS_RANKING_LEGIONS` (`readC raceId`) if ranking cache send behavior remains deferred
+	- inspect another compact unregistered parser boundary with Java golden evidence
+	- inspect another Java delete-path cube-size caller outside craft to ensure Kinah/storage-count assumptions remain scoped correctly
+	- inspect private-store live side effects only as read-only readiness reporting, not mutation wiring
+
 ### Session 2007 (June 1, 2026)
 - Performed Work Discovery after UOW-2006: re-read the latest handoff, inspected Java `CM_GAMEGUARD`, Java packet factory opcode `104`, searched the C# port for existing GameGuard coverage, reviewed `PacketBuffer.ReadB`, `GameClientPacketFactory`, `GameServerConnection`, and packet factory tests, and source-reviewed opcode `108` `CM_GROUP_DISTRIBUTION` as the next safe candidate.
 - Found a compact parser/factory parity gap: Java registers `CM_GAMEGUARD` at opcode `104` for both `IN_GAME` and `AUTHED`, while C# game-server had no parser or registration for that client packet.
