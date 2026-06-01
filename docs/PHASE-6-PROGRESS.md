@@ -84882,6 +84882,56 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1931 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1930: re-read required orchestration/parity docs, latest completion, latest handoff, and current progress context; inspected Java `PetService.sell`, Java `PetService.activateAutoSell`, Java `SM_SYSTEM_MESSAGE.STR_MSG_MERCHANT_PET_GET_SELL_ITEM`, C# `TradeSellToShopPlanService`, C# pet merchant disabled facade/outcome services, C# `SmSystemMessage`, and existing pet merchant tests.
+- Confirmed Java `PetService.sell` is a separate auto-sell path from `CM_BUY_ITEM` pet action `17`: it returns for null/non-selling pets, resolves the MERCHANT `PetFunction`, builds a `TradeList` from supplied item object IDs/counts, calls `TradeService.performSellToShop(pet.getMaster(), tradeList, null, pf.getRatePrice())`, then sends `STR_MSG_MERCHANT_PET_GET_SELL_ITEM(pet.getName())` when the trade list is non-empty.
+- Added a disabled `PetAutoSellPlanService` that records the Java auto-sell guard order, trade-list build boundary, `TradeService.performSellToShop` invocation, and merchant-pet auto-sell notification intent without enabling live pet service execution.
+- Preserved the existing documented distinction that `CM_BUY_ITEM` pet merchant action `17` remains notification-free; only the new source-derived auto-sell planner records message `1402570`.
+- Added a `SmSystemMessage.MerchantPetGetSellItem` factory for Java message `1402570` and packet regression coverage for its pet-name parameter.
+- Added regression coverage for the source-reviewed Java behavior that the auto-sell notification intent is recorded after the `performSellToShop` boundary even when the supplied disabled sell plan is blocked.
+- Kept this unit non-live. No live pet common-data mutation, auto-sell activation, inventory mutation, Kinah mutation, repurchase write, packet dispatch, transaction commit, repository write, Java runtime output, or real client validation was enabled.
+
+#### Migration Parity Table - Session 1931
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.toypet.PetService.sell` | `Aion.GameServer.Services.PetAutoSellPlanService` | Disabled Diagnostic Planner | Partial | Regression Tested | Partial Parity | C# records Java auto-sell guards, trade-list construction, sell-to-shop invocation, and notification intent. It does not wire live pet state, inventory mutation, packet dispatch, DAO writes, or Java runtime comparison. |
+| `com.aionemu.gameserver.services.toypet.PetService.activateAutoSell` | `PetAutoSellInput.PetIsSelling` / future pet common-data source | Service State Input | Partial | Manual Source Review | Partial Parity | Java stores auto-sell activation in pet common data and sends `SM_PET(AUTOSELL, activate)`. This unit only consumes a supplied diagnostic boolean; activation/deactivation runtime remains pending. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_SYSTEM_MESSAGE.STR_MSG_MERCHANT_PET_GET_SELL_ITEM` | `Aion.GameServer.Network.Aion.ServerPackets.SmSystemMessage.MerchantPetGetSellItem` | Packet Factory | Partial | Regression Tested | Partial Parity | C# writes message ID `1402570` with the pet-name parameter. No Java runtime/golden packet vector was captured. |
+| `com.aionemu.gameserver.services.TradeService.performSellToShop` auto-sell caller boundary | `PetAutoSellPlan.SellToShopPlan` + disabled boundary flags | Diagnostic Boundary | Partial | Regression Tested | Partial Parity | C# can attach an existing disabled sell-to-shop plan and records whether that plan would mutate inventory/Kinah/repurchase state. The future live caller still must build the real plan from pet items and dispatch no live side effects yet. |
+
+Validation:
+- Focused pet/trade outcome slice first failed because a stale Windows `testhost` process held `Aion.GameServer.Tests.dll`; after stopping that stale process, the same focused filter passed with 38 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~PetMerchantSellLiveExecutorFacadePlanServiceTests|FullyQualifiedName~TradeSellToShopPlanServiceTests|FullyQualifiedName~CmBuyItemSideEffectOutcomePlanServiceTests|FullyQualifiedName~GamePacketTests.SmSystemMessage_WritesDialogTooFarMessages" --no-restore`
+- Broad game-server suite excluding `GameServerConnectionInventoryExpansionUseItemTests` passed with 4963 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore`
+
+Remaining risks:
+- No Java runtime/golden comparison was captured.
+- Local Java execution remains blocked until compatible Java and Maven are available.
+- Live pet common-data auto-sell state, pet object-template function lookup, pet item selection, and auto-sell activation/deactivation are not wired.
+- Live `TradeService.performSellToShop` execution, seller inventory mutation, repurchase state, Kinah mutation, transaction/rollback behavior, repository writes, and packet dispatch remain disabled.
+- The planner consumes supplied diagnostic facts and an optional disabled sell plan; it does not prove parity with a live Java pet, inventory, drop, or loot caller.
+- `CM_BUY_ITEM` pet action `17` remains intentionally notification-free because Java emits `STR_MSG_MERCHANT_PET_GET_SELL_ITEM` from `PetService.sell`, not from the socket pet-merchant branch.
+
+Summary metrics:
+- Total Java artifacts discovered: 4 grouped rows in this unit.
+- Total artifacts ported: source-reviewed disabled diagnostic planner for `PetService.sell` auto-sell notification intent plus one system-message packet factory.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 24 rows pending Java runtime/golden comparison, Java-equivalent known-list object population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN wiring, live private-store action `0`, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item service state/counter persistence, live pet auto-sell activation/state/item selection, live pet auto-sell execution/notification dispatch, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: local Java golden capture due JDK/Maven toolchain, live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live normal/AP sell mutation wiring, live buy transaction mutation wiring, live limited-item counter mutation/cron reset, live pet common-data/service wiring, live pet auto-sell inventory/drop caller integration, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves source-reviewed pet auto-sell diagnostics but does not complete live pet service, live trade execution, or runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: hydrate safe private-store listed-item facts into the diagnostic path only if no live mutation is enabled.
+- Safe alternative candidates for the next session:
+	- add Java-runtime golden capture for `CM_BUY_ITEM` or pet auto-sell once compatible Java and Maven are available
+	- continue buy-from-shop diagnostics around Java `PricesService.getBuyPrice(price, race)` global influence/tax facts without enabling live execution
+	- inspect `PetService.activateAutoSell` and `SM_PET(AUTOSELL, activate)` runtime state wiring as a separate disabled activation planner
+	- investigate the transient `WorldNpcWalkerRouteWalkingServiceTests.TargetReachedAsync_SchedulesBroadcastAfterRestTime` double-broadcast failure if it recurs
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime remains unavailable
+
 ### Session 1930 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1929: re-read required orchestration/parity docs, latest completion, latest handoff, and current progress context; inspected Java `TradeService.canBuyLimitItem`, Java `LimitedItemTradeService.start` / `getLimitedItem`, Java `LimitedItem`, Java `LimitedTradeNpc`, Java `GoodsList.getLimitedItems`, C# `NpcDialogLimitedItemFactAdapterService`, C# `TradeBuyTransactionPlanService`, and C# `GameServerConnection.ResolveBuyItemBuyTransactionPlan`.
 - Confirmed Java creates limited-item runtime state from trade-list tabs and goods lists, treats only goods-list rows with both `buyLimit` and `sellLimit` as limited items, and rejects a purchase before mutation when remaining sell limit or per-player buy limit would be exceeded.
