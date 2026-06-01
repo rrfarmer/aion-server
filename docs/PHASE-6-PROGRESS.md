@@ -87913,6 +87913,37 @@ Next recommended unit of work:
 	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
 
+### Session 2037 (June 1, 2026)
+- Performed Work Discovery after UOW-2036: re-read the required migration/orchestration/parity docs plus the latest UOW-2036 completion/handoff, confirmed a clean tree, inspected Java `CM_GROUP_DATA_EXCHANGE.runImpl`, Java `Player.getPlayerAllianceGroup`/`isInLeague`, Java `PlayerAllianceGroup`, existing C# `CmGroupDataExchange`, C# group/alliance/league runtimes, and the UOW-2036 `SmGroupDataExchange` writer.
+- Scoped this unit to a non-live fanout planner for parsed `CM_GROUP_DATA_EXCHANGE` data. Production packet dispatch remains deferred.
+- Added `GroupDataExchangeFanoutPlanService` to model Java's source-order gates: missing active player, empty data, maximum data size, action `1` nearby broadcast-and-receive, groupType `0` group members except self, groupType `1` current alliance-group members except self, groupType `2` league-required current alliance-group members except self, unsupported groupType, and no-recipient cases.
+- Added C# tests covering the planner gates and ensuring planned packets still serialize through the Java-backed `SmGroupDataExchange` layouts from UOW-2036.
+
+#### Migration Parity Table - Session 2037
+
+| Java Artifact | C# Artifact | Type | Status | Verification | Parity Risk | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_GROUP_DATA_EXCHANGE.runImpl` | `Aion.GameServer.Services.GroupDataExchangeFanoutPlanService` | Client Packet Runtime Planner | Partial | Unit Tested + Java Source Reviewed | Partial Parity | Planner mirrors Java branch ordering and recipient selection at the plan level only. It does not send packets or hook production `GameServerConnection`. Java logging hex output for oversized data is represented only as a rejected plan. |
+| `com.aionemu.gameserver.model.team.group.PlayerGroup.getOnlineMembers` branch | `PlayerGroupRuntime.GetMemberObjectIds` via `GroupDataExchangeFanoutPlanService` | Team Recipient Planner | Partial | Unit Tested + Java Source Reviewed | Partial Parity | Group fanout selects current group members and excludes the source player. Runtime online/offline filtering is approximated by the current C# runtime member set and still needs live socket validation. |
+| `com.aionemu.gameserver.model.team.alliance.PlayerAllianceGroup.getOnlineMembers` branch | `PlayerAllianceRuntime.GetMemberObjectIdsByGroupId` via `GroupDataExchangeFanoutPlanService` | Alliance Recipient Planner | Partial | Unit Tested + Java Source Reviewed | Partial Parity | Alliance and league groupTypes select the player's current alliance subgroup, not the whole alliance or league. groupType `2` requires league membership before using the same subgroup. Full league/alliance live lifecycle and online filtering remain unverified. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GroupDataExchangeFanoutPlanServiceTests" --no-restore` passed with 7 C# tests. Existing nullable/analyzer warnings were emitted.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=CM_GROUP_DATA_EXCHANGE_ReadPayloadGoldenTest,SM_GROUP_DATA_EXCHANGE_GoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 4 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SmGroupDataExchangeTests|FullyQualifiedName~GroupDataExchangeFanoutPlanServiceTests" --no-restore` passed with 10 C# tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 111 game-server tests. Existing Unsafe warnings were emitted.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5156 tests.
+
+Known gaps:
+- This remains a non-live planner. `GameServerConnection` still leaves `CmGroupDataExchange` dispatch deferred.
+- Nearby visible-player fanout is recorded as `broadcastPacketAndReceive` intent only; no known-list/connection-registry broadcast executes.
+- Group/alliance/league recipient lists use C# runtime snapshots and object IDs. Java's exact online-member filtering, socket availability, encrypted frames, logging side effects, and real-client ordering remain unverified.
+- Oversized-data Java logging content is not reproduced beyond the rejected-plan status.
+
+Next candidates:
+- Next sequential task: inspect a disabled/live adapter boundary for `CM_GROUP_DATA_EXCHANGE` only if it can remain behind explicit non-live tests and not enable production dispatch; otherwise inspect another nearby group/alliance packet boundary with Java packet evidence.
+- Safe alternatives: add Java-side runImpl test doubles for `CM_GROUP_DATA_EXCHANGE` routing if feasible; inspect `SM_GROUP_MEMBER_INFO` or alliance packet writer gaps; return to a narrow non-live `FindGroupService` planner with service mutation and broadcast side effects deferred.
+
 ### Session 2036 (June 1, 2026)
 - Performed Work Discovery after UOW-2035: re-read the latest UOW-2035 handoff, confirmed a clean tree, inspected Java `SM_GROUP_DATA_EXCHANGE`, Java `CM_GROUP_DATA_EXCHANGE` dispatch, Java server opcode registration, the existing Java client parser golden test, and the C# `CmGroupDataExchange`/server-packet surface.
 - Scoped this unit to packet-writer parity only for `SM_GROUP_DATA_EXCHANGE`; live group/neighborhood fanout and client dispatch remain deferred.
