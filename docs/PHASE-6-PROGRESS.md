@@ -87818,3 +87818,51 @@ Next recommended unit of work:
 	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
 	- inspect Java delete-path cube-size sends for another non-repurchase inventory diagnostic where `sendItemDeletePacket` is already represented by a C# planner
 	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
+
+### Session 1962 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1961: re-read Session 1961 completion and handoff, inspected Java `DialogService.onDialogSelect` BUY_AGAIN, Java `SM_REPURCHASE(Player, npcId)` constructor/write path, C# `GameServerConnection.CreateNonLiveTradeDialogSelectPlan`, C# `RepurchasePacketSnapshotPlanService`, C# dialog service/controller plan propagation, and existing BUY_AGAIN/repurchase packet tests.
+- Tightened the non-live BUY_AGAIN diagnostic path so an explicit `RepurchasePacketSnapshotPlan` always wins over the fallback `CreateDialogRepurchasePacket` helper.
+- When static item templates are available and the snapshot planner reports `BlockedMissingTemplate`, the dialog descriptor now carries that blocked snapshot and a null repurchase packet instead of silently falling back to an empty/best-effort packet that skips the missing-template item.
+- The fallback helper remains available only when no static item-template table was available to create a richer snapshot plan.
+- Kept this unit non-live. No socket send, Java singleton map query, live packet serialization attempt, missing-template exception emulation, inventory/Kinah mutation, repository write, transaction behavior, encrypted-frame proof, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1962
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.DialogService.onDialogSelect` BUY_AGAIN branch | `Aion.GameServer.Network.Aion.GameServerConnection.CreateNonLiveTradeDialogSelectPlan` | Dialog Diagnostic Integration | Partial | Unit Tested + Source Reviewed | Partial Parity | BUY_AGAIN non-live planning now preserves a blocked repurchase packet snapshot when supplied item facts lack templates. Live `PacketSendUtility.sendPacket` and NPC controller runtime dispatch remain disabled. |
+| `com.aionemu.gameserver.network.aion.serverpackets.SM_REPURCHASE(Player, int)` write path | `Aion.GameServer.Services.RepurchasePacketSnapshotPlanService.BlockedMissingTemplate` through dialog descriptor | Packet Snapshot Diagnostic | Partial | Unit Tested + Source Reviewed | Needs Verification | Java constructor snapshots the item collection and `writeImpl` dereferences each item's template. C# records missing supplied templates rather than composing a best-effort packet, but live Java exception behavior for impossible/malformed item facts is not runtime-compared. |
+| `com.aionemu.gameserver.services.RepurchaseService.getRepurchaseItems` as consumed by BUY_AGAIN | `Player.RepurchaseItems` supplied to `RepurchasePacketSnapshotPlanService.CreateDisabledPlan` | State Source Boundary | Partial | Unit Tested + Source Reviewed | Needs Verification | C# still uses supplied player facts only. Java map lookup timing, returned set mutability, `HashSet` iteration, and concurrent state behavior remain unmodeled. |
+
+Validation:
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~GameServerConnectionStorageExpansionDialogTests|FullyQualifiedName~RepurchasePacketSnapshotPlanServiceTests|FullyQualifiedName~NpcDialogServiceSelectPlanServiceTests|FullyQualifiedName~QuestDialogNpcTargetBranchInputAssemblyPlanServiceTests|FullyQualifiedName~NpcDialogControllerDispatchPlanServiceTests|FullyQualifiedName~SmRepurchaseTests" --no-restore` passed with 68 tests. The build emitted existing nullable/analyzer warnings in unrelated files.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false" "-Dtest=SM_REPURCHASE_GoldenTest,CM_BUY_ITEM_ReadGuardGoldenTest" "-Dsurefire.failIfNoSpecifiedTests=false"` passed with 11 Java test methods.
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore` passed with 5009 tests.
+- `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` passed with 1 commons test and 23 game-server tests.
+- `mvn test "-Dmaven.test.skip=false" "-DskipTests=false"` passed the full Maven reactor in the current workspace. This run did not force a clean login-server recompile.
+
+Remaining risks:
+- BUY_AGAIN repurchase packet planning remains disabled and informational only; it does not send `SM_REPURCHASE` or dispatch live `DialogService` socket side effects.
+- The C# missing-template state records malformed/supplied-facts diagnostics. Java normally holds `Item` instances with templates; exact runtime behavior for a malformed missing-template item was not executed in Java.
+- C# still has no live `RepurchaseService` singleton map equivalent.
+- Java `HashSet` bucket iteration and returned set mutability are not emulated.
+- Live BUY_AGAIN socket dispatch, live `CM_BUY_ITEM` repurchase execution, inventory/Kinah mutation, repository persistence, transaction behavior, encrypted frame capture, and real-client validation remain pending.
+- Full clean Maven validation should still be rerun if the prior login-server compile failure needs root-cause proof.
+- Full item-info blob parity for advanced item state remains partial.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: one disabled BUY_AGAIN missing-template diagnostic propagation adjustment plus focused socket-boundary test.
+- Total artifacts with verified parity: 0 full artifacts; this unit is source-reviewed and C# unit-tested but remains non-live and does not prove Java runtime exception/socket/concurrency parity.
+- Total artifacts needing verification: live repurchase singleton state, live set/map mutation timing, live BUY_AGAIN packet dispatch, live `CM_BUY_ITEM` repurchase execution, DAO/packet behavior, live trade/repurchase/private-store/pet persistence, live source-item clone caller integration, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, live handler wiring and transaction mutation boundaries, live repurchase state/send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, Stat2/stat-cap evaluation, full drop registration runtime comparison, and full clean Maven proof if the prior login-server compile failure is revisited.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled BUY_AGAIN missing-template diagnostics but does not complete live repurchase or dialog parity.
+
+Next recommended unit of work:
+- Next sequential task: inspect `PetService.activateAutoSell` plus `SM_PET(PetAction.AUTOSELL, activate)` and add a disabled activation planner that records the Java runtime state/packet intent without enabling live pet merchant autosell.
+- Safe alternative candidates for the next session:
+	- harden private-store diagnostics for blocked/race/offline/cube-full cases without live mutation
+	- inspect `CM_BUY_ITEM` amount signedness (`readUH()` versus C# unsigned reads) with a focused parser test if a Java runtime vector is practical
+	- inspect Java delete-path cube-size sends for another non-repurchase inventory diagnostic where `sendItemDeletePacket` is already represented by a C# planner
+	- inspect BUY_AGAIN live-send ordering only if a deterministic Java-side packet vector can be added safely
+	- run a clean Maven validation if the prior login-server `PlayerTransferService.java:42` compile observation needs root-cause proof
