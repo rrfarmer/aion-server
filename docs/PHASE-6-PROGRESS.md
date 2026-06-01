@@ -84882,6 +84882,56 @@ Next recommended unit of work:
 	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
 	- continue source-only Java condition capture hardening if Java runtime remains unavailable
 
+### Session 1937 (June 1, 2026)
+- Performed fresh Work Discovery after UOW-1936: re-read the required orchestration/parity docs and latest handoff, inspected Java `CM_BUY_ITEM.readImpl`, Java `CM_BUY_ITEM.runImpl`, Java `RepurchaseList`, Java `RepurchaseService.repurchaseFromShop`, C# `CmBuyItemRepurchaseReadPlanService`, C# `CmBuyItemRepurchaseRunPlanService`, C# `CmBuyItemRepurchaseCompositionPlanService`, C# `CmBuyItemHandlerCompositionPlanService`, and C# `RepurchasePlanService`.
+- Confirmed the existing non-live action `2` composition path already carries an optional `RepurchasePlan` payload through the `CM_BUY_ITEM` diagnostic descriptor without enabling live side effects.
+- Extended `RepurchasePlan` with non-live `AuditMessages` so the Java insufficient-Kinah branch records the exact source-reviewed audit text: `tried to repurchase item {itemId}, count: {count} without kinah`.
+- Updated `RepurchasePlanService` to use a working repurchase item set and remove each successfully repurchased source item before continuing, so repeated object-id requests cannot plan a second add after the Java-equivalent removal boundary.
+- Added focused tests covering the insufficient-Kinah audit diagnostic and the repeated-removal/repeated-request behavior.
+- Kept this unit non-live. No live `RepurchaseService` singleton state, live `CM_BUY_ITEM` handler execution, socket send, inventory mutation, Kinah mutation, repository write, Java runtime golden output, or real-client validation was enabled.
+
+#### Migration Parity Table - Session 1937
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `com.aionemu.gameserver.services.RepurchaseService.repurchaseFromShop` insufficient-Kinah audit branch | `Aion.GameServer.Services.RepurchasePlan.AuditMessages` / `RepurchasePlanService.CreatePlan` | Disabled Execution Diagnostic | Partial | Unit Tested | Partial Parity | C# now records the reviewed Java audit message for insufficient Kinah without invoking the live audit logger. Java runtime logging sink, exact player context, and side-effect timing remain unverified. |
+| `com.aionemu.gameserver.services.RepurchaseService.repurchaseFromShop` successful add/remove loop | `Aion.GameServer.Services.RepurchasePlanService` working repurchase item set | Disabled Execution Planner | Partial | Unit Tested | Partial Parity | C# removes successful repurchase source items from the non-live working set before continuing, preventing repeated object-id requests from planning duplicate adds after removal. Live singleton set mutation, iterator/remove behavior under concurrency, DAO writes, packet fanout, and Java runtime comparison remain unwired. |
+| `com.aionemu.gameserver.network.aion.clientpackets.CM_BUY_ITEM` action `2` repurchase dispatch | `CmBuyItemRepurchaseCompositionPlanService` / `CmBuyItemRepurchaseRunPlanService` carrying `RepurchasePlan` | Client Packet Diagnostic Composition | Partial | Regression Tested | Partial Parity | Existing action `2` composition continues to carry optional disabled execution payloads with no live side effects. Live `GameServerConnection` invocation and Java runtime packet/audit ordering remain pending. |
+
+Validation:
+- Focused repurchase action `2` slice passed with 51 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~RepurchasePlanServiceTests|FullyQualifiedName~CmBuyItemRepurchaseCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemRepurchaseRunPlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests" --no-restore`
+- Wider repurchase/dialog/sell slice passed with 81 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~RepurchasePlanServiceTests|FullyQualifiedName~CmBuyItemRepurchaseCompositionPlanServiceTests|FullyQualifiedName~CmBuyItemRepurchaseRunPlanServiceTests|FullyQualifiedName~CmBuyItemHandlerCompositionPlanServiceTests|FullyQualifiedName~GameServerConnectionStorageExpansionDialogTests|FullyQualifiedName~TradeSellToShopPlanServiceTests|FullyQualifiedName~SmRepurchaseTests" --no-restore`
+- Broad game-server C# suite excluding the known inventory expansion use-item slice passed with 4969 tests:
+  `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName!~GameServerConnectionInventoryExpansionUseItemTests" --no-restore`
+- Java/Maven reactor test run passed after explicitly overriding the parent POM's default `maven.test.skip=true` in PowerShell:
+  `mvn -pl game-server -am test "-Dmaven.test.skip=false" "-DskipTests=false"` ran 1 commons test and 12 game-server tests with 0 failures.
+
+Remaining risks:
+- No Java runtime/golden comparison was captured for `CM_BUY_ITEM` action `2`, `RepurchaseService.repurchaseFromShop`, audit output, item-add packets, Kinah updates, or repurchase-set state.
+- `RepurchasePlanService` remains disabled diagnostics only; it does not mutate live inventory, Kinah, repositories, or a singleton repurchase store.
+- Java `RepurchaseList` normally de-duplicates requested object IDs before execution; the repeated-request test is a defensive execution-planner guard, not proof of a live Java duplicate-request path.
+- Live `CM_BUY_ITEM` handler execution, BUY_AGAIN packet dispatch, sell-to-shop repurchase state writes, Java-equivalent known-list target ownership, repository transaction behavior, and real-client validation remain pending.
+- Reflection is not used. Serialization is unchanged in this unit. Date/time is not involved. Threading/concurrency of Java's `ConcurrentHashMap` and `Set<Item>` remains unported.
+
+Summary metrics:
+- Total Java artifacts discovered: 3 grouped rows in this unit.
+- Total artifacts ported: disabled repurchase execution diagnostics for insufficient-Kinah audit text and repeated-removal working-set behavior.
+- Total artifacts with verified parity: 0 rows; verified runtime parity count remains 0 because no Java runtime/golden comparison was produced.
+- Total artifacts needing verification: 25 rows pending Java runtime/golden comparison, live repurchase singleton state, live BUY_AGAIN packet dispatch, live `CM_BUY_ITEM` handler execution, Java-equivalent known-list object population, live known-list resolver ownership, live private-store action `0`, live pet action `17`, live sell-to-shop mutation wiring, live AP-sell mutation wiring, live buy-from-shop transaction wiring, live AP/Kinah/item mutation, live limited-item service state/counter persistence, live price influence/siege state source, live pet auto-sell activation/state/item selection, live pet auto-sell execution/notification dispatch, live repurchase state and packet send wiring, live repurchase caller wiring, DAO/packet behavior, live private-store/reward source-item callers, live condition validators, live Stat2 state, and workflow integration.
+- Total blocked artifacts: live DB proof for sell/repurchase/buy/private-store/pet persistence, Java-equivalent known-list target population, live known-list resolver ownership, live `CM_BUY_ITEM` handler execution, live BUY_AGAIN packet dispatch, live normal/AP sell mutation wiring, live buy transaction mutation wiring, live influence/siege state wiring, live limited-item counter mutation/cron reset, live private-store model/runtime wiring, live pet common-data/service wiring, live pet auto-sell inventory/drop caller integration, live repurchase state and send wiring, live source-item clone caller integration, live stat/salvation source provider, condition validator runtime, active-effect/stat runtime, live Stat2/stat-cap evaluation, and full drop registration runtime comparison.
+- Estimated overall migration completion: Phase 6 remains about 73%; this unit improves disabled repurchase execution diagnostics but does not complete live repurchase execution or runtime parity.
+
+Next recommended unit of work:
+- Next sequential task: add Java-runtime golden/source-capture coverage for `CM_BUY_ITEM` action `2` or `SM_REPURCHASE` now that Java 25 and Maven are available, or wire the existing `CmBuyItemHandlerCompositionPlanService` into a no-op diagnostic path only if live side effects remain disabled and handler ownership is scoped.
+- Safe alternative candidates for the next session:
+	- inspect `PetService.activateAutoSell` and `SM_PET(AUTOSELL, activate)` runtime state wiring as a separate disabled activation planner
+	- harden private-store diagnostics for blocked/race/offline/cube-full socket cases without enabling live mutation
+	- investigate transient world-walk timing tests if they recur
+	- run the opt-in logout craft cooldown DB integration suite once Docker/MySQL is available
+	- continue source-only Java condition capture hardening if Java runtime golden capture is still not practical for the targeted behavior
+
 ### Session 1936 (June 1, 2026)
 - Performed fresh Work Discovery after UOW-1935: re-read the latest handoff and current progress context; inspected Java `SM_REPURCHASE`, Java `RepurchaseService.getRepurchaseItems`, C# `RepurchaseDiagnosticSnapshotPlanService`, C# `GameServerConnection.CreateDialogRepurchasePacket`, C# `SmRepurchase`, and the existing BUY_AGAIN socket diagnostics.
 - Added a disabled BUY_AGAIN composition regression that creates a successful sell-to-shop repurchase snapshot, assigns its payload to the non-live `Player.RepurchaseItems` diagnostic surface, and verifies BUY_AGAIN builds a non-empty `SmRepurchase` descriptor without sending packets.
