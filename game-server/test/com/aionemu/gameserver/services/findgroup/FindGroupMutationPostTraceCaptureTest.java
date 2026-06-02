@@ -360,6 +360,76 @@ public class FindGroupMutationPostTraceCaptureTest {
 		assertEquals("Artifact for action 2 must contain a matching mutation-post trace row.", exception.getMessage());
 	}
 
+	@Test
+	public void artifactValidatorReportsMissingExpectedFiles(@TempDir Path tempDirectory) throws IOException {
+		FindGroupMutationPostTraceCaptureArtifactValidator.ValidationReport report =
+			FindGroupMutationPostTraceCaptureArtifactValidator.validateExpectedArtifacts(tempDirectory);
+
+		assertEquals(FindGroupMutationPostTraceCaptureArtifactValidator.DirectoryStatus.MISSING_EXPECTED_FILES, report.status());
+		assertFalse(report.hasAllExpectedFiles());
+		assertFalse(report.hasOnlyShapeValidArtifacts());
+		assertFalse(report.readyForRuntimeComparison());
+		assertEquals(List.of(2, 6), report.files().stream().map(FindGroupMutationPostTraceCaptureArtifactValidator.FileValidation::action).toList());
+		assertTrue(report.files().stream().allMatch(file ->
+			file.status() == FindGroupMutationPostTraceCaptureArtifactValidator.FileStatus.MISSING_FILE));
+	}
+
+	@Test
+	public void artifactValidatorAcceptsFixtureWriterShapeOnlyArtifacts(@TempDir Path tempDirectory) throws IOException {
+		String captureFlag = FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
+		try {
+			System.setProperty(captureFlag, "true");
+			writeActionTwoAndSixFixtureArtifacts(tempDirectory);
+
+			FindGroupMutationPostTraceCaptureArtifactValidator.ValidationReport report =
+				FindGroupMutationPostTraceCaptureArtifactValidator.validateExpectedArtifacts(tempDirectory);
+
+			assertEquals(FindGroupMutationPostTraceCaptureArtifactValidator.DirectoryStatus.ALL_EXPECTED_ARTIFACTS_SHAPE_VALID, report.status());
+			assertTrue(report.hasAllExpectedFiles());
+			assertTrue(report.hasOnlyShapeValidArtifacts());
+			assertFalse(report.readyForRuntimeComparison());
+			assertTrue(report.files().stream().allMatch(file ->
+				file.status() == FindGroupMutationPostTraceCaptureArtifactValidator.FileStatus.SHAPE_VALID
+					&& file.notes().contains("runtime comparison remains blocked")));
+			assertFalse(runtimeInstrumentationImplemented());
+		} finally {
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+		}
+	}
+
+	@Test
+	public void artifactValidatorRejectsFixtureFileWithWrongActionMapping(@TempDir Path tempDirectory) throws IOException {
+		String captureFlag = FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
+		try {
+			System.setProperty(captureFlag, "true");
+			writeActionTwoAndSixFixtureArtifacts(tempDirectory);
+			Path actionSixPath = FindGroupMutationPostTraceCaptureArtifactWriter.artifactPathForAction(tempDirectory, 6);
+			Files.writeString(actionSixPath, Files.readString(actionSixPath).replace("\"postedSystemMessageId\": 1400393", "\"postedSystemMessageId\": 1400392"));
+
+			FindGroupMutationPostTraceCaptureArtifactValidator.ValidationReport report =
+				FindGroupMutationPostTraceCaptureArtifactValidator.validateExpectedArtifacts(tempDirectory);
+
+			assertEquals(FindGroupMutationPostTraceCaptureArtifactValidator.DirectoryStatus.INVALID_ARTIFACTS, report.status());
+			assertTrue(report.hasAllExpectedFiles());
+			assertFalse(report.hasOnlyShapeValidArtifacts());
+			assertTrue(report.files().stream().anyMatch(file ->
+				file.action() == 6
+					&& file.status() == FindGroupMutationPostTraceCaptureArtifactValidator.FileStatus.INVALID_ARTIFACT
+					&& file.notes().contains("\"postedSystemMessageId\": 1400393")));
+			assertFalse(report.readyForRuntimeComparison());
+		} finally {
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+		}
+	}
+
 	private static boolean captureEnabled() {
 		return FindGroupMutationPostTraceCaptureInstrumentation.captureEnabled();
 	}
@@ -387,6 +457,19 @@ public class FindGroupMutationPostTraceCaptureTest {
 			assertTrue(nextIndex > currentIndex, () -> "Expected fragment in order: " + fragment);
 			currentIndex = nextIndex;
 		}
+	}
+
+	private static void writeActionTwoAndSixFixtureArtifacts(Path artifactRoot) throws IOException {
+		FindGroupMutationPostTraceCaptureArtifactWriter.tryWriteArtifact(
+			artifactRoot,
+			2,
+			List.of(FindGroupMutationPostTraceCaptureSerializer.sampleRow(2, 1001, "ELYOS", 123456, 2002, List.of(2002))))
+			.orElseThrow();
+		FindGroupMutationPostTraceCaptureArtifactWriter.tryWriteArtifact(
+			artifactRoot,
+			6,
+			List.of(FindGroupMutationPostTraceCaptureSerializer.sampleRow(6, 4004, "ASMODIANS", 456789, 4004, List.of(4004))))
+			.orElseThrow();
 	}
 
 	private record CaptureScenario(
