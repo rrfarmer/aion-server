@@ -527,6 +527,8 @@ Do not use full .NET validation as a session heartbeat. When the scoped change i
 
 If the narrowest useful C# command is still slow, reduce the filter to the edited test class and only the closest adjacent class that proves the changed contract. Record the residual risk in the completion/handoff notes. Do not use an unfiltered project test, full solution test, or full solution build to compensate for uncertainty unless the active notes name a broad-validation trigger from `orchestration-rules.md`.
 
+For Phase 6 parity work, a slow broad .NET run is not better evidence than a targeted command. Prefer a specific filtered `dotnet test` that names the edited behavior, a targeted Maven command when a Java source-of-truth test exists, or `git diff --check` for documentation-only units. Full project tests and solution builds are exceptional blast-radius checks, not default proof.
+
 For each completion/handoff, record:
 
 - the changed surface,

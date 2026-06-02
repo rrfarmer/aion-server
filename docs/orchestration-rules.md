@@ -43,7 +43,7 @@ For each Unit of Work:
 3. Identify target C# artifacts.
 4. Identify dependencies and blockers.
 5. Review all changes.
-6. Run relevant build/tests.
+6. Run relevant focused build/tests or documentation hygiene checks.
 7. Compare behavior against Java where possible.
 8. Update parity documentation inside the session completion/handoff docs.
 9. Update the latest session completion/handoff docs with the current context and next work.
@@ -165,6 +165,8 @@ Prefer focused validation by default. The normal Unit of Work validation target 
 
 Do not use the full .NET test suite or full solution build as a routine session heartbeat, end-of-unit habit, or substitute for choosing the right parity evidence. They cost too much for ordinary parity slices and should be reserved for the broad-validation triggers below.
 
+Treat long-running validation as a cost that must be justified by the changed surface. If a command is expected to take more than a couple of minutes, first split the filter to the edited test class and the nearest adjacent contract class. Do not run full project tests, solution tests, or solution builds to avoid choosing a narrower command.
+
 Operational rule: future sessions should not run an unfiltered project test, full solution test, or full solution build unless the current completion or handoff draft already names the broad-validation trigger. If the trigger is not obvious, choose the smallest filtered `dotnet test` command or `git diff --check`, then document any residual risk.
 
 Full validation is opt-in by evidence, not habit. Before starting a broad .NET suite or solution build, name the trigger in the session notes. If no trigger applies, keep the validation narrow and record the exact focused commands instead.
@@ -184,6 +186,7 @@ Default testing policy for Phase 6 sessions:
 - For docs-only units, run `git diff --check`; runtime tests and full builds are not applicable unless the docs changed generated artifacts, scripts, test inputs, or run commands.
 - If a broad trigger exists, run the focused command first when the risk can be isolated, then decide whether the wider command is still needed.
 - If a focused test command is still too broad for the unit, narrow the filter and document the remaining risk instead of running the full suite for reassurance.
+- When a previous handoff offers both a full focused recipe and a narrower fallback, use the narrower fallback first if the full focused recipe has been slow in recent sessions or includes unrelated adjacent classes.
 
 Required focused recipe policy:
 
