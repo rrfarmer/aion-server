@@ -185,6 +185,14 @@ Default testing policy for Phase 6 sessions:
 - If a broad trigger exists, run the focused command first when the risk can be isolated, then decide whether the wider command is still needed.
 - If a focused test command is still too broad for the unit, narrow the filter and document the remaining risk instead of running the full suite for reassurance.
 
+Required focused recipe policy:
+
+- Every handoff must include the next recommended UOW's exact focused validation recipe, including the expected `dotnet test --filter` class names or the exact hygiene command for documentation-only work.
+- The recipe must state whether Java/Maven is expected and why. Use `not expected unless Java source or fixtures change` when the next UOW only changes C# non-live metadata.
+- The recipe must state the broad-validation trigger as `none` unless a specific trigger from this document already applies.
+- Do not replace a named focused recipe with an unfiltered project test, full solution test, or full solution build because the focused command feels incomplete. First remove nonessential adjacent classes, then document residual risk.
+- If a focused command still runs for several minutes, split it by edited test class and closest adjacent contract class before considering any broader command.
+
 Phase 6 test targeting matrix:
 
 | Changed surface | Default command shape | Do not run by default | Escalate only when |

@@ -407,3 +407,6 @@ The C# port is not considered ready until all of these are true:
 15. When a focused filtered test passes, do not follow it with a full solution build merely to confirm compilation; the filtered test has already built the affected project and dependencies.
 16. If the obvious focused command is still slow, narrow the filter to the edited class and the closest adjacent class first. Document any remaining risk; do not run the full .NET suite or solution build as a reassurance step.
 17. Use the Phase 6 test targeting matrix in `orchestration-rules.md` before every validation run; prefer a documented narrow command over a slow unfiltered project test.
+18. The latest handoff must provide the next UOW's exact focused validation recipe. Use that recipe as the starting point and narrow it further if it is slow; do not broaden it without a named trigger.
+19. Full `.NET` project tests, solution tests, and solution builds are exceptional checks. They are appropriate only when `orchestration-rules.md` broad-validation triggers apply, focused evidence exposes wider risk, the user asks for broad validation, or a release/readiness checkpoint is in scope.
+20. For ordinary Phase 6 non-live services, planners, reports, and documentation updates, prefer the edited test class plus the closest adjacent contract/checklist classes, or `git diff --check` for docs-only work.
