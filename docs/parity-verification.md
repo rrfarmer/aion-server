@@ -521,6 +521,8 @@ Full .NET suite or solution build success is not required for every Unit of Work
 
 Focused evidence is stronger than broad evidence when it is tied to the Java behavior under review. A full suite/build can show broad compile or regression health, but it does not by itself prove Java parity for a touched artifact. Prefer the smallest test or hygiene command that exercises the exact Java-derived behavior, then document any remaining gaps explicitly.
 
+Do not treat a broad .NET run as a replacement for source-of-truth parity evidence. A filtered test tied to reviewed Java behavior is the preferred proof for ordinary Phase 6 units; a broad suite is only a blast-radius check after a named trigger.
+
 For each completion/handoff, record:
 
 - the changed surface,

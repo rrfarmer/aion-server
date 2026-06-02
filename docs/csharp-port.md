@@ -401,3 +401,4 @@ The C# port is not considered ready until all of these are true:
 9. Use focused test selection from `orchestration-rules.md` for ordinary Phase 6 units; reserve full .NET suite/build runs for documented broad-validation triggers.
 10. In each completion/handoff document, record the exact focused validation command and the reason any full .NET suite/build was skipped or run.
 11. Treat a passing filtered `dotnet test` command as the compile signal for its affected project/dependencies unless a named broad-validation trigger requires a wider project test or solution build.
+12. For documentation-only Phase 6 units, prefer `git diff --check` and skip runtime tests unless the docs alter generated artifacts, test scripts, or run scripts.

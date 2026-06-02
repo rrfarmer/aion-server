@@ -167,6 +167,14 @@ Do not use the full .NET test suite or full solution build as a routine session 
 
 Full validation is opt-in by evidence, not habit. Before starting a broad .NET suite or solution build, name the trigger in the session notes. If no trigger applies, keep the validation narrow and record the exact focused commands instead.
 
+Quick rule for future sessions:
+
+- Documentation-only change: run `git diff --check`; skip runtime tests.
+- Single service/planner/schema/test change: run filtered `dotnet test` for that test class plus directly adjacent classes only.
+- Packet/parser or boundary change: add only the immediately related packet/parser/boundary tests.
+- Java parity check: run a targeted Maven test only when a narrow Java fixture or source-of-truth command exists.
+- Full project test, solution test, or solution build: run only after documenting a broad-validation trigger below.
+
 Use this validation ladder before every test run:
 
 1. Start with the changed files and the smallest directly related test class names.
