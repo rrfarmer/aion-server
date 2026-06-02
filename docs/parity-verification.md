@@ -547,3 +547,7 @@ Code completion is not parity completion.
 Parity requires evidence.
 When uncertain, mark Needs Verification.
 Accuracy beats optimism.
+
+Stop adding more "evidence propagation" report layers unless they unblock a concrete runtime step.
+Move back to actual parity work: run or produce Java artifacts or targeted Java fixtures where appropriate, capture or validate C# boundary rows, compare concrete Java/C# row values, or implement missing game behavior directly against Java source.
+Keep docs short and focused in handoffs instead of expanding chains of metadata.
