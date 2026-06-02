@@ -5,20 +5,23 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Phase 6 Java parity fixture scaffold for future CM_FIND_GROUP action 2/6
  * mutation-post trace artifacts.
  *
  * This test intentionally does not instrument Java runtime behavior or write
- * artifact files yet. It keeps the capture flag, scenarios, schema name, and
- * artifact targets executable in Maven while the Java hooks and serializer are
- * still blocked.
+ * artifact files in the repository. It keeps the capture flag, scenarios,
+ * schema name, artifact targets, and fixture-only writer executable in Maven
+ * while production Java hooks remain blocked.
  */
 public class FindGroupMutationPostTraceCaptureTest {
 
@@ -37,7 +40,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 			System.clearProperty(captureFlag);
 
 			assertFalse(captureEnabled());
-			assertFalse(artifactWriterImplemented());
+			assertTrue(fixtureArtifactWriterImplemented());
 			assertFalse(runtimeInstrumentationImplemented());
 		} finally {
 			if (original == null)
@@ -80,7 +83,10 @@ public class FindGroupMutationPostTraceCaptureTest {
 		assertEquals(
 			ARTIFACT_ROOT.resolve("cm-find-group-direct-mutation-post-boundary-action-6-java.json"),
 			artifactPathForAction(6));
-		assertFalse(artifactWriterImplemented());
+		assertEquals(
+			ARTIFACT_ROOT.resolve("cm-find-group-direct-mutation-post-boundary-action-2-java.json"),
+			FindGroupMutationPostTraceCaptureArtifactWriter.artifactPathForAction(ARTIFACT_ROOT, 2));
+		assertTrue(fixtureArtifactWriterImplemented());
 	}
 
 	@Test
@@ -89,7 +95,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 
 		assertEquals(enabled, captureEnabled());
 		assertFalse(runtimeInstrumentationImplemented());
-		assertFalse(artifactWriterImplemented());
+		assertTrue(fixtureArtifactWriterImplemented());
 		assertTrue(SCENARIOS.stream().allMatch(scenario -> scenario.action() == 2 || scenario.action() == 6));
 	}
 
@@ -164,7 +170,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 				"recruitment_state_mutation_recorded",
 				"recruitment_posted_message_send_observed",
 				"recruitment_refreshed_list_send_observed"), recorder.events());
-			assertFalse(artifactWriterImplemented());
+			assertTrue(fixtureArtifactWriterImplemented());
 		} finally {
 			if (original == null)
 				System.clearProperty(captureFlag);
@@ -211,7 +217,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 				FindGroupMutationPostTraceCaptureSerializer.sampleRow(2, 1001, "ELYOS", 123456, 2002, List.of(2002))));
 
 			assertTrue(artifact.isEmpty());
-			assertFalse(artifactWriterImplemented());
+			assertTrue(fixtureArtifactWriterImplemented());
 		} finally {
 			if (original == null)
 				System.clearProperty(captureFlag);
@@ -244,7 +250,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 				"\"visibleEntryObjectIdsAfterMutation\": [2002, 3003]",
 				"\"worldBroadcastCount\": 0",
 				"\"inviteDispatchCount\": 0");
-			assertFalse(artifactWriterImplemented());
+			assertTrue(fixtureArtifactWriterImplemented());
 		} finally {
 			if (original == null)
 				System.clearProperty(captureFlag);
@@ -267,7 +273,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 			"\"visibleEntryObjectIdsAfterMutation\": [4004]",
 			"\"executorInvokedFromBoundary\": false",
 			"\"registrySendsObservedInOrder\": false");
-		assertFalse(artifactWriterImplemented());
+		assertTrue(fixtureArtifactWriterImplemented());
 	}
 
 	@Test
@@ -276,7 +282,82 @@ public class FindGroupMutationPostTraceCaptureTest {
 			FindGroupMutationPostTraceCaptureSerializer.sampleRow(3, 1001, "ELYOS", 123456, 1001, List.of(1001)));
 
 		assertEquals("Unsupported mutation-post action 3", exception.getMessage());
-		assertFalse(artifactWriterImplemented());
+		assertTrue(fixtureArtifactWriterImplemented());
+	}
+
+	@Test
+	public void artifactWriterNoOpsWhenCaptureFlagIsDisabled(@TempDir Path tempDirectory) throws IOException {
+		String captureFlag = FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
+		try {
+			System.clearProperty(captureFlag);
+
+			Optional<Path> artifactPath = FindGroupMutationPostTraceCaptureArtifactWriter.tryWriteArtifact(
+				tempDirectory,
+				2,
+				List.of(FindGroupMutationPostTraceCaptureSerializer.sampleRow(2, 1001, "ELYOS", 123456, 2002, List.of(2002))));
+
+			assertTrue(artifactPath.isEmpty());
+			assertFalse(Files.exists(FindGroupMutationPostTraceCaptureArtifactWriter.artifactPathForAction(tempDirectory, 2)));
+			assertFalse(runtimeInstrumentationImplemented());
+		} finally {
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+		}
+	}
+
+	@Test
+	public void artifactWriterWritesShapeValidFixtureRowsOnlyWhenCaptureFlagIsEnabled(@TempDir Path tempDirectory) throws IOException {
+		String captureFlag = FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
+		try {
+			System.setProperty(captureFlag, "true");
+
+			Path actionTwoPath = FindGroupMutationPostTraceCaptureArtifactWriter.tryWriteArtifact(
+				tempDirectory,
+				2,
+				List.of(FindGroupMutationPostTraceCaptureSerializer.sampleRow(2, 1001, "ELYOS", 123456, 2002, List.of(2002))))
+				.orElseThrow();
+			Path actionSixPath = FindGroupMutationPostTraceCaptureArtifactWriter.tryWriteArtifact(
+				tempDirectory,
+				6,
+				List.of(FindGroupMutationPostTraceCaptureSerializer.sampleRow(6, 4004, "ASMODIANS", 456789, 4004, List.of(4004))))
+				.orElseThrow();
+
+			assertEquals(tempDirectory.resolve("cm-find-group-direct-mutation-post-boundary-action-2-java.json"), actionTwoPath);
+			assertEquals(tempDirectory.resolve("cm-find-group-direct-mutation-post-boundary-action-6-java.json"), actionSixPath);
+			assertContainsInOrder(Files.readString(actionTwoPath),
+				"\"traceSource\": \"Java\"",
+				"\"action\": 2",
+				"\"mutationKind\": \"Recruitment\"",
+				"\"postedSystemMessageId\": 1400392",
+				"\"refreshedListAction\": 0");
+			assertContainsInOrder(Files.readString(actionSixPath),
+				"\"traceSource\": \"Java\"",
+				"\"action\": 6",
+				"\"mutationKind\": \"Application\"",
+				"\"postedSystemMessageId\": 1400393",
+				"\"refreshedListAction\": 4");
+			assertFalse(runtimeInstrumentationImplemented());
+		} finally {
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+		}
+	}
+
+	@Test
+	public void artifactWriterRejectsFileActionWithoutMatchingTraceRow(@TempDir Path tempDirectory) {
+		IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+			FindGroupMutationPostTraceCaptureArtifactWriter.tryWriteArtifact(
+				tempDirectory,
+				2,
+				List.of(FindGroupMutationPostTraceCaptureSerializer.sampleRow(6, 4004, "ASMODIANS", 456789, 4004, List.of(4004)))));
+
+		assertEquals("Artifact for action 2 must contain a matching mutation-post trace row.", exception.getMessage());
 	}
 
 	private static boolean captureEnabled() {
@@ -287,8 +368,8 @@ public class FindGroupMutationPostTraceCaptureTest {
 		return false;
 	}
 
-	private static boolean artifactWriterImplemented() {
-		return false;
+	private static boolean fixtureArtifactWriterImplemented() {
+		return true;
 	}
 
 	private static Path artifactPathForAction(int action) {
