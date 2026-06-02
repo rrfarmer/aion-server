@@ -406,3 +406,4 @@ The C# port is not considered ready until all of these are true:
 14. Do not run an unfiltered project test, full solution test, or full solution build unless the active completion/handoff notes already name the broad-validation trigger from `orchestration-rules.md`.
 15. When a focused filtered test passes, do not follow it with a full solution build merely to confirm compilation; the filtered test has already built the affected project and dependencies.
 16. If the obvious focused command is still slow, narrow the filter to the edited class and the closest adjacent class first. Document any remaining risk; do not run the full .NET suite or solution build as a reassurance step.
+17. Use the Phase 6 test targeting matrix in `orchestration-rules.md` before every validation run; prefer a documented narrow command over a slow unfiltered project test.

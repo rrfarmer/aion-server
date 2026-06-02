@@ -183,6 +183,18 @@ Default testing policy for Phase 6 sessions:
 - If a broad trigger exists, run the focused command first when the risk can be isolated, then decide whether the wider command is still needed.
 - If a focused test command is still too broad for the unit, narrow the filter and document the remaining risk instead of running the full suite for reassurance.
 
+Phase 6 test targeting matrix:
+
+| Changed surface | Default command shape | Do not run by default | Escalate only when |
+| --- | --- | --- | --- |
+| Documentation, handoff, parity table, or design note | `git diff --check` | Runtime tests, full project tests, solution builds | Docs changed generated artifacts, scripts, fixtures, or executable run commands |
+| One C# non-live service/report/planner plus tests | Filtered `dotnet test` for the edited test class and closest adjacent contract/checklist classes | Unfiltered project test, full solution test, full solution build | The service crosses shared infrastructure, live dispatch, persistence, scheduler, crypto, or packet primitive boundaries |
+| C# packet/parser/boundary shape | Filtered packet/parser/golden/boundary tests directly tied to the edited shape | Broad suite as a generic regression sweep | Packet primitive/shared serialization changed, or focused evidence exposes wider risk |
+| Java source or Java fixture update | Targeted Maven `-Dtest=SpecificJavaTest` where possible, plus the related focused C# command when C# behavior depends on it | Full Maven or full .NET suite | The Java change invalidates broad fixture assumptions or release/readiness validation is explicitly in scope |
+| Live side-effect enabling or shared runtime state | Start focused on the edited dispatch/state tests | Immediate full solution build before focused evidence | A broad-validation trigger below applies and is named in the active notes |
+
+If the expected focused C# command still looks slow, remove adjacent classes before adding broader validation. A narrow command with documented residual risk is preferred over an unfiltered project run that does not directly prove the scoped Java parity question.
+
 Quick rule for future sessions:
 
 - Documentation-only change: run `git diff --check`; skip runtime tests.
