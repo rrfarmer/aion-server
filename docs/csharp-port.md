@@ -405,3 +405,4 @@ The C# port is not considered ready until all of these are true:
 13. Do not run full .NET tests or full solution builds during startup or ordinary handoff review; choose the narrowest service, packet, parser, or documentation hygiene command after Work Discovery.
 14. Do not run an unfiltered project test, full solution test, or full solution build unless the active completion/handoff notes already name the broad-validation trigger from `orchestration-rules.md`.
 15. When a focused filtered test passes, do not follow it with a full solution build merely to confirm compilation; the filtered test has already built the affected project and dependencies.
+16. If the obvious focused command is still slow, narrow the filter to the edited class and the closest adjacent class first. Document any remaining risk; do not run the full .NET suite or solution build as a reassurance step.

@@ -525,6 +525,8 @@ Do not treat a broad .NET run as a replacement for source-of-truth parity eviden
 
 Do not use full .NET validation as a session heartbeat. When the scoped change is narrow, the verification record should show the exact narrow command, the Java source-of-truth reason for that command, and the remaining risk. A broad run without a broad trigger is slower and less informative than a focused test tied to the artifact being ported.
 
+If the narrowest useful C# command is still slow, reduce the filter to the edited test class and only the closest adjacent class that proves the changed contract. Record the residual risk in the completion/handoff notes. Do not use an unfiltered project test, full solution test, or full solution build to compensate for uncertainty unless the active notes name a broad-validation trigger from `orchestration-rules.md`.
+
 For each completion/handoff, record:
 
 - the changed surface,

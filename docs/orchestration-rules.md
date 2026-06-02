@@ -169,6 +169,10 @@ Full validation is opt-in by evidence, not habit. Before starting a broad .NET s
 
 Expensive-command checkpoint: before running an unfiltered project test, full solution test, or full solution build, stop and write the broad-validation trigger into the active completion/handoff draft or session notes. If the trigger cannot be named, choose a filtered test or `git diff --check` instead.
 
+Slow-command checkpoint: if a focused command is expected to take several minutes, or if the previous session notes show it repeatedly took several minutes, first look for a narrower filter, a single adjacent test class, or a documentation hygiene command that proves the current risk. Do not replace a slow focused command with an unfiltered project test or full solution build unless a broad-validation trigger is already documented.
+
+Compile-signal rule: a passing filtered `dotnet test` invocation is the compile validation for the edited project and its dependencies. A follow-up `dotnet build`, unfiltered project test, or solution-level test is redundant unless a named broad-validation trigger applies.
+
 Default testing policy for Phase 6 sessions:
 
 - Start with the smallest filtered C# test command that names the edited test class and directly adjacent classes.
@@ -177,6 +181,7 @@ Default testing policy for Phase 6 sessions:
 - Do not run unfiltered project tests, full solution tests, or full solution builds unless a broad-validation trigger is already written into the active completion/handoff notes.
 - For docs-only units, run `git diff --check`; runtime tests and full builds are not applicable unless the docs changed generated artifacts, scripts, test inputs, or run commands.
 - If a broad trigger exists, run the focused command first when the risk can be isolated, then decide whether the wider command is still needed.
+- If a focused test command is still too broad for the unit, narrow the filter and document the remaining risk instead of running the full suite for reassurance.
 
 Quick rule for future sessions:
 
@@ -185,6 +190,7 @@ Quick rule for future sessions:
 - Packet/parser or boundary change: add only the immediately related packet/parser/boundary tests.
 - Java parity check: run a targeted Maven test only when a narrow Java fixture or source-of-truth command exists.
 - Full project test, solution test, or solution build: run only after documenting a broad-validation trigger below.
+- Slow or long-running focused command: narrow the filter first; do not escalate to full .NET validation as a substitute for a precise command.
 
 Focused test examples:
 
