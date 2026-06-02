@@ -165,6 +165,8 @@ Prefer focused validation by default. The normal Unit of Work validation target 
 
 Do not use the full .NET test suite or full solution build as a routine session heartbeat, end-of-unit habit, or substitute for choosing the right parity evidence. They cost too much for ordinary parity slices and should be reserved for the broad-validation triggers below.
 
+Full validation is opt-in by evidence, not habit. Before starting a broad .NET suite or solution build, name the trigger in the session notes. If no trigger applies, keep the validation narrow and record the exact focused commands instead.
+
 Choose the narrowest command that still proves the scoped change:
 
 1. Documentation-only units:
@@ -181,6 +183,22 @@ Choose the narrowest command that still proves the scoped change:
    - Escalate only when the broad-validation triggers below apply.
 
 Prefer `--filter "FullyQualifiedName~SpecificTestClass|FullyQualifiedName~RelatedTestClass"` for C# test selection. Prefer Maven `-Dtest=SpecificJavaTest` for Java parity evidence when a matching Java test exists. Avoid unfiltered `dotnet test dotnetConversion/AionServer.slnx`, unfiltered project-wide tests, and full solution builds unless a broad trigger is documented.
+
+Useful command shapes:
+
+- C# targeted tests:
+  - `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~SpecificTestClass|FullyQualifiedName~AdjacentTestClass" --no-restore`
+- Java targeted tests:
+  - `mvn -pl game-server -am test "-Dtest=SpecificJavaTest" "-Dsurefire.failIfNoSpecifiedTests=false"`
+- Documentation-only hygiene:
+  - `git diff --check`
+
+Avoid these unless a broad-validation trigger is documented first:
+
+- `dotnet test dotnetConversion\AionServer.slnx`
+- `dotnet test dotnetConversion\tests\Aion.GameServer.Tests\Aion.GameServer.Tests.csproj` without a filter
+- `dotnet build dotnetConversion\AionServer.slnx`
+- Any broad command used only to "be safe" after a narrow documentation, test, or planner change
 
 Run focused C# tests for:
 - The edited test class or service area.
@@ -199,6 +217,8 @@ Do not run the broad .NET suite by default. Run broad C# validation only when:
 - Focused tests expose suspicious behavior and broader blast-radius checking is needed.
 - The user explicitly asks for broad validation.
 - A release/readiness checkpoint requires it.
+
+Even when a broad trigger exists, start with the smallest directly related test command when possible. Escalate to an unfiltered project test, solution test, or solution build only after the focused result is known or when the trigger cannot be meaningfully isolated.
 
 If broad validation is skipped, document that decision in the completion/handoff notes with the focused commands that did run and why they were sufficient for the scoped risk. For documentation-only units, document the hygiene command and state that runtime tests were not applicable. If no Java/Maven test is run, document why a narrower Java parity command was unavailable or irrelevant for the scoped change.
 

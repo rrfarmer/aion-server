@@ -500,8 +500,8 @@ Parity Status:
 
 Before committing a Unit of Work, the Orchestrator must answer:
 
-1. Did the build pass?
-2. Did relevant tests pass?
+1. Was the validation scope focused by default?
+2. Did relevant tests or hygiene checks pass?
 3. Were the exact focused C# command(s) documented, including filters where used?
 4. Were the exact focused Java/Maven command(s) documented when Java parity evidence was available?
 5. If Java/Maven was skipped, was the reason documented?
@@ -516,6 +516,8 @@ Before committing a Unit of Work, the Orchestrator must answer:
 14. Were next verification steps documented?
 
 If not, either fix it or document the blocker.
+
+Full .NET suite or solution build success is not required for every Unit of Work. It is required only when the scoped change crosses a broad-validation trigger from `orchestration-rules.md`, when focused tests suggest wider risk, or when the user asks for broad validation. Otherwise, filtered C# tests, targeted Java/Maven tests, and documentation hygiene checks are the expected evidence.
 
 ## Final Principle
 
