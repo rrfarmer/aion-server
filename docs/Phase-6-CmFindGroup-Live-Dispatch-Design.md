@@ -45,7 +45,7 @@ Controlled parsed-boundary evidence exists for every Java `runImpl` action liste
 - Actions `3` and `7`: state update with no packet intents.
 - Action `8`: register instance group action 14 direct packet intent.
 - Action `9`: remove instance group followed by action 10 updated show-list intent.
-- Actions `10` and `13`: instance-group show-list direct packet intents; action `10` also supports optional action 26 mask-list intent when form-anywhere is enabled, with focused disabled-boundary evidence that action 26 is recorded before the action 10 show-list packet.
+- Actions `10` and `13`: instance-group show-list direct packet intents; action `10` also supports optional action 26 mask-list intent when form-anywhere is enabled, with focused disabled-boundary evidence that action 26 is recorded before the action 10 show-list packet; action `13` has focused disabled-boundary evidence that update requests do not emit action 26.
 - Action `11`: instance-application action 11 direct packet intent to resolved recruiter.
 - Action `12`: declined whisper direct packet intent, accepted group/alliance invite intent, and inner branch status for accepted group invite, accepted alliance invite, declined, missing applicant, and missing responder instance group.
 - Action `15`: instance-group member-info action 16 direct packet intent.
