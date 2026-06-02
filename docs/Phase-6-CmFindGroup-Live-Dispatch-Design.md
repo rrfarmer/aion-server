@@ -75,17 +75,27 @@ The adapter must not silently ignore execution failures. Missing active player, 
 - Lifecycle hooks for logout and joined-team cleanup have observer evidence, but the same singleton instance must be wired across all live callers before live dispatch can claim parity.
 - Real encrypted socket or real-client behavior remains unverified.
 
-## Narrow Next Implementation Candidate
+## Non-Live Adapter Evidence
 
-The safest next code unit is not full live dispatch. It is a non-live adapter result type and test coverage that composes one `CmFindGroup` packet into:
+`FindGroupConnectionBoundaryDispatchAdapterService` now provides the non-live result surface recommended by this note.
+
+It composes:
 
 - direct packet intents,
 - world broadcast intents,
-- optional invite intent,
-- explicit no-op status for actions `20` and `25`,
-- explicit blocked status for missing runtime dependencies.
+- optional action 12 invite plans,
+- no-side-effect Java branch status,
+- parsed-only no-op status for actions `20` and `25`,
+- missing-active-player status,
+- missing invite-runtime status.
 
-That adapter can then become the seam used by `GameServerConnection` after singleton lifetime and concurrency risks are closed.
+It does not execute live `GameServerConnection` sends and does not mark `CM_FIND_GROUP` live dispatch ready.
+
+## Narrow Next Implementation Candidate
+
+The safest next code unit is still not full live dispatch. It is a lifetime/concurrency review or adapter-consumer test slice that proves how a future boundary can use `FindGroupConnectionBoundaryDispatchAdapterService` safely.
+
+The adapter can become the seam used by `GameServerConnection` after singleton lifetime and concurrency risks are closed.
 
 ## Validation Expectations
 
