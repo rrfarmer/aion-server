@@ -378,6 +378,70 @@ public class FindGroupMutationPostTraceCaptureTest {
 	}
 
 	@Test
+	public void guardedArtifactRootPropertyDoesNotWriteWhenPropertyIsMissing() throws Exception {
+		String captureFlag = FindGroupMutationPostTraceCaptureHooks.CAPTURE_FLAG;
+		String artifactRootProperty = FindGroupMutationPostTraceCaptureInMemoryArtifactBridge.ARTIFACT_ROOT_PROPERTY;
+		String originalCaptureFlag = System.getProperty(captureFlag);
+		String originalArtifactRoot = System.getProperty(artifactRootProperty);
+		try {
+			System.setProperty(captureFlag, "true");
+			System.clearProperty(artifactRootProperty);
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			captureRecruitmentAndApplicationRows();
+
+			List<Path> writtenPaths = FindGroupMutationPostTraceCaptureInMemoryArtifactBridge.tryWriteDrainedRowsFromArtifactRootProperty();
+
+			assertTrue(writtenPaths.isEmpty());
+			assertEquals(2, FindGroupMutationPostTraceCaptureHooks.traceRows().size());
+			assertFalse(productionHookArtifactOutputEnabled());
+		} finally {
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			if (originalCaptureFlag == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, originalCaptureFlag);
+			if (originalArtifactRoot == null)
+				System.clearProperty(artifactRootProperty);
+			else
+				System.setProperty(artifactRootProperty, originalArtifactRoot);
+		}
+	}
+
+	@Test
+	public void guardedArtifactRootPropertyWritesOnlyToSuppliedRoot(@TempDir Path tempDirectory) throws Exception {
+		String captureFlag = FindGroupMutationPostTraceCaptureHooks.CAPTURE_FLAG;
+		String artifactRootProperty = FindGroupMutationPostTraceCaptureInMemoryArtifactBridge.ARTIFACT_ROOT_PROPERTY;
+		String originalCaptureFlag = System.getProperty(captureFlag);
+		String originalArtifactRoot = System.getProperty(artifactRootProperty);
+		try {
+			System.setProperty(captureFlag, "true");
+			System.setProperty(artifactRootProperty, tempDirectory.toString());
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			captureRecruitmentAndApplicationRows();
+
+			List<Path> writtenPaths = FindGroupMutationPostTraceCaptureInMemoryArtifactBridge.tryWriteDrainedRowsFromArtifactRootProperty();
+			FindGroupMutationPostTraceCaptureArtifactValidator.ValidationReport report =
+				FindGroupMutationPostTraceCaptureArtifactValidator.validateExpectedArtifacts(tempDirectory);
+
+			assertEquals(2, writtenPaths.size());
+			assertTrue(writtenPaths.stream().allMatch(path -> path.startsWith(tempDirectory)));
+			assertEquals(FindGroupMutationPostTraceCaptureArtifactValidator.DirectoryStatus.ALL_EXPECTED_ARTIFACTS_SHAPE_VALID, report.status());
+			assertFalse(report.readyForRuntimeComparison());
+			assertTrue(FindGroupMutationPostTraceCaptureHooks.traceRows().isEmpty());
+		} finally {
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			if (originalCaptureFlag == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, originalCaptureFlag);
+			if (originalArtifactRoot == null)
+				System.clearProperty(artifactRootProperty);
+			else
+				System.setProperty(artifactRootProperty, originalArtifactRoot);
+		}
+	}
+
+	@Test
 	public void recorderNoOpsWhenCaptureFlagIsDisabled() {
 		String captureFlag = FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG;
 		String original = System.getProperty(captureFlag);

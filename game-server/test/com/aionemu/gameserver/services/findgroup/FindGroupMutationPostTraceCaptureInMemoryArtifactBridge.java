@@ -9,7 +9,16 @@ import java.util.Map;
 
 final class FindGroupMutationPostTraceCaptureInMemoryArtifactBridge {
 
+	static final String ARTIFACT_ROOT_PROPERTY = "aion.findGroupMutationPost.artifactRoot";
+
 	private FindGroupMutationPostTraceCaptureInMemoryArtifactBridge() {
+	}
+
+	static List<Path> tryWriteDrainedRowsFromArtifactRootProperty() throws IOException {
+		String artifactRoot = System.getProperty(ARTIFACT_ROOT_PROPERTY);
+		if (artifactRoot == null || artifactRoot.isBlank())
+			return List.of();
+		return writeDrainedRows(Path.of(artifactRoot));
 	}
 
 	static List<Path> writeDrainedRows(Path artifactRoot) throws IOException {
