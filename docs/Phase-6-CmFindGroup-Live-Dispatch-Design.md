@@ -47,7 +47,7 @@ Controlled parsed-boundary evidence exists for every Java `runImpl` action liste
 - Action `9`: remove instance group followed by action 10 updated show-list intent.
 - Actions `10` and `13`: instance-group show-list direct packet intents; action `10` also supports optional action 26 mask-list intent when form-anywhere is enabled.
 - Action `11`: instance-application action 11 direct packet intent to resolved recruiter.
-- Action `12`: declined whisper direct packet intent and accepted group/alliance invite intent.
+- Action `12`: declined whisper direct packet intent, accepted group/alliance invite intent, and inner branch status for accepted group invite, accepted alliance invite, declined, missing applicant, and missing responder instance group.
 - Action `15`: instance-group member-info action 16 direct packet intent.
 - Action `17`: update instance group followed by action 10 updated show-list intent.
 - `FindGroupRecruitmentPlanService` now uses `ConcurrentDictionary` for recruitment, application, and instance-group state stores to mirror Java `FindGroupService` `ConcurrentHashMap` declarations.
@@ -100,7 +100,7 @@ The adapter must not silently ignore execution failures. Missing active player, 
 - Basic Java map-shape parity is now covered by `ConcurrentDictionary`, show-list materialization has focused snapshot evidence, group/alliance joined-team recorder ordering has focused evidence, disabled client-action-to-logout singleton cleanup has focused evidence, and disabled client-action-to-group/alliance-disband singleton cleanup has focused evidence; live singleton use still needs evidence for multi-step mutation ordering under concurrent callers and additional cross-caller lifecycle cleanup.
 - `FindGroupLifecycleSingletonWiringReadinessService` records the Java singleton call-site inventory; current C# status is production graph lifecycle evidence plus deferred boundary evidence.
 - Direct packet sends and world broadcasts have opt-in executor ordering evidence, but still need live connection-registry tests proving packet ordering relative to the triggering client packet.
-- Action 12 accepted invite, declined whisper, missing-applicant, and missing-instance-group branches have disabled connection-helper evidence, but still need live boundary tests before being triggered by `CM_FIND_GROUP`.
+- Action 12 accepted invite, declined whisper, missing-applicant, and missing-instance-group branches have disabled connection-helper evidence, including the inner planner status surfaced at the connection-boundary intent plan, but still need live boundary tests before being triggered by `CM_FIND_GROUP`.
 - Lifecycle hooks for logout/joined-team/disband cleanup now have production singleton graph evidence, and the connection can consume the non-live adapter services. The same singleton instance must still be executed through the live `CM_FIND_GROUP` boundary before live dispatch can claim parity.
 - Real encrypted socket or real-client behavior remains unverified.
 
