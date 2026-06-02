@@ -508,12 +508,13 @@ Before committing a Unit of Work, the Orchestrator must answer:
 6. Was focused validation chosen for the changed surface, or was a broad-validation trigger documented?
 7. If the broad .NET suite/build was skipped, were the focused commands and rationale documented?
 8. If a broad .NET suite/build was run, was the trigger documented?
-9. For documentation-only units, was a repository hygiene check documented and were runtime tests marked not applicable?
-10. Were touched Java artifacts documented?
-11. Were touched C# artifacts documented?
-12. Was parity status conservative?
-13. Were gaps explicitly listed?
-14. Were next verification steps documented?
+9. Was the specific behavior, packet shape, metadata contract, or documentation invariant under validation named?
+10. For documentation-only units, was a repository hygiene check documented and were runtime tests marked not applicable?
+11. Were touched Java artifacts documented?
+12. Were touched C# artifacts documented?
+13. Was parity status conservative?
+14. Were gaps explicitly listed?
+15. Were next verification steps documented?
 
 If not, either fix it or document the blocker.
 
@@ -532,6 +533,7 @@ For Phase 6 parity work, a slow broad .NET run is not better evidence than a tar
 For each completion/handoff, record:
 
 - the changed surface,
+- the specific behavior, packet shape, metadata contract, or documentation invariant under validation,
 - the focused C# command or documentation hygiene command,
 - the focused Java/Maven command or skip rationale,
 - the broad-validation trigger, or `none`,

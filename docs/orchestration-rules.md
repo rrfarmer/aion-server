@@ -165,6 +165,15 @@ Prefer focused validation by default. The normal Unit of Work validation target 
 
 Do not use the full .NET test suite or full solution build as a routine session heartbeat, end-of-unit habit, or substitute for choosing the right parity evidence. They cost too much for ordinary parity slices and should be reserved for the broad-validation triggers below.
 
+Specific validation contract: each Unit of Work must name the specific behavior or contract being validated before choosing a command. The selected command should include only the edited test class and directly adjacent contract classes needed to prove that behavior. Do not run a full project test, full solution test, or full solution build because the focused command feels incomplete; identify the missing narrow evidence instead.
+
+Full-build exception gate: a full `.NET` project test, solution test, or solution build is allowed only when at least one of these is true and written into the active completion/handoff notes before execution:
+
+- A broad-validation trigger from this section applies to the changed surface.
+- Focused validation failed or exposed a wider compile/regression risk that cannot be isolated.
+- The user explicitly requested broad validation.
+- A release, replacement-readiness, or broad checkpoint is the current scope.
+
 Treat long-running validation as a cost that must be justified by the changed surface. If a command is expected to take more than a couple of minutes, first split the filter to the edited test class and the nearest adjacent contract class. Do not run full project tests, solution tests, or solution builds to avoid choosing a narrower command.
 
 Operational rule: future sessions should not run an unfiltered project test, full solution test, or full solution build unless the current completion or handoff draft already names the broad-validation trigger. If the trigger is not obvious, choose the smallest filtered `dotnet test` command or `git diff --check`, then document any residual risk.
@@ -179,6 +188,7 @@ Compile-signal rule: a passing filtered `dotnet test` invocation is the compile 
 
 Default testing policy for Phase 6 sessions:
 
+- State the exact Java-derived behavior, metadata contract, packet shape, or documentation invariant being checked before running validation.
 - Start with the smallest filtered C# test command that names the edited test class and directly adjacent classes.
 - Treat a passing filtered `dotnet test` command as the compile/build signal for the affected project and dependencies.
 - Do not run `dotnet build dotnetConversion\AionServer.slnx` after a focused passing test just to get a second compile signal.
@@ -191,6 +201,7 @@ Default testing policy for Phase 6 sessions:
 Required focused recipe policy:
 
 - Every handoff must include the next recommended UOW's exact focused validation recipe, including the expected `dotnet test --filter` class names or the exact hygiene command for documentation-only work.
+- Every recipe must name the specific behavior, contract, or invariant that the command is expected to prove.
 - The recipe must state whether Java/Maven is expected and why. Use `not expected unless Java source or fixtures change` when the next UOW only changes C# non-live metadata.
 - The recipe must state the broad-validation trigger as `none` unless a specific trigger from this document already applies.
 - Do not replace a named focused recipe with an unfiltered project test, full solution test, or full solution build because the focused command feels incomplete. First remove nonessential adjacent classes, then document residual risk.
@@ -253,6 +264,7 @@ Choose the narrowest command that still proves the scoped change:
 Record the validation decision before running expensive commands:
 
 - Changed surface: documentation-only, test-only, production-code, or shared-surface.
+- Specific behavior/contract under validation.
 - Focused command selected: exact `dotnet test`, Maven, or hygiene command.
 - Java parity command: exact Maven command, or explicit reason it is unavailable/not relevant.
 - Broad-validation trigger: exact trigger from this section, or `none`.
@@ -263,6 +275,7 @@ Use this decision template in completion/handoff docs:
 ```text
 Validation decision:
 - Changed surface:
+- Specific behavior/contract:
 - Focused C# command:
 - Focused Java/Maven command:
 - Broad-validation trigger:
