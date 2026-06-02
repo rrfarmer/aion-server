@@ -2,10 +2,12 @@ package com.aionemu.gameserver.services.findgroup;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
@@ -171,6 +173,112 @@ public class FindGroupMutationPostTraceCaptureTest {
 		}
 	}
 
+	@Test
+	public void serializerScaffoldListsStableSchemaFieldsInComparisonOrder() {
+		assertEquals(List.of(
+			"schemaVersion",
+			"traceName",
+			"traceSource",
+			"action",
+			"boundaryAccepted",
+			"activePlayerObjectId",
+			"activePlayerRace",
+			"serverEpochSeconds",
+			"mutationKind",
+			"mutatedEntryObjectId",
+			"stateMutationRecordedBeforeDirectPackets",
+			"postedSystemMessageRecipientObjectId",
+			"postedSystemMessageType",
+			"postedSystemMessageId",
+			"refreshedListRecipientObjectId",
+			"refreshedListPacketType",
+			"refreshedListAction",
+			"visibleEntryObjectIdsAfterMutation",
+			"executorInvokedFromBoundary",
+			"registrySendsObservedInOrder",
+			"worldBroadcastCount",
+			"inviteDispatchCount"), FindGroupMutationPostTraceCaptureSerializer.schemaFields());
+	}
+
+	@Test
+	public void serializerNoOpsWhenCaptureFlagIsDisabled() {
+		String captureFlag = FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
+		try {
+			System.clearProperty(captureFlag);
+
+			Optional<String> artifact = FindGroupMutationPostTraceCaptureSerializer.trySerializeArtifact(List.of(
+				FindGroupMutationPostTraceCaptureSerializer.sampleRow(2, 1001, "ELYOS", 123456, 2002, List.of(2002))));
+
+			assertTrue(artifact.isEmpty());
+			assertFalse(artifactWriterImplemented());
+		} finally {
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+		}
+	}
+
+	@Test
+	public void serializerEmitsRecruitmentRowWhenCaptureFlagIsEnabledWithoutWritingArtifacts() {
+		String captureFlag = FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
+		try {
+			System.setProperty(captureFlag, "true");
+
+			String json = FindGroupMutationPostTraceCaptureSerializer.trySerializeArtifact(List.of(
+				FindGroupMutationPostTraceCaptureSerializer.sampleRow(2, 1001, "ELYOS", 123456, 2002, List.of(2002, 3003))))
+				.orElseThrow();
+
+			assertContainsInOrder(json,
+				"\"schemaVersion\": 1",
+				"\"traceName\": \"cm-find-group-direct-mutation-post-boundary\"",
+				"\"traceSource\": \"Java\"",
+				"\"action\": 2",
+				"\"mutationKind\": \"Recruitment\"",
+				"\"postedSystemMessageType\": \"SmSystemMessage\"",
+				"\"postedSystemMessageId\": 1400392",
+				"\"refreshedListPacketType\": \"SmFindGroup\"",
+				"\"refreshedListAction\": 0",
+				"\"visibleEntryObjectIdsAfterMutation\": [2002, 3003]",
+				"\"worldBroadcastCount\": 0",
+				"\"inviteDispatchCount\": 0");
+			assertFalse(artifactWriterImplemented());
+		} finally {
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+		}
+	}
+
+	@Test
+	public void serializerEmitsApplicationActionMappingWithoutWritingArtifacts() {
+		String json = FindGroupMutationPostTraceCaptureSerializer.serializeArtifact(List.of(
+			FindGroupMutationPostTraceCaptureSerializer.sampleRow(6, 4004, "ASMODIANS", 456789, 4004, List.of(4004))));
+
+		assertContainsInOrder(json,
+			"\"action\": 6",
+			"\"mutationKind\": \"Application\"",
+			"\"mutatedEntryObjectId\": 4004",
+			"\"postedSystemMessageId\": 1400393",
+			"\"refreshedListAction\": 4",
+			"\"visibleEntryObjectIdsAfterMutation\": [4004]",
+			"\"executorInvokedFromBoundary\": false",
+			"\"registrySendsObservedInOrder\": false");
+		assertFalse(artifactWriterImplemented());
+	}
+
+	@Test
+	public void serializerRejectsUnsupportedMutationPostAction() {
+		IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+			FindGroupMutationPostTraceCaptureSerializer.sampleRow(3, 1001, "ELYOS", 123456, 1001, List.of(1001)));
+
+		assertEquals("Unsupported mutation-post action 3", exception.getMessage());
+		assertFalse(artifactWriterImplemented());
+	}
+
 	private static boolean captureEnabled() {
 		return FindGroupMutationPostTraceCaptureInstrumentation.captureEnabled();
 	}
@@ -189,6 +297,15 @@ public class FindGroupMutationPostTraceCaptureTest {
 			.findFirst()
 			.map(scenario -> ARTIFACT_ROOT.resolve(scenario.artifactFileName()))
 			.orElseThrow(() -> new IllegalArgumentException("Unsupported mutation-post action " + action));
+	}
+
+	private static void assertContainsInOrder(String text, String... expectedFragments) {
+		int currentIndex = -1;
+		for (String fragment : expectedFragments) {
+			int nextIndex = text.indexOf(fragment, currentIndex + 1);
+			assertTrue(nextIndex > currentIndex, () -> "Expected fragment in order: " + fragment);
+			currentIndex = nextIndex;
+		}
 	}
 
 	private record CaptureScenario(
