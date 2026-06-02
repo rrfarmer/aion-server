@@ -55,8 +55,9 @@ Controlled parsed-boundary evidence exists for every Java `runImpl` action liste
 - `PlayerGroupRuntime` and `PlayerAllianceRuntime` can now expose non-live find-group recruitment-removal plans for Java group/alliance disband paths when supplied with a `FindGroupRecruitmentPlanService`.
 - `GameServerConnection` and `GameClientSocketServer` can now consume injected group/alliance invite request services, allowing joined-team cleanup to use a shared `FindGroupJoinedTeamLifecycleRecorder` and `FindGroupRecruitmentPlanService` in focused connection tests.
 - `FindGroupServiceCollectionExtensions.AddFindGroupSingletonGraph` registers a production singleton graph for `FindGroupRecruitmentPlanService`, `FindGroupJoinedTeamLifecycleRecorder`, group/alliance runtimes, group/alliance invite services, and non-live boundary adapter services.
+- `GameServerConnection.CreateDisabledFindGroupBoundaryPlan` can consume injected composition and dispatch adapter services to produce a non-live `CmFindGroup` boundary plan without executing packet sends; `GameClientSocketServer` passes those services into new connections when DI supplies them.
 
-The evidence is intentionally disabled and opt-in. `GameServerConnection` still contains only a deferred `case CmFindGroup`.
+The evidence is intentionally disabled and opt-in. `GameServerConnection` still keeps live `case CmFindGroup` deferred.
 
 ## Required Singleton Lifecycle Shape
 
@@ -69,7 +70,7 @@ Java uses one `FindGroupService.SingletonHolder` instance across these call site
 - `PlayerGroupService.disband`: `removeRecruitment(group)` before removing the group.
 - `PlayerAllianceService.disband`: `removeRecruitment(alliance)` before alliance disband events.
 
-Current C# evidence is intentionally not live singleton proof. Logout cleanup, joined-team cleanup, and disband cleanup now have production singleton graph evidence, but `CM_FIND_GROUP` still is not wired to the shared service.
+Current C# evidence is intentionally not live singleton proof. Logout cleanup, joined-team cleanup, and disband cleanup now have production singleton graph evidence, and the connection can compose non-live boundary plans from injected services, but live `CM_FIND_GROUP` still is not wired to execute the shared service side effects.
 
 ## Required Live Dispatch Shape
 
@@ -86,12 +87,12 @@ The adapter must not silently ignore execution failures. Missing active player, 
 
 ## Blockers Before Live Dispatch
 
-- The C# `FindGroupRecruitmentPlanService` now has production singleton graph evidence for joined-team and disband callers; live use still needs logout cleanup and CM_FIND_GROUP boundary proof against the same singleton.
+- The C# `FindGroupRecruitmentPlanService` now has production singleton graph evidence for logout, joined-team, and disband callers; live use still needs `CM_FIND_GROUP` execution proof against the same singleton.
 - Basic Java map-shape parity is now covered by `ConcurrentDictionary`, but live singleton use still needs evidence for multi-step mutation ordering, enumeration snapshots, and cross-caller lifecycle cleanup.
 - `FindGroupLifecycleSingletonWiringReadinessService` records the Java singleton call-site inventory; current C# status is production graph lifecycle evidence plus deferred boundary evidence.
 - Direct packet sends and world broadcasts need live connection-registry tests proving packet ordering relative to the triggering client packet.
 - Action 12 invite dispatch mutates question/request state and may send invite packets indirectly; it needs live boundary tests before being triggered by `CM_FIND_GROUP`.
-- Lifecycle hooks for logout/joined-team/disband cleanup now have production singleton graph evidence. The same singleton instance must still be wired through the live `CM_FIND_GROUP` boundary before live dispatch can claim parity.
+- Lifecycle hooks for logout/joined-team/disband cleanup now have production singleton graph evidence, and the connection can consume the non-live adapter services. The same singleton instance must still be executed through the live `CM_FIND_GROUP` boundary before live dispatch can claim parity.
 - Real encrypted socket or real-client behavior remains unverified.
 
 ## Non-Live Adapter Evidence
@@ -110,9 +111,11 @@ It composes:
 
 It does not execute live `GameServerConnection` sends and does not mark `CM_FIND_GROUP` live dispatch ready.
 
+`GameServerConnection.CreateDisabledFindGroupBoundaryPlan` can now call the composition service and adapter to create the same disabled plan shape from a parsed `CmFindGroup` packet and the connection's active player. This helper is not called by `ProcessPacketAsync`.
+
 ## Narrow Next Implementation Candidate
 
-The safest next code unit is still not full live dispatch. It is either a singleton DI/runtime wiring plan slice or an adapter-consumer test slice that proves how a future boundary can use `FindGroupConnectionBoundaryDispatchAdapterService` safely.
+The safest next code unit is still not full live dispatch. It is a narrow review of multi-step mutation ordering and connection-registry side-effect ordering before any call from `ProcessPacketAsync`.
 
 The adapter can become the seam used by `GameServerConnection` after singleton lifetime and concurrency risks are closed.
 
