@@ -57,7 +57,7 @@ Controlled parsed-boundary evidence exists for every Java `runImpl` action liste
 - `GameServerConnection` and `GameClientSocketServer` can now consume injected group/alliance invite request services, allowing joined-team cleanup to use a shared `FindGroupJoinedTeamLifecycleRecorder` and `FindGroupRecruitmentPlanService` in focused connection tests.
 - `FindGroupServiceCollectionExtensions.AddFindGroupSingletonGraph` registers a production singleton graph for `FindGroupRecruitmentPlanService`, `FindGroupJoinedTeamLifecycleRecorder`, group/alliance runtimes, group/alliance invite services, and non-live boundary adapter services.
 - `GameServerConnection.CreateDisabledFindGroupBoundaryPlan` can consume injected composition and dispatch adapter services to produce a non-live `CmFindGroup` boundary plan without executing packet sends; `GameClientSocketServer` passes those services into new connections when DI supplies them.
-- `GameServerConnection.CreateDisabledFindGroupBoundaryPlan` has focused action `12` accept evidence that the connection resolver can find the applicant through `IGameClientConnectionRegistry.ForEachOnlinePlayer` and compose disabled group/alliance invite requests through injected group/alliance runtimes without socket sends.
+- `GameServerConnection.CreateDisabledFindGroupBoundaryPlan` has focused action `12` evidence that the connection resolver can find the applicant through `IGameClientConnectionRegistry.ForEachOnlinePlayer`, compose disabled group/alliance invite requests for accept replies, and expose the declined-whisper direct packet intent without socket sends.
 - `FindGroupSideEffectDispatchExecutorService` records opt-in direct-packet and world-broadcast execution order, including direct-before-broadcast ordering, without wiring `ProcessPacketAsync`.
 
 The evidence is intentionally disabled and opt-in. `GameServerConnection` still keeps live `case CmFindGroup` deferred.
@@ -94,7 +94,7 @@ The adapter must not silently ignore execution failures. Missing active player, 
 - Basic Java map-shape parity is now covered by `ConcurrentDictionary`, but live singleton use still needs evidence for multi-step mutation ordering, enumeration snapshots, and cross-caller lifecycle cleanup.
 - `FindGroupLifecycleSingletonWiringReadinessService` records the Java singleton call-site inventory; current C# status is production graph lifecycle evidence plus deferred boundary evidence.
 - Direct packet sends and world broadcasts have opt-in executor ordering evidence, but still need live connection-registry tests proving packet ordering relative to the triggering client packet.
-- Action 12 invite dispatch has disabled connection-helper evidence for accepted group and alliance invite request composition, but still needs live boundary tests before being triggered by `CM_FIND_GROUP`; declined whisper connection-helper evidence remains a narrower candidate.
+- Action 12 accepted invite and declined whisper branches have disabled connection-helper evidence, but still need live boundary tests before being triggered by `CM_FIND_GROUP`.
 - Lifecycle hooks for logout/joined-team/disband cleanup now have production singleton graph evidence, and the connection can consume the non-live adapter services. The same singleton instance must still be executed through the live `CM_FIND_GROUP` boundary before live dispatch can claim parity.
 - Real encrypted socket or real-client behavior remains unverified.
 
