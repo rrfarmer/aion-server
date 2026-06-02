@@ -38,11 +38,13 @@ public class FindGroupService {
 
 	public void showRecruitments(Player player) {
 		List<GroupRecruitment> recruitments = this.recruitments.values().stream().filter(r -> r.getRace() == player.getRace()).toList();
+		FindGroupMutationPostTraceCaptureHooks.recordRecruitmentRefreshedListSend(player, recruitments);
 		PacketSendUtility.sendPacket(player, new SM_FIND_GROUP(0, recruitments));
 	}
 
 	public void showApplications(Player player) {
 		List<GroupApplication> applications = this.applications.values().stream().filter(r -> r.getPlayer().getRace() == player.getRace()).toList();
+		FindGroupMutationPostTraceCaptureHooks.recordApplicationRefreshedListSend(player, applications);
 		PacketSendUtility.sendPacket(player, new SM_FIND_GROUP(4, applications));
 	}
 
@@ -74,6 +76,8 @@ public class FindGroupService {
 			playerOrTeam = player;
 		GroupRecruitment recruitment = new GroupRecruitment(playerOrTeam, message, groupType);
 		recruitments.put(playerOrTeam.getObjectId(), recruitment);
+		FindGroupMutationPostTraceCaptureHooks.recordRecruitmentStateMutation(player, recruitment);
+		FindGroupMutationPostTraceCaptureHooks.recordRecruitmentPostedMessageSend(player);
 		PacketSendUtility.sendPacket(player, SM_SYSTEM_MESSAGE.STR_PARTY_MATCH_OFFER_PARTY_POSTED());
 		showRecruitments(player); // necessary if player switched tabs before adding this entry (client bug)
 	}
@@ -81,6 +85,8 @@ public class FindGroupService {
 	public void addApplication(Player player, String message, int groupType, int classId, int level) {
 		GroupApplication application = new GroupApplication(player, message, groupType, classId, level);
 		applications.put(player.getObjectId(), application);
+		FindGroupMutationPostTraceCaptureHooks.recordApplicationStateMutation(player, application);
+		FindGroupMutationPostTraceCaptureHooks.recordApplicationPostedMessageSend(player);
 		PacketSendUtility.sendPacket(player, SM_SYSTEM_MESSAGE.STR_PARTY_MATCH_SEEK_PARTY_POSTED());
 		showApplications(player); // necessary if player switched tabs before adding this entry (client bug)
 	}

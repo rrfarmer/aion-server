@@ -45,6 +45,8 @@ public class FindGroupMutationPostTraceCaptureTest {
 
 			assertFalse(captureEnabled());
 			assertTrue(fixtureArtifactWriterImplemented());
+			assertTrue(productionHookIntegrationImplemented());
+			assertFalse(productionHookArtifactOutputEnabled());
 			assertFalse(runtimeInstrumentationImplemented());
 		} finally {
 			if (original == null)
@@ -98,6 +100,9 @@ public class FindGroupMutationPostTraceCaptureTest {
 		boolean enabled = Boolean.getBoolean(FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG);
 
 		assertEquals(enabled, captureEnabled());
+		assertEquals(enabled, FindGroupMutationPostTraceCaptureHooks.captureEnabled());
+		assertTrue(productionHookIntegrationImplemented());
+		assertFalse(productionHookArtifactOutputEnabled());
 		assertFalse(runtimeInstrumentationImplemented());
 		assertTrue(fixtureArtifactWriterImplemented());
 		assertTrue(SCENARIOS.stream().allMatch(scenario -> scenario.action() == 2 || scenario.action() == 6));
@@ -138,7 +143,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 	}
 
 	@Test
-	public void hookPlacementPreflightNamesProductionJavaStatementsWithoutIntegratingHooks() {
+	public void hookPlacementPreflightNamesProductionJavaStatementsWithNoArtifactOutput() {
 		List<FindGroupMutationPostTraceCaptureHookPlacementPreflight.Placement> placements =
 			FindGroupMutationPostTraceCaptureHookPlacementPreflight.placements();
 
@@ -147,16 +152,24 @@ public class FindGroupMutationPostTraceCaptureTest {
 			placement.action() == 2
 				&& placement.mutationKind().equals("Recruitment")
 				&& placement.mutationStatement().contains("recruitments.put")
+				&& placement.stateMutationHookStatement().contains("recordRecruitmentStateMutation")
+				&& placement.postedSystemMessageHookStatement().contains("recordRecruitmentPostedMessageSend")
 				&& placement.postedSystemMessageStatement().contains("STR_PARTY_MATCH_OFFER_PARTY_POSTED")
 				&& placement.refreshCallStatement().equals("showRecruitments(player);")
+				&& placement.refreshedListHookStatement().contains("recordRecruitmentRefreshedListSend")
 				&& placement.refreshedListSendStatement().contains("new SM_FIND_GROUP(0, recruitments)")));
 		assertTrue(placements.stream().anyMatch(placement ->
 			placement.action() == 6
 				&& placement.mutationKind().equals("Application")
 				&& placement.mutationStatement().contains("applications.put")
+				&& placement.stateMutationHookStatement().contains("recordApplicationStateMutation")
+				&& placement.postedSystemMessageHookStatement().contains("recordApplicationPostedMessageSend")
 				&& placement.postedSystemMessageStatement().contains("STR_PARTY_MATCH_SEEK_PARTY_POSTED")
 				&& placement.refreshCallStatement().equals("showApplications(player);")
+				&& placement.refreshedListHookStatement().contains("recordApplicationRefreshedListSend")
 				&& placement.refreshedListSendStatement().contains("new SM_FIND_GROUP(4, applications)")));
+		assertTrue(productionHookIntegrationImplemented());
+		assertFalse(productionHookArtifactOutputEnabled());
 		assertFalse(runtimeInstrumentationImplemented());
 	}
 
@@ -166,14 +179,43 @@ public class FindGroupMutationPostTraceCaptureTest {
 			FindGroupMutationPostTraceCaptureHookPlacementPreflight.inspectDefaultSource();
 
 		assertTrue(report.allPlacementsPreserveJavaMutationPostOrdering());
-		assertFalse(report.productionHooksIntegrated());
+		assertTrue(report.allProductionHooksPlacedBeforeObservedSends());
+		assertTrue(report.productionHooksIntegrated());
+		assertFalse(report.artifactOutputEnabled());
 		assertEquals(List.of(2, 6), report.rows().stream().map(FindGroupMutationPostTraceCaptureHookPlacementPreflight.Row::action).toList());
 		assertTrue(report.rows().stream().allMatch(row ->
 			row.mutationIndex() >= 0
+				&& row.stateMutationHookIndex() > row.mutationIndex()
+				&& row.postedSystemMessageHookIndex() > row.stateMutationHookIndex()
+				&& row.postedSystemMessageIndex() > row.postedSystemMessageHookIndex()
 				&& row.postedSystemMessageIndex() > row.mutationIndex()
 				&& row.refreshCallIndex() > row.postedSystemMessageIndex()
 				&& row.refreshedListSendIndex() >= 0
-				&& row.mutationBeforePostedBeforeRefresh()));
+				&& row.refreshedListSendIndex() > row.refreshedListHookIndex()
+				&& row.mutationBeforePostedBeforeRefresh()
+				&& row.productionHooksPlacedBeforeObservedSends()));
+	}
+
+	@Test
+	public void productionHooksNoOpWithoutArtifactOutputEvenWhenCaptureFlagIsEnabled() {
+		String captureFlag = FindGroupMutationPostTraceCaptureHooks.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
+		try {
+			System.setProperty(captureFlag, "true");
+
+			assertTrue(FindGroupMutationPostTraceCaptureHooks.captureEnabled());
+			assertFalse(FindGroupMutationPostTraceCaptureHooks.artifactOutputEnabled());
+			FindGroupMutationPostTraceCaptureHooks.recordRecruitmentPostedMessageSend(null);
+			FindGroupMutationPostTraceCaptureHooks.recordRecruitmentRefreshedListSend(null, List.of());
+			FindGroupMutationPostTraceCaptureHooks.recordApplicationPostedMessageSend(null);
+			FindGroupMutationPostTraceCaptureHooks.recordApplicationRefreshedListSend(null, List.of());
+			assertFalse(runtimeInstrumentationImplemented());
+		} finally {
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+		}
 	}
 
 	@Test
@@ -506,6 +548,14 @@ public class FindGroupMutationPostTraceCaptureTest {
 
 	private static boolean runtimeInstrumentationImplemented() {
 		return false;
+	}
+
+	private static boolean productionHookIntegrationImplemented() {
+		return true;
+	}
+
+	private static boolean productionHookArtifactOutputEnabled() {
+		return FindGroupMutationPostTraceCaptureHooks.artifactOutputEnabled();
 	}
 
 	private static boolean fixtureArtifactWriterImplemented() {

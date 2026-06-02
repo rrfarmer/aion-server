@@ -5,7 +5,7 @@ import java.util.List;
 
 final class FindGroupMutationPostTraceCaptureInstrumentation {
 
-	static final String CAPTURE_FLAG = "aion.findGroupMutationPost.capture";
+	static final String CAPTURE_FLAG = FindGroupMutationPostTraceCaptureHooks.CAPTURE_FLAG;
 	static final String TRACE_NAME = "cm-find-group-direct-mutation-post-boundary";
 
 	private static final List<HookPoint> HOOK_POINTS = List.of(
