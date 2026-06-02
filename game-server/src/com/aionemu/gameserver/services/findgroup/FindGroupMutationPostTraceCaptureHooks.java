@@ -11,6 +11,7 @@ import com.aionemu.gameserver.model.gameobjects.player.Player;
 final class FindGroupMutationPostTraceCaptureHooks {
 
 	static final String CAPTURE_FLAG = "aion.findGroupMutationPost.capture";
+	static final String SERVER_EPOCH_SECONDS_PROPERTY = "aion.findGroupMutationPost.serverEpochSeconds";
 	static final String TRACE_NAME = "cm-find-group-direct-mutation-post-boundary";
 	private static final int SCHEMA_VERSION = 1;
 	private static final String TRACE_SOURCE = "Java";
@@ -25,6 +26,13 @@ final class FindGroupMutationPostTraceCaptureHooks {
 
 	static boolean artifactOutputEnabled() {
 		return false;
+	}
+
+	static int serverEpochSeconds(int javaLastUpdate) {
+		String override = System.getProperty(SERVER_EPOCH_SECONDS_PROPERTY);
+		if (override == null || override.isBlank())
+			return javaLastUpdate;
+		return Integer.parseInt(override);
 	}
 
 	static void recordRecruitmentStateMutation(Player player, GroupRecruitment recruitment) {
@@ -158,11 +166,11 @@ final class FindGroupMutationPostTraceCaptureHooks {
 		}
 
 		private static PendingTrace recruitment(Player player, GroupRecruitment recruitment) {
-			return new PendingTrace(2, player, "Recruitment", recruitment.getObjectId(), recruitment.getLastUpdate(), 1400392);
+			return new PendingTrace(2, player, "Recruitment", recruitment.getObjectId(), serverEpochSeconds(recruitment.getLastUpdate()), 1400392);
 		}
 
 		private static PendingTrace application(Player player, GroupApplication application) {
-			return new PendingTrace(6, player, "Application", application.getPlayer().getObjectId(), application.getLastUpdate(), 1400393);
+			return new PendingTrace(6, player, "Application", application.getPlayer().getObjectId(), serverEpochSeconds(application.getLastUpdate()), 1400393);
 		}
 
 		private void recordPostedSystemMessage(Player player) {

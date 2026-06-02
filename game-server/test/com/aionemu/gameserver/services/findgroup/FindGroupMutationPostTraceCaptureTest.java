@@ -263,9 +263,12 @@ public class FindGroupMutationPostTraceCaptureTest {
 	@Test
 	public void productionHooksAssembleMutationPostRowsInMemoryWithoutWritingArtifacts() throws Exception {
 		String captureFlag = FindGroupMutationPostTraceCaptureHooks.CAPTURE_FLAG;
+		String timestampProperty = FindGroupMutationPostTraceCaptureHooks.SERVER_EPOCH_SECONDS_PROPERTY;
 		String original = System.getProperty(captureFlag);
+		String originalTimestamp = System.getProperty(timestampProperty);
 		try {
 			System.setProperty(captureFlag, "true");
+			System.clearProperty(timestampProperty);
 			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
 			Player recruiter = simplePlayer(2002, "Recruiter", Race.ELYOS);
 			GroupRecruitment recruitment = new GroupRecruitment(recruiter, "Recruit", 3);
@@ -322,6 +325,58 @@ public class FindGroupMutationPostTraceCaptureTest {
 				System.clearProperty(captureFlag);
 			else
 				System.setProperty(captureFlag, original);
+			if (originalTimestamp == null)
+				System.clearProperty(timestampProperty);
+			else
+				System.setProperty(timestampProperty, originalTimestamp);
+		}
+	}
+
+	@Test
+	public void productionHooksCanUseDeterministicServerEpochSecondsOverrideForCaptureRows() throws Exception {
+		String captureFlag = FindGroupMutationPostTraceCaptureHooks.CAPTURE_FLAG;
+		String timestampProperty = FindGroupMutationPostTraceCaptureHooks.SERVER_EPOCH_SECONDS_PROPERTY;
+		String original = System.getProperty(captureFlag);
+		String originalTimestamp = System.getProperty(timestampProperty);
+		try {
+			System.setProperty(captureFlag, "true");
+			System.setProperty(timestampProperty, "1700000000");
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			captureRecruitmentAndApplicationRows();
+
+			List<FindGroupMutationPostTraceCaptureHooks.TraceRow> rows = FindGroupMutationPostTraceCaptureHooks.drainTraceRows();
+
+			assertEquals(2, rows.size());
+			assertEquals(1700000000, rows.get(0).serverEpochSeconds());
+			assertEquals(1700000000, rows.get(1).serverEpochSeconds());
+			assertFalse(productionHookArtifactOutputEnabled());
+			assertFalse(runtimeInstrumentationImplemented());
+		} finally {
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+			if (originalTimestamp == null)
+				System.clearProperty(timestampProperty);
+			else
+				System.setProperty(timestampProperty, originalTimestamp);
+		}
+	}
+
+	@Test
+	public void deterministicServerEpochSecondsOverrideRejectsInvalidValues() {
+		String timestampProperty = FindGroupMutationPostTraceCaptureHooks.SERVER_EPOCH_SECONDS_PROPERTY;
+		String originalTimestamp = System.getProperty(timestampProperty);
+		try {
+			System.setProperty(timestampProperty, "not-an-int");
+
+			assertThrows(NumberFormatException.class, () -> FindGroupMutationPostTraceCaptureHooks.serverEpochSeconds(123));
+		} finally {
+			if (originalTimestamp == null)
+				System.clearProperty(timestampProperty);
+			else
+				System.setProperty(timestampProperty, originalTimestamp);
 		}
 	}
 
