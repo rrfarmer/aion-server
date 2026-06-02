@@ -69,7 +69,7 @@ Java uses one `FindGroupService.SingletonHolder` instance across these call site
 - `PlayerGroupService.disband`: `removeRecruitment(group)` before removing the group.
 - `PlayerAllianceService.disband`: `removeRecruitment(alliance)` before alliance disband events.
 
-Current C# evidence is intentionally not live singleton proof. Joined-team cleanup and disband cleanup now have production singleton graph evidence, but logout cleanup remains observer-only and `CM_FIND_GROUP` still is not wired to the shared service.
+Current C# evidence is intentionally not live singleton proof. Logout cleanup, joined-team cleanup, and disband cleanup now have production singleton graph evidence, but `CM_FIND_GROUP` still is not wired to the shared service.
 
 ## Required Live Dispatch Shape
 
@@ -88,10 +88,10 @@ The adapter must not silently ignore execution failures. Missing active player, 
 
 - The C# `FindGroupRecruitmentPlanService` now has production singleton graph evidence for joined-team and disband callers; live use still needs logout cleanup and CM_FIND_GROUP boundary proof against the same singleton.
 - Basic Java map-shape parity is now covered by `ConcurrentDictionary`, but live singleton use still needs evidence for multi-step mutation ordering, enumeration snapshots, and cross-caller lifecycle cleanup.
-- `FindGroupLifecycleSingletonWiringReadinessService` records the Java singleton call-site inventory; current C# status is mixed production graph, observer-only, and deferred boundary evidence.
+- `FindGroupLifecycleSingletonWiringReadinessService` records the Java singleton call-site inventory; current C# status is production graph lifecycle evidence plus deferred boundary evidence.
 - Direct packet sends and world broadcasts need live connection-registry tests proving packet ordering relative to the triggering client packet.
 - Action 12 invite dispatch mutates question/request state and may send invite packets indirectly; it needs live boundary tests before being triggered by `CM_FIND_GROUP`.
-- Lifecycle hooks for joined-team/disband cleanup now have production singleton graph evidence, while logout cleanup remains observer-only. The same singleton instance must still be wired across all live callers before live dispatch can claim parity.
+- Lifecycle hooks for logout/joined-team/disband cleanup now have production singleton graph evidence. The same singleton instance must still be wired through the live `CM_FIND_GROUP` boundary before live dispatch can claim parity.
 - Real encrypted socket or real-client behavior remains unverified.
 
 ## Non-Live Adapter Evidence
