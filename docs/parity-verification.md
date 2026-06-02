@@ -523,6 +523,8 @@ Focused evidence is stronger than broad evidence when it is tied to the Java beh
 
 Do not treat a broad .NET run as a replacement for source-of-truth parity evidence. A filtered test tied to reviewed Java behavior is the preferred proof for ordinary Phase 6 units; a broad suite is only a blast-radius check after a named trigger.
 
+Do not use full .NET validation as a session heartbeat. When the scoped change is narrow, the verification record should show the exact narrow command, the Java source-of-truth reason for that command, and the remaining risk. A broad run without a broad trigger is slower and less informative than a focused test tied to the artifact being ported.
+
 For each completion/handoff, record:
 
 - the changed surface,

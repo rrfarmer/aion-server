@@ -177,6 +177,16 @@ Quick rule for future sessions:
 - Java parity check: run a targeted Maven test only when a narrow Java fixture or source-of-truth command exists.
 - Full project test, solution test, or solution build: run only after documenting a broad-validation trigger below.
 
+Focused test examples:
+
+- New non-live service plus tests: run the new test class and directly adjacent contract/service tests with `--filter`; skip full project tests.
+- Packet read/write shape change: run the edited packet golden/parser test class and the one boundary test that consumes that packet shape.
+- Boundary dispatch change with live side effects still disabled: run the dispatch guard test and the directly related planner/packet tests.
+- Live side effect, shared state, scheduler, persistence, crypto, packet primitive, or connection dispatch change: start focused, then escalate only if a broad-validation trigger applies and is documented.
+- Documentation, handoff, parity-table, or design-note change: run `git diff --check`; runtime tests are not applicable unless the document edits generated artifacts, scripts, or test inputs.
+
+Session startup is not a validation trigger. Reading handoff docs, inspecting status, or selecting the next unit does not justify a full .NET suite or full solution build.
+
 Use this validation ladder before every test run:
 
 1. Start with the changed files and the smallest directly related test class names.
