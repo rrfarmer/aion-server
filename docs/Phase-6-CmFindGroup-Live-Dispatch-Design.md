@@ -48,7 +48,7 @@ Controlled parsed-boundary evidence exists for every Java `runImpl` action liste
 - Actions `10` and `13`: instance-group show-list direct packet intents; action `10` also supports optional action 26 mask-list intent when form-anywhere is enabled, with focused disabled-boundary evidence that action 26 is recorded before the action 10 show-list packet; action `13` has focused disabled-boundary evidence that update requests do not emit action 26.
 - Action `11`: instance-application action 11 direct packet intent to resolved recruiter.
 - Action `12`: declined whisper direct packet intent, accepted group/alliance invite intent, and inner branch status for accepted group invite, accepted alliance invite, declined, missing applicant, and missing responder instance group.
-- Action `15`: instance-group member-info action 16 direct packet intent.
+- Action `15`: instance-group member-info action 16 direct packet intent, with focused disabled-boundary evidence that missing member-info target records missing status and no packet side effects.
 - Action `17`: update instance group followed by action 10 updated show-list intent, with focused disabled-boundary evidence that a missing instance-group update records missing status and no packet side effects.
 - `FindGroupRecruitmentPlanService` now uses `ConcurrentDictionary` for recruitment, application, and instance-group state stores to mirror Java `FindGroupService` `ConcurrentHashMap` declarations.
 - `FindGroupRecruitmentPlanService` show-list plans now have focused evidence that recruitment, application, and instance-group results are materialized snapshots, matching Java `values().stream().filter(...).toList()` terminal list behavior after later mutations.
@@ -103,6 +103,7 @@ The adapter must not silently ignore execution failures. Missing active player, 
 - Action 12 accepted invite, declined whisper, missing-applicant, and missing-instance-group branches have disabled connection-helper evidence, including the inner planner status surfaced at the connection-boundary intent plan, but still need live boundary tests before being triggered by `CM_FIND_GROUP`.
 - Action 17 existing and missing instance-group update branches have disabled boundary evidence, including surfaced instance-group mutation status; live boundary tests are still needed before being triggered by `CM_FIND_GROUP`.
 - Action 9 existing and missing instance-group removal branches have disabled boundary evidence, including surfaced instance-group mutation status and Java's always-refresh-list behavior; live boundary tests are still needed before being triggered by `CM_FIND_GROUP`.
+- Action 15 existing and missing instance-group member-info branches have disabled boundary evidence, including surfaced member-info status; live boundary tests are still needed before being triggered by `CM_FIND_GROUP`.
 - Lifecycle hooks for logout/joined-team/disband cleanup now have production singleton graph evidence, and the connection can consume the non-live adapter services. The same singleton instance must still be executed through the live `CM_FIND_GROUP` boundary before live dispatch can claim parity.
 - Real encrypted socket or real-client behavior remains unverified.
 
