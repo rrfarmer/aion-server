@@ -165,6 +165,8 @@ Prefer focused validation by default. The normal Unit of Work validation target 
 
 Do not use the full .NET test suite or full solution build as a routine session heartbeat, end-of-unit habit, or substitute for choosing the right parity evidence. They cost too much for ordinary parity slices and should be reserved for the broad-validation triggers below.
 
+Operational rule: future sessions should not run an unfiltered project test, full solution test, or full solution build unless the current completion or handoff draft already names the broad-validation trigger. If the trigger is not obvious, choose the smallest filtered `dotnet test` command or `git diff --check`, then document any residual risk.
+
 Full validation is opt-in by evidence, not habit. Before starting a broad .NET suite or solution build, name the trigger in the session notes. If no trigger applies, keep the validation narrow and record the exact focused commands instead.
 
 Expensive-command checkpoint: before running an unfiltered project test, full solution test, or full solution build, stop and write the broad-validation trigger into the active completion/handoff draft or session notes. If the trigger cannot be named, choose a filtered test or `git diff --check` instead.

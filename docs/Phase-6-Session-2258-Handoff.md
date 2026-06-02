@@ -63,6 +63,17 @@ Broad `.NET` validation was skipped because there was no broad-validation trigge
 
 Use the Phase 6 test targeting matrix in `docs/orchestration-rules.md` before running validation.
 
+Startup and Work Discovery are not validation triggers. Do not run full `.NET` project tests, solution tests, or solution builds just because a new session started, a handoff was read, or a narrow service changed.
+
+Before any expensive command, write the validation decision into the active completion/handoff draft:
+
+- Changed surface.
+- Exact focused C# command, Java/Maven command, or documentation hygiene command.
+- Broad-validation trigger, or `none`.
+- Broad `.NET` decision: skipped unless the trigger is named.
+
+If the first focused command is still expected to take several minutes, narrow the filter to the edited test class and the closest adjacent class first. A narrow command with documented residual risk is preferred over an unfiltered project test or full build used for reassurance.
+
 For this artifact family:
 
 - Value-reader function execution preflight changes: run the edited preflight test class plus typed-reader implementation gate, comparator preflight, executor readiness gate, executor implementation plan, executor runtime-evidence intake, and runtime evidence checklist tests.
