@@ -169,6 +169,15 @@ Full validation is opt-in by evidence, not habit. Before starting a broad .NET s
 
 Expensive-command checkpoint: before running an unfiltered project test, full solution test, or full solution build, stop and write the broad-validation trigger into the active completion/handoff draft or session notes. If the trigger cannot be named, choose a filtered test or `git diff --check` instead.
 
+Default testing policy for Phase 6 sessions:
+
+- Start with the smallest filtered C# test command that names the edited test class and directly adjacent classes.
+- Treat a passing filtered `dotnet test` command as the compile/build signal for the affected project and dependencies.
+- Do not run `dotnet build dotnetConversion\AionServer.slnx` after a focused passing test just to get a second compile signal.
+- Do not run unfiltered project tests, full solution tests, or full solution builds unless a broad-validation trigger is already written into the active completion/handoff notes.
+- For docs-only units, run `git diff --check`; runtime tests and full builds are not applicable unless the docs changed generated artifacts, scripts, test inputs, or run commands.
+- If a broad trigger exists, run the focused command first when the risk can be isolated, then decide whether the wider command is still needed.
+
 Quick rule for future sessions:
 
 - Documentation-only change: run `git diff --check`; skip runtime tests.

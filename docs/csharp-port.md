@@ -403,3 +403,5 @@ The C# port is not considered ready until all of these are true:
 11. Treat a passing filtered `dotnet test` command as the compile signal for its affected project/dependencies unless a named broad-validation trigger requires a wider project test or solution build.
 12. For documentation-only Phase 6 units, prefer `git diff --check` and skip runtime tests unless the docs alter generated artifacts, test scripts, or run scripts.
 13. Do not run full .NET tests or full solution builds during startup or ordinary handoff review; choose the narrowest service, packet, parser, or documentation hygiene command after Work Discovery.
+14. Do not run an unfiltered project test, full solution test, or full solution build unless the active completion/handoff notes already name the broad-validation trigger from `orchestration-rules.md`.
+15. When a focused filtered test passes, do not follow it with a full solution build merely to confirm compilation; the filtered test has already built the affected project and dependencies.
