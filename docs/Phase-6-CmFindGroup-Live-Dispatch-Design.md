@@ -57,6 +57,7 @@ Controlled parsed-boundary evidence exists for every Java `runImpl` action liste
 - `GameServerConnection` and `GameClientSocketServer` can now consume injected group/alliance invite request services, allowing joined-team cleanup to use a shared `FindGroupJoinedTeamLifecycleRecorder` and `FindGroupRecruitmentPlanService` in focused connection tests.
 - `FindGroupServiceCollectionExtensions.AddFindGroupSingletonGraph` registers a production singleton graph for `FindGroupRecruitmentPlanService`, `FindGroupJoinedTeamLifecycleRecorder`, group/alliance runtimes, group/alliance invite services, and non-live boundary adapter services.
 - `GameServerConnection.CreateDisabledFindGroupBoundaryPlan` can consume injected composition and dispatch adapter services to produce a non-live `CmFindGroup` boundary plan without executing packet sends; `GameClientSocketServer` passes those services into new connections when DI supplies them.
+- `FindGroupSideEffectDispatchExecutorService` records opt-in direct-packet and world-broadcast execution order, including direct-before-broadcast ordering, without wiring `ProcessPacketAsync`.
 
 The evidence is intentionally disabled and opt-in. `GameServerConnection` still keeps live `case CmFindGroup` deferred.
 
@@ -91,7 +92,7 @@ The adapter must not silently ignore execution failures. Missing active player, 
 - The C# `FindGroupRecruitmentPlanService` now has production singleton graph evidence for logout, joined-team, and disband callers; live use still needs `CM_FIND_GROUP` execution proof against the same singleton.
 - Basic Java map-shape parity is now covered by `ConcurrentDictionary`, but live singleton use still needs evidence for multi-step mutation ordering, enumeration snapshots, and cross-caller lifecycle cleanup.
 - `FindGroupLifecycleSingletonWiringReadinessService` records the Java singleton call-site inventory; current C# status is production graph lifecycle evidence plus deferred boundary evidence.
-- Direct packet sends and world broadcasts need live connection-registry tests proving packet ordering relative to the triggering client packet.
+- Direct packet sends and world broadcasts have opt-in executor ordering evidence, but still need live connection-registry tests proving packet ordering relative to the triggering client packet.
 - Action 12 invite dispatch mutates question/request state and may send invite packets indirectly; it needs live boundary tests before being triggered by `CM_FIND_GROUP`.
 - Lifecycle hooks for logout/joined-team/disband cleanup now have production singleton graph evidence, and the connection can consume the non-live adapter services. The same singleton instance must still be executed through the live `CM_FIND_GROUP` boundary before live dispatch can claim parity.
 - Real encrypted socket or real-client behavior remains unverified.
