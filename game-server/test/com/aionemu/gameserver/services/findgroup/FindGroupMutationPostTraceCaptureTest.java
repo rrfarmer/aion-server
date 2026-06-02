@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.lang.reflect.Field;
 import java.io.IOException;
@@ -438,6 +439,38 @@ public class FindGroupMutationPostTraceCaptureTest {
 				System.clearProperty(artifactRootProperty);
 			else
 				System.setProperty(artifactRootProperty, originalArtifactRoot);
+		}
+	}
+
+	@Test
+	public void commandSuppliedArtifactRootPropertyWritesGuardedArtifacts() throws Exception {
+		String captureFlag = FindGroupMutationPostTraceCaptureHooks.CAPTURE_FLAG;
+		String artifactRootProperty = FindGroupMutationPostTraceCaptureInMemoryArtifactBridge.ARTIFACT_ROOT_PROPERTY;
+		String artifactRoot = System.getProperty(artifactRootProperty);
+		assumeTrue(artifactRoot != null && !artifactRoot.isBlank(), "artifact root property not supplied");
+		String originalCaptureFlag = System.getProperty(captureFlag);
+		try {
+			System.setProperty(captureFlag, "true");
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			Path artifactRootPath = Path.of(artifactRoot);
+			captureRecruitmentAndApplicationRows();
+
+			List<Path> writtenPaths = FindGroupMutationPostTraceCaptureInMemoryArtifactBridge.tryWriteDrainedRowsFromArtifactRootProperty();
+			FindGroupMutationPostTraceCaptureArtifactValidator.ValidationReport report =
+				FindGroupMutationPostTraceCaptureArtifactValidator.validateExpectedArtifacts(artifactRootPath);
+
+			assertEquals(List.of(
+				FindGroupMutationPostTraceCaptureArtifactWriter.artifactPathForAction(artifactRootPath, 2),
+				FindGroupMutationPostTraceCaptureArtifactWriter.artifactPathForAction(artifactRootPath, 6)), writtenPaths);
+			assertEquals(FindGroupMutationPostTraceCaptureArtifactValidator.DirectoryStatus.ALL_EXPECTED_ARTIFACTS_SHAPE_VALID, report.status());
+			assertFalse(report.readyForRuntimeComparison());
+			assertTrue(FindGroupMutationPostTraceCaptureHooks.traceRows().isEmpty());
+		} finally {
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			if (originalCaptureFlag == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, originalCaptureFlag);
 		}
 	}
 
