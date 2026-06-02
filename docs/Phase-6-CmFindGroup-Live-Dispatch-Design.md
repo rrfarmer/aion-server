@@ -65,6 +65,7 @@ Controlled parsed-boundary evidence exists for every Java `runImpl` action liste
 - `FindGroupLiveDispatchActionGateMatrixService` now maps each parsed Java `CM_FIND_GROUP` action to its remaining live evidence gate. It covers runImpl actions `0`/`1`/`2`/`3`/`4`/`5`/`6`/`7`/`8`/`9`/`10`/`11`/`12`/`13`/`15`/`17`, preserves parsed-only no-op actions `20`/`25`, and explicitly excludes server-packet-only action codes `14` and `16`.
 - `FindGroupDirectPacketTriggerOrderingReadinessService` now records that Java `AionClientPacket.run` invokes `CM_FIND_GROUP.runImpl` synchronously, C# opt-in executor ordering evidence exists, and live direct-packet ordering relative to the triggering `CM_FIND_GROUP` client packet remains blocked.
 - `FindGroupWorldBroadcastFanoutReadinessService` now records Java `PacketSendUtility.broadcastToWorld` predicate fanout, FindGroup action `1`/`5` race filters, C# registry fanout evidence, and the missing live boundary proof for same-race recipients/opposite-race exclusion.
+- `FindGroupConcurrentMutationOrderingReadinessService` now records Java independent `ConcurrentHashMap` state stores, Java `onJoinedTeam` method order, C# `ConcurrentDictionary` store evidence, C# sequential `onJoinedTeam` evidence, and C# basic concurrent store tests while keeping live singleton caller interleaving blocked.
 - `PlayerGroupRuntime` and `PlayerAllianceRuntime` can now expose non-live find-group recruitment-removal plans for Java group/alliance disband paths when supplied with a `FindGroupRecruitmentPlanService`.
 - `GameServerConnection` and `GameClientSocketServer` can now consume injected group/alliance invite request services, allowing joined-team cleanup to use a shared `FindGroupJoinedTeamLifecycleRecorder` and `FindGroupRecruitmentPlanService` in focused connection tests.
 - `FindGroupServiceCollectionExtensions.AddFindGroupSingletonGraph` registers a production singleton graph for `FindGroupRecruitmentPlanService`, `FindGroupJoinedTeamLifecycleRecorder`, group/alliance runtimes, group/alliance invite services, and non-live boundary adapter services.
@@ -109,6 +110,7 @@ The adapter must not silently ignore execution failures. Missing active player, 
 - `FindGroupLiveDispatchActionGateMatrixService` records the action-by-action blocked surface. Actions `1` and `5` still require world-broadcast live evidence; actions `3` and `7` still require shared singleton lifecycle evidence; actions `0`/`2`/`4`/`6`/`8`/`9`/`10`/`11`/`12`/`13`/`15`/`17` still require direct-packet live evidence; action `12` additionally requires invite-dispatch evidence.
 - `FindGroupDirectPacketTriggerOrderingReadinessService` records that opt-in executor ordering is not enough to claim live parity; C# still needs a connection-boundary ordered trace proving direct sends occur after the triggering `CM_FIND_GROUP` packet is accepted and before later boundary work.
 - `FindGroupWorldBroadcastFanoutReadinessService` records that opt-in race-filter fanout is not enough to claim live parity; C# still needs a live boundary trace proving actions `1` and `5` emit to same-race recipients, exclude opposite-race recipients, and preserve ordering from the triggering client packet.
+- `FindGroupConcurrentMutationOrderingReadinessService` records that `ConcurrentDictionary` storage shape plus sequential method-order tests are not enough to claim live singleton concurrency parity; C# still needs focused interleaving evidence for `CM_FIND_GROUP`, logout cleanup, joined-team cleanup, and group/alliance disband cleanup sharing one singleton.
 - Direct packet sends and world broadcasts have opt-in executor ordering evidence, including disabled-boundary action `2`/`6` and action `10` multi-direct ordering, but still need live connection-registry tests proving packet ordering relative to the triggering client packet.
 - Action 12 accepted invite, declined whisper, missing-applicant, and missing-instance-group branches have disabled connection-helper evidence, including the inner planner status surfaced at the connection-boundary intent plan. The declined whisper has focused `SM_MESSAGE` payload evidence, and disabled failure-result tests surface missing direct recipients plus missing invite players without live dispatch or request mutation, but action 12 still needs live boundary tests before being triggered by `CM_FIND_GROUP`.
 - Action 17 existing and missing instance-group update branches have disabled boundary evidence, including surfaced instance-group mutation status; live boundary tests are still needed before being triggered by `CM_FIND_GROUP`.
@@ -137,7 +139,12 @@ It does not execute live `GameServerConnection` sends and does not mark `CM_FIND
 
 ## Narrow Next Implementation Candidate
 
-The safest next code unit is still not full live dispatch. It is a narrow review of multi-step mutation ordering and connection-registry side-effect ordering before any call from `ProcessPacketAsync`.
+The safest next code unit is still not full live dispatch. It is a narrow focused test or readiness slice for one remaining live-blocked boundary:
+
+- live connection-boundary direct-packet ordering for one simple direct action,
+- live connection-boundary world-broadcast fanout for actions `1` or `5`,
+- action `12` live invite dispatch failure/result handling, or
+- concrete interleaving tests for `CM_FIND_GROUP`, logout, joined-team, and disband callers sharing one singleton.
 
 The adapter can become the seam used by `GameServerConnection` after singleton lifetime and concurrency risks are closed.
 
