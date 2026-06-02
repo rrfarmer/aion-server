@@ -519,6 +519,17 @@ If not, either fix it or document the blocker.
 
 Full .NET suite or solution build success is not required for every Unit of Work. It is required only when the scoped change crosses a broad-validation trigger from `orchestration-rules.md`, when focused tests suggest wider risk, or when the user asks for broad validation. Otherwise, filtered C# tests, targeted Java/Maven tests, and documentation hygiene checks are the expected evidence.
 
+Focused evidence is stronger than broad evidence when it is tied to the Java behavior under review. A full suite/build can show broad compile or regression health, but it does not by itself prove Java parity for a touched artifact. Prefer the smallest test or hygiene command that exercises the exact Java-derived behavior, then document any remaining gaps explicitly.
+
+For each completion/handoff, record:
+
+- the changed surface,
+- the focused C# command or documentation hygiene command,
+- the focused Java/Maven command or skip rationale,
+- the broad-validation trigger, or `none`,
+- whether broad .NET validation was skipped or run,
+- why the selected scope was sufficient for the current risk.
+
 ## Final Principle
 
 Code completion is not parity completion.

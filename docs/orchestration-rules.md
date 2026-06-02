@@ -167,6 +167,14 @@ Do not use the full .NET test suite or full solution build as a routine session 
 
 Full validation is opt-in by evidence, not habit. Before starting a broad .NET suite or solution build, name the trigger in the session notes. If no trigger applies, keep the validation narrow and record the exact focused commands instead.
 
+Use this validation ladder before every test run:
+
+1. Start with the changed files and the smallest directly related test class names.
+2. Add adjacent packet/parser/adapter/composition tests only when the changed surface crosses those boundaries.
+3. Add a targeted Java/Maven command only when a narrow Java source-of-truth behavior or fixture is available.
+4. Escalate to unfiltered project tests only when the focused command shows wider risk or the scoped change cannot be isolated.
+5. Escalate to a full solution build or solution test only after naming one of the broad-validation triggers below.
+
 Choose the narrowest command that still proves the scoped change:
 
 1. Documentation-only units:
@@ -190,9 +198,23 @@ Record the validation decision before running expensive commands:
 - Broad-validation trigger: exact trigger from this section, or `none`.
 - Broad .NET decision: run only when the trigger is named; otherwise document that it was skipped.
 
+Use this decision template in completion/handoff docs:
+
+```text
+Validation decision:
+- Changed surface:
+- Focused C# command:
+- Focused Java/Maven command:
+- Broad-validation trigger:
+- Broad .NET decision:
+- Why this scope is sufficient:
+```
+
 Prefer `--filter "FullyQualifiedName~SpecificTestClass|FullyQualifiedName~RelatedTestClass"` for C# test selection. Prefer Maven `-Dtest=SpecificJavaTest` for Java parity evidence when a matching Java test exists. Avoid unfiltered `dotnet test dotnetConversion/AionServer.slnx`, unfiltered project-wide tests, and full solution builds unless a broad trigger is documented.
 
 Filtered `dotnet test` commands already build the affected project and dependencies. Do not run `dotnet build dotnetConversion\AionServer.slnx` merely as a compile check after a narrow service, planner, packet, test, or documentation unit. Use a full solution build only when the changed surface has a broad-validation trigger or a focused compile/test result points to wider project risk.
+
+When a filtered `dotnet test` command passes, treat its implicit project build as the compile validation for that unit unless the changed surface has a named broad trigger. Do not follow it with a full solution build just to get a second compile signal.
 
 Useful command shapes:
 
