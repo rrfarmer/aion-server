@@ -184,6 +184,8 @@ Choose the narrowest command that still proves the scoped change:
 
 Prefer `--filter "FullyQualifiedName~SpecificTestClass|FullyQualifiedName~RelatedTestClass"` for C# test selection. Prefer Maven `-Dtest=SpecificJavaTest` for Java parity evidence when a matching Java test exists. Avoid unfiltered `dotnet test dotnetConversion/AionServer.slnx`, unfiltered project-wide tests, and full solution builds unless a broad trigger is documented.
 
+Filtered `dotnet test` commands already build the affected project and dependencies. Do not run `dotnet build dotnetConversion\AionServer.slnx` merely as a compile check after a narrow service, planner, packet, test, or documentation unit. Use a full solution build only when the changed surface has a broad-validation trigger or a focused compile/test result points to wider project risk.
+
 Useful command shapes:
 
 - C# targeted tests:
