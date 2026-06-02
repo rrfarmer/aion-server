@@ -51,6 +51,7 @@ Controlled parsed-boundary evidence exists for every Java `runImpl` action liste
 - Action `15`: instance-group member-info action 16 direct packet intent.
 - Action `17`: update instance group followed by action 10 updated show-list intent.
 - `FindGroupRecruitmentPlanService` now uses `ConcurrentDictionary` for recruitment, application, and instance-group state stores to mirror Java `FindGroupService` `ConcurrentHashMap` declarations.
+- `FindGroupRecruitmentPlanService` show-list plans now have focused evidence that recruitment, application, and instance-group results are materialized snapshots, matching Java `values().stream().filter(...).toList()` terminal list behavior after later mutations.
 - `FindGroupRecruitmentPlanService.OnJoinedTeam` has focused evidence for the Java mutation priority where a removed solo leader recruitment is re-added as the team recruitment before the full-team removal branch can run.
 - `FindGroupLifecycleSingletonWiringReadinessService` now enumerates Java `FindGroupService.getInstance` lifecycle call sites and keeps live singleton wiring blocked.
 - `PlayerGroupRuntime` and `PlayerAllianceRuntime` can now expose non-live find-group recruitment-removal plans for Java group/alliance disband paths when supplied with a `FindGroupRecruitmentPlanService`.
@@ -91,7 +92,7 @@ The adapter must not silently ignore execution failures. Missing active player, 
 ## Blockers Before Live Dispatch
 
 - The C# `FindGroupRecruitmentPlanService` now has production singleton graph evidence for logout, joined-team, and disband callers; live use still needs `CM_FIND_GROUP` execution proof against the same singleton.
-- Basic Java map-shape parity is now covered by `ConcurrentDictionary`, but live singleton use still needs evidence for multi-step mutation ordering, enumeration snapshots, and cross-caller lifecycle cleanup.
+- Basic Java map-shape parity is now covered by `ConcurrentDictionary`, and show-list materialization has focused snapshot evidence; live singleton use still needs evidence for multi-step mutation ordering under concurrent callers and cross-caller lifecycle cleanup.
 - `FindGroupLifecycleSingletonWiringReadinessService` records the Java singleton call-site inventory; current C# status is production graph lifecycle evidence plus deferred boundary evidence.
 - Direct packet sends and world broadcasts have opt-in executor ordering evidence, but still need live connection-registry tests proving packet ordering relative to the triggering client packet.
 - Action 12 accepted invite, declined whisper, missing-applicant, and missing-instance-group branches have disabled connection-helper evidence, but still need live boundary tests before being triggered by `CM_FIND_GROUP`.
