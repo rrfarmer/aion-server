@@ -20,8 +20,6 @@ import org.junit.jupiter.api.Test;
  */
 public class FindGroupMutationPostTraceCaptureTest {
 
-	private static final String CAPTURE_FLAG = "aion.findGroupMutationPost.capture";
-	private static final String TRACE_NAME = "cm-find-group-direct-mutation-post-boundary";
 	private static final Path ARTIFACT_ROOT = Path.of("parity-artifacts/find-group/mutation-post/java");
 	private static final List<CaptureScenario> SCENARIOS = List.of(
 		new CaptureScenario(2, "Recruitment", "CM_FIND_GROUP.readImpl action 2", "FindGroupService.addRecruitment",
@@ -31,18 +29,19 @@ public class FindGroupMutationPostTraceCaptureTest {
 
 	@Test
 	public void captureFlagDefaultsToDisabled() {
-		String original = System.getProperty(CAPTURE_FLAG);
+		String captureFlag = FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
 		try {
-			System.clearProperty(CAPTURE_FLAG);
+			System.clearProperty(captureFlag);
 
 			assertFalse(captureEnabled());
 			assertFalse(artifactWriterImplemented());
 			assertFalse(runtimeInstrumentationImplemented());
 		} finally {
 			if (original == null)
-				System.clearProperty(CAPTURE_FLAG);
+				System.clearProperty(captureFlag);
 			else
-				System.setProperty(CAPTURE_FLAG, original);
+				System.setProperty(captureFlag, original);
 		}
 	}
 
@@ -71,7 +70,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 
 	@Test
 	public void fixtureNamesStableArtifactTargetsWithoutWritingThem() {
-		assertEquals("cm-find-group-direct-mutation-post-boundary", TRACE_NAME);
+		assertEquals("cm-find-group-direct-mutation-post-boundary", FindGroupMutationPostTraceCaptureInstrumentation.TRACE_NAME);
 		assertEquals(Path.of("parity-artifacts/find-group/mutation-post/java"), ARTIFACT_ROOT);
 		assertEquals(
 			ARTIFACT_ROOT.resolve("cm-find-group-direct-mutation-post-boundary-action-2-java.json"),
@@ -84,7 +83,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 
 	@Test
 	public void captureFlagCanBeEnabledButRuntimeCaptureRemainsBlocked() {
-		boolean enabled = Boolean.getBoolean(CAPTURE_FLAG);
+		boolean enabled = Boolean.getBoolean(FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG);
 
 		assertEquals(enabled, captureEnabled());
 		assertFalse(runtimeInstrumentationImplemented());
@@ -92,8 +91,88 @@ public class FindGroupMutationPostTraceCaptureTest {
 		assertTrue(SCENARIOS.stream().allMatch(scenario -> scenario.action() == 2 || scenario.action() == 6));
 	}
 
+	@Test
+	public void instrumentationScaffoldListsHookPointsInJavaOrder() {
+		List<FindGroupMutationPostTraceCaptureInstrumentation.HookPoint> hooks =
+			FindGroupMutationPostTraceCaptureInstrumentation.hookPoints();
+
+		assertEquals(9, hooks.size());
+		assertEquals("client_packet_payload_parsed", hooks.get(0).eventName());
+		assertEquals("client_packet_run_impl_entered", hooks.get(1).eventName());
+		assertTrue(FindGroupMutationPostTraceCaptureInstrumentation.supportsActionsTwoAndSix());
+		assertTrue(FindGroupMutationPostTraceCaptureInstrumentation.preservesMutationBeforeSendOrdering(2));
+		assertTrue(FindGroupMutationPostTraceCaptureInstrumentation.preservesMutationBeforeSendOrdering(6));
+		assertEquals("trace_artifact_row_serialized", hooks.get(8).eventName());
+	}
+
+	@Test
+	public void instrumentationScaffoldNamesJavaHookSourcesAndRequiredFields() {
+		List<FindGroupMutationPostTraceCaptureInstrumentation.HookPoint> hooks =
+			FindGroupMutationPostTraceCaptureInstrumentation.hookPoints();
+
+		assertTrue(hooks.stream().anyMatch(point ->
+			point.javaSource().equals("CM_FIND_GROUP.readImpl")
+				&& point.requiredFields().contains("classId")
+				&& point.requiredFields().contains("level")));
+		assertTrue(hooks.stream().anyMatch(point ->
+			point.javaSource().contains("FindGroupService.addRecruitment after recruitments.put")
+				&& point.requiredFields().contains("stateMutationRecordedBeforeDirectPackets=true")));
+		assertTrue(hooks.stream().anyMatch(point ->
+			point.javaSource().contains("STR_PARTY_MATCH_OFFER_PARTY_POSTED")
+				&& point.requiredFields().contains("postedSystemMessageId=1400392")));
+		assertTrue(hooks.stream().anyMatch(point ->
+			point.javaSource().contains("FindGroupService.showApplications")
+				&& point.requiredFields().contains("refreshedListAction=4")));
+	}
+
+	@Test
+	public void recorderNoOpsWhenCaptureFlagIsDisabled() {
+		String captureFlag = FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
+		try {
+			System.clearProperty(captureFlag);
+			FindGroupMutationPostTraceCaptureInstrumentation.TraceRecorder recorder =
+				FindGroupMutationPostTraceCaptureInstrumentation.newRecorder();
+
+			assertFalse(recorder.enabled());
+			FindGroupMutationPostTraceCaptureInstrumentation.hookPoints().forEach(recorder::record);
+			assertTrue(recorder.events().isEmpty());
+		} finally {
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+		}
+	}
+
+	@Test
+	public void recorderCapturesEventNamesWhenFlagIsEnabledWithoutWritingArtifacts() {
+		String captureFlag = FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
+		try {
+			System.setProperty(captureFlag, "true");
+			FindGroupMutationPostTraceCaptureInstrumentation.TraceRecorder recorder =
+				FindGroupMutationPostTraceCaptureInstrumentation.newRecorder();
+
+			assertTrue(recorder.enabled());
+			FindGroupMutationPostTraceCaptureInstrumentation.hookPoints().stream()
+				.filter(point -> point.action() == 2)
+				.forEach(recorder::record);
+			assertEquals(List.of(
+				"recruitment_state_mutation_recorded",
+				"recruitment_posted_message_send_observed",
+				"recruitment_refreshed_list_send_observed"), recorder.events());
+			assertFalse(artifactWriterImplemented());
+		} finally {
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+		}
+	}
+
 	private static boolean captureEnabled() {
-		return Boolean.getBoolean(CAPTURE_FLAG);
+		return FindGroupMutationPostTraceCaptureInstrumentation.captureEnabled();
 	}
 
 	private static boolean runtimeInstrumentationImplemented() {
