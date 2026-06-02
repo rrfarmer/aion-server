@@ -67,7 +67,7 @@ Controlled parsed-boundary evidence exists for every Java `runImpl` action liste
 - `FindGroupLiveDispatchActionGateMatrixService` now maps each parsed Java `CM_FIND_GROUP` action to its remaining live evidence gate. It covers runImpl actions `0`/`1`/`2`/`3`/`4`/`5`/`6`/`7`/`8`/`9`/`10`/`11`/`12`/`13`/`15`/`17`, preserves parsed-only no-op actions `20`/`25`, and explicitly excludes server-packet-only action codes `14` and `16`.
 - `FindGroupDirectPacketTriggerOrderingReadinessService` now records that Java `AionClientPacket.run` invokes `CM_FIND_GROUP.runImpl` synchronously, C# opt-in executor ordering evidence exists, and live direct-packet ordering relative to the triggering `CM_FIND_GROUP` client packet remains blocked.
 - `FindGroupDirectPacketBoundaryTraceReadinessService` now records action `0`/`2`/`4`/`6`/`8`/`9`/`10`/`11`/`13`/`15`/`17` disabled-boundary acceptance before opt-in registry execution of direct packets to the Java-selected recipient, while keeping live `ProcessPacketAsync` ordering blocked.
-- `FindGroupWorldBroadcastFanoutReadinessService` now records Java `PacketSendUtility.broadcastToWorld` predicate fanout, FindGroup action `1`/`5` race filters, C# registry fanout evidence, disabled action `1` removed-branch fanout and missing-branch no-send evidence, disabled action `5` boundary fanout trace evidence, and the missing live boundary proof for actions `1`/`5`.
+- `FindGroupWorldBroadcastFanoutReadinessService` now records Java `PacketSendUtility.broadcastToWorld` predicate fanout, FindGroup action `1`/`5` race filters, C# registry fanout evidence, disabled action `1` and `5` removed-branch fanout plus missing-branch no-send evidence, and the missing live boundary proof for actions `1`/`5`.
 - `FindGroupConcurrentMutationOrderingReadinessService` now records Java independent `ConcurrentHashMap` state stores, Java `onJoinedTeam` method order, C# `ConcurrentDictionary` store evidence, C# sequential `onJoinedTeam` evidence, C# basic concurrent store tests, and deterministic shared-singleton interleaving tests while keeping live singleton caller interleaving blocked.
 - `PlayerGroupRuntime` and `PlayerAllianceRuntime` can now expose non-live find-group recruitment-removal plans for Java group/alliance disband paths when supplied with a `FindGroupRecruitmentPlanService`.
 - `GameServerConnection` and `GameClientSocketServer` can now consume injected group/alliance invite request services, allowing joined-team cleanup to use a shared `FindGroupJoinedTeamLifecycleRecorder` and `FindGroupRecruitmentPlanService` in focused connection tests.
@@ -113,7 +113,7 @@ The adapter must not silently ignore execution failures. Missing active player, 
 - `FindGroupLiveDispatchActionGateMatrixService` records the action-by-action blocked surface. Actions `1` and `5` still require world-broadcast live evidence; actions `3` and `7` still require shared singleton lifecycle evidence; actions `0`/`2`/`4`/`6`/`8`/`9`/`10`/`11`/`12`/`13`/`15`/`17` still require direct-packet live evidence; action `12` additionally requires invite-dispatch evidence.
 - `FindGroupDirectPacketTriggerOrderingReadinessService` records that opt-in executor ordering is not enough to claim live parity; C# still needs a connection-boundary ordered trace proving direct sends occur after the triggering `CM_FIND_GROUP` packet is accepted and before later boundary work.
 - `FindGroupDirectPacketBoundaryTraceReadinessService` records disabled-boundary-plus-opt-in action `0`/`2`/`4`/`6`/`8`/`9`/`10`/`11`/`13`/`15`/`17` ordered traces. This is still not live parity because `ProcessPacketAsync` does not invoke the boundary helper or executor for `CmFindGroup`.
-- `FindGroupWorldBroadcastFanoutReadinessService` records that opt-in race-filter fanout plus disabled action `1` removed/missing branch evidence and disabled action `5` boundary fanout trace evidence is not enough to claim live parity; C# still needs a live boundary trace proving actions `1` and `5` emit to same-race recipients, exclude opposite-race recipients, suppress missing-branch broadcasts, and preserve ordering from the triggering client packet.
+- `FindGroupWorldBroadcastFanoutReadinessService` records that opt-in race-filter fanout plus disabled action `1`/`5` removed/missing branch evidence is not enough to claim live parity; C# still needs a live boundary trace proving actions `1` and `5` emit to same-race recipients, exclude opposite-race recipients, suppress missing-branch broadcasts, and preserve ordering from the triggering client packet.
 - `FindGroupConcurrentMutationOrderingReadinessService` records that `ConcurrentDictionary` storage shape, sequential method-order tests, and deterministic shared-service interleaving fixtures are not enough to claim live singleton concurrency parity; C# still needs live boundary tests or runtime traces for `CM_FIND_GROUP`, logout cleanup, joined-team cleanup, and group/alliance disband cleanup sharing one singleton.
 - Direct packet sends and world broadcasts have opt-in executor ordering evidence, including disabled-boundary action `2`/`6` boundary traces and action `10` multi-direct ordering, but still need live connection-registry tests proving packet ordering relative to the triggering client packet.
 - Action 11 resolved-recipient and missing-recipient branches have disabled boundary evidence, including surfaced instance-application status and Java `World.getPlayer(playerOrTeamId)` no-send behavior; live boundary tests are still needed before being triggered by `CM_FIND_GROUP`.
@@ -133,6 +133,7 @@ It composes:
 - direct packet intents,
 - world broadcast intents,
 - recruitment mutation status for removed and missing action `1` branches,
+- application mutation status for removed and missing action `5` branches,
 - optional action 12 invite plans,
 - no-side-effect Java branch status,
 - parsed-only no-op status for actions `20` and `25`,
@@ -147,7 +148,6 @@ It does not execute live `GameServerConnection` sends and does not mark `CM_FIND
 
 The safest next code unit is still not full live dispatch. It is a narrow focused test or readiness slice for one remaining live-blocked boundary:
 
-- live connection-boundary world-broadcast fanout for action `5`,
 - action `12` live invite dispatch failure/result handling, or
 - live boundary or runtime traces for `CM_FIND_GROUP`, logout, joined-team, and disband callers sharing one singleton.
 
