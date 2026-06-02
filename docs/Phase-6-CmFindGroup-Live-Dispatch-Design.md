@@ -52,6 +52,7 @@ Controlled parsed-boundary evidence exists for every Java `runImpl` action liste
 - Action `17`: update instance group followed by action 10 updated show-list intent.
 - `FindGroupRecruitmentPlanService` now uses `ConcurrentDictionary` for recruitment, application, and instance-group state stores to mirror Java `FindGroupService` `ConcurrentHashMap` declarations.
 - `FindGroupLifecycleSingletonWiringReadinessService` now enumerates Java `FindGroupService.getInstance` lifecycle call sites and keeps live singleton wiring blocked.
+- `PlayerGroupRuntime` and `PlayerAllianceRuntime` can now expose non-live find-group recruitment-removal plans for Java group/alliance disband paths when supplied with a `FindGroupRecruitmentPlanService`.
 
 The evidence is intentionally disabled and opt-in. `GameServerConnection` still contains only a deferred `case CmFindGroup`.
 
@@ -66,7 +67,7 @@ Java uses one `FindGroupService.SingletonHolder` instance across these call site
 - `PlayerGroupService.disband`: `removeRecruitment(group)` before removing the group.
 - `PlayerAllianceService.disband`: `removeRecruitment(alliance)` before alliance disband events.
 
-Current C# evidence is intentionally not live singleton proof. Logout and joined-team hooks are observer-only, `GameServerConnection` still constructs invite request services without a shared recorder, and group/alliance disband recruitment-removal hooks are not represented yet.
+Current C# evidence is intentionally not live singleton proof. Logout and joined-team hooks are observer-only, `GameServerConnection` still constructs invite request services without a shared recorder, and group/alliance disband recruitment-removal hooks are non-live opt-in plans rather than normal runtime wiring.
 
 ## Required Live Dispatch Shape
 
@@ -85,7 +86,7 @@ The adapter must not silently ignore execution failures. Missing active player, 
 
 - The C# `FindGroupRecruitmentPlanService` state is currently instantiated in tests and planners; live use needs an explicit singleton lifetime review across all connection, logout, and invite callers.
 - Basic Java map-shape parity is now covered by `ConcurrentDictionary`, but live singleton use still needs evidence for multi-step mutation ordering, enumeration snapshots, and cross-caller lifecycle cleanup.
-- `FindGroupLifecycleSingletonWiringReadinessService` records the Java singleton call-site inventory; current C# status is observer-only or missing-hook for lifecycle callers.
+- `FindGroupLifecycleSingletonWiringReadinessService` records the Java singleton call-site inventory; current C# status is observer-only or non-live plan-only for lifecycle callers.
 - Direct packet sends and world broadcasts need live connection-registry tests proving packet ordering relative to the triggering client packet.
 - Action 12 invite dispatch mutates question/request state and may send invite packets indirectly; it needs live boundary tests before being triggered by `CM_FIND_GROUP`.
 - Lifecycle hooks for logout and joined-team cleanup have observer evidence, but the same singleton instance must be wired across all live callers before live dispatch can claim parity.
@@ -109,7 +110,7 @@ It does not execute live `GameServerConnection` sends and does not mark `CM_FIND
 
 ## Narrow Next Implementation Candidate
 
-The safest next code unit is still not full live dispatch. It is either a group/alliance disband recruitment-removal hook slice or an adapter-consumer test slice that proves how a future boundary can use `FindGroupConnectionBoundaryDispatchAdapterService` safely.
+The safest next code unit is still not full live dispatch. It is either a singleton DI/runtime wiring plan slice or an adapter-consumer test slice that proves how a future boundary can use `FindGroupConnectionBoundaryDispatchAdapterService` safely.
 
 The adapter can become the seam used by `GameServerConnection` after singleton lifetime and concurrency risks are closed.
 
