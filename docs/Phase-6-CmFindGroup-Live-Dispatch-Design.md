@@ -51,6 +51,7 @@ Controlled parsed-boundary evidence exists for every Java `runImpl` action liste
 - Action `15`: instance-group member-info action 16 direct packet intent.
 - Action `17`: update instance group followed by action 10 updated show-list intent.
 - `FindGroupRecruitmentPlanService` now uses `ConcurrentDictionary` for recruitment, application, and instance-group state stores to mirror Java `FindGroupService` `ConcurrentHashMap` declarations.
+- `FindGroupRecruitmentPlanService.OnJoinedTeam` has focused evidence for the Java mutation priority where a removed solo leader recruitment is re-added as the team recruitment before the full-team removal branch can run.
 - `FindGroupLifecycleSingletonWiringReadinessService` now enumerates Java `FindGroupService.getInstance` lifecycle call sites and keeps live singleton wiring blocked.
 - `PlayerGroupRuntime` and `PlayerAllianceRuntime` can now expose non-live find-group recruitment-removal plans for Java group/alliance disband paths when supplied with a `FindGroupRecruitmentPlanService`.
 - `GameServerConnection` and `GameClientSocketServer` can now consume injected group/alliance invite request services, allowing joined-team cleanup to use a shared `FindGroupJoinedTeamLifecycleRecorder` and `FindGroupRecruitmentPlanService` in focused connection tests.
