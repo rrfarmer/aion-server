@@ -325,6 +325,59 @@ public class FindGroupMutationPostTraceCaptureTest {
 	}
 
 	@Test
+	public void inMemoryArtifactBridgeDoesNotWriteWhenCaptureFlagIsDisabled(@TempDir Path tempDirectory) throws Exception {
+		String captureFlag = FindGroupMutationPostTraceCaptureHooks.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
+		try {
+			System.clearProperty(captureFlag);
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+
+			List<Path> writtenPaths = FindGroupMutationPostTraceCaptureInMemoryArtifactBridge.writeDrainedRows(tempDirectory);
+
+			assertTrue(writtenPaths.isEmpty());
+			assertFalse(Files.exists(FindGroupMutationPostTraceCaptureArtifactWriter.artifactPathForAction(tempDirectory, 2)));
+			assertFalse(Files.exists(FindGroupMutationPostTraceCaptureArtifactWriter.artifactPathForAction(tempDirectory, 6)));
+			assertTrue(FindGroupMutationPostTraceCaptureHooks.traceRows().isEmpty());
+		} finally {
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+		}
+	}
+
+	@Test
+	public void inMemoryArtifactBridgeWritesExplicitRootArtifactsFromDrainedRows(@TempDir Path tempDirectory) throws Exception {
+		String captureFlag = FindGroupMutationPostTraceCaptureHooks.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
+		try {
+			System.setProperty(captureFlag, "true");
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			captureRecruitmentAndApplicationRows();
+
+			List<Path> writtenPaths = FindGroupMutationPostTraceCaptureInMemoryArtifactBridge.writeDrainedRows(tempDirectory);
+			FindGroupMutationPostTraceCaptureArtifactValidator.ValidationReport report =
+				FindGroupMutationPostTraceCaptureArtifactValidator.validateExpectedArtifacts(tempDirectory);
+
+			assertEquals(List.of(
+				FindGroupMutationPostTraceCaptureArtifactWriter.artifactPathForAction(tempDirectory, 2),
+				FindGroupMutationPostTraceCaptureArtifactWriter.artifactPathForAction(tempDirectory, 6)), writtenPaths);
+			assertEquals(FindGroupMutationPostTraceCaptureArtifactValidator.DirectoryStatus.ALL_EXPECTED_ARTIFACTS_SHAPE_VALID, report.status());
+			assertTrue(report.hasAllExpectedFiles());
+			assertTrue(report.hasOnlyShapeValidArtifacts());
+			assertFalse(report.readyForRuntimeComparison());
+			assertTrue(FindGroupMutationPostTraceCaptureHooks.traceRows().isEmpty());
+		} finally {
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+		}
+	}
+
+	@Test
 	public void recorderNoOpsWhenCaptureFlagIsDisabled() {
 		String captureFlag = FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG;
 		String original = System.getProperty(captureFlag);
@@ -696,6 +749,21 @@ public class FindGroupMutationPostTraceCaptureTest {
 			6,
 			List.of(APPLICATION_SCENARIO.traceRow()))
 			.orElseThrow();
+	}
+
+	private static void captureRecruitmentAndApplicationRows() throws Exception {
+		Player recruiter = simplePlayer(2002, "Recruiter", Race.ELYOS);
+		GroupRecruitment recruitment = new GroupRecruitment(recruiter, "Recruit", 3);
+		GroupRecruitment visibleRecruitment = new GroupRecruitment(simplePlayer(3003, "VisibleRecruit", Race.ELYOS), "Other", 4);
+		Player applicant = simplePlayer(4004, "Applicant", Race.ASMODIANS);
+		GroupApplication application = new GroupApplication(applicant, "Apply", 5, 7, 45);
+
+		FindGroupMutationPostTraceCaptureHooks.recordRecruitmentStateMutation(recruiter, recruitment);
+		FindGroupMutationPostTraceCaptureHooks.recordRecruitmentPostedMessageSend(recruiter);
+		FindGroupMutationPostTraceCaptureHooks.recordRecruitmentRefreshedListSend(recruiter, List.of(recruitment, visibleRecruitment));
+		FindGroupMutationPostTraceCaptureHooks.recordApplicationStateMutation(applicant, application);
+		FindGroupMutationPostTraceCaptureHooks.recordApplicationPostedMessageSend(applicant);
+		FindGroupMutationPostTraceCaptureHooks.recordApplicationRefreshedListSend(applicant, List.of(application));
 	}
 
 	private static Player simplePlayer(int objectId, String name, Race race) throws Exception {
