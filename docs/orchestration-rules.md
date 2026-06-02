@@ -167,6 +167,8 @@ Do not use the full .NET test suite or full solution build as a routine session 
 
 Full validation is opt-in by evidence, not habit. Before starting a broad .NET suite or solution build, name the trigger in the session notes. If no trigger applies, keep the validation narrow and record the exact focused commands instead.
 
+Expensive-command checkpoint: before running an unfiltered project test, full solution test, or full solution build, stop and write the broad-validation trigger into the active completion/handoff draft or session notes. If the trigger cannot be named, choose a filtered test or `git diff --check` instead.
+
 Quick rule for future sessions:
 
 - Documentation-only change: run `git diff --check`; skip runtime tests.
@@ -223,6 +225,8 @@ Prefer `--filter "FullyQualifiedName~SpecificTestClass|FullyQualifiedName~Relate
 Filtered `dotnet test` commands already build the affected project and dependencies. Do not run `dotnet build dotnetConversion\AionServer.slnx` merely as a compile check after a narrow service, planner, packet, test, or documentation unit. Use a full solution build only when the changed surface has a broad-validation trigger or a focused compile/test result points to wider project risk.
 
 When a filtered `dotnet test` command passes, treat its implicit project build as the compile validation for that unit unless the changed surface has a named broad trigger. Do not follow it with a full solution build just to get a second compile signal.
+
+When selecting a C# filter, list the edited test class first, then only directly adjacent classes that prove the contract crossed by the edit. Do not add unrelated regression classes to pad confidence; document remaining risk instead.
 
 Useful command shapes:
 
