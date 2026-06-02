@@ -31,6 +31,10 @@ public class FindGroupMutationPostTraceCaptureTest {
 			"STR_PARTY_MATCH_OFFER_PARTY_POSTED", 1400392, 0, "cm-find-group-direct-mutation-post-boundary-action-2-java.json"),
 		new CaptureScenario(6, "Application", "CM_FIND_GROUP.readImpl action 6", "FindGroupService.addApplication",
 			"STR_PARTY_MATCH_SEEK_PARTY_POSTED", 1400393, 4, "cm-find-group-direct-mutation-post-boundary-action-6-java.json"));
+	private static final FindGroupMutationPostTraceCaptureScenarioBuilder.Scenario RECRUITMENT_SCENARIO =
+		FindGroupMutationPostTraceCaptureScenarioBuilder.recruitmentScenario();
+	private static final FindGroupMutationPostTraceCaptureScenarioBuilder.Scenario APPLICATION_SCENARIO =
+		FindGroupMutationPostTraceCaptureScenarioBuilder.applicationScenario();
 
 	@Test
 	public void captureFlagDefaultsToDisabled() {
@@ -207,6 +211,33 @@ public class FindGroupMutationPostTraceCaptureTest {
 	}
 
 	@Test
+	public void scenarioBuildersExposeDeterministicJavaPayloadAndMutationRows() {
+		assertEquals(2, RECRUITMENT_SCENARIO.action());
+		assertEquals(2002, RECRUITMENT_SCENARIO.playerOrTeamId());
+		assertEquals("Recruitment fixture message", RECRUITMENT_SCENARIO.message());
+		assertEquals(3, RECRUITMENT_SCENARIO.groupType());
+		assertEquals(0, RECRUITMENT_SCENARIO.classId());
+		assertEquals(0, RECRUITMENT_SCENARIO.level());
+		assertEquals("Recruitment", RECRUITMENT_SCENARIO.mutationKind());
+		assertEquals(1400392, RECRUITMENT_SCENARIO.postedSystemMessageId());
+		assertEquals(0, RECRUITMENT_SCENARIO.refreshedListAction());
+		assertEquals("cm-find-group-direct-mutation-post-boundary-action-2-java.json", RECRUITMENT_SCENARIO.artifactFileName());
+		assertTrue(RECRUITMENT_SCENARIO.javaSource().contains("addRecruitment"));
+
+		assertEquals(6, APPLICATION_SCENARIO.action());
+		assertEquals(4004, APPLICATION_SCENARIO.playerOrTeamId());
+		assertEquals("Application fixture message", APPLICATION_SCENARIO.message());
+		assertEquals(5, APPLICATION_SCENARIO.groupType());
+		assertEquals(7, APPLICATION_SCENARIO.classId());
+		assertEquals(45, APPLICATION_SCENARIO.level());
+		assertEquals("Application", APPLICATION_SCENARIO.mutationKind());
+		assertEquals(1400393, APPLICATION_SCENARIO.postedSystemMessageId());
+		assertEquals(4, APPLICATION_SCENARIO.refreshedListAction());
+		assertEquals("cm-find-group-direct-mutation-post-boundary-action-6-java.json", APPLICATION_SCENARIO.artifactFileName());
+		assertTrue(APPLICATION_SCENARIO.javaSource().contains("addApplication"));
+	}
+
+	@Test
 	public void serializerNoOpsWhenCaptureFlagIsDisabled() {
 		String captureFlag = FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG;
 		String original = System.getProperty(captureFlag);
@@ -214,7 +245,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 			System.clearProperty(captureFlag);
 
 			Optional<String> artifact = FindGroupMutationPostTraceCaptureSerializer.trySerializeArtifact(List.of(
-				FindGroupMutationPostTraceCaptureSerializer.sampleRow(2, 1001, "ELYOS", 123456, 2002, List.of(2002))));
+				RECRUITMENT_SCENARIO.traceRow()));
 
 			assertTrue(artifact.isEmpty());
 			assertTrue(fixtureArtifactWriterImplemented());
@@ -234,7 +265,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 			System.setProperty(captureFlag, "true");
 
 			String json = FindGroupMutationPostTraceCaptureSerializer.trySerializeArtifact(List.of(
-				FindGroupMutationPostTraceCaptureSerializer.sampleRow(2, 1001, "ELYOS", 123456, 2002, List.of(2002, 3003))))
+				RECRUITMENT_SCENARIO.traceRowWithVisibleEntryObjectIds(List.of(2002, 3003))))
 				.orElseThrow();
 
 			assertContainsInOrder(json,
@@ -262,7 +293,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 	@Test
 	public void serializerEmitsApplicationActionMappingWithoutWritingArtifacts() {
 		String json = FindGroupMutationPostTraceCaptureSerializer.serializeArtifact(List.of(
-			FindGroupMutationPostTraceCaptureSerializer.sampleRow(6, 4004, "ASMODIANS", 456789, 4004, List.of(4004))));
+			APPLICATION_SCENARIO.traceRow()));
 
 		assertContainsInOrder(json,
 			"\"action\": 6",
@@ -295,7 +326,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 			Optional<Path> artifactPath = FindGroupMutationPostTraceCaptureArtifactWriter.tryWriteArtifact(
 				tempDirectory,
 				2,
-				List.of(FindGroupMutationPostTraceCaptureSerializer.sampleRow(2, 1001, "ELYOS", 123456, 2002, List.of(2002))));
+				List.of(RECRUITMENT_SCENARIO.traceRow()));
 
 			assertTrue(artifactPath.isEmpty());
 			assertFalse(Files.exists(FindGroupMutationPostTraceCaptureArtifactWriter.artifactPathForAction(tempDirectory, 2)));
@@ -318,12 +349,12 @@ public class FindGroupMutationPostTraceCaptureTest {
 			Path actionTwoPath = FindGroupMutationPostTraceCaptureArtifactWriter.tryWriteArtifact(
 				tempDirectory,
 				2,
-				List.of(FindGroupMutationPostTraceCaptureSerializer.sampleRow(2, 1001, "ELYOS", 123456, 2002, List.of(2002))))
+				List.of(RECRUITMENT_SCENARIO.traceRow()))
 				.orElseThrow();
 			Path actionSixPath = FindGroupMutationPostTraceCaptureArtifactWriter.tryWriteArtifact(
 				tempDirectory,
 				6,
-				List.of(FindGroupMutationPostTraceCaptureSerializer.sampleRow(6, 4004, "ASMODIANS", 456789, 4004, List.of(4004))))
+				List.of(APPLICATION_SCENARIO.traceRow()))
 				.orElseThrow();
 
 			assertEquals(tempDirectory.resolve("cm-find-group-direct-mutation-post-boundary-action-2-java.json"), actionTwoPath);
@@ -355,7 +386,7 @@ public class FindGroupMutationPostTraceCaptureTest {
 			FindGroupMutationPostTraceCaptureArtifactWriter.tryWriteArtifact(
 				tempDirectory,
 				2,
-				List.of(FindGroupMutationPostTraceCaptureSerializer.sampleRow(6, 4004, "ASMODIANS", 456789, 4004, List.of(4004)))));
+				List.of(APPLICATION_SCENARIO.traceRow())));
 
 		assertEquals("Artifact for action 2 must contain a matching mutation-post trace row.", exception.getMessage());
 	}
@@ -463,12 +494,12 @@ public class FindGroupMutationPostTraceCaptureTest {
 		FindGroupMutationPostTraceCaptureArtifactWriter.tryWriteArtifact(
 			artifactRoot,
 			2,
-			List.of(FindGroupMutationPostTraceCaptureSerializer.sampleRow(2, 1001, "ELYOS", 123456, 2002, List.of(2002))))
+			List.of(RECRUITMENT_SCENARIO.traceRow()))
 			.orElseThrow();
 		FindGroupMutationPostTraceCaptureArtifactWriter.tryWriteArtifact(
 			artifactRoot,
 			6,
-			List.of(FindGroupMutationPostTraceCaptureSerializer.sampleRow(6, 4004, "ASMODIANS", 456789, 4004, List.of(4004))))
+			List.of(APPLICATION_SCENARIO.traceRow()))
 			.orElseThrow();
 	}
 
