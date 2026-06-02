@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Field;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,6 +14,20 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import com.aionemu.gameserver.model.PlayerClass;
+import com.aionemu.gameserver.model.Race;
+import com.aionemu.gameserver.model.account.Account;
+import com.aionemu.gameserver.model.account.PlayerAccountData;
+import com.aionemu.gameserver.model.gameobjects.AionObject;
+import com.aionemu.gameserver.model.gameobjects.findGroup.GroupApplication;
+import com.aionemu.gameserver.model.gameobjects.findGroup.GroupRecruitment;
+import com.aionemu.gameserver.model.gameobjects.player.Player;
+import com.aionemu.gameserver.model.gameobjects.player.PlayerAppearance;
+import com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData;
+import com.aionemu.gameserver.world.WorldPosition;
+
+import sun.misc.Unsafe;
 
 /**
  * Phase 6 Java parity fixture scaffold for future CM_FIND_GROUP action 2/6
@@ -211,6 +226,97 @@ public class FindGroupMutationPostTraceCaptureTest {
 			FindGroupMutationPostTraceCaptureHooks.recordApplicationRefreshedListSend(null, List.of());
 			assertFalse(runtimeInstrumentationImplemented());
 		} finally {
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+		}
+	}
+
+	@Test
+	public void productionHooksDoNotPopulateInMemoryRowsWhenCaptureFlagIsDisabled() throws Exception {
+		String captureFlag = FindGroupMutationPostTraceCaptureHooks.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
+		try {
+			System.clearProperty(captureFlag);
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			Player player = simplePlayer(2002, "Recruiter", Race.ELYOS);
+			GroupRecruitment recruitment = new GroupRecruitment(player, "Recruit", 3);
+
+			FindGroupMutationPostTraceCaptureHooks.recordRecruitmentStateMutation(player, recruitment);
+			FindGroupMutationPostTraceCaptureHooks.recordRecruitmentPostedMessageSend(player);
+			FindGroupMutationPostTraceCaptureHooks.recordRecruitmentRefreshedListSend(player, List.of(recruitment));
+
+			assertTrue(FindGroupMutationPostTraceCaptureHooks.traceRows().isEmpty());
+			assertTrue(FindGroupMutationPostTraceCaptureHooks.drainTraceRows().isEmpty());
+			assertFalse(productionHookArtifactOutputEnabled());
+		} finally {
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			if (original == null)
+				System.clearProperty(captureFlag);
+			else
+				System.setProperty(captureFlag, original);
+		}
+	}
+
+	@Test
+	public void productionHooksAssembleMutationPostRowsInMemoryWithoutWritingArtifacts() throws Exception {
+		String captureFlag = FindGroupMutationPostTraceCaptureHooks.CAPTURE_FLAG;
+		String original = System.getProperty(captureFlag);
+		try {
+			System.setProperty(captureFlag, "true");
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
+			Player recruiter = simplePlayer(2002, "Recruiter", Race.ELYOS);
+			GroupRecruitment recruitment = new GroupRecruitment(recruiter, "Recruit", 3);
+			GroupRecruitment visibleRecruitment = new GroupRecruitment(simplePlayer(3003, "VisibleRecruit", Race.ELYOS), "Other", 4);
+			Player applicant = simplePlayer(4004, "Applicant", Race.ASMODIANS);
+			GroupApplication application = new GroupApplication(applicant, "Apply", 5, 7, 45);
+
+			FindGroupMutationPostTraceCaptureHooks.recordRecruitmentStateMutation(recruiter, recruitment);
+			FindGroupMutationPostTraceCaptureHooks.recordRecruitmentPostedMessageSend(recruiter);
+			FindGroupMutationPostTraceCaptureHooks.recordRecruitmentRefreshedListSend(recruiter, List.of(recruitment, visibleRecruitment));
+			FindGroupMutationPostTraceCaptureHooks.recordApplicationStateMutation(applicant, application);
+			FindGroupMutationPostTraceCaptureHooks.recordApplicationPostedMessageSend(applicant);
+			FindGroupMutationPostTraceCaptureHooks.recordApplicationRefreshedListSend(applicant, List.of(application));
+
+			List<FindGroupMutationPostTraceCaptureHooks.TraceRow> rows = FindGroupMutationPostTraceCaptureHooks.drainTraceRows();
+
+			assertEquals(2, rows.size());
+			FindGroupMutationPostTraceCaptureHooks.TraceRow recruitmentRow = rows.get(0);
+			assertEquals(2, recruitmentRow.action());
+			assertEquals("Recruitment", recruitmentRow.mutationKind());
+			assertEquals(2002, recruitmentRow.activePlayerObjectId());
+			assertEquals("ELYOS", recruitmentRow.activePlayerRace());
+			assertEquals(recruitment.getLastUpdate(), recruitmentRow.serverEpochSeconds());
+			assertEquals(2002, recruitmentRow.mutatedEntryObjectId());
+			assertEquals(2002, recruitmentRow.postedSystemMessageRecipientObjectId());
+			assertEquals("SmSystemMessage", recruitmentRow.postedSystemMessageType());
+			assertEquals(1400392, recruitmentRow.postedSystemMessageId());
+			assertEquals(2002, recruitmentRow.refreshedListRecipientObjectId());
+			assertEquals("SmFindGroup", recruitmentRow.refreshedListPacketType());
+			assertEquals(0, recruitmentRow.refreshedListAction());
+			assertEquals(List.of(2002, 3003), recruitmentRow.visibleEntryObjectIdsAfterMutation());
+			assertTrue(recruitmentRow.boundaryAccepted());
+			assertTrue(recruitmentRow.stateMutationRecordedBeforeDirectPackets());
+			assertFalse(recruitmentRow.executorInvokedFromBoundary());
+			assertFalse(recruitmentRow.registrySendsObservedInOrder());
+			assertEquals(0, recruitmentRow.worldBroadcastCount());
+			assertEquals(0, recruitmentRow.inviteDispatchCount());
+
+			FindGroupMutationPostTraceCaptureHooks.TraceRow applicationRow = rows.get(1);
+			assertEquals(6, applicationRow.action());
+			assertEquals("Application", applicationRow.mutationKind());
+			assertEquals(4004, applicationRow.activePlayerObjectId());
+			assertEquals("ASMODIANS", applicationRow.activePlayerRace());
+			assertEquals(application.getLastUpdate(), applicationRow.serverEpochSeconds());
+			assertEquals(4004, applicationRow.mutatedEntryObjectId());
+			assertEquals(1400393, applicationRow.postedSystemMessageId());
+			assertEquals(4, applicationRow.refreshedListAction());
+			assertEquals(List.of(4004), applicationRow.visibleEntryObjectIdsAfterMutation());
+			assertFalse(productionHookArtifactOutputEnabled());
+			assertTrue(FindGroupMutationPostTraceCaptureHooks.traceRows().isEmpty());
+		} finally {
+			FindGroupMutationPostTraceCaptureHooks.clearInMemoryTraceRows();
 			if (original == null)
 				System.clearProperty(captureFlag);
 			else
@@ -590,6 +696,53 @@ public class FindGroupMutationPostTraceCaptureTest {
 			6,
 			List.of(APPLICATION_SCENARIO.traceRow()))
 			.orElseThrow();
+	}
+
+	private static Player simplePlayer(int objectId, String name, Race race) throws Exception {
+		PlayerCommonData commonData = new PlayerCommonData(objectId);
+		commonData.setName(name);
+		commonData.setRace(race);
+		commonData.setPlayerClass(race == Race.ELYOS ? PlayerClass.GLADIATOR : PlayerClass.ASSASSIN);
+		PlayerAppearance appearance = new PlayerAppearance();
+		appearance.setHeight(1);
+		PlayerAccountData accountData = new PlayerAccountData(commonData, appearance);
+		Account account = new Account(1);
+
+		Player player = (Player) unsafe().allocateInstance(Player.class);
+		setAionObjectId(player, objectId);
+		setField(player, "playerAccountData", accountData);
+		setField(player, "playerAccount", account);
+		setField(player, "position", new WorldPosition(300110000));
+		return player;
+	}
+
+	private static void setAionObjectId(AionObject object, int objectId) throws Exception {
+		Field field = AionObject.class.getDeclaredField("objectId");
+		unsafe().putInt(object, unsafe().objectFieldOffset(field), objectId);
+	}
+
+	private static Unsafe unsafe() throws Exception {
+		Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+		unsafeField.setAccessible(true);
+		return (Unsafe) unsafeField.get(null);
+	}
+
+	private static void setField(Object target, String name, Object value) throws Exception {
+		Field field = findField(target.getClass(), name);
+		field.setAccessible(true);
+		field.set(target, value);
+	}
+
+	private static Field findField(Class<?> type, String name) throws NoSuchFieldException {
+		Class<?> current = type;
+		while (current != null) {
+			try {
+				return current.getDeclaredField(name);
+			} catch (NoSuchFieldException ignored) {
+				current = current.getSuperclass();
+			}
+		}
+		throw new NoSuchFieldException(name);
 	}
 
 	private record CaptureScenario(
