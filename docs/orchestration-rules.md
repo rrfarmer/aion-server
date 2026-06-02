@@ -182,6 +182,14 @@ Choose the narrowest command that still proves the scoped change:
    - Start with the narrowest directly affected project/test filters.
    - Escalate only when the broad-validation triggers below apply.
 
+Record the validation decision before running expensive commands:
+
+- Changed surface: documentation-only, test-only, production-code, or shared-surface.
+- Focused command selected: exact `dotnet test`, Maven, or hygiene command.
+- Java parity command: exact Maven command, or explicit reason it is unavailable/not relevant.
+- Broad-validation trigger: exact trigger from this section, or `none`.
+- Broad .NET decision: run only when the trigger is named; otherwise document that it was skipped.
+
 Prefer `--filter "FullyQualifiedName~SpecificTestClass|FullyQualifiedName~RelatedTestClass"` for C# test selection. Prefer Maven `-Dtest=SpecificJavaTest` for Java parity evidence when a matching Java test exists. Avoid unfiltered `dotnet test dotnetConversion/AionServer.slnx`, unfiltered project-wide tests, and full solution builds unless a broad trigger is documented.
 
 Filtered `dotnet test` commands already build the affected project and dependencies. Do not run `dotnet build dotnetConversion\AionServer.slnx` merely as a compile check after a narrow service, planner, packet, test, or documentation unit. Use a full solution build only when the changed surface has a broad-validation trigger or a focused compile/test result points to wider project risk.
@@ -223,6 +231,8 @@ Do not run the broad .NET suite by default. Run broad C# validation only when:
 Even when a broad trigger exists, start with the smallest directly related test command when possible. Escalate to an unfiltered project test, solution test, or solution build only after the focused result is known or when the trigger cannot be meaningfully isolated.
 
 If broad validation is skipped, document that decision in the completion/handoff notes with the focused commands that did run and why they were sufficient for the scoped risk. For documentation-only units, document the hygiene command and state that runtime tests were not applicable. If no Java/Maven test is run, document why a narrower Java parity command was unavailable or irrelevant for the scoped change.
+
+Do not retroactively convert a focused Unit of Work into a broad validation run just to make the handoff feel safer. If the focused evidence is insufficient, identify the missing narrow test or document the specific broad trigger that makes full validation necessary.
 
 ## Summary Metrics
 

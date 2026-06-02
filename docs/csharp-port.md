@@ -399,4 +399,5 @@ The C# port is not considered ready until all of these are true:
 7. Add or extend parity tests before changing shared protocol behavior.
 8. Add short implementation notes as each phase discovers differences from Java.
 9. Use focused test selection from `orchestration-rules.md` for ordinary Phase 6 units; reserve full .NET suite/build runs for documented broad-validation triggers.
+10. In each completion/handoff document, record the exact focused validation command and the reason any full .NET suite/build was skipped or run.
 
