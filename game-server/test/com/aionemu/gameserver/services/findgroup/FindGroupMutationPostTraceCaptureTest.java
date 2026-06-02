@@ -138,6 +138,45 @@ public class FindGroupMutationPostTraceCaptureTest {
 	}
 
 	@Test
+	public void hookPlacementPreflightNamesProductionJavaStatementsWithoutIntegratingHooks() {
+		List<FindGroupMutationPostTraceCaptureHookPlacementPreflight.Placement> placements =
+			FindGroupMutationPostTraceCaptureHookPlacementPreflight.placements();
+
+		assertEquals(2, placements.size());
+		assertTrue(placements.stream().anyMatch(placement ->
+			placement.action() == 2
+				&& placement.mutationKind().equals("Recruitment")
+				&& placement.mutationStatement().contains("recruitments.put")
+				&& placement.postedSystemMessageStatement().contains("STR_PARTY_MATCH_OFFER_PARTY_POSTED")
+				&& placement.refreshCallStatement().equals("showRecruitments(player);")
+				&& placement.refreshedListSendStatement().contains("new SM_FIND_GROUP(0, recruitments)")));
+		assertTrue(placements.stream().anyMatch(placement ->
+			placement.action() == 6
+				&& placement.mutationKind().equals("Application")
+				&& placement.mutationStatement().contains("applications.put")
+				&& placement.postedSystemMessageStatement().contains("STR_PARTY_MATCH_SEEK_PARTY_POSTED")
+				&& placement.refreshCallStatement().equals("showApplications(player);")
+				&& placement.refreshedListSendStatement().contains("new SM_FIND_GROUP(4, applications)")));
+		assertFalse(runtimeInstrumentationImplemented());
+	}
+
+	@Test
+	public void hookPlacementPreflightConfirmsJavaMutationBeforePostedBeforeRefreshOrdering() throws IOException {
+		FindGroupMutationPostTraceCaptureHookPlacementPreflight.Report report =
+			FindGroupMutationPostTraceCaptureHookPlacementPreflight.inspectDefaultSource();
+
+		assertTrue(report.allPlacementsPreserveJavaMutationPostOrdering());
+		assertFalse(report.productionHooksIntegrated());
+		assertEquals(List.of(2, 6), report.rows().stream().map(FindGroupMutationPostTraceCaptureHookPlacementPreflight.Row::action).toList());
+		assertTrue(report.rows().stream().allMatch(row ->
+			row.mutationIndex() >= 0
+				&& row.postedSystemMessageIndex() > row.mutationIndex()
+				&& row.refreshCallIndex() > row.postedSystemMessageIndex()
+				&& row.refreshedListSendIndex() >= 0
+				&& row.mutationBeforePostedBeforeRefresh()));
+	}
+
+	@Test
 	public void recorderNoOpsWhenCaptureFlagIsDisabled() {
 		String captureFlag = FindGroupMutationPostTraceCaptureInstrumentation.CAPTURE_FLAG;
 		String original = System.getProperty(captureFlag);
