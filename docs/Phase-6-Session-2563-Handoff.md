@@ -74,9 +74,24 @@ The complete exchange flow now works end-to-end:
 
 **UOW-2564: Partial-stack exchange trade splits**
 
-Complete the deferred path:
-1. In `TransferTradeItemsAsync`, when committed < item.Count: decrease giver's stack count (in memory + persist via existing count-update), allocate a new objectId via `_idFactory.NextId()`, INSERT a new item row owned by the receiver with the committed count (need a repo `InsertTradedItemAsync` or reuse split-mutation INSERT), add to receiver in memory, send packets.
-2. Remove the partial-stack abort guard.
+Complete the deferred path. KEY FINDING (verified this session): the existing repo method
+`SaveItemSplitMutationAsync(playerObjectId, sourceItem, newItem)` is **directly reusable for a
+cross-player split** — it UPDATEs the source row count `WHERE item_owner = playerObjectId` (pass the
+giver) and INSERTs `newItem` using the new item's own `OwnerId` field (set it to the receiver). One
+transaction, no new repo method needed.
+
+Steps:
+1. Add an optional `int? objectId = null` parameter to `CopyInventoryItem` (default keeps ObjectId) so the
+   receiver's split item can get a fresh id. (Low risk: optional param, default preserves all call sites.)
+2. In `TransferTradeItemsAsync`, branch:
+   - Full-stack (committed == item.Count): current path (TransferItemOwnershipAsync).
+   - Partial-stack (committed < item.Count): 
+     - `reducedSource = CopyInventoryItem(item, count: item.Count - committed)`; `ReplaceInventoryItemFor(giver, reducedSource)` (no giver packet — the add-item step already showed the reduced count via PutToExchange).
+     - `newId = _idFactory.NextId()`; `received = CopyInventoryItem(item, objectId: newId, count: committed, ownerId: receiver, location: cube, slot: FirstAvailableSlot, isEquipped: false, packCount: unwrapped)`.
+     - Persist via `_playerEnterWorldService.SaveItemSplitMutationAsync(giver, reducedSource, received)`.
+     - Add `received` to receiver in memory; send `SmInventoryAddItem.CreatePlayerExchangeGet`.
+3. Remove the partial-stack abort guard in `ExecuteExchangeTradeAsync`. If `_idFactory == null`, keep the abort fallback (cannot allocate ids).
+4. Test: extend `GameServerConnectionExchangeTradeTests` harness to pass an `IDFactory` and a fake repo capturing the split; assert giver count reduced + receiver gets a new-id item with committed count.
 
 Alternatives:
 1. **DB integration test for TransferItemOwnershipAsync** — opt-in test against the Dockerized MySQL to raise its parity status to Verified (currently Needs Verification).
