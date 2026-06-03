@@ -1,4 +1,4 @@
-# Phase 6 Session 2543 Handoff
+# Phase 6 Session 2543-2544 Handoff
 
 ## Current Phase
 
@@ -6,7 +6,7 @@ Phase 6: Port Game Core
 
 ## Last Completed UOW
 
-[Phase 6] UOW-2543: Port CM_WINDSTREAM handler with SmWindstream server packet
+[Phase 6] UOW-2544: Port SM_WINDSTREAM_ANNOUNCE, WindstreamTable data loading, and CM_LEVEL_READY announce fanout
 
 ## UOW-2543 Summary
 
@@ -82,29 +82,88 @@ Ported the windstream flight system handler, making windstream entry/exit/boost 
 - `HandleTitleSetAsync` and `HandleSetNoteAsync` are live; both save to DB on logout via `SavePlayerLogoutAsync`.
 - `SmWindstream` opcode 163; `SmWarehouseUpdateItem` opcode 171; `SmViewPlayerDetails` opcode 65; `SmUnwrapItem` opcode 289.
 
+## UOW-2544 Summary
+
+Ported windstream data loading and the SM_WINDSTREAM_ANNOUNCE server packet. Players entering windstream maps now receive the correct announce packets telling the client about windstream locations.
+
+### Java Source Reviewed (UOW-2544)
+
+- `game-server/src/com/aionemu/gameserver/dataholders/WindstreamData.java`
+- `game-server/src/com/aionemu/gameserver/model/templates/windstreams/WindstreamTemplate.java`
+- `game-server/src/com/aionemu/gameserver/model/templates/windstreams/Location2D.java`
+- `game-server/src/com/aionemu/gameserver/model/flypath/FlyPathType.java`
+- `game-server/src/com/aionemu/gameserver/network/aion/serverpackets/SM_WINDSTREAM_ANNOUNCE.java`
+- `game-server/src/com/aionemu/gameserver/network/aion/clientpackets/CM_LEVEL_READY.java` (windstream announce section)
+- `game-server/src/com/aionemu/gameserver/network/aion/ServerPacketsOpcodes.java` (opcode 164)
+
+### Files Changed (UOW-2544)
+
+| File | Change |
+|------|--------|
+| `dotnetConversion/src/Aion.GameServer/Dataholders/WindstreamTable.cs` | New: WindstreamTable + WindstreamLocationSummary record |
+| `dotnetConversion/src/Aion.GameServer/Dataholders/StaticData.cs` | Parse `<windstream>` + `<location>` elements; add WindstreamLocations property |
+| `dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmWindstreamAnnounce.cs` | New: opcode 164; writeD(flyPathId) writeD(mapId) writeD(streamId) writeC(state) |
+| `dotnetConversion/src/Aion.GameServer/Network/Aion/GameServerConnection.cs` | HandleLevelReadyAsync sends SmWindstreamAnnounce for player's map |
+| `dotnetConversion/tests/Aion.GameServer.Tests/CmWindstreamTests.cs` | Add SmWindstreamAnnounce and WindstreamTable tests |
+
+### Validation Decision (UOW-2544)
+
+- Changed surface: production-code (new data table, new server packet, StaticData parser extension, level-ready handler update)
+- Specific behavior: windstream announce sent per location for player's current map
+- Focused C# command: `dotnet test --filter "FullyQualifiedName~CmWindstreamTests"` → 18/18 passed
+- Adjacent regression: `--filter "FullyQualifiedName~PlayerEnterWorldServiceTests|FullyQualifiedName~CmWindstreamTests"` → 75/75 passed
+- Flight zone fanout regression: `--filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests"` → 22/22 passed
+- Java/Maven: not available; FlyPathType id mapping verified from enum source
+- Broad-validation trigger: none
+- Broad .NET decision: skipped (focused evidence sufficient)
+
+### Migration Parity Table (UOW-2544)
+
+| Java Artifact | C# Artifact | Type | Port Status | Test Status | Parity Status | Notes |
+|---|---|---|---|---|---|---|
+| `WindstreamData` | `WindstreamTable` | DataHolder | Complete | Unit Tested | Verified Parity | Keyed by mapId; GetByMapId matches getStreamTemplate |
+| `WindstreamTemplate` + `Location2D` | `WindstreamLocationSummary` | Model | Complete | Unit Tested | Verified Parity | Flat record; FlyPathType id mapping 0/1/2 per Java enum |
+| `SM_WINDSTREAM_ANNOUNCE` | `SmWindstreamAnnounce` | ServerPacket | Complete | Unit Tested | Verified Parity | Opcode 164; all 4 fields write-verified |
+| `CM_LEVEL_READY` windstream announce loop | `HandleLevelReadyAsync` windstream section | Handler | Complete | No Tests | Partial Parity | Sends announces; `null` static data safely skipped |
+
 ## Next Recommended UOW
 
-**UOW-2544: Port CM_OPEN_STATICDOOR handler**
+**UOW-2545: Assess CM_LEVEL_READY remaining gaps or port CM_ABYSS_RANKING_PLAYERS/LEGIONS skeleton**
 
-The static door handler (`CM_OPEN_STATICDOOR`) is currently deferred. Java dispatches `StaticDoorService.openStaticDoor`. The key question is whether the C# infrastructure for static door objects is in place.
+Options:
+1. **CM_LEVEL_READY audit** — verify which remaining packets (SM_INSTANCE_COUNT_INFO, SM_RIFT_ANNOUNCE, SM_CONQUEROR_PROTECTOR) are deferred vs. silently absent. Port the simplest missing one.
+2. **CM_ABYSS_RANKING_PLAYERS/LEGIONS skeleton** — these require an AbyssRankingCache; assess if the C# abyss rank data service can provide ranking list data.
+3. **Legion warehouse items** — port CM_MOVE_ITEM and CM_SPLIT_ITEM for legion WH (storageType==3).
+4. **updateNearbyQuests on title change** — `TitleList.setDisplayTitle` calls `updateNearbyQuests()`; check if `NearbyQuestTemplates` is sufficient without full quest engine.
 
-Alternative next UOWs (roughly increasing complexity):
-1. **CM_OPEN_STATICDOOR** — check if `StaticDoorService` and the door object model are available
-2. **Player stats/speed on title change** — `TitleList.setDisplayTitle` calls `updateNearbyQuests()` which C# skips; check if there's a quest start-condition table that could do this without full quest engine
-3. **SM_WINDSTREAM_ANNOUNCE** — the `CM_LEVEL_READY` path sends `SM_WINDSTREAM_ANNOUNCE` for windstream areas; verify this is live or port it
-4. **Legion warehouse items** — port CM_MOVE_ITEM and CM_SPLIT_ITEM for legion WH storage type (storageType==3)
-
-Focused validation recipe for UOW-2544 (if CM_OPEN_STATICDOOR):
-- Behavior: static door open state mutation + packet fanout
-- Focused C# command: `dotnet test --filter "FullyQualifiedName~CmOpenStaticDoorTests"` (new)
-- Java/Maven: not expected unless Java door model fixtures exist
+Focused validation recipe for UOW-2545 (if CM_LEVEL_READY audit):
+- Behavior: document or port one more level-ready packet
+- Focused C# command: `dotnet test --filter "FullyQualifiedName~GameServerConnectionFlightZoneFanoutTests"` (existing level-ready coverage)
+- Java/Maven: not expected unless Java level-ready fixtures exist
 - Broad-validation trigger: none
 
 ## Remaining Risks
 
 - Legion warehouse operations (CM_MOVE_ITEM, CM_SPLIT_ITEM) all deferred.
 - Transform system not yet ported — SM_TRANSFORM broadcast on windstream exit missing.
-- QuestEngine.onEnterWindStream deferred — windstream quest triggers will not fire.
+- QuestEngine.onEnterWindStream (state 1) deferred — windstream quest triggers will not fire.
 - `TitleList.setDisplayTitle` calls `updateNearbyQuests()` — not ported, quest start conditions near the player won't re-evaluate on title change.
 - `SmViewPlayerDetails` sends to any world player; Java restricts to known-list (parity gap from UOW-2531).
 - Kinah split: only cube↔account warehouse; regular warehouse kinah not handled.
+- CM_LEVEL_READY: SM_INSTANCE_COUNT_INFO, SM_RIFT_ANNOUNCE, SM_CONQUEROR_PROTECTOR, quest/effect updates all deferred.
+
+## Context Needed By Next Session
+
+### Windstream state context (UOWs 2543-2544)
+- `HandleWindstreamAsync` live for all states (0/1/2/3/4/7/8); state 1 quest hook deferred.
+- `SmWindstream` opcode 163 (state + result); `SmWindstreamAnnounce` opcode 164 (flyPathId + mapId + streamId + state).
+- `StaticData.WindstreamLocations.GetByMapId(worldId)` returns locations for a map.
+- `HandleLevelReadyAsync` now sends SmWindstreamAnnounce for all locations in player's map.
+
+### Item system context (UOWs 2531-2542)
+- Same-storage and cross-storage move/split/merge/kinah live; legion WH deferred.
+- `HandleTitleSetAsync` and `HandleSetNoteAsync` are live; both save to DB on logout.
+
+### UOW-2543 tests summary
+- 14 tests in `CmWindstreamTests.cs` cover windstream handler states + SmWindstream packet parity.
+- 4 new tests added in UOW-2544: SmWindstreamAnnounce bytes, opcode, WindstreamTable lookup, count.
