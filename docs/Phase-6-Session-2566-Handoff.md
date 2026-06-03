@@ -93,33 +93,40 @@ legion-history model + legion rank are ported.
 
 ## Next Recommended UOW
 
-Grounded candidates (all confirmed to exist as Java artifacts):
+### Work Discovery already done this session (read before choosing)
 
-1. **UOW-2567: CM_QUEST_SHARE no-members / cannot-share messages.**
-   - Java: `network/aion/clientpackets/CM_QUEST_SHARE.java`. Needs `DataManager.QUEST_DATA.getQuestById`
-     (isCannotShare + QuestTarget), `player.getQuestStateList()` (status != COMPLETE guard), and group membership.
-   - **Check first** whether the C# port models quest templates (`isCannotShare`, `QuestTarget`) and per-player
-     quest state. If quest state/templates are NOT ported, this is blocked the same way legion history was —
-     scope down to porting the `SM_QUEST_ACTION` server packet + system-message constants as a building block.
-2. **UOW-2567-alt: Legion member rank loading** — read `legion_members.rank` at enter-world into a new
-   `Player.LegionRank`/brigade-general flag. This unblocks the REWARD guard and future legion features; a focused
-   repository/enter-world unit. Verify the `legion_members` schema column name first.
-3. **DB integration test for exchange persistence** — opt-in MySQL; **broad-validation trigger applies**. Raises
-   UOW-2564 SQL to Verified.
+- **CM_QUEST_SHARE is BLOCKED** as a full live port. Its `runImpl` needs
+  `DataManager.QUEST_DATA.getQuestById(questId).isCannotShare()` and `.getTarget() == ALLIANCE`, but the C# port
+  has **no general quest-template holder** with those fields — only `NearbyQuestTemplateTable` (a narrow subset)
+  and quest-reward services. So the cannot-share (1100001) guard and the ALLIANCE/group message split
+  (1100005 vs 1100000) cannot be reproduced faithfully. Also, the handoff's old fallback ("port SM_QUEST_ACTION")
+  is **already done** — `SmQuestAction.cs` exists. Do not re-scope to that.
+- Per-player quest state IS modeled (`PlayerQuestState` with `Status`/`IsComplete`); group membership IS modeled
+  (`PlayerGroupRuntime`). The single missing dependency is the general quest template's share metadata.
 
-Recommended next: **UOW-2567 quest-share**, but **do Work Discovery on C# quest-template/quest-state modeling
-first** — if absent, pivot to porting `SM_QUEST_ACTION` + the system-message constants (1100000/1100001/1100002/
-1100003/1100005) as a golden-tested building block, mirroring this UOW's approach.
+### Recommended next: **UOW-2567 — Legion member rank loading** (smallest self-contained data-layer unit)
 
-### Focused validation recipe for UOW-2567
+This is the cleanest unblocking unit and furthers gameplay parity. Read `legion_members.rank` at enter-world
+into the Player model (e.g. `Player.LegionRank` + an `IsBrigadeGeneral` helper) so rank-gated legion behavior
+(incl. the SM_LEGION_HISTORY REWARD guard ported this session) becomes reachable.
 
-- If quest data is modeled — Behavior: CM_QUEST_SHARE emits the correct SM_SYSTEM_MESSAGE for cannot-share /
-  no-group / no-alliance-members and SM_QUEST_ACTION for a valid share.
-  - Focused C# command: `dotnet test ... --filter "FullyQualifiedName~<CmQuestSharePlanServiceTests>|FullyQualifiedName~<SmQuestActionTests>"`.
-- If quest data is NOT modeled — Behavior: SM_QUEST_ACTION byte layout.
-  - Focused C# command: `dotnet test ... --filter "FullyQualifiedName~<SmQuestActionTests>"`.
-- Java/Maven: not expected (packet-shape / message-constant port).
-- Broad-validation trigger: none.
+- Java source of truth: `model/team/legion/LegionMember` rank enum (e.g. `BRIGADE_GENERAL`), and the
+  `legion_members` table load (`dao/LegionMemberDAO`).
+- C# artifacts: `PlayerEnterWorldRepository` enter-world SELECT (already LEFT JOINs `legion_members lm`; add the
+  rank column), `Player.cs`.
+- **Verify first**: the exact `legion_members` rank column name in the live schema and the Java
+  `LegionMemberRank` ordinal/name mapping.
+- Focused recipe: filtered repository/enter-world test asserting the rank maps correctly
+  (`--filter "FullyQualifiedName~PlayerEnterWorldServiceTests"` + any new rank-mapping test class). Java/Maven:
+  not expected unless the schema/DAO is touched. Broad-validation trigger: none (in-memory mapping;
+  the DB read itself is opt-in integration territory only if asserted against MySQL).
+
+### Other safe candidates
+
+- **Port the general quest-template share metadata** (`isCannotShare`, `QuestTarget`) into the quest data holder,
+  then wire CM_QUEST_SHARE. Larger (touches XML extraction + static data); discovery-heavy.
+- **DB integration test for exchange persistence** — opt-in MySQL; **broad-validation trigger applies**. Raises
+  UOW-2564 SQL (`TransferItemOwnershipAsync`, trade-time `SaveItemSplitMutationAsync`) to Verified.
 
 ## Context Needed By Next Session
 
