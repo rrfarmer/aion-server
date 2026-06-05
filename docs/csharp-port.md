@@ -239,6 +239,13 @@ Validation:
 
 Port gameplay systems in dependency order, validating continuously.
 
+Corrective rule: Phase 6 work must move live runtime parity forward. Do not spend Units of Work on preview helpers,
+metadata hardening, evidence propagation, readiness reports, adapter-only plans, or tests that only prove a dry-run
+model unless the user explicitly asks for that scaffolding. A Phase 6 UOW counts as progress only when it enables or
+fixes client-observable/runtime behavior: packet dispatch, packet send, live state mutation, persistence, runtime
+XML/static-data loading, handler execution, scheduler behavior, or a Java/C# runtime comparison that directly unblocks
+one of those changes.
+
 Subsystem order:
 
 - Account and character list flow
@@ -318,6 +325,11 @@ Acceptance:
 
 - Keep Java behavior as the source of truth.
 - Prefer direct ports over redesign.
+- Prioritize live runtime parity over preview scaffolding. Do not create or harden preview helpers as a substitute for
+  wiring real behavior.
+- A Unit of Work must state which runtime behavior it advances before editing. If it only changes tests, docs,
+  preview metadata, readiness checklists, planners, or evidence records, stop unless the user explicitly requested that
+  non-runtime work.
 - Do not change packet wire format.
 - Do not change database schema.
 - Do not change XML shape.
@@ -408,7 +420,9 @@ The C# port is not considered ready until all of these are true:
 16. If the obvious focused command is still slow, narrow the filter to the edited class and the closest adjacent class first. Document any remaining risk; do not run the full .NET suite or solution build as a reassurance step.
 17. The latest handoff must provide the next UOW's exact focused validation recipe. Use that recipe as the starting point and narrow it further if it is slow; do not broaden it without a named trigger.
 18. Full `.NET` project tests, solution tests, and solution builds are exceptional checks. They are appropriate only when `orchestration-rules.md` broad-validation triggers apply, focused evidence exposes wider risk, the user asks for broad validation, or a release/readiness checkpoint is in scope.
-19. For ordinary Phase 6 non-live services, planners, reports, and documentation updates, prefer the edited test class plus the closest adjacent contract/checklist classes, or `git diff --check` for docs-only work.
+19. Do not choose ordinary Phase 6 non-live services, planners, reports, preview helpers, evidence hardening, or documentation updates as migration progress. These are allowed only when explicitly requested by the user, required to unblock an immediately following runtime UOW in the same session, or needed to document a discovered blocker.
 20. If a focused command is expected to run for several minutes, narrow it before execution. Full `.NET` project tests, solution tests, or solution builds must not be used as a substitute for a specific parity evidence command.
 21. Before running validation, state the specific behavior, packet shape, metadata contract, or documentation invariant being checked. Choose the command that proves that target, not the command that feels broadly reassuring.
 22. Full `.NET` project tests, solution tests, and solution builds require an explicit exception reason in the active completion/handoff notes before execution: a broad-validation trigger, focused evidence of wider risk, an explicit user request, or a release/readiness checkpoint.
+23. Ignore stale handoff recommendations that propose another preview/metadata/evidence hardening slice. Re-plan from Java source, current C# deferred/runtime gaps, and the runtime-progress rule above.
+24. Commit titles containing `preview`, `metadata`, `evidence`, `readiness`, `planner`, `adapter`, `audit`, or `harden` are warning signs. Do not create such commits unless the body also includes a live runtime change or the user explicitly requested the non-runtime artifact.

@@ -17,6 +17,44 @@ Your job is to:
 2. Do not mark parity as verified unless objectively validated.
 3. Commit after every completed Unit of Work.
 4. Keep going until blocked, context limits require stopping, or no safe next unit remains.
+5. Phase 6 Units of Work must move live runtime parity forward. Non-live previews, metadata hardening, readiness
+   reports, evidence propagation, adapter-only plans, and tests that only validate dry-run models are not acceptable
+   migration progress unless the user explicitly requests that work or it is the shortest path to unblock a runtime
+   change in the same session.
+
+## Runtime Progress Gate
+
+Before selecting any Phase 6 Unit of Work, answer this gate in the active notes or handoff:
+
+```text
+Runtime progress gate:
+- Deferred/live behavior being advanced:
+- Java source method or runtime path:
+- C# runtime artifact to wire or fix:
+- Client-visible/state/persistence effect expected:
+- Why this is not preview-only/test-only/documentation-only:
+```
+
+Proceed only if the UOW is expected to do at least one of these:
+
+- wire a deferred client packet or server packet path,
+- send a real server packet from a live handler,
+- mutate live player, quest, inventory, world, group, alliance, combat, skill, loot, or NPC state,
+- persist or restore runtime state through the existing database shape,
+- load Java XML/static data into a runtime C# structure used by live code,
+- execute a dynamic handler, quest handler, AI handler, zone handler, or instance handler path,
+- pass a Java/C# runtime or golden comparison that directly unblocks one of the runtime changes above.
+
+Do not proceed if the best description is only:
+
+- add or harden a preview helper,
+- add or harden metadata constants,
+- add an evidence/report/readiness/planner layer,
+- add tests for a dry-run model,
+- update handoff/progress docs without changing executable runtime behavior.
+
+If no safe runtime UOW is obvious, perform a short discovery pass over deferred handlers, disabled runtime gates, or
+TODOs, then propose the smallest live UOW. Do not fall back to preview or evidence work to keep the loop busy.
 
 ## Required Startup
 
@@ -39,16 +77,17 @@ Then produce a short execution plan:
 For each Unit of Work:
 
 1. Select a coherent scope.
-2. Identify Java source artifacts.
-3. Identify target C# artifacts.
-4. Identify dependencies and blockers.
-5. Review all changes.
-6. Run relevant focused build/tests or documentation hygiene checks.
-7. Compare behavior against Java where possible.
-8. Update parity documentation inside the session completion/handoff docs.
-9. Update the latest session completion/handoff docs with the current context and next work.
-10. Commit completed work.
-11. Select the next Unit of Work and repeat.
+2. Pass the Runtime Progress Gate above.
+3. Identify Java source artifacts.
+4. Identify target C# artifacts.
+5. Identify dependencies and blockers.
+6. Review all changes.
+7. Run relevant focused build/tests or documentation hygiene checks.
+8. Compare behavior against Java where possible.
+9. Update parity documentation inside the session completion/handoff docs.
+10. Update the latest session completion/handoff docs with the current context and next work.
+11. Commit completed work.
+12. Select the next Unit of Work and repeat.
 
 The Orchestrator must review this output before committing.
 
@@ -201,6 +240,7 @@ Default testing policy for Phase 6 sessions:
 Required focused recipe policy:
 
 - Every handoff must include the next recommended UOW's exact focused validation recipe, including the expected `dotnet test --filter` class names or the exact hygiene command for documentation-only work.
+- Every handoff must include the Runtime Progress Gate answer for the next recommended UOW. If the answer cannot name a live runtime behavior, the recommendation is invalid and must not be followed.
 - Every recipe must name the specific behavior, contract, or invariant that the command is expected to prove.
 - The recipe must state whether Java/Maven is expected and why. Use `not expected unless Java source or fixtures change` when the next UOW only changes C# non-live metadata.
 - The recipe must state the broad-validation trigger as `none` unless a specific trigger from this document already applies.
@@ -359,7 +399,8 @@ After every parity table update, include:
 
 After every completed Unit of Work, include:
 
-- The next smallest safe scope
+- The next smallest safe runtime scope
+- The Runtime Progress Gate answer for that scope
 - Java artifacts to inspect
 - C# artifacts likely involved
 - Risks to watch
@@ -430,6 +471,10 @@ Avoid:
 - Updating docs after several units instead of every unit
 - Letting handoff docs become vague
 - Optimizing behavior away from Java source truth
+- Continuing a run of preview, metadata, evidence, readiness, planner, adapter, or hardening commits after the user asked for Java parity progress
+- Treating tests for non-live preview helpers as meaningful Phase 6 runtime progress
+- Following stale handoff recommendations that point to another preview-only or metadata-only UOW
+- Creating commits whose only executable change is assertions over constants, JavaSource strings, dry-run records, or documentation claims
 
 ## Final Principle
 

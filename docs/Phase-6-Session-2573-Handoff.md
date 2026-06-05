@@ -86,6 +86,22 @@ C# changes:
 - `cannotGiveup` not ported.
 - Carried risks as above.
 
+## Corrective Direction After History Reset
+
+The branch was reset back to `00362a54a` because later preview, metadata, readiness, planner, adapter, and evidence
+commits did not materially move runtime parity. A backup of the discarded state exists at
+`backup/polluted-phase6-before-runtime-reset`.
+
+Future Phase 6 work must pass the Runtime Progress Gate from `docs/orchestration-rules.md`. Do not recreate the
+discarded preview chain.
+
+Invalid next UOWs:
+
+- adding or hardening `QuestStepMutationPreviewService` helpers,
+- adding metadata-only or JavaSource-string evidence,
+- adding readiness/planner/adapter layers without wiring live behavior in the same UOW,
+- test-only assertion passes over dry-run models or constants.
+
 ## Next Recommended UOW
 
 1. **UOW-2574: Port `CM_DELETE_QUEST` (quest abandon).** `CM_DELETE_QUEST.runImpl` cancels timed quests +
@@ -95,14 +111,28 @@ C# changes:
    `NearbyQuestTemplateSummary` — a small UOW-2571-style extractor add is likely a prerequisite.
 2. **Alt**: another deferred handler whose deps are ported — Work Discovery on the `deferred` switch cases.
 
+### Runtime Progress Gate For UOW-2574
+
+```text
+Runtime progress gate:
+- Deferred/live behavior being advanced: `CM_DELETE_QUEST` client packet dispatch and quest-abandon execution.
+- Java source method or runtime path: `CM_DELETE_QUEST.runImpl` and `QuestService.abandonQuest`.
+- C# runtime artifact to wire or fix: `GameServerConnection` packet dispatch plus C# quest-abandon service/handler code.
+- Client-visible/state/persistence effect expected: active player quest state is removed/reset according to Java, abandon/timer packets are sent as Java sends them, and persistence/nearby refresh behavior is executed or explicitly blocked by a real missing runtime dependency.
+- Why this is not preview-only/test-only/documentation-only: success requires live dispatch, packet output, and live player quest-state mutation.
+```
+
+Before editing, inspect current C# delete-quest code only to reuse or replace it. Do not add more non-live layers.
+
 ### Focused validation recipe for UOW-2574
 
 - Behavior/contract: CM_DELETE_QUEST honors `cannot_giveup`, removes/resets quest state, emits
   SM_QUEST_ACTION.ABANDON (confirm exact Java behavior first).
 - Focused C# command: `dotnet test tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter
   "FullyQualifiedName~<CmDeleteQuestTests>|FullyQualifiedName~NearbyQuestTemplateXmlExtractorTests"`.
-- Java/Maven: not expected unless quest XML parsing is touched.
-- Broad-validation trigger: none unless the abandon path mutates shared persistence.
+- Java/Maven: use a targeted Java test only if a narrow fixture exists; otherwise document exact Java source review.
+- Broad-validation trigger: live dispatch/state/persistence may apply. Name the trigger before broad .NET validation;
+  start focused on live handler/service tests.
 
 ## Context Needed By Next Session
 

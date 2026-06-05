@@ -6,6 +6,11 @@ The Java implementation is always the source of truth.
 
 Do not claim verified parity unless there is objective evidence.
 
+Corrective rule: evidence is not progress by itself. Preview helpers, metadata assertions, readiness reports,
+planner-only tests, and documentation layers may describe Java behavior, but they do not move the C# server toward
+replacement unless they are tied to live runtime behavior. Treat such artifacts as scaffolding only, not Java parity
+completion.
+
 ## Parity Status Definitions
 
 Use only these statuses:
@@ -74,6 +79,21 @@ Must document:
 
 Use the strongest available evidence.
 
+## Runtime Progress Classification
+
+Classify every Phase 6 Unit of Work before assigning parity status:
+
+| Classification | Meaning | Counts As Migration Progress |
+|---|---|---|
+| Runtime Parity | C# live code now executes Java-equivalent behavior, sends packets, mutates state, persists state, loads runtime data, or dispatches handlers | Yes |
+| Runtime Comparison | Java and C# runtime/golden outputs were compared and the result directly enables or validates a live path | Yes |
+| Supportive Test | Tests cover code that is already live or will be wired live in the same UOW | Yes, only with the live change |
+| Scaffolding | Preview helpers, planners, metadata, readiness reports, dry-run records, or documentation-only evidence | No |
+| Archival/Forensic | Audits or handoff notes explaining what is missing or what should be deleted | No, unless explicitly requested |
+
+Do not label scaffolding as Phase 6 progress. It may be documented as `Partial Parity` or `Needs Verification`, but it
+must not be used as the next recommended UOW unless the user explicitly asked for scaffolding.
+
 ### Level 0: No Evidence
 
 Examples:
@@ -107,6 +127,10 @@ Examples:
 Allowed status:
 - Partial Parity
 - Verified Parity if coverage is complete for artifact scope
+
+Preview-helper tests are Level 2 evidence only for the preview helper itself. They are not evidence that live quest,
+packet, handler, persistence, reward, challenge, combat, inventory, or world behavior works. Do not use preview tests
+to claim runtime parity.
 
 ### Level 3: Golden File Evidence
 
@@ -500,6 +524,7 @@ Parity Status:
 
 Before committing a Unit of Work, the Orchestrator must answer:
 
+0. Did this UOW pass the Runtime Progress Gate from `orchestration-rules.md`, or did the user explicitly request non-runtime documentation/scaffolding?
 1. Was the validation scope focused by default?
 2. Did relevant tests or hygiene checks pass?
 3. Were the exact focused C# command(s) documented, including filters where used?
@@ -515,6 +540,9 @@ Before committing a Unit of Work, the Orchestrator must answer:
 13. Was parity status conservative?
 14. Were gaps explicitly listed?
 15. Were next verification steps documented?
+
+If answer 0 is "no", do not commit as Phase 6 migration progress. Either change the scope to live runtime work, mark
+the work as explicitly user-requested documentation/scaffolding, or stop and ask for direction.
 
 If not, either fix it or document the blocker.
 
@@ -551,3 +579,7 @@ Accuracy beats optimism.
 Do not get into a cycle of "evidence propagation" report layers unless they unblock a concrete runtime step.
 Focus on actual parity work: run or produce Java artifacts or targeted Java fixtures where appropriate, capture or validate C# boundary rows, compare concrete Java/C# row values, or implement missing game behavior directly against Java source.
 Keep docs short and focused in handoffs instead of expanding chains of metadata.
+
+Most importantly: do not let evidence work replace implementation work. If several consecutive commits do not wire,
+execute, mutate, persist, load, dispatch, or compare runtime behavior, stop the loop and re-plan from the last real
+runtime parity commit.
