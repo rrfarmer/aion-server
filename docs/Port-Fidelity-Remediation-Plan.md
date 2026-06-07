@@ -110,9 +110,23 @@ We cannot use a live game client until the port is complete, so we validate agai
   caveat: the orphan table over-reports because of `CM_`→`Cm`/`SM_`→`Sm` naming conventions — use the
   explosion-cluster table (with Java line counts) as the authoritative remediation ranking.
 
-- **A4. Guardrails (enforcement).** **NOT YET BUILT.** A CI/check step that fails when a new C# file under
-  `Services/` uses banned slop vocabulary (§3.3) without a matching Java type, or has no resolvable Java
-  parent. This is the missing enforcement that let the drift happen; build it before Phase D resumes.
+- **A4. Guardrails (enforcement).** **DONE.** `scripts/parity/check_fidelity.py` mechanically enforces two
+  structural rules as a **ratchet** (the whole codebase currently violates them, so a committed baseline freezes
+  today's debt and the check fails only on NEW debt or growth):
+  1. **No invented abstraction** — a C# file whose name contains a banned token (§3.3) with no Java class of the
+     same (naming-normalized) name is a violation.
+  2. **No god-classes** — a C# source file over 3,000 lines must not grow beyond its baseline; no new file may
+     cross the threshold.
+  ```
+  python scripts/parity/check_fidelity.py                  # check (exit 1 on new violations)
+  python scripts/parity/check_fidelity.py --update-baseline    # ratchet the floor DOWN after deleting slop
+  ```
+  Baseline: `scripts/parity/fidelity-baseline.json` (363 known slop files, 6 god-classes at 2026-06-07). Wired into
+  CI as the `fidelity` job in `.github/workflows/run-tests.yml`. **Rule: only run `--update-baseline` after reducing
+  debt; never hand-add entries to silence a new violation.** Remediation (Phase C) deletes slop, then ratchets.
+
+  Still open in the foundation: **formula golden capture** (extend the A2 harness to pure `StatFunctions`-style
+  methods).
 
 ---
 
@@ -129,6 +143,25 @@ This scorecard *is* the loop backlog. Seed it in dependency order; the worst kno
 ---
 
 ## 7. Phase C — Remediate (re-port fresh; the loop)
+
+### Remediation order: substrate-first, NOT slop-size-first
+
+Finding (2026-06-07, from attempting BindPointTeleport): the largest slop clusters cannot be remediated in isolation, because **the slop exists to fake unported runtime substrate.** BindPointTeleport (38 files) depends on teleport, the player-controller channeling-task registry (`addTask/hasTask/cancelTask(TaskId)`), and a hotspot dataholder — all unported (every teleport `CM_` handler is a deferred no-op; there is no `TeleportService`; hotspot data lives only inside the slop cluster). Re-porting it faithfully now would force inventing the banned abstractions.
+
+Therefore the `Structural-Audit-Scorecard.md` is a **magnitude map, not a work order.** Remediate in Java dependency order:
+
+- **Track 1 — substrate (unblocks the big clusters):** port the missing runtime layer the slop fakes — `model` gaps, the `CreatureController` task registry (`TaskId` + task map), `TeleportService` + hotspot dataholder, KnownList, scheduler ownership. Once a substrate lands, the clusters that faked it (BindPointTeleport, etc.) collapse to faithful ~150-line services naturally.
+- **Track 2 — substrate-free slop (safe now):** collapse clusters that are pure computation/static-data with an existing Java source and no runtime dependency — e.g. `StatFunctions`-derived combat/reward formula services and enum lookups. These are immediately golden-validatable with the formula harness and remove real slop without waiting on substrate.
+
+Do Track 2 units to prove the loop and trim debt; do Track 1 to actually unblock the big clusters. Before selecting a cluster, check whether its substrate exists; if not, port the substrate first or pick a Track 2 unit.
+
+### Definition of "foundation" + the no-defer rule
+
+**Foundation = units with zero dependencies and zero fakery** — true leaves you can port faithfully right now without stubbing anything. Build leaves first, then the layer above them, and so on upward.
+
+When a unit hits a missing dependency, **do not defer or fake it — recurse and build the real dependency first**, then return (see the hard rule in `parity-verification.md`). Deferral is how the slop was born; a "wire later / TODO / placeholder / Plan-layer" is not allowed as a way to keep the current piece moving. The only acceptable omission is an *upward* behavior of a leaf that has no caller and genuinely belongs to a higher unbuilt layer — recorded as a concrete backlog unit, not a floating TODO (e.g. `AionObject`'s GC objectId auto-release, which belongs to the respawn/id-release layer).
+
+### The loop
 
 For each backlog item (one Java file or one tight Java cluster per iteration):
 

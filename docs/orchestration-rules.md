@@ -14,11 +14,12 @@ Work in small units, one Java file (or one tight Java cluster) at a time. Repeat
 
 1. **Select** the next unit (smallest, in dependency order). For remediation, take it from the top of `Structural-Audit-Scorecard.md`.
 2. **Pass the gates** (see `parity-verification.md`): the **Fidelity Gate** (always) and, for new porting work, the **Live Gate**. If a unit can pass neither, do not do it.
-3. **Read the Java source fully** — it is the spec.
-4. **Write/replace** C# that mirrors Java 1:1 (one file, class→class, method→method; no invented abstraction; no packet logic added to `GameServerConnection.cs`). For remediation, delete the slop cluster the new file replaces.
-5. **Validate against Java** — golden fixtures for packets/formulas, or line-by-line audit for glue (see Validation below).
-6. **Update `HANDOFF.md`** in place and, if structure changed, regenerate the scorecard.
-7. **Commit** the unit (code + HANDOFF together).
+3. **Read the Java source fully** — it is the spec. Identify its real dependencies up front.
+4. **If a dependency is missing, recurse — do not defer or fake.** Per the hard rule in `parity-verification.md`, stop and port the missing real dependency first (it becomes the next unit), then return. Never stub/placeholder/Plan-layer/TODO your way past it. Build the deepest leaf first, then unwind.
+5. **Write/replace** C# that mirrors Java 1:1 (one file, class→class, method→method; no invented abstraction; no packet logic added to `GameServerConnection.cs`). For remediation, delete the slop cluster the new file replaces.
+6. **Validate against Java** — golden fixtures for packets/formulas, or line-by-line audit for glue (see Validation below).
+7. **Update `HANDOFF.md`** in place and, if structure changed, regenerate the scorecard.
+8. **Commit** the unit (code + HANDOFF together) using the repo's configured author. Commit as you go — one commit per completed unit, never let work pile up uncommitted.
 
 ## Validation
 
@@ -37,6 +38,7 @@ Default to focused, Java-anchored evidence. Never use a broad run as a heartbeat
   A passing filtered `dotnet test` IS the compile signal — do not follow it with a full solution build.
 - **Java parity check** → `mvn -pl game-server -am test -Dtest=SpecificJavaTest -Dmaven.test.skip=false -Dsurefire.failIfNoSpecifiedTests=false` when a narrow Java test exists.
 - **Docs-only** → `git diff --check`.
+- **Fidelity guardrail** (run before every commit that adds/renames C# files): `python scripts/parity/check_fidelity.py`. It fails on new invented-abstraction files or god-class growth. When a unit *deletes* slop, run `python scripts/parity/check_fidelity.py --update-baseline` to ratchet the floor down and commit the updated `fidelity-baseline.json`. Never hand-edit the baseline to silence a violation — fix the structure instead. (CI also runs this as the `fidelity` job.)
 - **Broad run** (`dotnet test` of a whole project/solution, or `dotnet build` the solution) is allowed ONLY when named in `HANDOFF.md` as triggered by: a shared-infrastructure/packet-primitive/crypto/scheduler/persistence change, focused evidence of wider risk, an explicit user request, or a readiness checkpoint. Otherwise narrow the filter; document residual risk.
 
 Note: the Java build sets `maven.test.skip=true`; the `-Dmaven.test.skip=false -Dsurefire.failIfNoSpecifiedTests=false` flags are required to run any Java test. `python` (not `python3`) on this machine.
@@ -62,7 +64,8 @@ Keep it short and current. After each unit, overwrite the relevant sections so i
 
 ## Commits
 
-- One commit per completed unit, code + `HANDOFF.md` together.
+- **Commit as you go** — one commit per completed unit, code + `HANDOFF.md` together. Never leave finished work uncommitted across units.
+- Use the repo's configured git author (`rrfarmer <ryanfarmer@mac.com>`). Do **not** set an AI/"claude" author and do **not** add an AI co-author trailer.
 - Format: `[Fidelity] <Java path::class> — <action>` (e.g. `[Fidelity] services/teleport/BindPointTeleportService — re-port 1:1, delete 38 slop files`).
 - Do not commit broken builds except to explicitly record a documented blocked state.
 

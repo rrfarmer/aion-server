@@ -7,30 +7,51 @@ Last updated: 2026-06-07
 ## Current position
 
 - Phase 6, **re-baselined** to the Port Fidelity & Remediation Plan. The earlier Phase-6 work is behaviorally faithful but structurally over-decomposed (plan-service slop) and partly fused into a god-class; it is being re-ported to 1:1 Java fidelity.
-- **Phase A (foundation) — mostly done:**
+- **Phase A (foundation) — DONE except formula golden capture:**
   - A1 doctrine: `Port-Fidelity-Remediation-Plan.md`. DONE.
-  - A2 golden pipeline: DONE, proven end-to-end. Java generator `game-server/test/.../serverpackets/GoldenPacketFixtureGeneratorTest.java` → fixtures in `parity-artifacts/golden/packets/`; C# consumer `dotnetConversion/tests/Aion.GameServer.Tests/GoldenPacketFixtureTests.cs` asserts byte-for-byte. Currently covers SM_GROUP_DATA_EXCHANGE, SM_GF_WEBSHOP_TOKEN_RESPONSE.
+  - A2 golden pipeline: DONE, proven end-to-end. Java generator `game-server/test/.../serverpackets/GoldenPacketFixtureGeneratorTest.java` → fixtures in `parity-artifacts/golden/packets/`; C# consumer `dotnetConversion/tests/Aion.GameServer.Tests/GoldenPacketFixtureTests.cs` asserts byte-for-byte. Covers SM_GROUP_DATA_EXCHANGE, SM_GF_WEBSHOP_TOKEN_RESPONSE.
   - A3 structural audit: DONE. `scripts/parity/structural_audit.py` → `Structural-Audit-Scorecard.md`.
-  - **A4 CI guardrail: NOT built.** Formula golden capture: NOT built.
+  - A4 fidelity guardrail: DONE. `scripts/parity/check_fidelity.py` (ratchet; baseline `scripts/parity/fidelity-baseline.json` = 363 slop files + 6 god-classes), wired into CI `fidelity` job. Proven to fail on new slop and pass when clean.
+  - **Formula golden capture: NOT built** (only remaining foundation item).
 - Build: C# GameServer builds green (nullable warnings only). Golden test passes 2/2.
+
+## Direction chosen: FOUNDATION-FIRST (bottom-up)
+
+Decision (2026-06-07): build the missing runtime substrate bottom-up in Java dependency order, then the faked feature clusters collapse into faithful ~150-line services. The `Structural-Audit-Scorecard.md` is a magnitude map, not a work order.
+
+**Why:** there is NO object hierarchy in C#. `Player` is a flat `sealed class` with no base; `VisibleObject`/`Creature`/`Npc`/`WorldObject`/`WorldMap` are MISSING. The whole C# model is a flat parallel collection built for the packet path (`Player`, `WorldNpc`, `WorldStaticObject`, `PlayerLifeStats`, …), separate from the Java tree. Everything above (teleport, combat, AI, known-list) is faked because there is no `Creature` to attach a controller/lifestats/effects/known-list to.
+
+### Foundation sequence (the backlog)
+
+Java spine sizes in parens. Each is a faithful 1:1 port of the named Java class.
+
+- **F1. `AionObject`** (79) — base: objectId/name/equals/hashCode. **DONE** (`Model/GameObjects/AionObject.cs`). Trimmed to the dependency-free core per the no-defer rule — no stub/TODO. Its `autoReleaseObjectId` GC path is an *upward* behavior (respawn/id-release layer) with no caller; tracked as backlog item **FR-1** below, not deferred-in-place.
+- **F2. `VisibleObject extends AionObject`** (256) + `VisibleObjectController` (124) — position/world membership/spawn/known-list+controller refs. Additive (new files).
+- **F3. `Creature extends VisibleObject`** (522) + `CreatureController` (568) — **the task system** (`TaskId` enum + `addTask/hasTask/cancelTask` map) = the scheduler substrate the slop fakes; lifeStats/effect/move controller refs. Additive.
+- **F4. Reparent flat C# `Player` → `Creature`** (Java Player 1655; C# Player 1442 lines, **329 referencing files**) — **THE high-risk integration + PIVOTAL DECISION** (big-bang vs gradual/strangler). Reconcile flat Player fields (objectId/name/position/world) with inherited ones.
+- **F5. `Npc extends Creature`** (393) + `NpcController` (340) — reconcile flat `WorldNpc`/`WorldStaticObject`.
+- **F6. `KnownList`** — visibility engine on VisibleObject.
+- **F7. `World`/`WorldMap`/`MapRegion`** — faithful spatial container (current `World.cs` is flat).
+
+After F1–F7, subsystems (teleport → its hotspot dataholder + the F3 task system) become portable, and BindPointTeleport/FindGroup/etc. collapse.
+
+### Backlog (upward features owed, with their real prerequisite — not deferrals-in-place)
+
+- **FR-1. `AionObject` GC objectId auto-release** — port when the respawn/id-release layer lands. Prereq: a process-wide IDFactory accessor + `RespawnService.setAutoReleaseId`. Java: `AionObject(int,boolean)` Cleaner branch.
 
 ## Last unit
 
-- Set up Phase A (doctrine, golden pipeline, audit tool) and rewrote the canonical docs to the fidelity workflow with single-rolling-handoff discipline. Not yet committed at time of writing.
+- Chose foundation-first. Ported **F1 `AionObject`** faithfully (build green, guardrail green). Phase A foundation (harness + guardrail + formula capture) is fully complete; A-formula and A4 from prior turns also done.
 
-## Next unit (pick one)
+## Next unit
 
-Recommended order:
-1. **A4 — CI guardrail** (the enforcement whose absence caused the drift): a check that fails when a new `Services/` file uses banned slop vocabulary without a matching Java type, or has no resolvable Java parent. Then **formula golden capture** (extend the harness to `StatFunctions` pure methods).
-2. Then **Phase C remediation**, top of `Structural-Audit-Scorecard.md`. First concrete target: **`services/teleport/BindPointTeleportService.java`** (148 Java lines) → one `Services/Teleport/BindPointTeleportService.cs`, delete the 38-file `BindPoint*` slop cluster, golden/audit against Java.
+- **F2 — `VisibleObject` + `VisibleObjectController`** (additive new files). Read `model/gameobjects/VisibleObject.java` + `controllers/VisibleObjectController.java`; port 1:1 under `Model/GameObjects/` and `Controllers/`. It references `WorldPosition` (exists), a known-list ref (forward — minimal interface ok), and a controller ref. Fidelity Gate only (additive, not yet wired live).
+- **Before F4**, surface the reparent-strategy decision to the user (big-bang vs gradual). F2/F3 do not depend on it.
 
-For the chosen unit, fill in:
-- Fidelity Gate answers: (1:1 shape / no invented abstraction / packets isolated / structure reduced / breadcrumb).
-- Live Gate answer (Phase D only) or "remediation — Fidelity Gate only."
-- Exact validation command + whether Java/Maven is needed.
+For the chosen unit fill in: Fidelity Gate answers; "remediation/foundation — Fidelity only"; exact validation command (`dotnet build src/Aion.GameServer` + targeted test) + Java/Maven need.
 
 ## Blockers / risks
 
-- A4 not built yet → nothing mechanically prevents new slop; rely on the gates + review until it exists.
-- Phase C/D porting depends on the runtime layer (controllers, scheduler, KnownList) and `model` (801 Java → 89 C#) that are largely absent; some re-ports will surface missing dependencies — port the dependency rather than stubbing with a new abstraction.
-- Golden harness currently covers deterministic, constructor-driven packets only; singleton/time-dependent packets need a deterministic config harness first.
+- **The biggest slop clusters (BindPointTeleport, and likely FindGroup, WorldNpc, PlayerKnown, summons, vortex) are substrate-blocked** — they fake unported runtime (teleport, controller tasks, KnownList, scheduler). Don't attempt them top-down by file count; port substrate first (Track 1) or pick Track 2 units.
+- Golden harness covers deterministic, constructor-driven packets and pure formulas only; singleton/time-dependent packets need a deterministic config harness first.
+- `check_fidelity.py` matches by simple class name (naming-normalized). A faithful C# port named differently from its Java class could trip it — fix by matching the Java name, not by editing the baseline.
