@@ -43,17 +43,23 @@ After F1–F7, subsystems (teleport → its hotspot dataholder + the F3 task sys
 
 - Chose foundation-first. Ported **F1 `AionObject`** faithfully (build green, guardrail green). Phase A foundation (harness + guardrail + formula capture) is fully complete; A-formula and A4 from prior turns also done.
 
+## How to choose the next unit (no-defer = strictly bottom-up)
+
+**Never start a node that has an unmet dependency.** Build the dependency-free base and expand upward; you only reach a higher node once everything it needs already exists. The object-model spine (`AionObject→VisibleObject→Creature→Npc/Player` + `World`/`KnownList`/controllers) defines *which* foundation pieces are in scope (don't port unrelated dependency-free files); the no-defer rule defines the *order* (bottom-up). Note the trunk also needs *sideways* foundation (`KnownList`, controllers, templates, `MapRegion`) before each step up.
+
+Algorithm each turn: from the in-scope spine, pick a unit whose dependencies **all already exist in C#**. If none do, pick the deepest still-missing dependency (it is itself such a unit). Read the Java fully, port 1:1, build, commit (code+HANDOFF). Never stub/defer.
+
 ## Next unit
 
-**F2 is a sub-tree, not one file** (no-defer rule: build leaves first). `VisibleObject.java` depends on: `controllers/VisibleObjectController`, `model/animations/ObjectDeleteAnimation`, `model/templates/VisibleObjectTemplate`, `model/templates/spawns/SpawnTemplate`, `world/*` (WorldPosition exists; MapRegion/WorldMap don't), `world/knownlist/KnownList`. Port deepest leaves first, then up:
+`AionObject` (the object-tree root, zero deps) is done. The next in-scope units, in dependency order toward `VisibleObject` (which needs `VisibleObjectController`, `ObjectDeleteAnimation`, `VisibleObjectTemplate`, `SpawnTemplate`, `world/*` incl. missing `MapRegion`/`WorldMap`, `world/knownlist/KnownList`):
 
-1. `model/animations/ObjectDeleteAnimation` (enum — likely a true leaf). Start here.
-2. `model/templates/VisibleObjectTemplate` (interface) and other leaf templates it needs.
-3. `model/templates/spawns/SpawnTemplate` (+ its leaf deps).
-4. `world/knownlist/KnownList` (+ MapRegion/WorldMap as needed) and `controllers/VisibleObjectController`.
-5. Then `VisibleObject` itself.
+1. `model/animations/ObjectDeleteAnimation` — verify it's truly zero-dep, then port. Likely the next buildable unit.
+2. `model/templates/VisibleObjectTemplate` (interface) + any zero-dep templates it needs.
+3. `model/templates/spawns/SpawnTemplate` (+ its deps, bottom-up).
+4. `world/knownlist/KnownList`, `MapRegion`/`WorldMap`, `controllers/VisibleObjectController`.
+5. `VisibleObject` — only once 1–4 exist.
 
-Each: read the Java fully, identify deps, recurse if any is missing (never stub), port 1:1, build, commit (code+HANDOFF). Fidelity Gate only (foundation/additive). Validation: `dotnet build src/Aion.GameServer` + targeted test; Java/Maven only if a golden/parity check applies.
+Fidelity Gate only (foundation/additive). Validation: `dotnet build src/Aion.GameServer` + targeted test; Java/Maven only if a golden/parity check applies.
 
 - **Before F4** (reparent flat `Player` → `Creature`, 329 files), surface the strategy decision (big-bang vs gradual). F2/F3 do not depend on it.
 
