@@ -41,7 +41,9 @@ After F1–F7, subsystems (teleport → its hotspot dataholder + the F3 task sys
 
 ## Last unit
 
-- Ported **`model/templates/BoundRadius`**, **`model/templates/L10n`** (interface → `IL10n`), and **`model/templates/VisibleObjectTemplate`** → `dotnetConversion/src/Aion.GameServer/Model/Templates/` (3 new files). `BoundRadius` is zero project-deps (JAXB XML annotations → `System.Xml.Serialization`); `L10n` depends only on `ChatUtil.L10n(int)` (exists); `VisibleObjectTemplate` depends on both. Build green, guardrail green (363/6). Commit: `[Fidelity] model/templates/BoundRadius+L10n+VisibleObjectTemplate — port 3 template foundation classes`.
+- Ported **`world/WorldType`**, **`world/WorldDropType`**, **`spawnengine/SpawnHandlerType`** → 3 zero-dep enums (2 in `World/`, 1 in `SpawnEngine/`). Build green, guardrail green (363/6).
+
+Previous: Ported **`model/templates/BoundRadius`**, **`model/templates/L10n`** (interface → `IL10n`), and **`model/templates/VisibleObjectTemplate`** → `dotnetConversion/src/Aion.GameServer/Model/Templates/` (3 new files). `BoundRadius` is zero project-deps (JAXB XML annotations → `System.Xml.Serialization`); `L10n` depends only on `ChatUtil.L10n(int)` (exists); `VisibleObjectTemplate` depends on both. Build green, guardrail green (363/6). Commit: `[Fidelity] model/templates/BoundRadius+L10n+VisibleObjectTemplate — port 3 template foundation classes`.
 
 Previous: Ported **`model/animations` package** (6 enums). Commit `31242003e`.
 
