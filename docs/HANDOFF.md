@@ -39,11 +39,22 @@ After F1–F7, subsystems (teleport → its hotspot dataholder + the F3 task sys
 
 - **FR-1. `AionObject` GC objectId auto-release** — port when the respawn/id-release layer lands. Prereq: a process-wide IDFactory accessor + `RespawnService.setAutoReleaseId`. Java: `AionObject(int,boolean)` Cleaner branch.
 
-## Last unit
+## Last unit (session 2026-06-07 batch)
 
-- Ported **`world/WorldType`**, **`world/WorldDropType`**, **`spawnengine/SpawnHandlerType`** → 3 zero-dep enums (2 in `World/`, 1 in `SpawnEngine/`). Build green, guardrail green (363/6).
+Bottom-up scan of all zero-dep types needed on path to `SpawnGroup`/`VisibleObject`. All green (build + guardrail 363/6):
 
-Previous: Ported **`model/templates/BoundRadius`**, **`model/templates/L10n`** (interface → `IL10n`), and **`model/templates/VisibleObjectTemplate`** → `dotnetConversion/src/Aion.GameServer/Model/Templates/` (3 new files). `BoundRadius` is zero project-deps (JAXB XML annotations → `System.Xml.Serialization`); `L10n` depends only on `ChatUtil.L10n(int)` (exists); `VisibleObjectTemplate` depends on both. Build green, guardrail green (363/6). Commit: `[Fidelity] model/templates/BoundRadius+L10n+VisibleObjectTemplate — port 3 template foundation classes`.
+| Commit | File(s) |
+|--------|---------|
+| `31242003e` | `model/animations` — 6 animation enums |
+| `608f4c2c3` | `model/templates/BoundRadius + L10n (IL10n) + VisibleObjectTemplate` |
+| `c01d57edb` | `world/WorldType + WorldDropType + spawnengine/SpawnHandlerType` |
+| `7c61a213d` | `ai/event/AIEventType + model/templates/zone/ZoneClassName` |
+| `85f92e112` | `world/zone/ZoneName + ZoneAttributes` |
+| `cdbfa72a2` | `model/Race + model/siege/SiegeModType + model/vortex/VortexStateType` |
+| `14b529960` | `model/TribeClass` (748-line zero-dep enum; SCREAMING_SNAKE_CASE preserved for XML+isGuard) |
+| `0388d9bf6` | `services/panesterra/ahserion/PanesterraFaction` |
+| `d3f267c13` | `model/base/BaseOccupier` |
+| `9db32c4bb` | `model/siege/SiegeRace` | `BoundRadius` is zero project-deps (JAXB XML annotations → `System.Xml.Serialization`); `L10n` depends only on `ChatUtil.L10n(int)` (exists); `VisibleObjectTemplate` depends on both. Build green, guardrail green (363/6). Commit: `[Fidelity] model/templates/BoundRadius+L10n+VisibleObjectTemplate — port 3 template foundation classes`.
 
 Previous: Ported **`model/animations` package** (6 enums). Commit `31242003e`.
 
@@ -57,9 +68,10 @@ Algorithm each turn: from the in-scope spine, pick a unit whose dependencies **a
 
 `model/animations` (all 6 enums) — DONE. The next in-scope units, in dependency order toward `VisibleObject` (which needs `VisibleObjectController`, `VisibleObjectTemplate`, `SpawnTemplate`, `world/*` incl. missing `MapRegion`/`WorldMap`, `world/knownlist/KnownList`):
 
-1. **`model/templates/spawns/SpawnTemplate`** — read Java fully, confirm deps (likely references `VisibleObjectTemplate`); port bottom-up.
-2. `world/knownlist/KnownList`, `MapRegion`/`WorldMap`, `controllers/VisibleObjectController`.
-3. `VisibleObject` — only once 1–2 exist.
+Dependency tree progress for `VisibleObject` (F2):
+- `VisibleObject` directly needs: `AionObject` ✅, `ObjectDeleteAnimation` ✅, `VisibleObjectTemplate` ✅, `SpawnTemplate`, `WorldPosition`, `World`/`WorldMap`/`WorldMapInstance`, `KnownList`, `VisibleObjectController`.
+- `SpawnTemplate` → `SpawnGroup` → needs: `BaseOccupier` ✅, `SiegeModType` ✅, `SiegeRace` ✅, `VortexStateType` ✅, `PanesterraFaction` ✅, **`EventTemplate`** (needs SpawnsData/GlobalRule/adapters), **`TemporarySpawn`** (needs GameTimeService/ServerTime/GameTime), and sub-templates.
+- **Next**: read `GameTimeService`, `ServerTime`, `GameTime` for zero-dep status; also check `GlobalRule`, `SpawnsData` deps.
 
 Fidelity Gate only (foundation/additive). Validation: `dotnet build src/Aion.GameServer` + targeted test; Java/Maven only if a golden/parity check applies.
 
