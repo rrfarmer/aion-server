@@ -10,7 +10,7 @@
 | Phase 3: Port Login Server | COMPLETE | May 19, 2026 | Authentication, game-server registration, session management, Java GS mixed mode, and real-client login/create/logout validated. See [PHASE-3-COMPLETION.md](PHASE-3-COMPLETION.md) |
 | Phase 4: Port Chat Server | COMPLETE | May 20, 2026 | Chat protocol, channels, game-server bridge, DB logging, handler pipeline, and real-client mixed mode validated. See [PHASE-4-COMPLETION.md](PHASE-4-COMPLETION.md) |
 | Phase 5: Port Game Infrastructure | COMPLETE | May 20, 2026 | Game socket, bridges, bootstrap, ID factory, static data, and character-selection infrastructure. See [PHASE-5-PROGRESS.md](PHASE-5-PROGRESS.md) |
-| Phase 6: Port Game Core | IN PROGRESS | - | Characters, movement, combat, loot, quests. Use the latest `Phase-6-Session-*-Handoff.md` for current context; [PHASE-6-PROGRESS.md](PHASE-6-PROGRESS.md) is a historical archive. |
+| Phase 6: Port Game Core | IN PROGRESS (re-baselined 2026-06-07) | - | Characters, movement, combat, loot, quests. **Current loop driver: [Port-Fidelity-Remediation-Plan.md](Port-Fidelity-Remediation-Plan.md)** (re-port to 1:1 fidelity + golden validation against Java). [PHASE-6-PROGRESS.md](PHASE-6-PROGRESS.md) and `Phase-6-Session-2822-Handoff.md` are historical. |
 | Phase 7: Port Dynamic Handlers | PENDING | - | Commands, zones, instances, AI, quests |
 | Phase 8: Replacement Readiness | PENDING | - | Docker, soak tests, rollback plan |
 

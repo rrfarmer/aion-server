@@ -1,6 +1,14 @@
 # Game-Server Services Discovery Index
 
-Date: 2026-05-29
+Date: 2026-06-07 (index refreshed); per-area docs below still dated 2026-05-29.
+
+## Scope Warning (read first)
+
+This directory tracks only the Java **`services`** surface (169 files). That surface is roughly **7%** of the 2,324-file Java gameserver and roughly **4%** of the full ~4,056-file gameplay surface once content-handler scripts are counted.
+
+Do **not** read this index as a whole-server parity view. The largest remaining work — `skillengine` (combat/effects, 292 files, 0 ported), `controllers` (61→2), `questEngine` + ~1,153 quest scripts, the 1,732 `data/handlers` content scripts, and the `model` layer (801→89) — lives outside this index entirely.
+
+For the authoritative, full-surface picture and the modeled-vs-live distinction, see the Completion Estimate.
 
 ## Purpose
 
@@ -11,9 +19,9 @@ The organizing rule is Java-first:
 - one document per Java top-level service file under `game-server/src/com/aionemu/gameserver/services`
 - one document per Java services subpackage under `game-server/src/com/aionemu/gameserver/services/*`
 
-These documents are discovery-only. They do not claim runtime parity.
+These documents are discovery-only. They do not claim runtime parity. A ported file is not the same as a live behavior: ~34% of C# service files are non-live `*PlanService` boundaries.
 
-See also: [Completion Estimate](Completion-Estimate.md)
+See also: [Completion Estimate](Completion-Estimate.md) — authoritative full-surface summary.
 See also: [Parity-Risk Ownership Trace](Parity-Risk-Ownership-Trace.md)
 
 ## Status Legend
@@ -116,35 +124,34 @@ See also: [Parity-Risk Ownership Trace](Parity-Risk-Ownership-Trace.md)
 ## Working Notes
 
 - Statuses are high-level and based on current checked-in names and structure.
+- Per-area docs are individually still dated 2026-05-29; their status labels are directionally usable but predate the 2026-06-07 summary refresh.
 - `Not obvious` means either missed or not yet ported; this index intentionally does not try to infer intent.
-- The next detailed pass should start with `player`, `item`, `quest`, `teleport`, `siege`, and `worldraid`.
+- The biggest leverage now is **not** in this index — it is in `skillengine`, `controllers`, and the content handlers. Within this index, the highest-value deep dives are areas that already have plan-services needing live promotion (vortex, summons, duel) and the still-absent large-area systems (siege, panesterra, worldraid, transfers, conqueror/protector).
 
-## At-a-Glance Signals
+## At-a-Glance Signals (refreshed 2026-06-07)
 
-### Largest Refactor Zones
+### Deepest Ported Zones (login → play axis)
 
-- `player`
-- `item`
-- `quest`
-- `teleport`
-- `dialog`
+- enter-world + post-enter packet sequence
+- item actions (enchant, manastone, idian, decompose, assemble, extract, ap-extract, remodel, charge)
+- `housing` (auctions/bids/rent/visibility)
 - `kisk`
+- `mail` / `broker`
+- friends/blocks/chat, movement broadcast
+- combat/reward **formula** services (modeled, mostly non-live)
 
-### Highest-Signal Gaps
+### Highest-Signal Gaps (still ~zero)
 
 - `siege`
-- `worldraid`
-- `reward`
-- `antihack`
-- `transfers`
 - `panesterra`
+- `worldraid`
+- `transfers`
+- `conqueror/protector`
+- (and outside this index: `skillengine`, `controllers`, `questEngine`, content handlers)
 
-### Likely Mixed Areas
+### Modeled-But-Not-Live (file count overstates parity)
 
-- `housing`
-- `mail`
-- `reward`
-- `toypet`
-- `trade`
-- `pvp`
-- `weather`
+- `vortex` (34 files, almost all plan-services)
+- `summons`
+- `duel`
+- most `*PlanService` formula clusters
