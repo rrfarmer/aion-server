@@ -45,8 +45,17 @@ After F1–F7, subsystems (teleport → its hotspot dataholder + the F3 task sys
 
 ## Next unit
 
-- **F2 — `VisibleObject` + `VisibleObjectController`** (additive new files). Read `model/gameobjects/VisibleObject.java` + `controllers/VisibleObjectController.java`; port 1:1 under `Model/GameObjects/` and `Controllers/`. It references `WorldPosition` (exists), a known-list ref (forward — minimal interface ok), and a controller ref. Fidelity Gate only (additive, not yet wired live).
-- **Before F4**, surface the reparent-strategy decision to the user (big-bang vs gradual). F2/F3 do not depend on it.
+**F2 is a sub-tree, not one file** (no-defer rule: build leaves first). `VisibleObject.java` depends on: `controllers/VisibleObjectController`, `model/animations/ObjectDeleteAnimation`, `model/templates/VisibleObjectTemplate`, `model/templates/spawns/SpawnTemplate`, `world/*` (WorldPosition exists; MapRegion/WorldMap don't), `world/knownlist/KnownList`. Port deepest leaves first, then up:
+
+1. `model/animations/ObjectDeleteAnimation` (enum — likely a true leaf). Start here.
+2. `model/templates/VisibleObjectTemplate` (interface) and other leaf templates it needs.
+3. `model/templates/spawns/SpawnTemplate` (+ its leaf deps).
+4. `world/knownlist/KnownList` (+ MapRegion/WorldMap as needed) and `controllers/VisibleObjectController`.
+5. Then `VisibleObject` itself.
+
+Each: read the Java fully, identify deps, recurse if any is missing (never stub), port 1:1, build, commit (code+HANDOFF). Fidelity Gate only (foundation/additive). Validation: `dotnet build src/Aion.GameServer` + targeted test; Java/Maven only if a golden/parity check applies.
+
+- **Before F4** (reparent flat `Player` → `Creature`, 329 files), surface the strategy decision (big-bang vs gradual). F2/F3 do not depend on it.
 
 For the chosen unit fill in: Fidelity Gate answers; "remediation/foundation — Fidelity only"; exact validation command (`dotnet build src/Aion.GameServer` + targeted test) + Java/Maven need.
 
