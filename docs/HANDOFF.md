@@ -41,7 +41,9 @@ After F1–F7, subsystems (teleport → its hotspot dataholder + the F3 task sys
 
 ## Last unit
 
-- Ported **`model/animations` package** (all 6 enums: `ObjectDeleteAnimation`, `ArrivalAnimation`, `ActionAnimation`, `AttackHandAnimation`, `AttackTypeAnimation`, `TeleportAnimation`) → `dotnetConversion/src/Aion.GameServer/Model/Animations/` (6 new files). Pure enums, zero dependencies. `TeleportAnimation`'s two Java instance methods (`getDefaultArrivalAnimation`, `getDefaultObjectDeleteAnimation`) ported as C# extension methods in the same file. Build green, guardrail green (363/6, no new violations). Commit: see git log `[Fidelity] model/animations — port 6 animation enums`.
+- Ported **`model/templates/BoundRadius`**, **`model/templates/L10n`** (interface → `IL10n`), and **`model/templates/VisibleObjectTemplate`** → `dotnetConversion/src/Aion.GameServer/Model/Templates/` (3 new files). `BoundRadius` is zero project-deps (JAXB XML annotations → `System.Xml.Serialization`); `L10n` depends only on `ChatUtil.L10n(int)` (exists); `VisibleObjectTemplate` depends on both. Build green, guardrail green (363/6). Commit: `[Fidelity] model/templates/BoundRadius+L10n+VisibleObjectTemplate — port 3 template foundation classes`.
+
+Previous: Ported **`model/animations` package** (6 enums). Commit `31242003e`.
 
 ## How to choose the next unit (no-defer = strictly bottom-up)
 
@@ -53,10 +55,9 @@ Algorithm each turn: from the in-scope spine, pick a unit whose dependencies **a
 
 `model/animations` (all 6 enums) — DONE. The next in-scope units, in dependency order toward `VisibleObject` (which needs `VisibleObjectController`, `VisibleObjectTemplate`, `SpawnTemplate`, `world/*` incl. missing `MapRegion`/`WorldMap`, `world/knownlist/KnownList`):
 
-1. **`model/templates/VisibleObjectTemplate`** — read Java fully, confirm deps (likely zero or minimal); if zero-dep port next.
-2. `model/templates/spawns/SpawnTemplate` (+ its deps, bottom-up).
-3. `world/knownlist/KnownList`, `MapRegion`/`WorldMap`, `controllers/VisibleObjectController`.
-4. `VisibleObject` — only once 1–3 exist.
+1. **`model/templates/spawns/SpawnTemplate`** — read Java fully, confirm deps (likely references `VisibleObjectTemplate`); port bottom-up.
+2. `world/knownlist/KnownList`, `MapRegion`/`WorldMap`, `controllers/VisibleObjectController`.
+3. `VisibleObject` — only once 1–2 exist.
 
 Fidelity Gate only (foundation/additive). Validation: `dotnet build src/Aion.GameServer` + targeted test; Java/Maven only if a golden/parity check applies.
 
