@@ -3,6 +3,18 @@ name: Run tests
 on: [ push, pull_request ]
 
 jobs:
+  fidelity:
+    name: Fidelity guardrail
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check Java->C# 1:1 fidelity (no new slop / god-classes)
+        run: python scripts/parity/check_fidelity.py
+
   build:
     name: Run tests
     runs-on: ubuntu-latest
