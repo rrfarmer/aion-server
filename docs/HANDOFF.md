@@ -69,6 +69,7 @@ All green (build + guardrail 363/6):
 | `fb0b2091c` | **AI/observer enum leaves — AISubState, AIState, ObserverType** |
 | `449d687e5` | **skillengine/stats-calc leaves — TransformType, HopType, ShieldType, CalculationType, StatOwner** |
 | `effb209b7` | **SkillTemplate enum leaves — 9 (ActivationAttribute, DispelCategoryType, HostileType, SkillCategory, SkillSubType, SkillType, StigmaType, SkillTargetSlot, DispelSlotType)** |
+| `3538242ab` | **Effect-cone enum leaves — SpellStatus, EffectResult, HitType, AttackType, EffectType** |
 
 ### Commit `3994a5c75` — Stats/skill enum leaves (4 files)
 
@@ -183,6 +184,7 @@ All dependency-free leaves of the spine are now ported. The next node is `Visibl
 - ✅ `AISubState`, `AIState`, `ObserverType` (commit `fb0b2091c`)
 - ✅ `TransformType`, `HopType`, `ShieldType`, `CalculationType`, `StatOwner`(→`IStatOwner`) (commit `449d687e5`)
 - ✅ skill enums: `ActivationAttribute`, `DispelCategoryType`, `HostileType`, `SkillCategory`, `SkillSubType`, `SkillType`, `StigmaType`, `SkillTargetSlot`, `DispelSlotType` (commit `effb209b7`) — anchored to `SkillTemplate`'s direct references
+- ✅ effect enums: `SpellStatus`, `EffectResult`, `HitType`, `AttackType`, `EffectType` (commit `3538242ab`) — `Effect`/`EffectTemplate` cone leaves (`CombatMode`/`RatioType` already existed in C#)
 - ⏭️ NEXT leaves (method: scan a target class's imports, port the zero-dep enum/marker leaves it references, then climb):
   - **Finish the SkillTemplate leaf set** then port `SkillTemplate` itself (data class; check remaining deps: `L10n`✅, `ModifiersTemplate`/`Effects`/`StartConditions`/etc. — these are skill-XML sub-trees, likely their own leaves).
   - **Effect cone:** scan `skillengine/effect/EffectTemplate` + `Effect` for leaf enums (`EffectType`, `SpellStatus`, `EffectResult`, `HitType`, etc. — several already seen as zero-dep in the skillengine/model scan).
