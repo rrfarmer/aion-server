@@ -49,6 +49,7 @@ Every unit of work must satisfy all of these. A reviewer/agent may reject work t
 5. **Minimal idiom translation only.** `ThreadPoolManager.schedule` → the C# scheduler equivalent; Java statics → C# statics; `Map` → `Dictionary`. Translate the mechanism, never restructure the design.
 6. **Breadcrumbs.** Keep a short `// Java parity: path::method` comment on each ported method.
 7. **Done means live-or-deferred, never planner-only.** A unit is "done" only if it is wired into live runtime behavior, **or** it is explicitly marked deferred with a Java-referenced reason and a tracked follow-up. "Modeled + tested" is scaffolding, not completion.
+8. **Conflict resolution = Java wins (user, 2026-06-07).** When a faithful new port conflicts with already-existing C# code (a type/shape built earlier for the packet path that diverges from the Java design), **default to 1:1 Java parity and replace/fix the existing code** — prior work may be inaccurate or wrongly stubbed and does not win by seniority. **Exception:** when the conflict is a genuine *C#-vs-Java foundational language difference* (something one language can express idiomatically and the other cannot), choose the best path forward that stays *as close to 1:1 as possible*. (First application: the `WorldPosition` `readonly record struct` → faithful Java mutable class, big-bang replace + fix all 64 consumers; struct-vs-class is a C# idiom choice, so pick the class = closest to Java.)
 
 ---
 
