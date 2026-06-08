@@ -70,6 +70,9 @@ All green (build + guardrail 363/6):
 | `449d687e5` | **skillengine/stats-calc leaves — TransformType, HopType, ShieldType, CalculationType, StatOwner** |
 | `effb209b7` | **SkillTemplate enum leaves — 9 (ActivationAttribute, DispelCategoryType, HostileType, SkillCategory, SkillSubType, SkillType, StigmaType, SkillTargetSlot, DispelSlotType)** |
 | `3538242ab` | **Effect-cone enum leaves — SpellStatus, EffectResult, HitType, AttackType, EffectType** |
+| `28e8fc389` | **Skill condition/properties/change enum leaves — 7 (TargetAttribute, AreaDirections, FirstTargetAttribute, TargetRangeAttribute, TargetRelationAttribute, TargetSpeciesAttribute, Func)** |
+| `634e6196a` | **Effect-controller cumulative-resist leaves — CumulativeResistType, CumulativeResist** |
+| `310ce8879` | **Item-template enum leaves (start of item cone) — ArmorType, EquipType, ItemSubType** |
 
 ### Commit `3994a5c75` — Stats/skill enum leaves (4 files)
 
@@ -185,6 +188,14 @@ All dependency-free leaves of the spine are now ported. The next node is `Visibl
 - ✅ `TransformType`, `HopType`, `ShieldType`, `CalculationType`, `StatOwner`(→`IStatOwner`) (commit `449d687e5`)
 - ✅ skill enums: `ActivationAttribute`, `DispelCategoryType`, `HostileType`, `SkillCategory`, `SkillSubType`, `SkillType`, `StigmaType`, `SkillTargetSlot`, `DispelSlotType` (commit `effb209b7`) — anchored to `SkillTemplate`'s direct references
 - ✅ effect enums: `SpellStatus`, `EffectResult`, `HitType`, `AttackType`, `EffectType` (commit `3538242ab`) — `Effect`/`EffectTemplate` cone leaves (`CombatMode`/`RatioType` already existed in C#)
+- ✅ skill sub-cone enums: `TargetAttribute`, `AreaDirections`, `FirstTargetAttribute`, `TargetRangeAttribute`, `TargetRelationAttribute`, `TargetSpeciesAttribute`, `Func` (commit `28e8fc389`)
+- ✅ effect-controller: `CumulativeResistType`, `CumulativeResist` (commit `634e6196a`)
+- ✅ item enums (item cone start): `ArmorType`, `EquipType`, `ItemSubType` (commit `310ce8879`)
+
+**Leaf-vein status (2026-06-08):**
+- **skillengine** (model/effect/condition/properties/change) enum leaves are **EXHAUSTED** — remaining classes (`Skill`, `SkillTemplate`, `Effect`, `EffectTemplate`, `Condition(s)`, `Change`, `Action(s)`, `PeriodicAction(s)`) all block on the SCC core (`Stat2`/`Effect`/`Skill`/`Creature`).
+- **stats** cone: leaf-complete for spine (`StatEnum` done; `CombatMode`/`RatioType` pre-existed; `Stat2`/`StatCapUtil` block on `Creature`). Skipped as out-of-cone per doctrine: `PlumStatEnum`, `DropRewardEnum`, `XPLossEnum`, `XPRewardEnum` (reward/feature-specific, not on Creature spine).
+- **ACTIVE VEIN → item cone.** `Creature` needs `NpcEquippedGear` → `ItemTemplate`, so the item-template cone is required. Started with `ArmorType`/`EquipType`/`ItemSubType`. NEXT item leaves to harvest (anchor to `ItemTemplate`): `ItemGroup` (1 dep), `PlayerClass` (**MISSING as enum** — C# currently uses a `string`; central 247L enum, port carefully on its own), then `ItemQuality`/`ItemSlot`/weapon/armor enums, then `ItemTemplate` itself.
 - ⏭️ NEXT leaves (method: scan a target class's imports, port the zero-dep enum/marker leaves it references, then climb):
   - **Finish the SkillTemplate leaf set** then port `SkillTemplate` itself (data class; check remaining deps: `L10n`✅, `ModifiersTemplate`/`Effects`/`StartConditions`/etc. — these are skill-XML sub-trees, likely their own leaves).
   - **Effect cone:** scan `skillengine/effect/EffectTemplate` + `Effect` for leaf enums (`EffectType`, `SpellStatus`, `EffectResult`, `HitType`, etc. — several already seen as zero-dep in the skillengine/model scan).
