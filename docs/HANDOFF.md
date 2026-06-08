@@ -74,6 +74,8 @@ All green (build + guardrail 363/6):
 | `634e6196a` | **Effect-controller cumulative-resist leaves — CumulativeResistType, CumulativeResist** |
 | `310ce8879` | **Item-template enum leaves (start of item cone) — ArmorType, EquipType, ItemSubType** |
 | `17c02776a` | **Item cone — ItemSlot (long-mask equip slots) + ItemGroup** |
+| `dc5c40c03` | **Stats-template cone — StatsTemplate + CreatureSpeeds** |
+| `6d981ed5d` | **PlayerClass + PlayerStatCalculator (mutual SCC; unblocked)** |
 
 ### Commit `3994a5c75` — Stats/skill enum leaves (4 files)
 
@@ -193,13 +195,15 @@ All dependency-free leaves of the spine are now ported. The next node is `Visibl
 - ✅ effect-controller: `CumulativeResistType`, `CumulativeResist` (commit `634e6196a`)
 - ✅ item enums (item cone start): `ArmorType`, `EquipType`, `ItemSubType` (commit `310ce8879`)
 - ✅ item cone: `ItemSlot` (long-mask equip slots), `ItemGroup` (commit `17c02776a`)
+- ✅ stats-template cone: `StatsTemplate`, `CreatureSpeeds` (commit `dc5c40c03`)
+- ✅ `PlayerClass` + `PlayerStatCalculator` (commit `6d981ed5d`) — **PlayerClass unblocked.** C# enums can't implement interfaces, so Java `implements L10n` → `GetL10nId()` extension (rule 8). New `enum PlayerClass` coexists additively with the legacy `string Player.PlayerClass` packet field (reconciled at F4).
 
 **Leaf-vein status (2026-06-08):**
 - **skillengine** (model/effect/condition/properties/change) enum leaves are **EXHAUSTED** — remaining classes (`Skill`, `SkillTemplate`, `Effect`, `EffectTemplate`, `Condition(s)`, `Change`, `Action(s)`, `PeriodicAction(s)`) all block on the SCC core (`Stat2`/`Effect`/`Skill`/`Creature`).
 - **stats** cone: leaf-complete for spine (`StatEnum` done; `CombatMode`/`RatioType` pre-existed; `Stat2`/`StatCapUtil` block on `Creature`). Skipped as out-of-cone per doctrine: `PlumStatEnum`, `DropRewardEnum`, `XPLossEnum`, `XPRewardEnum` (reward/feature-specific, not on Creature spine).
 - **ACTIVE VEIN → item cone.** `Creature` needs `NpcEquippedGear` → `ItemTemplate`, so the item-template cone is required. Started with `ArmorType`/`EquipType`/`ItemSubType`, then `ItemSlot`+`ItemGroup`. NEXT item leaves (anchor to `ItemTemplate`): `ItemQuality`/weapon/armor-type enums, then `ItemTemplate` itself.
 
-**`PlayerClass` is BLOCKED (not a leaf):** its `createStatsTemplate()` + inner `PlayerStatsTemplate` pull in `StatsTemplate` + `PlayerStatCalculator` (stats-template cone, unported). C# currently uses a `string` for player class; the real enum lands after that cone. A useful next climb is to probe/port the `StatsTemplate` cone to unblock `PlayerClass` (also needed broadly).
+**`PlayerClass` — DONE** (commit `6d981ed5d`, via the `StatsTemplate` cone). NEXT item-cone leaves toward `ItemTemplate`: `ItemQuality`, `ItemType`, `WeaponType`, `LeftHandSlot`, `RandomType`, `AcquisitionType`, `ExceedEnchantSkillSetType` (all zero-dep enums seen in the `model/templates/item` scan) + the small item data-classes (`Acquisition`, `GodstoneInfo`, `WeaponStats`, `Improvement`, etc.), then climb to `ItemTemplate` itself.
 - ⏭️ NEXT leaves (method: scan a target class's imports, port the zero-dep enum/marker leaves it references, then climb):
   - **Finish the SkillTemplate leaf set** then port `SkillTemplate` itself (data class; check remaining deps: `L10n`✅, `ModifiersTemplate`/`Effects`/`StartConditions`/etc. — these are skill-XML sub-trees, likely their own leaves).
   - **Effect cone:** scan `skillengine/effect/EffectTemplate` + `Effect` for leaf enums (`EffectType`, `SpellStatus`, `EffectResult`, `HitType`, etc. — several already seen as zero-dep in the skillengine/model scan).
