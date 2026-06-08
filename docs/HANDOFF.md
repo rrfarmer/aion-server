@@ -66,6 +66,7 @@ All green (build + guardrail 363/6):
 | `22e208019` | **Creature spine prerequisites — 6 zero-dep files** (see below) |
 | `b16f2db8c` | docs: Fidelity Doctrine rule 8 (conflicts default to 1:1 Java; replace existing) |
 | `3994a5c75` | **Stats/skill enum leaves — StatEnum, SkillElement, ItemAttackType, AbnormalState** |
+| `fb0b2091c` | **AI/observer enum leaves — AISubState, AIState, ObserverType** |
 
 ### Commit `3994a5c75` — Stats/skill enum leaves (4 files)
 
@@ -177,7 +178,13 @@ All dependency-free leaves of the spine are now ported. The next node is `Visibl
 **Creature SCC cone — leaf progress:**
 - ✅ `CreatureState`, `CreatureVisualState`, `TaskId`, `NpcObjectType`, `CreatureTemplate`, `RegionZone` (commit `22e208019`)
 - ✅ `StatEnum`, `SkillElement`, `ItemAttackType`, `AbnormalState` (commit `3994a5c75`)
-- ⏭️ NEXT leaves to port (verify deps first): stat helper types (`StatOwner`/`Stat2`/modifiers), `TransformType`+`TransformModel`-prereqs, `NpcEquippedGear`, AI enums (`AISubState`, `AIState`), movement enums, `Skill`/`SkillTemplate` cone. Keep porting until only `VisibleObject`/`Creature`/`World*`/`MapRegion`/`KnownList`/controllers + stats/effect/ai/move *containers* remain → final big-bang.
+- ✅ `AISubState`, `AIState`, `ObserverType` (commit `fb0b2091c`)
+- ⏭️ NEXT leaves to port (verify deps first): the remaining cone members are now **more entangled** — each needs fresh Java reading:
+  - `NpcEquippedGear` is **NOT** a clean leaf — it pulls in `model/templates/item/ItemTemplate` (large) + XML adapters `NpcEquipmentList`/`NpcEquippedGearAdapter`. Port the `ItemTemplate` cone first (its own sub-leaves: item enums) if going this way.
+  - Stats containers (`CreatureGameStats`/`CreatureLifeStats`) need `Creature` + helper types (`Stat2`/`StatOwner`/modifiers) — mid-cone, not leaves.
+  - `TransformModel` needs `Creature` + `TransformType` (+ transform templates) — port `TransformType` leaf first.
+  - `Skill`/`SkillTemplate` = the skill-engine cone (large).
+  - Keep porting leaves until only `VisibleObject`/`Creature`/`World*`/`MapRegion`/`KnownList`/controllers + stats/effect/ai/move *containers* remain → then the single final big-bang commit (incl. `WorldPosition` struct→class swap + 64-file migration).
 
 ### ⛔ The `WorldPosition` class-vs-struct fork (resolved above; details retained)
 
