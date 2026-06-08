@@ -59,8 +59,10 @@ Recent (this program of work):
 
 Executing the SCC on a branch via the **compiler-error-frontier** method: port faithful (pure-Java) files in dependency order; the branch build stays **red until the SCC converges**, then merge to main only when green + guardrail + golden pass. **No transitional fakery** — since nobody else is blocked and we merge only when faithful+green, `instanceId` derives from `MapRegion` per Java (the old stored-InstanceId struct was a non-Java artifact). `main` stays green; do NOT merge until convergence.
 
-**Done on branch:** `World/WorldPosition` struct → faithful Java **class** (mutable, holds `MapRegion`, derived `GetInstanceId`/`IsInstanceMap`; C# WorldId/X/Y/Z/Heading/InstanceId convenience props kept for legacy readers).
-**Current error frontier (next to port):** `MapRegion` (8 refs), `WorldMapInstance` (2 refs).
+**Done on branch:** `WorldPosition` struct→class (faithful Java); `world/RegionUtil` (pure region-id math); `world/zone/handler/IZoneHandler`+`IAdvancedZoneHandler` (interfaces).
+**Current error frontier (next to port):** `MapRegion` (8), `Creature` (8), `ZoneInstance` (6), `WorldMapInstance` (2).
+**⚠ flat-`World` conflict:** the faithful `World` singleton (Java) must REPLACE the existing flat `World/World.cs` (different design) — `ZoneInstance`/`VisibleObject` etc. call `World.GetInstance().GetWorldMap(id)`. Measure flat-World consumers before swapping.
+**Backlog (data-compat, like Race):** `ZoneAttributes` is PascalCase with `@XmlEnumValue` tokens (FLY/PVP/DUEL_SAME_RACE/…) only in comments — verify worldmaps XML `flags` parsing actually works; likely needs `[XmlEnum("FLY")]`/SCREAMING_SNAKE re-port for data parity.
 **Convergence reconciliation (will resurface once WorldPosition resolves):** 4 legacy sites set the old stored InstanceId — `GameServerConnection.cs:14718/14722`, `InstanceRuntimeService.cs:147` (`with { InstanceId = … }`), `PlayerTeleportService.cs:159` (6-arg ctor). Rework to set position via the spawn/instance flow (derived).
 **Build order (bottom-up):** WorldPosition✅ → MapRegion → WorldMapInstance(+2D/3D+factory) → WorldMap → ZoneInstance(+ZoneHandler/AdvancedZoneHandler) → VisibleObjectController → VisibleObject → KnownList/KnownObject → InstanceHandler/GeneralInstanceHandler → GeneralTeam → Creature(+CreatureController) + Tier-B subsystem containers → Npc/NpcController/Pet/StaticObject/StaticDoor → World singleton (+PlayerContainer/SiegeNpc/services) → reparent Player (F4) → reconcile the 4 InstanceId sites + legacy WorldPosition readers → green → merge.
 
