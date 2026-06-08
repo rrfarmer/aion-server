@@ -39,9 +39,9 @@ After F1–F7, subsystems (teleport → its hotspot dataholder + the F3 task sys
 
 - **FR-1. `AionObject` GC objectId auto-release** — port when the respawn/id-release layer lands. Prereq: a process-wide IDFactory accessor + `RespawnService.setAutoReleaseId`. Java: `AionObject(int,boolean)` Cleaner branch.
 
-## Last unit (session 2026-06-07 batch)
+## Last units (session 2026-06-07)
 
-Bottom-up scan of all zero-dep types needed on path to `SpawnGroup`/`VisibleObject`. All green (build + guardrail 363/6):
+All green (build + guardrail 363/6):
 
 | Commit | File(s) |
 |--------|---------|
@@ -51,12 +51,54 @@ Bottom-up scan of all zero-dep types needed on path to `SpawnGroup`/`VisibleObje
 | `7c61a213d` | `ai/event/AIEventType + model/templates/zone/ZoneClassName` |
 | `85f92e112` | `world/zone/ZoneName + ZoneAttributes` |
 | `cdbfa72a2` | `model/Race + model/siege/SiegeModType + model/vortex/VortexStateType` |
-| `14b529960` | `model/TribeClass` (748-line zero-dep enum; SCREAMING_SNAKE_CASE preserved for XML+isGuard) |
+| `14b529960` | `model/TribeClass` (748-line; SCREAMING_SNAKE_CASE for XML compat) |
 | `0388d9bf6` | `services/panesterra/ahserion/PanesterraFaction` |
 | `d3f267c13` | `model/base/BaseOccupier` |
-| `9db32c4bb` | `model/siege/SiegeRace` | `BoundRadius` is zero project-deps (JAXB XML annotations → `System.Xml.Serialization`); `L10n` depends only on `ChatUtil.L10n(int)` (exists); `VisibleObjectTemplate` depends on both. Build green, guardrail green (363/6). Commit: `[Fidelity] model/templates/BoundRadius+L10n+VisibleObjectTemplate — port 3 template foundation classes`.
+| `9db32c4bb` | `model/siege/SiegeRace` |
+| `b32377ead` | `utils/time/gametime/DayTime + GameTime` |
+| `e39b915cc` | `services/GameTimeService` — add GetInstance()/GetGameTime() |
+| `22ebda2d1` | `utils/time/ServerTime` |
+| `9620ea3f4` | `model/templates/spawns/TemporarySpawn` |
+| `c11e46d09` | `model/templates/spawns/SpawnSpotTemplate` |
+| `7e8906376` | **F2 spawn-data circular cluster — 50 files** (see below) |
 
-Previous: Ported **`model/animations` package** (6 enums). Commit `31242003e`.
+### Commit `7e8906376` — F2 spawn-data circular cluster (50 files)
+
+Entire mutually-referential cluster ported as one batch:
+- `model/gameobjects/state/CreatureSeeState` — NPC sight-range enum
+- `model/templates/npc/NpcRating` — quality enum (Junk→Legendary)
+- `model/templates/npc/GroupDropType` — 300+ SCREAMING_SNAKE_CASE XML-compat enum
+- `model/templates/globaldrops/StringFunction`
+- `model/templates/globaldrops/GlobalDrop*` (20 files: Map, Maps, Npc, Npcs, NpcName, NpcNames, NpcGroup, NpcGroups, Race, Races, Rating, Ratings, Tribe, Tribes, World, Worlds, Zone, Zones, ExcludedNpcs, Item)
+- `model/templates/globaldrops/GlobalRule`
+- `model/templates/event/EventQuestList`
+- `model/templates/event/InventoryDrop`
+- `model/templates/event/Buff` (BuffMapType/TriggerCondition/Trigger; `Matches(WorldMapInstance)` TODO-backlog)
+- `model/templates/event/BuffRestriction`
+- `model/templates/event/EventTemplate` (LocalDateTimeAdapter → DateTime? + ISO-8601 string setter)
+- `model/templates/spawns/SpawnType`
+- `model/templates/spawns/SpawnSearchResult`
+- `model/templates/spawns/basespawns/BaseSpawn`
+- `model/templates/spawns/riftspawns/RiftSpawn`
+- `model/templates/spawns/siegespawns/SiegeSpawn`
+- `model/templates/spawns/vortexspawns/VortexSpawn`
+- `model/templates/spawns/mercenaries/{MercenarySpawn, MercenaryRace, MercenaryZone}`
+- `model/templates/spawns/panesterra/AhserionsFlightSpawn`
+- `model/templates/spawns/SpawnMap`
+- `model/templates/spawns/Spawn` (beforeMarshal → ShouldSerialize*)
+- `model/templates/spawns/SpawnTemplate`
+- `model/templates/spawns/SpawnGroup` (Rnd.get() → Random.Shared inline)
+- `model/templates/spawns/basespawns/BaseSpawnTemplate`
+- `model/templates/spawns/riftspawns/RiftSpawnTemplate`
+- `model/templates/spawns/siegespawns/SiegeSpawnTemplate`
+- `model/templates/spawns/vortexspawns/VortexSpawnTemplate`
+- `model/templates/spawns/panesterra/AhserionsFlightSpawnTemplate`
+- `dataholders/SpawnsData` (afterUnmarshal → `Initialize(parent?)`; saveSpawn / getNearestSpawnByNpcId / getFirstSpawnByNpcId / getRelativePath → TODO-backlog)
+
+**Pending backlog additions from this batch:**
+- TODO-backlog: `Buff.BuffMapTypeExtensions.Matches(WorldMapInstance)` — needs WorldMapInstance
+- TODO-backlog: `GlobalDropItem` DataManager.ITEM_DATA validation — needs DI DataManager in load pipeline
+- TODO-backlog in `SpawnsData`: saveSpawn, getNearestSpawnByNpcId, getFirstSpawnByNpcId, getRelativePath, loadSpawnsFromTemplateFiles, findSpawnTemplate, positionMatches, getNearestSpawn, toSpawnSearchResult (all need VisibleObject/Player/WorldMapInstance)
 
 ## How to choose the next unit (no-defer = strictly bottom-up)
 
@@ -66,18 +108,35 @@ Algorithm each turn: from the in-scope spine, pick a unit whose dependencies **a
 
 ## Next unit
 
-`model/animations` (all 6 enums) — DONE. The next in-scope units, in dependency order toward `VisibleObject` (which needs `VisibleObjectController`, `VisibleObjectTemplate`, `SpawnTemplate`, `world/*` incl. missing `MapRegion`/`WorldMap`, `world/knownlist/KnownList`):
+`SpawnTemplate`/`SpawnGroup`/`SpawnsData` — **DONE** (commit `7e8906376`).
 
-Dependency tree progress for `VisibleObject` (F2):
-- `VisibleObject` directly needs: `AionObject` ✅, `ObjectDeleteAnimation` ✅, `VisibleObjectTemplate` ✅, `SpawnTemplate`, `WorldPosition`, `World`/`WorldMap`/`WorldMapInstance`, `KnownList`, `VisibleObjectController`.
-- `SpawnTemplate` → `SpawnGroup` → needs: `BaseOccupier` ✅, `SiegeModType` ✅, `SiegeRace` ✅, `VortexStateType` ✅, `PanesterraFaction` ✅, **`EventTemplate`** (needs SpawnsData/GlobalRule/adapters), **`TemporarySpawn`** (needs GameTimeService/ServerTime/GameTime), and sub-templates.
-- **Next**: read `GameTimeService`, `ServerTime`, `GameTime` for zero-dep status; also check `GlobalRule`, `SpawnsData` deps.
+### Remaining path to `VisibleObject` (F2)
 
-Fidelity Gate only (foundation/additive). Validation: `dotnet build src/Aion.GameServer` + targeted test; Java/Maven only if a golden/parity check applies.
+`VisibleObject` directly needs:
+- `AionObject` ✅
+- `ObjectDeleteAnimation` ✅
+- `VisibleObjectTemplate` ✅
+- `SpawnTemplate` ✅
+- `WorldPosition` — **MISSING** (needs `WorldMapInstance` / `MapRegion`)
+- `World` / `WorldMap` / `WorldMapInstance` — **MISSING**
+- `KnownList` — **MISSING**
+- `VisibleObjectController` — **MISSING** (needs `RespawnService` + `GeoService`)
+
+**Next sub-cluster: world-object cluster** (port all together since they form another circular graph):
+1. `WorldMapTemplate` (data holder for world config XML)
+2. `WorldMap` (instance-maps per world)
+3. `WorldPosition` (faithful: x/y/z/mapId/worldMapInstance ref)
+4. `MapRegion` (spatial partition, ref to WorldMapInstance)
+5. `WorldMapInstance` (world instance, ref to WorldMap + MapRegion list)
+6. `VisibleObjectController` (needs `RespawnService` + `GeoService` — check if portable without them, or port those first)
+7. `RespawnService` / `GeoService` (check deps)
+8. `KnownList`
+
+Then `VisibleObject` (F2), `Creature`/`CreatureController` (F3), etc.
+
+Fidelity Gate only (foundation/additive). Validation: `dotnet build src/Aion.GameServer` + guardrail after each batch commit.
 
 - **Before F4** (reparent flat `Player` → `Creature`, 329 files), surface the strategy decision (big-bang vs gradual). F2/F3 do not depend on it.
-
-For the chosen unit fill in: Fidelity Gate answers; "remediation/foundation — Fidelity only"; exact validation command (`dotnet build src/Aion.GameServer` + targeted test) + Java/Maven need.
 
 ## Blockers / risks
 
