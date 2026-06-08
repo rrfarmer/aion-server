@@ -61,6 +61,7 @@ All green (build + guardrail 363/6):
 | `9620ea3f4` | `model/templates/spawns/TemporarySpawn` |
 | `c11e46d09` | `model/templates/spawns/SpawnSpotTemplate` |
 | `7e8906376` | **F2 spawn-data circular cluster — 50 files** (see below) |
+| `f2d0c1f35` | **World infrastructure batch — 6 files** (see below) |
 
 ### Commit `7e8906376` — F2 spawn-data circular cluster (50 files)
 
@@ -100,6 +101,16 @@ Entire mutually-referential cluster ported as one batch:
 - TODO-backlog: `GlobalDropItem` DataManager.ITEM_DATA validation — needs DI DataManager in load pipeline
 - TODO-backlog in `SpawnsData`: saveSpawn, getNearestSpawnByNpcId, getFirstSpawnByNpcId, getRelativePath, loadSpawnsFromTemplateFiles, findSpawnTemplate, positionMatches, getNearestSpawn, toSpawnSearchResult (all need VisibleObject/Player/WorldMapInstance)
 
+### Commit `f2d0c1f35` — World infrastructure batch (6 files)
+
+Zero-dep preparatory batch ahead of the F2-F5 world-object spine:
+- `World/WorldMapType` — 207-member enum (all world IDs as PascalCase); extensions: `GetId()`, `IsPersonal()`, `GetWorld(int)`, `IsPanesterraMap(int)`
+- `Model/Templates/Zone/ZoneType` — `Fly/NoFly/Siege/Pvp` enum
+- `Utils/Collections/CollectionUtil` — safe `ForEach<T>` with error logging (two overloads)
+- `World/Exceptions/DuplicateAionObjectException` — extends Exception; takes two `AionObject` args; TODO-backlog `Player.GetPosition()` at F4
+- `Model/Templates/World/AiInfo` — `ChaseTarget=50`, `ChaseHome=200`, static `Default`
+- `Model/Templates/World/WorldMapTemplate` — full XML data holder; `flags` `@XmlList @XmlAttribute` → `FlagsRaw` string parsed to `List<ZoneAttributes>`; `GetTwinCount`/`GetBeginnerTwinCount` TODO-backlog WorldConfig cap; bit-check methods via `(int)ZoneAttributes.*` casts
+
 ## How to choose the next unit (no-defer = strictly bottom-up)
 
 **Never start a node that has an unmet dependency.** Build the dependency-free base and expand upward; you only reach a higher node once everything it needs already exists. The object-model spine (`AionObject→VisibleObject→Creature→Npc/Player` + `World`/`KnownList`/controllers) defines *which* foundation pieces are in scope (don't port unrelated dependency-free files); the no-defer rule defines the *order* (bottom-up). Note the trunk also needs *sideways* foundation (`KnownList`, controllers, templates, `MapRegion`) before each step up.
@@ -108,7 +119,7 @@ Algorithm each turn: from the in-scope spine, pick a unit whose dependencies **a
 
 ## Next unit
 
-`SpawnTemplate`/`SpawnGroup`/`SpawnsData` — **DONE** (commit `7e8906376`).
+World infrastructure batch — **DONE** (commit `f2d0c1f35`).
 
 ### Remaining path to `VisibleObject` (F2)
 
@@ -117,22 +128,27 @@ Algorithm each turn: from the in-scope spine, pick a unit whose dependencies **a
 - `ObjectDeleteAnimation` ✅
 - `VisibleObjectTemplate` ✅
 - `SpawnTemplate` ✅
+- `WorldMapTemplate` ✅ (`f2d0c1f35`)
 - `WorldPosition` — **MISSING** (needs `WorldMapInstance` / `MapRegion`)
 - `World` / `WorldMap` / `WorldMapInstance` — **MISSING**
 - `KnownList` — **MISSING**
 - `VisibleObjectController` — **MISSING** (needs `RespawnService` + `GeoService`)
 
-**Next sub-cluster: world-object cluster** (port all together since they form another circular graph):
-1. `WorldMapTemplate` (data holder for world config XML)
-2. `WorldMap` (instance-maps per world)
-3. `WorldPosition` (faithful: x/y/z/mapId/worldMapInstance ref)
-4. `MapRegion` (spatial partition, ref to WorldMapInstance)
-5. `WorldMapInstance` (world instance, ref to WorldMap + MapRegion list)
-6. `VisibleObjectController` (needs `RespawnService` + `GeoService` — check if portable without them, or port those first)
-7. `RespawnService` / `GeoService` (check deps)
-8. `KnownList`
+**Next preparatory batch: geometry + zone templates** (zero- or near-zero-dep; needed by ZoneInstance → WorldMapInstance):
+1. Geometry package — `Point3D`, `Plane3D`, `Polygon2D`, `AbstractArea`, `RectangleArea`, `CylinderArea`, `PolyArea`, `SphereArea`, `SemisphereArea`
+2. `ZoneTemplate` (needs geometry types + `AreaType` enum + `ZoneClassName` ✅ + `ZoneType` ✅)
+3. `ZoneInfo` (needs `ZoneTemplate`)
 
-Then `VisibleObject` (F2), `Creature`/`CreatureController` (F3), etc.
+**Then the F2-F5 world-object circular cluster** (must be one large batch — all circularly reference each other within the same assembly):
+4. `ZoneInstance` (needs `Creature`, which needs full spine)
+5. `InstanceHandler` (interface) + `GeneralInstanceHandler`
+6. `GeneralTeam` abstract
+7. `StaticDoor`, `Pet`
+8. `WorldMap` + `WorldPosition` + `MapRegion` + `WorldMapInstance` (abstract)
+9. `VisibleObjectController` abstract, `KnownList`
+10. `VisibleObject` (F2), `Creature` + `CreatureController` (F3)
+11. `Npc` + `NpcController` (F5), reparent `Player` → `Creature` (F4)
+12. `PositionUtil`, `World` singleton, `RespawnService`, `GeoService`
 
 Fidelity Gate only (foundation/additive). Validation: `dotnet build src/Aion.GameServer` + guardrail after each batch commit.
 
