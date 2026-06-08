@@ -1,261 +1,82 @@
 # HANDOFF — current state
 
-The single rolling state doc. Updated in place every Unit of Work (git history holds the past). Must be usable with zero prior conversation. Read after the other canonical docs in `csharp-port.md`.
+The single rolling state doc. Updated **in place** every Unit of Work — keep it lean: detail only the most recent round, collapse older batches to one-liners (git history holds the rest), but **never drop a TODO/backlog/blocker**. Must be usable with zero prior conversation. Read after the canonical docs in `csharp-port.md`.
 
-Last updated: 2026-06-07
+Last updated: 2026-06-08
 
 ## Current position
 
-- Phase 6, **re-baselined** to the Port Fidelity & Remediation Plan. The earlier Phase-6 work is behaviorally faithful but structurally over-decomposed (plan-service slop) and partly fused into a god-class; it is being re-ported to 1:1 Java fidelity.
-- **Phase A (foundation) — DONE except formula golden capture:**
-  - A1 doctrine: `Port-Fidelity-Remediation-Plan.md`. DONE.
-  - A2 golden pipeline: DONE, proven end-to-end. Java generator `game-server/test/.../serverpackets/GoldenPacketFixtureGeneratorTest.java` → fixtures in `parity-artifacts/golden/packets/`; C# consumer `dotnetConversion/tests/Aion.GameServer.Tests/GoldenPacketFixtureTests.cs` asserts byte-for-byte. Covers SM_GROUP_DATA_EXCHANGE, SM_GF_WEBSHOP_TOKEN_RESPONSE.
-  - A3 structural audit: DONE. `scripts/parity/structural_audit.py` → `Structural-Audit-Scorecard.md`.
-  - A4 fidelity guardrail: DONE. `scripts/parity/check_fidelity.py` (ratchet; baseline `scripts/parity/fidelity-baseline.json` = 363 slop files + 6 god-classes), wired into CI `fidelity` job. Proven to fail on new slop and pass when clean.
-  - **Formula golden capture: NOT built** (only remaining foundation item).
-- Build: C# GameServer builds green (nullable warnings only). Golden test passes 2/2.
+- Phase 6, **re-baselined** to the Port Fidelity & Remediation Plan (`docs/Port-Fidelity-Remediation-Plan.md`). Earlier Phase-6 work is behaviorally faithful but structurally slop (plan-service sprawl + a god-class `GameServerConnection.cs`); being re-ported to 1:1 Java fidelity.
+- **Phase A (foundation): DONE except formula golden capture.** Golden packet pipeline proven (Java generator → `parity-artifacts/golden/packets/`; C# `GoldenPacketFixtureTests` asserts byte-for-byte). Structural audit + fidelity guardrail (`scripts/parity/check_fidelity.py`, baseline 363 slop / 6 god-classes, in CI) done. **TODO: formula golden capture not built** (last foundation item).
+- Build: C# GameServer green (nullable warnings only).
+- **Active work: building the missing object-model spine bottom-up** (see below).
 
-## Direction chosen: FOUNDATION-FIRST (bottom-up)
+## Direction: FOUNDATION-FIRST (bottom-up), 1:1 Java
 
-Decision (2026-06-07): build the missing runtime substrate bottom-up in Java dependency order, then the faked feature clusters collapse into faithful ~150-line services. The `Structural-Audit-Scorecard.md` is a magnitude map, not a work order.
+There is NO object hierarchy in C#: `Player` is a flat `sealed class`; `VisibleObject`/`Creature`/`Npc`/`World`/`WorldMap` are MISSING. The C# model is a flat parallel collection built for the packet path. Build the spine bottom-up so the faked feature clusters can later collapse.
 
-**Why:** there is NO object hierarchy in C#. `Player` is a flat `sealed class` with no base; `VisibleObject`/`Creature`/`Npc`/`WorldObject`/`WorldMap` are MISSING. The whole C# model is a flat parallel collection built for the packet path (`Player`, `WorldNpc`, `WorldStaticObject`, `PlayerLifeStats`, …), separate from the Java tree. Everything above (teleport, combat, AI, known-list) is faked because there is no `Creature` to attach a controller/lifestats/effects/known-list to.
+**Spine sequence** (each a faithful 1:1 port; Java line counts in parens):
+- **F1 `AionObject`** (79) — **DONE** (`Model/GameObjects/AionObject.cs`).
+- **F2 `VisibleObject`** (256) + `VisibleObjectController` (124).
+- **F3 `Creature`** (522) + `CreatureController` (568) — incl. the TaskId task system.
+- **F4 reparent flat `Player` → `Creature`** (Java 1655; C# 1442, **329 referencing files**) — high-risk integration.
+- **F5 `Npc`** (393) + `NpcController` (340).
+- **F6 `KnownList`**; **F7 `World`/`WorldMap`/`MapRegion`**.
 
-### Foundation sequence (the backlog)
+**How to choose the next unit:** never start a node with an unmet dependency. From the in-scope spine cone, pick a unit whose deps all already exist in C#; if none, port the deepest still-missing dep. Read the Java fully, port 1:1, build, commit (code + HANDOFF). **Never stub/defer.** Don't port dependency-free files unrelated to the spine cone.
 
-Java spine sizes in parens. Each is a faithful 1:1 port of the named Java class.
+## Strategy resolved (user, 2026-06-07): big-bang + SCC-leaves-first
 
-- **F1. `AionObject`** (79) — base: objectId/name/equals/hashCode. **DONE** (`Model/GameObjects/AionObject.cs`). Trimmed to the dependency-free core per the no-defer rule — no stub/TODO. Its `autoReleaseObjectId` GC path is an *upward* behavior (respawn/id-release layer) with no caller; tracked as backlog item **FR-1** below, not deferred-in-place.
-- **F2. `VisibleObject extends AionObject`** (256) + `VisibleObjectController` (124) — position/world membership/spawn/known-list+controller refs. Additive (new files).
-- **F3. `Creature extends VisibleObject`** (522) + `CreatureController` (568) — **the task system** (`TaskId` enum + `addTask/hasTask/cancelTask` map) = the scheduler substrate the slop fakes; lifeStats/effect/move controller refs. Additive.
-- **F4. Reparent flat C# `Player` → `Creature`** (Java Player 1655; C# Player 1442 lines, **329 referencing files**) — **THE high-risk integration + PIVOTAL DECISION** (big-bang vs gradual/strangler). Reconcile flat Player fields (objectId/name/position/world) with inherited ones.
-- **F5. `Npc extends Creature`** (393) + `NpcController` (340) — reconcile flat `WorldNpc`/`WorldStaticObject`.
-- **F6. `KnownList`** — visibility engine on VisibleObject.
-- **F7. `World`/`WorldMap`/`MapRegion`** — faithful spatial container (current `World.cs` is flat).
+- **Doctrine rule 8** (in `Port-Fidelity-Remediation-Plan.md` §3 + memory): when a new faithful port conflicts with existing C# code, **default to 1:1 Java parity and replace the existing code**; only when the conflict is a genuine **C#-vs-Java foundational language difference** take the closest-to-1:1 path instead.
+- **Execution model:** `VisibleObject ↔ Creature ↔ World/MapRegion/WorldMapInstance/WorldPosition ↔ KnownList ↔ subsystems` form one big SCC. In a single assembly a partial SCC won't compile, so the SCC core lands as **one final big-bang commit**. Until then, port the SCC's **dependency-free leaves** bottom-up (green each batch). The `WorldPosition` struct→class swap (below) is part of that closing big-bang.
 
-After F1–F7, subsystems (teleport → its hotspot dataholder + the F3 task system) become portable, and BindPointTeleport/FindGroup/etc. collapse.
+## Creature SCC cone — leaf progress
 
-### Backlog (upward features owed, with their real prerequisite — not deferrals-in-place)
+Older spine/leaf batches (git has detail): animations, templates (`BoundRadius`/`IL10n`/`VisibleObjectTemplate`), world/zone enums (`WorldType`,`WorldDropType`,`ZoneName`,`ZoneAttributes`,`ZoneClassName`,`AIEventType`), `Race`/`TribeClass`/siege/vortex, gametime, **F2 spawn-data cluster (50 files)**, **world-infra batch (6)**, **geometry+zone-template batch (19)**.
 
-- **FR-1. `AionObject` GC objectId auto-release** — port when the respawn/id-release layer lands. Prereq: a process-wide IDFactory accessor + `RespawnService.setAutoReleaseId`. Java: `AionObject(int,boolean)` Cleaner branch.
+Recent (this program of work):
+- `22e208019` Creature prereqs: `CreatureState`,`CreatureVisualState`,`TaskId`,`NpcObjectType`,`CreatureTemplate`,`RegionZone`
+- `3994a5c75` stats/skill enums: `StatEnum`,`SkillElement`,`ItemAttackType`,`AbnormalState`
+- `fb0b2091c` AI/observer: `AISubState`,`AIState`,`ObserverType`
+- `449d687e5` `TransformType`,`HopType`,`ShieldType`,`CalculationType`,`IStatOwner`
+- `effb209b7` SkillTemplate enums (9): `ActivationAttribute`,`DispelCategoryType`,`HostileType`,`SkillCategory`,`SkillSubType`,`SkillType`,`StigmaType`,`SkillTargetSlot`,`DispelSlotType`
+- `3538242ab` effect enums: `SpellStatus`,`EffectResult`,`HitType`,`AttackType`,`EffectType`
+- `28e8fc389` skill condition/properties/change: `TargetAttribute`,`AreaDirections`,`FirstTargetAttribute`,`TargetRangeAttribute`,`TargetRelationAttribute`,`TargetSpeciesAttribute`,`Func`
+- `634e6196a` effect-controller: `CumulativeResistType`,`CumulativeResist`
+- `310ce8879` item enums: `ArmorType`,`EquipType`,`ItemSubType`
+- `17c02776a` item: `ItemSlot` (long-mask), `ItemGroup`
+- `dc5c40c03` stats-template: `StatsTemplate`,`CreatureSpeeds`
+- `6d981ed5d` `PlayerClass` + `PlayerStatCalculator` (mutual SCC) — **PlayerClass unblocked**. (Java `implements L10n`; C# enums can't implement interfaces → `GetL10nId()` extension per rule 8. New `enum PlayerClass` coexists additively with legacy `string Player.PlayerClass`, reconciled at F4.)
 
-## Last units (session 2026-06-07)
+**Leaf-vein status:**
+- **skillengine** enum leaves EXHAUSTED — `Skill`/`SkillTemplate`/`Effect`/`EffectTemplate`/`Condition(s)`/`Change`/`Action(s)`/`PeriodicAction(s)` all block on the SCC core (`Stat2`/`Effect`/`Skill`/`Creature`).
+- **stats** cone leaf-complete for spine (`Stat2`/`StatCapUtil` block on `Creature`). Out-of-cone, deliberately NOT ported: `PlumStatEnum`,`DropRewardEnum`,`XPLossEnum`,`XPRewardEnum`.
+- **ACTIVE VEIN → item cone** (required: `Creature`→`NpcEquippedGear`→`ItemTemplate`). **NEXT:** remaining zero-dep item enums (`ItemQuality`,`ItemType`,`WeaponType`,`LeftHandSlot`,`RandomType`,`AcquisitionType`,`ExceedEnchantSkillSetType`) + small item data-classes (`Acquisition`,`GodstoneInfo`,`WeaponStats`,`Improvement`,…), then climb to `ItemTemplate` itself.
 
-All green (build + guardrail 363/6):
+## Backlog / TODOs (come back to these)
 
-| Commit | File(s) |
-|--------|---------|
-| `31242003e` | `model/animations` — 6 animation enums |
-| `608f4c2c3` | `model/templates/BoundRadius + L10n (IL10n) + VisibleObjectTemplate` |
-| `c01d57edb` | `world/WorldType + WorldDropType + spawnengine/SpawnHandlerType` |
-| `7c61a213d` | `ai/event/AIEventType + model/templates/zone/ZoneClassName` |
-| `85f92e112` | `world/zone/ZoneName + ZoneAttributes` |
-| `cdbfa72a2` | `model/Race + model/siege/SiegeModType + model/vortex/VortexStateType` |
-| `14b529960` | `model/TribeClass` (748-line; SCREAMING_SNAKE_CASE for XML compat) |
-| `0388d9bf6` | `services/panesterra/ahserion/PanesterraFaction` |
-| `d3f267c13` | `model/base/BaseOccupier` |
-| `9db32c4bb` | `model/siege/SiegeRace` |
-| `b32377ead` | `utils/time/gametime/DayTime + GameTime` |
-| `e39b915cc` | `services/GameTimeService` — add GetInstance()/GetGameTime() |
-| `22ebda2d1` | `utils/time/ServerTime` |
-| `9620ea3f4` | `model/templates/spawns/TemporarySpawn` |
-| `c11e46d09` | `model/templates/spawns/SpawnSpotTemplate` |
-| `7e8906376` | **F2 spawn-data circular cluster — 50 files** (see below) |
-| `f2d0c1f35` | **World infrastructure batch — 6 files** (see below) |
-| `0d4cacf69` | **Geometry + zone-template batch — 19 files** (see below) |
-| `22e208019` | **Creature spine prerequisites — 6 zero-dep files** (see below) |
-| `b16f2db8c` | docs: Fidelity Doctrine rule 8 (conflicts default to 1:1 Java; replace existing) |
-| `3994a5c75` | **Stats/skill enum leaves — StatEnum, SkillElement, ItemAttackType, AbnormalState** |
-| `fb0b2091c` | **AI/observer enum leaves — AISubState, AIState, ObserverType** |
-| `449d687e5` | **skillengine/stats-calc leaves — TransformType, HopType, ShieldType, CalculationType, StatOwner** |
-| `effb209b7` | **SkillTemplate enum leaves — 9 (ActivationAttribute, DispelCategoryType, HostileType, SkillCategory, SkillSubType, SkillType, StigmaType, SkillTargetSlot, DispelSlotType)** |
-| `3538242ab` | **Effect-cone enum leaves — SpellStatus, EffectResult, HitType, AttackType, EffectType** |
-| `28e8fc389` | **Skill condition/properties/change enum leaves — 7 (TargetAttribute, AreaDirections, FirstTargetAttribute, TargetRangeAttribute, TargetRelationAttribute, TargetSpeciesAttribute, Func)** |
-| `634e6196a` | **Effect-controller cumulative-resist leaves — CumulativeResistType, CumulativeResist** |
-| `310ce8879` | **Item-template enum leaves (start of item cone) — ArmorType, EquipType, ItemSubType** |
-| `17c02776a` | **Item cone — ItemSlot (long-mask equip slots) + ItemGroup** |
-| `dc5c40c03` | **Stats-template cone — StatsTemplate + CreatureSpeeds** |
-| `6d981ed5d` | **PlayerClass + PlayerStatCalculator (mutual SCC; unblocked)** |
+**The final big-bang (closes the SCC):**
+- **`WorldPosition` struct→class swap.** Java `WorldPosition` is a *mutable class* holding a `MapRegion` ref + `isSpawned`, with `instanceId` **derived** from `mapRegion.getParent().getInstanceId()`. Existing C# is a `readonly record struct (WorldId,X,Y,Z,Heading,InstanceId=1)`: immutable, InstanceId stored, copied via `with{}`. **Blast radius: 64 files / ~273 `.WorldId` + ~101 `.InstanceId` + ~72 `.Heading` reads + `with{InstanceId=…}` sites.** Replacing is behavior-affecting (value→ref, `with`→setters, stored→derived InstanceId), not a rename. Resolved = **big-bang replace** (rule 8).
+- **Creature field-cone (2nd fork):** `Creature`'s fields `AbstractAI`/`CreatureGameStats`/`CreatureLifeStats`/`EffectController`/`CreatureMoveController`/`ObserveController`/`AggroList`/`TransformModel`/`Skill` are *downward* deps (its methods call them), so a faithful `Creature` compile pulls in the AI/stats/effect/skill/move containers. Scope these into the big-bang.
+- **F2-F5 big-bang membership:** `WorldPosition`(class)+`MapRegion`+`WorldMap`+`WorldMapInstance`(+factory/2D/3D); `ZoneInstance`,`ZoneHandler`/`AdvancedZoneHandler`,`InstanceHandler`/`GeneralInstanceHandler`; `GeneralTeam`; `KnownList`+`KnownObject`; `VisibleObjectController`; `VisibleObject`(F2); `Creature`+`CreatureController`(F3); `StaticObject`/`StaticDoor`; `Npc`+`NpcController`(F5); `Pet`; reparent `Player`(F4); `World` singleton; `RespawnService`,`GeoService`,`ThreadPoolManager`; `PositionUtil` game-object overloads.
 
-### Commit `3994a5c75` — Stats/skill enum leaves (4 files)
+**Owed upward features (port when their prereq lands):**
+- **FR-1 `AionObject` GC objectId auto-release** — needs process-wide IDFactory accessor + `RespawnService.setAutoReleaseId` (Java `AionObject(int,boolean)` Cleaner branch).
+- `Buff.BuffMapTypeExtensions.Matches(WorldMapInstance)` — needs `WorldMapInstance`.
+- `GlobalDropItem` `DataManager.ITEM_DATA` validation — needs DI DataManager in load pipeline.
+- `SpawnsData`: `saveSpawn`,`getNearestSpawnByNpcId`,`getFirstSpawnByNpcId`,`getRelativePath`,`loadSpawnsFromTemplateFiles`,`findSpawnTemplate`,`positionMatches`,`getNearestSpawn`,`toSpawnSearchResult` — need `VisibleObject`/`Player`/`WorldMapInstance`.
+- `WorldConfig` config-framework loading (currently hardcoded Java defaults).
+- `PositionUtil` game-object-aware overloads (only pure-coordinate methods ported) — at F2/F3.
+- `WorldMapTemplate.GetTwinCount`/`GetBeginnerTwinCount` — WorldConfig cap.
+- `DuplicateAionObjectException` — `Player.GetPosition()` detail at F4.
+- `Polygon2D` rendering methods (`getPolyline2D`/`getPolygon`/`getBounds`/`getPathIterator`) and `RectangleArea.IntersectsRectangle` (Java TODO stub preserved) — no server callers.
 
-First batch of the **Creature SCC cone** (see "Strategy resolved" below), all dependency-free leaves:
-- `Model/Stats/Container/StatEnum` — full stat-id enum (SCREAMING_SNAKE_CASE for XML); per-constant `itemStoneMask`+`sign` and static `GetModifier` in `StatEnumExtensions`
-- `Model/SkillElement` — element→resistance-stat via `GetStatForElement()`
-- `Model/Templates/Item/ItemAttackType` — `IsMagical()`/`GetMagicalElement()`
-- `SkillEngine/Effect/AbnormalState` — bit-flag + compound masks; `int` base preserves `SANCTUARY=1<<31`
+## Validation
 
-### Commit `22e208019` — Creature spine prerequisites (6 zero-dep files)
-
-The remaining dependency-free leaves needed by the `Creature`/`Npc` spine, ported ahead of the (now blocked) F2 cluster:
-- `Model/GameObjects/State/CreatureState` — bit-flag + multibit states; `GetId()` and `MustMatchExact()` extensions (CHAIR/PRIVATE_SHOP exact). Multibit ids are distinct so a single enum suffices.
-- `Model/GameObjects/State/CreatureVisualState` — hide/blink states; `GetId()` extension
-- `Model/TaskId` — controller task-slot enum (zero-dep)
-- `Model/GameObjects/NpcObjectType` — npc-derived object kinds; `GetId()` extension
-- `Model/GameObjects/CreatureTemplate` — abstract `VisibleObjectTemplate` subclass adding `GetAiName()` (virtual, returns null)
-- `World/Zone/RegionZone` — `RectangleArea` region square spanning one `WorldConfig.WorldRegionSize`; passes `null!` ZoneName / worldId 0 per Java
-
-### Commit `7e8906376` — F2 spawn-data circular cluster (50 files)
-
-Entire mutually-referential cluster ported as one batch:
-- `model/gameobjects/state/CreatureSeeState` — NPC sight-range enum
-- `model/templates/npc/NpcRating` — quality enum (Junk→Legendary)
-- `model/templates/npc/GroupDropType` — 300+ SCREAMING_SNAKE_CASE XML-compat enum
-- `model/templates/globaldrops/StringFunction`
-- `model/templates/globaldrops/GlobalDrop*` (20 files: Map, Maps, Npc, Npcs, NpcName, NpcNames, NpcGroup, NpcGroups, Race, Races, Rating, Ratings, Tribe, Tribes, World, Worlds, Zone, Zones, ExcludedNpcs, Item)
-- `model/templates/globaldrops/GlobalRule`
-- `model/templates/event/EventQuestList`
-- `model/templates/event/InventoryDrop`
-- `model/templates/event/Buff` (BuffMapType/TriggerCondition/Trigger; `Matches(WorldMapInstance)` TODO-backlog)
-- `model/templates/event/BuffRestriction`
-- `model/templates/event/EventTemplate` (LocalDateTimeAdapter → DateTime? + ISO-8601 string setter)
-- `model/templates/spawns/SpawnType`
-- `model/templates/spawns/SpawnSearchResult`
-- `model/templates/spawns/basespawns/BaseSpawn`
-- `model/templates/spawns/riftspawns/RiftSpawn`
-- `model/templates/spawns/siegespawns/SiegeSpawn`
-- `model/templates/spawns/vortexspawns/VortexSpawn`
-- `model/templates/spawns/mercenaries/{MercenarySpawn, MercenaryRace, MercenaryZone}`
-- `model/templates/spawns/panesterra/AhserionsFlightSpawn`
-- `model/templates/spawns/SpawnMap`
-- `model/templates/spawns/Spawn` (beforeMarshal → ShouldSerialize*)
-- `model/templates/spawns/SpawnTemplate`
-- `model/templates/spawns/SpawnGroup` (Rnd.get() → Random.Shared inline)
-- `model/templates/spawns/basespawns/BaseSpawnTemplate`
-- `model/templates/spawns/riftspawns/RiftSpawnTemplate`
-- `model/templates/spawns/siegespawns/SiegeSpawnTemplate`
-- `model/templates/spawns/vortexspawns/VortexSpawnTemplate`
-- `model/templates/spawns/panesterra/AhserionsFlightSpawnTemplate`
-- `dataholders/SpawnsData` (afterUnmarshal → `Initialize(parent?)`; saveSpawn / getNearestSpawnByNpcId / getFirstSpawnByNpcId / getRelativePath → TODO-backlog)
-
-**Pending backlog additions from this batch:**
-- TODO-backlog: `Buff.BuffMapTypeExtensions.Matches(WorldMapInstance)` — needs WorldMapInstance
-- TODO-backlog: `GlobalDropItem` DataManager.ITEM_DATA validation — needs DI DataManager in load pipeline
-- TODO-backlog in `SpawnsData`: saveSpawn, getNearestSpawnByNpcId, getFirstSpawnByNpcId, getRelativePath, loadSpawnsFromTemplateFiles, findSpawnTemplate, positionMatches, getNearestSpawn, toSpawnSearchResult (all need VisibleObject/Player/WorldMapInstance)
-
-### Commit `0d4cacf69` — Geometry + zone-template batch (19 files)
-
-Zone template data classes (`Model/Templates/Zone/`):
-- `Point2D` — float x/y XML attribute pair
-- `AreaType` — Polygon/Cylinder/Sphere/Semisphere enum
-- `Cylinder`, `Sphere`, `Semisphere` — XML geometry descriptors
-- `Points` — polygon boundary points list with top/bottom Z
-- `ZoneTemplate` — full XML zone descriptor; `name` attr → `ZoneName.CreateOrGet()`; `ZoneClassName.Sub` default
-- `ZoneInfo` — `Area` + `ZoneTemplate` container pair
-
-Geometry package (`Model/Geometry/`):
-- `Point3D` — float x/y/z, `ICloneable`, `GetHashCode` matching Java `(int)(result * 100)`
-- `Area` — interface (all `IsInside2D/3D`, `IsInsideZ`, `GetDistance2D/3D`, `GetClosestPoint`, `IntersectsRectangle`)
-- `AbstractArea` — base implementation, `GetClosestPoint(float,float,float)` z-clamping
-- `RectangleArea` — axis-aligned rect; `GetClosestPoint` via four edge walk; `IntersectsRectangle` is stub (Java TODO preserved)
-- `CylinderArea` — circular cylinder; all geometry via `PositionUtil` pure methods
-- `SphereArea` — sphere; 2D methods `@Deprecated` (return false/0/null matching Java)
-- `SemisphereArea` — upper half-sphere extending `SphereArea`; `virtual` on overridden methods
-- `Polygon2D` — float polygon; ray-casting (even-odd) for `Contains()` matches `GeneralPath.WIND_EVEN_ODD`; edge-intersection for `Intersects()`; rendering TODO-backlog
-- `PolyArea` — free-form polygon area using `WorldConfig.WorldRegionSize`
-
-Support:
-- `Configs/Main/WorldConfig` — static with Java default values; TODO-backlog config-framework loading
-- `Utils/PositionUtil` — pure coordinate methods only (2D/3D distance, angle/heading, `GetClosestPointOnSegment`, `NormalizeAngle`); game-object-aware methods TODO-backlog at F2/F3
-
-### Commit `f2d0c1f35` — World infrastructure batch (6 files)
-
-Zero-dep preparatory batch ahead of the F2-F5 world-object spine:
-- `World/WorldMapType` — 207-member enum (all world IDs as PascalCase); extensions: `GetId()`, `IsPersonal()`, `GetWorld(int)`, `IsPanesterraMap(int)`
-- `Model/Templates/Zone/ZoneType` — `Fly/NoFly/Siege/Pvp` enum
-- `Utils/Collections/CollectionUtil` — safe `ForEach<T>` with error logging (two overloads)
-- `World/Exceptions/DuplicateAionObjectException` — extends Exception; takes two `AionObject` args; TODO-backlog `Player.GetPosition()` at F4
-- `Model/Templates/World/AiInfo` — `ChaseTarget=50`, `ChaseHome=200`, static `Default`
-- `Model/Templates/World/WorldMapTemplate` — full XML data holder; `flags` `@XmlList @XmlAttribute` → `FlagsRaw` string parsed to `List<ZoneAttributes>`; `GetTwinCount`/`GetBeginnerTwinCount` TODO-backlog WorldConfig cap; bit-check methods via `(int)ZoneAttributes.*` casts
-
-## How to choose the next unit (no-defer = strictly bottom-up)
-
-**Never start a node that has an unmet dependency.** Build the dependency-free base and expand upward; you only reach a higher node once everything it needs already exists. The object-model spine (`AionObject→VisibleObject→Creature→Npc/Player` + `World`/`KnownList`/controllers) defines *which* foundation pieces are in scope (don't port unrelated dependency-free files); the no-defer rule defines the *order* (bottom-up). Note the trunk also needs *sideways* foundation (`KnownList`, controllers, templates, `MapRegion`) before each step up.
-
-Algorithm each turn: from the in-scope spine, pick a unit whose dependencies **all already exist in C#**. If none do, pick the deepest still-missing dependency (it is itself such a unit). Read the Java fully, port 1:1, build, commit (code+HANDOFF). Never stub/defer.
-
-## Next unit
-
-All dependency-free leaves of the spine are now ported. The next node is `VisibleObject` (F2) — and it is **BLOCKED on a pivotal architectural decision** (see below). The zero-dep leaf supply is exhausted; we cannot make further bottom-up progress on the spine without resolving the `WorldPosition` fork.
-
-### ✅ STRATEGY RESOLVED (user, 2026-06-07): big-bang replace + SCC-leaves-first
-
-**Decision:** the `WorldPosition` fork (below) is resolved by **big-bang replace** — port the faithful Java `WorldPosition` class and fix all consumers. New permanent doctrine (Plan rule 8 / memory): *conflicts default to 1:1 Java parity, replacing existing C# code; a genuine C#-vs-Java foundational language difference instead takes the closest-to-1:1 path.* struct-vs-class is a C# idiom choice → class wins.
-
-**Execution insight:** the big-bang `WorldPosition` swap is the **CLOSING move** of the Creature SCC, not the next move. The SCC (`VisibleObject ↔ Creature ↔ World/MapRegion/WorldMapInstance/WorldPosition ↔ KnownList ↔ subsystems`) only reaches a green build once it fully closes (single assembly → partial SCC = red). But its **leaves are dependency-free and ported bottom-up, green each batch**, until only the tightly-coupled core remains for one final big-bang commit (which includes the struct→class swap + 64-file migration). So the loop stays productive without further decisions.
-
-**Creature SCC cone — leaf progress:**
-- ✅ `CreatureState`, `CreatureVisualState`, `TaskId`, `NpcObjectType`, `CreatureTemplate`, `RegionZone` (commit `22e208019`)
-- ✅ `StatEnum`, `SkillElement`, `ItemAttackType`, `AbnormalState` (commit `3994a5c75`)
-- ✅ `AISubState`, `AIState`, `ObserverType` (commit `fb0b2091c`)
-- ✅ `TransformType`, `HopType`, `ShieldType`, `CalculationType`, `StatOwner`(→`IStatOwner`) (commit `449d687e5`)
-- ✅ skill enums: `ActivationAttribute`, `DispelCategoryType`, `HostileType`, `SkillCategory`, `SkillSubType`, `SkillType`, `StigmaType`, `SkillTargetSlot`, `DispelSlotType` (commit `effb209b7`) — anchored to `SkillTemplate`'s direct references
-- ✅ effect enums: `SpellStatus`, `EffectResult`, `HitType`, `AttackType`, `EffectType` (commit `3538242ab`) — `Effect`/`EffectTemplate` cone leaves (`CombatMode`/`RatioType` already existed in C#)
-- ✅ skill sub-cone enums: `TargetAttribute`, `AreaDirections`, `FirstTargetAttribute`, `TargetRangeAttribute`, `TargetRelationAttribute`, `TargetSpeciesAttribute`, `Func` (commit `28e8fc389`)
-- ✅ effect-controller: `CumulativeResistType`, `CumulativeResist` (commit `634e6196a`)
-- ✅ item enums (item cone start): `ArmorType`, `EquipType`, `ItemSubType` (commit `310ce8879`)
-- ✅ item cone: `ItemSlot` (long-mask equip slots), `ItemGroup` (commit `17c02776a`)
-- ✅ stats-template cone: `StatsTemplate`, `CreatureSpeeds` (commit `dc5c40c03`)
-- ✅ `PlayerClass` + `PlayerStatCalculator` (commit `6d981ed5d`) — **PlayerClass unblocked.** C# enums can't implement interfaces, so Java `implements L10n` → `GetL10nId()` extension (rule 8). New `enum PlayerClass` coexists additively with the legacy `string Player.PlayerClass` packet field (reconciled at F4).
-
-**Leaf-vein status (2026-06-08):**
-- **skillengine** (model/effect/condition/properties/change) enum leaves are **EXHAUSTED** — remaining classes (`Skill`, `SkillTemplate`, `Effect`, `EffectTemplate`, `Condition(s)`, `Change`, `Action(s)`, `PeriodicAction(s)`) all block on the SCC core (`Stat2`/`Effect`/`Skill`/`Creature`).
-- **stats** cone: leaf-complete for spine (`StatEnum` done; `CombatMode`/`RatioType` pre-existed; `Stat2`/`StatCapUtil` block on `Creature`). Skipped as out-of-cone per doctrine: `PlumStatEnum`, `DropRewardEnum`, `XPLossEnum`, `XPRewardEnum` (reward/feature-specific, not on Creature spine).
-- **ACTIVE VEIN → item cone.** `Creature` needs `NpcEquippedGear` → `ItemTemplate`, so the item-template cone is required. Started with `ArmorType`/`EquipType`/`ItemSubType`, then `ItemSlot`+`ItemGroup`. NEXT item leaves (anchor to `ItemTemplate`): `ItemQuality`/weapon/armor-type enums, then `ItemTemplate` itself.
-
-**`PlayerClass` — DONE** (commit `6d981ed5d`, via the `StatsTemplate` cone). NEXT item-cone leaves toward `ItemTemplate`: `ItemQuality`, `ItemType`, `WeaponType`, `LeftHandSlot`, `RandomType`, `AcquisitionType`, `ExceedEnchantSkillSetType` (all zero-dep enums seen in the `model/templates/item` scan) + the small item data-classes (`Acquisition`, `GodstoneInfo`, `WeaponStats`, `Improvement`, etc.), then climb to `ItemTemplate` itself.
-- ⏭️ NEXT leaves (method: scan a target class's imports, port the zero-dep enum/marker leaves it references, then climb):
-  - **Finish the SkillTemplate leaf set** then port `SkillTemplate` itself (data class; check remaining deps: `L10n`✅, `ModifiersTemplate`/`Effects`/`StartConditions`/etc. — these are skill-XML sub-trees, likely their own leaves).
-  - **Effect cone:** scan `skillengine/effect/EffectTemplate` + `Effect` for leaf enums (`EffectType`, `SpellStatus`, `EffectResult`, `HitType`, etc. — several already seen as zero-dep in the skillengine/model scan).
-  - **Stats container helpers:** `Stat2`/`StatCapUtil` are blocked by `Creature`; but `CombatMode`, `RatioType` (referenced by `StatCapUtil`) are likely leaf enums — port those.
-  - The remaining cone members are **more entangled** — each needs fresh Java reading:
-  - `NpcEquippedGear` is **NOT** a clean leaf — it pulls in `model/templates/item/ItemTemplate` (large) + XML adapters `NpcEquipmentList`/`NpcEquippedGearAdapter`. Port the `ItemTemplate` cone first (its own sub-leaves: item enums) if going this way.
-  - Stats containers (`CreatureGameStats`/`CreatureLifeStats`) need `Creature` + helper types (`Stat2`/`StatOwner`/modifiers) — mid-cone, not leaves.
-  - `TransformModel` needs `Creature` + `TransformType` (+ transform templates) — port `TransformType` leaf first.
-  - `Skill`/`SkillTemplate` = the skill-engine cone (large).
-  - Keep porting leaves until only `VisibleObject`/`Creature`/`World*`/`MapRegion`/`KnownList`/controllers + stats/effect/ai/move *containers* remain → then the single final big-bang commit (incl. `WorldPosition` struct→class swap + 64-file migration).
-
-### ⛔ The `WorldPosition` class-vs-struct fork (resolved above; details retained)
-
-`VisibleObject` (F2) holds a `WorldPosition` and calls `getMapRegion()`, `getWorldMapInstance()`, `isSpawned()`, `setPosition()`, `getInstanceId()`. The faithful Java `WorldPosition` is a **mutable class** that:
-- holds a mutable `MapRegion` reference + `isSpawned` flag,
-- **derives** `instanceId` from `mapRegion.getParent().getInstanceId()` (not stored),
-- exposes `setMapRegion/setXYZH/setZ/setH/setIsSpawned`.
-
-The existing C# `World/WorldPosition.cs` is the opposite design — a **`readonly record struct`** `(int WorldId, float X, float Y, float Z, byte Heading, int InstanceId = 1)`: immutable value type, **InstanceId stored**, copied via `with { … }`, no `MapRegion`/`isSpawned` concept. It was built for the packet path.
-
-**Blast radius (measured):** 64 files reference `WorldPosition`; ~273 reads of `.WorldId`, ~101 of `.InstanceId`, ~72 of `.Heading`; multiple `portalLocation with { InstanceId = … }` expressions; services that store/compare a literal `InstanceId` on a position (e.g. `InstanceRuntimeService`, `PlayerTeleportService`, `WorldNpcSpawnService`). Replacing the struct with the Java class is **not** a pure rename: value→reference semantics, `with`→constructor, and **stored→derived InstanceId** all change behavior, not just syntax.
-
-No-defer forbids stubbing past it; foundation-first forbids skipping it. So this is a genuine fork that must be decided before F2 can proceed. Candidate strategies:
-- **A. Big-bang replace** — delete the struct, port the Java `WorldPosition` class into the same namespace, and fix all 64 files (convert `with` to setters, reconcile stored-vs-derived InstanceId). One large, behavior-affecting commit.
-- **B. Strangler / parallel** — port the Java class under a distinct name/namespace for the new spine, leave the struct for the legacy packet path, migrate callers incrementally. Risk: two `WorldPosition` types; guardrail matches by Java name (the spine one should own the name).
-- **C. Adapter** — keep the struct as a pure coordinate value, and put `MapRegion`/`isSpawned`/derived-InstanceId on `VisibleObject` itself (where Java keeps them on the position). Diverges from 1:1 field placement.
-
-**Resolved: option A (big-bang replace).** Executed as the closing move of the Creature SCC (see "Strategy resolved" above).
-
-### Remaining path to `VisibleObject` (F2) once unblocked
-
-`VisibleObject` directly needs (besides `WorldPosition`):
-- `AionObject` ✅, `ObjectDeleteAnimation` ✅, `VisibleObjectTemplate` ✅, `SpawnTemplate` ✅, `WorldMapTemplate` ✅
-- `World` / `WorldMap` / `WorldMapInstance` / `MapRegion` — **MISSING** (large spatial-container cluster; needs `ThreadPoolManager`, `ZoneService`, `QuestEngine`, `Creature`, `Player`)
-- `KnownList` (+`KnownObject`) — **MISSING** (needs `Npc`, `Pet`, `Player`, `MapRegion`, `WorldPosition`, `PositionUtil` game-object overloads)
-- `VisibleObjectController` — **MISSING** (needs `RespawnService` + `GeoService`)
-
-**Creature (F3) sub-blocker:** `Creature`'s *fields* (not just upward behavior) are `AbstractAI`, `CreatureGameStats`, `CreatureLifeStats`, `EffectController`, `CreatureMoveController`, `ObserveController`, `AggroList`, `TransformModel`, `Skill` — and Creature's own methods call them (`isDead()`→lifeStats, `canAttack()`→effectController, ctor news `ObserveController`/`AggroList`/`AIEngine.newAI`). These are **downward** deps of Creature, so a faithful Creature compile pulls in the AI/stats/effects/skill/movement subsystems. This is the second large fork (how much of those subsystems to port as the Creature foundation) and should be scoped right after the `WorldPosition` decision.
-
-### F2-F5 world-object circular cluster (one large batch, once unblocked)
-- `WorldPosition` (class) + `MapRegion` + `WorldMap` + `WorldMapInstance` (abstract) + factory/2D/3D instances
-- `ZoneInstance`, `ZoneHandler`/`AdvancedZoneHandler` interfaces, `InstanceHandler`/`GeneralInstanceHandler`
-- `GeneralTeam` abstract; `KnownList` + `KnownObject`; `VisibleObjectController`
-- `VisibleObject` (F2); `Creature` + `CreatureController` (F3); `StaticObject`/`StaticDoor`; `Npc` + `NpcController` (F5); `Pet`
-- reparent `Player` → `Creature` (F4); `World` singleton; `RespawnService`, `GeoService`, `ThreadPoolManager`; `PositionUtil` game-object overloads
-
-Fidelity Gate only (foundation/additive). Validation: `dotnet build src/Aion.GameServer` + guardrail after each batch commit.
+Fidelity Gate (foundation/additive): `dotnet build src/Aion.GameServer` + `python scripts/parity/check_fidelity.py` after each batch commit. Commit author `rrfarmer <ryanfarmer@mac.com>`, no AI co-author.
 
 ## Blockers / risks
 
-- **⛔ `WorldPosition` class-vs-struct fork blocks all further spine progress** — see the PIVOTAL BLOCKER section above. Needs a user strategy decision before F2.
-
-- **The biggest slop clusters (BindPointTeleport, and likely FindGroup, WorldNpc, PlayerKnown, summons, vortex) are substrate-blocked** — they fake unported runtime (teleport, controller tasks, KnownList, scheduler). Don't attempt them top-down by file count; port substrate first (Track 1) or pick Track 2 units.
-- Golden harness covers deterministic, constructor-driven packets and pure formulas only; singleton/time-dependent packets need a deterministic config harness first.
-- `check_fidelity.py` matches by simple class name (naming-normalized). A faithful C# port named differently from its Java class could trip it — fix by matching the Java name, not by editing the baseline.
+- Big slop clusters (BindPointTeleport, FindGroup, WorldNpc, PlayerKnown, summons, vortex) are **substrate-blocked** — they fake unported runtime; don't attempt top-down by file count. Port substrate first.
+- Golden harness covers deterministic, constructor-driven packets + pure formulas only; singleton/time-dependent packets need a deterministic config harness first.
+- `check_fidelity.py` matches by simple (normalized) class name — a faithful port named differently from its Java class can trip it; fix by matching the Java name, not by editing the baseline.
