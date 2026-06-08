@@ -67,6 +67,8 @@ All green (build + guardrail 363/6):
 | `b16f2db8c` | docs: Fidelity Doctrine rule 8 (conflicts default to 1:1 Java; replace existing) |
 | `3994a5c75` | **Stats/skill enum leaves — StatEnum, SkillElement, ItemAttackType, AbnormalState** |
 | `fb0b2091c` | **AI/observer enum leaves — AISubState, AIState, ObserverType** |
+| `449d687e5` | **skillengine/stats-calc leaves — TransformType, HopType, ShieldType, CalculationType, StatOwner** |
+| `effb209b7` | **SkillTemplate enum leaves — 9 (ActivationAttribute, DispelCategoryType, HostileType, SkillCategory, SkillSubType, SkillType, StigmaType, SkillTargetSlot, DispelSlotType)** |
 
 ### Commit `3994a5c75` — Stats/skill enum leaves (4 files)
 
@@ -179,7 +181,13 @@ All dependency-free leaves of the spine are now ported. The next node is `Visibl
 - ✅ `CreatureState`, `CreatureVisualState`, `TaskId`, `NpcObjectType`, `CreatureTemplate`, `RegionZone` (commit `22e208019`)
 - ✅ `StatEnum`, `SkillElement`, `ItemAttackType`, `AbnormalState` (commit `3994a5c75`)
 - ✅ `AISubState`, `AIState`, `ObserverType` (commit `fb0b2091c`)
-- ⏭️ NEXT leaves to port (verify deps first): the remaining cone members are now **more entangled** — each needs fresh Java reading:
+- ✅ `TransformType`, `HopType`, `ShieldType`, `CalculationType`, `StatOwner`(→`IStatOwner`) (commit `449d687e5`)
+- ✅ skill enums: `ActivationAttribute`, `DispelCategoryType`, `HostileType`, `SkillCategory`, `SkillSubType`, `SkillType`, `StigmaType`, `SkillTargetSlot`, `DispelSlotType` (commit `effb209b7`) — anchored to `SkillTemplate`'s direct references
+- ⏭️ NEXT leaves (method: scan a target class's imports, port the zero-dep enum/marker leaves it references, then climb):
+  - **Finish the SkillTemplate leaf set** then port `SkillTemplate` itself (data class; check remaining deps: `L10n`✅, `ModifiersTemplate`/`Effects`/`StartConditions`/etc. — these are skill-XML sub-trees, likely their own leaves).
+  - **Effect cone:** scan `skillengine/effect/EffectTemplate` + `Effect` for leaf enums (`EffectType`, `SpellStatus`, `EffectResult`, `HitType`, etc. — several already seen as zero-dep in the skillengine/model scan).
+  - **Stats container helpers:** `Stat2`/`StatCapUtil` are blocked by `Creature`; but `CombatMode`, `RatioType` (referenced by `StatCapUtil`) are likely leaf enums — port those.
+  - The remaining cone members are **more entangled** — each needs fresh Java reading:
   - `NpcEquippedGear` is **NOT** a clean leaf — it pulls in `model/templates/item/ItemTemplate` (large) + XML adapters `NpcEquipmentList`/`NpcEquippedGearAdapter`. Port the `ItemTemplate` cone first (its own sub-leaves: item enums) if going this way.
   - Stats containers (`CreatureGameStats`/`CreatureLifeStats`) need `Creature` + helper types (`Stat2`/`StatOwner`/modifiers) — mid-cone, not leaves.
   - `TransformModel` needs `Creature` + `TransformType` (+ transform templates) — port `TransformType` leaf first.
