@@ -47,11 +47,12 @@ Recent (this program of work):
 - `17c02776a` item: `ItemSlot` (long-mask), `ItemGroup`
 - `dc5c40c03` stats-template: `StatsTemplate`,`CreatureSpeeds`
 - `6d981ed5d` `PlayerClass` + `PlayerStatCalculator` (mutual SCC) — **PlayerClass unblocked**. (Java `implements L10n`; C# enums can't implement interfaces → `GetL10nId()` extension per rule 8. New `enum PlayerClass` coexists additively with legacy `string Player.PlayerClass`, reconciled at F4.)
+- `c1ff3c9c1`+`f55e20a9a` item enums: `ItemQuality`,`ItemType`,`WeaponType`,`LeftHandSlot`,`AcquisitionType`,`RandomType`,`ExceedEnchantSkillSetType`(116)
 
 **Leaf-vein status:**
 - **skillengine** enum leaves EXHAUSTED — `Skill`/`SkillTemplate`/`Effect`/`EffectTemplate`/`Condition(s)`/`Change`/`Action(s)`/`PeriodicAction(s)` all block on the SCC core (`Stat2`/`Effect`/`Skill`/`Creature`).
 - **stats** cone leaf-complete for spine (`Stat2`/`StatCapUtil` block on `Creature`). Out-of-cone, deliberately NOT ported: `PlumStatEnum`,`DropRewardEnum`,`XPLossEnum`,`XPRewardEnum`.
-- **ACTIVE VEIN → item cone** (required: `Creature`→`NpcEquippedGear`→`ItemTemplate`). **NEXT:** remaining zero-dep item enums (`ItemQuality`,`ItemType`,`WeaponType`,`LeftHandSlot`,`RandomType`,`AcquisitionType`,`ExceedEnchantSkillSetType`) + small item data-classes (`Acquisition`,`GodstoneInfo`,`WeaponStats`,`Improvement`,…), then climb to `ItemTemplate` itself.
+- **ACTIVE VEIN → item cone** (required: `Creature`→`NpcEquippedGear`→`ItemTemplate`). Enum leaves now DONE. **NEXT:** small item data-classes that are leaves (`Acquisition`,`GodstoneInfo`,`WeaponStats`,`Improvement`,`Idian`,`Disposition`,`RequireSkill`,`AssemblyItem`/`AssembledItem`,`TradeinItem`/`TradeinList`,`RandomItem`,`MultiReturnItem`,`ExtraInventory`,`DecomposableItemInfo`,`ReturnLocList`,`ResultedItemsCollection` — verify each via same-package refs), then climb to `ItemTemplate` itself (check its remaining sub-trees).
 
 ## Backlog / TODOs (come back to these)
 
