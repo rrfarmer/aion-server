@@ -370,7 +370,6 @@
     "dotnetConversion/src/Aion.GameServer/Data/PlayerEnterWorldRepository.cs": 8519,
     "dotnetConversion/src/Aion.GameServer/Dataholders/StaticData.cs": 6644,
     "dotnetConversion/src/Aion.GameServer/Network/Aion/GameServerConnection.cs": 22907,
-    "dotnetConversion/src/Aion.GameServer/Network/Aion/ServerPackets/SmSystemMessage.cs": 3206,
     "dotnetConversion/src/Aion.GameServer/Services/CraftService.cs": 3952,
     "dotnetConversion/src/Aion.GameServer/Services/PlayerSummonSkillExecutionService.cs": 8790
   }

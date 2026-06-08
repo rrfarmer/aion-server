@@ -92,8 +92,22 @@ def line_count(path: Path) -> int:
         return sum(1 for _ in fh)
 
 
+def java_oversized_norms() -> set[str]:
+    """Normalized stems of Java files that are themselves over the god-class threshold.
+    A C# file that mirrors one of these 1:1 is NOT a fused god-class — Java intentionally keeps it
+    as a single large file (e.g. DialogAction.java, 6246 lines: enum->class for the JVM 64KB limit).
+    Exempting these encodes the 1:1 rule; it does NOT exempt true fusions (e.g. GameServerConnection),
+    which have no large Java counterpart of the same name."""
+    norms: set[str] = set()
+    for path in JAVA_ROOT.rglob("*.java"):
+        if line_count(path) > GODCLASS_LINE_THRESHOLD:
+            norms.add(normalize(path.stem))
+    return norms
+
+
 def compute() -> dict:
     java_norms = java_type_norms()
+    java_big = java_oversized_norms()
     banned_files: list[str] = []
     oversized: dict[str, int] = {}
     for path in cs_source_files():
@@ -101,7 +115,8 @@ def compute() -> dict:
         if normalize(stem) not in java_norms and any(t in BANNED_TOKENS for t in camel_tokens(stem)):
             banned_files.append(rel(path))
         n = line_count(path)
-        if n > GODCLASS_LINE_THRESHOLD:
+        # A faithful 1:1 port of an intentionally-large Java file is not a god-class.
+        if n > GODCLASS_LINE_THRESHOLD and normalize(stem) not in java_big:
             oversized[rel(path)] = n
     return {
         "_comment": "Fidelity ratchet baseline. Only ever shrink this (via --update-baseline after "
