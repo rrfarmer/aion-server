@@ -63,6 +63,17 @@ All green (build + guardrail 363/6):
 | `7e8906376` | **F2 spawn-data circular cluster — 50 files** (see below) |
 | `f2d0c1f35` | **World infrastructure batch — 6 files** (see below) |
 | `0d4cacf69` | **Geometry + zone-template batch — 19 files** (see below) |
+| `22e208019` | **Creature spine prerequisites — 6 zero-dep files** (see below) |
+
+### Commit `22e208019` — Creature spine prerequisites (6 zero-dep files)
+
+The remaining dependency-free leaves needed by the `Creature`/`Npc` spine, ported ahead of the (now blocked) F2 cluster:
+- `Model/GameObjects/State/CreatureState` — bit-flag + multibit states; `GetId()` and `MustMatchExact()` extensions (CHAIR/PRIVATE_SHOP exact). Multibit ids are distinct so a single enum suffices.
+- `Model/GameObjects/State/CreatureVisualState` — hide/blink states; `GetId()` extension
+- `Model/TaskId` — controller task-slot enum (zero-dep)
+- `Model/GameObjects/NpcObjectType` — npc-derived object kinds; `GetId()` extension
+- `Model/GameObjects/CreatureTemplate` — abstract `VisibleObjectTemplate` subclass adding `GetAiName()` (virtual, returns null)
+- `World/Zone/RegionZone` — `RectangleArea` region square spanning one `WorldConfig.WorldRegionSize`; passes `null!` ZoneName / worldId 0 per Java
 
 ### Commit `7e8906376` — F2 spawn-data circular cluster (50 files)
 
@@ -145,42 +156,48 @@ Algorithm each turn: from the in-scope spine, pick a unit whose dependencies **a
 
 ## Next unit
 
-World infrastructure batch — **DONE** (commit `f2d0c1f35`).
+All dependency-free leaves of the spine are now ported. The next node is `VisibleObject` (F2) — and it is **BLOCKED on a pivotal architectural decision** (see below). The zero-dep leaf supply is exhausted; we cannot make further bottom-up progress on the spine without resolving the `WorldPosition` fork.
 
-### Remaining path to `VisibleObject` (F2)
+### ⛔ PIVOTAL BLOCKER (confirmed 2026-06-07): `WorldPosition` class-vs-struct fork
 
-`VisibleObject` directly needs:
-- `AionObject` ✅
-- `ObjectDeleteAnimation` ✅
-- `VisibleObjectTemplate` ✅
-- `SpawnTemplate` ✅
-- `WorldMapTemplate` ✅ (`f2d0c1f35`)
-- `WorldPosition` — **MISSING** (needs `WorldMapInstance` / `MapRegion`)
-- `World` / `WorldMap` / `WorldMapInstance` — **MISSING**
-- `KnownList` — **MISSING**
+`VisibleObject` (F2, the next spine node) holds a `WorldPosition` and calls `getMapRegion()`, `getWorldMapInstance()`, `isSpawned()`, `setPosition()`, `getInstanceId()`. The faithful Java `WorldPosition` is a **mutable class** that:
+- holds a mutable `MapRegion` reference + `isSpawned` flag,
+- **derives** `instanceId` from `mapRegion.getParent().getInstanceId()` (not stored),
+- exposes `setMapRegion/setXYZH/setZ/setH/setIsSpawned`.
+
+The existing C# `World/WorldPosition.cs` is the opposite design — a **`readonly record struct`** `(int WorldId, float X, float Y, float Z, byte Heading, int InstanceId = 1)`: immutable value type, **InstanceId stored**, copied via `with { … }`, no `MapRegion`/`isSpawned` concept. It was built for the packet path.
+
+**Blast radius (measured):** 64 files reference `WorldPosition`; ~273 reads of `.WorldId`, ~101 of `.InstanceId`, ~72 of `.Heading`; multiple `portalLocation with { InstanceId = … }` expressions; services that store/compare a literal `InstanceId` on a position (e.g. `InstanceRuntimeService`, `PlayerTeleportService`, `WorldNpcSpawnService`). Replacing the struct with the Java class is **not** a pure rename: value→reference semantics, `with`→constructor, and **stored→derived InstanceId** all change behavior, not just syntax.
+
+No-defer forbids stubbing past it; foundation-first forbids skipping it. So this is a genuine fork that must be decided before F2 can proceed. Candidate strategies:
+- **A. Big-bang replace** — delete the struct, port the Java `WorldPosition` class into the same namespace, and fix all 64 files (convert `with` to setters, reconcile stored-vs-derived InstanceId). One large, behavior-affecting commit.
+- **B. Strangler / parallel** — port the Java class under a distinct name/namespace for the new spine, leave the struct for the legacy packet path, migrate callers incrementally. Risk: two `WorldPosition` types; guardrail matches by Java name (the spine one should own the name).
+- **C. Adapter** — keep the struct as a pure coordinate value, and put `MapRegion`/`isSpawned`/derived-InstanceId on `VisibleObject` itself (where Java keeps them on the position). Diverges from 1:1 field placement.
+
+Recommendation pending user decision (this was pre-flagged in F4 as "big-bang vs gradual/strangler"). **Until decided, do not start F2.**
+
+### Remaining path to `VisibleObject` (F2) once unblocked
+
+`VisibleObject` directly needs (besides `WorldPosition`):
+- `AionObject` ✅, `ObjectDeleteAnimation` ✅, `VisibleObjectTemplate` ✅, `SpawnTemplate` ✅, `WorldMapTemplate` ✅
+- `World` / `WorldMap` / `WorldMapInstance` / `MapRegion` — **MISSING** (large spatial-container cluster; needs `ThreadPoolManager`, `ZoneService`, `QuestEngine`, `Creature`, `Player`)
+- `KnownList` (+`KnownObject`) — **MISSING** (needs `Npc`, `Pet`, `Player`, `MapRegion`, `WorldPosition`, `PositionUtil` game-object overloads)
 - `VisibleObjectController` — **MISSING** (needs `RespawnService` + `GeoService`)
 
-**Geometry + zone-template batch** ✅ (commit `0d4cacf69`):
-- `Point2D`, `AreaType`, `Cylinder`, `Sphere`, `Semisphere`, `Points`, `ZoneTemplate`, `ZoneInfo` — zone template data classes
-- `Point3D`, `Area`, `AbstractArea`, `RectangleArea`, `CylinderArea`, `SphereArea`, `SemisphereArea`, `Polygon2D`, `PolyArea` — geometry package
-- `WorldConfig`, `PositionUtil` (pure coord methods)
+**Creature (F3) sub-blocker:** `Creature`'s *fields* (not just upward behavior) are `AbstractAI`, `CreatureGameStats`, `CreatureLifeStats`, `EffectController`, `CreatureMoveController`, `ObserveController`, `AggroList`, `TransformModel`, `Skill` — and Creature's own methods call them (`isDead()`→lifeStats, `canAttack()`→effectController, ctor news `ObserveController`/`AggroList`/`AIEngine.newAI`). These are **downward** deps of Creature, so a faithful Creature compile pulls in the AI/stats/effects/skill/movement subsystems. This is the second large fork (how much of those subsystems to port as the Creature foundation) and should be scoped right after the `WorldPosition` decision.
 
-**Then the F2-F5 world-object circular cluster** (must be one large batch — all circularly reference each other within the same assembly):
-4. `ZoneInstance` (needs `Creature`, which needs full spine)
-5. `InstanceHandler` (interface) + `GeneralInstanceHandler`
-6. `GeneralTeam` abstract
-7. `StaticDoor`, `Pet`
-8. `WorldMap` + `WorldPosition` + `MapRegion` + `WorldMapInstance` (abstract)
-9. `VisibleObjectController` abstract, `KnownList`
-10. `VisibleObject` (F2), `Creature` + `CreatureController` (F3)
-11. `Npc` + `NpcController` (F5), reparent `Player` → `Creature` (F4)
-12. `PositionUtil`, `World` singleton, `RespawnService`, `GeoService`
+### F2-F5 world-object circular cluster (one large batch, once unblocked)
+- `WorldPosition` (class) + `MapRegion` + `WorldMap` + `WorldMapInstance` (abstract) + factory/2D/3D instances
+- `ZoneInstance`, `ZoneHandler`/`AdvancedZoneHandler` interfaces, `InstanceHandler`/`GeneralInstanceHandler`
+- `GeneralTeam` abstract; `KnownList` + `KnownObject`; `VisibleObjectController`
+- `VisibleObject` (F2); `Creature` + `CreatureController` (F3); `StaticObject`/`StaticDoor`; `Npc` + `NpcController` (F5); `Pet`
+- reparent `Player` → `Creature` (F4); `World` singleton; `RespawnService`, `GeoService`, `ThreadPoolManager`; `PositionUtil` game-object overloads
 
 Fidelity Gate only (foundation/additive). Validation: `dotnet build src/Aion.GameServer` + guardrail after each batch commit.
 
-- **Before F4** (reparent flat `Player` → `Creature`, 329 files), surface the strategy decision (big-bang vs gradual). F2/F3 do not depend on it.
-
 ## Blockers / risks
+
+- **⛔ `WorldPosition` class-vs-struct fork blocks all further spine progress** — see the PIVOTAL BLOCKER section above. Needs a user strategy decision before F2.
 
 - **The biggest slop clusters (BindPointTeleport, and likely FindGroup, WorldNpc, PlayerKnown, summons, vortex) are substrate-blocked** — they fake unported runtime (teleport, controller tasks, KnownList, scheduler). Don't attempt them top-down by file count; port substrate first (Track 1) or pick Track 2 units.
 - Golden harness covers deterministic, constructor-driven packets and pure formulas only; singleton/time-dependent packets need a deterministic config harness first.
