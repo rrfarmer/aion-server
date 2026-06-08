@@ -4,12 +4,24 @@ The single rolling state doc. Updated **in place** every Unit of Work — keep i
 
 Last updated: 2026-06-08
 
+## ⏯️ RESUME HERE (cold-start — read this first)
+
+**You are mid-way through the object-spine big-bang on a branch. Pick up the dedicated core-convergence push.**
+
+1. **Branch:** `git checkout feature/object-spine-bigbang` (work happens here; `main` is the green baseline — do NOT commit core WIP to `main`). Confirm with `git branch --show-current`.
+2. **Mode:** `/loop` dynamic, **60-second** cadence (user wants minimal dead time). Each iteration: port the next faithful unit(s), run guardrail, commit, update this doc, then `ScheduleWakeup delaySeconds:60` with the verbatim `/loop` prompt.
+3. **What's done:** ~70 files of the spine cone are ported (leaf phase COMPLETE; see "leaf progress"). The **F3 core push** has started: `Utils/AtomicBoolean`, `CreatureMoveController`, `TransformModel`.
+4. **What's left = the indivisible core convergence** (see "BIG-BANG IN PROGRESS" + "REMAINING core convergence" below): `Effect`/`EffectTemplate`(+~170 subclasses), `Skill`/`SkillTemplate`(+action/condition/property/periodic sub-cones), stats containers, `EffectController`/`ObserveController`/`AggroList`/`AbstractAI`/`AIEngine`, `Creature`+`CreatureController`, `Npc`/`Pet`/`Static*`, spatial container, **reparent flat `Player`→`Creature` (F4)**, reconcile packet ctors to Creature/Npc + add `PacketSendUtility`. **Core + F4 are ONE convergence** (spine classes do `is Player`/`is Npc` and call container/Effect/Skill APIs). Branch stays RED until it all compiles together; then build green + guardrail + golden → merge to `main`.
+5. **Next concrete action:** continue porting core container classes faithfully (suggested order: stats containers `CreatureGameStats`/`CreatureLifeStats` → `ObserveController` → `AggroList` → `EffectController` → `AbstractAI`/`AIEngine` → then `Creature`+`CreatureController` → `Npc`/`Pet`/`Static*` → Effect/Skill engines → Player reparent + packet reconciliation). Forward-ref not-yet-ported types/packets by their faithful Java names so they line up at convergence.
+6. **Per-unit loop:** read the Java file fully → port 1:1 (NO gaps/stubs) → `dotnet build src/Aion.GameServer` (RED expected on branch; just confirm no NEW non-forward-ref errors in files you wrote) → `python scripts/parity/check_fidelity.py` (must stay 363/5) → `git -c user.name="rrfarmer" -c user.email="ryanfarmer@mac.com" commit --author="rrfarmer <ryanfarmer@mac.com>"` (NO AI co-author) → update this doc.
+7. **Conventions/gotchas (apply consistently):** XML data classes use **public properties** (C# XmlSerializer needs public; Java `@XmlAccessorType(FIELD)`). `getType()`→a `Type` property or `GetTypeValue()` (never a `GetType()` method/extension — clashes with `Object.GetType()`). `afterUnmarshal`→`AfterUnmarshal()` method. Java annotations→C# attributes. SCREAMING_SNAKE preserved for `@XmlEnum`/data-bound enums. `System.currentTimeMillis()`→`DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()`. Java enums-with-data → C# enum + extension class (data in dictionaries).
+
 ## Current position
 
 - Phase 6, **re-baselined** to the Port Fidelity & Remediation Plan (`docs/Port-Fidelity-Remediation-Plan.md`). Earlier Phase-6 work is behaviorally faithful but structurally slop (plan-service sprawl + a god-class `GameServerConnection.cs`); being re-ported to 1:1 Java fidelity.
 - **Phase A (foundation): DONE except formula golden capture.** Golden packet pipeline proven (Java generator → `parity-artifacts/golden/packets/`; C# `GoldenPacketFixtureTests` asserts byte-for-byte). Structural audit + fidelity guardrail (`scripts/parity/check_fidelity.py`, baseline 363 slop / 6 god-classes, in CI) done. **TODO: formula golden capture not built** (last foundation item).
-- Build: C# GameServer green (nullable warnings only).
-- **Active work: building the missing object-model spine bottom-up** (see below).
+- Build: `main` is green (nullable warnings only). The **`feature/object-spine-bigbang` branch is RED BY DESIGN** during the core convergence (see RESUME HERE) — that is expected, not a regression.
+- **Active work: the object-spine big-bang core convergence on the branch** (see RESUME HERE + below).
 
 ## Direction: FOUNDATION-FIRST (bottom-up), 1:1 Java
 
