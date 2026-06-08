@@ -64,6 +64,16 @@ All green (build + guardrail 363/6):
 | `f2d0c1f35` | **World infrastructure batch — 6 files** (see below) |
 | `0d4cacf69` | **Geometry + zone-template batch — 19 files** (see below) |
 | `22e208019` | **Creature spine prerequisites — 6 zero-dep files** (see below) |
+| `b16f2db8c` | docs: Fidelity Doctrine rule 8 (conflicts default to 1:1 Java; replace existing) |
+| `3994a5c75` | **Stats/skill enum leaves — StatEnum, SkillElement, ItemAttackType, AbnormalState** |
+
+### Commit `3994a5c75` — Stats/skill enum leaves (4 files)
+
+First batch of the **Creature SCC cone** (see "Strategy resolved" below), all dependency-free leaves:
+- `Model/Stats/Container/StatEnum` — full stat-id enum (SCREAMING_SNAKE_CASE for XML); per-constant `itemStoneMask`+`sign` and static `GetModifier` in `StatEnumExtensions`
+- `Model/SkillElement` — element→resistance-stat via `GetStatForElement()`
+- `Model/Templates/Item/ItemAttackType` — `IsMagical()`/`GetMagicalElement()`
+- `SkillEngine/Effect/AbnormalState` — bit-flag + compound masks; `int` base preserves `SANCTUARY=1<<31`
 
 ### Commit `22e208019` — Creature spine prerequisites (6 zero-dep files)
 
@@ -158,9 +168,20 @@ Algorithm each turn: from the in-scope spine, pick a unit whose dependencies **a
 
 All dependency-free leaves of the spine are now ported. The next node is `VisibleObject` (F2) — and it is **BLOCKED on a pivotal architectural decision** (see below). The zero-dep leaf supply is exhausted; we cannot make further bottom-up progress on the spine without resolving the `WorldPosition` fork.
 
-### ⛔ PIVOTAL BLOCKER (confirmed 2026-06-07): `WorldPosition` class-vs-struct fork
+### ✅ STRATEGY RESOLVED (user, 2026-06-07): big-bang replace + SCC-leaves-first
 
-`VisibleObject` (F2, the next spine node) holds a `WorldPosition` and calls `getMapRegion()`, `getWorldMapInstance()`, `isSpawned()`, `setPosition()`, `getInstanceId()`. The faithful Java `WorldPosition` is a **mutable class** that:
+**Decision:** the `WorldPosition` fork (below) is resolved by **big-bang replace** — port the faithful Java `WorldPosition` class and fix all consumers. New permanent doctrine (Plan rule 8 / memory): *conflicts default to 1:1 Java parity, replacing existing C# code; a genuine C#-vs-Java foundational language difference instead takes the closest-to-1:1 path.* struct-vs-class is a C# idiom choice → class wins.
+
+**Execution insight:** the big-bang `WorldPosition` swap is the **CLOSING move** of the Creature SCC, not the next move. The SCC (`VisibleObject ↔ Creature ↔ World/MapRegion/WorldMapInstance/WorldPosition ↔ KnownList ↔ subsystems`) only reaches a green build once it fully closes (single assembly → partial SCC = red). But its **leaves are dependency-free and ported bottom-up, green each batch**, until only the tightly-coupled core remains for one final big-bang commit (which includes the struct→class swap + 64-file migration). So the loop stays productive without further decisions.
+
+**Creature SCC cone — leaf progress:**
+- ✅ `CreatureState`, `CreatureVisualState`, `TaskId`, `NpcObjectType`, `CreatureTemplate`, `RegionZone` (commit `22e208019`)
+- ✅ `StatEnum`, `SkillElement`, `ItemAttackType`, `AbnormalState` (commit `3994a5c75`)
+- ⏭️ NEXT leaves to port (verify deps first): stat helper types (`StatOwner`/`Stat2`/modifiers), `TransformType`+`TransformModel`-prereqs, `NpcEquippedGear`, AI enums (`AISubState`, `AIState`), movement enums, `Skill`/`SkillTemplate` cone. Keep porting until only `VisibleObject`/`Creature`/`World*`/`MapRegion`/`KnownList`/controllers + stats/effect/ai/move *containers* remain → final big-bang.
+
+### ⛔ The `WorldPosition` class-vs-struct fork (resolved above; details retained)
+
+`VisibleObject` (F2) holds a `WorldPosition` and calls `getMapRegion()`, `getWorldMapInstance()`, `isSpawned()`, `setPosition()`, `getInstanceId()`. The faithful Java `WorldPosition` is a **mutable class** that:
 - holds a mutable `MapRegion` reference + `isSpawned` flag,
 - **derives** `instanceId` from `mapRegion.getParent().getInstanceId()` (not stored),
 - exposes `setMapRegion/setXYZH/setZ/setH/setIsSpawned`.
@@ -174,7 +195,7 @@ No-defer forbids stubbing past it; foundation-first forbids skipping it. So this
 - **B. Strangler / parallel** — port the Java class under a distinct name/namespace for the new spine, leave the struct for the legacy packet path, migrate callers incrementally. Risk: two `WorldPosition` types; guardrail matches by Java name (the spine one should own the name).
 - **C. Adapter** — keep the struct as a pure coordinate value, and put `MapRegion`/`isSpawned`/derived-InstanceId on `VisibleObject` itself (where Java keeps them on the position). Diverges from 1:1 field placement.
 
-Recommendation pending user decision (this was pre-flagged in F4 as "big-bang vs gradual/strangler"). **Until decided, do not start F2.**
+**Resolved: option A (big-bang replace).** Executed as the closing move of the Creature SCC (see "Strategy resolved" above).
 
 ### Remaining path to `VisibleObject` (F2) once unblocked
 
