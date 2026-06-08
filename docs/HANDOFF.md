@@ -62,6 +62,7 @@ All green (build + guardrail 363/6):
 | `c11e46d09` | `model/templates/spawns/SpawnSpotTemplate` |
 | `7e8906376` | **F2 spawn-data circular cluster — 50 files** (see below) |
 | `f2d0c1f35` | **World infrastructure batch — 6 files** (see below) |
+| `0d4cacf69` | **Geometry + zone-template batch — 19 files** (see below) |
 
 ### Commit `7e8906376` — F2 spawn-data circular cluster (50 files)
 
@@ -101,6 +102,31 @@ Entire mutually-referential cluster ported as one batch:
 - TODO-backlog: `GlobalDropItem` DataManager.ITEM_DATA validation — needs DI DataManager in load pipeline
 - TODO-backlog in `SpawnsData`: saveSpawn, getNearestSpawnByNpcId, getFirstSpawnByNpcId, getRelativePath, loadSpawnsFromTemplateFiles, findSpawnTemplate, positionMatches, getNearestSpawn, toSpawnSearchResult (all need VisibleObject/Player/WorldMapInstance)
 
+### Commit `0d4cacf69` — Geometry + zone-template batch (19 files)
+
+Zone template data classes (`Model/Templates/Zone/`):
+- `Point2D` — float x/y XML attribute pair
+- `AreaType` — Polygon/Cylinder/Sphere/Semisphere enum
+- `Cylinder`, `Sphere`, `Semisphere` — XML geometry descriptors
+- `Points` — polygon boundary points list with top/bottom Z
+- `ZoneTemplate` — full XML zone descriptor; `name` attr → `ZoneName.CreateOrGet()`; `ZoneClassName.Sub` default
+- `ZoneInfo` — `Area` + `ZoneTemplate` container pair
+
+Geometry package (`Model/Geometry/`):
+- `Point3D` — float x/y/z, `ICloneable`, `GetHashCode` matching Java `(int)(result * 100)`
+- `Area` — interface (all `IsInside2D/3D`, `IsInsideZ`, `GetDistance2D/3D`, `GetClosestPoint`, `IntersectsRectangle`)
+- `AbstractArea` — base implementation, `GetClosestPoint(float,float,float)` z-clamping
+- `RectangleArea` — axis-aligned rect; `GetClosestPoint` via four edge walk; `IntersectsRectangle` is stub (Java TODO preserved)
+- `CylinderArea` — circular cylinder; all geometry via `PositionUtil` pure methods
+- `SphereArea` — sphere; 2D methods `@Deprecated` (return false/0/null matching Java)
+- `SemisphereArea` — upper half-sphere extending `SphereArea`; `virtual` on overridden methods
+- `Polygon2D` — float polygon; ray-casting (even-odd) for `Contains()` matches `GeneralPath.WIND_EVEN_ODD`; edge-intersection for `Intersects()`; rendering TODO-backlog
+- `PolyArea` — free-form polygon area using `WorldConfig.WorldRegionSize`
+
+Support:
+- `Configs/Main/WorldConfig` — static with Java default values; TODO-backlog config-framework loading
+- `Utils/PositionUtil` — pure coordinate methods only (2D/3D distance, angle/heading, `GetClosestPointOnSegment`, `NormalizeAngle`); game-object-aware methods TODO-backlog at F2/F3
+
 ### Commit `f2d0c1f35` — World infrastructure batch (6 files)
 
 Zero-dep preparatory batch ahead of the F2-F5 world-object spine:
@@ -134,10 +160,10 @@ World infrastructure batch — **DONE** (commit `f2d0c1f35`).
 - `KnownList` — **MISSING**
 - `VisibleObjectController` — **MISSING** (needs `RespawnService` + `GeoService`)
 
-**Next preparatory batch: geometry + zone templates** (zero- or near-zero-dep; needed by ZoneInstance → WorldMapInstance):
-1. Geometry package — `Point3D`, `Plane3D`, `Polygon2D`, `AbstractArea`, `RectangleArea`, `CylinderArea`, `PolyArea`, `SphereArea`, `SemisphereArea`
-2. `ZoneTemplate` (needs geometry types + `AreaType` enum + `ZoneClassName` ✅ + `ZoneType` ✅)
-3. `ZoneInfo` (needs `ZoneTemplate`)
+**Geometry + zone-template batch** ✅ (commit `0d4cacf69`):
+- `Point2D`, `AreaType`, `Cylinder`, `Sphere`, `Semisphere`, `Points`, `ZoneTemplate`, `ZoneInfo` — zone template data classes
+- `Point3D`, `Area`, `AbstractArea`, `RectangleArea`, `CylinderArea`, `SphereArea`, `SemisphereArea`, `Polygon2D`, `PolyArea` — geometry package
+- `WorldConfig`, `PositionUtil` (pure coord methods)
 
 **Then the F2-F5 world-object circular cluster** (must be one large batch — all circularly reference each other within the same assembly):
 4. `ZoneInstance` (needs `Creature`, which needs full spine)
