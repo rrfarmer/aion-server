@@ -265,3 +265,4 @@ Branch `feature/object-spine-bigbang`, guardrail green every commit. Cones compl
 - **ai SummonGroup(79L)+Percentage+Summons** DONE (npcId/xyz/h/min-maxCount/distance/schedule; afterUnmarshal→AfterUnmarshal(parent) validates min/max; Percentage→List<SummonGroup>; Summons→List<Percentage>). ai summon-template chain complete.
 - **QueuedNpcSkillTemplate** (: NpcSkillTemplate; 3 ctor overloads, prob=100, NpcSkillTargetAttribute.MOST_HATED) + **QuestTarget** (enum NONE/AREA/LEAGUE/ALLIANCE) + **DoorRepairStone** (static_id/door_id). All deps green.
 - **ItemPart (itemset) + BountyTemplate (bounty) + IGSubCategory (ingameshop)** DONE — clean leaves. MultiReturnItem still pending ReturnLocList leaf.
+- **QuestCategory** (enum 13 values) + **purification/RequiredMaterial** (item_id/item_count) DONE. item ReturnLocList/MultiReturnItem chain pending ResultedItem (→ResultedItemsCollection→ReturnLocList→MultiReturnItem; RandomItem green).
