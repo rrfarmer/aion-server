@@ -270,3 +270,4 @@ Branch `feature/object-spine-bigbang`, guardrail green every commit. Cones compl
 - **item ResultedItemsCollection + ReturnLocList(: it) + MultiReturnItem** DONE — item-result/return-loc chain complete (items/random_item; index/worldid/desc/alias; id/return_loc list). getItems/getRandomItems null→empty list.
 - **MailPartType(enum+ext)/IMailFormatter(interface, getType()→GetType_())/TradeNpcType(enum+ext Index() 1-5)/SiegeLegionReward/FinishedQuestCond** DONE. StreamLocations deferred (needs Location2D leaf, MISSING).
 - **FlyPathType(enum+ext GetId=(int)t) + Location2D + StreamLocations** DONE (windstreams; id/state/fly_path; location list null→new). NEXT windstreams: WindstreamTemplate.
+- **WindstreamTemplate** ([XmlType("WindFlight")]; locations/mapid) DONE — **windstreams cone COMPLETE** (FlyPathType/Location2D/StreamLocations/WindstreamTemplate).
