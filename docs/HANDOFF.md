@@ -272,3 +272,4 @@ Branch `feature/object-spine-bigbang`, guardrail green every commit. Cones compl
 - **FlyPathType(enum+ext GetId=(int)t) + Location2D + StreamLocations** DONE (windstreams; id/state/fly_path; location list null→new). NEXT windstreams: WindstreamTemplate.
 - **WindstreamTemplate** ([XmlType("WindFlight")]; locations/mapid) DONE — **windstreams cone COMPLETE** (FlyPathType/Location2D/StreamLocations/WindstreamTemplate).
 - **ChallengeType(enum+ext GetId/Value/FromValue)/KeyItem(item_ids space-sep+count)/OpenRift(schedule/spawnGuards)/MeshMaterial(only GetZoneName exposed)** DONE — clean leaves.
+- **MailMessage (enum+ext GetId=(int)t, ids 0-6=ordinals) + walker RouteParent (version list + id)** DONE. PortalUse/ItemPurificationTemplate pending PortalPath/PurificationResult leaves; EventGroup/MedalGroup pending BonusItemGroup (itemgroups/StaticData deep cone — deferred).
