@@ -188,3 +188,20 @@ Fidelity Gate (foundation/additive): `dotnet build src/Aion.GameServer` + `pytho
 - Big slop clusters (BindPointTeleport, FindGroup, WorldNpc, PlayerKnown, summons, vortex) are **substrate-blocked** — they fake unported runtime; don't attempt top-down by file count. Port substrate first.
 - Golden harness covers deterministic, constructor-driven packets + pure formulas only; singleton/time-dependent packets need a deterministic config harness first.
 - `check_fidelity.py` matches by simple (normalized) class name — a faithful port named differently from its Java class can trip it; fix by matching the Java name, not by editing the baseline.
+
+---
+## SESSION PROGRESS — bottom-up red-frontier cones (rrfarmer autonomous /loop)
+Branch `feature/object-spine-bigbang`, guardrail green every commit. Cones completed this run (all faithful 1:1, deep service/packet/AI/DataManager deps remain RED by design):
+- **Item-action cone COMPLETE** — all 33+ AbstractItemAction subtypes (Skill/Ride/Dye/Decompose last).
+- **Item-service cone** — ItemService(209L), ItemPacketService(237L: ItemAdd/Update/DeleteType), ItemFactory, ExpireTimerTask.
+- **Summon controller cone** — PlayerAggroList, SummonMode/SkillOrder/UnsummonType, PlayableMoveController/SummonMoveController/SiegeWeaponMoveController, SummonController, SiegeWeaponController, SummonsService.
+- **Gameobject-controller set** — NpcController(340L)/PetController/StaticObjectController/GatherableController(204L) (+Summon/SiegeWeapon).
+- **Taskmanager cone** — AbstractPeriodic/AbstractFIFOPeriodic bases + PlayerMoveTaskManager/MoveTaskManager/MovementNotifyTask/TeamMoveUpdater/ExpireTimerTask.
+- **Config cone COMPLETE (all referenced)** — AI/Custom/Admin/Security/Craft/Group/Legion/Logging/HTML/Membership/Siege/GS/Rates/Punishment.
+- **Audit cone** — AuditLogger/AutoBan/GMService/PunishmentConfig; +ChatUtil.Name(Player) overload, AdminConfig byte→sbyte.
+- **Quest value cone** — QuestStatus/QuestEnv/QuestState/QuestVars.
+- **Gather cone** — GatherableTemplate/Materials/ExMaterials/Material + GatheringTask + AbstractInteractionTask/AbstractCraftTask (+ScheduledTask.IsCancelled).
+- **Drop/loot cone** — Drop/DropItem/DropNpc + LootGroupRules/LootRuleType/InRoll.
+- **Team/group/alliance/league cone COMPLETE** — Predicates, GeneralTeam, TemporaryPlayerTeam, PlayerGroup(+Member/Stats), PlayerAlliance(+Group/Member), League(+Member), TeamType, PlayerMode.
+- **Gameobjects** — Letter, Kisk(214L), DropNpc; services KiskService, PunishmentService, ChatBanService, BannedMacManager(+gameserver BannedMacEntry); npcskill cone (NpcSkillTemplates/Template/Condition/Spawn + enums); NpcTemplate(329L)+NpcEquippedGear; SkillEngine.Task chain; AILogger; FollowStartService/FollowSummonTaskAI; TradeItem/TradePSItem.
+**Recurring idioms applied:** enum-with-fields→class-enum or enum+extension(GetType→GetTypeValue/GetType_); Java pkg-private→internal; ConcurrentLinkedDeque→LinkedList (concurrency caveat); CopyOnWriteArrayList→List; AionServerPacket→GameServerPacket; Predicate/Consumer/Function→System.Predicate/Action/Func; TemporaryPlayerTeam<?> wildcard→bound generic (covariance caveat); Java byte→sbyte where signed. **Tier-4 bridges still RED:** World.GetInstance()/UpdatePosition, IDFactory.GetInstance(), PacketSendUtility, SM_* packets, Quartz.CronExpression, most DAOs, DialogService/TeleportService/DropService/RespawnService (big services). DEFERRED: CAPTCHAUtil (java.awt image-lib, joins GeoWorldLoader), DecomposeAction done, QuestTemplate(389L, ~14 sub-deps).
