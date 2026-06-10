@@ -1124,3 +1124,6 @@ Ported network/aion/serverpackets/SM_ALLIANCE_MEMBER_INFO (166L): per-PlayerAlli
 
 ## 2026-06-10 — SM_ALLIANCE_INFO
 Ported network/aion/serverpackets/SM_ALLIANCE_INFO (185L): alliance/league info — leader/4 vice-captains, full loot rules (alliance + league), team type/subType, 4 group slots, league captain blocks. Private inner AllianceInfo POJO -> nested class (getters/setters PascalCase). getTeamType().getType()->GetType_() collision. 4 ctors chained. PlayerAlliance/League/LootGroupRules red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_ALLIANCE_READY_CHECK
+Ported network/aion/serverpackets/SM_ALLIANCE_READY_CHECK (25L): alliance ready-check status (player objId + status code). Guardrail green.
