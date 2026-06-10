@@ -1622,3 +1622,6 @@ Ported CM_RESTORE_CHARACTER (-Nemesiss- — cancel pending char deletion via Pla
 
 ## 2026-06-10 — CM_GF_WEBSHOP_TOKEN_REQUEST + CM_IN_GAME_SHOP_INFO
 Ported CM_GF_WEBSHOP_TOKEN_REQUEST (Artur — empty webshop token reply, started w/ -st) and CM_IN_GAME_SHOP_INFO (xTz/KID — shop actions 0x01 item / 0x02 category set / 0x04 list / 0x08 showcat+sub / 0x10 balance (SM_TOLL_INFO) / 0x20 buy / 0x40 gift via InGameShopEn). InGameShopEn/SM_IN_GAME_SHOP_*/SM_TOLL_INFO red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_MAY_LOGIN_INTO_GAME + CM_TIME_CHECK_QUIT
+Ported CM_MAY_LOGIN_INTO_GAME (-Nemesiss- — reply SM_MAY_LOGIN_INTO_GAME) and CM_TIME_CHECK_QUIT (Rolandas — trivial CM_TIME_CHECK subclass, behaviour inherited). SM_MAY_LOGIN_INTO_GAME red-tolerated. Guardrail green.
