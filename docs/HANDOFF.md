@@ -1043,3 +1043,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpacket SM_LEGION_EDIT (Simple; legion update by type - level/ranking/permissions/contrib/wh-kinah/announcement/disband/recover). Converges AbyssPointsService/AbyssRankingCache. switch-on-type; Legion.Announcement record accessors; Timestamp.getTime()/1000->ToUnixTimeMilliseconds()/1000. Guardrail green.
+
+## 2026-06-10
+- Ported 3 tiny network serverpackets: SM_PONG (ping response), SM_AFTER_SIEGE_LOCINFO_475 (Ritsu; empty siege locinfo), SM_MAY_LOGIN_INTO_GAME (-Nemesiss-; login ok response). Guardrail green.
