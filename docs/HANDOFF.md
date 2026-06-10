@@ -1214,3 +1214,6 @@ Ported network/aion/serverpackets/SM_LEGION_DOMINION_RANK (42L, Yeats): legion-d
 
 ## 2026-06-10 — SM_LEARN_RECIPE + SM_ICON_INFO
 Ported 2 small serverpackets: SM_LEARN_RECIPE (recipeId) and SM_ICON_INFO (buffId + display flag). Guardrail green.
+
+## 2026-06-10 — SM_ITEM_COOLDOWN + SM_INVENTORY_ADD_ITEM
+Ported 2 item serverpackets: SM_ITEM_COOLDOWN (per-item reuse cooldown; currentTimeMillis->DateTimeOffset, Map.entrySet->KeyValuePair) and SM_INVENTORY_ADD_ITEM (add mask + per-item info blob via ItemInfoBlob.GetFullBlob.WriteMe(GetBuf()); ItemAddType aliased from ItemPacketService, ITEM_COLLECT/PARTIAL_WITH_SLOT slot logic). ItemCooldown/Item/ItemInfoBlob/ItemStorage red-tolerated. Guardrail green.
