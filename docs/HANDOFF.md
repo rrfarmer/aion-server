@@ -1031,3 +1031,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpacket SM_MOVE (-Nemesiss-; creature movement broadcast - position/heading/mask, manual target vector, glide/geyser, vehicle). Converges AntiHackService. CreatureMoveController<?>/PlayableMoveController<?>-><Creature> invariance bound; instanceof->is; pmc public fields red-tolerated. Guardrail green.
+
+## 2026-06-10
+- Ported network serverpacket SM_MESSAGE (-Nemesiss-/Sweetkr/Neon, 150L; chat/system message - sender id/name/race-filter, type, shout coords, hardcap truncation; 4 ctors). Converges SystemMailService/MailService/PlayerEnterWorldService/FindGroupService. instanceof->is; getName(true)/isSysMsg/getId->PascalCase; substring->Substring. ChatType/AbnormalState red-tolerated. Guardrail green.
