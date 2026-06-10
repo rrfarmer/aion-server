@@ -1127,3 +1127,6 @@ Ported network/aion/serverpackets/SM_ALLIANCE_INFO (185L): alliance/league info 
 
 ## 2026-06-10 — SM_ALLIANCE_READY_CHECK
 Ported network/aion/serverpackets/SM_ALLIANCE_READY_CHECK (25L): alliance ready-check status (player objId + status code). Guardrail green.
+
+## 2026-06-10 — SM_FORTRESS_INFO + SM_FORTRESS_STATUS
+Ported 2 fortress serverpackets: SM_FORTRESS_INFO (locationId + teleport flag) and SM_FORTRESS_STATUS (next-state countdown, elyos/asmo/balaur influence rates, per-world influence by SiegeRace, per-fortress next state). FortressLocation/Influence/SiegeRace/SiegeService red-tolerated. Opens fortress/siege packet group. Guardrail green.
