@@ -1529,3 +1529,6 @@ Ported CM_PRIVATE_STORE (Simple — read TradePSItem[] (objId/itemId/count/price
 
 ## 2026-06-10 — CM_READ_MAIL + CM_READ_EXPRESS_MAIL
 Ported CM_READ_MAIL (kosyachok — MailService.ReadMail) and CM_READ_EXPRESS_MAIL (antness/Guapo — action 0 close postman / 1 summon w/ express+blackcloud unread checks, already-summoned/in-flight/cooltime guards, VisibleObjectSpawner.SpawnPostman + 10-min EXPRESS_MAIL_USE task via ThreadPoolManager.Schedule lambda). MailService/VisibleObjectSpawner/ThreadPoolManager/LetterType/TaskId red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_GET_MAIL_ATTACHMENT + CM_SEND_MAIL
+Ported CM_GET_MAIL_ATTACHMENT (kosyachok — item(0)/kinah(1) attachment -> MailService.GetAttachments) and CM_SEND_MAIL (Aion Gates/xTz — send mail w/ item+kinah; getLetterTypeById -> LetterTypeExtensions.GetLetterTypeById). MailService/LetterType red-tolerated. Mail clientpacket cluster (CHECK_MAIL_LIST/UNK, DELETE_MAIL, READ_MAIL, READ_EXPRESS_MAIL, GET_MAIL_ATTACHMENT, SEND_MAIL) now complete. Guardrail green.
