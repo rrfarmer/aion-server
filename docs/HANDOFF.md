@@ -1541,3 +1541,6 @@ Ported CM_UNWRAP_ITEM (xTz — unwrap packed item: negate packCount, PersistentS
 
 ## 2026-06-10 — CM_FUSION_WEAPONS + CM_GODSTONE_SOCKET
 Ported CM_FUSION_WEAPONS (zdead/Wakizashi/Neon — compound 2 weapons at armsfusion officer, DialogAction.COMPOUND_WEAPON gate + audit; pairs with earlier CM_BREAK_WEAPONS) and CM_GODSTONE_SOCKET (ATracer — socket godstone into equipped weapon, Npc talk-range check, instanceof->is). ArmsfusionService/ItemSocketService/DialogAction red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_ITEM_PURIFICATION + CM_RECIPE_DELETE
+Ported CM_ITEM_PURIFICATION (FinalNovas/Navyan — purify/upgrade item: IsPurificationAllowed + DecreaseMaterials + UpgradeItem; 5 require-item obj ids read) and CM_RECIPE_DELETE (Rolandas — recipeList.DeleteRecipe). ItemPurificationService/RecipeList red-tolerated. Guardrail green.
