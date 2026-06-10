@@ -1307,3 +1307,6 @@ Ported network/aion/serverpackets/SM_QUEST_ACTION (124L, VladimirZ): quest ADD/U
 
 ## 2026-06-10 — SM_QUEST_REPEAT + SM_QUEST_COMPLETED_LIST
 Ported 2 quest serverpackets: SM_QUEST_REPEAT (repeatable quest ids) and SM_QUEST_COMPLETED_LIST (MrPoke/Neon — completed list rewrite/insert; Function<QuestState,Integer>->Func<QuestState,int>; -size&0xFFFF; Math.Min). QuestState red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_PRIVATE_STORE_NAME + SM_NEARBY_QUESTS
+Ported 2 serverpackets: SM_PRIVATE_STORE_NAME (objId + store message) and SM_NEARBY_QUESTS (MrPoke/Rolandas/Neon — nearby quest ids with notYetAvailableBit 1<<17; Map.entrySet->KeyValuePair; -size&0xFFFF). Player red-tolerated. Guardrail green.
