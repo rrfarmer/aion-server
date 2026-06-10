@@ -1040,3 +1040,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpackets SM_SKILL_LIST (MrPoke/ATracer/Neon; skill list silent/with-notify; converges PlayerEnterWorldService SplitList) + SM_ABYSS_RANK (Nemiroff; full abyss rank stats; converges AbyssPointsService/GloryPointsService/PlayerEnterWorldService). Integer->int?; Collections.singletonList->new List; SkillEntryWriter.writeSkillEntry(...,getBuf())->PascalCase. Guardrail green.
+
+## 2026-06-10
+- Ported network serverpacket SM_LEGION_EDIT (Simple; legion update by type - level/ranking/permissions/contrib/wh-kinah/announcement/disband/recover). Converges AbyssPointsService/AbyssRankingCache. switch-on-type; Legion.Announcement record accessors; Timestamp.getTime()/1000->ToUnixTimeMilliseconds()/1000. Guardrail green.
