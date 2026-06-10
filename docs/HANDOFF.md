@@ -1130,3 +1130,6 @@ Ported network/aion/serverpackets/SM_ALLIANCE_READY_CHECK (25L): alliance ready-
 
 ## 2026-06-10 — SM_FORTRESS_INFO + SM_FORTRESS_STATUS
 Ported 2 fortress serverpackets: SM_FORTRESS_INFO (locationId + teleport flag) and SM_FORTRESS_STATUS (next-state countdown, elyos/asmo/balaur influence rates, per-world influence by SiegeRace, per-fortress next state). FortressLocation/Influence/SiegeRace/SiegeService red-tolerated. Opens fortress/siege packet group. Guardrail green.
+
+## 2026-06-10 — SM_ABYSS_ARTIFACT_INFO3
+Ported network/aion/serverpackets/SM_ABYSS_ARTIFACT_INFO3 (34L): abyss artifact status list (locationId*10+1 + status value); 2nd ctor builds via SiegeService.GetArtifact. ArtifactLocation/SiegeService red-tolerated. Guardrail green.
