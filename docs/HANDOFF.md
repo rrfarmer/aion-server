@@ -1316,3 +1316,6 @@ Ported 2 serverpackets: SM_POSITION (Sweetkr — object objId + x/y/z + heading 
 
 ## 2026-06-10 — SM_LOOKATOBJECT + SM_MACRO_RESULT
 Ported 2 serverpackets: SM_LOOKATOBJECT (alexa026 — face target: objId/targetId/heading) and SM_MACRO_RESULT (xavier — create/delete static instances). VisibleObject red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_RECEIVE_BIDS + SM_PLASTIC_SURGERY
+Ported 2 serverpackets: SM_RECEIVE_BIDS (Rolandas — auction-changed notice) and SM_PLASTIC_SURGERY (IlBuono — surgery/gender-switch prompt via CM_CHARACTER_EDIT.CheckOrRemoveTicket). CM_CHARACTER_EDIT/Player red-tolerated. Guardrail green.
