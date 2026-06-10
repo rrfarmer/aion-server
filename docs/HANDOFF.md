@@ -1184,3 +1184,6 @@ Ported network/aion/serverpackets/SM_GM_SHOW_PLAYER_SKILLS (29L): GM view of a p
 
 ## 2026-06-10 — SM_HEADING_UPDATE + SM_KISK_UPDATE
 Ported 2 serverpackets: SM_HEADING_UPDATE (visible-object objId + heading) and SM_KISK_UPDATE (kisk objId/creator/useMask/member counts/resurrects/lifetime). VisibleObject/Kisk red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_GROUP_MEMBER_INFO
+Ported network/aion/serverpackets/SM_GROUP_MEMBER_INFO (143L): per-GroupEvent group member update (hp/mp/fp, position, class/gender/level, fly/mentor, abnormal effects for UPDATE_EFFECTS and ENTER/UPDATE). Same idioms as SM_ALLIANCE_MEMBER_INFO: field event->eventValue; SkillTargetSlot.ordinal()->Array.IndexOf(Enum.GetValues) x2; SkillTargetSlot.values()->Enum.GetValues x2; FULLSLOTS/GetId->SkillTargetSlotExtensions; GroupEvent switch labels qualified+stacked. Effect/PlayerGroup/WorldPosition red-tolerated. Opens group packet group. Guardrail green.
