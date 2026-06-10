@@ -1313,3 +1313,6 @@ Ported 2 serverpackets: SM_PRIVATE_STORE_NAME (objId + store message) and SM_NEA
 
 ## 2026-06-10 — SM_POSITION + SM_POSITION_SELF
 Ported 2 serverpackets: SM_POSITION (Sweetkr — object objId + x/y/z + heading teleport) and SM_POSITION_SELF (cura — self x/y/z + heading). VisibleObject red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_LOOKATOBJECT + SM_MACRO_RESULT
+Ported 2 serverpackets: SM_LOOKATOBJECT (alexa026 — face target: objId/targetId/heading) and SM_MACRO_RESULT (xavier — create/delete static instances). VisibleObject red-tolerated. Guardrail green.
