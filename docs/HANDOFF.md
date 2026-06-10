@@ -1598,3 +1598,6 @@ Ported CM_INSTANCE_INFO (nrg/Neon — leader instance-score info; updateType 1 s
 
 ## 2026-06-10 — CM_LEGION_HISTORY + CM_LEGION_DOMINION_REQUEST_RANKING
 Ported CM_LEGION_HISTORY (Simple/xTz/Sykra — page+type history; LegionHistoryAction.Type aliased (vs System.Type), Type.values()[i] ordinal -> Enum.GetValues<Type>()[i], REWARD brigade-general gate) and CM_LEGION_DOMINION_REQUEST_RANKING (Yeats — stonespear 1-6 ranking via LegionDominionService). LegionHistoryAction.Type/LegionDominionService/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_LEGION_MODIFY_EMBLEM + CM_LEGION_SEND_EMBLEM_INFO
+Ported CM_LEGION_MODIFY_EMBLEM (Simple/cura/Neon — store emblem id/argb/type; LegionEmblemType.DEFAULT.GetValue() ext, DEFAULT/CUSTOM; legion-member+id guard) and CM_LEGION_SEND_EMBLEM_INFO (cura — SM_LEGION_SEND_EMBLEM info-only, no EMBLEM_DATA). LegionEmblemType/LegionService/SM_* red-tolerated. Guardrail green.
