@@ -705,3 +705,6 @@ Ported skillengine/effect/CaseHealEffect (83L, kecimis) : AbstractHealEffect —
 
 ## 2026-06-10 — PolymorphEffect + DeformEffect (TransformEffect subclasses)
 Ported PolymorphEffect (sets transformModel tribe from NPC_DATA template on start, clears on end) and DeformEffect (DEFORM abnormal state + DEFORM_RESISTANCE calculate). Both converge on already-ported TransformEffect. Guardrail green (363/5). skillengine.effect: ~63 ported, ~88 remain (summon/shield/proc/abnormal-set families). Big services pending (Siege/Broker/Quest/Legion).
+
+## 2026-06-10 — SummonEffect base + SummonFunctionalNpcEffect + SummonGroupGateEffect
+Ported SummonEffect base (createSummon + DESPAWN ScheduledTask, removePetOrderUnSummonEffects) and two subclasses: SummonFunctionalNpcEffect (spawnFunctionalNpc, 300s delete) and SummonGroupGateEffect (newSingleTimeSpawn + spawnGroupGate, time*1000 despawn). Future→ScheduledTask, anonymous Runnable→async delegate. Guardrail green (363/5). skillengine.effect: ~66 ported, ~85 remain (SummonHomingEffect/SummonTrapEffect/SummonServantEffect/SummonSkillAreaEffect/shield/proc families). Big services pending (Siege/Broker/Quest/Legion).
