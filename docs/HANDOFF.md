@@ -968,3 +968,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported model/gameobjects/findGroup/GroupRecruitment (MrPoke; FindGroupEntry impl wrapping Player/team for the Recruit tab - class/level/name/size/race derivation, last-update). Converges FindGroupService recruitments dep (GroupApplication/ServerWideGroup already loop-ported). instanceof X x->is X x; TemporaryPlayerTeam<?>-><TeamMember<Player>>; currentTimeMillis/1000->UtcNow; getRace nullable Race?; field `object`->`obj` (C# keyword). Guardrail green.
+
+## 2026-06-10
+- Ported network/aion/serverpackets/SM_CONQUEROR_PROTECTOR (Source/xTz; conqueror/protector buff+cooldown / intruder-scan list / broadcast rank packet by type). Converges ConquerorAndProtectorService SM_CONQUEROR_PROTECTOR ctors (5 overloads). First network serverpacket ported in faithful style: extends AionServerPacket, writeImpl->WriteImpl(AionConnection) override, write* (WriteD/H/F/S/B) red-tolerated; switch fallthrough->stacked case labels; Collection->ICollection; static-import CHARNAME_MAX_LENGTH->using static. Network packet pillar is NOT in deferred list (only NIO connection layer is). Guardrail green.
