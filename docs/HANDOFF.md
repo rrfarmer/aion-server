@@ -1016,3 +1016,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpackets SM_CLOSE_QUESTION_WINDOW (Neon; close window + reason/params, params object[], field params->parameters keyword), SM_FRIEND_NOTIFY (Ben; friend login/out/delete), SM_REPURCHASE (xTz/KID; NPC repurchase list w/ ItemInfoBlob; converges RepurchaseService). Guardrail green.
+
+## 2026-06-10
+- Ported network serverpackets SM_QUESTION_WINDOW (Ben/avol/Lyahim/Neon; yes/no dialog by client-string code + 50 STR_* constants + params/sender/range; converges FindGroupService/Invasion/ItemChargeService) and SM_DELETE_ITEM (Avol; inventory item removal w/ delete mask; converges MailService). Object...->params object[]; params->parameters keyword; String.valueOf->ToString; IllegalArgument->Argument; ItemDeleteType alias. Guardrail green.
