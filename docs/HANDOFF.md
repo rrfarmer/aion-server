@@ -1418,3 +1418,6 @@ Ported 3 clientpackets: CM_CHECK_NICKNAME (-Nemesiss-/cura — nickname availabi
 
 ## 2026-06-10 — CM_COMPOSITE_STONES + CM_CHARGE_ITEM
 Ported CM_COMPOSITE_STONES (pixfid — combine 2 manastones via combination tool; protection/casting cancel, inventory lookups, CompositionAction.CanAct/Act) and CM_CHARGE_ITEM (ATracer — charge item list at target NPC via ItemChargeService.ChargeItems). PlayerRestrictions/CompositionAction/ItemChargeService red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_CHECK_MAIL_LIST + CM_CHECK_MAIL_UNK + CM_CHALLENGE_LIST
+Ported 3 clientpackets: CM_CHECK_MAIL_LIST (ginho1 — request mailbox list, expressOnly flag -> MailService.SendMailList), CM_CHECK_MAIL_UNK (ginho1 — empty no-op opcode), CM_CHALLENGE_LIST (Rolandas — legion/town challenge-task list via ChallengeTaskService w/ legion guard + audit). MailService/ChallengeTaskService/ChallengeType/AuditLogger red-tolerated. Guardrail green.
