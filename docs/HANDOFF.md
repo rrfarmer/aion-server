@@ -1109,3 +1109,6 @@ Ported 2 skill serverpackets: SM_SKILL_CANCEL (creature objId + skillId) and SM_
 
 ## 2026-06-10 — SM_SHIELD_EFFECT + SM_MANTRA_EFFECT
 Ported 2 effect serverpackets: SM_SHIELD_EFFECT (siege-location shield state list: locationId + underShield; 2nd ctor builds via SiegeService.GetSiegeLocation) and SM_MANTRA_EFFECT (mantra sub-effect: effector objId + subEffectId). SiegeLocation/SiegeService/Creature red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_SUMMON_USESKILL + SM_SUMMON_PANEL
+Ported 2 summon serverpackets: SM_SUMMON_USESKILL (summonId/skillId/lvl/targetId) and SM_SUMMON_PANEL (summon status panel: objId/level/hp/maxhp/mainhand attack(DISPLAY)/pdef/mresist/liveTime). Summon/CalculationType red-tolerated. Opens summon packet group. Guardrail green.
