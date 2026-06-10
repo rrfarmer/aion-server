@@ -1049,3 +1049,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpacket SM_STATS_INFO (-Nemesiss-/Luno/ginho1, 190L; full player stat sheet current+base - primary/resist/hp/mp/dp/fly/attack/defense/crit/accuracy/boost/repose). Converges PlayerEnterWorldService. getCurrent/getBase->PascalCase; writeF(x/1000f). Guardrail green.
+
+## 2026-06-10 — SM_PLAYER_INFO (5cf738ed6)
+Ported network/aion/serverpackets/SM_PLAYER_INFO (230L, extends AbstractPlayerInfoPacket): visible-player info packet — position/ids/transform-model (GetType_), race/class/gender, name/title/legion-emblem, hp/dp, equipped appearance, full PlayerAppearance sheet, speeds (attackSpeed Stat2), store message, movement vector (Vector3f normalizeLocal/multLocal; movementMask &= ~ABSOLUTE), target/team/house/membership, conqueror/protector rank (CPInfo.GetType_). Converges PlayerEnterWorldService. Guardrail green (363 slop, 5 god-classes).
