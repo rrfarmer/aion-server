@@ -1001,3 +1001,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported 4 login serverpackets (converge PlayerEnterWorldService): SM_UI_SETTINGS (settings blob padded 0x1C00), SM_AFTER_TIME_CHECK_4_7_5, SM_UNK_3_5_1 (fast-track), SM_HOUSE_SCRIPTS (Rolandas/Neon/Sykra; compressed house scripts + padding, Function->Func, SCRIPT_PADDING -51==0xCD, PlayerScript red-tolerated deferred). Guardrail green.
+
+## 2026-06-10
+- Ported network serverpackets SM_RECIPE_LIST (known recipe ids), SM_LEGION_DOMINION_LOC_INFO (Neon/Yeats; dominion loc + legion emblem), SM_MOTION (MrPoke; motion list/add/set/remove/player-slots by action). All converge PlayerEnterWorldService. Set->ISet, Map->Dictionary, switch-on-action. Guardrail green.
