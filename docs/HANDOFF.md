@@ -1640,3 +1640,6 @@ Ported CM_TELEPORT_ANIMATION_DONE (Rolandas/Neon — run deferred TELEPORT task 
 
 ## 2026-06-10 — CM_UPGRADE_ARCADE + CM_WINDSTREAM
 Ported CM_UPGRADE_ARCADE (ginho1 — arcade event actions 0-5 via UpgradeArcadeService) and CM_WINDSTREAM (windstream flight state 0/1/2/3/4/7/8: enter sets FlightPath+states+Windstream emotion+QuestEngine.OnEnterWindStream, leave clears+glide/visual-update+WindstreamEnd/Exit+SM_TRANSFORM, boost start/end). EmotionType/CreatureState PascalCase; FlyState/PlayerMode SCREAMING; FlightPath.Type.WINDSTREAM nested. UpgradeArcadeService/SM_WINDSTREAM/SM_EMOTION red-tolerated. Only 5 clientpackets remain (CM_FIND_GROUP, CM_MOVE, CM_MOVE_IN_AIR, CM_POSITION_SELF, CM_VERSION_CHECK). Guardrail green.
+
+## 2026-06-10 — CM_POSITION_SELF + CM_MOVE_IN_AIR
+Ported CM_POSITION_SELF (reply to SM_POSITION_SELF, no-op) and CM_MOVE_IN_AIR (-Nemesiss-/Sweetkr/KID — flying-teleport move: spawned+FLYING(PascalCase) guard, FlightPath.SetDistance, protection cancel, World.UpdatePosition, OnMoveFromClient/OnMove). World/CreatureState red-tolerated. 3 clientpackets remain (CM_FIND_GROUP, CM_MOVE, CM_VERSION_CHECK). Guardrail green.
