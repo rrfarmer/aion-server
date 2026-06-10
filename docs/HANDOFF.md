@@ -1619,3 +1619,6 @@ Ported CM_SECURITY_TOKEN (ginho1 — lazily generate + return account security t
 
 ## 2026-06-10 — CM_RESTORE_CHARACTER + CM_QUESTIONNAIRE
 Ported CM_RESTORE_CHARACTER (-Nemesiss- — cancel pending char deletion via PlayerService.CancelPlayerDeletion -> SM_RESTORE_CHARACTER) and CM_QUESTIONNAIRE (xTz — HTML reward selection items list -> HTMLService.GetReward). PlayerService/HTMLService/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_GF_WEBSHOP_TOKEN_REQUEST + CM_IN_GAME_SHOP_INFO
+Ported CM_GF_WEBSHOP_TOKEN_REQUEST (Artur — empty webshop token reply, started w/ -st) and CM_IN_GAME_SHOP_INFO (xTz/KID — shop actions 0x01 item / 0x02 category set / 0x04 list / 0x08 showcat+sub / 0x10 balance (SM_TOLL_INFO) / 0x20 buy / 0x40 gift via InGameShopEn). InGameShopEn/SM_IN_GAME_SHOP_*/SM_TOLL_INFO red-tolerated. Guardrail green.
