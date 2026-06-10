@@ -986,3 +986,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported 4 network serverpackets: SM_ABYSS_RANK_UPDATE (Nemiroff; rank/team/mentor by action; converges AbyssPointsService), SM_NPC_ASSEMBLER (xTz; assembled-npc carrier spawn/despawn; converges BalaurAssaultService/FortressAssault), SM_CHANNEL_INFO (ATracer; channel+instance count; converges PlayerEnterWorldService), SM_RECIPE_COOLDOWN (zzsort/Sykra; craft cooldown seconds, Cooldowns.forEach->ForEach lambda; converges PlayerEnterWorldService). Guardrail green.
+
+## 2026-06-10
+- Ported network serverpackets SM_ABNORMAL_STATE (Avol/ATracer; active abnormal effect icons + bitmask; converges PlayerEffectController; getTargetSlot().ordinal()->(int)) and SM_MACRO_LIST (-Nemesiss-; paged macro list, Function->Func DYNAMIC_BODY_PART_SIZE_CALCULATOR, Macros.Macro accessors; converges PlayerEnterWorldService SplitList). Guardrail green.
