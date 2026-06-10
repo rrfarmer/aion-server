@@ -1343,3 +1343,6 @@ Ported 2 serverpackets: SM_TARGET_UPDATE (Sweetkr — objId + targetId) and SM_W
 
 ## 2026-06-10 — SM_SIEGE_LOCATION_STATE + SM_SIEGE_LOCATION_INFO
 Ported 2 siege serverpackets: SM_SIEGE_LOCATION_STATE (Source — locationId + state) and SM_SIEGE_LOCATION_INFO (Sarynth/Neon — all/single siege locations: legion/emblem/race/vulnerable/teleport/next-state/veille-masta timer/occupiedCount; SiegeConfig.SIEGE_ENABLED guard; Map.values). SiegeLocation/SiegeService/LegionService red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_TELEPORT_MAP + SM_TELEPORT_LOC
+Ported 2 teleport serverpackets: SM_TELEPORT_MAP (alexa026/orz — teleporter map open) and SM_TELEPORT_LOC (Luno/orz/xTz — teleport with port animation; isInstance via DataManager.WORLD_MAPS_DATA). DataManager/TeleportAnimation red-tolerated. Guardrail green.
