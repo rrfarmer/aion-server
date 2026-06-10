@@ -1439,3 +1439,6 @@ Ported CM_CREATE_CHARACTER (-Nemesiss-/cura/Neon — second AbstractCharacterEdi
 
 ## 2026-06-10 — CM_CASTSPELL
 Ported CM_CASTSPELL (alexa026/rhys2002 — core skill-cast packet): targetType-switched read (obj id / point / area+8 unk floats), death/pet-order/passive guards, protection+useItem cancel, nextSkillUse cooldown anti-early audit, controller.UseSkill. receiveTime = UtcNow millis (final field). DataManager.PET_SKILL_DATA/SKILL_DATA/SkillTemplate/AuditLogger/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_ATTACK
+Ported CM_ATTACK (alexa026/Avol/ATracer/KID — auto-attack initiation): death guard, protection cancel, known-list target lookup, instanceof Creature -> controller.AttackTarget(time,false) else warn on unsupported target. Creature/VisibleObject/controller red-tolerated. Guardrail green.
