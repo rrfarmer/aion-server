@@ -1487,3 +1487,6 @@ Ported CM_HEADING_UPDATE (post-spin heading no-op, reads 1 byte) and CM_USE_ITEM
 
 ## 2026-06-10 — CM_MOVE_ITEM + CM_SPLIT_ITEM
 Ported CM_MOVE_ITEM (alexa026/kosyachok — move item across storages 0-3 -> ItemMoveService.MoveItem) and CM_SPLIT_ITEM (kosyak — split stack w/ source/dest storage types + slot -> ItemSplitService.SplitItem). ItemMoveService/ItemSplitService red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_TARGET_SELECT + CM_REPLACE_ITEM
+Ported CM_TARGET_SELECT (SoulKeeper/Sweetkr/KID — click/hotkey/chat target select + assist target-of-target; assist no-target/no-user/too-far msgs, team-member resolution, radar-hack audit on invisible) and CM_REPLACE_ITEM (kosyachok — swap items between storages -> ItemMoveService.SwitchItemsInStorages). VisibleObject/AuditLogger/ItemMoveService red-tolerated. Guardrail green.
