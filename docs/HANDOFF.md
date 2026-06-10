@@ -1502,3 +1502,6 @@ Ported CM_TITLE_SET (Nemiroff/cura — set display title, 0xFFFF clear, owns-tit
 
 ## 2026-06-10 — CM_REPORT_PLAYER + CM_SHOW_MAP
 Ported CM_REPORT_PLAYER (Jego/Neon — reportType 0 /accuse (race/self guards, audit, submit) + 1 /NumberofReports; the infinity glyph U+221E built from (char)0x221E to keep source clean) and CM_SHOW_MAP (Lyahim — action 0 -> ConquerorAndProtectorService.IntruderScan, 1 unk, default warn). World/AuditLogger/ConquerorAndProtectorService/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_PING + CM_SHOW_DIALOG
+Ported CM_PING (-Nemesiss-/Undertrey/Neon — heartbeat -> SM_PONG; ping-interval time/speed-hack detection w/ 3-strike fail count + optional kick; currentTimeMillis->UtcNow millis) and CM_SHOW_DIALOG (alexa026/Avol/ATracer — NPC dialog request; protection/trading guards, removeHideEffects when talkInfo can't-talk-invisible, controller.OnDialogRequest). SM_PONG/AuditLogger/Npc/TalkInfo red-tolerated. Guardrail green.
