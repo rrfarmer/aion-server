@@ -1253,3 +1253,6 @@ Ported network/aion/serverpackets/SM_HOUSE_REGISTRY (69L, Rolandas): not-spawned
 
 ## 2026-06-10 — SM_IN_GAME_SHOP_CATEGORY_LIST + SM_IN_GAME_SHOP_ITEM
 Ported 2 in-game-shop serverpackets: SM_IN_GAME_SHOP_CATEGORY_LIST (type 0 categories / type 2 sub-categories; List.get->indexer) and SM_IN_GAME_SHOP_ITEM (item detail price/itemId/count/gift/type/descriptions). Opens in-game-shop packet group. InGameShopProperty/InGameShopEn/IGItem/IGCategory red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_IN_GAME_SHOP_LIST
+Ported network/aion/serverpackets/SM_IN_GAME_SHOP_LIST (71L, xTz/KID): paged shop item list (salesRanking 1, 9-per-tab paging) / top-sales list. computeIfAbsent(f,k->new ArrayList).add->TryGetValue-or-add; Map.get(nrList)->GetValueOrDefault; player.inGameShop field. Completes in-game-shop packet group (CATEGORY_LIST/ITEM/LIST). IGItem/InGameShopEn red-tolerated. Guardrail green.
