@@ -1121,3 +1121,6 @@ Ported network/aion/serverpackets/SM_TRANSFORM_IN_SUMMON (31L): summon-transform
 
 ## 2026-06-10 — SM_ALLIANCE_MEMBER_INFO
 Ported network/aion/serverpackets/SM_ALLIANCE_MEMBER_INFO (166L): per-PlayerAllianceEvent alliance member update — hp/mp/fp, world position, class/gender/level, fly state, abnormal-effects blocks for UPDATE_EFFECTS and JOIN/ENTER/UPDATE/etc. Keyword collision: field event->eventValue. SkillTargetSlot ordinal()->Array.IndexOf(Enum.GetValues) twice (position, not id); FULLSLOTS->SkillTargetSlotExtensions. PlayerAllianceEvent switch labels qualified + stacked. Effect/PlayerAllianceMember/WorldPosition red-tolerated. Opens alliance packet group. Guardrail green.
+
+## 2026-06-10 — SM_ALLIANCE_INFO
+Ported network/aion/serverpackets/SM_ALLIANCE_INFO (185L): alliance/league info — leader/4 vice-captains, full loot rules (alliance + league), team type/subType, 4 group slots, league captain blocks. Private inner AllianceInfo POJO -> nested class (getters/setters PascalCase). getTeamType().getType()->GetType_() collision. 4 ctors chained. PlayerAlliance/League/LootGroupRules red-tolerated. Guardrail green.
