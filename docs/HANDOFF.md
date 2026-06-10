@@ -1535,3 +1535,6 @@ Ported CM_GET_MAIL_ATTACHMENT (kosyachok — item(0)/kinah(1) attachment -> Mail
 
 ## 2026-06-10 — CM_TUNE + CM_TUNE_RESULT
 Ported CM_TUNE (xTz — identify unidentified item or apply tuning scroll via TuningAction.CanAct/Act; audit if tuning identified item w/o scroll) and CM_TUNE_RESULT (Estrayl — accept/reject pending re-identification; attribute-only cancel audit, ApplyTuneResult / clear pending, SM_INVENTORY_UPDATE_ITEM). ItemActionService/TuningAction/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_UNWRAP_ITEM + CM_ITEM_REMODEL
+Ported CM_UNWRAP_ITEM (xTz — unwrap packed item: negate packCount, PersistentState.UPDATE_REQUIRED aliased, SM_UNWRAP_ITEM + SM_INVENTORY_UPDATE_ITEM) and CM_ITEM_REMODEL (Sarynth — keep/extract item appearance -> ItemRemodelService.RemodelItem). Persistable.PersistentState aliased; ItemRemodelService/SM_* red-tolerated. Guardrail green.
