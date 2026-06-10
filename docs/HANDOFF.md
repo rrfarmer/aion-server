@@ -1613,3 +1613,6 @@ Ported CM_LEGION (Simple — main legion command dispatcher): exOpcode-switched 
 
 ## 2026-06-10 — CM_BUY_TRADE_IN_TRADE + CM_SHOW_BRAND
 Ported CM_BUY_TRADE_IN_TRADE (MrPoke/Ritsu — buy from trade-in NPC surrendering trade-in item list -> TradeService.PerformBuyFromTradeInTrade) and CM_SHOW_BRAND (Sweetkr/Simple — team brand marker; no-team self SM_SHOW_BRAND else leader/alliance-captain UpdateBrand; TemporaryPlayerTeam<?>->var, instanceof PlayerAlliance->is). TradeService/SM_SHOW_BRAND red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_SECURITY_TOKEN + CM_RECONNECT_AUTH
+Ported CM_SECURITY_TOKEN (ginho1 — lazily generate + return account security token; getBytes() -> Encoding.UTF8.GetBytes) and CM_RECONNECT_AUTH (-Nemesiss- — fast LoginServer reconnection request). SecurityTokenService/LoginServer/SM_SECURITY_TOKEN red-tolerated. Guardrail green.
