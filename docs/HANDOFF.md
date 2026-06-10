@@ -1382,3 +1382,6 @@ Ported network/aion/serverpackets/SM_VERSION_CHECK (146L, -Nemesiss-/Novo/cura/N
 
 ## 2026-06-10 — SM_LEGION_UPDATE_SELF_INTRO + SM_TOWNS_LIST
 Ported 2 serverpackets: SM_LEGION_UPDATE_SELF_INTRO (Simple — objId + self-intro) and SM_TOWNS_LIST (ViAl — town id/level/levelUpDate; getTime()/1000->ToUnixTimeMilliseconds()/1000). Town red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_BROKER_SERVICE
+Ported network/aion/serverpackets/SM_BROKER_SERVICE (270L, IlBuono/kosyachok): broker search/register/settled/sell packets. KEY: BrokerPacketType has DUPLICATE ids (SHOW_SETTLED_ICON=5, SETTLED_ITEMS=5) distinguished by identity -> sealed value-class + reference-equality if-chain (plain enum = duplicate case-label error). Function->Func; List.toArray->ToArray; TimeUnit.MILLISECONDS.toDays(ms)->ms/86400000; currentTimeMillis->DateTimeOffset; getBuf()->GetBuf(); ItemBlobType aliased. BrokerItem/Item/EnchantInfoBlobEntry/ItemInfoBlob red-tolerated. Guardrail green. NOTE: SM_SYSTEM_MESSAGE (~28.9k generated STR_* lines) deferred — needs a dedicated generator, not a 60s tick.
