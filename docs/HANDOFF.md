@@ -1034,3 +1034,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpacket SM_MESSAGE (-Nemesiss-/Sweetkr/Neon, 150L; chat/system message - sender id/name/race-filter, type, shout coords, hardcap truncation; 4 ctors). Converges SystemMailService/MailService/PlayerEnterWorldService/FindGroupService. instanceof->is; getName(true)/isSysMsg/getId->PascalCase; substring->Substring. ChatType/AbnormalState red-tolerated. Guardrail green.
+
+## 2026-06-10
+- Ported network serverpacket SM_MAIL_SERVICE (kosyachok/Source/Neon, 179L; mailbox state/message/list/read/attachment/delete by serviceId, 6 ctors). Converges MailService/SystemMailService. Function->Func; switch-arrow->switch; byteLengthForString inherited static->ByteLengthForString; writeMe(getBuf())->WriteMe(GetBuf()); int...->params int[]. Guardrail green.
