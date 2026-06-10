@@ -1445,3 +1445,6 @@ Ported CM_ATTACK (alexa026/Avol/ATracer/KID — auto-attack initiation): death g
 
 ## 2026-06-10 — CM_CHARACTER_LIST + CM_ATREIAN_PASSPORT
 Ported CM_CHARACTER_LIST (-Nemesiss- — replies SM_ACCOUNT_PROPERTIES + SM_CHARACTER_LIST(playOk2)) and CM_ATREIAN_PASSPORT (ViAl — reads passportId/timestamp pairs, count==-1 reads until <8 bytes remain w/ invalid-count warn; Map.compute -> TryGetValue-or-add into Dictionary<int,HashSet<int>>; AtreianPassportService.TakeReward). SM_*/AtreianPassportService red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_APPEARANCE
+Ported CM_APPEARANCE (xTz/Neon — rename char (0) / legion (1) / cosmetic item (2)): TryChangeCharacterName (same-name/invalid/used guards, coupon item-id 169670000/1 + decrease, OldNamesDAO + PlayerDAO store, OnPlayerNameChanged w/ World cache + legion history + SM_RENAME world broadcast), TryChangeLegionName (brigade-general gate -> LegionService.TryRename), TryUseCosmeticItem (instanceof CosmeticItemAction CanAct/Act loop). PlayerService/LegionService/OldNamesDAO/PlayerDAO/World/SM_* red-tolerated. Guardrail green.
