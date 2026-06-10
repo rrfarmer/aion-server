@@ -1559,3 +1559,6 @@ Ported CM_SHOW_BLOCKLIST (Ben — reply SM_BLOCK_LIST) and CM_SHOW_RESTRICTIONS 
 
 ## 2026-06-10 — CM_START_LOOT + CM_LOOT_ITEM
 Ported CM_START_LOOT (alexa026/Metos/ATracer — open(0)/close(1) drop list via DropService) and CM_LOOT_ITEM (alexa026/ATracer — RequestDropItem by index). DropService red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_MACRO_CREATE + CM_MACRO_DELETE
+Ported CM_MACRO_CREATE (SoulKeeper — PlayerService.AddMacro + SM_MACRO_CREATED) and CM_MACRO_DELETE (SoulKeeper — PlayerService.RemoveMacro by position + SM_MACRO_DELETED). PlayerService/SM_MACRO_RESULT red-tolerated. Guardrail green.
