@@ -953,3 +953,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported services/trade/PricesService (Sarynth/wakizashi; influence-scaled global prices/taxes, vendor buy/sell modifiers, ordered round-down multiply chains for getPriceForService/getBuyPrice, getSellReward). Math.round(float)->(int)Floor(x+0.5f); switch-on-Race + IllegalArgument->Argument; /100D round-down casts preserved. Converges PricesService.getPriceForService used by many ported services (mail/item/siege). **trade subdir DONE (1/1).** Guardrail green.
+
+## 2026-06-10
+- Ported services/panesterra/ahserion PanesterraTeam (Yeats/Estrayl; faction origin/start positions, member roster, teleports; List<Integer>.remove(int) index-pitfall preserved as RemoveAt) + AhserionRaid (Yeats/Neon/Estrayl, 308L; raid orchestration - 30s fixed-rate staged progress via nested ProgressRunnable, spawnRaid/spawnStage, corridor-shield team elimination + consolation reward, boss-killed winner handling). Converges PanesterraService deps (PanesterraTeam/AhserionRaid). AtomicBoolean; Future->ScheduledTask; values()->Enum.GetValues; ordinal()->(int); instanceof X x->is X x; method-ref->ct-lambda. ahserion subdir DONE (3/3). Guardrail green.
