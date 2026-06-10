@@ -1133,3 +1133,6 @@ Ported 2 fortress serverpackets: SM_FORTRESS_INFO (locationId + teleport flag) a
 
 ## 2026-06-10 — SM_ABYSS_ARTIFACT_INFO3
 Ported network/aion/serverpackets/SM_ABYSS_ARTIFACT_INFO3 (34L): abyss artifact status list (locationId*10+1 + status value); 2nd ctor builds via SiegeService.GetArtifact. ArtifactLocation/SiegeService red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_ABYSS_RANKING_PLAYERS
+Ported network/aion/serverpackets/SM_ABYSS_RANKING_PLAYERS (62L): paged abyss player ranking — race/lastUpdate/page/endflag + per-player position/rank/oldpos/id/class/gender/ap/gp/level/name/legion. RankingListPlayer record accessors -> PascalCase (aliased from AbyssRankDAO); Collections.emptyList->new List; static-import CHARNAME_MAX_LENGTH -> AbstractPlayerInfoPacket.CHARNAME_MAX_LENGTH. AbyssRankDAO red-tolerated. Guardrail green.
