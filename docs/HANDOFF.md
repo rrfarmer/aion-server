@@ -1190,3 +1190,6 @@ Ported network/aion/serverpackets/SM_GROUP_MEMBER_INFO (143L): per-GroupEvent gr
 
 ## 2026-06-10 — SM_GROUP_INFO + SM_LEAVE_GROUP_MEMBER
 Ported 2 group serverpackets: SM_GROUP_INFO (id/leader/world/loot rules/team type; getType()->GetType_() collision) and SM_LEAVE_GROUP_MEMBER (fixed leave fields). PlayerGroup/LootGroupRules/TeamType red-tolerated. Continues group packet group. Guardrail green.
+
+## 2026-06-10 — SM_GROUP_LOOT + SM_GROUP_DATA_EXCHANGE
+Ported 2 group serverpackets: SM_GROUP_LOOT (roll/distribution entry: group/index/item/corpse/distribution/player/luck) and SM_GROUP_DATA_EXCHANGE (action + optional unk + length-prefixed blob). Completes group packet group (INFO/MEMBER_INFO/LEAVE/LOOT/DATA_EXCHANGE). Guardrail green.
