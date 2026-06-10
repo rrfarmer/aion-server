@@ -1349,3 +1349,6 @@ Ported 2 teleport serverpackets: SM_TELEPORT_MAP (alexa026/orz — teleporter ma
 
 ## 2026-06-10 — SM_WAREHOUSE_INFO + SM_WAREHOUSE_ADD_ITEM
 Ported 2 warehouse serverpackets: SM_WAREHOUSE_INFO (kosyachok — contents per-item info blob; StorageType.REGULAR_WAREHOUSE.GetId; Collections.emptyList->new List) and SM_WAREHOUSE_ADD_ITEM (kosyachok/-Nemesiss- — add item; Collections.singletonList->new List; ItemAddType aliased; GetFirstItem/GetFirstItemInfoBlob helpers). Item/ItemInfoBlob/StorageType red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_WINDSTREAM + SM_WINDSTREAM_ANNOUNCE
+Ported 2 windstream serverpackets: SM_WINDSTREAM (2 unk fields) and SM_WINDSTREAM_ANNOUNCE (LokiReborn — bidirectional/map/stream/state). Guardrail green.
