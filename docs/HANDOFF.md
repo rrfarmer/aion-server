@@ -1379,3 +1379,6 @@ Ported 2 serverpackets: SM_STATS_STATUS_UNK (Rolandas — stat points + lvl-50 c
 
 ## 2026-06-10 — SM_VERSION_CHECK
 Ported network/aion/serverpackets/SM_VERSION_CHECK (146L, -Nemesiss-/Novo/cura/Neon): client version check (INTERNAL_VERSION 207) + full server config blob (build dates/server flags/rates/chat server). currentTimeMillis()/1000->DateTimeOffset; GameServer type aliased (namespace clash); ServerTime.GetStandardOffset/GetDaylightSavings. GSConfig/GameServer/ChatServer/LoginServer/AtreianPassportService red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_LEGION_UPDATE_SELF_INTRO + SM_TOWNS_LIST
+Ported 2 serverpackets: SM_LEGION_UPDATE_SELF_INTRO (Simple — objId + self-intro) and SM_TOWNS_LIST (ViAl — town id/level/levelUpDate; getTime()/1000->ToUnixTimeMilliseconds()/1000). Town red-tolerated. Guardrail green.
