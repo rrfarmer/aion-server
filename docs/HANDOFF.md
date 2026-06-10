@@ -980,3 +980,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpackets SM_TITLE_INFO (cura/xTz/-Enomine-; title list/self-set/broadcast/mentor-flag/bonus by action, 6 ctors; converges PlayerEnterWorldService) and SM_CASTSPELL (alexa026/rhys2002; casting animation by targetType object/ground/ground+unks). switch stacked case labels; getTitles/secondsUntilExpiration->PascalCase. Guardrail green.
+
+## 2026-06-10
+- Ported network serverpackets SM_SUMMON_UPDATE (ATracer; summon level/mode/HP + full current+base stat block) and SM_TRANSFORM (Sweetkr/xTz/kecimis; transform model+state+restriction flags, custom test ctor + live transform-model path; getType()->GetType_()). Stat2/TransformType/TransformModel red-tolerated. Guardrail green.
