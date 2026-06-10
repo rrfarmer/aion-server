@@ -1241,3 +1241,6 @@ Ported house-info base AbstractHouseInfoPacket (Neon): WriteCommonInfo (address/
 
 ## 2026-06-10 — SM_HOUSE_UPDATE + SM_HOUSE_EDIT
 Ported 2 house serverpackets: SM_HOUSE_UPDATE (3 unk shorts + WriteCommonInfo) and SM_HOUSE_EDIT (Rolandas — decorate add/remove/spawn-move/despawn actions 3/4/5/7). HouseObject<?> erased to HouseObject<PlaceableHouseObject>; instanceof UseableItemObject->is+cast WriteUsageData(GetBuf()); LoggerFactory.getLogger(getClass())->NullLoggerFactory.CreateLogger(GetType().FullName).LogWarning. HouseObject/UseableItemObject/HouseDecoration red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_HOUSE_OBJECT + SM_HOUSE_OBJECTS
+Ported 2 house-object serverpackets: SM_HOUSE_OBJECT (single object spawn: template/pos/rotation/cooldown/expiration + typeId switch 1 useable/7 npc) and SM_HOUSE_OBJECTS (bulk positions). HouseObject<?> erased to HouseObject<PlaceableHouseObject>; (UseableItemObject)/(NpcObject) casts; getBuf()->GetBuf(). HouseObject/NpcObject/UseableItemObject red-tolerated. Guardrail green.
