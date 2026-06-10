@@ -1583,3 +1583,6 @@ Ported 3 house-teleport clientpackets (Rolandas/Neon): CM_HOUSE_TELEPORT (relati
 
 ## 2026-06-10 — CM_HOUSE_PAY_RENT + CM_HOUSE_KICK
 Ported CM_HOUSE_PAY_RENT (Rolandas — pay maintenance N weeks, 4-week client cap; java.time -> DateTimeOffset: .with(LocalTime.MIDNIGHT) rebuilt via new DateTimeOffset(y,m,d,0,0,0,offset), ChronoUnit.WEEKS.between -> (long)(TotalDays/7); MaintenanceTask.GetNextRun/GetNextRunAfter, ServerTime.Now/AtDate; getNextPay nullable .Value) and CM_HOUSE_KICK (Rolandas — kick visitors option 1/2 incl friends). HousingConfig/MaintenanceTask/ServerTime/House red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_HOUSE_SETTINGS + CM_HOUSE_SCRIPT
+Ported CM_HOUSE_SETTINGS (Rolandas — door state/owner-name/sign-notice update; SIGN_NOTICE_MAX_LENGTH truncation+audit, HouseDoorState enum nullable via HouseDoorStates.Get((sbyte)) w/ .Value, OPEN/CLOSED_EXCEPT_FRIENDS/CLOSED kick+msg) and CM_HOUSE_SCRIPT (Rolandas/Neon/Sykra — upload/remove sign script w/ MAX_COMPRESSED_SCRIPT_SIZE guard, ownership audit, PlayerScripts.Set/Remove/Get, SM_HOUSE_SCRIPTS broadcast). HouseDoorState/PlayerScripts/SM_* red-tolerated. Guardrail green.
