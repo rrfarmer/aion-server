@@ -1595,3 +1595,6 @@ Ported CM_HOUSE_DECORATE (Rolandas — apply/clear wall/floor part by lineNo; Pa
 
 ## 2026-06-10 — CM_INSTANCE_INFO + CM_INSTANCE_LEAVE
 Ported CM_INSTANCE_INFO (nrg/Neon — leader instance-score info; updateType 1 splits team members (allExcept leader) into groups of 3 via FixedElementCountSplitList, forEach->foreach) and CM_INSTANCE_LEAVE (xTz — instanceHandler.LeaveInstance). Predicates.Players.AllExcept/SplitList/SM_INSTANCE_INFO red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_LEGION_HISTORY + CM_LEGION_DOMINION_REQUEST_RANKING
+Ported CM_LEGION_HISTORY (Simple/xTz/Sykra — page+type history; LegionHistoryAction.Type aliased (vs System.Type), Type.values()[i] ordinal -> Enum.GetValues<Type>()[i], REWARD brigade-general gate) and CM_LEGION_DOMINION_REQUEST_RANKING (Yeats — stonespear 1-6 ranking via LegionDominionService). LegionHistoryAction.Type/LegionDominionService/SM_* red-tolerated. Guardrail green.
