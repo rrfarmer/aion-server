@@ -1097,3 +1097,6 @@ Ported network/aion/serverpackets/SM_ACTION_ANIMATION (32L): plays an ActionAnim
 
 ## 2026-06-10 — SM_CASTSPELL_RESULT (6a63ff107)
 Ported network/aion/serverpackets/SM_CASTSPELL_RESULT (212L): cast-spell result — effector/targetType switch (0/3/4 stacked, 1, 2), skill id/lvl/cooldown/hitTime, chain/item/dash branches, per-effect loop (effect result, target + attacker hp percent, spell-status switch incl nested SubEffectType PULL/PULL_NPC/SIMPLE_MOVE_BACK, reserved-effects loop with shield/reflect switch). getType()->GetType_() collision (EffectReserved); instanceof Player->is Player+cast; Skill.SkillMethod.PENALTY nested enum; SubEffectType/AttackStatus/EffectResult red-tolerated. Converges AttackUtil/skillengine. Guardrail green.
+
+## 2026-06-10 — SM_ATTACK (HEAD)
+Ported network/aion/serverpackets/SM_ATTACK (149L): physical-attack result — attacker/target ids, type/hand animations, hp percents, counter/status flag switch (negative-id crit cases -60/-62/-64/-58 + 4/2/0/6, default crit-effect skill 8218 branch), per-hit AttackResult list (damage, status, (byte) shieldType switch 0/2,8/10,16,default). instanceof Player->is Player+cast; List.get(0)->[0]. AttackResult/animations/Effect red-tolerated. Continues combat packet group. Guardrail green.
