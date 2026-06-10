@@ -1058,3 +1058,6 @@ Ported network/aion/serverpackets/AbstractPlayerInfoPacket (181L, abstract base 
 
 ## 2026-06-10 — SM_CHARACTER_LIST (0f118506e)
 Ported network/aion/serverpackets/SM_CHARACTER_LIST (36L, extends AbstractPlayerInfoPacket): sends account char list — playOk2, char count, WritePlayerInfo per PlayerAccountData. Builds on AbstractPlayerInfoPacket base. Guardrail green.
+
+## 2026-06-10 — SM_CHARACTER_SELECT (1b4bbde87)
+Ported network/aion/serverpackets/SM_CHARACTER_SELECT (44L): passkey window/result packet (type 0/1/2) for char selection; type 2 writes messageType, wrong-passkey flag/count, PASSKEY_WRONG_MAXCOUNT. SecurityConfig red-tolerated. Guardrail green.
