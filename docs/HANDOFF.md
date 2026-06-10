@@ -1448,3 +1448,6 @@ Ported CM_CHARACTER_LIST (-Nemesiss- — replies SM_ACCOUNT_PROPERTIES + SM_CHAR
 
 ## 2026-06-10 — CM_APPEARANCE
 Ported CM_APPEARANCE (xTz/Neon — rename char (0) / legion (1) / cosmetic item (2)): TryChangeCharacterName (same-name/invalid/used guards, coupon item-id 169670000/1 + decrease, OldNamesDAO + PlayerDAO store, OnPlayerNameChanged w/ World cache + legion history + SM_RENAME world broadcast), TryChangeLegionName (brigade-general gate -> LegionService.TryRename), TryUseCosmeticItem (instanceof CosmeticItemAction CanAct/Act loop). PlayerService/LegionService/OldNamesDAO/PlayerDAO/World/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_BUILDER_COMMAND + CM_BUILDER_CONTROL + CM_DISCONNECT
+Ported 3 clientpackets: CM_BUILDER_COMMAND and CM_BUILDER_CONTROL (ginho1 — trivial AbstractGmCommandPacket subclasses for // and /// GM-panel command tiers, behaviour fully inherited) and CM_DISCONNECT (Neon — AFK-timeout disconnect notice; reads 1 flag byte, no-op run). Clientpacket pillar now 51/190. Guardrail green.
