@@ -1544,3 +1544,6 @@ Ported CM_FUSION_WEAPONS (zdead/Wakizashi/Neon — compound 2 weapons at armsfus
 
 ## 2026-06-10 — CM_ITEM_PURIFICATION + CM_RECIPE_DELETE
 Ported CM_ITEM_PURIFICATION (FinalNovas/Navyan — purify/upgrade item: IsPurificationAllowed + DecreaseMaterials + UpgradeItem; 5 require-item obj ids read) and CM_RECIPE_DELETE (Rolandas — recipeList.DeleteRecipe). ItemPurificationService/RecipeList red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_STOP_TRAINING + CM_TOGGLE_SKILL_DEACTIVATE
+Ported CM_STOP_TRAINING (xTz — instanceHandler.OnStopTraining) and CM_TOGGLE_SKILL_DEACTIVATE (ATracer — remove toggle/stance effect, non-toggle audit, stop stance if matching). DataManager.SKILL_DATA/SkillTemplate/WorldMapInstance red-tolerated. Guardrail green.
