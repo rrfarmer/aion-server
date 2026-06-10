@@ -1172,3 +1172,6 @@ Ported 2 anti-hack serverpackets: SM_GAMEGUARD (size + zero buffer) and SM_CAPTC
 
 ## 2026-06-10 — SM_GM_BOOKMARK_ADD + SM_GM_SEARCH
 Ported 2 GM serverpackets: SM_GM_BOOKMARK_ADD (teleport bookmark name+worldId+x/y/z) and SM_GM_SEARCH (player-search result string name+world+(int)coords). Player red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_LEGION_INFO + SM_GM_SHOW_LEGION_INFO
+Ported network/aion/serverpackets/SM_LEGION_INFO (55L, Simple): legion summary (name/level/ranking via AbyssRankingCache/permissions/contribution/disband/dominion + up to 7 announcements). Legion.Announcement record -> PascalCase accessors (aliased); Collections.singletonList->new List; time().getTime()/1000->ToUnixTimeMilliseconds()/1000; isEmpty()->Length==0. Plus thin subclass SM_GM_SHOW_LEGION_INFO. Converges legion packet base. Legion red-tolerated. Guardrail green.
