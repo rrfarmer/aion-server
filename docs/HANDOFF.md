@@ -1556,3 +1556,6 @@ Ported CM_REJECT_REVIVE (Neon — decline revive, no-op) and CM_SELECT_DECOMPOSA
 
 ## 2026-06-10 — CM_SHOW_BLOCKLIST + CM_SHOW_RESTRICTIONS
 Ported CM_SHOW_BLOCKLIST (Ben — reply SM_BLOCK_LIST) and CM_SHOW_RESTRICTIONS (Neon — /restriction -> SM_SYSTEM_MESSAGE.STR_MSG_ACCUSE_INFO_NORMAL). SM_BLOCK_LIST/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_START_LOOT + CM_LOOT_ITEM
+Ported CM_START_LOOT (alexa026/Metos/ATracer — open(0)/close(1) drop list via DropService) and CM_LOOT_ITEM (alexa026/ATracer — RequestDropItem by index). DropService red-tolerated. Guardrail green.
