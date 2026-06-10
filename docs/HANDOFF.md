@@ -1046,3 +1046,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported 3 tiny network serverpackets: SM_PONG (ping response), SM_AFTER_SIEGE_LOCINFO_475 (Ritsu; empty siege locinfo), SM_MAY_LOGIN_INTO_GAME (-Nemesiss-; login ok response). Guardrail green.
+
+## 2026-06-10
+- Ported network serverpacket SM_STATS_INFO (-Nemesiss-/Luno/ginho1, 190L; full player stat sheet current+base - primary/resist/hp/mp/dp/fly/attack/defense/crit/accuracy/boost/repose). Converges PlayerEnterWorldService. getCurrent/getBase->PascalCase; writeF(x/1000f). Guardrail green.
