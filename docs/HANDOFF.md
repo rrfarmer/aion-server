@@ -1400,3 +1400,6 @@ Ported 2 clientpackets: CM_AUTO_GROUP (Shepper/Guapo/nrg — auto-group window 1
 
 ## 2026-06-10 — CM_BREAK_WEAPONS + CM_CHANGE_CHANNEL
 Ported 2 clientpackets: CM_BREAK_WEAPONS (zdead — defuse fused weapon w/ DialogAction.DECOMPOUND_WEAPON target check) and CM_CHANGE_CHANNEL (ATracer — channel change w/ FastTrack twin-count offset; converges TeleportService). ArmsfusionService/AuditLogger/WorldMapInstance red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_BROKER_* clientpacket group (7 files)
+Ported the 7 broker-window clientpackets converging SM_BROKER_SERVICE / BrokerService: CM_BROKER_LIST (browse by mask/sort/page), CM_BROKER_SEARCH (item-id list search), CM_BROKER_REGISTERED (view own registered items), CM_BROKER_CANCEL_REGISTERED (unregister item), CM_BROKER_SELL_WINDOW (open sell window, isTrading guard), CM_BROKER_SETTLE_ACCOUNT (collect kinah/unsold), CM_BROKER_SETTLE_LIST (sold-item list). All gate on IsTargetingNpcWithFunction(DialogAction.OPEN_VENDOR) except SELL_WINDOW. BrokerService/DialogAction/AuditLogger red-tolerated. Guardrail green.
