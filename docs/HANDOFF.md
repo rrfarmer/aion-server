@@ -1160,3 +1160,6 @@ Ported network/aion/serverpackets/SM_ENTER_WORLD_CHECK (77L): char connection-st
 
 ## 2026-06-10 — SM_FIRST_SHOW_DECOMPOSABLE
 Ported network/aion/serverpackets/SM_FIRST_SHOW_DECOMPOSABLE (40L): item-decomposition result preview (objId + indexed ResultedItem list: itemId/minCount). ResultedItem red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_CHALLENGE_LIST
+Ported network/aion/serverpackets/SM_CHALLENGE_LIST (71L): legion/town challenge task list (action 2: tasks + complete time) / individual task quests (action 7: questId/maxRepeats/score/completeCount). currentTimeMillis()/1000->DateTimeOffset. ChallengeTask/ChallengeQuest/ChallengeType red-tolerated. Guardrail green.
