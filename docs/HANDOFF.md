@@ -1028,3 +1028,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpackets SM_FORCED_MOVE (Sweetkr; force creature to position) + SM_QUIT_RESPONSE (-Nemesiss-; CM_QUIT response normal/plastic-surgery). Both converge AntiHackService (move-back + disconnect). Guardrail green.
+
+## 2026-06-10
+- Ported network serverpacket SM_MOVE (-Nemesiss-; creature movement broadcast - position/heading/mask, manual target vector, glide/geyser, vehicle). Converges AntiHackService. CreatureMoveController<?>/PlayableMoveController<?>-><Creature> invariance bound; instanceof->is; pmc public fields red-tolerated. Guardrail green.
