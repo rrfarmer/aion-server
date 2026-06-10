@@ -1004,3 +1004,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpackets SM_RECIPE_LIST (known recipe ids), SM_LEGION_DOMINION_LOC_INFO (Neon/Yeats; dominion loc + legion emblem), SM_MOTION (MrPoke; motion list/add/set/remove/player-slots by action). All converge PlayerEnterWorldService. Set->ISet, Map->Dictionary, switch-on-action. Guardrail green.
+
+## 2026-06-10
+- Ported network serverpacket SM_INSTANCE_INFO (nrg/Neon; per-player instance cooldown info - reuse time, max/used entries, race hide flag). Converges PlayerEnterWorldService. Integer...->params int[]; Arrays.asList->new List; keySet().toArray->Keys.ToArray; currentTimeMillis->UtcNow; cast precedence (int)(a-b)/1000 preserved. Guardrail green.
