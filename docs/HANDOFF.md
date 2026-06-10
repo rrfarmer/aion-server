@@ -1178,3 +1178,6 @@ Ported network/aion/serverpackets/SM_LEGION_INFO (55L, Simple): legion summary (
 
 ## 2026-06-10 — SM_LEGION_MEMBERLIST + SM_GM_SHOW_LEGION_MEMBERLIST
 Ported network/aion/serverpackets/SM_LEGION_MEMBERLIST (Simple): paged legion member list (isFirst flag, isLast negates size); WriteLegionMember made virtual (objId/name/class/level/rank/world/online/intro/nickname/lastonline + house address/door + GAMESERVER_ID). Plus override SM_GM_SHOW_LEGION_MEMBERLIST (Yeats — adds gender via PlayerService.GetOrLoadPlayerCommonData, omits house fields). House/HousingService/NetworkConfig/LegionMember red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_GM_SHOW_PLAYER_SKILLS
+Ported network/aion/serverpackets/SM_GM_SHOW_PLAYER_SKILLS (29L): GM view of a player's skill list (size + SkillEntryWriter per entry). Completes GM packet group (BOOKMARK_ADD/SEARCH/SHOW_LEGION_INFO/SHOW_LEGION_MEMBERLIST/SHOW_PLAYER_SKILLS). PlayerSkillEntry/SkillEntryWriter red-tolerated. Guardrail green.
