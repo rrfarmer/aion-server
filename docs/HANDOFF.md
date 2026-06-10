@@ -1277,3 +1277,6 @@ Ported network/aion/serverpackets/SM_LOOT_STATUS (54L, alexa026): loot enable/di
 
 ## 2026-06-10 — SM_LOOT_ITEMLIST
 Ported network/aion/serverpackets/SM_LOOT_ITEMLIST (61L): corpse drop list (index/itemId/count/socket + per-item loot-confirmation based on tradeable + sole-looter/team-nearby). (int) count cast; Set/Collection iteration; DataManager.ITEM_DATA lookup. Drop/DropItem/DropNpc red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_PING_RESPONSE + SM_LOGIN_QUEUE
+Ported 2 small serverpackets: SM_PING_RESPONSE (0x04) and SM_LOGIN_QUEUE (position/time/count, private ctor fixed sample values). Guardrail green.
