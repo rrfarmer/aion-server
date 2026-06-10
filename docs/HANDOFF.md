@@ -929,3 +929,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported services/item ItemSplitService (ATracer; split stack to slot/storage incl kinah cube<->acc-wh checksum move, mergeStacks) + ItemMoveService (ATracer; moveItem same-storage reslot/cross-storage move w/ restriction+trade+shutdown checks + stackable merge + WH history, switchItemsInStorages swap). static-import ItemPacketService.*->using static; nested ItemUpdateType/ItemDeleteType aliases; String.format->string.Format; switch-on-StorageType blocks; GameServer.isShuttingDownSoon red-tolerated. Remaining item: ItemChargeService(182), ItemPurificationService(138), ItemRemodelService(124), ItemSocketService(209). Guardrail green.
+
+## 2026-06-10
+- Ported services/item/ItemSocketService (ATracer/Sykra, 209L): addManaStone (next/specific slot w/ special+normal slot accounting), copyFusionStones, removeManastone (kinah cost + DAO store), removeAllManastone, socketGodstone (move-cancel listener + 2s cast). Set->ISet/HashSet; stream.filter.findFirst.orElse->LINQ FirstOrDefault; Collections.singleton->new HashSet; anonymous StartMovingListener->nested GodstoneMoveListener (super.moved->base.Moved); anonymous Runnable->Schedule ct-lambda. Remaining item: ItemChargeService(182), ItemPurificationService(138), ItemRemodelService(124). Guardrail green.
