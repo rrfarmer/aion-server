@@ -1466,3 +1466,6 @@ Ported CM_DELETE_MAIL (kosyachok — read mailObjId[]+unk byte each -> MailServi
 
 ## 2026-06-10 — CM_ENTER_WORLD + CM_EQUIP_ITEM
 Ported CM_ENTER_WORLD (-Nemesiss-/Avol/Neon — PlayerEnterWorldService.EnterWorld(connection, oid)) and CM_EQUIP_ITEM (Avol/ATracer — action 0/1/2 equip/unequip/switch-hands; unequip-full inventory msg; appearance broadcast on change). Equipment/PlayerRestrictions/PlayerEnterWorldService/SM_UPDATE_PLAYER_APPEARANCE red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_EXCHANGE_* clientpacket group (6 files)
+Ported the full player-trade clientpacket group converging ExchangeService: CM_EXCHANGE_REQUEST (-Avol- — range/hide/race/deny guards + question-window; anonymous RequestResponseHandler<Player> -> nested sealed ExchangeResponseHandler w/ AcceptRequest=RegisterExchange / DenyRequest=rejected msg, matching WarehouseService idiom), CM_EXCHANGE_ADD_ITEM, CM_EXCHANGE_ADD_KINAH (readQ), CM_EXCHANGE_CANCEL, CM_EXCHANGE_LOCK, CM_EXCHANGE_OK (confirm). targetObjectId Integer->int? (.Value at World.GetPlayer). ExchangeService/World/SM_QUESTION_WINDOW/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
