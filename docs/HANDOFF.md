@@ -1067,3 +1067,6 @@ Ported network/aion/serverpackets/SM_CREATE_CHARACTER (68L, extends AbstractPlay
 
 ## 2026-06-10 — SM_DELETE_CHARACTER (9e52e0e43)
 Ported network/aion/serverpackets/SM_DELETE_CHARACTER (36L): CM_DELETE_CHARACTER response — objId + deletionTime, or failure triple (0x10/0/0) when objId==0. Completes char-screen packet set (LIST/SELECT/CREATE/DELETE + AbstractPlayerInfoPacket base). Guardrail green.
+
+## 2026-06-10 — Exchange serverpackets (4621936c7)
+Ported 4 exchange/trade serverpackets: SM_EXCHANGE_REQUEST (receiver name), SM_EXCHANGE_ADD_KINAH (kinah+action), SM_EXCHANGE_CONFIRMATION (action byte), SM_EXCHANGE_ADD_ITEM (action/template/objid/name + ItemInfoBlob.GetFullBlob.WriteMe(GetBuf())). ItemInfoBlob red-tolerated. Guardrail green.
