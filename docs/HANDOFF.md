@@ -1064,3 +1064,6 @@ Ported network/aion/serverpackets/SM_CHARACTER_SELECT (44L): passkey window/resu
 
 ## 2026-06-10 — SM_CREATE_CHARACTER (1e23b786e)
 Ported network/aion/serverpackets/SM_CREATE_CHARACTER (68L, extends AbstractPlayerInfoPacket): CM_CREATE_CHARACTER response — 11 response-code consts (OK/limit/invalid-name/forbidden/reserved/other-race/class/open-window), writes code then WritePlayerInfo on RESPONSE_OK. Guardrail green.
+
+## 2026-06-10 — SM_DELETE_CHARACTER (9e52e0e43)
+Ported network/aion/serverpackets/SM_DELETE_CHARACTER (36L): CM_DELETE_CHARACTER response — objId + deletionTime, or failure triple (0x10/0/0) when objId==0. Completes char-screen packet set (LIST/SELECT/CREATE/DELETE + AbstractPlayerInfoPacket base). Guardrail green.
