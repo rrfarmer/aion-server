@@ -1352,3 +1352,6 @@ Ported 2 warehouse serverpackets: SM_WAREHOUSE_INFO (kosyachok — contents per-
 
 ## 2026-06-10 — SM_WINDSTREAM + SM_WINDSTREAM_ANNOUNCE
 Ported 2 windstream serverpackets: SM_WINDSTREAM (2 unk fields) and SM_WINDSTREAM_ANNOUNCE (LokiReborn — bidirectional/map/stream/state). Guardrail green.
+
+## 2026-06-10 — SM_TIME_CHECK + SM_USE_OBJECT
+Ported 2 serverpackets: SM_TIME_CHECK (-Nemesiss- — server uptime + nanoTime; ManagementFactory.getRuntimeMXBean().getUptime() -> process uptime via Process.StartTime) and SM_USE_OBJECT (ATracer — use-object animation). Guardrail green.
