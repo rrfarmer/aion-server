@@ -1412,3 +1412,6 @@ Ported the two core chat clientpackets (SoulKeeper): CM_CHAT_MESSAGE_PUBLIC (Cha
 
 ## 2026-06-10 — CM_CHAT_PLAYER_INFO + CM_CHAT_GROUP_INFO + CM_CHAT_AUTH
 Ported 3 more chat clientpackets: CM_CHAT_PLAYER_INFO (prix/Neon — chat-window info, knows() gate), CM_CHAT_GROUP_INFO (ginho1/Neon — group chat-window, unk readD), CM_CHAT_AUTH (Luno — one-shot chatserver login request, reads objId + 6-byte MAC). World/SM_CHAT_WINDOW/SM_SYSTEM_MESSAGE/ChatServer red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_CHECK_NICKNAME + CM_CLOSE_DIALOG + CM_CLIENT_COMMAND_ROLL
+Ported 3 clientpackets: CM_CHECK_NICKNAME (-Nemesiss-/cura — nickname availability check; reserved/used/invalid/forbidden/ok via SM_CREATE_CHARACTER.RESPONSE_* + CHARACTER_CREATION_MODE), CM_CLOSE_DIALOG (close/unselect dialog -> DialogService.OnCloseDialog), CM_CLIENT_COMMAND_ROLL (Rhys2002 — /roll dice, Rnd.Get(1,maxRoll) default 100, self+broadcast dice messages). PlayerService/NameRestrictionService/DialogService/Rnd/SM_* red-tolerated. Guardrail green.
