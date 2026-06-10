@@ -1076,3 +1076,6 @@ Ported network/aion/serverpackets/SM_FRIEND_RESPONSE (133L): add/delete-friend r
 
 ## 2026-06-10 — SM_FRIEND_UPDATE + SM_FRIEND_STATUS (58f449b70)
 Ported 2 friend serverpackets: SM_FRIEND_UPDATE (43L — friendlist status entry: name/level/class/gender/map/lastonline/note/status; FriendList.Status via alias; LoggerFactory->NullLogger LogDebug) and SM_FRIEND_STATUS (status byte). Continues social packet group (with SM_FRIEND_RESPONSE/LIST/NOTIFY). Guardrail green.
+
+## 2026-06-10 — SM_BLOCK_RESPONSE (f3c04a435)
+Ported network/aion/serverpackets/SM_BLOCK_RESPONSE (59L): block-list request reply (name + code). 6 code consts (BLOCK/UNBLOCK_SUCCESSFUL, TARGET_NOT_FOUND, LIST_FULL, CANT_BLOCK_SELF, EDIT_NOTE). Rounds out social/block packet group. Guardrail green.
