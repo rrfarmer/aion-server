@@ -1235,3 +1235,6 @@ Ported 2 house serverpackets: SM_DELETE_HOUSE (address) and SM_DELETE_HOUSE_OBJE
 
 ## 2026-06-10 — SM_HOUSE_OWNER_INFO
 Ported network/aion/serverpackets/SM_HOUSE_OWNER_INFO (70L, Rolandas/Neon): active/inactive house + owner-state bitmask + weeks-until-pay calc. java.time mappings: ZonedDateTime->DateTimeOffset, DayOfWeek->System.DayOfWeek (.Sunday), getHour->Hour, Duration.between(a,b).toDays()->(long)(b-a).TotalDays (toward-zero truncation). HouseOwnerState.getId enum; getNextPay() nullable DateTimeOffset?.Value. House/HousingService/ServerTime red-tolerated. Guardrail green.
+
+## 2026-06-10 — AbstractHouseInfoPacket + SM_HOUSE_RENDER + SM_HOUSE_ACQUIRE
+Ported house-info base AbstractHouseInfoPacket (Neon): WriteCommonInfo (address/owner/building(GetType_)/door/sign + PartType decor-registry loop + legion emblem). PartType real C# enum -> Enum.GetValues + GetRooms ext; Integer decorId->int?; CHARNAME_MAX_LENGTH from AbstractPlayerInfoPacket. Plus SM_HOUSE_RENDER (WriteCommonInfo) and SM_HOUSE_ACQUIRE (playerId/address/acquire). House/LegionMember/LegionService red-tolerated. Guardrail green.
