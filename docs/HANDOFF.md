@@ -1511,3 +1511,6 @@ Ported CM_PING_REQUEST (dragoon112 — /ping -> SM_PING_RESPONSE) and CM_PLAYER_
 
 ## 2026-06-10 — CM_TIME_CHECK + CM_OBJECT_SEARCH
 Ported CM_TIME_CHECK (-Nemesiss- — time-sync ping/pong; echoes nanoTime via SM_TIME_CHECK after SM_AFTER_TIME_CHECK_4_7_5; commented-out nanoTime diag preserved) and CM_OBJECT_SEARCH (Lyahim — nearest-spawn-by-npcId in player world -> SM_SHOW_NPC_ON_MAP else STR_FIND_POS_UNKNOWN_NAME). DataManager.SPAWNS_DATA/SpawnSearchResult/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_OPEN_STATICDOOR + CM_SUBZONE_CHANGE
+Ported CM_OPEN_STATICDOOR (rhys2002/Wakizashi — StaticDoorService.OpenStaticDoor) and CM_SUBZONE_CHANGE (Rolandas — RevalidateZones + GM ZONE_INFO zone echo skipping DUMMY/WEATHER; Java enum.name() -> ToString()). StaticDoorService/ZoneInstance/ZoneClassName red-tolerated. Guardrail green.
