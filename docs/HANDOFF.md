@@ -1232,3 +1232,6 @@ Ported 2 house serverpackets: SM_HOUSE_TELEPORT (address + playerId) and SM_HOUS
 
 ## 2026-06-10 — SM_DELETE_HOUSE + SM_DELETE_HOUSE_OBJECT
 Ported 2 house serverpackets: SM_DELETE_HOUSE (address) and SM_DELETE_HOUSE_OBJECT (item objId). Guardrail green.
+
+## 2026-06-10 — SM_HOUSE_OWNER_INFO
+Ported network/aion/serverpackets/SM_HOUSE_OWNER_INFO (70L, Rolandas/Neon): active/inactive house + owner-state bitmask + weeks-until-pay calc. java.time mappings: ZonedDateTime->DateTimeOffset, DayOfWeek->System.DayOfWeek (.Sunday), getHour->Hour, Duration.between(a,b).toDays()->(long)(b-a).TotalDays (toward-zero truncation). HouseOwnerState.getId enum; getNextPay() nullable DateTimeOffset?.Value. House/HousingService/ServerTime red-tolerated. Guardrail green.
