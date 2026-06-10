@@ -1193,3 +1193,6 @@ Ported 2 group serverpackets: SM_GROUP_INFO (id/leader/world/loot rules/team typ
 
 ## 2026-06-10 — SM_GROUP_LOOT + SM_GROUP_DATA_EXCHANGE
 Ported 2 group serverpackets: SM_GROUP_LOOT (roll/distribution entry: group/index/item/corpse/distribution/player/luck) and SM_GROUP_DATA_EXCHANGE (action + optional unk + length-prefixed blob). Completes group packet group (INFO/MEMBER_INFO/LEAVE/LOOT/DATA_EXCHANGE). Guardrail green.
+
+## 2026-06-10 — SM_LEGION_UPDATE_NICKNAME + SM_LEGION_UPDATE_MEMBER
+Ported 2 legion-member serverpackets: SM_LEGION_UPDATE_NICKNAME (objId + nickname) and SM_LEGION_UPDATE_MEMBER (rank/class/level/world/online/lastonline + GAMESERVER_ID + msg; 3 ctors). Opens legion-member packet group. LegionMember/NetworkConfig red-tolerated. Guardrail green.
