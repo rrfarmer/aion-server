@@ -1601,3 +1601,6 @@ Ported CM_LEGION_HISTORY (Simple/xTz/Sykra — page+type history; LegionHistoryA
 
 ## 2026-06-10 — CM_LEGION_MODIFY_EMBLEM + CM_LEGION_SEND_EMBLEM_INFO
 Ported CM_LEGION_MODIFY_EMBLEM (Simple/cura/Neon — store emblem id/argb/type; LegionEmblemType.DEFAULT.GetValue() ext, DEFAULT/CUSTOM; legion-member+id guard) and CM_LEGION_SEND_EMBLEM_INFO (cura — SM_LEGION_SEND_EMBLEM info-only, no EMBLEM_DATA). LegionEmblemType/LegionService/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_LEGION_SEND_EMBLEM + CM_LEGION_UPLOAD_EMBLEM + CM_LEGION_UPLOAD_INFO
+Ported 3 legion emblem clientpackets: CM_LEGION_SEND_EMBLEM (Simple/cura/Neon — SendEmblemData full), CM_LEGION_UPLOAD_EMBLEM (Simple — UploadEmblemData chunk), CM_LEGION_UPLOAD_INFO (Simple/cura — UploadEmblemInfo size+argb, LegionEmblemType.CUSTOM). LegionService/LegionEmblemType red-tolerated. Legion emblem cluster (MODIFY/SEND_INFO/SEND/UPLOAD_EMBLEM/UPLOAD_INFO) now complete. Guardrail green.
