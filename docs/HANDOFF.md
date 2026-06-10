@@ -1013,3 +1013,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpackets SM_DELETE (-Nemesiss-/Neon; object despawn w/ delete animation, NONE out of range), SM_GATHERABLE_INFO (ATracer; gatherable/door state info), SM_SKILL_ACTIVATION (Sweetkr; toggle/stigma-remove). instanceof->is; ObjectDeleteAnimation red-tolerated. Guardrail green.
+
+## 2026-06-10
+- Ported network serverpackets SM_CLOSE_QUESTION_WINDOW (Neon; close window + reason/params, params object[], field params->parameters keyword), SM_FRIEND_NOTIFY (Ben; friend login/out/delete), SM_REPURCHASE (xTz/KID; NPC repurchase list w/ ItemInfoBlob; converges RepurchaseService). Guardrail green.
