@@ -1301,3 +1301,6 @@ Ported network/aion/serverpackets/SM_PET_EMOTE (54L, ATracer/Neon): pet emote/mo
 
 ## 2026-06-10 — SM_OBJECT_USE_UPDATE + SM_MEGAPHONE
 Ported 2 serverpackets: SM_OBJECT_USE_UPDATE (Rolandas — postbox/storage/useable-item use update; HouseObject<?>->HouseObject<PlaceableHouseObject>, instanceof->is+cast, getCheckType nullable int?) and SM_MEGAPHONE (Artur/Neon — -megaphone chat; nested FactionLabel enum with byte id from Race.getRaceId() -> sealed value-class + public id field). HouseObject/UseableItemObject/UseItemAction/Race red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_QUEST_ACTION
+Ported network/aion/serverpackets/SM_QUEST_ACTION (124L, VladimirZ): quest ADD/UPDATE/ABANDON/TIMER/SHARE/UNK notice (4 ctors). Nested ActionType enum ids 1..6 == value -> real C# enum + (int) for getId(); switch labels qualified; QuestExtraCategory.NONE guard; step | flags<<24. QuestState/QuestTemplate red-tolerated. Opens quest packet group. Guardrail green.
