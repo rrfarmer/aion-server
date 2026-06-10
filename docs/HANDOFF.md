@@ -1196,3 +1196,6 @@ Ported 2 group serverpackets: SM_GROUP_LOOT (roll/distribution entry: group/inde
 
 ## 2026-06-10 — SM_LEGION_UPDATE_NICKNAME + SM_LEGION_UPDATE_MEMBER
 Ported 2 legion-member serverpackets: SM_LEGION_UPDATE_NICKNAME (objId + nickname) and SM_LEGION_UPDATE_MEMBER (rank/class/level/world/online/lastonline + GAMESERVER_ID + msg; 3 ctors). Opens legion-member packet group. LegionMember/NetworkConfig red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_LEGION_ADD_MEMBER + SM_LEGION_LEAVE_MEMBER
+Ported 2 legion-member serverpackets: SM_LEGION_ADD_MEMBER (new member objId/name/rank/isMember/class/level/map + GAMESERVER_ID + msg) and SM_LEGION_LEAVE_MEMBER (leave/kick objId + msgId + name(s); 2 ctors). Player/NetworkConfig red-tolerated. Guardrail green.
