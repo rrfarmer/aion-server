@@ -1478,3 +1478,6 @@ Ported 3 clientpackets, completing the friend-list cluster: CM_SHOW_FRIENDLIST (
 
 ## 2026-06-10 — CM_GATHER + CM_INVITE_TO_GROUP
 Ported CM_GATHER (ATracer — start/cancel gathering; switch-arrow -1/0,128/default flattened; cancel path stream filter/findFirst/map/orElse -> LINQ Where/Select/FirstOrDefault over GetKnownList w/ o.Get(); getClass() logger -> GetType_().Name) and CM_INVITE_TO_GROUP (Lyahim/ATracer/Simple/Neon — dead/offline/deny guards; inviteType 0/12/28 -> PlayerGroupService/PlayerAllianceService/LeagueService). Gatherable/AuditLogger/team services/World red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_GROUP_LOOT + CM_GROUP_DISTRIBUTION + CM_GROUP_DATA_EXCHANGE
+Ported 3 group clientpackets: CM_GROUP_LOOT (Rhys2002 — roll/bid response -> DropDistributionService.HandleRollOrBid), CM_GROUP_DISTRIBUTION (Lyahim/Simple/xTz — kinah distribute by partyType 1/2/3 across group/alliance/league; amount<2 + canTrade guards), CM_GROUP_DATA_EXCHANGE (xTz — opaque UI exchange relay; MAX_EXCHANGE_DATA_SIZE = AionServerPacket.MAX_USABLE_PACKET_BODY_SIZE-6; action 1 broadcast-and-receive else per online-member send; ByteBuffer.wrap+NetworkUtils.toHex -> NetworkUtils.ToHex(data)). DropDistributionService/team services/SM_GROUP_DATA_EXCHANGE/NetworkUtils red-tolerated. Guardrail green.
