@@ -1256,3 +1256,6 @@ Ported 2 in-game-shop serverpackets: SM_IN_GAME_SHOP_CATEGORY_LIST (type 0 categ
 
 ## 2026-06-10 — SM_IN_GAME_SHOP_LIST
 Ported network/aion/serverpackets/SM_IN_GAME_SHOP_LIST (71L, xTz/KID): paged shop item list (salesRanking 1, 9-per-tab paging) / top-sales list. computeIfAbsent(f,k->new ArrayList).add->TryGetValue-or-add; Map.get(nrList)->GetValueOrDefault; player.inGameShop field. Completes in-game-shop packet group (CATEGORY_LIST/ITEM/LIST). IGItem/InGameShopEn red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_KEY + SM_L2AUTH_LOGIN_CHECK
+Ported 2 login serverpackets: SM_KEY (EnableCryptKey) and SM_L2AUTH_LOGIN_CHECK (-Nemesiss- — auth result + world-map list; static standardData/fastTrackData hex blobs via static ctor + Hex2Byte using Convert.ToInt32(substr,16); DataManager.WORLD_MAPS_DATA iteration). DataManager/WorldMapTemplate red-tolerated. Guardrail green.
