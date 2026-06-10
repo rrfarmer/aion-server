@@ -1142,3 +1142,6 @@ Ported network/aion/serverpackets/SM_ABYSS_RANKING_LEGIONS (54L): abyss legion r
 
 ## 2026-06-10 — SM_BIND_POINT_INFO + SM_BIND_POINT_TELEPORT
 Ported 2 bind-point serverpackets: SM_BIND_POINT_INFO (obelisk/Kisk display: type/map/x/y/z/kiskObjId; Kisk ctor with inactive-kisk guard) and SM_BIND_POINT_TELEPORT (action/playerId + locId/cooldown by action switch 1/3). Converges BindPointTeleportService. Kisk/WorldPosition red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_CHAT_INIT + SM_CHAT_WINDOW
+Ported 2 chat serverpackets: SM_CHAT_INIT (chat auth token length+bytes) and SM_CHAT_WINDOW (130L — group(2)/alliance(3)/no-group(4)/single(1) target info layouts). PlayerClass is real C# enum w/ GetClassId extension -> PlayerClass.values().length = Enum.GetValues<PlayerClass>().Length; explicit IEnumerator consumption for the 4 captains loop; getName(true)->GetName(true). PlayerGroup/PlayerAlliance red-tolerated. Guardrail green.
