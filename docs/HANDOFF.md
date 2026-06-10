@@ -1508,3 +1508,6 @@ Ported CM_PING (-Nemesiss-/Undertrey/Neon — heartbeat -> SM_PONG; ping-interva
 
 ## 2026-06-10 — CM_PING_REQUEST + CM_PLAYER_SEARCH
 Ported CM_PING_REQUEST (dragoon112 — /ping -> SM_PING_RESPONSE) and CM_PLAYER_SEARCH (Ben — social/who search: level gate, staff bypass, race/offline/GM/lfg/name-substring/min-max-level/classMask-bit/region/self filters, MAX_RESULTS=104 cap; FriendList.Status aliased; getClassId() ext; toLowerCase->ToLower; isEmpty->Length!=0). World/SM_PLAYER_SEARCH/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_TIME_CHECK + CM_OBJECT_SEARCH
+Ported CM_TIME_CHECK (-Nemesiss- — time-sync ping/pong; echoes nanoTime via SM_TIME_CHECK after SM_AFTER_TIME_CHECK_4_7_5; commented-out nanoTime diag preserved) and CM_OBJECT_SEARCH (Lyahim — nearest-spawn-by-npcId in player world -> SM_SHOW_NPC_ON_MAP else STR_FIND_POS_UNKNOWN_NAME). DataManager.SPAWNS_DATA/SpawnSearchResult/SM_* red-tolerated. Guardrail green.
