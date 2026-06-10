@@ -1643,3 +1643,6 @@ Ported CM_UPGRADE_ARCADE (ginho1 — arcade event actions 0-5 via UpgradeArcadeS
 
 ## 2026-06-10 — CM_POSITION_SELF + CM_MOVE_IN_AIR
 Ported CM_POSITION_SELF (reply to SM_POSITION_SELF, no-op) and CM_MOVE_IN_AIR (-Nemesiss-/Sweetkr/KID — flying-teleport move: spawned+FLYING(PascalCase) guard, FlightPath.SetDistance, protection cancel, World.UpdatePosition, OnMoveFromClient/OnMove). World/CreatureState red-tolerated. 3 clientpackets remain (CM_FIND_GROUP, CM_MOVE, CM_VERSION_CHECK). Guardrail green.
+
+## 2026-06-10 — CM_MOVE
+Ported CM_MOVE (-Nemesiss- — core player-movement packet): MovementMask position/glide(GEYSER)/vehicle parsing w/ absolute-vs-vector dirs; runImpl dead/fear/confused + bogus-packet guards, jumping calc, glide switch, teleportation-mode absolute fast-path, vector-speed direction, vehicle fields, AntiHackService.CanMove, protection cancel, World.UpdatePosition, NotifyControllers (immediate turn/stop vs start vs move), SM_MOVE broadcast, fall vs stop-falling; HandleBogusPacket (RandomMoveLocEffect range workaround -> SM_FORCED_MOVE/SM_MOVE); ToString() override preserved. MovementMask/GlideFlag/PlayerMoveController/AntiHackService red-tolerated. Only CM_FIND_GROUP + CM_VERSION_CHECK remain. Guardrail green.
