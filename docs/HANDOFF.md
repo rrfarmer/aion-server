@@ -1406,3 +1406,6 @@ Ported the 7 broker-window clientpackets converging SM_BROKER_SERVICE / BrokerSe
 
 ## 2026-06-10 — CM_BUY_BROKER_ITEM + CM_BUY_ITEM
 Ported CM_BUY_BROKER_ITEM (kosyak — buy broker item by unique id/count, OPEN_VENDOR gate) and CM_BUY_ITEM (orz/ATracer/Simple/xTz — multi-purpose buy/sell/repurchase dispatcher over private store / shop / abyss / reward / merchant-pet via tradeActionId; anti-exploit amount/count audit; instanceof->is pattern for Player/Npc/Pet target). TradeService/PrivateStoreService/RepurchaseService/DialogService/RepurchaseList/TradeList red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_CHAT_MESSAGE_PUBLIC + CM_CHAT_MESSAGE_WHISPER
+Ported the two core chat clientpackets (SoulKeeper): CM_CHAT_MESSAGE_PUBLIC (ChatType-dispatched broadcast — group/alliance/group-leader/legion/league/normal/shout/commander; ChatProcessor command intercept; block-list & race predicate lambdas -> Func<Player,bool>) and CM_CHAT_MESSAGE_WHISPER (whisper routing w/ no-such-user / refuse / level / block / cross-race guards). ChatProcessor/PlayerChatService/NameRestrictionService/PlayerRestrictions/World/SM_MESSAGE/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
