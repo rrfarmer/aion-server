@@ -995,3 +995,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported 4 login serverpackets (all converge PlayerEnterWorldService): SM_PRICES (uses ported PricesService), SM_BLOCK_LIST, SM_FRIEND_LIST (id/class/gender/status/house), SM_GAME_TIME. Iterables->foreach; Status alias. Guardrail green.
+
+## 2026-06-10
+- Ported network serverpackets SM_QUEST_LIST (uncompleted quests, -size&0xFFFF), SM_SKILL_COOLDOWN (ATracer/nrg; single/full/reset, nested record Cooldown, Comparator.comparingInt->Sort, stream toMap->ToDictionary, Map.get null->TryGetValue), SM_EMOTION_LIST (emotion id+expiry). All converge PlayerEnterWorldService. Guardrail green.
