@@ -1085,3 +1085,6 @@ Ported network/aion/serverpackets/SM_DUEL (65L): duel started (type 0, requester
 
 ## 2026-06-10 — SM_ATTACK_STATUS (053f9c151)
 Ported network/aion/serverpackets/SM_ATTACK_STATUS (182L): HP/MP/FP change status. KEY: nested TYPE enum has DUPLICATE int values (HP=7=DAMAGE, ABSORBED_MP=20=DAMAGE_MP, FP=26=FP_DAMAGE, DROWNING=12=TYPE12) and the writeImpl switch distinguishes constants by IDENTITY not value (DAMAGE writes -value; HP falls to default writing +value). A plain C# enum would collapse them, so TYPE/LOG -> sealed value-classes (reference identity) + switch -> reference-equality if-chains (RiftInformer idiom). 3 ctors. Creature/LifeStats red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_FLY_TIME + SM_DP_INFO (1304e5998)
+Ported 2 player-state serverpackets: SM_FLY_TIME (current+max FP) and SM_DP_INFO (objId + current DP). Trivial WriteD/WriteH. Guardrail green.
