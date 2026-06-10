@@ -1472,3 +1472,6 @@ Ported the full player-trade clientpacket group converging ExchangeService: CM_E
 
 ## 2026-06-10 — CM_FRIEND_* clientpacket group (4 files)
 Ported the friend-list clientpackets converging SocialService: CM_FRIEND_ADD (Ben/Neon — offline/self/GM-restrict/already-friend/race/block/full/deny guard chain + buddy-request question window; anonymous RequestResponseHandler<Player> -> nested FriendAddResponseHandler capturing the packet so DenyRequest can call protected SendPacket), CM_FRIEND_DEL, CM_FRIEND_SET_MEMO, CM_FRIEND_STATUS (FriendList.Status aliased; getByValue -> FriendListStatusExtensions.GetByValue, null->ONLINE fallback, statusEnum.Value). SocialService/SM_FRIEND_RESPONSE/SM_FRIEND_STATUS/SM_QUESTION_WINDOW/World red-tolerated. Clientpacket pillar ~63/190. Guardrail green.
+
+## 2026-06-10 — CM_SHOW_FRIENDLIST + CM_MARK_FRIENDLIST + CM_GAMEGUARD
+Ported 3 clientpackets, completing the friend-list cluster: CM_SHOW_FRIENDLIST (Ben — reply SM_FRIEND_LIST), CM_MARK_FRIENDLIST (xTz/Rolandas — reply SM_MARK_FRIENDLIST), CM_GAMEGUARD (read size + blob -> AntiHackService.CheckAionBin). SM_FRIEND_LIST/SM_MARK_FRIENDLIST/AntiHackService red-tolerated. Guardrail green.
