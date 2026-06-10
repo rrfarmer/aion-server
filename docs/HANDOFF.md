@@ -1022,3 +1022,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpackets SM_INVENTORY_UPDATE_ITEM (ATracer/-Nemesiss-; single inventory item update w/ type-specific ItemInfoBlob; converges ItemActionService/ItemChargeService) and SM_WAREHOUSE_UPDATE_ITEM (kosyachok/-Nemesiss-; warehouse item update). switch-on-ItemUpdateType; ItemBlobType/ItemUpdateType aliases; writeMe(getBuf())->WriteMe(GetBuf()). Guardrail green.
+
+## 2026-06-10
+- Ported network serverpacket SM_EMOTION (SoulKeeper/-Enomine-, 182L; creature emotion/state broadcast - fly/land/sit/loot/ride/resurrect/emote/speed/windstream w/ per-EmotionType payload, 4 ctors). Converges PlayerReviveService (RESURRECT). switch-arrow groups->stacked case labels; getTypeId()->GetTypeId(); writeF(int hex)->WriteF int->float. EmotionType/Stat2 red-tolerated. Guardrail green.
