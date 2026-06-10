@@ -1475,3 +1475,6 @@ Ported the friend-list clientpackets converging SocialService: CM_FRIEND_ADD (Be
 
 ## 2026-06-10 — CM_SHOW_FRIENDLIST + CM_MARK_FRIENDLIST + CM_GAMEGUARD
 Ported 3 clientpackets, completing the friend-list cluster: CM_SHOW_FRIENDLIST (Ben — reply SM_FRIEND_LIST), CM_MARK_FRIENDLIST (xTz/Rolandas — reply SM_MARK_FRIENDLIST), CM_GAMEGUARD (read size + blob -> AntiHackService.CheckAionBin). SM_FRIEND_LIST/SM_MARK_FRIENDLIST/AntiHackService red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_GATHER + CM_INVITE_TO_GROUP
+Ported CM_GATHER (ATracer — start/cancel gathering; switch-arrow -1/0,128/default flattened; cancel path stream filter/findFirst/map/orElse -> LINQ Where/Select/FirstOrDefault over GetKnownList w/ o.Get(); getClass() logger -> GetType_().Name) and CM_INVITE_TO_GROUP (Lyahim/ATracer/Simple/Neon — dead/offline/deny guards; inviteType 0/12/28 -> PlayerGroupService/PlayerAllianceService/LeagueService). Gatherable/AuditLogger/team services/World red-tolerated. Guardrail green.
