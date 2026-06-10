@@ -1265,3 +1265,6 @@ Ported SM_GF_WEBSHOP_TOKEN_RESPONSE (Artur — 32-char token) and SM_CUSTOM_PACK
 
 ## 2026-06-10 — SM_GM_SHOW_PLAYER_STATUS
 Ported network/aion/serverpackets/SM_GM_SHOW_PLAYER_STATUS (202L, Yeats): GM full stat-sheet dump for a player (name + 12 reserved Qs + identical current/base stat block as SM_STATS_INFO). getCurrent/getBase->PascalCase; writeF(x/1000f); StatEnum/PlayerGameStats/CalculationType red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_FIND_GROUP
+Ported network/aion/serverpackets/SM_FIND_GROUP (245L, cura/MrPoke): find-group board — recruitments(0)/remove(1)/applications(4)/remove(5)/instance-groups(10)/whisper-app(11)/register(14)/member-info(16)/prepare-for-entry windows(18/22/23/24)/enable-register(26). List<? extends FindGroupEntry> -> IReadOnlyList<FindGroupEntry> (covariant accepts subtype lists, downcast at switch); switch-arrow->switch statement; instanceof Player->is; getName(true)->GetName(true); currentTimeMillis()/1000->DateTimeOffset. FindGroup model/NetworkConfig red-tolerated. Guardrail green.
