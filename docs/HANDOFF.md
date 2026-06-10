@@ -1139,3 +1139,6 @@ Ported network/aion/serverpackets/SM_ABYSS_RANKING_PLAYERS (62L): paged abyss pl
 
 ## 2026-06-10 — SM_ABYSS_RANKING_LEGIONS
 Ported network/aion/serverpackets/SM_ABYSS_RANKING_LEGIONS (54L): abyss legion ranking — race/updateTime/clearflag + per-legion position/oldpos/id/level/memberCount/contributionPoints/name. RankingListLegion record accessors -> PascalCase (aliased from AbyssRankDAO); Collections.emptyList->new List; 3 ctors chained (private base). Completes abyss-ranking pair (PLAYERS+LEGIONS). AbyssRankDAO red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_BIND_POINT_INFO + SM_BIND_POINT_TELEPORT
+Ported 2 bind-point serverpackets: SM_BIND_POINT_INFO (obelisk/Kisk display: type/map/x/y/z/kiskObjId; Kisk ctor with inactive-kisk guard) and SM_BIND_POINT_TELEPORT (action/playerId + locId/cooldown by action switch 1/3). Converges BindPointTeleportService. Kisk/WorldPosition red-tolerated. Guardrail green.
