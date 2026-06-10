@@ -941,3 +941,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported services/siege ArtifactSiege (SoulKeeper; endless artifact siege - boss init, capture winner race/legion + system messages, restart) + OutpostSiege (SoulKeeper/Estrayl; field-abyss agent boss - vulnerable/spawn, agent-defeated top-damager announce + winner buff, reward distribution, AP accrual). getWinnerLegionId Integer->int?(??0); keySet().iterator().next()->Keys.First(); forEachPlayer lambda; Map->Dictionary. Remaining siege: AgentSiege(154), FortressSiege(414), ArtifactAssault(55), FortressAssault(178), MercenaryLocation(138), BalaurAssaultService(146). Guardrail green.
+
+## 2026-06-10
+- Ported services/siege ArtifactAssault (Luzien/Whoop; extends Assault<ArtifactSiege>, level-based assaulter spawn near boss) + AgentSiege (Estrayl/Sykra; Levinshor Mastarius/Veille - recursive 60s delayStart ramp to spawn, zone-gated quest distribution, BALAUR/SIEGE boss init, capture base 6113 + rewards on finish). schedule(Runnable,ms)->Schedule ct-lambda (return->return CompletedTask); SiegeRace winner->SiegeRace? nullable; switch-on-SiegeRace; Math.toRadians->x*PI/180; ZoneName.get->Get. Remaining siege: FortressSiege(414), FortressAssault(178), MercenaryLocation(138), BalaurAssaultService(146). Guardrail green.
