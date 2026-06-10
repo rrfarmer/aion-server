@@ -1271,3 +1271,6 @@ Ported network/aion/serverpackets/SM_FIND_GROUP (245L, cura/MrPoke): find-group 
 
 ## 2026-06-10 — SM_PLAYER_STATE + SM_PLAYER_STANCE
 Ported 2 player-state serverpackets: SM_PLAYER_STATE (visual/see state + blinking flag via CreatureVisualState.BLINKING.GetId()) and SM_PLAYER_STANCE (objId + stance state). Creature/CreatureVisualState/Player red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_LOOT_STATUS
+Ported network/aion/serverpackets/SM_LOOT_STATUS (54L, alexa026): loot enable/disable + drop-list open/close + loot-effect lookup. Nested Status enum sequential 0..3 + GetId extension; stream mapToInt/filter/findAny.orElse(0) -> Select/Where/DefaultIfEmpty(0).First; getOrDefault->GetValueOrDefault(...,new HashSet). DropItem/DropRegistrationService red-tolerated. Guardrail green.
