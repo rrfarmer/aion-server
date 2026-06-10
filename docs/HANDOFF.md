@@ -1571,3 +1571,6 @@ Ported CM_LEVEL_READY (-Nemesiss-/Kwazar — the full enter-world sequence: hous
 
 ## 2026-06-10 — CM_MEGAPHONE + CM_PET_EMOTE
 Ported CM_MEGAPHONE (Artur/ginho1/Neon — global faction-chat via megaphone item; stream filter/map/findAny -> OfType<MegaphoneAction>().FirstOrDefault; cooldown+observers; currentTimeMillis->UtcNow) and CM_PET_EMOTE (ATracer — pet move/emotion; PetEmote PascalCase MoveStop/MovePositionUpdate/MoveTo/Emotion/Unknown via PetEmoteResolver.GetEmoteById; getClass() logger->GetType_().Name; private BroadcastToSightedPlayers w/ predicate lambda). MegaphoneAction/PetEmote/SM_*/World red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_USE_CHARGE_SKILL + CM_PLACE_BID
+Ported CM_USE_CHARGE_SKILL (Cheatkiller — release charge skill with accumulated time; isCharge guard, currentTimeMillis->UtcNow - castStartTime) and CM_PLACE_BID (Rolandas — house-auction bid via HousingBidService when ENABLE_HOUSE_AUCTIONS). Skill/HousingBidService red-tolerated. Guardrail green.
