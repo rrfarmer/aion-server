@@ -1403,3 +1403,6 @@ Ported 2 clientpackets: CM_BREAK_WEAPONS (zdead — defuse fused weapon w/ Dialo
 
 ## 2026-06-10 — CM_BROKER_* clientpacket group (7 files)
 Ported the 7 broker-window clientpackets converging SM_BROKER_SERVICE / BrokerService: CM_BROKER_LIST (browse by mask/sort/page), CM_BROKER_SEARCH (item-id list search), CM_BROKER_REGISTERED (view own registered items), CM_BROKER_CANCEL_REGISTERED (unregister item), CM_BROKER_SELL_WINDOW (open sell window, isTrading guard), CM_BROKER_SETTLE_ACCOUNT (collect kinah/unsold), CM_BROKER_SETTLE_LIST (sold-item list). All gate on IsTargetingNpcWithFunction(DialogAction.OPEN_VENDOR) except SELL_WINDOW. BrokerService/DialogAction/AuditLogger red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_BUY_BROKER_ITEM + CM_BUY_ITEM
+Ported CM_BUY_BROKER_ITEM (kosyak — buy broker item by unique id/count, OPEN_VENDOR gate) and CM_BUY_ITEM (orz/ATracer/Simple/xTz — multi-purpose buy/sell/repurchase dispatcher over private store / shop / abyss / reward / merchant-pet via tradeActionId; anti-exploit amount/count audit; instanceof->is pattern for Player/Npc/Pet target). TradeService/PrivateStoreService/RepurchaseService/DialogService/RepurchaseList/TradeList red-tolerated. Guardrail green.
