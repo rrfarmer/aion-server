@@ -1136,3 +1136,6 @@ Ported network/aion/serverpackets/SM_ABYSS_ARTIFACT_INFO3 (34L): abyss artifact 
 
 ## 2026-06-10 — SM_ABYSS_RANKING_PLAYERS
 Ported network/aion/serverpackets/SM_ABYSS_RANKING_PLAYERS (62L): paged abyss player ranking — race/lastUpdate/page/endflag + per-player position/rank/oldpos/id/class/gender/ap/gp/level/name/legion. RankingListPlayer record accessors -> PascalCase (aliased from AbyssRankDAO); Collections.emptyList->new List; static-import CHARNAME_MAX_LENGTH -> AbstractPlayerInfoPacket.CHARNAME_MAX_LENGTH. AbyssRankDAO red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_ABYSS_RANKING_LEGIONS
+Ported network/aion/serverpackets/SM_ABYSS_RANKING_LEGIONS (54L): abyss legion ranking — race/updateTime/clearflag + per-legion position/oldpos/id/level/memberCount/contributionPoints/name. RankingListLegion record accessors -> PascalCase (aliased from AbyssRankDAO); Collections.emptyList->new List; 3 ctors chained (private base). Completes abyss-ranking pair (PLAYERS+LEGIONS). AbyssRankDAO red-tolerated. Guardrail green.
