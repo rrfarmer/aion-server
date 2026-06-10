@@ -1454,3 +1454,6 @@ Ported 3 clientpackets: CM_BUILDER_COMMAND and CM_BUILDER_CONTROL (ginho1 — tr
 
 ## 2026-06-10 — CM_DELETE_ITEM + CM_DELETE_QUEST
 Ported CM_DELETE_ITEM (Avol — discard inventory item, unbreakable guard -> SM_SYSTEM_MESSAGE.STR_UNBREAKABLE_ITEM else inventory.Delete(ItemDeleteType.DISCARD); nested ItemDeleteType aliased) and CM_DELETE_QUEST (abandon quest; timed quests cancel TaskId.QUEST_TIMER + SM_QUEST_ACTION(id,0) then QuestService.AbandonQuest). Storage/ItemPacketService/DataManager/QuestService red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_DIALOG_SELECT
+Ported CM_DIALOG_SELECT (KKnD/orz/avol/Pad — core NPC/quest dialog dispatcher): protection/trading guards, DialogAction.NameOf + DIALOG_INFO admin echo, unknown-action warn; self/0-target quest path (QuestEnv, canReport SELECTED_QUEST_AUTO_REWARD0..15 -> FinishQuest, QuestEngine.OnDialog, simple-2ndclass ClassChange); NPC-target path (function-dialog SupportsAction + interaction-allowed audits, dialogActionId<SELECT1 gate) -> controller.OnDialogSelect. Java `import static DialogAction.*` -> qualified DialogAction.* const refs; pattern `instanceof X y` -> `is X y`. QuestEngine/QuestService/DialogService/DataManager/ClassChangeService red-tolerated. Guardrail green.
