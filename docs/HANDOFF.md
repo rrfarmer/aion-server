@@ -1634,3 +1634,6 @@ Ported CM_PET (M@xx/xTz — pet command dispatcher): action-switched read (adopt
 
 ## 2026-06-10 — CM_USE_HOUSE_OBJECT + CM_TELEPORT_SELECT
 Ported CM_USE_HOUSE_OBJECT (Rolandas — house object dialog via World.FindVisibleObject; HouseObject<?>-><PlaceableHouseObject>) and CM_TELEPORT_SELECT (ATracer/orz/KID — teleport via NPC: instanceof Npc->is + audit, ValidateTeleporterAndGetTemplate, GetTeleportLocation, hasStatic JUMP_IN_STATUE vs JUMP_IN). World/TeleportService/TeleporterTemplate red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_TELEPORT_ANIMATION_DONE + CM_VIEW_PLAYER_DETAILS
+Ported CM_TELEPORT_ANIMATION_DONE (Rolandas/Neon — run deferred TELEPORT task on anim end; Java RunnableFuture run()/get() + InterruptedException|ExecutionException multi-catch -> ScheduledTask Run()/Get() + single catch w/ e.InnerException as getCause(); fallback spawn if not spawned. concurrency-model adaptation noted) and CM_VIEW_PLAYER_DETAILS (Avol — show equipment unless VIEW_DETAILS denied / GM bypass). World/SM_PLAYER_INFO/SM_VIEW_PLAYER_DETAILS red-tolerated. Guardrail green.
