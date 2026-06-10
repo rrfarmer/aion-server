@@ -1055,3 +1055,6 @@ Ported network/aion/serverpackets/SM_PLAYER_INFO (230L, extends AbstractPlayerIn
 
 ## 2026-06-10 — AbstractPlayerInfoPacket (55fc014a4)
 Ported network/aion/serverpackets/AbstractPlayerInfoPacket (181L, abstract base of SM_PLAYER_INFO + character-list/select packets). WritePlayerInfo: full PlayerAccountData appearance/legion/16-visible-items/ban-info for char screen; WriteEquippedItems: in-world equipment slot mask + skin/godstone/dye/enchant. GetCharBanInfo: faction-switch cooldown ban (U+E026 PUA glyph preserved byte-faithful). currentTimeMillis()/1000 -> DateTimeOffset; VisibleItem record accessors -> PascalCase; DAO/SecurityConfig/BrokerService red-tolerated. Converges SM_PLAYER_INFO/SM_STATS_INFO base. Guardrail green (363 slop, 5 god-classes).
+
+## 2026-06-10 — SM_CHARACTER_LIST (0f118506e)
+Ported network/aion/serverpackets/SM_CHARACTER_LIST (36L, extends AbstractPlayerInfoPacket): sends account char list — playOk2, char count, WritePlayerInfo per PlayerAccountData. Builds on AbstractPlayerInfoPacket base. Guardrail green.
