@@ -1424,3 +1424,6 @@ Ported 3 clientpackets: CM_CHECK_MAIL_LIST (ginho1 — request mailbox list, exp
 
 ## 2026-06-10 — CM_CHARACTER_PASSKEY + CM_CUSTOM_SETTINGS
 Ported CM_CHARACTER_PASSKEY (ginho1 — passkey new/update/input type 0/2/3; UTF-16LE byte[48] -> Encoding.Unicode.GetString; wrong-count block via LoginServer ban; ENTER/DELETE connect-type branch; ConnectType aliased) and CM_CUSTOM_SETTINGS (Sweetkr — display/deny player settings + broadcast SM_CUSTOM_SETTINGS). PlayerPasskeyDAO/CharacterPasskey/PlayerEnterWorldService/LoginServer/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_CHECK_PAK + CM_CRAFT
+Ported CM_CHECK_PAK (ginho1 — data-pak integrity audit; String.isEmpty->Length!=0, endsWith/contains preserved) and CM_CRAFT (Mr. Poke — start crafting w/ materials map readD/readQ; shutdown guard via GameServer aliased GameServerMain to dodge namespace collision; unk!=129 range+template validation via PositionUtil; CraftService.StartCrafting). CraftService/PositionUtil/AuditLogger red-tolerated. Guardrail green.
