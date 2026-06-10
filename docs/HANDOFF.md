@@ -1490,3 +1490,6 @@ Ported CM_MOVE_ITEM (alexa026/kosyachok — move item across storages 0-3 -> Ite
 
 ## 2026-06-10 — CM_TARGET_SELECT + CM_REPLACE_ITEM
 Ported CM_TARGET_SELECT (SoulKeeper/Sweetkr/KID — click/hotkey/chat target select + assist target-of-target; assist no-target/no-user/too-far msgs, team-member resolution, radar-hack audit on invisible) and CM_REPLACE_ITEM (kosyachok — swap items between storages -> ItemMoveService.SwitchItemsInStorages). VisibleObject/AuditLogger/ItemMoveService red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_MANASTONE + CM_REVIVE
+Ported CM_MANASTONE (ATracer/Wakizashi — actionType 1/2 enchant/manastone w/ stigma-charge vs EnchantItemAction + suppliment 1661 check (assignment-in-condition preserved), 3 remove-manastone (talk-range npc target, instanceof->is), 4 godstone socket, 8 amplify) and CM_REVIVE (ATracer/orz/avol/Simple — ReviveType switch -> PlayerReviveService bind/obelisk/rebirth/item-self/skill/kisk/instance; ReviveType SCREAMING + ReviveTypeExtensions.GetReviveTypeById). EnchantService/StigmaService/ItemSocketService/PlayerReviveService red-tolerated. Guardrail green.
