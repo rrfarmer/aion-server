@@ -1442,3 +1442,6 @@ Ported CM_CASTSPELL (alexa026/rhys2002 — core skill-cast packet): targetType-s
 
 ## 2026-06-10 — CM_ATTACK
 Ported CM_ATTACK (alexa026/Avol/ATracer/KID — auto-attack initiation): death guard, protection cancel, known-list target lookup, instanceof Creature -> controller.AttackTarget(time,false) else warn on unsupported target. Creature/VisibleObject/controller red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_CHARACTER_LIST + CM_ATREIAN_PASSPORT
+Ported CM_CHARACTER_LIST (-Nemesiss- — replies SM_ACCOUNT_PROPERTIES + SM_CHARACTER_LIST(playOk2)) and CM_ATREIAN_PASSPORT (ViAl — reads passportId/timestamp pairs, count==-1 reads until <8 bytes remain w/ invalid-count warn; Map.compute -> TryGetValue-or-add into Dictionary<int,HashSet<int>>; AtreianPassportService.TakeReward). SM_*/AtreianPassportService red-tolerated. Guardrail green.
