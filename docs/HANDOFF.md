@@ -1391,3 +1391,6 @@ Ported network/aion/clientpackets/CM_CAPTCHA (Cura) — FIRST clientpacket (pill
 
 ## 2026-06-10 — CM_ABYSS_RANKING_PLAYERS/LEGIONS + CM_BIND_POINT_TELEPORT
 Ported 3 clientpackets: CM_ABYSS_RANKING_PLAYERS + CM_ABYSS_RANKING_LEGIONS (SheppeR — race ranking requests; converge SM_ABYSS_RANKING_* + AbyssRankingCache; AbyssRank.AbyssRankUpdateType aliased) and CM_BIND_POINT_TELEPORT (ginho1 — converges BindPointTeleportService). raceId=ReadC() preserved (no cast, base ReadC assumed byte). AionClientPacket base red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_BLOCK_ADD/DEL/SET_REASON
+Ported 3 block clientpackets (Ben): CM_BLOCK_ADD (self/full/not-found/buddy/already checks; converges SM_BLOCK_RESPONSE), CM_BLOCK_DEL, CM_BLOCK_SET_REASON. equalsIgnoreCase->StringComparison.OrdinalIgnoreCase. SocialService/PlayerService/BlockedPlayer/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
