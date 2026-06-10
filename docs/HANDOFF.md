@@ -1166,3 +1166,6 @@ Ported network/aion/serverpackets/SM_CHALLENGE_LIST (71L): legion/town challenge
 
 ## 2026-06-10 — SM_ASCENSION_MORPH + SM_ATREIAN_PASSPORT
 Ported 2 serverpackets: SM_ASCENSION_MORPH (ascension quest morph flag) and SM_ATREIAN_PASSPORT (daily-login passport: account creation date + per-passport id/stamps/rewardStatus/arriveDate). java.time.LocalDate->DateOnly (Year/Month/Day props); getArriveDate().getTime()/1000->ToUnixTimeMilliseconds()/1000. Passport/PassportsList red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_GAMEGUARD + SM_CAPTCHA
+Ported 2 anti-hack serverpackets: SM_GAMEGUARD (size + zero buffer) and SM_CAPTCHA (Cura — type 1 image data / type 3 correct flag + ban time). Guardrail green.
