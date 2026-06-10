@@ -1499,3 +1499,6 @@ Ported CM_QUIT (-Nemesiss-/Neon — leave-world to char-select/plastic-surgery (
 
 ## 2026-06-10 — CM_TITLE_SET + CM_SET_NOTE
 Ported CM_TITLE_SET (Nemiroff/cura — set display title, 0xFFFF clear, owns-title guard) and CM_SET_NOTE (Ben — set player note, no-op if unchanged, refresh each online friend's SM_FRIEND_LIST + broadcast SM_UPDATE_NOTE). TitleList/World/SM_FRIEND_LIST/SM_UPDATE_NOTE red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_REPORT_PLAYER + CM_SHOW_MAP
+Ported CM_REPORT_PLAYER (Jego/Neon — reportType 0 /accuse (race/self guards, audit, submit) + 1 /NumberofReports; the infinity glyph U+221E built from (char)0x221E to keep source clean) and CM_SHOW_MAP (Lyahim — action 0 -> ConquerorAndProtectorService.IntruderScan, 1 unk, default warn). World/AuditLogger/ConquerorAndProtectorService/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
