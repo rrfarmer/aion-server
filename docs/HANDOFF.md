@@ -1505,3 +1505,6 @@ Ported CM_REPORT_PLAYER (Jego/Neon — reportType 0 /accuse (race/self guards, a
 
 ## 2026-06-10 — CM_PING + CM_SHOW_DIALOG
 Ported CM_PING (-Nemesiss-/Undertrey/Neon — heartbeat -> SM_PONG; ping-interval time/speed-hack detection w/ 3-strike fail count + optional kick; currentTimeMillis->UtcNow millis) and CM_SHOW_DIALOG (alexa026/Avol/ATracer — NPC dialog request; protection/trading guards, removeHideEffects when talkInfo can't-talk-invisible, controller.OnDialogRequest). SM_PONG/AuditLogger/Npc/TalkInfo red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_PING_REQUEST + CM_PLAYER_SEARCH
+Ported CM_PING_REQUEST (dragoon112 — /ping -> SM_PING_RESPONSE) and CM_PLAYER_SEARCH (Ben — social/who search: level gate, staff bypass, race/offline/GM/lfg/name-substring/min-max-level/classMask-bit/region/self filters, MAX_RESULTS=104 cap; FriendList.Status aliased; getClassId() ext; toLowerCase->ToLower; isEmpty->Length!=0). World/SM_PLAYER_SEARCH/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
