@@ -1334,3 +1334,6 @@ Ported 2 serverpackets: SM_PRIVATE_STORE (Simple — sold items objId/itemId/cou
 
 ## 2026-06-10 — SM_NPC_INFO
 Ported network/aion/serverpackets/SM_NPC_INFO (130L, -Nemesiss-): visible npc/monster/summon info (pos/ids/type/state/heading/master/hp/level/override-gear/bound/speed/move/target/town). getType(player)->GetType_() collision (2 ctors); CreatureMoveController<?>->CreatureMoveController<Creature>; NpcEquippedGear iterable -> foreach KeyValuePair<ItemSlot,ItemTemplate>. Npc/Summon/NpcTemplate/NpcEquippedGear/TownService red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_STATUPDATE_HP/MP/DP/EXP
+Ported 4 stat-update serverpackets (Luno/alexa026): SM_STATUPDATE_HP (cur/max), SM_STATUPDATE_MP (cur/max), SM_STATUPDATE_DP (cur), SM_STATUPDATE_EXP (cur/recoverable/max + boost). Trivial WriteD/WriteH/WriteQ. Guardrail green.
