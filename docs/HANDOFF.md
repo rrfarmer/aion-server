@@ -1526,3 +1526,6 @@ Ported CM_QUEST_SHARE (ginho1/Neon — share quest w/ nearby online group/allian
 
 ## 2026-06-10 — CM_PRIVATE_STORE + CM_PRIVATE_STORE_NAME
 Ported CM_PRIVATE_STORE (Simple — read TradePSItem[] (objId/itemId/count/price), empty closes else CreateStoreWithItems) and CM_PRIVATE_STORE_NAME (Simple — OpenPrivateStore w/ name). PrivateStoreService/TradePSItem red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_READ_MAIL + CM_READ_EXPRESS_MAIL
+Ported CM_READ_MAIL (kosyachok — MailService.ReadMail) and CM_READ_EXPRESS_MAIL (antness/Guapo — action 0 close postman / 1 summon w/ express+blackcloud unread checks, already-summoned/in-flight/cooltime guards, VisibleObjectSpawner.SpawnPostman + 10-min EXPRESS_MAIL_USE task via ThreadPoolManager.Schedule lambda). MailService/VisibleObjectSpawner/ThreadPoolManager/LetterType/TaskId red-tolerated. Guardrail green.
