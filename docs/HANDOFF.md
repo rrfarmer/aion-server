@@ -1628,3 +1628,6 @@ Ported CM_MAY_LOGIN_INTO_GAME (-Nemesiss- — reply SM_MAY_LOGIN_INTO_GAME) and 
 
 ## 2026-06-10 — CM_UI_SETTINGS + CM_L2AUTH_LOGIN_CHECK
 Ported CM_UI_SETTINGS (ATracer — persist UI(0)/shortcuts(1)/houseBuddies(2) blobs via GetRemainingBytes) and CM_L2AUTH_LOGIN_CHECK (-Nemesiss- — accountId+sessionKey login auth -> LoginServer.RegisterLoginRequest). PlayerSettings/LoginServer red-tolerated. Clientpacket pillar ~150/190. Guardrail green.
+
+## 2026-06-10 — CM_PET
+Ported CM_PET (M@xx/xTz — pet command dispatcher): action-switched read (adopt/surrender/spawn/dismiss/food w/ doping sub-actions 0-3 + loot/auto-sell/rename/mood/extend); runImpl adopt name-check, food branch (doping/loot/autosell/cancel-feed END_FEEDING emotion/refeed-delay/remove), rename, mood remaining-time gate. PetAction PascalCase (Adopt/Surrender/Spawn/Dismiss/Food/Rename/Mood/ExtendExpiration) via PetActionResolver.GetActionById; EmotionType.EndFeeding. PetAdoptionService/PetSpawnService/PetService/PetMoodService/SM_PET red-tolerated. Guardrail green.
