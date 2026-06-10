@@ -1616,3 +1616,6 @@ Ported CM_BUY_TRADE_IN_TRADE (MrPoke/Ritsu — buy from trade-in NPC surrenderin
 
 ## 2026-06-10 — CM_SECURITY_TOKEN + CM_RECONNECT_AUTH
 Ported CM_SECURITY_TOKEN (ginho1 — lazily generate + return account security token; getBytes() -> Encoding.UTF8.GetBytes) and CM_RECONNECT_AUTH (-Nemesiss- — fast LoginServer reconnection request). SecurityTokenService/LoginServer/SM_SECURITY_TOKEN red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_RESTORE_CHARACTER + CM_QUESTIONNAIRE
+Ported CM_RESTORE_CHARACTER (-Nemesiss- — cancel pending char deletion via PlayerService.CancelPlayerDeletion -> SM_RESTORE_CHARACTER) and CM_QUESTIONNAIRE (xTz — HTML reward selection items list -> HTMLService.GetReward). PlayerService/HTMLService/SM_* red-tolerated. Guardrail green.
