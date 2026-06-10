@@ -878,3 +878,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported services/vortex (2/2, completes subdir): DimensionalVortex (abstract base, generic where VL:VortexLocation; AtomicBoolean finished; synchronized start->lock double-start guard; CompareAndSet stop; initRiftGenerator DeathObserver->stopInvasion; NullPointer->NullReference) + Invasion (:DimensionalVortex<VortexLocation>; ConcurrentDictionary invaders/defenders; inv/defAlliance; nested DefenderResponseHandler:RequestResponseHandler<Player>; Arrays.asList->array). Guardrail green (363 slop, 5 god). Commit f145a8c15 as rrfarmer.
+
+## 2026-06-10
+- Ported services/findgroup/FindGroupService (cura, MrPoke; 1/2, Hooks file is golden-capture instrumentation, skipped): singleton; ConcurrentDictionary recruitments/applications/instanceGroups; show/add/update/remove tabs, server-wide instance application flow (invite to group/alliance), onJoinedTeam/onLogout cleanup. No-op FindGroupMutationPostTraceCaptureHooks calls omitted (not Aion gameplay). Guardrail green.
