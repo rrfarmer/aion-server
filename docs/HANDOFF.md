@@ -1112,3 +1112,6 @@ Ported 2 effect serverpackets: SM_SHIELD_EFFECT (siege-location shield state lis
 
 ## 2026-06-10 — SM_SUMMON_USESKILL + SM_SUMMON_PANEL
 Ported 2 summon serverpackets: SM_SUMMON_USESKILL (summonId/skillId/lvl/targetId) and SM_SUMMON_PANEL (summon status panel: objId/level/hp/maxhp/mainhand attack(DISPLAY)/pdef/mresist/liveTime). Summon/CalculationType red-tolerated. Opens summon packet group. Guardrail green.
+
+## 2026-06-10 — SM_SUMMON_OWNER_REMOVE + SM_SUMMON_PANEL_REMOVE
+Ported 2 summon remove serverpackets: SM_SUMMON_OWNER_REMOVE (summon objId) and SM_SUMMON_PANEL_REMOVE (skillId + present flag). Continues summon packet group. Guardrail green.
