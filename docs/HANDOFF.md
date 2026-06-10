@@ -1091,3 +1091,6 @@ Ported 2 player-state serverpackets: SM_FLY_TIME (current+max FP) and SM_DP_INFO
 
 ## 2026-06-10 — SM_ABNORMAL_EFFECT (d514c3b17)
 Ported network/aion/serverpackets/SM_ABNORMAL_EFFECT (63L): creature buff/debuff effect list, slot-filtered. Java case2->case1 fall-through -> goto case; stream filter -> LINQ Where; instanceof Player -> is Player. KEY: SkillTargetSlot ported as real C# enum with VALUES=ids (1,2,4..) and FULLSLOTS/GetId on SkillTargetSlotExtensions — so getTargetSlot().ordinal() (Java declaration POSITION 0-7) != (int)slot; used Array.IndexOf(Enum.GetValues<SkillTargetSlot>(), slot). Effect red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_ACTION_ANIMATION (1afb46167)
+Ported network/aion/serverpackets/SM_ACTION_ANIMATION (32L): plays an ActionAnimation on a target (objId + animation id + optional level/objId). ActionAnimation red-tolerated. Guardrail green.
