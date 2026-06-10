@@ -1037,3 +1037,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpacket SM_MAIL_SERVICE (kosyachok/Source/Neon, 179L; mailbox state/message/list/read/attachment/delete by serviceId, 6 ctors). Converges MailService/SystemMailService. Function->Func; switch-arrow->switch; byteLengthForString inherited static->ByteLengthForString; writeMe(getBuf())->WriteMe(GetBuf()); int...->params int[]. Guardrail green.
+
+## 2026-06-10
+- Ported network serverpackets SM_SKILL_LIST (MrPoke/ATracer/Neon; skill list silent/with-notify; converges PlayerEnterWorldService SplitList) + SM_ABYSS_RANK (Nemiroff; full abyss rank stats; converges AbyssPointsService/GloryPointsService/PlayerEnterWorldService). Integer->int?; Collections.singletonList->new List; SkillEntryWriter.writeSkillEntry(...,getBuf())->PascalCase. Guardrail green.
