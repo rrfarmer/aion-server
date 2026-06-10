@@ -1520,3 +1520,6 @@ Ported the summon/mercenary clientpackets: CM_SUMMON_COMMAND (SummonMode.GetSumm
 
 ## 2026-06-10 — CM_PLAYER_STATUS_INFO + CM_PLAYER_LISTENER
 Ported CM_PLAYER_STATUS_INFO (Lyahim/ATracer/Simple/xTz — TeamCommand dispatch: GROUP_SET_LFG / ALLIANCE_CHANGE_GROUP / LEAGUE_ALLIANCE_MOVE / default ExecuteCommand; TeamCommandExtensions.GetCommand) and CM_PLAYER_LISTENER (ginho1 — 5-min web-reward push when ENABLE_WEB_REWARDS). TeamCommand/PlayerAllianceService/LeagueService/PlayerTeamCommandService/WebRewardService red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_QUEST_SHARE + CM_QUESTION_RESPONSE
+Ported CM_QUEST_SHARE (ginho1/Neon — share quest w/ nearby online group/alliance members; Java static-imported Predicate.and() chain (allExcept/ONLINE/in-range) -> combined lambda invoking Predicates.Players delegates; TemporaryPlayerTeam<? extends TeamMember<Player>> -> var; Collections.emptyList->new List; QuestService.CheckStartConditions, SM_SYSTEM_MESSAGE int/int+name ctors) and CM_QUESTION_RESPONSE (Ben/Sarynth/Neon — SM_QUESTION_WINDOW reply; mid-trade yes cancels exchange; responseRequester.Respond). QuestService/ExchangeService/SM_* red-tolerated. Guardrail green.
