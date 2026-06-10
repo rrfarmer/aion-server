@@ -1574,3 +1574,6 @@ Ported CM_MEGAPHONE (Artur/ginho1/Neon — global faction-chat via megaphone ite
 
 ## 2026-06-10 — CM_USE_CHARGE_SKILL + CM_PLACE_BID
 Ported CM_USE_CHARGE_SKILL (Cheatkiller — release charge skill with accumulated time; isCharge guard, currentTimeMillis->UtcNow - castStartTime) and CM_PLACE_BID (Rolandas — house-auction bid via HousingBidService when ENABLE_HOUSE_AUCTIONS). Skill/HousingBidService red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_REGISTER_BROKER_ITEM + CM_GET_HOUSE_BIDS
+Ported CM_REGISTER_BROKER_ITEM (kosyak — list item on broker, OPEN_VENDOR gate + isTrading/count guards) and CM_GET_HOUSE_BIDS (Rolandas — house-auction bid list via DynamicServerPacketBodySplitList<HouseBids>, forEach->foreach part.IsFirst/IsLast -> SM_HOUSE_BIDS). BrokerService/HousingBidService/SplitList/SM_* red-tolerated. Guardrail green.
