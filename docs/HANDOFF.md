@@ -1376,3 +1376,6 @@ Ported 2 serverpackets: SM_UPDATE_PLAYER_APPEARANCE (Avol/ATracer/Neon — exten
 
 ## 2026-06-10 — SM_STATS_STATUS_UNK + SM_UPGRADE_ARCADE
 Ported 2 serverpackets: SM_STATS_STATUS_UNK (Rolandas — stat points + lvl-50 conditional fields) and SM_UPGRADE_ARCADE (ginho1/Neon/Estrayl — upgrade-arcade event, 10 ctors + action 0-10 switch). ArcadeProgress/ArcadeRewards/DataManager/EventsConfig red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_VERSION_CHECK
+Ported network/aion/serverpackets/SM_VERSION_CHECK (146L, -Nemesiss-/Novo/cura/Neon): client version check (INTERNAL_VERSION 207) + full server config blob (build dates/server flags/rates/chat server). currentTimeMillis()/1000->DateTimeOffset; GameServer type aliased (namespace clash); ServerTime.GetStandardOffset/GetDaylightSavings. GSConfig/GameServer/ChatServer/LoginServer/AtreianPassportService red-tolerated. Guardrail green.
