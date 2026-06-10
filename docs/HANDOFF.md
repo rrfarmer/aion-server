@@ -1631,3 +1631,6 @@ Ported CM_UI_SETTINGS (ATracer — persist UI(0)/shortcuts(1)/houseBuddies(2) bl
 
 ## 2026-06-10 — CM_PET
 Ported CM_PET (M@xx/xTz — pet command dispatcher): action-switched read (adopt/surrender/spawn/dismiss/food w/ doping sub-actions 0-3 + loot/auto-sell/rename/mood/extend); runImpl adopt name-check, food branch (doping/loot/autosell/cancel-feed END_FEEDING emotion/refeed-delay/remove), rename, mood remaining-time gate. PetAction PascalCase (Adopt/Surrender/Spawn/Dismiss/Food/Rename/Mood/ExtendExpiration) via PetActionResolver.GetActionById; EmotionType.EndFeeding. PetAdoptionService/PetSpawnService/PetService/PetMoodService/SM_PET red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_USE_HOUSE_OBJECT + CM_TELEPORT_SELECT
+Ported CM_USE_HOUSE_OBJECT (Rolandas — house object dialog via World.FindVisibleObject; HouseObject<?>-><PlaceableHouseObject>) and CM_TELEPORT_SELECT (ATracer/orz/KID — teleport via NPC: instanceof Npc->is + audit, ValidateTeleporterAndGetTemplate, GetTeleportLocation, hasStatic JUMP_IN_STATUE vs JUMP_IN). World/TeleportService/TeleporterTemplate red-tolerated. Guardrail green.
