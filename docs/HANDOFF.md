@@ -1346,3 +1346,6 @@ Ported 2 siege serverpackets: SM_SIEGE_LOCATION_STATE (Source — locationId + s
 
 ## 2026-06-10 — SM_TELEPORT_MAP + SM_TELEPORT_LOC
 Ported 2 teleport serverpackets: SM_TELEPORT_MAP (alexa026/orz — teleporter map open) and SM_TELEPORT_LOC (Luno/orz/xTz — teleport with port animation; isInstance via DataManager.WORLD_MAPS_DATA). DataManager/TeleportAnimation red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_WAREHOUSE_INFO + SM_WAREHOUSE_ADD_ITEM
+Ported 2 warehouse serverpackets: SM_WAREHOUSE_INFO (kosyachok — contents per-item info blob; StorageType.REGULAR_WAREHOUSE.GetId; Collections.emptyList->new List) and SM_WAREHOUSE_ADD_ITEM (kosyachok/-Nemesiss- — add item; Collections.singletonList->new List; ItemAddType aliased; GetFirstItem/GetFirstItemInfoBlob helpers). Item/ItemInfoBlob/StorageType red-tolerated. Guardrail green.
