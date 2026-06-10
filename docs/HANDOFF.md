@@ -1684,3 +1684,6 @@ Ported network/aion/iteminfo/ItemBlobEntry (abstract, extends PacketWriteHelper)
 
 ## 2026-06-10 — iteminfo entries batch 1: slot blobs (6)
 Ported GeneralInfoBlobEntry (sent with ALL items; getSize 29+creator.Length*2+4), WeaponInfoBlobEntry (slot masks, two-hand handling), ArmorInfoBlobEntry + ShieldInfoBlobEntry (slot mask + WriteDyeInfo), AccessoryInfoBlobEntry (ring/earring/waist dual-slot), ArrowInfoBlobEntry. All extend ItemBlobEntry. Package-private ctors -> internal (Arrow's was public -> public). ownerItem/owner fields reached via base protected internal. Item/ItemTemplate/ItemSlot/DataManager red-tolerated. 6/18 entries done; remaining 12: EquippedSlot, StigmaInfo, StigmaShard, PremiumOption, Polish, Wrap, Plume, Bonus, Enchant, Wing, Composite, Conditioning. All NUL-clean, guardrail green.
+
+## 2026-06-10 — iteminfo entries batch 2 (4)
+Ported EquippedSlotBlobEntry (equipped slot or 0), StigmaInfoBlobEntry (group1/2 gain-skill ids + Skip(192)/Skip(96) padding, size 306), StigmaShardInfoBlobEntry, PremiumOptionInfoBlobEntry (bonusStatsId/tuneCount, -1 when unidentified). Stigma/SkillTemplate red-tolerated. 10/18 entries done; remaining 8: Polish, Wrap, Plume, Bonus, Enchant, Wing, Composite, Conditioning. All NUL-clean, guardrail green.
