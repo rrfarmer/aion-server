@@ -1148,3 +1148,6 @@ Ported 2 chat serverpackets: SM_CHAT_INIT (chat auth token length+bytes) and SM_
 
 ## 2026-06-10 — SM_GATHER_ANIMATION + SM_GATHER_UPDATE
 Ported 2 gathering serverpackets: SM_GATHER_ANIMATION (player/gatherable objIds + skillId + action) and SM_GATHER_UPDATE (62L — progress + per-action system message via switch-arrow->switch statement; static-import STR_EXTRACT_GATHER_* from SM_SYSTEM_MESSAGE). GatherableTemplate/Material/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_CRAFT_ANIMATION + SM_CRAFT_UPDATE
+Ported 2 crafting serverpackets: SM_CRAFT_ANIMATION (player/target objIds + skillId + action) and SM_CRAFT_UPDATE (72L — progress + per-action system message switch 0/3,1/2,4,5,6/7; skillId 40009 forces delay 1000). Completes crafting/gathering packet group (CRAFT+GATHER animation/update). ItemTemplate red-tolerated. Guardrail green.
