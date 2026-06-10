@@ -1421,3 +1421,6 @@ Ported CM_COMPOSITE_STONES (pixfid — combine 2 manastones via combination tool
 
 ## 2026-06-10 — CM_CHECK_MAIL_LIST + CM_CHECK_MAIL_UNK + CM_CHALLENGE_LIST
 Ported 3 clientpackets: CM_CHECK_MAIL_LIST (ginho1 — request mailbox list, expressOnly flag -> MailService.SendMailList), CM_CHECK_MAIL_UNK (ginho1 — empty no-op opcode), CM_CHALLENGE_LIST (Rolandas — legion/town challenge-task list via ChallengeTaskService w/ legion guard + audit). MailService/ChallengeTaskService/ChallengeType/AuditLogger red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_CHARACTER_PASSKEY + CM_CUSTOM_SETTINGS
+Ported CM_CHARACTER_PASSKEY (ginho1 — passkey new/update/input type 0/2/3; UTF-16LE byte[48] -> Encoding.Unicode.GetString; wrong-count block via LoginServer ban; ENTER/DELETE connect-type branch; ConnectType aliased) and CM_CUSTOM_SETTINGS (Sweetkr — display/deny player settings + broadcast SM_CUSTOM_SETTINGS). PlayerPasskeyDAO/CharacterPasskey/PlayerEnterWorldService/LoginServer/SM_* red-tolerated. Guardrail green.
