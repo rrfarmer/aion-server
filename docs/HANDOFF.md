@@ -1280,3 +1280,6 @@ Ported network/aion/serverpackets/SM_LOOT_ITEMLIST (61L): corpse drop list (inde
 
 ## 2026-06-10 — SM_PING_RESPONSE + SM_LOGIN_QUEUE
 Ported 2 small serverpackets: SM_PING_RESPONSE (0x04) and SM_LOGIN_QUEUE (position/time/count, private ctor fixed sample values). Guardrail green.
+
+## 2026-06-10 — SM_RESURRECT + SM_PLAYER_SEARCH
+Ported 2 serverpackets: SM_RESURRECT (creature name + skillId) and SM_PLAYER_SEARCH (Ben — social search panel: world/pos/class/gender/level/group-status + ChatUtil.ToFactionPrefixedName; static-import CHARNAME_MAX_LENGTH). Creature/DeniedStatus/ChatUtil red-tolerated. Guardrail green.
