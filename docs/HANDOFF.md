@@ -1562,3 +1562,6 @@ Ported CM_START_LOOT (alexa026/Metos/ATracer — open(0)/close(1) drop list via 
 
 ## 2026-06-10 — CM_MACRO_CREATE + CM_MACRO_DELETE
 Ported CM_MACRO_CREATE (SoulKeeper — PlayerService.AddMacro + SM_MACRO_CREATED) and CM_MACRO_DELETE (SoulKeeper — PlayerService.RemoveMacro by position + SM_MACRO_DELETED). PlayerService/SM_MACRO_RESULT red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_MAC_ADDRESS + CM_MOTION
+Ported CM_MAC_ADDRESS (-Nemesiss-/KID/ViAl/Neon — read traceroute/MAC/HDD serial, FixHddSerial: HexFormat->Convert.ToHexString, UTF_16LE->Encoding.Unicode, Java matches() anchored as ^...$, replaceAll char-swap->Regex.Replace; LoginServer auth) and CM_MOTION (MrPoke — motions.SetActive). LoginServer/Motions red-tolerated. Guardrail green.
