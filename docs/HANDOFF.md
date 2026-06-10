@@ -1094,3 +1094,6 @@ Ported network/aion/serverpackets/SM_ABNORMAL_EFFECT (63L): creature buff/debuff
 
 ## 2026-06-10 — SM_ACTION_ANIMATION (1afb46167)
 Ported network/aion/serverpackets/SM_ACTION_ANIMATION (32L): plays an ActionAnimation on a target (objId + animation id + optional level/objId). ActionAnimation red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_CASTSPELL_RESULT (6a63ff107)
+Ported network/aion/serverpackets/SM_CASTSPELL_RESULT (212L): cast-spell result — effector/targetType switch (0/3/4 stacked, 1, 2), skill id/lvl/cooldown/hitTime, chain/item/dash branches, per-effect loop (effect result, target + attacker hp percent, spell-status switch incl nested SubEffectType PULL/PULL_NPC/SIMPLE_MOVE_BACK, reserved-effects loop with shield/reflect switch). getType()->GetType_() collision (EffectReserved); instanceof Player->is Player+cast; Skill.SkillMethod.PENALTY nested enum; SubEffectType/AttackStatus/EffectResult red-tolerated. Converges AttackUtil/skillengine. Guardrail green.
