@@ -1355,3 +1355,6 @@ Ported 2 windstream serverpackets: SM_WINDSTREAM (2 unk fields) and SM_WINDSTREA
 
 ## 2026-06-10 — SM_TIME_CHECK + SM_USE_OBJECT
 Ported 2 serverpackets: SM_TIME_CHECK (-Nemesiss- — server uptime + nanoTime; ManagementFactory.getRuntimeMXBean().getUptime() -> process uptime via Process.StartTime) and SM_USE_OBJECT (ATracer — use-object animation). Guardrail green.
+
+## 2026-06-10 — SM_UPDATE_NOTE + SM_TOLL_INFO
+Ported 2 serverpackets: SM_UPDATE_NOTE (xavier — target note objId+note) and SM_TOLL_INFO (xTz — toll/AP-token count). Player red-tolerated. Guardrail green.
