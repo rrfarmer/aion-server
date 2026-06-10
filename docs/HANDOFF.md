@@ -1436,3 +1436,6 @@ Ported the character-edit base AbstractCharacterEditPacket (Neon — ReadBasicIn
 
 ## 2026-06-10 — CM_CREATE_CHARACTER
 Ported CM_CREATE_CHARACTER (-Nemesiss-/cura/Neon — second AbstractCharacterEditPacket subclass): type==1 opens creation window; otherwise validates (membership/limit, name used/reserved/invalid/forbidden, starting-class, same-race in mode 0 via LINQ Any) then builds PlayerCommonData/PlayerAccountData, PlayerService.NewPlayer/StoreNewPlayer, IDFactory id alloc/release, creation timestamp. playerClass.Value used where Java passed the (validated non-null) enum; Java stream.anyMatch -> .Any; new Timestamp(currentTimeMillis()) -> DateTimeOffset.FromUnixTimeMilliseconds(UtcNow...). PlayerService/AccountService/IDFactory/SM_CREATE_CHARACTER red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_CASTSPELL
+Ported CM_CASTSPELL (alexa026/rhys2002 — core skill-cast packet): targetType-switched read (obj id / point / area+8 unk floats), death/pet-order/passive guards, protection+useItem cancel, nextSkillUse cooldown anti-early audit, controller.UseSkill. receiveTime = UtcNow millis (final field). DataManager.PET_SKILL_DATA/SKILL_DATA/SkillTemplate/AuditLogger/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
