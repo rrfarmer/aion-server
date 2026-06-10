@@ -1052,3 +1052,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10 — SM_PLAYER_INFO (5cf738ed6)
 Ported network/aion/serverpackets/SM_PLAYER_INFO (230L, extends AbstractPlayerInfoPacket): visible-player info packet — position/ids/transform-model (GetType_), race/class/gender, name/title/legion-emblem, hp/dp, equipped appearance, full PlayerAppearance sheet, speeds (attackSpeed Stat2), store message, movement vector (Vector3f normalizeLocal/multLocal; movementMask &= ~ABSOLUTE), target/team/house/membership, conqueror/protector rank (CPInfo.GetType_). Converges PlayerEnterWorldService. Guardrail green (363 slop, 5 god-classes).
+
+## 2026-06-10 — AbstractPlayerInfoPacket (55fc014a4)
+Ported network/aion/serverpackets/AbstractPlayerInfoPacket (181L, abstract base of SM_PLAYER_INFO + character-list/select packets). WritePlayerInfo: full PlayerAccountData appearance/legion/16-visible-items/ban-info for char screen; WriteEquippedItems: in-world equipment slot mask + skin/godstone/dye/enchant. GetCharBanInfo: faction-switch cooldown ban (U+E026 PUA glyph preserved byte-faithful). currentTimeMillis()/1000 -> DateTimeOffset; VisibleItem record accessors -> PascalCase; DAO/SecurityConfig/BrokerService red-tolerated. Converges SM_PLAYER_INFO/SM_STATS_INFO base. Guardrail green (363 slop, 5 god-classes).
