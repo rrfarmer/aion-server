@@ -1289,3 +1289,6 @@ Ported 2 serverpackets: SM_RENAME (Rhys2002 — char/legion rename notice, Playe
 
 ## 2026-06-10 — SM_RIDE_ROBOT + SM_RECIPE_DELETE
 Ported 2 serverpackets: SM_RIDE_ROBOT (objId + robotId mount/dismount) and SM_RECIPE_DELETE (recipeId). Player red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_PLAY_MOVIE + SM_PLAYER_REGION
+Ported 2 serverpackets: SM_PLAY_MOVIE (-orz-/MrPoke — cutscene/movie play; sets WATCHING_CUTSCENE) and SM_PLAYER_REGION (Rolandas — current sub-zone). KEY: SM_PLAYER_REGION writes subZone.name().hashCode() to wire -> must use Java String.hashCode (31*h+c, unchecked), NOT C# GetHashCode (saved memory java-string-hashcode-on-wire); ZoneName.name()->ZoneName.Name property. CustomPlayerState/ZoneName red-tolerated. Guardrail green.
