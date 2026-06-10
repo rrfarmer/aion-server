@@ -1580,3 +1580,6 @@ Ported CM_REGISTER_BROKER_ITEM (kosyak — list item on broker, OPEN_VENDOR gate
 
 ## 2026-06-10 — CM_HOUSE_TELEPORT + CM_HOUSE_TELEPORT_BACK + CM_HOUSE_OPEN_DOOR
 Ported 3 house-teleport clientpackets (Rolandas/Neon): CM_HOUSE_TELEPORT (relationship-crystal teleport own/friend/random; NpcTemplateType.HOUSING + ai name "friendportal" gate; stream.filter.findAny->FirstOrDefault, Rnd.Get(list), FindFriendsAccessibleHouses over friendlist+legion; getClass()->GetType_().Name), CM_HOUSE_TELEPORT_BACK (battle-return coords -> TeleportService), CM_HOUSE_OPEN_DOOR (enter/leave via door; exit-map vs teleportNearHouseDoor; HOUSE_SHOW_ADDRESS gm echo, canEnter guard). HousingService/TeleportService/InstanceService/TeleportAnimation red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_HOUSE_PAY_RENT + CM_HOUSE_KICK
+Ported CM_HOUSE_PAY_RENT (Rolandas — pay maintenance N weeks, 4-week client cap; java.time -> DateTimeOffset: .with(LocalTime.MIDNIGHT) rebuilt via new DateTimeOffset(y,m,d,0,0,0,offset), ChronoUnit.WEEKS.between -> (long)(TotalDays/7); MaintenanceTask.GetNextRun/GetNextRunAfter, ServerTime.Now/AtDate; getNextPay nullable .Value) and CM_HOUSE_KICK (Rolandas — kick visitors option 1/2 incl friends). HousingConfig/MaintenanceTask/ServerTime/House red-tolerated. Guardrail green.
