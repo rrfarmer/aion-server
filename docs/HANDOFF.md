@@ -932,3 +932,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported services/item/ItemSocketService (ATracer/Sykra, 209L): addManaStone (next/specific slot w/ special+normal slot accounting), copyFusionStones, removeManastone (kinah cost + DAO store), removeAllManastone, socketGodstone (move-cancel listener + 2s cast). Set->ISet/HashSet; stream.filter.findFirst.orElse->LINQ FirstOrDefault; Collections.singleton->new HashSet; anonymous StartMovingListener->nested GodstoneMoveListener (super.moved->base.Moved); anonymous Runnable->Schedule ct-lambda. Remaining item: ItemChargeService(182), ItemPurificationService(138), ItemRemodelService(124). Guardrail green.
+
+## 2026-06-10
+- Ported services/item ItemRemodelService (Sarynth/Wakizashi; skin remodel w/ level/gender/kinah/type checks, Pattern Reshaper revert, dye transfer), ItemPurificationService (Ranastic/Estrayl; isPurificationAllowed validations, decreaseMaterials, upgradeItem carrying over sockets/fusion/stones/godstone/bonus/color), ItemChargeService (ATracer; equipment charging chargeWay 1=kinah/2=AP, confirm window anonymous RequestResponseHandler->nested ChargeRequestHandler, pay-amount ratio math, switch-expr payment). Math.round->Floor(x+0.5), Math.ceil->Ceiling, switch-expr, stream->LINQ. **item subdir DONE (12/12).** Guardrail green.
