@@ -750,3 +750,6 @@ Ported HealCastorOnAttackedEffect (anonymous ATTACKED observer→nested HealObse
 
 ## 2026-06-10 — Resurrect effect family (Resurrect base + Base + Positional)
 Ported ResurrectEffect base (skill_id, setPlayerResActivate/setResurrectionSkill + SM_RESURRECT, Player&&dead calculate), ResurrectBaseEffect (3-arg calculate, endEffect→scheduleReviveAtBase 2500ms when dead+!dueling), ResurrectPositionalEffect (effector/effected Player casts, setResPosState+setResPos{X,Y,Z} from effector pos). **Resurrect family COMPLETE (3 files).** Guardrail green (363/5). skillengine.effect: ~113 ported, ~38 remain (HideEffect, abnormal-set family, Aura/Confuse/Fear/Blind, pet/dispel-buff/teleport leaves). Big services pending (Siege/Broker/Quest/Legion).
+
+## 2026-06-10 — Target EffectTemplate leaves: TargetTeleport/TargetChange
+Ported TargetTeleportEffect (loc==null→teleport in front of effector via getClosestCollision, reflected→originalEffected; else→SKILL_ALIAS_LOCATION_DATA + Rnd.Get random position; TeleportService.teleportTo) and TargetChangeEffect (switch(Delta) case 1→target=effector, setTarget). Math.toRadians→*PI/180. Guardrail green (363/5). skillengine.effect: ~115 ported, ~36 remain (HideEffect, abnormal-set family, Aura/Confuse/Fear/Blind, pet/dispel-buff leaves, signet-related). Big services pending (Siege/Broker/Quest/Legion).
