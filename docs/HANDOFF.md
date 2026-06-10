@@ -1550,3 +1550,6 @@ Ported CM_STOP_TRAINING (xTz — instanceHandler.OnStopTraining) and CM_TOGGLE_S
 
 ## 2026-06-10 — CM_RELEASE_OBJECT + CM_REMOVE_ALTERED_STATE
 Ported CM_RELEASE_OBJECT (Rolandas/Neon — release occupied useable house object; UseableHouseObject<?>-><PlaceableHouseObject>; postbox always notifies, UseableItemObject resets progress bar via SM_USE_OBJECT; HOUSE_OBJECT_USE task cancel; `object` renamed object_) and CM_REMOVE_ALTERED_STATE (dragoon112/Neon — end altered-state effect, audit debuff-removal via SkillSubType.DEBUFF). UseableHouseObject/Effect/SkillSubType/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_REJECT_REVIVE + CM_SELECT_DECOMPOSABLE
+Ported CM_REJECT_REVIVE (Neon — decline revive, no-op) and CM_SELECT_DECOMPOSABLE (xTz — pick selectable result from decomposable item: removeIf->RemoveAll obtainable filter, bounds check, usage animation + success msg, decrease, SM_SECONDARY_SHOW_DECOMPOSABLE empty list, Rnd.Get count, ItemService.AddItem w/ nested ItemAddType/ItemUpdateType/ItemUpdatePredicate aliased). DataManager.DECOMPOSABLE_ITEMS_DATA/ItemService/ResultedItem/SM_* red-tolerated. Guardrail green.
