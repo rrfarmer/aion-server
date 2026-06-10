@@ -1208,3 +1208,6 @@ Ported 2 legion serverpackets: SM_LEGION_SEND_EMBLEM_DATA (emblem byte stream: s
 
 ## 2026-06-10 — SM_LEGION_HISTORY
 Ported network/aion/serverpackets/SM_LEGION_HISTORY (57L, Simple/KID/xTz): paged legion history (8/page; total/page/entries: epochSeconds/action/name/description). LegionHistoryEntry record -> PascalCase accessors; LegionHistoryAction.Type sequential (LEGION/REWARD/WAREHOUSE) -> ordinal()=(int); subList->GetRange(start,count); Collections.emptyList->new List. Guardrail green.
+
+## 2026-06-10 — SM_LEGION_DOMINION_RANK
+Ported network/aion/serverpackets/SM_LEGION_DOMINION_RANK (42L, Yeats): legion-dominion ranking (top 25 + requester if outside top). indexOf/subList/set/get->IndexOf/GetRange/indexer; subList view-copy semantics fine (ranking not read afterward). LegionDominionLocation/ParticipantInfo red-tolerated. Guardrail green.
