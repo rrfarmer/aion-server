@@ -1322,3 +1322,6 @@ Ported 2 serverpackets: SM_RECEIVE_BIDS (Rolandas — auction-changed notice) an
 
 ## 2026-06-10 — SM_SECURITY_TOKEN + SM_RESTORE_CHARACTER
 Ported 2 serverpackets: SM_SECURITY_TOKEN (ginho1 — region byte + token + equal-length zero pad) and SM_RESTORE_CHARACTER (-Nemesiss- — restore success + char objId). Guardrail green.
+
+## 2026-06-10 — SM_PACKAGE_INFO_NOTIFY + SM_QUESTIONNAIRE
+Ported 2 serverpackets: SM_PACKAGE_INFO_NOTIFY (Rolandas — account package notice) and SM_QUESTIONNAIRE (lhw/Kaipo — chunked survey HTML; html.Length*2 byte count). Guardrail green.
