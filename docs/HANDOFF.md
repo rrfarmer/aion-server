@@ -1427,3 +1427,6 @@ Ported CM_CHARACTER_PASSKEY (ginho1 — passkey new/update/input type 0/2/3; UTF
 
 ## 2026-06-10 — CM_CHECK_PAK + CM_CRAFT
 Ported CM_CHECK_PAK (ginho1 — data-pak integrity audit; String.isEmpty->Length!=0, endsWith/contains preserved) and CM_CRAFT (Mr. Poke — start crafting w/ materials map readD/readQ; shutdown guard via GameServer aliased GameServerMain to dodge namespace collision; unk!=129 range+template validation via PositionUtil; CraftService.StartCrafting). CraftService/PositionUtil/AuditLogger red-tolerated. Guardrail green.
+
+## 2026-06-10 — AbstractGmCommandPacket + CM_DEBUG_COMMAND + CM_DELETE_CHARACTER
+Ported the GM-command base AbstractGmCommandPacket (reads command string -> ChatProcessor.HandleConsoleCommand; ReplaceUnsupportedCommandChars). NOTE: Java's regex excludes the U+0000..U+013E range; the Write tool kept rendering the low bound as a literal NUL byte in source, so the range is built from (char)0x0000/(char)0x013E concatenation to keep the .cs clean ASCII while matching the exact range. CM_DEBUG_COMMAND (extends the base; ADMINAUDIT_LOG channel via NullLoggerFactory) and CM_DELETE_CHARACTER (-Nemesiss-; legion guard, passkey gate w/ ConnectType.DELETE, PlayerService.DeletePlayer). ChatProcessor/LegionService/PlayerService/PlayerPasskeyDAO red-tolerated. Guardrail green.
