@@ -1175,3 +1175,6 @@ Ported 2 GM serverpackets: SM_GM_BOOKMARK_ADD (teleport bookmark name+worldId+x/
 
 ## 2026-06-10 — SM_LEGION_INFO + SM_GM_SHOW_LEGION_INFO
 Ported network/aion/serverpackets/SM_LEGION_INFO (55L, Simple): legion summary (name/level/ranking via AbyssRankingCache/permissions/contribution/disband/dominion + up to 7 announcements). Legion.Announcement record -> PascalCase accessors (aliased); Collections.singletonList->new List; time().getTime()/1000->ToUnixTimeMilliseconds()/1000; isEmpty()->Length==0. Plus thin subclass SM_GM_SHOW_LEGION_INFO. Converges legion packet base. Legion red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_LEGION_MEMBERLIST + SM_GM_SHOW_LEGION_MEMBERLIST
+Ported network/aion/serverpackets/SM_LEGION_MEMBERLIST (Simple): paged legion member list (isFirst flag, isLast negates size); WriteLegionMember made virtual (objId/name/class/level/rank/world/online/intro/nickname/lastonline + house address/door + GAMESERVER_ID). Plus override SM_GM_SHOW_LEGION_MEMBERLIST (Yeats — adds gender via PlayerService.GetOrLoadPlayerCommonData, omits house fields). House/HousingService/NetworkConfig/LegionMember red-tolerated. Guardrail green.
