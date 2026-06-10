@@ -1187,3 +1187,6 @@ Ported 2 serverpackets: SM_HEADING_UPDATE (visible-object objId + heading) and S
 
 ## 2026-06-10 — SM_GROUP_MEMBER_INFO
 Ported network/aion/serverpackets/SM_GROUP_MEMBER_INFO (143L): per-GroupEvent group member update (hp/mp/fp, position, class/gender/level, fly/mentor, abnormal effects for UPDATE_EFFECTS and ENTER/UPDATE). Same idioms as SM_ALLIANCE_MEMBER_INFO: field event->eventValue; SkillTargetSlot.ordinal()->Array.IndexOf(Enum.GetValues) x2; SkillTargetSlot.values()->Enum.GetValues x2; FULLSLOTS/GetId->SkillTargetSlotExtensions; GroupEvent switch labels qualified+stacked. Effect/PlayerGroup/WorldPosition red-tolerated. Opens group packet group. Guardrail green.
+
+## 2026-06-10 — SM_GROUP_INFO + SM_LEAVE_GROUP_MEMBER
+Ported 2 group serverpackets: SM_GROUP_INFO (id/leader/world/loot rules/team type; getType()->GetType_() collision) and SM_LEAVE_GROUP_MEMBER (fixed leave fields). PlayerGroup/LootGroupRules/TeamType red-tolerated. Continues group packet group. Guardrail green.
