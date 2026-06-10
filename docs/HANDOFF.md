@@ -1604,3 +1604,6 @@ Ported CM_LEGION_MODIFY_EMBLEM (Simple/cura/Neon — store emblem id/argb/type; 
 
 ## 2026-06-10 — CM_LEGION_SEND_EMBLEM + CM_LEGION_UPLOAD_EMBLEM + CM_LEGION_UPLOAD_INFO
 Ported 3 legion emblem clientpackets: CM_LEGION_SEND_EMBLEM (Simple/cura/Neon — SendEmblemData full), CM_LEGION_UPLOAD_EMBLEM (Simple — UploadEmblemData chunk), CM_LEGION_UPLOAD_INFO (Simple/cura — UploadEmblemInfo size+argb, LegionEmblemType.CUSTOM). LegionService/LegionEmblemType red-tolerated. Legion emblem cluster (MODIFY/SEND_INFO/SEND/UPLOAD_EMBLEM/UPLOAD_INFO) now complete. Guardrail green.
+
+## 2026-06-10 — CM_LEGION_WH_KINAH
+Ported CM_LEGION_WH_KINAH (ATracer — legion-warehouse kinah withdraw(0)/deposit(1) w/ LegionPermissionsMask.WH_WITHDRAWAL/WH_DEPOSIT checks, StorageType.LEGION_WAREHOUSE.GetId(), AddHistory KINAH_WITHDRAW/DEPOSIT; Long.toString->amount.ToString(Invariant)). LegionService/LegionPermissionsMask/StorageType red-tolerated. Guardrail green.
