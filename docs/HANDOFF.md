@@ -1304,3 +1304,6 @@ Ported 2 serverpackets: SM_OBJECT_USE_UPDATE (Rolandas — postbox/storage/useab
 
 ## 2026-06-10 — SM_QUEST_ACTION
 Ported network/aion/serverpackets/SM_QUEST_ACTION (124L, VladimirZ): quest ADD/UPDATE/ABANDON/TIMER/SHARE/UNK notice (4 ctors). Nested ActionType enum ids 1..6 == value -> real C# enum + (int) for getId(); switch labels qualified; QuestExtraCategory.NONE guard; step | flags<<24. QuestState/QuestTemplate red-tolerated. Opens quest packet group. Guardrail green.
+
+## 2026-06-10 — SM_QUEST_REPEAT + SM_QUEST_COMPLETED_LIST
+Ported 2 quest serverpackets: SM_QUEST_REPEAT (repeatable quest ids) and SM_QUEST_COMPLETED_LIST (MrPoke/Neon — completed list rewrite/insert; Function<QuestState,Integer>->Func<QuestState,int>; -size&0xFFFF; Math.Min). QuestState red-tolerated. Guardrail green.
