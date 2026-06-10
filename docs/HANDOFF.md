@@ -950,3 +950,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported services/siege FortressAssault (Luzien/Estrayl; Balaur fortress assault - wave scheduling, budgeted assaulter spawn by type stake/cost, commander chance, difficulty from faction balance+influence, dredgion commander kill drain) + FortressSiege (SoulKeeper, 414L; full fortress siege - start vulnerable/spawn/boss/merc-zones/balance-buffs/faction-troop+balaur assault, finish capture/defend, player+legion reward distribution, world buffs, faction-balance adjust, quest onKill). EnumMap->Dictionary; AssaulterType.values()->Values(); schedule(Runnable,..)->ct-lambda; Integer legionId->int?(??0); Math.round->(int/long)Floor(x+0.5f); retainAll->IntersectWith; switch-on-locationId/race. **siege subdir DONE (14/14).** Guardrail green.
+
+## 2026-06-10
+- Ported services/trade/PricesService (Sarynth/wakizashi; influence-scaled global prices/taxes, vendor buy/sell modifiers, ordered round-down multiply chains for getPriceForService/getBuyPrice, getSellReward). Math.round(float)->(int)Floor(x+0.5f); switch-on-Race + IllegalArgument->Argument; /100D round-down casts preserved. Converges PricesService.getPriceForService used by many ported services (mail/item/siege). **trade subdir DONE (1/1).** Guardrail green.
