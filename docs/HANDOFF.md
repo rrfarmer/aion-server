@@ -1079,3 +1079,6 @@ Ported 2 friend serverpackets: SM_FRIEND_UPDATE (43L — friendlist status entry
 
 ## 2026-06-10 — SM_BLOCK_RESPONSE (f3c04a435)
 Ported network/aion/serverpackets/SM_BLOCK_RESPONSE (59L): block-list request reply (name + code). 6 code consts (BLOCK/UNBLOCK_SUCCESSFUL, TARGET_NOT_FOUND, LIST_FULL, CANT_BLOCK_SELF, EDIT_NOTE). Rounds out social/block packet group. Guardrail green.
+
+## 2026-06-10 — SM_DUEL (4b8b82d92)
+Ported network/aion/serverpackets/SM_DUEL (65L): duel started (type 0, requesterObjId) / result (type 1, DuelResult resultId+msgId+name) via static factories SM_DUEL_STARTED/SM_DUEL_RESULT; type 0xE0 no-op; default throws ArgumentException. DuelResult red-tolerated. Guardrail green.
