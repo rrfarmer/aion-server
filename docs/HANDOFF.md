@@ -983,3 +983,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpackets SM_SUMMON_UPDATE (ATracer; summon level/mode/HP + full current+base stat block) and SM_TRANSFORM (Sweetkr/xTz/kecimis; transform model+state+restriction flags, custom test ctor + live transform-model path; getType()->GetType_()). Stat2/TransformType/TransformModel red-tolerated. Guardrail green.
+
+## 2026-06-10
+- Ported 4 network serverpackets: SM_ABYSS_RANK_UPDATE (Nemiroff; rank/team/mentor by action; converges AbyssPointsService), SM_NPC_ASSEMBLER (xTz; assembled-npc carrier spawn/despawn; converges BalaurAssaultService/FortressAssault), SM_CHANNEL_INFO (ATracer; channel+instance count; converges PlayerEnterWorldService), SM_RECIPE_COOLDOWN (zzsort/Sykra; craft cooldown seconds, Cooldowns.forEach->ForEach lambda; converges PlayerEnterWorldService). Guardrail green.
