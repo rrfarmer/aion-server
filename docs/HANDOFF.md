@@ -1292,3 +1292,6 @@ Ported 2 serverpackets: SM_RIDE_ROBOT (objId + robotId mount/dismount) and SM_RE
 
 ## 2026-06-10 — SM_PLAY_MOVIE + SM_PLAYER_REGION
 Ported 2 serverpackets: SM_PLAY_MOVIE (-orz-/MrPoke — cutscene/movie play; sets WATCHING_CUTSCENE) and SM_PLAYER_REGION (Rolandas — current sub-zone). KEY: SM_PLAYER_REGION writes subZone.name().hashCode() to wire -> must use Java String.hashCode (31*h+c, unchecked), NOT C# GetHashCode (saved memory java-string-hashcode-on-wire); ZoneName.name()->ZoneName.Name property. CustomPlayerState/ZoneName red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_NICKNAME_CHECK_RESPONSE + SM_MARK_FRIENDLIST
+Ported 2 small serverpackets: SM_NICKNAME_CHECK_RESPONSE (-Nemesiss- — name-check result code) and SM_MARK_FRIENDLIST (xTz — active player objId + flags). Guardrail green.
