@@ -1226,3 +1226,6 @@ Ported 2 serverpackets: SM_INFLUENCE_RATIO (faction influence rates + per-world 
 
 ## 2026-06-10 — SM_INSTANCE_STAGE_INFO + SM_INSTANCE_SCORE
 Ported 2 instance serverpackets: SM_INSTANCE_STAGE_INFO (type/event/unk; field event->eventValue keyword) and SM_INSTANCE_SCORE (Dns/ginho1/nrg/xTz — wildcard InstanceScoreWriter<?> erased to bound InstanceScoreWriter<InstanceScore<InstancePlayerReward>>; writeMe(buf)->WriteMe(GetBuf()); ArenaScoreWriter ctor). NOTE: invariant erasure means ArenaScoreWriter arg is a convergence-time type mismatch (red-tolerated now). Instanceinfo writers red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_HOUSE_TELEPORT + SM_HOUSE_PAY_RENT
+Ported 2 house serverpackets: SM_HOUSE_TELEPORT (address + playerId) and SM_HOUSE_PAY_RENT (weeks paid). Opens house packet group. Guardrail green.
