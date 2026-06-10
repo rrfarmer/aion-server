@@ -989,3 +989,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpackets SM_ABNORMAL_STATE (Avol/ATracer; active abnormal effect icons + bitmask; converges PlayerEffectController; getTargetSlot().ordinal()->(int)) and SM_MACRO_LIST (-Nemesiss-; paged macro list, Function->Func DYNAMIC_BODY_PART_SIZE_CALCULATOR, Macros.Macro accessors; converges PlayerEnterWorldService SplitList). Guardrail green.
+
+## 2026-06-10
+- Ported network serverpackets SM_DIE (orz/Sarynth/Rhys2002; revive options + kisk time + invasion flag on death), SM_TARGET_SELECTED (Sweetkr/-Enomine-; target id/level/HP/MP), SM_DIALOG_WINDOW (alexa026; NPC dialog page + mail/town context, DialogPage.id()->GetId(), mailBoxState field). Guardrail green.
