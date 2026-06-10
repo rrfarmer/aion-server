@@ -1523,3 +1523,6 @@ Ported CM_PLAYER_STATUS_INFO (Lyahim/ATracer/Simple/xTz — TeamCommand dispatch
 
 ## 2026-06-10 — CM_QUEST_SHARE + CM_QUESTION_RESPONSE
 Ported CM_QUEST_SHARE (ginho1/Neon — share quest w/ nearby online group/alliance members; Java static-imported Predicate.and() chain (allExcept/ONLINE/in-range) -> combined lambda invoking Predicates.Players delegates; TemporaryPlayerTeam<? extends TeamMember<Player>> -> var; Collections.emptyList->new List; QuestService.CheckStartConditions, SM_SYSTEM_MESSAGE int/int+name ctors) and CM_QUESTION_RESPONSE (Ben/Sarynth/Neon — SM_QUESTION_WINDOW reply; mid-trade yes cancels exchange; responseRequester.Respond). QuestService/ExchangeService/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_PRIVATE_STORE + CM_PRIVATE_STORE_NAME
+Ported CM_PRIVATE_STORE (Simple — read TradePSItem[] (objId/itemId/count/price), empty closes else CreateStoreWithItems) and CM_PRIVATE_STORE_NAME (Simple — OpenPrivateStore w/ name). PrivateStoreService/TradePSItem red-tolerated. Guardrail green.
