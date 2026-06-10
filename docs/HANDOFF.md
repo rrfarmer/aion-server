@@ -1373,3 +1373,6 @@ Ported 2 serverpackets: SM_TRADE_IN_LIST (MrPoke — sellback list, TradeTab ali
 
 ## 2026-06-10 — SM_UPDATE_PLAYER_APPEARANCE + SM_VIEW_PLAYER_DETAILS
 Ported 2 serverpackets: SM_UPDATE_PLAYER_APPEARANCE (Avol/ATracer/Neon — extends AbstractPlayerInfoPacket, WriteEquippedItems) and SM_VIEW_PLAYER_DETAILS (Avol/xTz — other player's equipped items + ItemInfoBlob). Item/ItemInfoBlob red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_STATS_STATUS_UNK + SM_UPGRADE_ARCADE
+Ported 2 serverpackets: SM_STATS_STATUS_UNK (Rolandas — stat points + lvl-50 conditional fields) and SM_UPGRADE_ARCADE (ginho1/Neon/Estrayl — upgrade-arcade event, 10 ctors + action 0-10 switch). ArcadeProgress/ArcadeRewards/DataManager/EventsConfig red-tolerated. Guardrail green.
