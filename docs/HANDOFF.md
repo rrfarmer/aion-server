@@ -1115,3 +1115,6 @@ Ported 2 summon serverpackets: SM_SUMMON_USESKILL (summonId/skillId/lvl/targetId
 
 ## 2026-06-10 — SM_SUMMON_OWNER_REMOVE + SM_SUMMON_PANEL_REMOVE
 Ported 2 summon remove serverpackets: SM_SUMMON_OWNER_REMOVE (summon objId) and SM_SUMMON_PANEL_REMOVE (skillId + present flag). Continues summon packet group. Guardrail green.
+
+## 2026-06-10 — SM_TRANSFORM_IN_SUMMON
+Ported network/aion/serverpackets/SM_TRANSFORM_IN_SUMMON (31L): summon-transform link (summon objId + owner name + owner objId); convenience ctor takes Creature. Completes the summon serverpacket group (PANEL/USESKILL/OWNER_REMOVE/PANEL_REMOVE/TRANSFORM_IN_SUMMON). Creature/Player red-tolerated. Guardrail green.
