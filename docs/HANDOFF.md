@@ -1331,3 +1331,6 @@ Ported network/aion/serverpackets/SM_PET (341L, M@xx/xTz/Rolandas): pet LoadPets
 
 ## 2026-06-10 — SM_PRIVATE_STORE + SM_SECONDARY_SHOW_DECOMPOSABLE
 Ported 2 serverpackets: SM_PRIVATE_STORE (Simple — sold items objId/itemId/count/price + ItemInfoBlob.GetFullBlob.WriteMe(GetBuf())) and SM_SECONDARY_SHOW_DECOMPOSABLE (xTz — indexed ResultedItem preview). PrivateStore/TradePSItem/ItemInfoBlob/ResultedItem red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_NPC_INFO
+Ported network/aion/serverpackets/SM_NPC_INFO (130L, -Nemesiss-): visible npc/monster/summon info (pos/ids/type/state/heading/master/hp/level/override-gear/bound/speed/move/target/town). getType(player)->GetType_() collision (2 ctors); CreatureMoveController<?>->CreatureMoveController<Creature>; NpcEquippedGear iterable -> foreach KeyValuePair<ItemSlot,ItemTemplate>. Npc/Summon/NpcTemplate/NpcEquippedGear/TownService red-tolerated. Guardrail green.
