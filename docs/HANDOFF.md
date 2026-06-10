@@ -998,3 +998,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpackets SM_QUEST_LIST (uncompleted quests, -size&0xFFFF), SM_SKILL_COOLDOWN (ATracer/nrg; single/full/reset, nested record Cooldown, Comparator.comparingInt->Sort, stream toMap->ToDictionary, Map.get null->TryGetValue), SM_EMOTION_LIST (emotion id+expiry). All converge PlayerEnterWorldService. Guardrail green.
+
+## 2026-06-10
+- Ported 4 login serverpackets (converge PlayerEnterWorldService): SM_UI_SETTINGS (settings blob padded 0x1C00), SM_AFTER_TIME_CHECK_4_7_5, SM_UNK_3_5_1 (fast-track), SM_HOUSE_SCRIPTS (Rolandas/Neon/Sykra; compressed house scripts + padding, Function->Func, SCRIPT_PADDING -51==0xCD, PlayerScript red-tolerated deferred). Guardrail green.
