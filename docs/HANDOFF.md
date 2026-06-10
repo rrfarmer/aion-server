@@ -1247,3 +1247,6 @@ Ported 2 house-object serverpackets: SM_HOUSE_OBJECT (single object spawn: templ
 
 ## 2026-06-10 — SM_HOUSE_BIDS
 Ported network/aion/serverpackets/SM_HOUSE_BIDS (62L, Rolandas/Neon): paged house-auction bid list (last bid / registered-house bid + per-house land/address/building/type/highest-bid/count/remaining-seconds). Function<HouseBids,Integer>->Func<HouseBids,int> lambda; HouseBids.Bid nested. HouseBids/HousingBidService/HousingService/AuctionEndTask red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_HOUSE_REGISTRY
+Ported network/aion/serverpackets/SM_HOUSE_REGISTRY (69L, Rolandas): not-spawned objects (action 1) / default+unused decorations (action 2). HouseObject<?> erased to HouseObject<PlaceableHouseObject>; instanceof UseableItemObject->is+cast WriteUsageData(GetBuf()). HouseRegistry/HouseObject/HouseDecoration red-tolerated. Guardrail green.
