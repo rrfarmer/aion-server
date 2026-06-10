@@ -1298,3 +1298,6 @@ Ported 2 small serverpackets: SM_NICKNAME_CHECK_RESPONSE (-Nemesiss- — name-ch
 
 ## 2026-06-10 — SM_PET_EMOTE
 Ported network/aion/serverpackets/SM_PET_EMOTE (54L, ATracer/Neon): pet emote/move packet (MoveStop/MoveTo position branches + default emotion). NOTE: existing C# PetEmote enum (auto-loop) uses PascalCase members with value==emoteId, so getEmoteId()->(int)emote and MOVE_STOP/MOVETO->PetEmote.MoveStop/MoveTo. Pet red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_OBJECT_USE_UPDATE + SM_MEGAPHONE
+Ported 2 serverpackets: SM_OBJECT_USE_UPDATE (Rolandas — postbox/storage/useable-item use update; HouseObject<?>->HouseObject<PlaceableHouseObject>, instanceof->is+cast, getCheckType nullable int?) and SM_MEGAPHONE (Artur/Neon — -megaphone chat; nested FactionLabel enum with byte id from Race.getRaceId() -> sealed value-class + public id field). HouseObject/UseableItemObject/UseItemAction/Race red-tolerated. Guardrail green.
