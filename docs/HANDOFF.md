@@ -1202,3 +1202,6 @@ Ported 2 legion-member serverpackets: SM_LEGION_ADD_MEMBER (new member objId/nam
 
 ## 2026-06-10 — SM_LEGION_UPDATE_EMBLEM + SM_LEGION_SEND_EMBLEM
 Ported 2 legion emblem serverpackets: SM_LEGION_UPDATE_EMBLEM (id/type/argb) and SM_LEGION_SEND_EMBLEM (id/type/dataSize/argb/name header before emblem bytes). LegionEmblem red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_LEGION_SEND_EMBLEM_DATA + SM_LEGION_UPDATE_TITLE
+Ported 2 legion serverpackets: SM_LEGION_SEND_EMBLEM_DATA (emblem byte stream: size + bytes) and SM_LEGION_UPDATE_TITLE (objId/legionId/name/rank). LegionRank red-tolerated. Guardrail green.
