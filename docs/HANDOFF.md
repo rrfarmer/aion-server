@@ -1553,3 +1553,6 @@ Ported CM_RELEASE_OBJECT (Rolandas/Neon — release occupied useable house objec
 
 ## 2026-06-10 — CM_REJECT_REVIVE + CM_SELECT_DECOMPOSABLE
 Ported CM_REJECT_REVIVE (Neon — decline revive, no-op) and CM_SELECT_DECOMPOSABLE (xTz — pick selectable result from decomposable item: removeIf->RemoveAll obtainable filter, bounds check, usage animation + success msg, decrease, SM_SECONDARY_SHOW_DECOMPOSABLE empty list, Rnd.Get count, ItemService.AddItem w/ nested ItemAddType/ItemUpdateType/ItemUpdatePredicate aliased). DataManager.DECOMPOSABLE_ITEMS_DATA/ItemService/ResultedItem/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_SHOW_BLOCKLIST + CM_SHOW_RESTRICTIONS
+Ported CM_SHOW_BLOCKLIST (Ben — reply SM_BLOCK_LIST) and CM_SHOW_RESTRICTIONS (Neon — /restriction -> SM_SYSTEM_MESSAGE.STR_MSG_ACCUSE_INFO_NORMAL). SM_BLOCK_LIST/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
