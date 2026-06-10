@@ -1259,3 +1259,6 @@ Ported network/aion/serverpackets/SM_IN_GAME_SHOP_LIST (71L, xTz/KID): paged sho
 
 ## 2026-06-10 — SM_KEY + SM_L2AUTH_LOGIN_CHECK
 Ported 2 login serverpackets: SM_KEY (EnableCryptKey) and SM_L2AUTH_LOGIN_CHECK (-Nemesiss- — auth result + world-map list; static standardData/fastTrackData hex blobs via static ctor + Hex2Byte using Convert.ToInt32(substr,16); DataManager.WORLD_MAPS_DATA iteration). DataManager/WorldMapTemplate red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_GF_WEBSHOP_TOKEN_RESPONSE + SM_CUSTOM_PACKET
+Ported SM_GF_WEBSHOP_TOKEN_RESPONSE (Artur — 32-char token) and SM_CUSTOM_PACKET (Luno — admin //fsc fake-packet builder). KEY: PacketElementType is a Java enum with per-constant abstract write() bodies -> abstract nested class + static-readonly nested sealed subclass instances (D/B/H/C/F/DF/Q/S), nested in the packet so they reach protected WriteX. Integer.decode/Long.decode -> Decode/LongDecode helpers (0x/#/leading-0 octal, sign-aware); Float/Double.valueOf -> Parse(InvariantCulture); ctor base(opcode). Guardrail green.
