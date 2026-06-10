@@ -1325,3 +1325,6 @@ Ported 2 serverpackets: SM_SECURITY_TOKEN (ginho1 — region byte + token + equa
 
 ## 2026-06-10 — SM_PACKAGE_INFO_NOTIFY + SM_QUESTIONNAIRE
 Ported 2 serverpackets: SM_PACKAGE_INFO_NOTIFY (Rolandas — account package notice) and SM_QUESTIONNAIRE (lhw/Kaipo — chunked survey HTML; html.Length*2 byte count). Guardrail green.
+
+## 2026-06-10 — SM_PET
+Ported network/aion/serverpackets/SM_PET (341L, M@xx/xTz/Rolandas): pet LoadPets/Adopt/Surrender/Spawn/Dismiss/Food/Rename/Mood/SpecialFunction (12 ctors). Matched existing C# enums: PetAction & PetSpecialFunction PascalCase value==id (getActionId/getId->(int)); PetFunctionType SCREAMING names + GetId() ext + ContainsFunction. currentTimeMillis()->DateTimeOffset; nested subType switches; PetDopingBag.MAX_ITEMS. Pet/PetCommonData/PetTemplate red-tolerated. Guardrail green.
