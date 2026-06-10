@@ -1019,3 +1019,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpackets SM_QUESTION_WINDOW (Ben/avol/Lyahim/Neon; yes/no dialog by client-string code + 50 STR_* constants + params/sender/range; converges FindGroupService/Invasion/ItemChargeService) and SM_DELETE_ITEM (Avol; inventory item removal w/ delete mask; converges MailService). Object...->params object[]; params->parameters keyword; String.valueOf->ToString; IllegalArgument->Argument; ItemDeleteType alias. Guardrail green.
+
+## 2026-06-10
+- Ported network serverpackets SM_INVENTORY_UPDATE_ITEM (ATracer/-Nemesiss-; single inventory item update w/ type-specific ItemInfoBlob; converges ItemActionService/ItemChargeService) and SM_WAREHOUSE_UPDATE_ITEM (kosyachok/-Nemesiss-; warehouse item update). switch-on-ItemUpdateType; ItemBlobType/ItemUpdateType aliases; writeMe(getBuf())->WriteMe(GetBuf()). Guardrail green.
