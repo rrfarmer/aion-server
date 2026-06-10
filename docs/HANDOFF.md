@@ -1586,3 +1586,6 @@ Ported CM_HOUSE_PAY_RENT (Rolandas — pay maintenance N weeks, 4-week client ca
 
 ## 2026-06-10 — CM_HOUSE_SETTINGS + CM_HOUSE_SCRIPT
 Ported CM_HOUSE_SETTINGS (Rolandas — door state/owner-name/sign-notice update; SIGN_NOTICE_MAX_LENGTH truncation+audit, HouseDoorState enum nullable via HouseDoorStates.Get((sbyte)) w/ .Value, OPEN/CLOSED_EXCEPT_FRIENDS/CLOSED kick+msg) and CM_HOUSE_SCRIPT (Rolandas/Neon/Sykra — upload/remove sign script w/ MAX_COMPRESSED_SCRIPT_SIZE guard, ownership audit, PlayerScripts.Set/Remove/Get, SM_HOUSE_SCRIPTS broadcast). HouseDoorState/PlayerScripts/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_HOUSE_EDIT
+Ported CM_HOUSE_EDIT (Rolandas — house decoration/renovation editor): action-dispatched read, enter/exit deco (1/2), add item (3: decor vs HouseObject via HouseObjectFactory, IDFactory), delete (4), spawn (5: set xyz/rot, Spawn, QuestEngine.OnHouseItemUseEvent), move (6: delete+respawn), despawn (7), renovation modes (14/15), switch building (16: RemoveRenovationCoupon race-based item-id arithmetic). HouseObject<?>-><PlaceableHouseObject>; ItemDeleteType/PersistentState aliased; Race.ELYOS. HousingService/HouseObjectFactory/SM_HOUSE_EDIT red-tolerated. Guardrail green.
