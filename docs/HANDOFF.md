@@ -1181,3 +1181,6 @@ Ported network/aion/serverpackets/SM_LEGION_MEMBERLIST (Simple): paged legion me
 
 ## 2026-06-10 — SM_GM_SHOW_PLAYER_SKILLS
 Ported network/aion/serverpackets/SM_GM_SHOW_PLAYER_SKILLS (29L): GM view of a player's skill list (size + SkillEntryWriter per entry). Completes GM packet group (BOOKMARK_ADD/SEARCH/SHOW_LEGION_INFO/SHOW_LEGION_MEMBERLIST/SHOW_PLAYER_SKILLS). PlayerSkillEntry/SkillEntryWriter red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_HEADING_UPDATE + SM_KISK_UPDATE
+Ported 2 serverpackets: SM_HEADING_UPDATE (visible-object objId + heading) and SM_KISK_UPDATE (kisk objId/creator/useMask/member counts/resurrects/lifetime). VisibleObject/Kisk red-tolerated. Guardrail green.
