@@ -1250,3 +1250,6 @@ Ported network/aion/serverpackets/SM_HOUSE_BIDS (62L, Rolandas/Neon): paged hous
 
 ## 2026-06-10 — SM_HOUSE_REGISTRY
 Ported network/aion/serverpackets/SM_HOUSE_REGISTRY (69L, Rolandas): not-spawned objects (action 1) / default+unused decorations (action 2). HouseObject<?> erased to HouseObject<PlaceableHouseObject>; instanceof UseableItemObject->is+cast WriteUsageData(GetBuf()). HouseRegistry/HouseObject/HouseDecoration red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_IN_GAME_SHOP_CATEGORY_LIST + SM_IN_GAME_SHOP_ITEM
+Ported 2 in-game-shop serverpackets: SM_IN_GAME_SHOP_CATEGORY_LIST (type 0 categories / type 2 sub-categories; List.get->indexer) and SM_IN_GAME_SHOP_ITEM (item detail price/itemId/count/gift/type/descriptions). Opens in-game-shop packet group. InGameShopProperty/InGameShopEn/IGItem/IGCategory red-tolerated. Guardrail green.
