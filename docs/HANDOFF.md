@@ -1607,3 +1607,6 @@ Ported 3 legion emblem clientpackets: CM_LEGION_SEND_EMBLEM (Simple/cura/Neon �
 
 ## 2026-06-10 — CM_LEGION_WH_KINAH
 Ported CM_LEGION_WH_KINAH (ATracer — legion-warehouse kinah withdraw(0)/deposit(1) w/ LegionPermissionsMask.WH_WITHDRAWAL/WH_DEPOSIT checks, StorageType.LEGION_WAREHOUSE.GetId(), AddHistory KINAH_WITHDRAW/DEPOSIT; Long.toString->amount.ToString(Invariant)). LegionService/LegionPermissionsMask/StorageType red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_LEGION
+Ported CM_LEGION (Simple — main legion command dispatcher): exOpcode-switched read; member runImpl switch-arrow flattened (0x01 invite/0x02 leave/0x04 kick/0x05 appoint-BG/0x06 rank/0x07 show-notice (Legion.Announcement record .Message/.Time, Date.getTime()/1000 -> (DateTimeOffset)Time.ToUnixTimeMilliseconds()/1000)/0x08 refresh/0x09 announcement/0x0A self-intro/0x0D permissions/0x0E level/0x0F nickname/0x10 dominion); non-member 0x00 create. Integer.toHexString.toUpperCase -> ToString("X",Invariant). LegionService/SM_LEGION_INFO red-tolerated. Guardrail green.
