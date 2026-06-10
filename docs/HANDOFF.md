@@ -1687,3 +1687,6 @@ Ported GeneralInfoBlobEntry (sent with ALL items; getSize 29+creator.Length*2+4)
 
 ## 2026-06-10 — iteminfo entries batch 2 (4)
 Ported EquippedSlotBlobEntry (equipped slot or 0), StigmaInfoBlobEntry (group1/2 gain-skill ids + Skip(192)/Skip(96) padding, size 306), StigmaShardInfoBlobEntry, PremiumOptionInfoBlobEntry (bonusStatsId/tuneCount, -1 when unidentified). Stigma/SkillTemplate red-tolerated. 10/18 entries done; remaining 8: Polish, Wrap, Plume, Bonus, Enchant, Wing, Composite, Conditioning. All NUL-clean, guardrail green.
+
+## 2026-06-10 — iteminfo entries batch 3 (4)
+Ported PolishInfoBlobEntry (IdianStone polish charge), WrapInfoBlobEntry (pack count, written last), PlumeInfoBlobEntry (slot mask + 0x100000 secondary + 4 unk dwords, size 32), BonusInfoBlobEntry (modifier itemStoneMask/value*sign/StatRateFunction flag). IdianStone/ItemSlot/StatRateFunction red-tolerated. 14/18 entries done; remaining 4: Enchant, Wing, Composite, Conditioning. All NUL-clean, guardrail green.
