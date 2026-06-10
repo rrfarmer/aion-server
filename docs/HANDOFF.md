@@ -1163,3 +1163,6 @@ Ported network/aion/serverpackets/SM_FIRST_SHOW_DECOMPOSABLE (40L): item-decompo
 
 ## 2026-06-10 — SM_CHALLENGE_LIST
 Ported network/aion/serverpackets/SM_CHALLENGE_LIST (71L): legion/town challenge task list (action 2: tasks + complete time) / individual task quests (action 7: questId/maxRepeats/score/completeCount). currentTimeMillis()/1000->DateTimeOffset. ChallengeTask/ChallengeQuest/ChallengeType red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_ASCENSION_MORPH + SM_ATREIAN_PASSPORT
+Ported 2 serverpackets: SM_ASCENSION_MORPH (ascension quest morph flag) and SM_ATREIAN_PASSPORT (daily-login passport: account creation date + per-passport id/stamps/rewardStatus/arriveDate). java.time.LocalDate->DateOnly (Year/Month/Day props); getArriveDate().getTime()/1000->ToUnixTimeMilliseconds()/1000. Passport/PassportsList red-tolerated. Guardrail green.
