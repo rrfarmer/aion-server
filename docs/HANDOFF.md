@@ -1145,3 +1145,6 @@ Ported 2 bind-point serverpackets: SM_BIND_POINT_INFO (obelisk/Kisk display: typ
 
 ## 2026-06-10 — SM_CHAT_INIT + SM_CHAT_WINDOW
 Ported 2 chat serverpackets: SM_CHAT_INIT (chat auth token length+bytes) and SM_CHAT_WINDOW (130L — group(2)/alliance(3)/no-group(4)/single(1) target info layouts). PlayerClass is real C# enum w/ GetClassId extension -> PlayerClass.values().length = Enum.GetValues<PlayerClass>().Length; explicit IEnumerator consumption for the 4 captains loop; getName(true)->GetName(true). PlayerGroup/PlayerAlliance red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_GATHER_ANIMATION + SM_GATHER_UPDATE
+Ported 2 gathering serverpackets: SM_GATHER_ANIMATION (player/gatherable objIds + skillId + action) and SM_GATHER_UPDATE (62L — progress + per-action system message via switch-arrow->switch statement; static-import STR_EXTRACT_GATHER_* from SM_SYSTEM_MESSAGE). GatherableTemplate/Material/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
