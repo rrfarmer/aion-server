@@ -965,3 +965,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported questEngine/handlers/QuestHandlerLoader (MrPoke; ClassListener that registers all public concrete AbstractQuestHandler subclasses on postLoad, clears QuestEngine on preUnload). Reflection: Class[]->Type[], getName->FullName, isAssignableFrom->IsAssignableFrom, newInstance->Activator.CreateInstance, Modifier.isX->Type.IsX; RuntimeException->Exception; isDebugEnabled->IsEnabled(LogLevel.Debug). questEngine core DONE (only per-quest handler scripts under handlers/ subdirs remain, mostly loop-territory). NOTE: ai/ and world/ pillars are being ported by the concurrent auto-commit loop in a different (PascalCase, non-fidelity) style - avoiding collision. Guardrail green.
+
+## 2026-06-10
+- Ported model/gameobjects/findGroup/GroupRecruitment (MrPoke; FindGroupEntry impl wrapping Player/team for the Recruit tab - class/level/name/size/race derivation, last-update). Converges FindGroupService recruitments dep (GroupApplication/ServerWideGroup already loop-ported). instanceof X x->is X x; TemporaryPlayerTeam<?>-><TeamMember<Player>>; currentTimeMillis/1000->UtcNow; getRace nullable Race?; field `object`->`obj` (C# keyword). Guardrail green.
