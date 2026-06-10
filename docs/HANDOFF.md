@@ -1538,3 +1538,6 @@ Ported CM_TUNE (xTz — identify unidentified item or apply tuning scroll via Tu
 
 ## 2026-06-10 — CM_UNWRAP_ITEM + CM_ITEM_REMODEL
 Ported CM_UNWRAP_ITEM (xTz — unwrap packed item: negate packCount, PersistentState.UPDATE_REQUIRED aliased, SM_UNWRAP_ITEM + SM_INVENTORY_UPDATE_ITEM) and CM_ITEM_REMODEL (Sarynth — keep/extract item appearance -> ItemRemodelService.RemodelItem). Persistable.PersistentState aliased; ItemRemodelService/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_FUSION_WEAPONS + CM_GODSTONE_SOCKET
+Ported CM_FUSION_WEAPONS (zdead/Wakizashi/Neon — compound 2 weapons at armsfusion officer, DialogAction.COMPOUND_WEAPON gate + audit; pairs with earlier CM_BREAK_WEAPONS) and CM_GODSTONE_SOCKET (ATracer — socket godstone into equipped weapon, Npc talk-range check, instanceof->is). ArmsfusionService/ItemSocketService/DialogAction red-tolerated. Guardrail green.
