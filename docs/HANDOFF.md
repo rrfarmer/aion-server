@@ -1061,3 +1061,6 @@ Ported network/aion/serverpackets/SM_CHARACTER_LIST (36L, extends AbstractPlayer
 
 ## 2026-06-10 — SM_CHARACTER_SELECT (1b4bbde87)
 Ported network/aion/serverpackets/SM_CHARACTER_SELECT (44L): passkey window/result packet (type 0/1/2) for char selection; type 2 writes messageType, wrong-passkey flag/count, PASSKEY_WRONG_MAXCOUNT. SecurityConfig red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_CREATE_CHARACTER (1e23b786e)
+Ported network/aion/serverpackets/SM_CREATE_CHARACTER (68L, extends AbstractPlayerInfoPacket): CM_CREATE_CHARACTER response — 11 response-code consts (OK/limit/invalid-name/forbidden/reserved/other-race/class/open-window), writes code then WritePlayerInfo on RESPONSE_OK. Guardrail green.
