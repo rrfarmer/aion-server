@@ -1328,3 +1328,6 @@ Ported 2 serverpackets: SM_PACKAGE_INFO_NOTIFY (Rolandas — account package not
 
 ## 2026-06-10 — SM_PET
 Ported network/aion/serverpackets/SM_PET (341L, M@xx/xTz/Rolandas): pet LoadPets/Adopt/Surrender/Spawn/Dismiss/Food/Rename/Mood/SpecialFunction (12 ctors). Matched existing C# enums: PetAction & PetSpecialFunction PascalCase value==id (getActionId/getId->(int)); PetFunctionType SCREAMING names + GetId() ext + ContainsFunction. currentTimeMillis()->DateTimeOffset; nested subType switches; PetDopingBag.MAX_ITEMS. Pet/PetCommonData/PetTemplate red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_PRIVATE_STORE + SM_SECONDARY_SHOW_DECOMPOSABLE
+Ported 2 serverpackets: SM_PRIVATE_STORE (Simple — sold items objId/itemId/count/price + ItemInfoBlob.GetFullBlob.WriteMe(GetBuf())) and SM_SECONDARY_SHOW_DECOMPOSABLE (xTz — indexed ResultedItem preview). PrivateStore/TradePSItem/ItemInfoBlob/ResultedItem red-tolerated. Guardrail green.
