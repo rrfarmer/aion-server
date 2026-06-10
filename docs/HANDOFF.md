@@ -1286,3 +1286,6 @@ Ported 2 serverpackets: SM_RESURRECT (creature name + skillId) and SM_PLAYER_SEA
 
 ## 2026-06-10 — SM_RENAME + SM_RECONNECT_KEY
 Ported 2 serverpackets: SM_RENAME (Rhys2002 — char/legion rename notice, Player+Legion ctors -> private base ctor) and SM_RECONNECT_KEY (-Nemesiss- — reconnection key). Player/Legion red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_RIDE_ROBOT + SM_RECIPE_DELETE
+Ported 2 serverpackets: SM_RIDE_ROBOT (objId + robotId mount/dismount) and SM_RECIPE_DELETE (recipeId). Player red-tolerated. Guardrail green.
