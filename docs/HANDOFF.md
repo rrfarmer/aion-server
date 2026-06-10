@@ -1415,3 +1415,6 @@ Ported 3 more chat clientpackets: CM_CHAT_PLAYER_INFO (prix/Neon — chat-window
 
 ## 2026-06-10 — CM_CHECK_NICKNAME + CM_CLOSE_DIALOG + CM_CLIENT_COMMAND_ROLL
 Ported 3 clientpackets: CM_CHECK_NICKNAME (-Nemesiss-/cura — nickname availability check; reserved/used/invalid/forbidden/ok via SM_CREATE_CHARACTER.RESPONSE_* + CHARACTER_CREATION_MODE), CM_CLOSE_DIALOG (close/unselect dialog -> DialogService.OnCloseDialog), CM_CLIENT_COMMAND_ROLL (Rhys2002 — /roll dice, Rnd.Get(1,maxRoll) default 100, self+broadcast dice messages). PlayerService/NameRestrictionService/DialogService/Rnd/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_COMPOSITE_STONES + CM_CHARGE_ITEM
+Ported CM_COMPOSITE_STONES (pixfid — combine 2 manastones via combination tool; protection/casting cancel, inventory lookups, CompositionAction.CanAct/Act) and CM_CHARGE_ITEM (ATracer — charge item list at target NPC via ItemChargeService.ChargeItems). PlayerRestrictions/CompositionAction/ItemChargeService red-tolerated. Guardrail green.
