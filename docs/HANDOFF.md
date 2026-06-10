@@ -1592,3 +1592,6 @@ Ported CM_HOUSE_EDIT (Rolandas — house decoration/renovation editor): action-d
 
 ## 2026-06-10 — CM_HOUSE_DECORATE + CM_REGISTER_HOUSE
 Ported CM_HOUSE_DECORATE (Rolandas — apply/clear wall/floor part by lineNo; PartType nullable enum via PartTypeExtensions.GetForLineNr + .Value.GetStartLineNr; discard vs setUsed decor, double SM_HOUSE_EDIT, QuestEngine) and CM_REGISTER_HOUSE (Rolandas — auction-register house w/ bid+registration-fee%; registering-allowed/studio/already-bid/fee-overdue guards, TryDecreaseKinah, Auction success/refund; HouseType.STUDIO enum). HousingBidService/PartType/HouseType/SM_* red-tolerated. House clientpacket cluster (TELEPORT/TELEPORT_BACK/OPEN_DOOR/PAY_RENT/KICK/SETTINGS/SCRIPT/EDIT/DECORATE/REGISTER) now complete. Guardrail green.
+
+## 2026-06-10 — CM_INSTANCE_INFO + CM_INSTANCE_LEAVE
+Ported CM_INSTANCE_INFO (nrg/Neon — leader instance-score info; updateType 1 splits team members (allExcept leader) into groups of 3 via FixedElementCountSplitList, forEach->foreach) and CM_INSTANCE_LEAVE (xTz — instanceHandler.LeaveInstance). Predicates.Players.AllExcept/SplitList/SM_INSTANCE_INFO red-tolerated. Guardrail green.
