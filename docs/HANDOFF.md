@@ -1646,3 +1646,8 @@ Ported CM_POSITION_SELF (reply to SM_POSITION_SELF, no-op) and CM_MOVE_IN_AIR (-
 
 ## 2026-06-10 — CM_MOVE
 Ported CM_MOVE (-Nemesiss- — core player-movement packet): MovementMask position/glide(GEYSER)/vehicle parsing w/ absolute-vs-vector dirs; runImpl dead/fear/confused + bogus-packet guards, jumping calc, glide switch, teleportation-mode absolute fast-path, vector-speed direction, vehicle fields, AntiHackService.CanMove, protection cancel, World.UpdatePosition, NotifyControllers (immediate turn/stop vs start vs move), SM_MOVE broadcast, fall vs stop-falling; HandleBogusPacket (RandomMoveLocEffect range workaround -> SM_FORCED_MOVE/SM_MOVE); ToString() override preserved. MovementMask/GlideFlag/PlayerMoveController/AntiHackService red-tolerated. Only CM_FIND_GROUP + CM_VERSION_CHECK remain. Guardrail green.
+
+## 2026-06-10 — CM_VERSION_CHECK + CM_FIND_GROUP — CLIENTPACKET PILLAR COMPLETE
+Ported CM_VERSION_CHECK (-Nemesiss- — client version handshake -> SM_VERSION_CHECK w/ EventService.GetEventTheme) and CM_FIND_GROUP (cura/MrPoke — find-group/find-instance-group window: action-switched read 0-25 + dispatch 0-17 to FindGroupService; switch-arrow flattened). EventService/FindGroupService red-tolerated.
+
+** MILESTONE: ALL 190 game-server clientpackets are now ported to C# (Network/Aion/Clientpackets). The clientpacket pillar that opened this session is fully complete (incl. 2 abstract bases AbstractGmCommandPacket + AbstractCharacterEditPacket). Every file NUL-clean, guardrail green throughout. ** Remaining network gaps: the deferred ~28.9k-line generated SM_SYSTEM_MESSAGE catalog (serverpacket pillar otherwise complete) and the unported game-server AionClientPacket base (red-tolerated; only Aion.LoginServer's exists). Guardrail green.
