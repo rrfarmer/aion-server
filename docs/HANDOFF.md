@@ -1337,3 +1337,6 @@ Ported network/aion/serverpackets/SM_NPC_INFO (130L, -Nemesiss-): visible npc/mo
 
 ## 2026-06-10 — SM_STATUPDATE_HP/MP/DP/EXP
 Ported 4 stat-update serverpackets (Luno/alexa026): SM_STATUPDATE_HP (cur/max), SM_STATUPDATE_MP (cur/max), SM_STATUPDATE_DP (cur), SM_STATUPDATE_EXP (cur/recoverable/max + boost). Trivial WriteD/WriteH/WriteQ. Guardrail green.
+
+## 2026-06-10 — SM_TARGET_UPDATE + SM_WEATHER
+Ported 2 serverpackets: SM_TARGET_UPDATE (Sweetkr — objId + targetId) and SM_WEATHER (ATracer/Kwazar/Nemesiss — per-zone weather codes). Player/WeatherEntry red-tolerated. Guardrail green.
