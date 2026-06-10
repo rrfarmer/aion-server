@@ -1244,3 +1244,6 @@ Ported 2 house serverpackets: SM_HOUSE_UPDATE (3 unk shorts + WriteCommonInfo) a
 
 ## 2026-06-10 — SM_HOUSE_OBJECT + SM_HOUSE_OBJECTS
 Ported 2 house-object serverpackets: SM_HOUSE_OBJECT (single object spawn: template/pos/rotation/cooldown/expiration + typeId switch 1 useable/7 npc) and SM_HOUSE_OBJECTS (bulk positions). HouseObject<?> erased to HouseObject<PlaceableHouseObject>; (UseableItemObject)/(NpcObject) casts; getBuf()->GetBuf(). HouseObject/NpcObject/UseableItemObject red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_HOUSE_BIDS
+Ported network/aion/serverpackets/SM_HOUSE_BIDS (62L, Rolandas/Neon): paged house-auction bid list (last bid / registered-house bid + per-house land/address/building/type/highest-bid/count/remaining-seconds). Function<HouseBids,Integer>->Func<HouseBids,int> lambda; HouseBids.Bid nested. HouseBids/HousingBidService/HousingService/AuctionEndTask red-tolerated. Guardrail green.
