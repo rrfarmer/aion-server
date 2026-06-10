@@ -1364,3 +1364,6 @@ Ported 2 item serverpackets: SM_UNWRAP_ITEM (xTz — objId + count) and SM_TUNE_
 
 ## 2026-06-10 — SM_SELL_ITEM + SM_SHOW_NPC_ON_MAP
 Ported 2 serverpackets: SM_SELL_ITEM (orz/Sarynth/Artur/Neon — vendor window: npc type/buy rate/tabs; TradeListTemplate.TradeTab aliased; PricesService.GetVendorSellModifier fallback) and SM_SHOW_NPC_ON_MAP (Lyahim — npc map marker w/ instance calc). Npc/TradeListTemplate/TradeNpcType/Player red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_TRADELIST
+Ported network/aion/serverpackets/SM_TRADELIST (74L, alexa026/ATracer/Sarynth/xTz/Neon): vendor trade list — npc type/buy modifier + trade tabs filtered by GoodsList legion level + limited items. ArrayList->new List; addAll->AddRange; TradeTab aliased; tradeNpcType.index()->Index(). Npc/TradeListTemplate/GoodsList/LimitedItem red-tolerated. Guardrail green.
