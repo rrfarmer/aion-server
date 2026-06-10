@@ -1205,3 +1205,6 @@ Ported 2 legion emblem serverpackets: SM_LEGION_UPDATE_EMBLEM (id/type/argb) and
 
 ## 2026-06-10 — SM_LEGION_SEND_EMBLEM_DATA + SM_LEGION_UPDATE_TITLE
 Ported 2 legion serverpackets: SM_LEGION_SEND_EMBLEM_DATA (emblem byte stream: size + bytes) and SM_LEGION_UPDATE_TITLE (objId/legionId/name/rank). LegionRank red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_LEGION_HISTORY
+Ported network/aion/serverpackets/SM_LEGION_HISTORY (57L, Simple/KID/xTz): paged legion history (8/page; total/page/entries: epochSeconds/action/name/description). LegionHistoryEntry record -> PascalCase accessors; LegionHistoryAction.Type sequential (LEGION/REWARD/WAREHOUSE) -> ordinal()=(int); subList->GetRange(start,count); Collections.emptyList->new List. Guardrail green.
