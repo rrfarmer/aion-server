@@ -1310,3 +1310,6 @@ Ported 2 quest serverpackets: SM_QUEST_REPEAT (repeatable quest ids) and SM_QUES
 
 ## 2026-06-10 — SM_PRIVATE_STORE_NAME + SM_NEARBY_QUESTS
 Ported 2 serverpackets: SM_PRIVATE_STORE_NAME (objId + store message) and SM_NEARBY_QUESTS (MrPoke/Rolandas/Neon — nearby quest ids with notYetAvailableBit 1<<17; Map.entrySet->KeyValuePair; -size&0xFFFF). Player red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_POSITION + SM_POSITION_SELF
+Ported 2 serverpackets: SM_POSITION (Sweetkr — object objId + x/y/z + heading teleport) and SM_POSITION_SELF (cura — self x/y/z + heading). VisibleObject red-tolerated. Guardrail green.
