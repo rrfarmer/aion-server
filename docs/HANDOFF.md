@@ -1367,3 +1367,6 @@ Ported 2 serverpackets: SM_SELL_ITEM (orz/Sarynth/Artur/Neon — vendor window: 
 
 ## 2026-06-10 — SM_TRADELIST
 Ported network/aion/serverpackets/SM_TRADELIST (74L, alexa026/ATracer/Sarynth/xTz/Neon): vendor trade list — npc type/buy modifier + trade tabs filtered by GoodsList legion level + limited items. ArrayList->new List; addAll->AddRange; TradeTab aliased; tradeNpcType.index()->Index(). Npc/TradeListTemplate/GoodsList/LimitedItem red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_TRADE_IN_LIST + SM_SHOW_BRAND
+Ported 2 serverpackets: SM_TRADE_IN_LIST (MrPoke — sellback list, TradeTab aliased) and SM_SHOW_BRAND (Sweetkr — target-brand icons; IntStream.range->for, putAll->dict copy, Map.forEach->foreach KeyValuePair). Npc/TradeListTemplate red-tolerated. Guardrail green.
