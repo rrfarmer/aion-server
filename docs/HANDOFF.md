@@ -1388,3 +1388,6 @@ Ported network/aion/serverpackets/SM_BROKER_SERVICE (270L, IlBuono/kosyachok): b
 
 ## 2026-06-10 — CM_CAPTCHA (opens clientpacket pillar)
 Ported network/aion/clientpackets/CM_CAPTCHA (Cura) — FIRST clientpacket (pillar = 190 files, all unported). Established client idiom: extends AionClientPacket; ReadImpl()/RunImpl() overrides; readUC/readS->ReadUC/ReadS; ctor(opcode, ISet<State>):base(...); AionConnection.State aliased; SM_ATTACK_STATUS.TYPE/LOG aliased (converges those); equalsIgnoreCase->StringComparison.OrdinalIgnoreCase; PacketSendUtility.SendPacket; LoggerFactory->NullLogger LogWarning. AionClientPacket base + SM_SYSTEM_MESSAGE (28.9k generated, deferred) red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_ABYSS_RANKING_PLAYERS/LEGIONS + CM_BIND_POINT_TELEPORT
+Ported 3 clientpackets: CM_ABYSS_RANKING_PLAYERS + CM_ABYSS_RANKING_LEGIONS (SheppeR — race ranking requests; converge SM_ABYSS_RANKING_* + AbyssRankingCache; AbyssRank.AbyssRankUpdateType aliased) and CM_BIND_POINT_TELEPORT (ginho1 — converges BindPointTeleportService). raceId=ReadC() preserved (no cast, base ReadC assumed byte). AionClientPacket base red-tolerated. Guardrail green.
