@@ -1484,3 +1484,6 @@ Ported 3 group clientpackets: CM_GROUP_LOOT (Rhys2002 — roll/bid response -> D
 
 ## 2026-06-10 — CM_HEADING_UPDATE + CM_USE_ITEM
 Ported CM_HEADING_UPDATE (post-spin heading no-op, reads 1 byte) and CM_USE_ITEM (Avol/Neon — full item-use pipeline: target item/equip/house-object resolution, casting cancel, canUse, QuestEngine.OnItemUseEvent, per-action-type CanAct/Act dispatch for DyeAction/MultiReturnAction/InstanceTimeClear/default, cooldown add, item-use observers). HouseObject<?>->HouseObject<PlaceableHouseObject>; Collections.emptyList->new List; currentTimeMillis->UtcNow millis. QuestEngine/item actions/PlayerRestrictions red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_MOVE_ITEM + CM_SPLIT_ITEM
+Ported CM_MOVE_ITEM (alexa026/kosyachok — move item across storages 0-3 -> ItemMoveService.MoveItem) and CM_SPLIT_ITEM (kosyak — split stack w/ source/dest storage types + slot -> ItemSplitService.SplitItem). ItemMoveService/ItemSplitService red-tolerated. Guardrail green.
