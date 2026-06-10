@@ -1565,3 +1565,6 @@ Ported CM_MACRO_CREATE (SoulKeeper — PlayerService.AddMacro + SM_MACRO_CREATED
 
 ## 2026-06-10 — CM_MAC_ADDRESS + CM_MOTION
 Ported CM_MAC_ADDRESS (-Nemesiss-/KID/ViAl/Neon — read traceroute/MAC/HDD serial, FixHddSerial: HexFormat->Convert.ToHexString, UTF_16LE->Encoding.Unicode, Java matches() anchored as ^...$, replaceAll char-swap->Regex.Replace; LoginServer auth) and CM_MOTION (MrPoke — motions.SetActive). LoginServer/Motions red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_LEVEL_READY + CM_PLAY_MOVIE_END
+Ported CM_LEVEL_READY (-Nemesiss-/Kwazar — the full enter-world sequence: house objects/instance count/player info/protection/account props/motion/windstream announces, World.Spawn, fly resume, siege/conqueror/rift/arcade/quests/weather/QuestEngine.OnEnterWorld, cube update, pet spawn, town/event enter, delayed team SendBrands via ThreadPoolManager lambda; serverpackets.* wildcard expanded; var team) and CM_PLAY_MOVIE_END (MrPoke — cutscene-end validation; Set.of(3,4,5)->HashSet, server-initiated audit, QuestEngine.OnMovieEnd + instanceHandler.OnPlayMovieEnd). Many services/SM_* red-tolerated. Guardrail green.
