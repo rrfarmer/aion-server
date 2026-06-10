@@ -1070,3 +1070,6 @@ Ported network/aion/serverpackets/SM_DELETE_CHARACTER (36L): CM_DELETE_CHARACTER
 
 ## 2026-06-10 — Exchange serverpackets (4621936c7)
 Ported 4 exchange/trade serverpackets: SM_EXCHANGE_REQUEST (receiver name), SM_EXCHANGE_ADD_KINAH (kinah+action), SM_EXCHANGE_CONFIRMATION (action byte), SM_EXCHANGE_ADD_ITEM (action/template/objid/name + ItemInfoBlob.GetFullBlob.WriteMe(GetBuf())). ItemInfoBlob red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_FRIEND_RESPONSE (f3eec99e8)
+Ported network/aion/serverpackets/SM_FRIEND_RESPONSE (133L): add/delete-friend reply (name + result code). 18 result variants — Java static-final factory methods (TARGET_ADDED/DENIED/REMOVED/LIST_FULL/OFFLINE_SENT_REQUEST/REQUESTED_ALREADY/REQUESTER_LIST_FULL_CANT_ACCEPT/REQUEST_DENIED/REQUEST_ALREADY_RECEIVED) -> static methods; parameterless instances (TARGET_OFFLINE/ALREADY_FRIEND/NOT_FOUND/LIST_FULL/BLOCKED_YOU/DEAD/TOO_MANY_REQUESTS/CLOSE_SEND_REQUEST_WINDOW) -> static readonly. Guardrail green.
