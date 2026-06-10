@@ -1547,3 +1547,6 @@ Ported CM_ITEM_PURIFICATION (FinalNovas/Navyan — purify/upgrade item: IsPurifi
 
 ## 2026-06-10 — CM_STOP_TRAINING + CM_TOGGLE_SKILL_DEACTIVATE
 Ported CM_STOP_TRAINING (xTz — instanceHandler.OnStopTraining) and CM_TOGGLE_SKILL_DEACTIVATE (ATracer — remove toggle/stance effect, non-toggle audit, stop stance if matching). DataManager.SKILL_DATA/SkillTemplate/WorldMapInstance red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_RELEASE_OBJECT + CM_REMOVE_ALTERED_STATE
+Ported CM_RELEASE_OBJECT (Rolandas/Neon — release occupied useable house object; UseableHouseObject<?>-><PlaceableHouseObject>; postbox always notifies, UseableItemObject resets progress bar via SM_USE_OBJECT; HOUSE_OBJECT_USE task cancel; `object` renamed object_) and CM_REMOVE_ALTERED_STATE (dragoon112/Neon — end altered-state effect, audit debuff-removal via SkillSubType.DEBUFF). UseableHouseObject/Effect/SkillSubType/SM_* red-tolerated. Guardrail green.
