@@ -881,3 +881,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported services/findgroup/FindGroupService (cura, MrPoke; 1/2, Hooks file is golden-capture instrumentation, skipped): singleton; ConcurrentDictionary recruitments/applications/instanceGroups; show/add/update/remove tabs, server-wide instance application flow (invite to group/alliance), onJoinedTeam/onLogout cleanup. No-op FindGroupMutationPostTraceCaptureHooks calls omitted (not Aion gameplay). Guardrail green.
+
+## 2026-06-10
+- Ported services/rift (RiftEnum + RiftManager + RiftInformer; RiftOpenRunnable already present from auto-commit loop). RiftEnum: first value-carrying Java enum port -> sealed class, static readonly SCREAMING_SNAKE instances + Values(), constructor chaining, Name() via reflection static ctor, getRift/getVortex throw ArgumentException. RiftManager: ConcurrentDictionary riftsPerWorld/riftGroups, CopyOnWriteArrayList->List, computeIfAbsent->GetOrAdd, spawnRift/spawnVortex/spawnInstance, rift.name()->Name(). RiftInformer: SM_RIFT_ANNOUNCE packet building, Java switch on RiftEnum constants -> reference-equality HashSet groups (Vortex/Normal/Volatile), TreeMap->SortedDictionary 12-slot announce data, twin-map ids, anonymous Consumer->lambda. Guardrail green.
