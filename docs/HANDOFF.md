@@ -1103,3 +1103,6 @@ Ported network/aion/serverpackets/SM_ATTACK (149L): physical-attack result — a
 
 ## 2026-06-10 — SM_ATTACK_RESPONSE
 Ported network/aion/serverpackets/SM_ATTACK_RESPONSE (49L): attack-stop/notice reply (message + attack count). 6 static factories (TARGET_IN_DIFFERENT_AREA/STOP_INVALID_TARGET/TARGET_TOO_FAR_AWAY/STOP_OBSTACLE_IN_THE_WAY/STOP_TOO_CLOSE_TO_ATTACK/STOP_WITHOUT_MESSAGE) + private ctor. Guardrail green.
+
+## 2026-06-10 — SM_SKILL_CANCEL + SM_SKILL_REMOVE
+Ported 2 skill serverpackets: SM_SKILL_CANCEL (creature objId + skillId) and SM_SKILL_REMOVE (skillId + level/professionFlag + type from PlayerSkillEntry). Creature/PlayerSkillEntry red-tolerated. Guardrail green.
