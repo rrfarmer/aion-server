@@ -1514,3 +1514,6 @@ Ported CM_TIME_CHECK (-Nemesiss- — time-sync ping/pong; echoes nanoTime via SM
 
 ## 2026-06-10 — CM_OPEN_STATICDOOR + CM_SUBZONE_CHANGE
 Ported CM_OPEN_STATICDOOR (rhys2002/Wakizashi — StaticDoorService.OpenStaticDoor) and CM_SUBZONE_CHANGE (Rolandas — RevalidateZones + GM ZONE_INFO zone echo skipping DUMMY/WEATHER; Java enum.name() -> ToString()). StaticDoorService/ZoneInstance/ZoneClassName red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_SUMMON_* clientpacket group (5 files)
+Ported the summon/mercenary clientpackets: CM_SUMMON_COMMAND (SummonMode.GetSummonModeById nullable->.Value, UnsummonType.COMMAND, SummonsService.DoMode), CM_SUMMON_ATTACK (creature auto-attack, is-pattern + audit), CM_SUMMON_EMOTION (EmotionType PascalCase Fly/Land/Jump/SummonStopJump/AttackModeInMove/NeutralModeInMove/None; getTypeId()->(int)EmotionType.None; SM_EMOTION broadcasts), CM_SUMMON_MOVE (MovementMask position/glide/vehicle parsing; CreatureMoveController<? extends Creature>->_<Creature>; dual `is SummonMoveController smc` renamed smc/smc2 to avoid C# scope clash), CM_SUMMON_CASTSPELL (pet-vs-mercenary, SkillOrder validation w/ log placeholders, PET_SKILL_DATA.PetHasSkill). SummonsService/SkillOrder/MovementMask/SM_* red-tolerated. Guardrail green.
