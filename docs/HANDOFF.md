@@ -1229,3 +1229,6 @@ Ported 2 instance serverpackets: SM_INSTANCE_STAGE_INFO (type/event/unk; field e
 
 ## 2026-06-10 — SM_HOUSE_TELEPORT + SM_HOUSE_PAY_RENT
 Ported 2 house serverpackets: SM_HOUSE_TELEPORT (address + playerId) and SM_HOUSE_PAY_RENT (weeks paid). Opens house packet group. Guardrail green.
+
+## 2026-06-10 — SM_DELETE_HOUSE + SM_DELETE_HOUSE_OBJECT
+Ported 2 house serverpackets: SM_DELETE_HOUSE (address) and SM_DELETE_HOUSE_OBJECT (item objId). Guardrail green.
