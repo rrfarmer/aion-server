@@ -1118,3 +1118,6 @@ Ported 2 summon remove serverpackets: SM_SUMMON_OWNER_REMOVE (summon objId) and 
 
 ## 2026-06-10 — SM_TRANSFORM_IN_SUMMON
 Ported network/aion/serverpackets/SM_TRANSFORM_IN_SUMMON (31L): summon-transform link (summon objId + owner name + owner objId); convenience ctor takes Creature. Completes the summon serverpacket group (PANEL/USESKILL/OWNER_REMOVE/PANEL_REMOVE/TRANSFORM_IN_SUMMON). Creature/Player red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_ALLIANCE_MEMBER_INFO
+Ported network/aion/serverpackets/SM_ALLIANCE_MEMBER_INFO (166L): per-PlayerAllianceEvent alliance member update — hp/mp/fp, world position, class/gender/level, fly state, abnormal-effects blocks for UPDATE_EFFECTS and JOIN/ENTER/UPDATE/etc. Keyword collision: field event->eventValue. SkillTargetSlot ordinal()->Array.IndexOf(Enum.GetValues) twice (position, not id); FULLSLOTS->SkillTargetSlotExtensions. PlayerAllianceEvent switch labels qualified + stacked. Effect/PlayerAllianceMember/WorldPosition red-tolerated. Opens alliance packet group. Guardrail green.
