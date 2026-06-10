@@ -1007,3 +1007,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpacket SM_INSTANCE_INFO (nrg/Neon; per-player instance cooldown info - reuse time, max/used entries, race hide flag). Converges PlayerEnterWorldService. Integer...->params int[]; Arrays.asList->new List; keySet().toArray->Keys.ToArray; currentTimeMillis->UtcNow; cast precedence (int)(a-b)/1000 preserved. Guardrail green.
+
+## 2026-06-10
+- Ported network serverpacket SM_PLAYER_SPAWN (-Nemesiss-; map/channel load notify for entering player - personal-instance negative channel, position/heading, beginner-twin flag). Converges PlayerEnterWorldService. Guardrail green.
