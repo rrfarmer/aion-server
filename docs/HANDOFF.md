@@ -974,3 +974,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpackets SM_CUBE_UPDATE (Sweetkr; cube/wh/legion-wh size+expansions or stigma slots, factories stigmaSlots/cubeSize, ordinal->(int)) and SM_AUTO_GROUP (SheppeR et al; matchmaking UI by windowId, switch-arrow grouped->stacked case labels, getAGTByMaskId, IllegalArgument->Argument). Converge ItemSplitService (SM_CUBE_UPDATE.cubeSize) + AutoGroupUtility (SM_AUTO_GROUP). Guardrail green.
+
+## 2026-06-10
+- Ported network serverpackets SM_ITEM_USAGE_ANIMATION (ATracer; item-use cast animation, 5 ctors, timed-use sets using-item; converges ItemActionService/ItemSocketService/PlayerReviveService) and SM_RIFT_ANNOUNCE (Sweetkr/-Enomine-; rift announce/silentera/spawn/despawn by actionId, Map->Dictionary, writeRiftType; converges RiftInformer). Guardrail green.
