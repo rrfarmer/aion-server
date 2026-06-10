@@ -1211,3 +1211,6 @@ Ported network/aion/serverpackets/SM_LEGION_HISTORY (57L, Simple/KID/xTz): paged
 
 ## 2026-06-10 — SM_LEGION_DOMINION_RANK
 Ported network/aion/serverpackets/SM_LEGION_DOMINION_RANK (42L, Yeats): legion-dominion ranking (top 25 + requester if outside top). indexOf/subList/set/get->IndexOf/GetRange/indexer; subList view-copy semantics fine (ranking not read afterward). LegionDominionLocation/ParticipantInfo red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_LEARN_RECIPE + SM_ICON_INFO
+Ported 2 small serverpackets: SM_LEARN_RECIPE (recipeId) and SM_ICON_INFO (buffId + display flag). Guardrail green.
