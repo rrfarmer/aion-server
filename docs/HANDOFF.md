@@ -1262,3 +1262,6 @@ Ported 2 login serverpackets: SM_KEY (EnableCryptKey) and SM_L2AUTH_LOGIN_CHECK 
 
 ## 2026-06-10 — SM_GF_WEBSHOP_TOKEN_RESPONSE + SM_CUSTOM_PACKET
 Ported SM_GF_WEBSHOP_TOKEN_RESPONSE (Artur — 32-char token) and SM_CUSTOM_PACKET (Luno — admin //fsc fake-packet builder). KEY: PacketElementType is a Java enum with per-constant abstract write() bodies -> abstract nested class + static-readonly nested sealed subclass instances (D/B/H/C/F/DF/Q/S), nested in the packet so they reach protected WriteX. Integer.decode/Long.decode -> Decode/LongDecode helpers (0x/#/leading-0 octal, sign-aware); Float/Double.valueOf -> Parse(InvariantCulture); ctor base(opcode). Guardrail green.
+
+## 2026-06-10 — SM_GM_SHOW_PLAYER_STATUS
+Ported network/aion/serverpackets/SM_GM_SHOW_PLAYER_STATUS (202L, Yeats): GM full stat-sheet dump for a player (name + 12 reserved Qs + identical current/base stat block as SM_STATS_INFO). getCurrent/getBase->PascalCase; writeF(x/1000f); StatEnum/PlayerGameStats/CalculationType red-tolerated. Guardrail green.
