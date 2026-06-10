@@ -1361,3 +1361,6 @@ Ported 2 serverpackets: SM_UPDATE_NOTE (xavier — target note objId+note) and S
 
 ## 2026-06-10 — SM_UNWRAP_ITEM + SM_TUNE_RESULT
 Ported 2 item serverpackets: SM_UNWRAP_ITEM (xTz — objId + count) and SM_TUNE_RESULT (Estrayl/Sykra — tuning result statBonus + EnchantInfoBlobEntry.WriteInfo(GetBuf()) + manastone/cancel flags; chained assignment). Item/PendingTuneResult/EnchantInfoBlobEntry red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_SELL_ITEM + SM_SHOW_NPC_ON_MAP
+Ported 2 serverpackets: SM_SELL_ITEM (orz/Sarynth/Artur/Neon — vendor window: npc type/buy rate/tabs; TradeListTemplate.TradeTab aliased; PricesService.GetVendorSellModifier fallback) and SM_SHOW_NPC_ON_MAP (Lyahim — npc map marker w/ instance calc). Npc/TradeListTemplate/TradeNpcType/Player red-tolerated. Guardrail green.
