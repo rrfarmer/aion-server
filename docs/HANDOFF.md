@@ -1610,3 +1610,6 @@ Ported CM_LEGION_WH_KINAH (ATracer — legion-warehouse kinah withdraw(0)/deposi
 
 ## 2026-06-10 — CM_LEGION
 Ported CM_LEGION (Simple — main legion command dispatcher): exOpcode-switched read; member runImpl switch-arrow flattened (0x01 invite/0x02 leave/0x04 kick/0x05 appoint-BG/0x06 rank/0x07 show-notice (Legion.Announcement record .Message/.Time, Date.getTime()/1000 -> (DateTimeOffset)Time.ToUnixTimeMilliseconds()/1000)/0x08 refresh/0x09 announcement/0x0A self-intro/0x0D permissions/0x0E level/0x0F nickname/0x10 dominion); non-member 0x00 create. Integer.toHexString.toUpperCase -> ToString("X",Invariant). LegionService/SM_LEGION_INFO red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_BUY_TRADE_IN_TRADE + CM_SHOW_BRAND
+Ported CM_BUY_TRADE_IN_TRADE (MrPoke/Ritsu — buy from trade-in NPC surrendering trade-in item list -> TradeService.PerformBuyFromTradeInTrade) and CM_SHOW_BRAND (Sweetkr/Simple — team brand marker; no-team self SM_SHOW_BRAND else leader/alliance-captain UpdateBrand; TemporaryPlayerTeam<?>->var, instanceof PlayerAlliance->is). TradeService/SM_SHOW_BRAND red-tolerated. Guardrail green.
