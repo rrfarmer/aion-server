@@ -1625,3 +1625,6 @@ Ported CM_GF_WEBSHOP_TOKEN_REQUEST (Artur — empty webshop token reply, started
 
 ## 2026-06-10 — CM_MAY_LOGIN_INTO_GAME + CM_TIME_CHECK_QUIT
 Ported CM_MAY_LOGIN_INTO_GAME (-Nemesiss- — reply SM_MAY_LOGIN_INTO_GAME) and CM_TIME_CHECK_QUIT (Rolandas — trivial CM_TIME_CHECK subclass, behaviour inherited). SM_MAY_LOGIN_INTO_GAME red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_UI_SETTINGS + CM_L2AUTH_LOGIN_CHECK
+Ported CM_UI_SETTINGS (ATracer — persist UI(0)/shortcuts(1)/houseBuddies(2) blobs via GetRemainingBytes) and CM_L2AUTH_LOGIN_CHECK (-Nemesiss- — accountId+sessionKey login auth -> LoginServer.RegisterLoginRequest). PlayerSettings/LoginServer red-tolerated. Clientpacket pillar ~150/190. Guardrail green.
