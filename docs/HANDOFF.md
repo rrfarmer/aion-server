@@ -1319,3 +1319,6 @@ Ported 2 serverpackets: SM_LOOKATOBJECT (alexa026 — face target: objId/targetI
 
 ## 2026-06-10 — SM_RECEIVE_BIDS + SM_PLASTIC_SURGERY
 Ported 2 serverpackets: SM_RECEIVE_BIDS (Rolandas — auction-changed notice) and SM_PLASTIC_SURGERY (IlBuono — surgery/gender-switch prompt via CM_CHARACTER_EDIT.CheckOrRemoveTicket). CM_CHARACTER_EDIT/Player red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_SECURITY_TOKEN + SM_RESTORE_CHARACTER
+Ported 2 serverpackets: SM_SECURITY_TOKEN (ginho1 — region byte + token + equal-length zero pad) and SM_RESTORE_CHARACTER (-Nemesiss- — restore success + char objId). Guardrail green.
