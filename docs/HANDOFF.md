@@ -1238,3 +1238,6 @@ Ported network/aion/serverpackets/SM_HOUSE_OWNER_INFO (70L, Rolandas/Neon): acti
 
 ## 2026-06-10 — AbstractHouseInfoPacket + SM_HOUSE_RENDER + SM_HOUSE_ACQUIRE
 Ported house-info base AbstractHouseInfoPacket (Neon): WriteCommonInfo (address/owner/building(GetType_)/door/sign + PartType decor-registry loop + legion emblem). PartType real C# enum -> Enum.GetValues + GetRooms ext; Integer decorId->int?; CHARNAME_MAX_LENGTH from AbstractPlayerInfoPacket. Plus SM_HOUSE_RENDER (WriteCommonInfo) and SM_HOUSE_ACQUIRE (playerId/address/acquire). House/LegionMember/LegionService red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_HOUSE_UPDATE + SM_HOUSE_EDIT
+Ported 2 house serverpackets: SM_HOUSE_UPDATE (3 unk shorts + WriteCommonInfo) and SM_HOUSE_EDIT (Rolandas — decorate add/remove/spawn-move/despawn actions 3/4/5/7). HouseObject<?> erased to HouseObject<PlaceableHouseObject>; instanceof UseableItemObject->is+cast WriteUsageData(GetBuf()); LoggerFactory.getLogger(getClass())->NullLoggerFactory.CreateLogger(GetType().FullName).LogWarning. HouseObject/UseableItemObject/HouseDecoration red-tolerated. Guardrail green.
