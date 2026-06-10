@@ -1463,3 +1463,6 @@ Ported CM_DUEL_REQUEST (xavier — DuelService.OnDuelRequest on known target pla
 
 ## 2026-06-10 — CM_DELETE_MAIL + CM_DISTRIBUTION_SETTINGS
 Ported CM_DELETE_MAIL (kosyachok — read mailObjId[]+unk byte each -> MailService.DeleteMail) and CM_DISTRIBUTION_SETTINGS (Lyahim/Simple/xTz — loot rule 0/1/2->FREEFORALL/ROUNDROBIN/LEADER switch-arrow flattened to switch stmt; LootGroupRules w/ per-grade thresholds applied to group / league / alliance). MailService/PlayerGroupService/LeagueService/PlayerAllianceService/LootRuleType red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_ENTER_WORLD + CM_EQUIP_ITEM
+Ported CM_ENTER_WORLD (-Nemesiss-/Avol/Neon — PlayerEnterWorldService.EnterWorld(connection, oid)) and CM_EQUIP_ITEM (Avol/ATracer — action 0/1/2 equip/unequip/switch-hands; unequip-full inventory msg; appearance broadcast on change). Equipment/PlayerRestrictions/PlayerEnterWorldService/SM_UPDATE_PLAYER_APPEARANCE red-tolerated. Guardrail green.
