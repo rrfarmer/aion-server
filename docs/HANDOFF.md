@@ -1496,3 +1496,6 @@ Ported CM_MANASTONE (ATracer/Wakizashi — actionType 1/2 enchant/manastone w/ s
 
 ## 2026-06-10 — CM_QUIT + CM_MAY_QUIT
 Ported CM_QUIT (-Nemesiss-/Neon — leave-world to char-select/plastic-surgery (edit-mode npc talk-range + EDIT_CHARACTER_ALL/GENDER audit gate) or connection close; stayConnected updates visible items + per-account char-ban info; con.Close(packet) ordering) and CM_MAY_QUIT (xavier — 10s may-quit no-op). PlayerLeaveWorldService/PlayerPunishmentsDAO/DialogAction/SM_QUIT_RESPONSE red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_TITLE_SET + CM_SET_NOTE
+Ported CM_TITLE_SET (Nemiroff/cura — set display title, 0xFFFF clear, owns-title guard) and CM_SET_NOTE (Ben — set player note, no-op if unchanged, refresh each online friend's SM_FRIEND_LIST + broadcast SM_UPDATE_NOTE). TitleList/World/SM_FRIEND_LIST/SM_UPDATE_NOTE red-tolerated. Guardrail green.
