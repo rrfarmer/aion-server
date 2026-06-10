@@ -1274,3 +1274,6 @@ Ported 2 player-state serverpackets: SM_PLAYER_STATE (visual/see state + blinkin
 
 ## 2026-06-10 — SM_LOOT_STATUS
 Ported network/aion/serverpackets/SM_LOOT_STATUS (54L, alexa026): loot enable/disable + drop-list open/close + loot-effect lookup. Nested Status enum sequential 0..3 + GetId extension; stream mapToInt/filter/findAny.orElse(0) -> Select/Where/DefaultIfEmpty(0).First; getOrDefault->GetValueOrDefault(...,new HashSet). DropItem/DropRegistrationService red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_LOOT_ITEMLIST
+Ported network/aion/serverpackets/SM_LOOT_ITEMLIST (61L): corpse drop list (index/itemId/count/socket + per-item loot-confirmation based on tradeable + sole-looter/team-nearby). (int) count cast; Set/Collection iteration; DataManager.ITEM_DATA lookup. Drop/DropItem/DropNpc red-tolerated. Guardrail green.
