@@ -1199,3 +1199,6 @@ Ported 2 legion-member serverpackets: SM_LEGION_UPDATE_NICKNAME (objId + nicknam
 
 ## 2026-06-10 — SM_LEGION_ADD_MEMBER + SM_LEGION_LEAVE_MEMBER
 Ported 2 legion-member serverpackets: SM_LEGION_ADD_MEMBER (new member objId/name/rank/isMember/class/level/map + GAMESERVER_ID + msg) and SM_LEGION_LEAVE_MEMBER (leave/kick objId + msgId + name(s); 2 ctors). Player/NetworkConfig red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_LEGION_UPDATE_EMBLEM + SM_LEGION_SEND_EMBLEM
+Ported 2 legion emblem serverpackets: SM_LEGION_UPDATE_EMBLEM (id/type/argb) and SM_LEGION_SEND_EMBLEM (id/type/dataSize/argb/name header before emblem bytes). LegionEmblem red-tolerated. Guardrail green.
