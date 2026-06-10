@@ -1169,3 +1169,6 @@ Ported 2 serverpackets: SM_ASCENSION_MORPH (ascension quest morph flag) and SM_A
 
 ## 2026-06-10 — SM_GAMEGUARD + SM_CAPTCHA
 Ported 2 anti-hack serverpackets: SM_GAMEGUARD (size + zero buffer) and SM_CAPTCHA (Cura — type 1 image data / type 3 correct flag + ban time). Guardrail green.
+
+## 2026-06-10 — SM_GM_BOOKMARK_ADD + SM_GM_SEARCH
+Ported 2 GM serverpackets: SM_GM_BOOKMARK_ADD (teleport bookmark name+worldId+x/y/z) and SM_GM_SEARCH (player-search result string name+world+(int)coords). Player red-tolerated. Guardrail green.
