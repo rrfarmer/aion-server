@@ -1283,3 +1283,6 @@ Ported 2 small serverpackets: SM_PING_RESPONSE (0x04) and SM_LOGIN_QUEUE (positi
 
 ## 2026-06-10 — SM_RESURRECT + SM_PLAYER_SEARCH
 Ported 2 serverpackets: SM_RESURRECT (creature name + skillId) and SM_PLAYER_SEARCH (Ben — social search panel: world/pos/class/gender/level/group-status + ChatUtil.ToFactionPrefixedName; static-import CHARNAME_MAX_LENGTH). Creature/DeniedStatus/ChatUtil red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_RENAME + SM_RECONNECT_KEY
+Ported 2 serverpackets: SM_RENAME (Rhys2002 — char/legion rename notice, Player+Legion ctors -> private base ctor) and SM_RECONNECT_KEY (-Nemesiss- — reconnection key). Player/Legion red-tolerated. Guardrail green.
