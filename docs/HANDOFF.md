@@ -1577,3 +1577,6 @@ Ported CM_USE_CHARGE_SKILL (Cheatkiller — release charge skill with accumulate
 
 ## 2026-06-10 — CM_REGISTER_BROKER_ITEM + CM_GET_HOUSE_BIDS
 Ported CM_REGISTER_BROKER_ITEM (kosyak — list item on broker, OPEN_VENDOR gate + isTrading/count guards) and CM_GET_HOUSE_BIDS (Rolandas — house-auction bid list via DynamicServerPacketBodySplitList<HouseBids>, forEach->foreach part.IsFirst/IsLast -> SM_HOUSE_BIDS). BrokerService/HousingBidService/SplitList/SM_* red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_HOUSE_TELEPORT + CM_HOUSE_TELEPORT_BACK + CM_HOUSE_OPEN_DOOR
+Ported 3 house-teleport clientpackets (Rolandas/Neon): CM_HOUSE_TELEPORT (relationship-crystal teleport own/friend/random; NpcTemplateType.HOUSING + ai name "friendportal" gate; stream.filter.findAny->FirstOrDefault, Rnd.Get(list), FindFriendsAccessibleHouses over friendlist+legion; getClass()->GetType_().Name), CM_HOUSE_TELEPORT_BACK (battle-return coords -> TeleportService), CM_HOUSE_OPEN_DOOR (enter/leave via door; exit-map vs teleportNearHouseDoor; HOUSE_SHOW_ADDRESS gm echo, canEnter guard). HousingService/TeleportService/InstanceService/TeleportAnimation red-tolerated. Guardrail green.
