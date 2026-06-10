@@ -1460,3 +1460,6 @@ Ported CM_DIALOG_SELECT (KKnD/orz/avol/Pad — core NPC/quest dialog dispatcher)
 
 ## 2026-06-10 — CM_DUEL_REQUEST + CM_EMOTION
 Ported CM_DUEL_REQUEST (xavier — DuelService.OnDuelRequest on known target player) and CM_EMOTION (SoulKeeper/nerolory — large emotion/state dispatcher: sit/stand/chair/fly/land/walk/run/powershard/sprint/attack-mode etc). IMPORTANT enum divergence: loop ported EmotionType as PascalCase (SelectTarget/Jump/Fly/...) with EmotionTypes.FromId not getEmotionTypeById; CreatureState PascalCase (Resting/Chair/WeaponEquipped/WalkMode/Powershard/Active/PrivateShop); PlayerMode.RIDE stayed SCREAMING. Matched those. Integer.toHexString(et).toUpperCase() -> et.ToString("X",Invariant). AbnormalState/SM_EMOTION/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_DELETE_MAIL + CM_DISTRIBUTION_SETTINGS
+Ported CM_DELETE_MAIL (kosyachok — read mailObjId[]+unk byte each -> MailService.DeleteMail) and CM_DISTRIBUTION_SETTINGS (Lyahim/Simple/xTz — loot rule 0/1/2->FREEFORALL/ROUNDROBIN/LEADER switch-arrow flattened to switch stmt; LootGroupRules w/ per-grade thresholds applied to group / league / alliance). MailService/PlayerGroupService/LeagueService/PlayerAllianceService/LootRuleType red-tolerated. Guardrail green.
