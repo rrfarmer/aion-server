@@ -992,3 +992,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported network serverpackets SM_DIE (orz/Sarynth/Rhys2002; revive options + kisk time + invasion flag on death), SM_TARGET_SELECTED (Sweetkr/-Enomine-; target id/level/HP/MP), SM_DIALOG_WINDOW (alexa026; NPC dialog page + mail/town context, DialogPage.id()->GetId(), mailBoxState field). Guardrail green.
+
+## 2026-06-10
+- Ported 4 login serverpackets (all converge PlayerEnterWorldService): SM_PRICES (uses ported PricesService), SM_BLOCK_LIST, SM_FRIEND_LIST (id/class/gender/status/house), SM_GAME_TIME. Iterables->foreach; Status alias. Guardrail green.
