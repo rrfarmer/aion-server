@@ -1082,3 +1082,6 @@ Ported network/aion/serverpackets/SM_BLOCK_RESPONSE (59L): block-list request re
 
 ## 2026-06-10 — SM_DUEL (4b8b82d92)
 Ported network/aion/serverpackets/SM_DUEL (65L): duel started (type 0, requesterObjId) / result (type 1, DuelResult resultId+msgId+name) via static factories SM_DUEL_STARTED/SM_DUEL_RESULT; type 0xE0 no-op; default throws ArgumentException. DuelResult red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_ATTACK_STATUS (053f9c151)
+Ported network/aion/serverpackets/SM_ATTACK_STATUS (182L): HP/MP/FP change status. KEY: nested TYPE enum has DUPLICATE int values (HP=7=DAMAGE, ABSORBED_MP=20=DAMAGE_MP, FP=26=FP_DAMAGE, DROWNING=12=TYPE12) and the writeImpl switch distinguishes constants by IDENTITY not value (DAMAGE writes -value; HP falls to default writing +value). A plain C# enum would collapse them, so TYPE/LOG -> sealed value-classes (reference identity) + switch -> reference-equality if-chains (RiftInformer idiom). 3 ctors. Creature/LifeStats red-tolerated. Guardrail green.
