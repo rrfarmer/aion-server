@@ -723,3 +723,6 @@ Ported BufEffect subclasses: ArmorMasteryEffect (StatArmorMasteryFunction w/ equ
 
 ## 2026-06-10 — BufEffect debuff/boost: Slow/Snare/Curse/OneTimeBoostSkillAttack
 Ported BufEffect subclasses: SlowEffect/SnareEffect/CurseEffect (calculate→X_RESISTANCE, set/unset AbnormalState), OneTimeBoostSkillAttackEffect (switch PHYSICAL/MAGICAL/ALL, stateful anonymous AttackCalcObserver(boostCount)→nested BoostObserver capturing outer+effect+percent, getBase{Physical,Magical}DamageMultiplier overrides, schedule(100ms) removeEffect). Guardrail green (363/5). skillengine.effect: ~86 ported, ~65 remain (HideEffect + Always* family + proc/instant/abnormal-set). Big services pending (Siege/Broker/Quest/Legion).
+
+## 2026-06-10 — Always* family complete (Block/Dodge/Parry/Resist)
+Ported AlwaysBlock/Dodge/Parry/ResistEffect : EffectTemplate. Each: applyEffect→addToEffectedController; anonymous AttackStatusObserver(value, STATUS) overriding checkStatus→nested {Status}Observer capturing effect, --Value<=0→endEffect, matching-status returns true. **Always* family COMPLETE (4 files).** Guardrail green (363/5). skillengine.effect: ~90 ported, ~61 remain (HideEffect, proc/instant DamageEffect family, abnormal-set, Aura/Confuse/Fear/Blind). Big services pending (Siege/Broker/Quest/Legion).
