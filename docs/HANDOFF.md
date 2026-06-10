@@ -1481,3 +1481,6 @@ Ported CM_GATHER (ATracer — start/cancel gathering; switch-arrow -1/0,128/defa
 
 ## 2026-06-10 — CM_GROUP_LOOT + CM_GROUP_DISTRIBUTION + CM_GROUP_DATA_EXCHANGE
 Ported 3 group clientpackets: CM_GROUP_LOOT (Rhys2002 — roll/bid response -> DropDistributionService.HandleRollOrBid), CM_GROUP_DISTRIBUTION (Lyahim/Simple/xTz — kinah distribute by partyType 1/2/3 across group/alliance/league; amount<2 + canTrade guards), CM_GROUP_DATA_EXCHANGE (xTz — opaque UI exchange relay; MAX_EXCHANGE_DATA_SIZE = AionServerPacket.MAX_USABLE_PACKET_BODY_SIZE-6; action 1 broadcast-and-receive else per online-member send; ByteBuffer.wrap+NetworkUtils.toHex -> NetworkUtils.ToHex(data)). DropDistributionService/team services/SM_GROUP_DATA_EXCHANGE/NetworkUtils red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_HEADING_UPDATE + CM_USE_ITEM
+Ported CM_HEADING_UPDATE (post-spin heading no-op, reads 1 byte) and CM_USE_ITEM (Avol/Neon — full item-use pipeline: target item/equip/house-object resolution, casting cancel, canUse, QuestEngine.OnItemUseEvent, per-action-type CanAct/Act dispatch for DyeAction/MultiReturnAction/InstanceTimeClear/default, cooldown add, item-use observers). HouseObject<?>->HouseObject<PlaceableHouseObject>; Collections.emptyList->new List; currentTimeMillis->UtcNow millis. QuestEngine/item actions/PlayerRestrictions red-tolerated. Guardrail green.
