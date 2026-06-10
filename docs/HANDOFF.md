@@ -1295,3 +1295,6 @@ Ported 2 serverpackets: SM_PLAY_MOVIE (-orz-/MrPoke — cutscene/movie play; set
 
 ## 2026-06-10 — SM_NICKNAME_CHECK_RESPONSE + SM_MARK_FRIENDLIST
 Ported 2 small serverpackets: SM_NICKNAME_CHECK_RESPONSE (-Nemesiss- — name-check result code) and SM_MARK_FRIENDLIST (xTz — active player objId + flags). Guardrail green.
+
+## 2026-06-10 — SM_PET_EMOTE
+Ported network/aion/serverpackets/SM_PET_EMOTE (54L, ATracer/Neon): pet emote/move packet (MoveStop/MoveTo position branches + default emotion). NOTE: existing C# PetEmote enum (auto-loop) uses PascalCase members with value==emoteId, so getEmoteId()->(int)emote and MOVE_STOP/MOVETO->PetEmote.MoveStop/MoveTo. Pet red-tolerated. Guardrail green.
