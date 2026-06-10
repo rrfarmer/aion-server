@@ -1397,3 +1397,6 @@ Ported 3 block clientpackets (Ben): CM_BLOCK_ADD (self/full/not-found/buddy/alre
 
 ## 2026-06-10 — CM_AUTO_GROUP + CM_BONUS_TITLE
 Ported 2 clientpackets: CM_AUTO_GROUP (Shepper/Guapo/nrg — auto-group window 100-105 switch; converges AutoGroupService) and CM_BONUS_TITLE (-Enomine- — set bonus title, 0xFFFF clears; readUH->ReadUH). EntryRequestType/AutoGroupService/PeriodicInstanceManager red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_BREAK_WEAPONS + CM_CHANGE_CHANNEL
+Ported 2 clientpackets: CM_BREAK_WEAPONS (zdead — defuse fused weapon w/ DialogAction.DECOMPOUND_WEAPON target check) and CM_CHANGE_CHANNEL (ATracer — channel change w/ FastTrack twin-count offset; converges TeleportService). ArmsfusionService/AuditLogger/WorldMapInstance red-tolerated. Guardrail green.
