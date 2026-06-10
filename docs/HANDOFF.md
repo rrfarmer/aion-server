@@ -1220,3 +1220,6 @@ Ported 2 item serverpackets: SM_ITEM_COOLDOWN (per-item reuse cooldown; currentT
 
 ## 2026-06-10 — SM_DELETE_WAREHOUSE_ITEM + SM_INVENTORY_INFO
 Ported 2 item serverpackets: SM_DELETE_WAREHOUSE_ITEM (warehouse type/objId/delete mask; ItemDeleteType aliased) and SM_INVENTORY_INFO (cube expands + per-item info blob; removeAll(singletonList(null))->RemoveAll(x=>x==null)). Item/ItemInfoBlob/ItemPacketService red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_INFLUENCE_RATIO + SM_INSTANCE_COUNT_INFO
+Ported 2 serverpackets: SM_INFLUENCE_RATIO (faction influence rates + per-world influence by SiegeRace) and SM_INSTANCE_COUNT_INFO (map/instance id + group-type marker). Influence/SiegeRace/SiegeService red-tolerated. Guardrail green.
