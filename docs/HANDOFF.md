@@ -1358,3 +1358,6 @@ Ported 2 serverpackets: SM_TIME_CHECK (-Nemesiss- — server uptime + nanoTime; 
 
 ## 2026-06-10 — SM_UPDATE_NOTE + SM_TOLL_INFO
 Ported 2 serverpackets: SM_UPDATE_NOTE (xavier — target note objId+note) and SM_TOLL_INFO (xTz — toll/AP-token count). Player red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_UNWRAP_ITEM + SM_TUNE_RESULT
+Ported 2 item serverpackets: SM_UNWRAP_ITEM (xTz — objId + count) and SM_TUNE_RESULT (Estrayl/Sykra — tuning result statBonus + EnchantInfoBlobEntry.WriteInfo(GetBuf()) + manastone/cancel flags; chained assignment). Item/PendingTuneResult/EnchantInfoBlobEntry red-tolerated. Guardrail green.
