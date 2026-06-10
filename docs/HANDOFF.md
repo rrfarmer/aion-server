@@ -1151,3 +1151,6 @@ Ported 2 gathering serverpackets: SM_GATHER_ANIMATION (player/gatherable objIds 
 
 ## 2026-06-10 — SM_CRAFT_ANIMATION + SM_CRAFT_UPDATE
 Ported 2 crafting serverpackets: SM_CRAFT_ANIMATION (player/target objIds + skillId + action) and SM_CRAFT_UPDATE (72L — progress + per-action system message switch 0/3,1/2,4,5,6/7; skillId 40009 forces delay 1000). Completes crafting/gathering packet group (CRAFT+GATHER animation/update). ItemTemplate red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_ACCOUNT_PROPERTIES + SM_CUSTOM_SETTINGS
+Ported 2 settings serverpackets: SM_ACCOUNT_PROPERTIES (GM-panel enable via AccessLevel>=GM_PANEL + fixed/zero account fields) and SM_CUSTOM_SETTINGS (player display/deny HIDE_* bitmask consts). AdminConfig/Player red-tolerated. Guardrail green.
