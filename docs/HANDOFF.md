@@ -944,3 +944,6 @@ Ported EventBuffHandler (Neon): per-event buff pools + day-restrictions w/ DB pe
 
 ## 2026-06-10
 - Ported services/siege ArtifactAssault (Luzien/Whoop; extends Assault<ArtifactSiege>, level-based assaulter spawn near boss) + AgentSiege (Estrayl/Sykra; Levinshor Mastarius/Veille - recursive 60s delayStart ramp to spawn, zone-gated quest distribution, BALAUR/SIEGE boss init, capture base 6113 + rewards on finish). schedule(Runnable,ms)->Schedule ct-lambda (return->return CompletedTask); SiegeRace winner->SiegeRace? nullable; switch-on-SiegeRace; Math.toRadians->x*PI/180; ZoneName.get->Get. Remaining siege: FortressSiege(414), FortressAssault(178), MercenaryLocation(138), BalaurAssaultService(146). Guardrail green.
+
+## 2026-06-10
+- Ported services/siege MercenaryLocation (Whoop; purchasable merc spawn zone - spawn/despawn, cooldown+50%-alive request validity, zone resolution by siege/race) + BalaurAssaultService (synchro2/Luzien/Estrayl; schedules fortress 1-15min/artifact 3-48h Balaur assaults, calculateFortressAssault influence chance + per-map limits, spawnDredgion carrier broadcast). ConcurrentHashMap->ConcurrentDictionary; map.remove(k).call->TryRemove(out)+call; Siege<?>-><SiegeLocation>; instanceof X x->is X x; Race.getRaceByString(name)->ToString. Remaining siege: FortressSiege(414), FortressAssault(178). Guardrail green.
