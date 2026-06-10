@@ -1394,3 +1394,6 @@ Ported 3 clientpackets: CM_ABYSS_RANKING_PLAYERS + CM_ABYSS_RANKING_LEGIONS (She
 
 ## 2026-06-10 — CM_BLOCK_ADD/DEL/SET_REASON
 Ported 3 block clientpackets (Ben): CM_BLOCK_ADD (self/full/not-found/buddy/already checks; converges SM_BLOCK_RESPONSE), CM_BLOCK_DEL, CM_BLOCK_SET_REASON. equalsIgnoreCase->StringComparison.OrdinalIgnoreCase. SocialService/PlayerService/BlockedPlayer/SM_SYSTEM_MESSAGE red-tolerated. Guardrail green.
+
+## 2026-06-10 — CM_AUTO_GROUP + CM_BONUS_TITLE
+Ported 2 clientpackets: CM_AUTO_GROUP (Shepper/Guapo/nrg — auto-group window 100-105 switch; converges AutoGroupService) and CM_BONUS_TITLE (-Enomine- — set bonus title, 0xFFFF clears; readUH->ReadUH). EntryRequestType/AutoGroupService/PeriodicInstanceManager red-tolerated. Guardrail green.
