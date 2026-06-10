@@ -1451,3 +1451,6 @@ Ported CM_APPEARANCE (xTz/Neon — rename char (0) / legion (1) / cosmetic item 
 
 ## 2026-06-10 — CM_BUILDER_COMMAND + CM_BUILDER_CONTROL + CM_DISCONNECT
 Ported 3 clientpackets: CM_BUILDER_COMMAND and CM_BUILDER_CONTROL (ginho1 — trivial AbstractGmCommandPacket subclasses for // and /// GM-panel command tiers, behaviour fully inherited) and CM_DISCONNECT (Neon — AFK-timeout disconnect notice; reads 1 flag byte, no-op run). Clientpacket pillar now 51/190. Guardrail green.
+
+## 2026-06-10 — CM_DELETE_ITEM + CM_DELETE_QUEST
+Ported CM_DELETE_ITEM (Avol — discard inventory item, unbreakable guard -> SM_SYSTEM_MESSAGE.STR_UNBREAKABLE_ITEM else inventory.Delete(ItemDeleteType.DISCARD); nested ItemDeleteType aliased) and CM_DELETE_QUEST (abandon quest; timed quests cancel TaskId.QUEST_TIMER + SM_QUEST_ACTION(id,0) then QuestService.AbandonQuest). Storage/ItemPacketService/DataManager/QuestService red-tolerated. Guardrail green.
