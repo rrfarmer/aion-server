@@ -1223,3 +1223,6 @@ Ported 2 item serverpackets: SM_DELETE_WAREHOUSE_ITEM (warehouse type/objId/dele
 
 ## 2026-06-10 — SM_INFLUENCE_RATIO + SM_INSTANCE_COUNT_INFO
 Ported 2 serverpackets: SM_INFLUENCE_RATIO (faction influence rates + per-world influence by SiegeRace) and SM_INSTANCE_COUNT_INFO (map/instance id + group-type marker). Influence/SiegeRace/SiegeService red-tolerated. Guardrail green.
+
+## 2026-06-10 — SM_INSTANCE_STAGE_INFO + SM_INSTANCE_SCORE
+Ported 2 instance serverpackets: SM_INSTANCE_STAGE_INFO (type/event/unk; field event->eventValue keyword) and SM_INSTANCE_SCORE (Dns/ginho1/nrg/xTz — wildcard InstanceScoreWriter<?> erased to bound InstanceScoreWriter<InstanceScore<InstancePlayerReward>>; writeMe(buf)->WriteMe(GetBuf()); ArenaScoreWriter ctor). NOTE: invariant erasure means ArenaScoreWriter arg is a convergence-time type mismatch (red-tolerated now). Instanceinfo writers red-tolerated. Guardrail green.
