@@ -1783,3 +1783,6 @@ Ported InstanceScoreWriter<T> : PacketWriteHelper (abstract base for the *ScoreW
 
 ## 2026-06-10 — instanceinfo: DarkPoetaScoreWriter + CrucibleScoreWriter
 First two *ScoreWriter subclasses (now portable since InstanceScoreWriter base exists). DarkPoetaScoreWriter : InstanceScoreWriter<DarkPoetaScore> (points/kills/gathers/rank). CrucibleScoreWriter : InstanceScoreWriter<InstanceScore<CruciblePlayerReward>> (per-player rewards padded to 6 slots; writeB zero-fill). writeMe -> protected override (base widened to public in Java; C# keeps protected). DarkPoetaScore/CruciblePlayerReward red-tolerated. Remaining instanceinfo: Arena/Dredgion/EternalBastion/Harmony/LegionDominion/PvpInstance/TheShugoEmperorsVault ScoreWriters. NUL-clean, guardrail green.
+
+## 2026-06-10 — instanceinfo: EternalBastion + LegionDominion + TheShugoEmperorsVault ScoreWriters
+Three more (all mechanical writeD/writeQ blobs). EternalBastionScoreWriter + TheShugoEmperorsVaultScoreWriter : InstanceScoreWriter<NormalScore>; LegionDominionScoreWriter : InstanceScoreWriter<LegionDominionScore>. Each writes points/rank/AP/(GP) + 4 reward item/count pairs. NormalScore/LegionDominionScore red-tolerated. instanceinfo remaining: Arena (90L), Dredgion (69L), Harmony (150L), PvpInstance (151L). NUL-clean, guardrail green.
