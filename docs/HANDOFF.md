@@ -1789,3 +1789,6 @@ Three more (all mechanical writeD/writeQ blobs). EternalBastionScoreWriter + The
 
 ## 2026-06-10 — instanceinfo/DredgionScoreWriter
 Ported DredgionScoreWriter : InstanceScoreWriter<PvpInstanceScore<PvpInstancePlayerReward>> (extra players + dredgionRooms ctor args). Writes two race tables (ELYOS/ASMODIANS, SCREAMING; padded to 6 @ 88 bytes), team scores, room states. writeS(name,54) fixed-size; abyssRank.getRank().getId(); playerClass.getClassId(); dredgionRooms.forEach -> foreach + WriteC(d.GetState()). Player/DredgionRoom/PvpInstanceScore/PvpInstancePlayerReward red-tolerated. instanceinfo remaining: Arena (90L), Harmony (150L), PvpInstance (151L). NUL-clean, guardrail green.
+
+## 2026-06-10 — instanceinfo/ArenaScoreWriter
+Ported ArenaScoreWriter : InstanceScoreWriter<PvPArenaScore> (per-player arena table padded to 12 @ 92 bytes + owner reward block). ArenaRewardItem is a C# record -> Java itemId()/baseCount()/scoreCount()/rankingCount() map to ItemId/BaseCount/ScoreCount/RankingCount PROPERTIES (not methods). writeS(name,54) fixed-size; (short)(participation*100). PvPArenaScore/PvPArenaPlayerReward/RewardItem red-tolerated. instanceinfo remaining: Harmony (150L), PvpInstance (151L). NUL-clean, guardrail green.
