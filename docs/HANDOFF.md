@@ -1971,3 +1971,6 @@ Ported PlayerSettingsDAO (ATracer/Neon): player_settings. MIXED - loadSettings v
 
 ## 2026-06-11 — DAO pillar: LegionMemberDAO
 Ported LegionMemberDAO (Simple): legion_members. MIXED - exercises the low-level DB helper (DB.PrepareStatement/Close/ExecuteUpdateAndClose) for isIdUsed/deleteLegionMember, DB.InsertUpdate(IUStH->nested SaveNew/Store) for saves, DatabaseFactory for loads/setRank. LegionRank.valueOf->Enum.Parse, getRank().toString()->ToString(); LegionService.GetInstance().GetLegion; loadLegionMembers RuntimeException->Exception wrap; isIdUsed reader inside try with finally DB.Close. NUL-clean, guardrail green (baseline 126). DB-callback DAOs remaining: 6 (LegionDominion/Broker/PlayerAppearance/Mail/Legion/Player - all larger).
+
+## 2026-06-11 — DAO pillar: LegionDominionDAO
+Ported LegionDominionDAO (Yeats): legion_dominion_locations + participants. MIXED across all three DB access styles. Map.get/put->indexer; TreeMap->SortedDictionary; list.remove((Integer)x)->List.Remove(x) by value; nullable getTimestamp->IsDBNull?null:new DateTimeOffset(GetDateTime) (Location/Info use DateTimeOffset?); setTimestamp(null)->DBNull.Value; delete via DB.PrepareStatement+ExecuteUpdateAndClose. StoreNewInfo consumed by LegionDominionLocation. NUL-clean, guardrail green (baseline 126). DB-callback DAOs remaining: 5 (Broker/PlayerAppearance/Mail/Legion/Player).
