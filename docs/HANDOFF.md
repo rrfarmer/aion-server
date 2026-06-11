@@ -1750,3 +1750,6 @@ Ported PlayerGroupLeavedEvent : PlayerLeavedEvent<PlayerGroupMember, PlayerGroup
 
 ## 2026-06-10 — group/events: PlayerGroupEnteredEvent + PlayerStartMentoringEvent
 PlayerGroupEnteredEvent : PlayerEnteredEvent<PlayerGroup> (AddPlayerToGroup + join/enter broadcasts). PlayerStartMentoringEvent : AlwaysTrueTeamEvent — **Java `implements Consumer<Player>` -> C# plain Accept(Player) method passed as a method group: group.forEach(this) -> group.ForEach(Accept)** (no IConsumer interface; Action delegate idiom). FilterMembers(Predicates.Players.CanBeMentoredBy).isEmpty() -> .Count == 0; AuditLogger.Log. group/events remaining: PlayerConnectedEvent, PlayerDisconnectedEvent. NUL-clean, guardrail green.
+
+## 2026-06-10 — group/events COMPLETE (PlayerConnected + PlayerDisconnected)
+Ported the last two group/events. PlayerConnectedEvent : AlwaysTrueTeamEvent (re-add reconnecting member, restore leadership, rebroadcast; slf4j {} -> string concat in log). PlayerDisconnectedEvent : ITeamEvent (disband if no online members else transfer leadership + offline broadcast). GroupEvent.DISCONNECTED confirmed. **model/team/group/events now 100% present by name (8/8).** Remaining team-events: alliance/events + league/events concretes. NUL-clean, guardrail green.
