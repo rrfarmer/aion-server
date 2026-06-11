@@ -23,8 +23,6 @@
     "dotnetConversion/src/Aion.GameServer/Services/StarterKitLevelChangePlanService.cs",
     "dotnetConversion/src/Aion.GameServer/Services/SystemMailRewardPlanService.cs",
     "dotnetConversion/src/Aion.GameServer/Services/ToyPet/PetFeedXmlProjection.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/VortexRiftEntryUpdateCompositionDispatchBridgeService.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/VortexRiftEntryUpdatePipelinePlanService.cs",
     "dotnetConversion/src/Aion.GameServer/Services/WorldNpcWalkerSpawnPlanCacheService.cs",
     "dotnetConversion/src/Aion.GameServer/Services/WorldRegionKeyProjectionService.cs",
     "dotnetConversion/src/Aion.GameServer/Utils/Concurrent/OrderedTaskExecutor.cs"
