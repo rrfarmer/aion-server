@@ -2306,3 +2306,16 @@ PlayerLeaveFlyAreaStatus, BindPointTeleportKnownListFanoutKnownListOrdering, Npc
 PlayerAggroEntrySnapshot, PlayerGroupSnapshotResolver, AutoGroupLookingPartyRegistrationService, IGameClient
 ConnectionRegistry(14 refs), GameServerRuntimeContext(22 refs). NEXT: knock isolated slop/ports, then schedule the
 two webs as concentrated pushes.
+
+## 2026-06-11 — Last-mile decision: faithful replacement of reworked WorldNpc spawn cluster (build steady at 10)
+Surgical dead-ref removal drove 25->10 (CharacterBanInfo dedup, GameServer faction-ratio/shutdown facade,
+ScriptManager reflection shim, IGameClientConnectionRegistry/GameServerRuntimeContext/PeriodicInstance dead-ref
+trims, LimitedItemTradeService dead Fact methods). The remaining 10 (5 walker-placement + ~5 teleport) are the tip
+of a ~34-file reworked WorldNpc* spawn/walker/loot/DP cluster. **User chose: concentrated FAITHFUL replacement,
+executed INCREMENTALLY pillar-by-pillar** (commit each time build<=10; never leave tree badly broken).
+Full cluster map + pillar plan saved to memory `reworked-worldnpc-spawn-cluster`. Key: faithful PlayerCommonData.
+AddDp/SetDp + SpawnEngine walker system ALREADY EXIST (no porting); the reworked services are referenced only by
+Program.cs DI + each other, bridged to (also-reworked) DP/HP reward services. Partial deletion regresses (10->33),
+so pillars must cut the DP/HP bridges FIRST, then delete the dead web, then teleport. NEXT TICK: start Pillar 1
+(DP) — rewire CraftService/QuestRewardService/PvpDpRewardService off WorldNpcResourceStatsService.AddPlayerDpAsync
+to faithful player.GetCommonData().AddDp(); tree is clean+committed at 10 now.
