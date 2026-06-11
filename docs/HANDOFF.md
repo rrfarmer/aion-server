@@ -2319,3 +2319,29 @@ Program.cs DI + each other, bridged to (also-reworked) DP/HP reward services. Pa
 so pillars must cut the DP/HP bridges FIRST, then delete the dead web, then teleport. NEXT TICK: start Pillar 1
 (DP) — rewire CraftService/QuestRewardService/PvpDpRewardService off WorldNpcResourceStatsService.AddPlayerDpAsync
 to faithful player.GetCommonData().AddDp(); tree is clean+committed at 10 now.
+
+## 2026-06-11 — Teleport pillar DONE (10->5); walker/spawn cluster removal VALIDATED (one-pass checklist ready)
+Teleport pillar committed (ac3b1d06f): deleted reworked teleport web (PlayerTeleportService/PortalEntry
+Validation/PlayerRecall/PlayerTeleportToNpc/PlayerGroupSnapshotResolver, all 0-ref), kept faithful TeleportService,
+decoupled RiftPortalUseService(VortexInvasionRuntime) + InstanceRuntimeService(BindLocationResolutionPlan).
+Build steady at 5 (all walker-placement). Then DRY-RAN the full WorldNpc cluster removal (deleted 34 files,
+rewired CraftService, fixed SmMove) -> only the Program.cs DI block (~30 scattered lines) remained; rolled back to
+keep tree green (validated each step works). **NEXT TICK execute in ONE pass:**
+1. Delete all 33 `Services/WorldNpc*Service.cs` (KEEP Model/GameObjects/WorldNpc.cs model) + InstanceDestroy
+WorkflowService + InstanceEmptyInstanceCheckerService + orphan ServerPackets/SmLootItemList.cs.
+2. Delete dead reward svcs (0 faithful refs): QuestRewardService, PvpDpRewardService, PlayerIncomingDamage
+ObserverFanoutService.
+3. CraftService (KEEP - wired to CM_CRAFT): drop _resourceStats field/ctor-param/assign; replace `await
+_resourceStats.AddPlayerDpAsync(player,-requiredDp,maxDp)`+`FromDpChange(change,...)` with `player.GetCommonData().
+AddDp(-requiredDp)`+`CraftStartDpCostResult.Applied(player.ObjectId,recipeId,requiredDp,previousDp,player.Dp)`;
+remove record field `WorldNpcResourceChangeResult? Change` and rewrite FromDpChange->Applied(objId,recipeId,reqDp,
+prevDp,curDp). (faithful PlayerCommonData.AddDp/SetDp exist, broadcast SM_DP_INFO/STATUPDATE_DP.)
+4. SmMove.cs: delete the `SmMove(WorldNpc,WorldNpcWalkerMovementState,byte)` overload (uncalled; callers use new
+SmMove(owner)).
+5. Program.cs: remove every deleted-service AddSingleton (WorldNpc*, the WorldNpcDeathDropWorkflowService factory
+block, Action<WorldNpc>, Action<int>, Func<int,bool>=CancelRespawn, InstanceDestroyWorkflowService, Instance
+EmptyInstanceCheckerService, GameEngine<-WorldNpcSpawnService, QuestRewardService, PvpDpRewardService, Player
+IncomingDamageObserverFanoutService). KEEP: PlayerVisualStatsUpdateService, CustomLevelRewardExecutionService,
+all Pvp*ApReward/Aturam/Eternal/Stonespear, EquipmentObserverBurnFanoutService, Rift*, Func<int,WorldNpc,bool>.
+Keepers verified NOT ctor-dependent on deleted; Func<int,bool> consumer RiftService is optional-null-tolerant.
+Target: build 5->0. See memory reworked-worldnpc-spawn-cluster.
