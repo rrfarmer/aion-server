@@ -1768,3 +1768,6 @@ Last two alliance/events. PlayerAllianceEnteredEvent : PlayerEnteredEvent<Player
 
 ## 2026-06-10 — league/events: LeagueJoinEvent + LeagueMoveEvent
 Started league/events (last team-events subdir). LeagueJoinEvent : ITeamEvent (add alliance to league + joined broadcasts; SM_ALLIANCE_INFO.LEAGUE_ALLIANCE_ENTERED/LEAGUE_JOINED_ALLIANCE). LeagueMoveEvent : AlwaysTrueTeamEvent (swap two alliances' league positions + renumber broadcast; SM_SYSTEM_MESSAGE.STR_UNION_CHANGE_FORCE_NUMBER_* catalog). League/LeagueMember (Model.Team.League). Remaining league/events: LeagueChangeLeaderEvent, LeagueKinahDistributionEvent, LeagueLeftEvent. NUL-clean, guardrail green.
+
+## 2026-06-10 — league/events: LeagueChangeLeaderEvent + LeagueKinahDistributionEvent
+LeagueChangeLeaderEvent : ChangeLeaderEvent<PlayerAlliance> (league captaincy transfer w/ position swap; nested league.ForEach(alliance => alliance.ForEach(member => ...)); inherits CheckCondition; league field set from team.GetLeague() in ctor). LeagueKinahDistributionEvent : AlwaysTrueTeamEvent (even kinah split among league online members, mirrors TeamKinahDistributionEvent). league/events remaining: LeagueLeftEvent (87L). NUL-clean, guardrail green.
