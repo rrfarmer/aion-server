@@ -1780,3 +1780,6 @@ model/ tree now 100% present by name (incl. all team-events). Surveyed remaining
 
 ## 2026-06-10 — network/aion/instanceinfo/InstanceScoreWriter
 Ported InstanceScoreWriter<T> : PacketWriteHelper (abstract base for the *ScoreWriter family). Java <T extends InstanceScore<?>> -> where T : class (base uses no InstanceScore API; keeps the deferred Dredgion/Harmony/DarkPoeta/etc ScoreWriter subclasses 1:1 single-param). Default WriteMe empty override (subclasses fill). Unblocks the *ScoreWriter subclasses (each renders a specific instance scoreboard; still need their concrete InstanceScore types). skillinfo dir confirmed complete. NUL-clean, guardrail green.
+
+## 2026-06-10 — instanceinfo: DarkPoetaScoreWriter + CrucibleScoreWriter
+First two *ScoreWriter subclasses (now portable since InstanceScoreWriter base exists). DarkPoetaScoreWriter : InstanceScoreWriter<DarkPoetaScore> (points/kills/gathers/rank). CrucibleScoreWriter : InstanceScoreWriter<InstanceScore<CruciblePlayerReward>> (per-player rewards padded to 6 slots; writeB zero-fill). writeMe -> protected override (base widened to public in Java; C# keeps protected). DarkPoetaScore/CruciblePlayerReward red-tolerated. Remaining instanceinfo: Arena/Dredgion/EternalBastion/Harmony/LegionDominion/PvpInstance/TheShugoEmperorsVault ScoreWriters. NUL-clean, guardrail green.
