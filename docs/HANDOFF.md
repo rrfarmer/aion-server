@@ -1804,3 +1804,6 @@ network/aion/instanceinfo + skillinfo confirmed complete. Discovered the AI engi
 
 ## 2026-06-10 — ai/handler: Freeze + Move EventHandlers
 FreezeEventHandler (onFreeze/onUnfreeze sub-state toggle; AbstractAI<? extends Creature> -> AbstractAI<Creature> wildcard erasure; AiSubState.Freeze/None). MoveEventHandler (onMoveValidate/onMoveArrived -> controller.OnMove + TargetEventHandler dispatch; TargetEventHandler red-tolerated/not-yet-ported). AbstractAI<T> : AbstractAI where T : Creature is generic in C#. ai/handler remaining: Aggro/Attack/Creature/Follow/Returning/Talk/Target/Think EventHandlers. NUL-clean, guardrail green.
+
+## 2026-06-10 — ai/handler: Returning + Talk EventHandlers
+ReturningEventHandler (onNotAtHome/onBackHome: returning-state, EmoteManager/WalkManager, dispel BUFF, post-spawn skills, WorldMapInstance.GetInstanceHandler().OnBackHome). TalkEventHandler (onTalk/onSimpleTalk/onFinishTalk: dialog quest hook, town-residence title 462877 special case, SM_DIALOG_WINDOW). AiEventType.BackHome; AiState.Returning/Idle/Following; AiSubState.Talk/None; DialogAction.USE_OBJECT is a const int (-1) not enum; DispelSlotType.BUFF SCREAMING. EmoteManager/WalkManager/SkillEngine/QuestEngine/TownService/DialogPage red-tolerated where unported. ai/handler remaining: Aggro/Attack/Creature/Follow/Target/Think EventHandlers. NUL-clean, guardrail green.
