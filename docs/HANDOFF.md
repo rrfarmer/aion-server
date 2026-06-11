@@ -1947,3 +1947,6 @@ Ported BlockListDAO (Ben): blocks table, **first DB-callback-style DAO using the
 
 ## 2026-06-11 — DAO pillar: ItemCooldownsDAO (mixed)
 Ported ItemCooldownsDAO (ATracer): item_cooldowns. MIXED style - load/delete via commons DB callback helper (DB.Select(ParamReadStH)/DB.InsertUpdate(IUStH), anonymous->nested LoadHandler/DeleteHandler capturing player), store via DatabaseFactory MySqlBatch+transaction. currentTimeMillis()->UtcNow.ToUnixTimeMilliseconds(); values().removeIf(null||reuseTime-now<=30000)->Where+Remove on a dictionary copy; player.AddItemCoolDown/GetItemCoolDowns/GetEffectController().BroadCastEffects(null). NUL-clean, guardrail green (baseline 126). DB-callback DAOs remaining: 17; DatabaseFactory DAOs remaining: ~21.
+
+## 2026-06-11 — DAO pillar: PlayerRecipesDAO + AnnouncementsDAO
+Two DB-callback DAOs. PlayerRecipesDAO (lord_rex): player_recipes; ParamReadStH/IUStH->nested LoadHandler/AddRecipeHandler/DelRecipeHandler; RecipeList(HashSet<int>). AnnouncementsDAO (Divinity): MIXED - load/del via DB callback (ReadStH/IUStH->nested), addAnnouncement via DatabaseFactory; **Statement.RETURN_GENERATED_KEYS + getGeneratedKeys().getInt(1) -> ExecuteNonQuery + (int)stmt.LastInsertedId**; message "\n"/"\t" unescape preserved; GetAnnouncement(MySqlDataReader) helper. NUL-clean, guardrail green (baseline 126). DB-callback DAOs remaining: 15.
