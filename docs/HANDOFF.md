@@ -1792,3 +1792,6 @@ Ported DredgionScoreWriter : InstanceScoreWriter<PvpInstanceScore<PvpInstancePla
 
 ## 2026-06-10 — instanceinfo/ArenaScoreWriter
 Ported ArenaScoreWriter : InstanceScoreWriter<PvPArenaScore> (per-player arena table padded to 12 @ 92 bytes + owner reward block). ArenaRewardItem is a C# record -> Java itemId()/baseCount()/scoreCount()/rankingCount() map to ItemId/BaseCount/ScoreCount/RankingCount PROPERTIES (not methods). writeS(name,54) fixed-size; (short)(participation*100). PvPArenaScore/PvPArenaPlayerReward/RewardItem red-tolerated. instanceinfo remaining: Harmony (150L), PvpInstance (151L). NUL-clean, guardrail green.
+
+## 2026-06-10 — instanceinfo/HarmonyScoreWriter
+Ported HarmonyScoreWriter : InstanceScoreWriter<HarmonyArenaScore> (150L, 2 ctors). Multi-mode writer switched on InstanceScoreType (SCREAMING + GetId() extension): UPDATE_INSTANCE_PROGRESS/INIT_PLAYER/UPDATE_PLAYER_BUFF_STATUS/SHOW_REWARD/UPDATE_INSTANCE_BUFFS_AND_SCORE (nested group/member loops)/UPDATE_RANK; early-return null-guards per case. AGPlayer is a C# record -> .name() -> .Name property; ArenaRewardItem record accessors -> properties. writeS(name,52) fixed. HarmonyArenaScore/HarmonyGroupReward/PvPArenaPlayerReward red-tolerated. instanceinfo remaining: PvpInstanceScoreWriter (151L). NUL-clean, guardrail green.
