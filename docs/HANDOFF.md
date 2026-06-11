@@ -1959,3 +1959,6 @@ Two DB-callback DAOs (both MIXED). PlayerMacrosDAO (Aquanox): player_macrosses; 
 
 ## 2026-06-11 — DAO pillar: PlayerEffectsDAO
 Ported PlayerEffectsDAO (ATracer): player_effects (abnormal effects across logout). MIXED - load/delete via DB callback (ParamReadStH/IUStH->nested), store via DatabaseFactory MySqlBatch+transaction. Predicate<Effect>->Func<Effect,bool> for LINQ Where; Effect.ForceType nested value-class via `using ForceType=...Effect.ForceType` alias, GetInstance/GetName, nullable forceType (IsDBNull guard + ?.GetName()??DBNull.Value); (int)GetRemainingTimeMillis cast; EffectController.AddSavedEffect/GetAbnormalEffects/BroadCastEffects(null). NUL-clean, guardrail green (baseline 126). DB-callback DAOs remaining: 10.
+
+## 2026-06-11 — DAO pillar: FriendListDAO
+Ported FriendListDAO (Ben): friends. MIXED - load via DatabaseFactory, add/del/setMemo via DB.InsertUpdate(IUStH->nested). **Bidirectional add/del: Java's two addBatch()+executeBatch() on one PreparedStatement -> two sequential ExecuteNonQuery with Parameters.Clear between** (DB.InsertUpdate hands a plain MySqlCommand, not a MySqlBatch; same two-row effect). Friend(pcd,memo); FriendList(player,friends); PlayerService.GetOrLoadPlayerCommonData. NUL-clean, guardrail green (baseline 126). DB-callback DAOs remaining: 9.
