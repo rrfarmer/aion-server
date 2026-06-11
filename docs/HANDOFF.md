@@ -2286,3 +2286,23 @@ Executed the gameplay-faithful/infra-idiomatic endgame in loop mode, GSC-pattern
 ## 2026-06-11 — Loop run cont'd: Quartz pillar RESOLVED + scattered fixes (165->86)
 GameEngine async lifecycle (6 thin adapters, 183->165). WorldRegionKeyProjection/WorldMapRegionLayout slop deleted (->158). Scheduler-handle idiom: QuestTasks/AuctionEndTask Future->ScheduledTask + ScheduledTask.Cancel(bool) overload; StaticData slop table QuestFinishRewardProjectionLookupTable purged + Model.Vortex using (->148). **QUARTZ PILLAR RESOLVED via real Quartz.NET 3.18.1** (earlier 'offline-blocked' was WRONG - network restore works): configs compile vs real Quartz.CronExpression; CronService/RunnableRunner rewritten idiomatically on Quartz.NET (IScheduler/IJobDetail/ITrigger/IJob, async ops bridged sync, CronScheduleBuilder.CronSchedule), Action overloads wrap LambdaRunnable; JobDetail->IJobDetail callers; orphaned CronExpressionTransformer deleted. **148->86.** See memory quartz-net-cron-resolved.
 **REMAINING ~86 (all non-cron now):** scattered slop+legit: AutoGroupPenaltyRefreshIntent/AutoGroupLookingPartyRegistrationService (SchedulerService slop), EventService (TeamMember<>/Properties), SM_*/Sm* alliance/trade packets, PlayerTeleportService, PlayerOwnedAggroList, Exchange, ArtifactLocation, AbstractQuestHandler, WorldNpcWalkerSpawnPlanCacheService(slop), QuestXp...ContextFactoryService(slop). No single dominant cluster left - grind file-by-file. CAVEAT: no CronService.InitSingleton caller found (cron may be unwired at boot - runtime gap, not compile).
+
+## 2026-06-11 — Loop run cont'd: scattered grind 86->28
+Post-Quartz file-by-file convergence. Deleted Sm*PacketPlan slop packets (SmAllianceInfo/MemberInfo/GroupInfo/
+SellItem/TradeList/TradeInList + PlayerGroupInfoPacketPlan), repointed to faithful SM_* (SM_ALLIANCE_INFO/
+SM_GROUP_INFO). Deleted orphan slop (PetFeedUnlock*ContextAssembler, QuestXp*RuntimeInputAdapter+DI line,
+QuestXp*ContextFactory, WorldMapRegionZoneFilter, WorldRegionKeyProjection/WorldMapRegionLayout). Faithful ports:
+ArtifactStatus, ExchangeItem, StatCondition(renamed from IStatCondition). Broad fixes: TeamMember<>->ITeamMember<>
+(13 files), nested ItemPacketService.ItemAddType/UpdateType qualify, Properties->Dictionary, PetDopingBag/Vortex/
+ShieldObserver/PlayerAllianceEvent usings, global:: namespace-shadowing on Instance ScoreWriter/SkillEntryWriter,
+SM_ALLIANCE_MEMBER_INFO using. **86->28.**
+**REMAINING 28:** (a) two reworked WEBS needing concentrated transitive-closure deletion (measured: partial delete
+regresses): WorldNpcWalker*Service(10)+WorldNpcSpawnService+LifeStats/LootBroadcast/InstanceChecker/SmMove (~5 err);
+PlayerTeleportService+PortalEntryValidationService+PlayerRecall/TeleportToNpc request svcs (PendingPlayerTeleport/
+*RequestResult/OpenWorld chain, ~3 err). (b) isolated porting gaps: AtomicBoolean(DimensionalVortex - java.util.
+concurrent.atomic, need commons type), ScriptManager(QuestEngine - commons scripting), GameServer.GetRatiosFor/
+GetCountFor/START_TIME_SECONDS(SM_VERSION_CHECK - race-balance bootstrap statics, deleted god). (c) slop types:
+PlayerLeaveFlyAreaStatus, BindPointTeleportKnownListFanoutKnownListOrdering, NpcDialogLimitedItemFact,
+PlayerAggroEntrySnapshot, PlayerGroupSnapshotResolver, AutoGroupLookingPartyRegistrationService, IGameClient
+ConnectionRegistry(14 refs), GameServerRuntimeContext(22 refs). NEXT: knock isolated slop/ports, then schedule the
+two webs as concentrated pushes.
