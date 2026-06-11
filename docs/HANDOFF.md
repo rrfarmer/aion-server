@@ -1887,3 +1887,6 @@ Ported AdventDAO (advent-calendar reward gate, @author Neon). DatabaseFactory-st
 
 ## 2026-06-11 — DAO pillar: InGameShopLogDAO + OldNamesDAO
 Ported two DatabaseFactory-style DAOs. InGameShopLogDAO (ViAl): single ingameshop_log insert; java.sql.Timestamp->DateTime, setLong->long param, method log()->Log(). OldNamesDAO (synchro2): rename name-reservation over old_names; COUNT(*) cnt read via reader.GetInt32(GetOrdinal("cnt")); inline SQL (COALESCE/INTERVAL ? DAY) verbatim; SLF4J '{}'->C# named message-template placeholders with the exception moved to LogError's first arg. NUL-clean, guardrail green (baseline 126). DatabaseFactory DAOs remaining: ~49.
+
+## 2026-06-11 — DAO pillar: BonusPackDAO + FactionPackDAO + VeteranRewardDAO
+Ported three DatabaseFactory-style reward-tracking DAOs (load/store receiving-player or received-months over bonus_packs/faction_packs/player_veteran_rewards). All same idiom: load returns error-sentinel on SQLException (Integer.MAX_VALUE->int.MaxValue for the pack DAOs, -1 for veteran); REPLACE INTO store; SQL verbatim. NUL-clean, guardrail green (baseline 126). DatabaseFactory DAOs remaining: ~46.
