@@ -1786,3 +1786,6 @@ First two *ScoreWriter subclasses (now portable since InstanceScoreWriter base e
 
 ## 2026-06-10 — instanceinfo: EternalBastion + LegionDominion + TheShugoEmperorsVault ScoreWriters
 Three more (all mechanical writeD/writeQ blobs). EternalBastionScoreWriter + TheShugoEmperorsVaultScoreWriter : InstanceScoreWriter<NormalScore>; LegionDominionScoreWriter : InstanceScoreWriter<LegionDominionScore>. Each writes points/rank/AP/(GP) + 4 reward item/count pairs. NormalScore/LegionDominionScore red-tolerated. instanceinfo remaining: Arena (90L), Dredgion (69L), Harmony (150L), PvpInstance (151L). NUL-clean, guardrail green.
+
+## 2026-06-10 — instanceinfo/DredgionScoreWriter
+Ported DredgionScoreWriter : InstanceScoreWriter<PvpInstanceScore<PvpInstancePlayerReward>> (extra players + dredgionRooms ctor args). Writes two race tables (ELYOS/ASMODIANS, SCREAMING; padded to 6 @ 88 bytes), team scores, room states. writeS(name,54) fixed-size; abyssRank.getRank().getId(); playerClass.getClassId(); dredgionRooms.forEach -> foreach + WriteC(d.GetState()). Player/DredgionRoom/PvpInstanceScore/PvpInstancePlayerReward red-tolerated. instanceinfo remaining: Arena (90L), Harmony (150L), PvpInstance (151L). NUL-clean, guardrail green.
