@@ -1980,3 +1980,6 @@ Ported BrokerDAO: broker table, pure DB-callback (ReadStH/IUStH->nested handlers
 
 ## 2026-06-11 — DAO pillar: PlayerAppearanceDAO
 Ported PlayerAppearanceDAO (SoulKeeper/AEJTester/srx47): player_appearance, 54-field load/store. MIXED - load via DatabaseFactory, store via DB.InsertUpdate(IUStH->nested StoreHandler capturing id+pa). getInt/getFloat->GetInt32/GetFloat(GetOrdinal); multi-line REPLACE SQL verbatim; Java accessor typo getJawHeigh/setJawHeigh preserved; load returns null on exception. NUL-clean, guardrail green (baseline 126). DB-callback DAOs remaining: 3 (Mail/Legion/Player - all large).
+
+## 2026-06-11 — DAO pillar: HousesDAO
+Ported HousesDAO (Rolandas): houses table. DatabaseFactory-style. getUsedIDs scrollable ResultSet -> forward-only List<int>+ToArray (scroll flags dropped, as GuideDAO). nullable getTimestamp acquire_time/next_pay -> IsDBNull?null:new DateTimeOffset(GetDateTime) (House uses DateTimeOffset?); setTimestamp(null)->DBNull.Value. Map.get/put->indexer, containsKey->ContainsKey; building.getType()->GetType_(); BuildingType.PERSONAL_FIELD; House(houseId,building,address,0); IPersistable.PersistentState NEW/UPDATE_REQUIRED. NUL-clean, guardrail green (baseline 126). DatabaseFactory DAOs remaining: ~20; DB-callback remaining: 3 (Mail/Legion/Player).
