@@ -2,13 +2,7 @@
   "_comment": "Fidelity ratchet baseline. Only ever shrink this (via --update-baseline after deleting slop / splitting god-classes). Never hand-add entries to silence new debt.",
   "godclass_line_threshold": 3000,
   "banned_vocab_files": [
-    "dotnetConversion/src/Aion.GameServer/Model/Legion/LegionMemberSnapshot.cs",
-    "dotnetConversion/src/Aion.GameServer/Network/BridgePacketFrameCodec.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/CustomLevelRewardPlanService.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/GameBridgeHostedService.cs",
     "dotnetConversion/src/Aion.GameServer/Services/QuestBonusItemGroupXmlProjectionExtractor.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/StarterKitLevelChangePlanService.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/SystemMailRewardPlanService.cs",
     "dotnetConversion/src/Aion.GameServer/Services/ToyPet/PetFeedXmlProjection.cs"
   ],
   "oversized_files": {
