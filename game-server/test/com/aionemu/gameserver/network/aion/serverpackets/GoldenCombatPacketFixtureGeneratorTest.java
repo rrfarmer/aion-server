@@ -223,6 +223,24 @@ public class GoldenCombatPacketFixtureGeneratorTest {
 			"{\"abnormals\":131073,\"slot\":2,\"effectCount\":0}",
 			capture(new SM_ABNORMAL_STATE(new java.util.ArrayList<>(), 131073, 2))));
 		writeFixture(outDir.resolve("SM_ABNORMAL_STATE.json"), "SM_ABNORMAL_STATE", null, smAbnormalState);
+
+		// ---- SM_ABNORMAL_EFFECT: empty effect collection (no live SkillEngine Effect needed). NPC effected
+		//      => effectType=1. writeD(objId) writeC(1) writeD(0) writeD(abnormals) writeD(0) writeC(slots) writeH(0). ----
+		List<Case> smAbnormalEffect = new ArrayList<>();
+		{
+			HarnessCreature c = creature(880001, (byte) 50, new TreeMap<>());
+			// FULLSLOTS=127 keeps filtered == effects (empty); slots byte = 127.
+			smAbnormalEffect.add(new Case("emptyFullslots",
+				"{\"objectId\":880001,\"effectType\":1,\"abnormals\":0,\"slots\":127,\"effectCount\":0}",
+				capture(new SM_ABNORMAL_EFFECT(c, 0, new java.util.ArrayList<>(), 127))));
+		}
+		{
+			HarnessCreature c = creature(880002, (byte) 50, new TreeMap<>());
+			smAbnormalEffect.add(new Case("emptySlot1",
+				"{\"objectId\":880002,\"effectType\":1,\"abnormals\":65536,\"slots\":1,\"effectCount\":0}",
+				capture(new SM_ABNORMAL_EFFECT(c, 65536, new java.util.ArrayList<>(), 1))));
+		}
+		writeFixture(outDir.resolve("SM_ABNORMAL_EFFECT.json"), "SM_ABNORMAL_EFFECT", null, smAbnormalEffect);
 	}
 
 	private static HarnessCreature creature(int objectId, byte level, TreeMap<StatEnum, Integer> statMap) {
