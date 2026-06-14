@@ -11,6 +11,8 @@
     { "inputs": {"points": 1000, "defeatedLvl": 50, "killerLvl": 62}, "result": 0 },
     { "inputs": {"points": 1000, "defeatedLvl": 65, "killerLvl": 50}, "result": 1100 },
     { "inputs": {"points": 1000, "defeatedLvl": 53, "killerLvl": 50}, "result": 1030 },
-    { "inputs": {"points": 999, "defeatedLvl": 52, "killerLvl": 50}, "result": 1018 }
+    { "inputs": {"points": 999, "defeatedLvl": 52, "killerLvl": 50}, "result": 1018 },
+    { "inputs": {"points": 12345, "defeatedLvl": 40, "killerLvl": 49}, "result": 1234 },
+    { "inputs": {"points": 7777, "defeatedLvl": 60, "killerLvl": 50}, "result": 8554 }
   ]
 }
