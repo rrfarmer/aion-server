@@ -189,6 +189,40 @@ public class GoldenSocialPacketFixtureGeneratorTest {
 				"{\"objectId\":790100}", capture(new SM_MARK_FRIENDLIST(), con)));
 		}
 		writeFixture(outDir.resolve("SM_MARK_FRIENDLIST.json"), "SM_MARK_FRIENDLIST", markFriendList);
+
+		// ===== Batch 3: legion emblem packets (LegionEmblem rebuilt from deterministic scalar fields) =====
+
+		// ---- SM_LEGION_SEND_EMBLEM_DATA: writeD(size) writeB(data) ----
+		List<Case> emblemData = new ArrayList<>();
+		emblemData.add(new Case("dataChunk",
+			"{\"size\":4,\"data\":[16,32,48,255]}",
+			capture(new SM_LEGION_SEND_EMBLEM_DATA(4, new byte[] { 16, 32, 48, (byte) 255 }), null)));
+		emblemData.add(new Case("emptyData",
+			"{\"size\":0,\"data\":[]}",
+			capture(new SM_LEGION_SEND_EMBLEM_DATA(0, new byte[] {}), null)));
+		writeFixture(outDir.resolve("SM_LEGION_SEND_EMBLEM_DATA.json"), "SM_LEGION_SEND_EMBLEM_DATA", emblemData);
+
+		// ---- SM_LEGION_UPDATE_EMBLEM: writeD(legionId) writeC(emblemId/type) writeC(a/r/g/b) ----
+		List<Case> updateEmblem = new ArrayList<>();
+		{
+			com.aionemu.gameserver.model.team.legion.LegionEmblem emblem = new com.aionemu.gameserver.model.team.legion.LegionEmblem();
+			emblem.setEmblem(5, 200, 100, 50, 25, com.aionemu.gameserver.model.team.legion.LegionEmblemType.DEFAULT, new byte[] {});
+			updateEmblem.add(new Case("defaultEmblem",
+				"{\"legionId\":4100,\"emblemId\":5,\"emblemType\":0,\"color_a\":200,\"color_r\":100,\"color_g\":50,\"color_b\":25}",
+				capture(new SM_LEGION_UPDATE_EMBLEM(4100, emblem), null)));
+		}
+		writeFixture(outDir.resolve("SM_LEGION_UPDATE_EMBLEM.json"), "SM_LEGION_UPDATE_EMBLEM", updateEmblem);
+
+		// ---- SM_LEGION_SEND_EMBLEM: writeD(legionId) writeC(emblemId) writeC(emblemType) writeD(dataSize) writeC(a/r/g/b) writeS(name) writeC(1) ----
+		List<Case> sendEmblem = new ArrayList<>();
+		{
+			com.aionemu.gameserver.model.team.legion.LegionEmblem emblem = new com.aionemu.gameserver.model.team.legion.LegionEmblem();
+			emblem.setEmblem(9, 255, 0, 128, 64, com.aionemu.gameserver.model.team.legion.LegionEmblemType.DEFAULT, new byte[] {});
+			sendEmblem.add(new Case("sendDefault",
+				"{\"legionId\":4101,\"emblemId\":9,\"emblemType\":0,\"emblemDataSize\":1024,\"color_a\":255,\"color_r\":0,\"color_g\":128,\"color_b\":64,\"legionName\":\"Daevas\"}",
+				capture(new SM_LEGION_SEND_EMBLEM(4101, emblem, 1024, "Daevas"), null)));
+		}
+		writeFixture(outDir.resolve("SM_LEGION_SEND_EMBLEM.json"), "SM_LEGION_SEND_EMBLEM", sendEmblem);
 	}
 
 	// ---- minimal player (only objectId/race vary; faithful base ctor builds the rest; accessLevel 0 => non-staff) ----
