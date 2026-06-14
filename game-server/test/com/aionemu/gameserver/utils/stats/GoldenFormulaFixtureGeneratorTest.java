@@ -12,6 +12,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import com.aionemu.gameserver.model.stats.container.StatEnum;
 import com.aionemu.gameserver.model.templates.npc.NpcRating;
 
 /**
@@ -45,6 +46,45 @@ public class GoldenFormulaFixtureGeneratorTest {
 		generateGetExpLoss(outDir);
 		generateAbyssGetRankForPoints(outDir);
 		generateAbyssGetRankById(outDir);
+		generateLimit(outDir);
+	}
+
+	// StatFunctions.limit(StatEnum, float) — Math.min(StatCapUtil.getDifferenceLimit(stat), value).
+	// Pure: reads only the arg + the static difference-limit table. Covers every distinct table
+	// bucket (500/900/300/400/2900/Integer.MAX_VALUE) on both the capped and uncapped sides, plus
+	// the int->float promotion edge (Integer.MAX_VALUE -> 2.14748365E9f loses precision identically
+	// in Java and C#).
+	private static void generateLimit(Path outDir) throws IOException {
+		List<Case> cases = new ArrayList<>();
+		Object[][] inputs = {
+			// stat,                       value           -> exercises which side of Math.min
+			{ StatEnum.BLOCK,              200f },         // table 500: value < limit -> value
+			{ StatEnum.BLOCK,              900f },         // table 500: value > limit -> 500
+			{ StatEnum.BLOCK,              500f },         // table 500: equal -> 500
+			{ StatEnum.PHYSICAL_CRITICAL,  10000f },      // table 500 -> 500
+			{ StatEnum.MAGICAL_CRITICAL,  -123.5f },      // table 500: negative value -> value
+			{ StatEnum.MAGICAL_RESIST,     1000f },       // table 900 -> 900
+			{ StatEnum.MAGICAL_RESIST,     850.25f },     // table 900: value < limit -> value
+			{ StatEnum.EVASION,            500f },        // table 300 -> 300
+			{ StatEnum.EVASION,            299.99f },     // table 300: value < limit -> value
+			{ StatEnum.PARRY,              1000f },       // table 400 -> 400
+			{ StatEnum.BOOST_MAGICAL_SKILL, 5000f },      // table 2900 -> 2900
+			{ StatEnum.BOOST_MAGICAL_SKILL, 1234.5f },    // table 2900: value < limit -> value
+			{ StatEnum.MAXHP,              123456.75f },  // no table entry -> Integer.MAX_VALUE -> value
+			{ StatEnum.MAXHP,              3.0E9f },      // uncapped: value > 2.14748365E9f promotion -> 2.14748365E9f
+		};
+		for (Object[] in : inputs) {
+			StatEnum stat = (StatEnum) in[0];
+			float value = (Float) in[1];
+			Map<String, Object> args = new LinkedHashMap<>();
+			args.put("statEnum", quote(stat.name()));
+			args.put("value", floatJson(value));
+			cases.add(Case.ofFloat(args, StatFunctions.limit(stat, value)));
+		}
+		writeFixture(outDir.resolve("StatFunctions.limit.json"),
+			"StatFunctions.limit",
+			"float limit(StatEnum statEnum, float value)",
+			cases);
 	}
 
 	// StatFunctions.adjustPvpDpGained(int points, int defeatedLvl, int killerLvl)
@@ -202,6 +242,14 @@ public class GoldenFormulaFixtureGeneratorTest {
 		return "\"" + s + "\"";
 	}
 
+	// Serialize a float as its raw IEEE-754 bits (a JSON int) so it round-trips BIT-EXACT
+	// across Java and C# with no decimal-parse rounding. The C# side reads it via
+	// BitConverter.Int32BitsToSingle. The companion human-readable decimal is emitted only as a
+	// comment-free sibling field is unnecessary; bits alone are authoritative.
+	private static String floatJson(float f) {
+		return Integer.toString(Float.floatToRawIntBits(f));
+	}
+
 	private static void writeFixture(Path file, String formula, String signature, List<Case> cases) throws IOException {
 		StringBuilder sb = new StringBuilder();
 		sb.append("{\n");
@@ -239,24 +287,34 @@ public class GoldenFormulaFixtureGeneratorTest {
 		final Map<String, Object> inputs;
 		final Long numericResult;     // for int/long-returning methods
 		final String nameResult;      // for enum-returning methods (serialized by name)
+		final Integer floatBitsResult; // for float-returning methods (raw IEEE-754 bits)
 
-		private Case(Map<String, Object> inputs, Long numericResult, String nameResult) {
+		private Case(Map<String, Object> inputs, Long numericResult, String nameResult, Integer floatBitsResult) {
 			this.inputs = inputs;
 			this.numericResult = numericResult;
 			this.nameResult = nameResult;
+			this.floatBitsResult = floatBitsResult;
 		}
 
 		static Case ofLong(Map<String, Object> inputs, long result) {
-			return new Case(inputs, result, null);
+			return new Case(inputs, result, null, null);
 		}
 
 		static Case ofName(Map<String, Object> inputs, String name) {
-			return new Case(inputs, null, name);
+			return new Case(inputs, null, name, null);
+		}
+
+		// Float result serialized as raw IEEE-754 bits inside a tagged object so the C# reader
+		// can distinguish it from a plain numeric/enum result.
+		static Case ofFloat(Map<String, Object> inputs, float result) {
+			return new Case(inputs, null, null, Float.floatToRawIntBits(result));
 		}
 
 		String resultJson() {
 			if (nameResult != null)
 				return "\"result\": \"" + nameResult + "\"";
+			if (floatBitsResult != null)
+				return "\"result\": { \"floatBits\": " + floatBitsResult + " }";
 			return "\"result\": " + numericResult;
 		}
 	}
