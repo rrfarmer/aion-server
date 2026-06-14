@@ -114,6 +114,81 @@ public class GoldenSocialPacketFixtureGeneratorTest {
 				capture(new SM_MESSAGE(790060, "Loud", "Hey!", ChatType.SHOUT), con)));
 		}
 		writeFixture(outDir.resolve("SM_MESSAGE.json"), "SM_MESSAGE", message);
+
+		// ===== Batch 2: pure-scalar/string house+legion+exchange+friend packets (writeImpl reads only ctor args) =====
+
+		// ---- SM_EXCHANGE_REQUEST: writeS(receiver) ----
+		List<Case> exchangeRequest = new ArrayList<>();
+		exchangeRequest.add(new Case("receiver",
+			"{\"receiver\":\"Israphel\"}", capture(new SM_EXCHANGE_REQUEST("Israphel"), null)));
+		writeFixture(outDir.resolve("SM_EXCHANGE_REQUEST.json"), "SM_EXCHANGE_REQUEST", exchangeRequest);
+
+		// ---- SM_HOUSE_ACQUIRE: writeD(playerId) writeD(address) writeD(acquire?1:0) ----
+		List<Case> houseAcquire = new ArrayList<>();
+		houseAcquire.add(new Case("acquired",
+			"{\"playerId\":770200,\"address\":31001,\"acquire\":true}",
+			capture(new SM_HOUSE_ACQUIRE(770200, 31001, true), null)));
+		houseAcquire.add(new Case("released",
+			"{\"playerId\":770201,\"address\":31002,\"acquire\":false}",
+			capture(new SM_HOUSE_ACQUIRE(770201, 31002, false), null)));
+		writeFixture(outDir.resolve("SM_HOUSE_ACQUIRE.json"), "SM_HOUSE_ACQUIRE", houseAcquire);
+
+		// ---- SM_HOUSE_TELEPORT: writeD(address) writeD(playerId) ----
+		List<Case> houseTeleport = new ArrayList<>();
+		houseTeleport.add(new Case("teleport",
+			"{\"houseAddress\":31050,\"playerId\":770210}",
+			capture(new SM_HOUSE_TELEPORT(31050, 770210), null)));
+		writeFixture(outDir.resolve("SM_HOUSE_TELEPORT.json"), "SM_HOUSE_TELEPORT", houseTeleport);
+
+		// ---- SM_HOUSE_PAY_RENT: writeC(0) writeC(weeksPaid) ----
+		List<Case> housePayRent = new ArrayList<>();
+		housePayRent.add(new Case("oneWeek",
+			"{\"weeksPaid\":1}", capture(new SM_HOUSE_PAY_RENT(1), null)));
+		housePayRent.add(new Case("fourWeeks",
+			"{\"weeksPaid\":4}", capture(new SM_HOUSE_PAY_RENT(4), null)));
+		writeFixture(outDir.resolve("SM_HOUSE_PAY_RENT.json"), "SM_HOUSE_PAY_RENT", housePayRent);
+
+		// ---- SM_LEGION_UPDATE_NICKNAME: writeD(playerObjId) writeS(newNickname) ----
+		List<Case> legionNickname = new ArrayList<>();
+		legionNickname.add(new Case("nickname",
+			"{\"playerObjId\":770300,\"newNickname\":\"Champion\"}",
+			capture(new SM_LEGION_UPDATE_NICKNAME(770300, "Champion"), null)));
+		writeFixture(outDir.resolve("SM_LEGION_UPDATE_NICKNAME.json"), "SM_LEGION_UPDATE_NICKNAME", legionNickname);
+
+		// ---- SM_LEGION_UPDATE_SELF_INTRO: writeD(playerObjId) writeS(selfintro) ----
+		List<Case> legionSelfIntro = new ArrayList<>();
+		legionSelfIntro.add(new Case("selfIntro",
+			"{\"playerObjId\":770301,\"selfintro\":\"For the glory of Atreia\"}",
+			capture(new SM_LEGION_UPDATE_SELF_INTRO(770301, "For the glory of Atreia"), null)));
+		writeFixture(outDir.resolve("SM_LEGION_UPDATE_SELF_INTRO.json"), "SM_LEGION_UPDATE_SELF_INTRO", legionSelfIntro);
+
+		// ---- SM_LEGION_UPDATE_TITLE: writeD(objId) writeD(legionId) writeS(legionName) writeC(rank.getRankId()) ----
+		List<Case> legionTitle = new ArrayList<>();
+		legionTitle.add(new Case("centurion",
+			"{\"playerObjectId\":770302,\"legionId\":4001,\"legionName\":\"Daevas\",\"rank\":\"CENTURION\"}",
+			capture(new SM_LEGION_UPDATE_TITLE(770302, 4001, "Daevas", com.aionemu.gameserver.model.team.legion.LegionRank.CENTURION), null)));
+		legionTitle.add(new Case("brigadeGeneral",
+			"{\"playerObjectId\":770303,\"legionId\":4002,\"legionName\":\"Seraphim\",\"rank\":\"BRIGADE_GENERAL\"}",
+			capture(new SM_LEGION_UPDATE_TITLE(770303, 4002, "Seraphim", com.aionemu.gameserver.model.team.legion.LegionRank.BRIGADE_GENERAL), null)));
+		writeFixture(outDir.resolve("SM_LEGION_UPDATE_TITLE.json"), "SM_LEGION_UPDATE_TITLE", legionTitle);
+
+		// ---- SM_FRIEND_STATUS: writeC(status) ----
+		List<Case> friendStatus = new ArrayList<>();
+		friendStatus.add(new Case("offline",
+			"{\"status\":0}", capture(new SM_FRIEND_STATUS(0), null)));
+		friendStatus.add(new Case("online",
+			"{\"status\":1}", capture(new SM_FRIEND_STATUS(1), null)));
+		writeFixture(outDir.resolve("SM_FRIEND_STATUS.json"), "SM_FRIEND_STATUS", friendStatus);
+
+		// ---- SM_MARK_FRIENDLIST: writeD(con.getActivePlayer().getObjectId()) writeC(1) writeH(0) ----
+		List<Case> markFriendList = new ArrayList<>();
+		{
+			Player active = newPlayer(790100, Race.ELYOS);
+			AionConnection con = newConnectionWithActivePlayer(active);
+			markFriendList.add(new Case("mark",
+				"{\"objectId\":790100}", capture(new SM_MARK_FRIENDLIST(), con)));
+		}
+		writeFixture(outDir.resolve("SM_MARK_FRIENDLIST.json"), "SM_MARK_FRIENDLIST", markFriendList);
 	}
 
 	// ---- minimal player (only objectId/race vary; faithful base ctor builds the rest; accessLevel 0 => non-staff) ----
