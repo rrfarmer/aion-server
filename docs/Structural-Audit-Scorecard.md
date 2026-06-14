@@ -17,46 +17,46 @@ with low `java_classes` is the slop signature (re-port fresh per the plan).
 
 | C# stem | C# files | C# lines | Java classes | Java lines | line ratio | Java match |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| SM | 245 | 36953 | 261 | 42787 | 1x | SM_GATHER_ANIMATION, SM_PREMIUM_CONTROL… |
-| CM | 189 | 10717 | 203 | 11691 | 1x | CM_HOUSE_TELEPORT, CM_DISTRIBUTION_SETTINGS… |
+| SM | 245 | 36953 | 261 | 42787 | 1x | SM_IN_GAME_SHOP_CATEGORY_LIST, SM_CHANGE_ALLOWED_HDD_SERIAL… |
+| CM | 189 | 10717 | 203 | 11691 | 1x | CM_INSTANCE_INFO, CM_QUIT… |
 | WorldNpc | 23 | 9890 | 0 | 0 | n/a | —(none) |
-| GlobalDrop | 22 | 419 | 21 | 655 | 1x | GlobalDropExcludedNpcs, GlobalDropRace… |
-| WorldMap | 14 | 2322 | 5 | 1063 | 2x | WorldMapTemplate, WorldMapInstanceFactory… |
-| PlayerGroup | 14 | 746 | 9 | 574 | 1x | PlayerGroupInvite, PlayerGroupStats… |
+| GlobalDrop | 22 | 419 | 21 | 655 | 1x | GlobalDropNpcGroup, GlobalDropTribes… |
+| WorldMap | 14 | 2322 | 5 | 1063 | 2x | WorldMap, WorldMapInstanceFactory… |
+| PlayerGroup | 14 | 746 | 9 | 574 | 1x | PlayerGroupLeavedEvent, PlayerGroupStats… |
+| LegionDominion | 13 | 1039 | 11 | 919 | 1x | LegionDominionParticipantInfo, LegionDominionService… |
 | SmLegion | 13 | 836 | 0 | 0 | n/a | —(none) |
-| LegionDominion | 12 | 1026 | 11 | 919 | 1x | LegionDominionScoreWriter, LegionDominionDAO… |
-| NpcSkill | 11 | 876 | 10 | 792 | 1x | NpcSkillTemplateEntry, NpcSkillList… |
+| NpcSkill | 11 | 876 | 10 | 792 | 1x | NpcSkillList, NpcSkillSpawn… |
 | PlayerKisk | 10 | 974 | 0 | 0 | n/a | —(none) |
 | SmHouse | 9 | 548 | 0 | 0 | n/a | —(none) |
-| PlayerAlliance | 9 | 916 | 9 | 811 | 1x | PlayerAlliance, PlayerAllianceGroup… |
-| PetFeed | 8 | 858 | 6 | 1469 | 1x | PetFeedUnusualStorageArtifactCapture, PetFeedCalculator… |
-| StaticDoor | 8 | 475 | 7 | 427 | 1x | StaticDoorService, StaticDoorTemplate… |
-| GameServer | 7 | 1455 | 2 | 365 | 4x | GameServer, GameServerError |
-| FlyRing | 7 | 324 | 7 | 340 | 1x | FlyRingTemplate, FlyRingController… |
-| AutoGroup | 7 | 1178 | 6 | 1036 | 1x | AutoGroupUtility, AutoGroupType… |
-| WorldRaid | 7 | 603 | 8 | 680 | 1x | WorldRaidLocation, WorldRaid… |
+| PlayerAlliance | 9 | 916 | 9 | 811 | 1x | PlayerAlliance, PlayerAllianceEnteredEvent… |
+| PetFeed | 8 | 858 | 6 | 1469 | 1x | PetFeedUnusualStorageArtifactCaptureConfig, PetFeedResult… |
+| StaticDoor | 8 | 475 | 7 | 427 | 1x | StaticDoorSpawnManager, StaticDoorData… |
+| GameServer | 7 | 1455 | 2 | 365 | 4x | GameServerError, GameServer |
+| FlyRing | 7 | 324 | 7 | 340 | 1x | FlyRingObserver, FlyRingService… |
+| AutoGroup | 7 | 1178 | 6 | 1036 | 1x | AutoGroupService, AutoGroupUtility… |
+| WorldRaid | 7 | 603 | 8 | 680 | 1x | WorldRaidData, WorldRaidLocation… |
 | SmPlayer | 7 | 238 | 0 | 0 | n/a | —(none) |
-| AbyssRank | 6 | 1190 | 5 | 1176 | 1x | AbyssRankEnum, AbyssRankUpdateType… |
-| CustomInstance | 6 | 588 | 6 | 492 | 1x | CustomInstanceService, CustomInstanceDAO… |
-| InGame | 6 | 606 | 6 | 545 | 1x | InGameShopProperty, InGameShopEn… |
+| AbyssRank | 6 | 1190 | 5 | 1176 | 1x | AbyssRankUpdateService, AbyssRankUpdateType… |
+| CustomInstance | 6 | 588 | 6 | 492 | 1x | CustomInstanceService, CustomInstanceRankedPlayer… |
+| InGame | 6 | 606 | 6 | 545 | 1x | InGameShopEn, InGameShopLogDAO… |
 | QuestNpc | 6 | 740 | 1 | 40 | 18x | QuestNpc |
 | SmDelete | 6 | 172 | 0 | 0 | n/a | —(none) |
 | SmAccount | 5 | 142 | 0 | 0 | n/a | —(none) |
-| VisibleObject | 4 | 537 | 4 | 693 | 1x | VisibleObjectTemplate, VisibleObjectController… |
-| HouseObject | 4 | 591 | 3 | 473 | 1x | HouseObjectFactory, HouseObject… |
+| VisibleObject | 4 | 537 | 4 | 693 | 1x | VisibleObjectController, VisibleObject… |
+| HouseObject | 4 | 591 | 3 | 473 | 1x | HouseObjectCooldownsDAO, HouseObjectFactory… |
 | PlayerSkill | 4 | 564 | 3 | 451 | 1x | PlayerSkillListDAO, PlayerSkillEntry… |
-| AtreianPassport | 4 | 551 | 3 | 449 | 1x | AtreianPassportService, AtreianPassportData… |
-| BindPoint | 4 | 296 | 4 | 313 | 1x | BindPointTeleportService, BindPointData… |
-| ChallengeTask | 4 | 570 | 3 | 465 | 1x | ChallengeTask, ChallengeTaskService… |
+| AtreianPassport | 4 | 551 | 3 | 449 | 1x | AtreianPassportService, AtreianPassport… |
+| BindPoint | 4 | 296 | 4 | 313 | 1x | BindPointPosition, BindPointTemplate… |
+| ChallengeTask | 4 | 570 | 3 | 465 | 1x | ChallengeTaskService, ChallengeTaskTemplate… |
 | CreaturePvp | 4 | 315 | 0 | 0 | n/a | —(none) |
-| ItemPurification | 4 | 272 | 3 | 220 | 1x | ItemPurificationTemplate, ItemPurificationData… |
+| ItemPurification | 4 | 272 | 3 | 220 | 1x | ItemPurificationService, ItemPurificationTemplate… |
 | NpcFaction | 4 | 294 | 2 | 226 | 1x | NpcFactionTemplate, NpcFaction |
-| PetDoping | 4 | 182 | 3 | 164 | 1x | PetDopingEntry, PetDopingBag… |
-| TradeList | 4 | 444 | 3 | 350 | 1x | TradeList, TradeListData… |
-| PvpInstance | 4 | 643 | 3 | 424 | 2x | PvpInstanceScore, PvpInstancePlayerReward… |
-| PvP | 4 | 624 | 5 | 869 | 1x | PvPArenaService, PvPArenaScore… |
+| PetDoping | 4 | 182 | 3 | 164 | 1x | PetDopingBag, PetDopingEntry… |
+| TradeList | 4 | 444 | 3 | 350 | 1x | TradeListData, TradeListTemplate… |
+| PvpInstance | 4 | 643 | 3 | 424 | 2x | PvpInstanceScoreWriter, PvpInstanceScore… |
+| PvP | 4 | 624 | 5 | 869 | 1x | PvPZoneInstance, PvPArenaScore… |
 | KillIn | 4 | 429 | 4 | 420 | 1x | KillInWorld, KillInZoneData… |
-| ReportTo | 4 | 408 | 4 | 391 | 1x | ReportToManyData, ReportToMany… |
+| ReportTo | 4 | 408 | 4 | 391 | 1x | ReportToMany, ReportTo… |
 
 ## Orphan C# Stems (no Java counterpart — invented)
 
