@@ -6,31 +6,14 @@
     "dotnetConversion/src/Aion.GameServer/Model/Legion/LegionEmblemSnapshot.cs",
     "dotnetConversion/src/Aion.GameServer/Model/Legion/LegionMemberSnapshot.cs",
     "dotnetConversion/src/Aion.GameServer/Network/BridgePacketFrameCodec.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/CraftingTaskPacketPlanService.cs",
     "dotnetConversion/src/Aion.GameServer/Services/CustomLevelRewardPlanService.cs",
     "dotnetConversion/src/Aion.GameServer/Services/GameBridgeHostedService.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/GuideHtmlLevelChangePlanService.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/NearbyQuestRefreshInputAdapterService.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/NearbyQuestRefreshPlanService.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/NpcFactionLevelUpPlanService.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/PlayerGroupInfoPacketPlan.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/PlayerGroupSnapshotResolver.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/PlayerLevelChangeUpgradePlanService.cs",
     "dotnetConversion/src/Aion.GameServer/Services/QuestBonusItemGroupXmlProjectionExtractor.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/QuestLevelChangedCallbackPlanService.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/QuestXpCustomRewardRuntimeInputAdapterService.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/SkillStatConditionPreviewCoverageReportService.cs",
     "dotnetConversion/src/Aion.GameServer/Services/StarterKitLevelChangePlanService.cs",
     "dotnetConversion/src/Aion.GameServer/Services/SystemMailRewardPlanService.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/ToyPet/PetFeedXmlProjection.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/WorldNpcWalkerSpawnPlanCacheService.cs",
-    "dotnetConversion/src/Aion.GameServer/Services/WorldRegionKeyProjectionService.cs",
-    "dotnetConversion/src/Aion.GameServer/Utils/Concurrent/OrderedTaskExecutor.cs"
+    "dotnetConversion/src/Aion.GameServer/Services/ToyPet/PetFeedXmlProjection.cs"
   ],
   "oversized_files": {
-    "dotnetConversion/src/Aion.GameServer/Data/PlayerEnterWorldRepository.cs": 8519,
-    "dotnetConversion/src/Aion.GameServer/Dataholders/StaticData.cs": 6644,
-    "dotnetConversion/src/Aion.GameServer/Services/CraftService.cs": 3952,
-    "dotnetConversion/src/Aion.GameServer/Services/PlayerSummonSkillExecutionService.cs": 8790
+    "dotnetConversion/src/Aion.GameServer/Dataholders/StaticData.cs": 4094
   }
 }

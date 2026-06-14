@@ -6,9 +6,9 @@ the C# structure diverges from Java 1:1 fidelity. Use as the Phase B/C remediati
 ## Summary
 
 - Java gameserver types indexed: **2456**
-- C# GameServer files indexed: **2755**
+- C# GameServer files indexed: **2747**
 - Java classes with an exact-name C# counterpart: **2265**
-- C# stem clusters: **1766**
+- C# stem clusters: **1761**
 
 ## Explosion Clusters (remediation priority)
 
@@ -17,46 +17,46 @@ with low `java_classes` is the slop signature (re-port fresh per the plan).
 
 | C# stem | C# files | C# lines | Java classes | Java lines | line ratio | Java match |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| SM | 245 | 36953 | 261 | 42787 | 1x | SM_GM_SEARCH, SM_LS_CONTROL… |
-| CM | 189 | 10717 | 203 | 11691 | 1x | CM_GS_CHARACTER_RESPONSE, CM_TELEPORT_ANIMATION_DONE… |
-| WorldNpc | 23 | 9890 | 0 | 0 | n/a | —(none) |
-| GlobalDrop | 22 | 419 | 21 | 655 | 1x | GlobalDropNpcGroups, GlobalDropNpcGroup… |
-| WorldMap | 14 | 2322 | 5 | 1063 | 2x | WorldMap, WorldMapInstanceFactory… |
-| PlayerGroup | 14 | 746 | 9 | 574 | 1x | PlayerGroupInvite, PlayerGroupStopMentoringEvent… |
-| LegionDominion | 13 | 1039 | 11 | 919 | 1x | LegionDominionDAO, LegionDominionScore… |
+| SM | 245 | 36953 | 261 | 42787 | 1x | SM_DELETE, SM_QUESTIONNAIRE… |
+| CM | 189 | 10717 | 203 | 11691 | 1x | CM_SUMMON_MOVE, CM_BROKER_SETTLE_ACCOUNT… |
+| WorldNpc | 23 | 9753 | 0 | 0 | n/a | —(none) |
+| GlobalDrop | 22 | 419 | 21 | 655 | 1x | GlobalDropItem, GlobalDropRating… |
+| WorldMap | 14 | 2322 | 5 | 1063 | 2x | WorldMapTemplate, WorldMapInstanceFactory… |
+| PlayerGroup | 14 | 746 | 9 | 574 | 1x | PlayerGroupUpdateEvent, PlayerGroup… |
+| LegionDominion | 13 | 1039 | 11 | 919 | 1x | LegionDominionInvasionRift, LegionDominionDAO… |
 | SmLegion | 13 | 836 | 0 | 0 | n/a | —(none) |
-| NpcSkill | 11 | 876 | 10 | 792 | 1x | NpcSkillTemplate, NpcSkillData… |
+| NpcSkill | 11 | 876 | 10 | 792 | 1x | NpcSkillTemplateEntry, NpcSkillSpawn… |
 | PlayerKisk | 10 | 974 | 0 | 0 | n/a | —(none) |
 | SmHouse | 9 | 548 | 0 | 0 | n/a | —(none) |
-| PlayerAlliance | 9 | 916 | 9 | 811 | 1x | PlayerAllianceService, PlayerAllianceMember… |
-| PetFeed | 8 | 858 | 6 | 1469 | 1x | PetFeedData, PetFeedUnusualStorageArtifactCaptureConfig… |
-| StaticDoor | 8 | 475 | 7 | 427 | 1x | StaticDoor, StaticDoorTemplate… |
+| PlayerAlliance | 9 | 916 | 9 | 811 | 1x | PlayerAllianceEnteredEvent, PlayerAllianceLeavedEvent… |
+| PetFeed | 8 | 858 | 6 | 1469 | 1x | PetFeedUnusualStorageArtifactCapture, PetFeedProgress… |
+| StaticDoor | 8 | 475 | 7 | 427 | 1x | StaticDoorService, StaticDoorWorld… |
 | GameServer | 7 | 1455 | 2 | 365 | 4x | GameServerError, GameServer |
-| FlyRing | 7 | 324 | 7 | 340 | 1x | FlyRingPoint, FlyRing… |
-| AutoGroup | 7 | 1178 | 6 | 1036 | 1x | AutoGroupConfig, AutoGroupData… |
-| WorldRaid | 7 | 603 | 8 | 680 | 1x | WorldRaidNpc, WorldRaidData… |
+| FlyRing | 7 | 324 | 7 | 340 | 1x | FlyRing, FlyRingObserver… |
+| AutoGroup | 7 | 1178 | 6 | 1036 | 1x | AutoGroup, AutoGroupUtility… |
+| WorldRaid | 7 | 603 | 8 | 680 | 1x | WorldRaidNpc, WorldRaidRunnable… |
 | SmPlayer | 7 | 238 | 0 | 0 | n/a | —(none) |
-| AbyssRank | 6 | 1190 | 5 | 1176 | 1x | AbyssRank, AbyssRankEnum… |
-| CustomInstance | 6 | 588 | 6 | 492 | 1x | CustomInstanceRankEnum, CustomInstanceDAO… |
-| InGame | 6 | 606 | 6 | 545 | 1x | InGameShopProperty, InGameShop… |
+| AbyssRank | 6 | 1190 | 5 | 1176 | 1x | AbyssRankDAO, AbyssRankUpdateService… |
+| CustomInstance | 6 | 588 | 6 | 492 | 1x | CustomInstanceRankedPlayer, CustomInstanceRank… |
+| InGame | 6 | 606 | 6 | 545 | 1x | InGameShopLogDAO, InGameShopConfig… |
 | QuestNpc | 6 | 740 | 1 | 40 | 18x | QuestNpc |
 | SmDelete | 6 | 172 | 0 | 0 | n/a | —(none) |
 | SmAccount | 5 | 142 | 0 | 0 | n/a | —(none) |
-| VisibleObject | 4 | 537 | 4 | 693 | 1x | VisibleObjectTemplate, VisibleObject… |
-| HouseObject | 4 | 591 | 3 | 473 | 1x | HouseObject, HouseObjectFactory… |
-| PlayerSkill | 4 | 564 | 3 | 451 | 1x | PlayerSkillList, PlayerSkillListDAO… |
-| AtreianPassport | 4 | 551 | 3 | 449 | 1x | AtreianPassport, AtreianPassportService… |
+| VisibleObject | 4 | 537 | 4 | 693 | 1x | VisibleObjectSpawner, VisibleObjectController… |
+| HouseObject | 4 | 591 | 3 | 473 | 1x | HouseObjectFactory, HouseObject… |
+| PlayerSkill | 4 | 564 | 3 | 451 | 1x | PlayerSkillListDAO, PlayerSkillEntry… |
+| AtreianPassport | 4 | 551 | 3 | 449 | 1x | AtreianPassportService, AtreianPassport… |
 | BindPoint | 4 | 296 | 4 | 313 | 1x | BindPointPosition, BindPointTeleportService… |
-| ChallengeTask | 4 | 570 | 3 | 465 | 1x | ChallengeTaskTemplate, ChallengeTask… |
+| ChallengeTask | 4 | 570 | 3 | 465 | 1x | ChallengeTaskService, ChallengeTask… |
 | CreaturePvp | 4 | 315 | 0 | 0 | n/a | —(none) |
-| ItemPurification | 4 | 272 | 3 | 220 | 1x | ItemPurificationTemplate, ItemPurificationData… |
+| ItemPurification | 4 | 272 | 3 | 220 | 1x | ItemPurificationData, ItemPurificationTemplate… |
 | NpcFaction | 4 | 294 | 2 | 226 | 1x | NpcFactionTemplate, NpcFaction |
 | PetDoping | 4 | 182 | 3 | 164 | 1x | PetDopingData, PetDopingBag… |
-| TradeList | 4 | 444 | 3 | 350 | 1x | TradeList, TradeListData… |
-| PvpInstance | 4 | 643 | 3 | 424 | 2x | PvpInstanceScoreWriter, PvpInstancePlayerReward… |
-| PvP | 4 | 624 | 5 | 869 | 1x | PvPArenaService, PvPArenaScore… |
-| KillIn | 4 | 429 | 4 | 420 | 1x | KillInZoneData, KillInWorld… |
-| ReportTo | 4 | 408 | 4 | 391 | 1x | ReportToMany, ReportToData… |
+| TradeList | 4 | 444 | 3 | 350 | 1x | TradeListData, TradeList… |
+| PvpInstance | 4 | 643 | 3 | 424 | 2x | PvpInstancePlayerReward, PvpInstanceScore… |
+| PvP | 4 | 624 | 5 | 869 | 1x | PvPAttackRatioFunction, PvPArenaService… |
+| KillIn | 4 | 429 | 4 | 420 | 1x | KillInWorldData, KillInWorld… |
+| ReportTo | 4 | 408 | 4 | 391 | 1x | ReportTo, ReportToData… |
 
 ## Orphan C# Stems (no Java counterpart — invented)
 
@@ -77,7 +77,6 @@ with low `java_classes` is the slop signature (re-port fresh per the plan).
 | HouseAuction | 3 | HouseAuctionRepository |
 | SmGame | 3 | SmGameServerAuth |
 | SmChat | 3 | SmChatServerAuth |
-| SmInventory | 3 | SmInventoryAddItem |
 | SmQuest | 3 | SmQuestAction |
 | SmRecipe | 3 | SmRecipeCooldown |
 | SmSummon | 3 | SmSummonOwnerRemove |
@@ -102,6 +101,7 @@ with low `java_classes` is the slop signature (re-port fresh per the plan).
 | SmMacro | 2 | SmMacroList |
 | SmPet | 2 | SmPet |
 | SmPosition | 2 | SmPosition |
+| SmShow | 2 | SmShowBrand |
 
 ## Missing High-Value Java (engine/services gaps)
 
