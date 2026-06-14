@@ -18,6 +18,8 @@ import org.junit.jupiter.api.Test;
 
 import com.aionemu.gameserver.model.EmotionType;
 import com.aionemu.gameserver.model.Race;
+import com.aionemu.gameserver.model.animations.ObjectDeleteAnimation;
+import com.aionemu.gameserver.model.gameobjects.PetSpecialFunction;
 import com.aionemu.gameserver.model.gameobjects.Creature;
 import com.aionemu.gameserver.model.gameobjects.state.CreatureSeeState;
 import com.aionemu.gameserver.model.gameobjects.state.CreatureVisualState;
@@ -120,6 +122,51 @@ public class GoldenLivePacketFixtureGeneratorTest {
 				capture(new SM_EMOTION(c, EmotionType.EMOTE, 42, 555)))); // writeD(target) writeH(emotion) writeC(1)
 		}
 		writeFixture(outDir.resolve("SM_EMOTION.json"), "SM_EMOTION", null, smEmotion);
+
+		// ---- SM_PET: the fully-deterministic scalar branches (no live Pet/PetCommonData/World needed). ----
+		// RENAME / DISMISS / SPECIAL_FUNCTION read only ctor scalars + enum ids; no DataManager, no Pet object.
+		// (LOAD_PETS/ADOPT/SURRENDER need a PetCommonData+PetTemplate from DataManager.PET_DATA, SPAWN needs a live
+		//  Pet with position/moveController/master, MOOD/FOOD need a PetCommonData feed/mood model — excluded here.)
+		List<Case> smPet = new ArrayList<>();
+		// RENAME: writeH(action=10) writeD(petObjectId) writeS(petName)
+		smPet.add(new Case("rename",
+			"{\"action\":\"RENAME\",\"petObjectId\":424242,\"petName\":\"Fluffy\"}",
+			capture(new SM_PET(424242, "Fluffy"))));
+		// DISMISS: writeH(action=4) writeD(petObjectId) writeC(animationId)
+		smPet.add(new Case("dismiss",
+			"{\"action\":\"DISMISS\",\"petObjectId\":555111,\"animation\":\"FADE_OUT\"}",
+			capture(new SM_PET(555111, ObjectDeleteAnimation.FADE_OUT))));
+		// SPECIAL_FUNCTION / DOPING (subType=2): writeH(action=13) writeC(2) writeC(dopeAction) + per-dopeAction payload
+		smPet.add(new Case("dopingAdd",
+			"{\"action\":\"SPECIAL_FUNCTION\",\"subType\":2,\"dopeAction\":0,\"itemId\":700,\"slot\":3}",
+			capture(new SM_PET(0, 700, 3))));
+		smPet.add(new Case("dopingRemove",
+			"{\"action\":\"SPECIAL_FUNCTION\",\"subType\":2,\"dopeAction\":1,\"itemId\":700,\"slot\":3}",
+			capture(new SM_PET(1, 700, 3))));
+		smPet.add(new Case("dopingMove",
+			"{\"action\":\"SPECIAL_FUNCTION\",\"subType\":2,\"dopeAction\":2,\"itemId\":700,\"slot\":3}",
+			capture(new SM_PET(2, 700, 3))));
+		smPet.add(new Case("dopingUse",
+			"{\"action\":\"SPECIAL_FUNCTION\",\"subType\":2,\"dopeAction\":3,\"itemId\":700,\"slot\":3}",
+			capture(new SM_PET(3, 700, 3))));
+		// SPECIAL_FUNCTION / AUTOLOOT (subType=3): with npc objId and without
+		smPet.add(new Case("autolootNpc",
+			"{\"action\":\"SPECIAL_FUNCTION\",\"specialFunction\":\"AUTOLOOT\",\"active\":true,\"npcObjId\":987654}",
+			capture(new SM_PET(PetSpecialFunction.AUTOLOOT, true, 987654))));
+		smPet.add(new Case("autolootActivate",
+			"{\"action\":\"SPECIAL_FUNCTION\",\"specialFunction\":\"AUTOLOOT\",\"active\":true,\"npcObjId\":0}",
+			capture(new SM_PET(PetSpecialFunction.AUTOLOOT, true, 0))));
+		smPet.add(new Case("autolootDeactivate",
+			"{\"action\":\"SPECIAL_FUNCTION\",\"specialFunction\":\"AUTOLOOT\",\"active\":false,\"npcObjId\":0}",
+			capture(new SM_PET(PetSpecialFunction.AUTOLOOT, false, 0))));
+		// SPECIAL_FUNCTION / AUTOSELL (subType=4)
+		smPet.add(new Case("autosellActive",
+			"{\"action\":\"SPECIAL_FUNCTION\",\"specialFunction\":\"AUTOSELL\",\"active\":true,\"npcObjId\":0}",
+			capture(new SM_PET(PetSpecialFunction.AUTOSELL, true))));
+		smPet.add(new Case("autosellInactive",
+			"{\"action\":\"SPECIAL_FUNCTION\",\"specialFunction\":\"AUTOSELL\",\"active\":false,\"npcObjId\":0}",
+			capture(new SM_PET(PetSpecialFunction.AUTOSELL, false))));
+		writeFixture(outDir.resolve("SM_PET.json"), "SM_PET", null, smPet);
 	}
 
 	private static HarnessCreature creature(int objectId, byte level, TreeMap<StatEnum, Integer> statMap) {
