@@ -119,6 +119,20 @@ public class GoldenEnterWorldPacketFixtureGeneratorTest {
 		}
 		writeFixture(outDir.resolve("SM_UNK_3_5_1.json"), "SM_UNK_3_5_1", unk351);
 
+		// ---- SM_UI_SETTINGS: writeC(type) writeH(0x1C00) writeB(data) pad to 0x1C00 ----
+		List<Case> uiSettings = new ArrayList<>();
+		{
+			byte[] small = { 1, 2, 3, 4, (byte) 0xAB, (byte) 0xCD };
+			uiSettings.add(new Case("uiType0Small",
+				"{\"type\":0,\"data\":[1,2,3,4,171,205]}",
+				capture(new SM_UI_SETTINGS(small, 0), null)));
+			byte[] shortcuts = { 0, 0, (byte) 0xFF, 16, 32 };
+			uiSettings.add(new Case("shortcutsType1",
+				"{\"type\":1,\"data\":[0,0,255,16,32]}",
+				capture(new SM_UI_SETTINGS(shortcuts, 1), null)));
+		}
+		writeFixture(outDir.resolve("SM_UI_SETTINGS.json"), "SM_UI_SETTINGS", uiSettings);
+
 		// ---- SM_FRIEND_LIST: empty friend list -> writeH(-0) writeC(0) ----
 		List<Case> friendList = new ArrayList<>();
 		{
