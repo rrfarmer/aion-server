@@ -2,9 +2,25 @@
 
 The single rolling state doc. Updated **in place** every Unit of Work — keep it lean: detail only the most recent round, collapse older batches to one-liners (git history holds the rest), but **never drop a TODO/backlog/blocker**. Must be usable with zero prior conversation. Read after the canonical docs in `csharp-port.md`.
 
-Last updated: 2026-06-08
+Last updated: 2026-06-14
 
 ## ⏯️ RESUME HERE (cold-start — read this first)
+
+**STATUS 2026-06-14: the object-spine big-bang CONVERGED. The branch is GREEN.** The detailed Tier-0–4 / F1–F7 convergence plan below is DONE — kept only for history. Current state and the *new* direction:
+
+- **Build:** all 4 projects + tests compile at **0 errors** on `feature/object-spine-bigbang` (~5,710 errors → 0). `Creature`/`Npc`/`World`/`WorldMap`/`KnownList` exist; `Player` reparented onto `Creature`; controllers 61/61; skillengine 292/292 — all faithful with `// Java parity:` breadcrumbs.
+- **Slop:** eliminated. `check_fidelity.py` baseline = **0 slop files / 0 god-classes** (was 363/6). `*PlanService` 249→0; the 22,907-line `GameServerConnection` god-class deleted; dead persistence layers (PlayerEnterWorldRepository 8490L, Broker/HouseAuction/Housing) removed.
+- **Validation:** a Java-oracle golden/diff harness exists (`game-server/test/.../serverpackets/Golden*FixtureGeneratorTest.java` ↔ `dotnetConversion/tests/Aion.GameServer.Tests/Golden*FixtureTests.cs`, fixtures in `parity-artifacts/golden/`). **88 cases, 0 fidelity bugs** — enter-world flow, both crown-jewel packets (SM_PLAYER_INFO/SM_STATS_INFO via a DB/exp-table integration harness), combat/skill/item packets, StatFunctions combat math. Run: `cd dotnetConversion && dotnet test tests/Aion.GameServer.Tests/Aion.GameServer.Tests.csproj --filter "FullyQualifiedName~Golden"`.
+- **THE GAP (new direction — this is what's actually left):**
+  1. **Content handlers: ~84 of 1,732 ported (~5%).** 509 AI scripts, ~1,100 quest scripts, instance handlers, ~138 admin/console commands under `game-server/data/handlers`. Largest remaining body.
+  2. **Go-live wiring:** runtime data loading is DEFERRED (DataManager holders empty-default; faithful per-file XML loaders not wired) + no real-client/integration validation yet.
+  See `docs/discovery/game-server-services/Completion-Estimate.md` (2026-06-14 update) for the authoritative current picture.
+- **NOT the work anymore:** more `SM_*` packet golden fixtures (protocol is well-validated, 0 bugs), and slop cleanup (none left). Don't re-enter the test-grind loop.
+- **Commit discipline unchanged:** branch `feature/object-spine-bigbang`, author `rrfarmer <ryanfarmer@mac.com>`, no AI co-author; keep all 4 builds at 0 + golden green per change.
+
+---
+
+### (HISTORY — the now-COMPLETE object-spine convergence plan; retained for archaeology only:)
 
 **You are mid-way through the object-spine big-bang on a branch. Pick up the dedicated core-convergence push.**
 

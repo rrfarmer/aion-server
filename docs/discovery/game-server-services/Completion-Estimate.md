@@ -1,7 +1,49 @@
 # Game-Server Completion Estimate
 
-Date: 2026-06-07
+Date: 2026-06-07 — **with a 2026-06-14 current-state update prepended below.**
 Supersedes: the 2026-05-29 revision (which is preserved only in git history).
+
+---
+
+## 2026-06-14 UPDATE — the engine surface is now ported; the gap moved to content + go-live
+
+The body of this doc (below the line) was written 2026-06-07 and is now **substantially out of date**. Between then and now the compile-convergence + concurrent porting effort changed the picture dramatically. Ground-truth counts as of 2026-06-14 (branch `feature/object-spine-bigbang`, HEAD ~`50b8bc0fd`):
+
+| Area | Jun 7 | **Jun 14** | Java | Notes |
+| --- | ---: | ---: | ---: | --- |
+| Build (all 4 projects + tests) | green on `main`, branch RED-by-design | **0 errors, green** | — | the object-spine big-bang converged; ~5,710 compile errors → 0 |
+| Fidelity guardrail (slop / god-class) | 363 / 6 | **0 / 0** | — | `check_fidelity.py` baseline empty |
+| `services` files / `*PlanService` | 733 / 249 | **278 / 0** | 169 | plan-service sprawl eliminated |
+| `GameServerConnection.cs` god-class | 22,907 lines | **deleted** | — | packet logic moved to per-`CM_*`/`SM_*` classes |
+| `model` | 89 (~11%) | **867** | 801 | faithful (844/867 carry `// Java parity:`); some Java classes split into `.PartN.cs` |
+| `controllers` | 2 | **61** | 61 | faithful, breadcrumbs |
+| `skillengine` | 0 | **292** | 292 | faithful (mirrors Java's own empty-`applyEffect` stubs; 0 `NotImplementedException`) |
+| `questEngine` (engine, not scripts) | ~0 | **79** | 79 | faithful |
+| `ai` (engine, not scripts) | 0 | **46** | 39 | faithful |
+| `dataholders` | 64 | **152** | 100 | partial; many holders deferred-empty (runtime XML load not wired) |
+| `network` CM_* / SM_* | 186 / 191 | **188 / 240** | 253 / 268 | |
+| **`data/handlers` content scripts** | ~11 | **~84** | **1,732** | **the dominant remaining gap (~5%)** |
+
+**Golden validation (new, Java-oracle byte/value diff harness):** 88 cases, **0 fidelity bugs** — covering the enter-world login flow, both crown-jewel packets (`SM_PLAYER_INFO`, `SM_STATS_INFO` via an integration harness), combat/skill/item packets, and the `StatFunctions` combat-damage math. Every C# writer/formula matches real Java exactly.
+
+### Revised honest answer to "how far"
+- **Structural / engine parity: essentially complete and faithful.** The pillars this doc (below) flagged as "absent" — skillengine, controllers, model, questEngine, ai-engine — are now ported 1:1 at file parity with breadcrumbs. The named-slop ("modeled-vs-live plan-service") problem is **resolved**.
+- **Playable / live parity: still the gap, now concentrated in two places:**
+  1. **Content handlers (~1,648 unported):** 509 AI scripts, ~1,100 quest scripts, instance handlers, ~138 admin/console commands. This is the largest remaining body and is what makes NPCs/quests/instances actually behave.
+  2. **Go-live wiring:** runtime data loading is deferred (DataManager holders are empty-default placeholders; per-file faithful XML loaders not wired), and there has been **no real-client/integration validation** (needs live DB + network + client).
+- **"Modeled vs live" still applies** to the engine: the code is faithfully ported and compiles, but most of it has not been exercised at runtime. Golden proves the *serialization/formula* surface; it does not prove the effect/AI/quest *runtime behavior*.
+
+### What's needed next (dependency order) — supersedes the "What's Left" list below
+1. **Wire runtime data loading** (faithful per-file XML loaders → populate the deferred DataManager holders) — prerequisite for the server actually running and for runtime/integration validation.
+2. **Content handlers** — port the `data/handlers` body (quests → AI → instances → admin/console commands); largest remaining surface.
+3. **Real-client / integration validation** — stand the three processes up against a client; promote "modeled" engine code to "runtime-proven."
+4. Opportunistic: extend golden to remaining packets/formulas as regression coverage (lower priority — 0 bugs across 88 cases so far).
+
+**Stop doing:** treating more `SM_*` packet golden fixtures as the primary work. The protocol is well-validated; the frontier is content + go-live.
+
+---
+
+### (Below: original 2026-06-07 text, retained for history — numbers superseded by the table above.)
 
 ## Why This Was Rewritten
 

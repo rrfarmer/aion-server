@@ -27,9 +27,9 @@ Do not read `PHASE-*-PROGRESS.md` or `PHASE-*-COMPLETION.md` during normal work 
 | 3 Login server | COMPLETE | Auth, GS registration, mixed-mode + real-client validated. |
 | 4 Chat server | COMPLETE | Protocol, channels, bridge, mixed-mode validated. |
 | 5 Game infrastructure | COMPLETE | Socket, bridges, bootstrap, ID factory, static data, char-select. |
-| 6 Game core | IN PROGRESS — **re-baselined 2026-06-07** | Driven by **Port-Fidelity-Remediation-Plan.md**: re-port existing slop to 1:1 fidelity, de-god-class, then resume porting (model → runtime → skillengine → quests/content), each unit golden-validated against Java. |
-| 7 Dynamic handlers | PENDING | Commands, zones, instances, AI, quests. |
-| 8 Replacement readiness | PENDING | Docker, soak, rollback, real-client full mode. |
+| 6 Game core | **STRUCTURALLY COMPLETE — 2026-06-14** | Object-spine big-bang converged: build 0 errors; slop eliminated (`check_fidelity` 0/0, was 363/6); engine pillars ported faithfully at file-parity (model 867, controllers 61/61, skillengine 292/292, questEngine 79/79, ai 46). Java-oracle golden harness: 88 cases, 0 bugs. **Remaining = runtime/live wiring** (deferred data loading) — see Completion-Estimate.md 2026-06-14. |
+| 7 Dynamic handlers | **NOW THE FRONTIER** | The dominant remaining gap: `data/handlers` content scripts ~84 of 1,732 (~5%) — 509 AI scripts, ~1,100 quest scripts, instance handlers, ~138 admin/console commands. |
+| 8 Replacement readiness | PENDING | Runtime data loading → Docker, soak, rollback, real-client full-mode validation. |
 
 Phases 0–5 are done; treat them complete unless new evidence shows a mismatch.
 
