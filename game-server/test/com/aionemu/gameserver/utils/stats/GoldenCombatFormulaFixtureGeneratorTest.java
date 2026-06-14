@@ -22,6 +22,8 @@ import com.aionemu.gameserver.model.stats.container.CreatureGameStats;
 import com.aionemu.gameserver.model.stats.container.StatEnum;
 import com.aionemu.gameserver.model.templates.npc.NpcTemplate;
 import com.aionemu.gameserver.model.templates.stats.StatsTemplate;
+import com.aionemu.gameserver.skillengine.effect.EffectTemplate;
+import com.aionemu.gameserver.skillengine.model.Effect;
 
 /**
  * Phase A2 / §5-A2 of the Port Fidelity & Remediation Plan: the COMBAT-FORMULA golden harness.
@@ -55,6 +57,76 @@ public class GoldenCombatFormulaFixtureGeneratorTest {
 		generateCalculateMagicalResistRate(outDir);
 		generateAdjustDamageByPvpOrPveModifiers(outDir);
 		generateAdjustStatByMovementModifier(outDir);
+		generateCalculateMagicalSkillDamage(outDir);
+	}
+
+	// StatFunctions.calculateMagicalSkillDamage(Creature effector, Creature target, float baseDamage, int bonus,
+	//   EffectTemplate template, boolean useMagicBoost, boolean useKnowledge)
+	//
+	// DETERMINISTIC-value path only: effector/target are plain (non-Npc, non-Trap, non-Summon) HarnessCreatures, so the
+	// `effector instanceof Npc` Rnd-randomization branch is NEVER reached. The template is a minimal HarnessEffect
+	// (concrete EffectTemplate, not NoReduceSpellATKInstantEffect) whose element can be set; the BOOST_SPELL_ATTACK
+	// read is left UNMAPPED so the seam returns (int)damage (the retail spell-atk pass-through), keeping it deterministic.
+	// Covered: magic-boost application, MBResist subtraction, BOOST_MAGICAL_SKILL cap(2900)+floor(0), knowledge division,
+	// (int)damage truncation at the BOOST_SPELL_ATTACK seam, bonus aggregation, the damage<0 -> 0 floor,
+	// and (element != NONE) elemental-defense reduction + MDEF/10 reduction.
+	private void generateCalculateMagicalSkillDamage(Path outDir) throws IOException {
+		List<Case> cases = new ArrayList<>();
+		// { element, baseDamage, mBoost(effector), mbResist(target), knowledge(effector), bonus,
+		//   useMagicBoost(0/1), useKnowledge(0/1), fireRes(target), mdef(target) }
+		// (fireRes/mdef only read on element != NONE; element string drives which resistance stat is used)
+		Object[][] inputs = {
+			// --- element == NONE (standard non-elemental spell path) ---
+			{ "NONE", 1000f, 500, 100, 100, 0,   1, 1, 0, 0 },   // mb 400 -> 1000*1.4 = 1400
+			{ "NONE", 1000f, 500, 200, 100, 50,  0, 1, 0, 0 },   // useMagicBoost=false -> mb = -200 floored 0 -> 1000 +50 = 1050
+			{ "NONE", 1000f, 5000, 0,  100, 0,   1, 1, 0, 0 },   // mb 5000 capped 2900 -> 1000*(1+2.9) = 3900
+			{ "NONE", 1000f, 400, 0,   9999, 0,  1, 0, 0, 0 },   // useKnowledge=false -> knowledge=100 -> 1000*1.4 = 1400
+			{ "NONE", 1000f, 300, 0,   50, 25,   1, 1, 0, 0 },   // knowledge 50 -> 1000*(1+300/500)=1600 +25 = 1625
+			{ "NONE", 100f,  0,   500, 100, -500, 1, 1, 0, 0 },  // mb floored 0 -> 100 + (-500) = -400 -> floored to 0
+			{ "NONE", 1234.5f, 250, 50, 100, 7,  1, 1, 0, 0 },   // mb 200 -> 1234.5*1.2=1481.4 ->(int)1481 +7 = 1488
+			// --- element != NONE (elemental-defense + MDEF/10 reduction) ---
+			{ "FIRE", 2000f, 0,   0,   100, 0,   1, 1, 130, 500 },  // 2000*(1-130/1300)=1800 ; -500/10=50 -> 1750
+			{ "WATER",1500f, 1000,0,   100, 100, 1, 1, 260, 1000 }, // mb 1000 -> 1500*2=3000 +100=3100 ; *(1-260/1300=0.8)=2480 ; -1000/10=100 -> 2380
+		};
+		for (Object[] in : inputs) {
+			SkillElement element = SkillElement.valueOf((String) in[0]);
+			float baseDamage = (Float) in[1];
+			int mBoost = (Integer) in[2];
+			int mbResist = (Integer) in[3];
+			int knowledge = (Integer) in[4];
+			int bonus = (Integer) in[5];
+			boolean useMagicBoost = (Integer) in[6] == 1;
+			boolean useKnowledge = (Integer) in[7] == 1;
+			int fireRes = (Integer) in[8];
+			int mdef = (Integer) in[9];
+
+			TreeMap<StatEnum, Integer> eStats = stats(
+				StatEnum.BOOST_MAGICAL_SKILL, mBoost, StatEnum.KNOWLEDGE, knowledge);
+			TreeMap<StatEnum, Integer> tStats = new TreeMap<>();
+			tStats.put(StatEnum.MAGIC_SKILL_BOOST_RESIST, mbResist);
+			if (element != SkillElement.NONE) {
+				tStats.put(element.getStatForElement(), fireRes);
+				tStats.put(StatEnum.MAGICAL_DEFEND, mdef);
+			}
+			HarnessCreature effector = creature(50, Race.NPC, eStats);
+			HarnessCreature target = creature(50, Race.NPC, tStats);
+			HarnessEffect template = new HarnessEffect(element);
+
+			Map<String, Object> args = new LinkedHashMap<>();
+			args.put("effector", creatureJson(effector, eStats));
+			args.put("target", creatureJson(target, tStats));
+			args.put("baseDamage", floatRepr(baseDamage));
+			args.put("bonus", bonus);
+			args.put("element", quote(element.name()));
+			args.put("useMagicBoost", useMagicBoost);
+			args.put("useKnowledge", useKnowledge);
+			cases.add(Case.ofFloat(args,
+				StatFunctions.calculateMagicalSkillDamage(effector, target, baseDamage, bonus, template, useMagicBoost, useKnowledge)));
+		}
+		writeFixture(outDir.resolve("StatFunctions.calculateMagicalSkillDamage.json"),
+			"StatFunctions.calculateMagicalSkillDamage",
+			"float calculateMagicalSkillDamage(Creature effector, Creature target, float baseDamage, int bonus, EffectTemplate template, boolean useMagicBoost, boolean useKnowledge)",
+			cases);
 	}
 
 	// StatFunctions.calculateHate(Creature, int): (int)((long)value * (1000 + BOOST_HATE) / 1000)
@@ -289,6 +361,22 @@ public class GoldenCombatFormulaFixtureGeneratorTest {
 		@Override public Stat2 getAttackRange() { return new AdditionStat(StatEnum.ATTACK_RANGE, 1500, owner); }
 		@Override public Stat2 getHpRegenRate() { return new AdditionStat(StatEnum.REGEN_HP, 1, owner); }
 		@Override public Stat2 getMpRegenRate() { return new AdditionStat(StatEnum.REGEN_MP, 1, owner); }
+	}
+
+	/**
+	 * Minimal concrete {@link EffectTemplate} for calculateMagicalSkillDamage: NOT a NoReduceSpellATKInstantEffect, so
+	 * the full magic-boost + elemental-defense path runs. Only the {@code element} (a protected superclass field this
+	 * subclass may set) matters to the formula; everything else stays at its EffectTemplate default.
+	 */
+	static final class HarnessEffect extends EffectTemplate {
+		HarnessEffect(SkillElement element) {
+			this.element = element;
+		}
+
+		@Override
+		public void applyEffect(Effect effect) {
+			// no-op: not exercised by the formula
+		}
 	}
 
 	// ---- fixture writing (mirrors GoldenFormulaFixtureGeneratorTest) ----
