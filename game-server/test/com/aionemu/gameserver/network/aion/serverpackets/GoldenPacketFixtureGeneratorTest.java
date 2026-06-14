@@ -56,6 +56,81 @@ public class GoldenPacketFixtureGeneratorTest {
 			"{\"ctor\":\"token\",\"token\":\"ABC123\"}",
 			capture(new SM_GF_WEBSHOP_TOKEN_RESPONSE("ABC123"))));
 		writeFixture(outDir.resolve("SM_GF_WEBSHOP_TOKEN_RESPONSE.json"), "SM_GF_WEBSHOP_TOKEN_RESPONSE", null, smGfWebshop);
+
+		List<Case> smQuitResponse = new ArrayList<>();
+		smQuitResponse.add(new Case("normal",
+			"{\"editMode\":false}",
+			capture(new SM_QUIT_RESPONSE(false))));
+		smQuitResponse.add(new Case("editMode",
+			"{\"editMode\":true}",
+			capture(new SM_QUIT_RESPONSE(true))));
+		writeFixture(outDir.resolve("SM_QUIT_RESPONSE.json"), "SM_QUIT_RESPONSE", null, smQuitResponse);
+
+		List<Case> smDeleteItem = new ArrayList<>();
+		smDeleteItem.add(new Case("default",
+			"{\"itemObjectId\":123456,\"deleteType\":0}",
+			capture(new SM_DELETE_ITEM(123456, com.aionemu.gameserver.services.item.ItemPacketService.ItemDeleteType.DEFAULT))));
+		smDeleteItem.add(new Case("discard",
+			"{\"itemObjectId\":999,\"deleteType\":21}",
+			capture(new SM_DELETE_ITEM(999, com.aionemu.gameserver.services.item.ItemPacketService.ItemDeleteType.DISCARD))));
+		writeFixture(outDir.resolve("SM_DELETE_ITEM.json"), "SM_DELETE_ITEM", null, smDeleteItem);
+
+		List<Case> smDeleteWarehouseItem = new ArrayList<>();
+		smDeleteWarehouseItem.add(new Case("move",
+			"{\"warehouseType\":1,\"itemObjectId\":777,\"deleteType\":20}",
+			capture(new SM_DELETE_WAREHOUSE_ITEM(1, 777, com.aionemu.gameserver.services.item.ItemPacketService.ItemDeleteType.MOVE))));
+		writeFixture(outDir.resolve("SM_DELETE_WAREHOUSE_ITEM.json"), "SM_DELETE_WAREHOUSE_ITEM", null, smDeleteWarehouseItem);
+
+		List<Case> smDeleteHouseObject = new ArrayList<>();
+		smDeleteHouseObject.add(new Case("objectId",
+			"{\"itemObjectId\":424242}",
+			capture(new SM_DELETE_HOUSE_OBJECT(424242))));
+		writeFixture(outDir.resolve("SM_DELETE_HOUSE_OBJECT.json"), "SM_DELETE_HOUSE_OBJECT", null, smDeleteHouseObject);
+
+		List<Case> smDeleteHouse = new ArrayList<>();
+		smDeleteHouse.add(new Case("address",
+			"{\"addressId\":31001}",
+			capture(new SM_DELETE_HOUSE(31001))));
+		writeFixture(outDir.resolve("SM_DELETE_HOUSE.json"), "SM_DELETE_HOUSE", null, smDeleteHouse);
+
+		List<Case> smRecipeDelete = new ArrayList<>();
+		smRecipeDelete.add(new Case("recipeId",
+			"{\"recipeId\":15001}",
+			capture(new SM_RECIPE_DELETE(15001))));
+		writeFixture(outDir.resolve("SM_RECIPE_DELETE.json"), "SM_RECIPE_DELETE", null, smRecipeDelete);
+
+		List<Case> smCraftAnimation = new ArrayList<>();
+		smCraftAnimation.add(new Case("animation",
+			"{\"playerObjectId\":1001,\"targetObjectId\":2002,\"skillId\":40009,\"action\":3}",
+			capture(new SM_CRAFT_ANIMATION(1001, 2002, 40009, 3))));
+		writeFixture(outDir.resolve("SM_CRAFT_ANIMATION.json"), "SM_CRAFT_ANIMATION", null, smCraftAnimation);
+
+		List<Case> smBlockResponse = new ArrayList<>();
+		smBlockResponse.add(new Case("blockSuccessful",
+			"{\"code\":0,\"playerName\":\"Nezekan\"}",
+			capture(new SM_BLOCK_RESPONSE(0, "Nezekan"))));
+		smBlockResponse.add(new Case("listFull",
+			"{\"code\":3,\"playerName\":\"Siel\"}",
+			capture(new SM_BLOCK_RESPONSE(3, "Siel"))));
+		writeFixture(outDir.resolve("SM_BLOCK_RESPONSE.json"), "SM_BLOCK_RESPONSE", null, smBlockResponse);
+
+		List<Case> smFriendResponse = new ArrayList<>();
+		smFriendResponse.add(new Case("targetAdded",
+			"{\"code\":0,\"playerName\":\"Israphel\"}",
+			capture(new SM_FRIEND_RESPONSE("Israphel", 0x0))));
+		smFriendResponse.add(new Case("targetOffline",
+			"{\"code\":1,\"playerName\":\"\"}",
+			capture(new SM_FRIEND_RESPONSE(0x1))));
+		writeFixture(outDir.resolve("SM_FRIEND_RESPONSE.json"), "SM_FRIEND_RESPONSE", null, smFriendResponse);
+
+		List<Case> smCloseQuestionWindow = new ArrayList<>();
+		smCloseQuestionWindow.add(new Case("close",
+			"{\"messageId\":0,\"params\":[]}",
+			capture(SM_CLOSE_QUESTION_WINDOW.CLOSE_QUESTION_WINDOW())));
+		smCloseQuestionWindow.add(new Case("duelWithdraw",
+			"{\"messageId\":1300134,\"params\":[\"Vaizel\"]}",
+			capture(SM_CLOSE_QUESTION_WINDOW.STR_DUEL_REQUESTER_WITHDRAW_REQUEST("Vaizel"))));
+		writeFixture(outDir.resolve("SM_CLOSE_QUESTION_WINDOW.json"), "SM_CLOSE_QUESTION_WINDOW", null, smCloseQuestionWindow);
 	}
 
 	/** Capture the payload bytes a packet's writeImpl produces (no opcode, no crypt). */
