@@ -248,6 +248,83 @@ public class GoldenPacketFixtureGeneratorTest {
 			"{\"action\":3,\"playerId\":102,\"locId\":556,\"cooldown\":60}",
 			capture(new SM_BIND_POINT_TELEPORT(3, 102, 556, 60))));
 		writeFixture(outDir.resolve("SM_BIND_POINT_TELEPORT.json"), "SM_BIND_POINT_TELEPORT", null, smBindPointTeleport);
+
+		// ----- New batch: faithful SM_* packets (AionServerPacket writeImpl reads only ctor args) -----
+
+		List<Case> smReconnectKey = new ArrayList<>();
+		smReconnectKey.add(new Case("key",
+			"{\"key\":1234567}",
+			capture(new SM_RECONNECT_KEY(1234567))));
+		smReconnectKey.add(new Case("zero",
+			"{\"key\":0}",
+			capture(new SM_RECONNECT_KEY(0))));
+		writeFixture(outDir.resolve("SM_RECONNECT_KEY.json"), "SM_RECONNECT_KEY", null, smReconnectKey);
+
+		List<Case> smGatherAnimation = new ArrayList<>();
+		smGatherAnimation.add(new Case("gather",
+			"{\"playerObjId\":5001,\"gatherableObjId\":6002,\"skillId\":30001,\"action\":1}",
+			capture(new SM_GATHER_ANIMATION(5001, 6002, 30001, 1))));
+		writeFixture(outDir.resolve("SM_GATHER_ANIMATION.json"), "SM_GATHER_ANIMATION", null, smGatherAnimation);
+
+		List<Case> smShowBrand = new ArrayList<>();
+		smShowBrand.add(new Case("single",
+			"{\"iconId\":3,\"targetObjectId\":700123}",
+			capture(new SM_SHOW_BRAND(3, 700123))));
+		smShowBrand.add(new Case("remove",
+			"{\"iconId\":0,\"targetObjectId\":0}",
+			capture(new SM_SHOW_BRAND(0, 0))));
+		writeFixture(outDir.resolve("SM_SHOW_BRAND.json"), "SM_SHOW_BRAND", null, smShowBrand);
+
+		List<Case> smCubeUpdate = new ArrayList<>();
+		smCubeUpdate.add(new Case("stigmaSlots",
+			"{\"action\":6,\"actionValue\":4}",
+			capture(SM_CUBE_UPDATE.stigmaSlots(4))));
+		smCubeUpdate.add(new Case("stigmaSlotsZero",
+			"{\"action\":6,\"actionValue\":0}",
+			capture(SM_CUBE_UPDATE.stigmaSlots(0))));
+		writeFixture(outDir.resolve("SM_CUBE_UPDATE.json"), "SM_CUBE_UPDATE", null, smCubeUpdate);
+
+		List<Case> smTeleportMap = new ArrayList<>();
+		smTeleportMap.add(new Case("teleporter",
+			"{\"targetObjId\":800200,\"teleportId\":4012}",
+			capture(new SM_TELEPORT_MAP(800200, 4012))));
+		writeFixture(outDir.resolve("SM_TELEPORT_MAP.json"), "SM_TELEPORT_MAP", null, smTeleportMap);
+
+		List<Case> smLootStatus = new ArrayList<>();
+		smLootStatus.add(new Case("disable",
+			"{\"targetObjectId\":900300,\"status\":1}",
+			capture(new SM_LOOT_STATUS(900300, SM_LOOT_STATUS.Status.LOOT_DISABLE))));
+		smLootStatus.add(new Case("openDropList",
+			"{\"targetObjectId\":900301,\"status\":2}",
+			capture(new SM_LOOT_STATUS(900301, SM_LOOT_STATUS.Status.OPEN_DROP_LIST))));
+		smLootStatus.add(new Case("closeDropList",
+			"{\"targetObjectId\":900302,\"status\":3}",
+			capture(new SM_LOOT_STATUS(900302, SM_LOOT_STATUS.Status.CLOSE_DROP_LIST))));
+		writeFixture(outDir.resolve("SM_LOOT_STATUS.json"), "SM_LOOT_STATUS", null, smLootStatus);
+
+		List<Case> smTargetSelected = new ArrayList<>();
+		smTargetSelected.add(new Case("noTarget",
+			"{\"target\":null}",
+			capture(new SM_TARGET_SELECTED(null))));
+		writeFixture(outDir.resolve("SM_TARGET_SELECTED.json"), "SM_TARGET_SELECTED", null, smTargetSelected);
+
+		List<Case> smRiftAnnounce = new ArrayList<>();
+		smRiftAnnounce.add(new Case("silentera",
+			"{\"actionId\":1,\"gelkmaros\":true,\"inggison\":false}",
+			capture(new SM_RIFT_ANNOUNCE(true, false))));
+		smRiftAnnounce.add(new Case("despawn",
+			"{\"actionId\":4,\"objectId\":750400}",
+			capture(new SM_RIFT_ANNOUNCE(750400))));
+		writeFixture(outDir.resolve("SM_RIFT_ANNOUNCE.json"), "SM_RIFT_ANNOUNCE", null, smRiftAnnounce);
+
+		List<Case> smRecipeList = new ArrayList<>();
+		smRecipeList.add(new Case("single",
+			"{\"recipeIds\":[15001]}",
+			capture(new SM_RECIPE_LIST(new java.util.LinkedHashSet<>(java.util.Arrays.asList(15001))))));
+		smRecipeList.add(new Case("empty",
+			"{\"recipeIds\":[]}",
+			capture(new SM_RECIPE_LIST(new java.util.LinkedHashSet<>()))));
+		writeFixture(outDir.resolve("SM_RECIPE_LIST.json"), "SM_RECIPE_LIST", null, smRecipeList);
 	}
 
 	/** Capture the payload bytes a packet's writeImpl produces (no opcode, no crypt). */
