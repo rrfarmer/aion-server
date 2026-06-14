@@ -131,6 +131,123 @@ public class GoldenPacketFixtureGeneratorTest {
 			"{\"messageId\":1300134,\"params\":[\"Vaizel\"]}",
 			capture(SM_CLOSE_QUESTION_WINDOW.STR_DUEL_REQUESTER_WITHDRAW_REQUEST("Vaizel"))));
 		writeFixture(outDir.resolve("SM_CLOSE_QUESTION_WINDOW.json"), "SM_CLOSE_QUESTION_WINDOW", null, smCloseQuestionWindow);
+
+		List<Case> smDeleteCharacter = new ArrayList<>();
+		smDeleteCharacter.add(new Case("present",
+			"{\"playerObjId\":654321,\"deletionTime\":86400}",
+			capture(new SM_DELETE_CHARACTER(654321, 86400))));
+		smDeleteCharacter.add(new Case("zero",
+			"{\"playerObjId\":0,\"deletionTime\":0}",
+			capture(new SM_DELETE_CHARACTER(0, 0))));
+		writeFixture(outDir.resolve("SM_DELETE_CHARACTER.json"), "SM_DELETE_CHARACTER", null, smDeleteCharacter);
+
+		List<Case> smRestoreCharacter = new ArrayList<>();
+		smRestoreCharacter.add(new Case("success",
+			"{\"chaOid\":11223,\"success\":true}",
+			capture(new SM_RESTORE_CHARACTER(11223, true))));
+		smRestoreCharacter.add(new Case("failure",
+			"{\"chaOid\":44556,\"success\":false}",
+			capture(new SM_RESTORE_CHARACTER(44556, false))));
+		writeFixture(outDir.resolve("SM_RESTORE_CHARACTER.json"), "SM_RESTORE_CHARACTER", null, smRestoreCharacter);
+
+		List<Case> smNicknameCheckResponse = new ArrayList<>();
+		smNicknameCheckResponse.add(new Case("ok",
+			"{\"value\":0}",
+			capture(new SM_NICKNAME_CHECK_RESPONSE(0))));
+		smNicknameCheckResponse.add(new Case("notOk",
+			"{\"value\":10}",
+			capture(new SM_NICKNAME_CHECK_RESPONSE(10))));
+		writeFixture(outDir.resolve("SM_NICKNAME_CHECK_RESPONSE.json"), "SM_NICKNAME_CHECK_RESPONSE", null, smNicknameCheckResponse);
+
+		List<Case> smLearnRecipe = new ArrayList<>();
+		smLearnRecipe.add(new Case("recipe",
+			"{\"recipeId\":15042}",
+			capture(new SM_LEARN_RECIPE(15042))));
+		writeFixture(outDir.resolve("SM_LEARN_RECIPE.json"), "SM_LEARN_RECIPE", null, smLearnRecipe);
+
+		List<Case> smSummonOwnerRemove = new ArrayList<>();
+		smSummonOwnerRemove.add(new Case("summon",
+			"{\"summonObjId\":700001}",
+			capture(new SM_SUMMON_OWNER_REMOVE(700001))));
+		writeFixture(outDir.resolve("SM_SUMMON_OWNER_REMOVE.json"), "SM_SUMMON_OWNER_REMOVE", null, smSummonOwnerRemove);
+
+		List<Case> smSummonPanelRemove = new ArrayList<>();
+		smSummonPanelRemove.add(new Case("withSkill",
+			"{\"skillId\":1601}",
+			capture(new SM_SUMMON_PANEL_REMOVE(1601))));
+		smSummonPanelRemove.add(new Case("zeroSkill",
+			"{\"skillId\":0}",
+			capture(new SM_SUMMON_PANEL_REMOVE(0))));
+		writeFixture(outDir.resolve("SM_SUMMON_PANEL_REMOVE.json"), "SM_SUMMON_PANEL_REMOVE", null, smSummonPanelRemove);
+
+		List<Case> smDpInfo = new ArrayList<>();
+		smDpInfo.add(new Case("dp",
+			"{\"playerObjectId\":800042,\"currentDp\":4000}",
+			capture(new SM_DP_INFO(800042, 4000))));
+		writeFixture(outDir.resolve("SM_DP_INFO.json"), "SM_DP_INFO", null, smDpInfo);
+
+		List<Case> smFlyTime = new ArrayList<>();
+		smFlyTime.add(new Case("flyTime",
+			"{\"currentFp\":3500,\"maxFp\":7000}",
+			capture(new SM_FLY_TIME(3500, 7000))));
+		writeFixture(outDir.resolve("SM_FLY_TIME.json"), "SM_FLY_TIME", null, smFlyTime);
+
+		List<Case> smStatUpdateDp = new ArrayList<>();
+		smStatUpdateDp.add(new Case("dp",
+			"{\"currentDp\":2500}",
+			capture(new SM_STATUPDATE_DP(2500))));
+		writeFixture(outDir.resolve("SM_STATUPDATE_DP.json"), "SM_STATUPDATE_DP", null, smStatUpdateDp);
+
+		List<Case> smStatUpdateHp = new ArrayList<>();
+		smStatUpdateHp.add(new Case("hp",
+			"{\"currentHp\":1234,\"maxHp\":5678}",
+			capture(new SM_STATUPDATE_HP(1234, 5678))));
+		writeFixture(outDir.resolve("SM_STATUPDATE_HP.json"), "SM_STATUPDATE_HP", null, smStatUpdateHp);
+
+		List<Case> smStatUpdateMp = new ArrayList<>();
+		smStatUpdateMp.add(new Case("mp",
+			"{\"currentMp\":345,\"maxMp\":900}",
+			capture(new SM_STATUPDATE_MP(345, 900))));
+		writeFixture(outDir.resolve("SM_STATUPDATE_MP.json"), "SM_STATUPDATE_MP", null, smStatUpdateMp);
+
+		List<Case> smStatUpdateExp = new ArrayList<>();
+		smStatUpdateExp.add(new Case("exp",
+			"{\"currentExp\":123456789,\"recoverableExp\":1000,\"maxExp\":500000000,\"rep1\":250,\"rep2\":2000}",
+			capture(new SM_STATUPDATE_EXP(123456789L, 1000L, 500000000L, 250L, 2000L))));
+		writeFixture(outDir.resolve("SM_STATUPDATE_EXP.json"), "SM_STATUPDATE_EXP", null, smStatUpdateExp);
+
+		List<Case> smUnwrapItem = new ArrayList<>();
+		smUnwrapItem.add(new Case("unwrap",
+			"{\"objectId\":900111,\"count\":5}",
+			capture(new SM_UNWRAP_ITEM(900111, 5))));
+		writeFixture(outDir.resolve("SM_UNWRAP_ITEM.json"), "SM_UNWRAP_ITEM", null, smUnwrapItem);
+
+		List<Case> smWindstream = new ArrayList<>();
+		smWindstream.add(new Case("windstream",
+			"{\"unk1\":12,\"unk2\":3}",
+			capture(new SM_WINDSTREAM(12, 3))));
+		writeFixture(outDir.resolve("SM_WINDSTREAM.json"), "SM_WINDSTREAM", null, smWindstream);
+
+		List<Case> smFriendNotify = new ArrayList<>();
+		smFriendNotify.add(new Case("login",
+			"{\"code\":0,\"name\":\"Nezekan\"}",
+			capture(new SM_FRIEND_NOTIFY((byte) 0, "Nezekan"))));
+		smFriendNotify.add(new Case("logout",
+			"{\"code\":1,\"name\":\"Siel\"}",
+			capture(new SM_FRIEND_NOTIFY((byte) 1, "Siel"))));
+		writeFixture(outDir.resolve("SM_FRIEND_NOTIFY.json"), "SM_FRIEND_NOTIFY", null, smFriendNotify);
+
+		List<Case> smBindPointTeleport = new ArrayList<>();
+		smBindPointTeleport.add(new Case("action0",
+			"{\"action\":0,\"playerId\":100,\"locId\":0,\"cooldown\":0}",
+			capture(new SM_BIND_POINT_TELEPORT(0, 100, 0, 0))));
+		smBindPointTeleport.add(new Case("action1",
+			"{\"action\":1,\"playerId\":101,\"locId\":555,\"cooldown\":0}",
+			capture(new SM_BIND_POINT_TELEPORT(1, 101, 555, 0))));
+		smBindPointTeleport.add(new Case("action3",
+			"{\"action\":3,\"playerId\":102,\"locId\":556,\"cooldown\":60}",
+			capture(new SM_BIND_POINT_TELEPORT(3, 102, 556, 60))));
+		writeFixture(outDir.resolve("SM_BIND_POINT_TELEPORT.json"), "SM_BIND_POINT_TELEPORT", null, smBindPointTeleport);
 	}
 
 	/** Capture the payload bytes a packet's writeImpl produces (no opcode, no crypt). */
