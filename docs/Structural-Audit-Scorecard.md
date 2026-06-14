@@ -6,9 +6,9 @@ the C# structure diverges from Java 1:1 fidelity. Use as the Phase B/C remediati
 ## Summary
 
 - Java gameserver types indexed: **2456**
-- C# GameServer files indexed: **1316**
-- Java classes with an exact-name C# counterpart: **56**
-- C# stem clusters: **602**
+- C# GameServer files indexed: **2956**
+- Java classes with an exact-name C# counterpart: **2265**
+- C# stem clusters: **1881**
 
 ## Explosion Clusters (remediation priority)
 
@@ -17,80 +17,99 @@ with low `java_classes` is the slop signature (re-port fresh per the plan).
 
 | C# stem | C# files | C# lines | Java classes | Java lines | line ratio | Java match |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| FindGroup | 101 | 19914 | 3 | 457 | 44x | FindGroupEntry, FindGroupMutationPostTraceCaptureHooks… |
-| PlayerProtection | 42 | 10678 | 0 | 0 | n/a | —(none) |
-| BindPoint | 38 | 4921 | 4 | 313 | 16x | BindPointData, BindPointTeleportService… |
-| WorldNpc | 38 | 13965 | 0 | 0 | n/a | —(none) |
-| PlayerKnown | 24 | 3562 | 0 | 0 | n/a | —(none) |
-| WorldMap | 22 | 3352 | 5 | 1063 | 3x | WorldMap, WorldMapInstance… |
-| PlayerAlliance | 22 | 3271 | 9 | 811 | 4x | PlayerAllianceEnteredEvent, PlayerAllianceInvite… |
-| PlayerGroup | 19 | 2143 | 9 | 574 | 4x | PlayerGroupStopMentoringEvent, PlayerGroupLeavedEvent… |
-| ItemPurification | 17 | 3068 | 3 | 220 | 14x | ItemPurificationService, ItemPurificationTemplate… |
-| PlayerKisk | 16 | 1398 | 0 | 0 | n/a | —(none) |
-| CmBuy | 15 | 2237 | 0 | 0 | n/a | —(none) |
-| SmLegion | 14 | 897 | 0 | 0 | n/a | —(none) |
-| QuestFinish | 13 | 2563 | 0 | 0 | n/a | —(none) |
-| SmHouse | 11 | 698 | 0 | 0 | n/a | —(none) |
-| NearbyQuest | 9 | 1291 | 0 | 0 | n/a | —(none) |
-| NpcDialog | 9 | 1138 | 1 | 39 | 29x | NpcDialogOperation |
-| PrivateStore | 9 | 1720 | 2 | 286 | 6x | PrivateStore, PrivateStoreService |
-| PetFeed | 9 | 1389 | 6 | 1469 | 1x | PetFeedUnusualStorageArtifactCaptureConfig, PetFeedResult… |
+| SM | 245 | 36953 | 261 | 42787 | 1x | SM_KEY, SM_DELETE_ITEM… |
+| CM | 189 | 10717 | 203 | 11691 | 1x | CM_FRIEND_SET_MEMO, CM_BLOCK_DEL… |
+| WorldNpc | 23 | 9890 | 0 | 0 | n/a | —(none) |
+| GlobalDrop | 22 | 419 | 21 | 655 | 1x | GlobalDropExcludedNpcs, GlobalDropNpcNames… |
+| WorldMap | 14 | 2322 | 5 | 1063 | 2x | WorldMapInstanceFactory, WorldMapTemplate… |
+| PlayerGroup | 14 | 746 | 9 | 574 | 1x | PlayerGroupService, PlayerGroupLeavedEvent… |
+| SmLegion | 13 | 836 | 0 | 0 | n/a | —(none) |
+| LegionDominion | 12 | 1026 | 11 | 919 | 1x | LegionDominionDAO, LegionDominionData… |
+| NpcSkill | 11 | 876 | 10 | 792 | 1x | NpcSkillData, NpcSkillList… |
+| PlayerKisk | 11 | 998 | 0 | 0 | n/a | —(none) |
 | CmHouse | 9 | 260 | 0 | 0 | n/a | —(none) |
 | CmLegion | 9 | 255 | 0 | 0 | n/a | —(none) |
-| GameServer | 7 | 24236 | 2 | 365 | 66x | GameServer, GameServerError |
-| PlayerDeath | 7 | 1036 | 0 | 0 | n/a | —(none) |
-| QuestBonus | 7 | 1003 | 0 | 0 | n/a | —(none) |
-| SmPlayer | 7 | 561 | 0 | 0 | n/a | —(none) |
+| SmHouse | 9 | 548 | 0 | 0 | n/a | —(none) |
+| PlayerAlliance | 9 | 916 | 9 | 811 | 1x | PlayerAllianceUpdateEvent, PlayerAllianceLeavedEvent… |
+| PetFeed | 8 | 858 | 6 | 1469 | 1x | PetFeedResult, PetFeedUnusualStorageArtifactCapture… |
+| StaticDoor | 8 | 475 | 7 | 427 | 1x | StaticDoorWorld, StaticDoorData… |
+| GameServer | 7 | 1455 | 2 | 365 | 4x | GameServerError, GameServer |
+| FlyRing | 7 | 324 | 7 | 340 | 1x | FlyRingPoint, FlyRingController… |
+| AutoGroup | 7 | 1178 | 6 | 1036 | 1x | AutoGroupService, AutoGroupData… |
+| WorldRaid | 7 | 603 | 8 | 680 | 1x | WorldRaidSchedule, WorldRaidData… |
+| SmPlayer | 7 | 238 | 0 | 0 | n/a | —(none) |
 | CmBroker | 7 | 164 | 0 | 0 | n/a | —(none) |
-| AutoGroup | 6 | 2927 | 6 | 1036 | 3x | AutoGroupService, AutoGroup… |
-| PlayerRevive | 6 | 431 | 1 | 261 | 2x | PlayerReviveService |
-| PlayerSummon | 6 | 9148 | 0 | 0 | n/a | —(none) |
-| SkillBuff | 6 | 908 | 0 | 0 | n/a | —(none) |
-| VortexDefender | 6 | 1705 | 0 | 0 | n/a | —(none) |
+| AbyssRank | 6 | 1190 | 5 | 1176 | 1x | AbyssRankUpdateType, AbyssRankUpdateService… |
+| CustomInstance | 6 | 588 | 6 | 492 | 1x | CustomInstanceRank, CustomInstanceDAO… |
+| InGame | 6 | 606 | 6 | 545 | 1x | InGameShopDAO, InGameShop… |
+| QuestNpc | 6 | 740 | 1 | 40 | 18x | QuestNpc |
+| CmExchange | 6 | 109 | 0 | 0 | n/a | —(none) |
+| CmShow | 6 | 111 | 0 | 0 | n/a | —(none) |
+| SmDelete | 6 | 172 | 0 | 0 | n/a | —(none) |
+| NpcFaction | 5 | 487 | 2 | 226 | 2x | NpcFactionTemplate, NpcFaction |
+| SmAccount | 5 | 142 | 0 | 0 | n/a | —(none) |
+| CmChat | 5 | 107 | 0 | 0 | n/a | —(none) |
+| CmSummon | 5 | 192 | 0 | 0 | n/a | —(none) |
+| VisibleObject | 4 | 537 | 4 | 693 | 1x | VisibleObjectTemplate, VisibleObjectSpawner… |
+| HouseObject | 4 | 591 | 3 | 473 | 1x | HouseObject, HouseObjectCooldownsDAO… |
+| PlayerSkill | 4 | 564 | 3 | 451 | 1x | PlayerSkillListDAO, PlayerSkillEntry… |
+| AtreianPassport | 4 | 551 | 3 | 449 | 1x | AtreianPassport, AtreianPassportData… |
+| BindPoint | 4 | 296 | 4 | 313 | 1x | BindPointTemplate, BindPointTeleportService… |
+| ChallengeTask | 4 | 570 | 3 | 465 | 1x | ChallengeTask, ChallengeTaskTemplate… |
+| CreaturePvp | 4 | 315 | 0 | 0 | n/a | —(none) |
 
 ## Orphan C# Stems (no Java counterpart — invented)
 
 | C# stem | files | example file |
 | --- | ---: | --- |
-| PlayerProtection | 42 | PlayerProtectionActiveTaskAdapterService |
-| WorldNpc | 38 | WorldNpcAiStateService |
-| PlayerKnown | 24 | PlayerKnownListAbnormalEffectFactPlanRequestAdapterService |
-| PlayerKisk | 16 | PlayerKiskAttackabilityService |
-| CmBuy | 15 | CmBuyItemBuyFromShopCompositionPlanService |
-| SmLegion | 14 | SmLegionAddMember |
-| QuestFinish | 13 | QuestFinishBonusRewardInputAssemblyPlanService |
-| SmHouse | 11 | SmHouseAcquire |
-| NearbyQuest | 9 | NearbyQuestTemplateTable |
+| WorldNpc | 23 | WorldNpcAiStateService |
+| SmLegion | 13 | SmLegionDominionRank |
+| PlayerKisk | 11 | PlayerKiskAttackabilityService |
 | CmHouse | 9 | CmHouseDecorate |
 | CmLegion | 9 | CmLegion |
-| PlayerDeath | 7 | PlayerDeathCoreSideEffectPlanService |
-| QuestBonus | 7 | QuestBonusCandidatePlanService |
+| SmHouse | 9 | SmHouseAcquire |
 | SmPlayer | 7 | SmPlayerAuth |
 | CmBroker | 7 | CmBrokerCancelRegistered |
-| PlayerSummon | 6 | PlayerSummonCastSpellService |
-| SkillBuff | 6 | SkillBuffStat2EvaluationReadinessReportService |
-| VortexDefender | 6 | VortexDefenderAddPlayerTransitionPlanService |
-| VortexRift | 6 | VortexRiftEntryUpdateCompositionDispatchBridgeService |
 | CmExchange | 6 | CmExchangeAddItem |
 | CmShow | 6 | CmShowBlockList |
 | SmDelete | 6 | SmDelete |
-| SkillStat | 5 | SkillStatChangeConditionReadinessReportService |
-| VortexInvader | 5 | VortexInvaderKiskZoneMembershipPlanService |
+| SmAccount | 5 | SmAccountAuth |
 | CmChat | 5 | CmChatAuth |
 | CmSummon | 5 | CmSummonAttack |
-| SmFriend | 5 | SmFriendList |
-| SmSummon | 5 | SmSummonOwnerRemove |
 | CreaturePvp | 4 | CreaturePvpZoneTable |
-| CmTune | 4 | CmTuneResultPlanService |
+| CmBuy | 4 | CmBuyItemKnownVisibleObjectMembershipService |
+| CmCheck | 4 | CmCheckMailList |
+| CmDelete | 4 | CmDeleteCharacter |
+| CmFriend | 4 | CmFriendAdd |
+| SmFriend | 4 | SmFriendList |
+| SmSkill | 4 | SmSkillCancel |
+| SmStat | 4 | SmStatUpdateDp |
+| CharacterCreation | 3 | CharacterCreationRepository |
+| CustomLevel | 3 | CustomLevelRewardRepository |
+| HouseAuction | 3 | HouseAuctionRepository |
+| SmGame | 3 | SmGameServerAuth |
+| SmChat | 3 | SmChatServerAuth |
+| CmBlock | 3 | CmBlockAdd |
+| CmCharacter | 3 | CmCharacterEdit |
+| CmGroup | 3 | CmGroupDataExchange |
+| CmMove | 3 | CmMove |
+| CmPlayer | 3 | CmPlayerListener |
+| CmUse | 3 | CmUseChargeSkill |
+| SmInventory | 3 | SmInventoryAddItem |
+| SmQuest | 3 | SmQuestAction |
+| SmRecipe | 3 | SmRecipeCooldown |
+| SmSummon | 3 | SmSummonOwnerRemove |
+| PlayerSummon | 3 | PlayerSummonKnownNpcTemplateType |
+| CharacterSelection | 2 | CharacterSelectionRepository |
+| PlayerPet | 2 | PlayerPetRowProjection |
 
 ## Missing High-Value Java (engine/services gaps)
 
-Java classes in ['ai', 'controllers', 'questEngine', 'services', 'skillengine'] with no exact-name C# file. Total: **642**.
+Java classes in ['ai', 'controllers', 'questEngine', 'services', 'skillengine'] with no exact-name C# file. Total: **31**.
 
 | area | missing classes |
 | --- | ---: |
-| skillengine | 299 |
-| services | 162 |
-| questEngine | 79 |
-| controllers | 62 |
-| ai | 40 |
+| services | 17 |
+| skillengine | 7 |
+| ai | 4 |
+| controllers | 3 |
