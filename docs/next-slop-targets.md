@@ -2,6 +2,128 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## RESOLVED — CronJobService wired + SiegeConfig cron schedules populated (commit pending, 2026-06-16)
+
+The CronJobService deferral (cron-config-transform unported) is FIXED and the service is now wired at boot.
+
+Root cause was bounded, not a subsystem: C# `Config.Load()` is a deferred no-op, so config-holder classes
+carry their `@Property` defaults as field initializers. Every SiegeConfig bool/int/float field already had its
+default; only the two `Quartz.CronExpression` fields (`MOLTENUS_SPAWN_SCHEDULE`, `AHSERION_START_SCHEDULE`)
+were left uninitialized (null) — there was no field initializer for them. When CronJobService's ctor passed
+the null CronExpression to `CronService.Schedule`, it NRE'd on `cronExpression.CronExpressionString`
+(prior bootstrap test failed with CronServiceException "Failed to start job").
+
+FIX (faithful 1:1): the Java `@Property` defaultValue strings (and config/main/siege.properties — identical)
+are `"0 0 22 ? * SUN"` (moltenus) and `"0 50 18 ? * SUN"` (ahserion). Java's `CronExpressionTransformer`
+turns these into a CronExpression via `CronExpressions.getOrCreate(value)`. So the two C# SiegeConfig fields
+are now initialized with `Aion.GameServer.Services.Cron.CronExpressions.GetOrCreate("0 0 22 ? * SUN")` /
+`("0 50 18 ? * SUN")` — exactly what Config.Load + CronExpressionTransformer would produce given no override.
+No invented values; defaultValue == properties-file value.
+
+WIRED: `CronJobService.GetInstance()` in GameServerBootstrapService.StartAsync at the Java-correct boot site
+(GameServer.main:158 — after AtreianPassportService/DebugService, before CuringZoneService/RoadService, and
+after CronService.InitSingleton). Its ctor schedules the Moltenus spawn + Ahserion flight cron jobs, runs the
+IdianDepthPortal spawner synchronously, and schedules the weekly LegionDominion calculation ("0 0 9 ? * WED *").
+
+Restored at boot: Moltenus (Berserker Sunayaka) Sunday-22:00 spawn cron, Ahserion Panesterra raid Sunday-18:50
+cron, Idian Depth portal spawns (Levinshor/Kaldor/Cygnea/Enshar entrances), weekly Legion Dominion calc.
+Verify: build 0, golden 167/167, bootstrap 7/7 (now exercises CronJobService through StartAsync — no throw),
+RealStaticDataLoad green.
+
+## BOOT-COMPLETENESS CENSUS (Java GameServer.main vs C# GameServerBootstrapService.StartAsync, 2026-06-16)
+
+initUtilityServicesAndConfig (Java pre-DataManager utility phase):
+- UncaughtExceptionHandler set — N/A (infra; .NET host handles unobserved-exception policy).
+- PropertyTransformers.register(CronExpressionTransformer) — N/A as a runtime step (Config.Load is a deferred
+  no-op); the transform's EFFECT is now reproduced by SiegeConfig field initializers (see RESOLVED above).
+- Config.load() — DEFERRED no-op (config-holders carry @Property defaults as field initializers). Inert for
+  boot today; live consumers read the hardcoded defaults. (Infra per gameplay-faithful/infra-idiomatic.)
+- DatabaseFactory.init() — DONE (Program.cs ConfigureServices / DI).
+- PlayerDAO.setAllPlayersOffline() — GAP (inert at boot; matters only with a populated players table — sets
+  the online flag false for all rows. No live in-process consumer at boot; cosmetic until real logins persist).
+- DatabaseCleaningService.deletePlayersOnInactiveAccounts() (guarded CLEANING_ENABLE=false) — GAP/DEFER
+  (default-off; needs a thread-1 pre-boot utility seam — see DEFERRED below). Inert by default.
+- ThreadPoolManager.getInstance() — DONE (RegisterInstance bridge early in StartAsync).
+- CronService.initSingleton(...) — DONE (guarded once-only init in StartAsync).
+
+main (post-utility):
+- JAXBUtil.preLoadContextAsync — N/A (JAXB warmup; C# uses XmlSerializer + cache, no equivalent prewarm needed).
+- IDFactory.getInstance() — DONE.
+- DataManager.getInstance() — DONE (StaticDataLoader, 13 holders live).
+- QuestEngine/AIEngine/InstanceEngine/ChatProcessor/ZoneService/GeoService init (parallel) — DONE (engine list).
+- World.getInstance() — DONE (LoadWorldMaps + RegisterInstance).
+- GameTimeService.getInstance() — DONE.
+- DropRegistrationService.getInstance() — GAP (drop-table registration; live consumers = loot on NPC death.
+  Bounded singleton-touch; likely next bounded wire — needs DropRegistrationService ported/verified first).
+- BaseService.getInstance() — GAP (loads base location data). Live consumers: base capture/spawns.
+- SiegeService.getInstance() — GAP (loads siege location data). Live consumers: fortress sieges.
+- WorldRaidService.initWorldRaidLocations() — GAP (world-raid locations).
+- VortexService.initVortexLocations() — GAP (vortex locations).
+- RiftService.initRiftLocations() — DONE.
+- LegionDominionService.initLocations() — GAP.
+- HousingService.getInstance() — GAP? (faithful HousingService exists + runs per-instance on spawn; explicit
+  boot getInstance() touch not in StartAsync — verify it self-inits via spawn path; likely effectively DONE).
+- HousingBidService / AuctionEndTask / AuctionAutoFillTask / MaintenanceTask — GAP (housing auction tasks).
+- ChallengeTaskService.getInstance() — GAP.
+- SpawnEngine.spawnAll() — DONE.
+- TownService.getInstance() — GAP (town spawns; TOWN_SPAWNS_DATA). Live consumers: town NPCs.
+- FlyRingService.getInstance() — DONE.
+- RiftService.initRifts() — DONE.
+- ratio-limitation block (GSConfig.ENABLE_RATIO_LIMITATION) — N/A by default (config-gated off).
+- LimitedItemTradeService.start() — GAP.
+- PlayerLimitService.scheduleUpdate() (CustomConfig.LIMITS_ENABLED) — GAP (config-gated).
+- SiegeService.initSieges() — GAP (depends on SiegeService.getInstance()).
+- BaseService.initBases() — GAP.
+- WorldRaidService.initWorldRaids() — GAP.
+- ConquerorAndProtectorService.init() — GAP.
+- AnnouncementService.getInstance() — GAP.
+- DebugService.getInstance() — DONE.
+- WeatherService.getInstance() — GAP (weather scheduling). Live consumers: zone weather.
+- BrokerService.getInstance() — GAP (auction broker). Live consumers: broker UI/persistence.
+- Influence.getInstance() — GAP (abyss influence ratio).
+- ExchangeService.getInstance() — GAP (player trade).
+- PeriodicSaveService.getInstance() — GAP (periodic player/legion save scheduling). Notable: real persistence.
+- AtreianPassportService.getInstance() — GAP.
+- CronJobService.getInstance() — DONE (this tick).
+- CuringZoneService.getInstance() (guarded !GEO_MATERIALS_ENABLE; default off) — DONE (guarded, matches Java).
+- RoadService.getInstance() — DONE.
+- HTMLCache.getInstance() — GAP (HTML dialog cache). Live consumers: NPC dialog HTML.
+- AbyssRankingCache / AbyssRankUpdateService.scheduleUpdate() — GAP.
+- PeriodicInstanceManager.getInstance() — GAP.
+- EventService.start() — GAP (event spawns/schedules).
+- AdminService.getInstance() — GAP.
+- CommandsAccessService.loadAccesses() — GAP (admin command ACLs). Live consumers: chat command auth.
+- PlayerTransferService.getInstance() — GAP.
+- GameTimeService.startClock() — DONE.
+- PvpMapService.init() — GAP.
+- CustomInstanceService.getInstance() — GAP.
+- DataManager.waitForValidationToFinishAndShutdownOnFail() — DONE (ValidationTask await).
+- System.gc() — N/A.
+- VersionInfo/SystemInfo logAll — N/A (logging).
+- PetFeedUnusualStorageArtifactCapture.installIfEnabled() — N/A by default (parity-capture seam, off).
+- initNioServer() — DONE-elsewhere (network host startup is the LS/GS/CS stack, not StartAsync).
+- ShutdownHook register — partial (StopAsync mirrors orderly shutdown).
+- LoginServer.connect / ChatServer.connect — DONE-elsewhere (3-server stack).
+
+GAPs ordered by gameplay impact (those with live consumers = real silent-skip):
+1. **SPAWNS_DATA regular-NPC spawns** — already documented/gated below (#1, heavy).
+2. **Location-init cluster** (SiegeService/BaseService/VortexService/WorldRaidService/LegionDominion +
+   their init*() second pass) — siege/base/vortex/raid gameplay silently absent. Each is a bounded
+   singleton getInstance()/init touch IF the service is already faithfully ported; needs per-service port
+   verification before wiring (a batch of bounded wires, like the FlyRing/Debug/Road tick).
+3. **TownService** — town NPCs absent (TOWN_SPAWNS_DATA path).
+4. **PeriodicSaveService** — periodic persistence not scheduled (matters once real logins persist).
+5. **CommandsAccessService.loadAccesses** — admin/chat command authorization unloaded.
+6. **HTMLCache** — NPC dialog HTML uncached.
+7. **EventService.start / WeatherService / BrokerService / ExchangeService / AbyssRanking / etc.** — feature
+   services, each a bounded getInstance() wire pending port verification.
+8. **PlayerDAO.setAllPlayersOffline / DatabaseCleaning** — DB-state, inert until players persist.
+
+Most remaining GAPs are individually bounded getInstance()/init() wires (the same shape as this tick), each
+gated only on confirming the target service is faithfully ported and its ctor doesn't NRE on an unported dep
+(the CronJobService failure mode). The recommended next bounded tick: audit the location-init cluster (#2)
+service-by-service and wire the ones whose ctors are dep-clean.
+
 ## RESOLVED — NpcSpawnTable dead-island retired (commit ec289dc00, 2026-06-16)
 
 SPAWNS_DATA is now live-loaded (commit ae2e25a54), so the reworked spawn projection was orphaned and is
@@ -161,15 +283,9 @@ WIRED (commit 7c2935abd) — GameServerBootstrapService.StartAsync, 1:1 with Gam
 - **RoadService** — `GetInstance()` (Java main:162). Spawns roads/ templates per instance.
 
 DEFERRED:
-- **CronJobService** (Java main:158) — DEFER. Its ctor schedules Moltenus/Ahserion/LegionDominion cron jobs
-  via `CronService.Schedule(..., SiegeConfig.MOLTENUS_SPAWN_SCHEDULE / AHSERION_START_SCHEDULE)`. Those
-  config `CronExpression` values are NULL because the cron-config-transform surface is unported: Java
-  registers `PropertyTransformers.register(new CronExpressionTransformer())` in initUtilityServicesAndConfig
-  and the @Property loader converts the schedule strings into CronExpression. In C# the SiegeConfig cron
-  fields aren't populated => `CronService.Schedule` NREs on `cronExpression.CronExpressionString`
-  (verified: bootstrap test failed with CronServiceException "Failed to start job"). Wiring it would need
-  the config-cron-transform pillar ported (SiegeConfig.MOLTENUS_SPAWN_SCHEDULE / AHSERION_START_SCHEDULE
-  populated from the .properties via a CronExpression transformer). Until then, half-wiring it throws.
+- **CronJobService** (Java main:158) — RESOLVED 2026-06-16 (see RESOLVED section at top). The cron-config
+  values are now populated via SiegeConfig field initializers (CronExpressions.GetOrCreate of the Java
+  @Property defaultValue strings) and the service is wired at the Java-correct boot site. No longer deferred.
 - **DatabaseCleaningService** (Java initUtilityServicesAndConfig:227, guarded CleaningConfig.CLEANING_ENABLE
   =false) — DEFER. (1) Its Java boot site is the pre-DataManager utility-init phase; the C# hosted bootstrap
   has no faithful pre-DataManager utility seam (DatabaseFactory.Initialize happens in Program.cs ConfigureServices,
@@ -184,8 +300,12 @@ DEFERRED:
 
 ## Gated list (need user decision)
 1. **SPAWNS_DATA re-port** (above) — silently-broken, #1 value. Heavy big-bang.
-2. **CronJobService cron-config-transform** — port SiegeConfig cron-schedule property transform so
-   CronJobService can be wired faithfully.
+2. **CronJobService cron-config-transform** — RESOLVED 2026-06-16 (cron schedules populated via SiegeConfig
+   field initializers, service wired at boot). See RESOLVED section at top. No longer gated.
 3. **DatabaseCleaningService thread-1 utility-init seam** — only if a faithful pre-boot utility phase is added.
 4. **Housing SmHouse* subsystem** — RESOLVED + DELETED (see RESOLVED section at top, 2026-06-16).
    Dead-island retired; faithful pillar is the sole live path.
+5. **Boot location-init cluster** (SiegeService/BaseService/VortexService/WorldRaidService/LegionDominion +
+   TownService/PeriodicSaveService/CommandsAccessService/HTMLCache/EventService...) — bounded getInstance()
+   wires, each gated on per-service port verification (ctor dep-clean). NOT slop; the next bounded boot-gap
+   batch. See BOOT-COMPLETENESS CENSUS above.
