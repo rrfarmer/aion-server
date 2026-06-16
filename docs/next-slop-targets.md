@@ -2,6 +2,51 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## RESOLVED — Location-init cluster wired (commit pending, 2026-06-16)
+
+The boot location-init cluster (GameServer.main lines 111-117 + TownService :127) is now WIRED in
+GameServerBootstrapService.StartAsync, in exact Java order. Each is dep-clean: ctors iterate the
+faithfully-loaded *_DATA holders (live via StaticData.TryLoadHolder) and any DAO read is try/catch-guarded
+(no DB => empty + logged, never NRE). Bounded null-deps fixed with Java @Property defaults (no invented values).
+
+WIRED (all build 0, per-class golden 167/167 + 5/5 LS, bootstrap 7/7, RealStaticDataLoad green):
+- **BaseService.getInstance()** (main:111) — ctor builds BaseLocation per BASE_DATA template. Restores base
+  capture/spawn location registry.
+- **SiegeService.getInstance()** (main:112) — loads SIEGE_LOCATION_DATA fortress/artifact/outpost (guard
+  SiegeConfig.SIEGE_ENABLED=true) + SiegeDAO.LoadSiegeLocations (try/catch). Restores fortress-siege location data.
+- **WorldRaidService.getInstance().initWorldRaidLocations()** (main:113) — loads WORLD_RAID_DATA (guard
+  EventsConfig.ENABLE_WORLDRAID). Restores world-raid locations.
+- **VortexService.getInstance().initVortexLocations()** (main:115) — spawns peace-state vortex NPCs +
+  schedules Theobomos/Brusthonin invasions (guard CustomConfig.VORTEX_ENABLED=true). Restores dimensional-vortex
+  invasion lifecycle.
+- **LegionDominionService.getInstance().initLocations()** (main:117) — builds LegionDominionLocation per
+  LEGION_DOMINION_DATA + LegionDominionDAO (try/catch). Restores legion-territory-control locations.
+- **TownService.getInstance()** (main:127, after SpawnEngine.spawnAll) — loads per-race towns via TownDAO
+  (try/catch) + seeds from HOUSE_DATA when empty. Restores town registry.
+
+NULL-DEP FIXES (faithful @Property defaults, same shape as the CronJobService/SiegeConfig fix):
+- **CustomConfig.VORTEX_THEOBOMOS_SCHEDULE / VORTEX_BRUSTHONIN_SCHEDULE** were null Quartz.CronExpression
+  fields (no initializer) — VortexService.initVortexLocations NRE'd on CronService.Schedule(..., null) (the
+  CronJobService failure mode). Initialized from the Java @Property defaultValue cron strings (identical to
+  config/main/custom.properties): theobomos `"0 0 16 ? * SUN"`, brusthonin `"0 0 16 ? * SAT"` via
+  CronExpressions.GetOrCreate. No invented value.
+- **BaseData.baseTemplates** + **LegionDominionData.ldl** ([XmlElement] List fields) were null when the XML
+  is absent (e.g. minimal bootstrap-test fixture) — GetAllBaseTemplates()/GetLocationTemplates() returned
+  null => foreach NRE. Initialized `= new()` (XmlSerializer add-to-existing / JAXB-faithful: stays empty when
+  the element is absent, populated when present). Matches the established pattern on HouseData.lands /
+  SiegeLocationData/VortexData/WorldRaidData [XmlIgnore] derived maps.
+
+ORDERING FIX: **CronService.InitSingleton** moved from its late position (after SpawnAll) up to right after
+GameTimeService.InitAsync (before the location-init cluster) — faithful to Java, where CronService.initSingleton
+runs in initUtilityServicesAndConfig BEFORE the main-body services that schedule through it. VortexService
+(main:115) / WorldRaidService.initWorldRaids / RiftService.initRifts all need a live CronService.getInstance().
+
+PRE-EXISTING (NOT introduced here): GoldenStatsInfoFixtureTests fails ONLY when run in the same process as
+the bootstrap test (combined --filter), due to shared DataManager static-singleton pollution + run order.
+Confirmed identical failure on clean HEAD (1 failed / 174 passed for the combined filter, pre-change). Passes
+in isolation. Per-class verification (the task contract) is all-green. This is a test-harness isolation issue,
+out of scope for this wire.
+
 ## RESOLVED — CronJobService wired + SiegeConfig cron schedules populated (commit pending, 2026-06-16)
 
 The CronJobService deferral (cron-config-transform unported) is FIXED and the service is now wired at boot.
@@ -55,26 +100,29 @@ main (post-utility):
 - GameTimeService.getInstance() — DONE.
 - DropRegistrationService.getInstance() — GAP (drop-table registration; live consumers = loot on NPC death.
   Bounded singleton-touch; likely next bounded wire — needs DropRegistrationService ported/verified first).
-- BaseService.getInstance() — GAP (loads base location data). Live consumers: base capture/spawns.
-- SiegeService.getInstance() — GAP (loads siege location data). Live consumers: fortress sieges.
-- WorldRaidService.initWorldRaidLocations() — GAP (world-raid locations).
-- VortexService.initVortexLocations() — GAP (vortex locations).
+- BaseService.getInstance() — DONE (base location registry; wired 2026-06-16 location-init cluster).
+- SiegeService.getInstance() — DONE (siege location data; wired 2026-06-16).
+- WorldRaidService.initWorldRaidLocations() — DONE (world-raid locations; wired 2026-06-16).
+- VortexService.initVortexLocations() — DONE (vortex locations + invasion cron; wired 2026-06-16, null-cron fixed).
 - RiftService.initRiftLocations() — DONE.
-- LegionDominionService.initLocations() — GAP.
+- LegionDominionService.initLocations() — DONE (legion-territory locations; wired 2026-06-16).
 - HousingService.getInstance() — GAP? (faithful HousingService exists + runs per-instance on spawn; explicit
   boot getInstance() touch not in StartAsync — verify it self-inits via spawn path; likely effectively DONE).
 - HousingBidService / AuctionEndTask / AuctionAutoFillTask / MaintenanceTask — GAP (housing auction tasks).
 - ChallengeTaskService.getInstance() — GAP.
 - SpawnEngine.spawnAll() — DONE.
-- TownService.getInstance() — GAP (town spawns; TOWN_SPAWNS_DATA). Live consumers: town NPCs.
+- TownService.getInstance() — DONE (town registry; wired 2026-06-16). NOTE: town NPC SPAWNING still depends on
+  the gated SPAWNS_DATA/TOWN_SPAWNS path (#1); this wire restores the town-level/points registry only.
 - FlyRingService.getInstance() — DONE.
 - RiftService.initRifts() — DONE.
 - ratio-limitation block (GSConfig.ENABLE_RATIO_LIMITATION) — N/A by default (config-gated off).
 - LimitedItemTradeService.start() — GAP.
 - PlayerLimitService.scheduleUpdate() (CustomConfig.LIMITS_ENABLED) — GAP (config-gated).
-- SiegeService.initSieges() — GAP (depends on SiegeService.getInstance()).
-- BaseService.initBases() — GAP.
-- WorldRaidService.initWorldRaids() — GAP.
+- SiegeService.initSieges() — GAP (second-pass: despawns spawn-engine NPCs + spawns siege NPCs + schedules
+  fortress sieges through CronService. getInstance() prereq now DONE; this is the next bounded second-pass wire,
+  gated on confirming the SpawnNpcs/DeSpawnNpcs path + SiegeSchedules.Load don't NRE on unported deps).
+- BaseService.initBases() — GAP (second-pass: starts casual/stained/panesterra bases. getInstance() prereq DONE).
+- WorldRaidService.initWorldRaids() — GAP (second-pass: schedules raids via CronService. getInstance() prereq DONE).
 - ConquerorAndProtectorService.init() — GAP.
 - AnnouncementService.getInstance() — GAP.
 - DebugService.getInstance() — DONE.
@@ -107,11 +155,12 @@ main (post-utility):
 
 GAPs ordered by gameplay impact (those with live consumers = real silent-skip):
 1. **SPAWNS_DATA regular-NPC spawns** — already documented/gated below (#1, heavy).
-2. **Location-init cluster** (SiegeService/BaseService/VortexService/WorldRaidService/LegionDominion +
-   their init*() second pass) — siege/base/vortex/raid gameplay silently absent. Each is a bounded
-   singleton getInstance()/init touch IF the service is already faithfully ported; needs per-service port
-   verification before wiring (a batch of bounded wires, like the FlyRing/Debug/Road tick).
-3. **TownService** — town NPCs absent (TOWN_SPAWNS_DATA path).
+2. **Location-init cluster** (SiegeService/BaseService/VortexService/WorldRaidService/LegionDominion
+   getInstance()/initLocations) — DONE (wired 2026-06-16). Remaining: the **second-pass init*()** calls
+   (SiegeService.initSieges / BaseService.initBases / WorldRaidService.initWorldRaids /
+   ConquerorAndProtectorService.init) which spawn NPCs + schedule sieges/raids — the next bounded batch,
+   gated on confirming the spawn/schedule paths are dep-clean.
+3. **TownService** — DONE (registry wired 2026-06-16). Town NPC spawning still gated on SPAWNS_DATA (#1).
 4. **PeriodicSaveService** — periodic persistence not scheduled (matters once real logins persist).
 5. **CommandsAccessService.loadAccesses** — admin/chat command authorization unloaded.
 6. **HTMLCache** — NPC dialog HTML uncached.
@@ -306,6 +355,8 @@ DEFERRED:
 4. **Housing SmHouse* subsystem** — RESOLVED + DELETED (see RESOLVED section at top, 2026-06-16).
    Dead-island retired; faithful pillar is the sole live path.
 5. **Boot location-init cluster** (SiegeService/BaseService/VortexService/WorldRaidService/LegionDominion +
-   TownService/PeriodicSaveService/CommandsAccessService/HTMLCache/EventService...) — bounded getInstance()
-   wires, each gated on per-service port verification (ctor dep-clean). NOT slop; the next bounded boot-gap
-   batch. See BOOT-COMPLETENESS CENSUS above.
+   TownService getInstance/initLocations) — RESOLVED 2026-06-16 (see RESOLVED section at top; all wired
+   dep-clean). Remaining bounded getInstance() wires: the second-pass init*() (SiegeService.initSieges /
+   BaseService.initBases / WorldRaidService.initWorldRaids / ConquerorAndProtectorService.init) +
+   PeriodicSaveService/CommandsAccessService/HTMLCache/EventService/WeatherService/BrokerService/etc., each
+   gated on per-service ctor dep-clean verification. NOT slop. See BOOT-COMPLETENESS CENSUS above.
