@@ -417,6 +417,71 @@ public class GoldenPacketFixtureGeneratorTest {
 			"{\"code\":1}",
 			capture(SM_MACRO_RESULT.SM_MACRO_DELETED)));
 		writeFixture(outDir.resolve("SM_MACRO_RESULT.json"), "SM_MACRO_RESULT", null, smMacroResult);
+
+		// ----- Batch 4: faithful pure value-ctor SM_* packets (writeImpl reads only ctor-stored scalars/strings) -----
+
+		List<Case> smDuel = new ArrayList<>();
+		smDuel.add(new Case("started",
+			"{\"type\":0,\"requesterObjId\":700123}",
+			capture(SM_DUEL.SM_DUEL_STARTED(700123))));
+		smDuel.add(new Case("resultWon",
+			"{\"type\":1,\"result\":\"DUEL_WON\",\"playerName\":\"Vaizel\"}",
+			capture(SM_DUEL.SM_DUEL_RESULT(com.aionemu.gameserver.model.DuelResult.DUEL_WON, "Vaizel"))));
+		writeFixture(outDir.resolve("SM_DUEL.json"), "SM_DUEL", null, smDuel);
+
+		List<Case> smSiegeLocationState = new ArrayList<>();
+		smSiegeLocationState.add(new Case("vulnerable",
+			"{\"locationId\":2011,\"state\":1}",
+			capture(new SM_SIEGE_LOCATION_STATE(2011, 1))));
+		smSiegeLocationState.add(new Case("invulnerable",
+			"{\"locationId\":2021,\"state\":0}",
+			capture(new SM_SIEGE_LOCATION_STATE(2021, 0))));
+		writeFixture(outDir.resolve("SM_SIEGE_LOCATION_STATE.json"), "SM_SIEGE_LOCATION_STATE", null, smSiegeLocationState);
+
+		List<Case> smMayLogin = new ArrayList<>();
+		smMayLogin.add(new Case("ok",
+			"{}",
+			capture(new SM_MAY_LOGIN_INTO_GAME())));
+		writeFixture(outDir.resolve("SM_MAY_LOGIN_INTO_GAME.json"), "SM_MAY_LOGIN_INTO_GAME", null, smMayLogin);
+
+		List<Case> smQuestionWindow = new ArrayList<>();
+		smQuestionWindow.add(new Case("withParam",
+			"{\"code\":50028,\"senderId\":700500,\"rangeOrCooldownSeconds\":30,\"params\":[\"Vaizel\"]}",
+			capture(new SM_QUESTION_WINDOW(50028, 700500, 30, "Vaizel"))));
+		smQuestionWindow.add(new Case("noParam",
+			"{\"code\":60000,\"senderId\":0,\"rangeOrCooldownSeconds\":0,\"params\":[]}",
+			capture(new SM_QUESTION_WINDOW(60000, 0, 0))));
+		writeFixture(outDir.resolve("SM_QUESTION_WINDOW.json"), "SM_QUESTION_WINDOW", null, smQuestionWindow);
+
+		List<Case> smInstanceStageInfo = new ArrayList<>();
+		smInstanceStageInfo.add(new Case("event",
+			"{\"type\":2,\"event\":17,\"unk\":1}",
+			capture(new SM_INSTANCE_STAGE_INFO(2, 17, 1))));
+		smInstanceStageInfo.add(new Case("zero",
+			"{\"type\":0,\"event\":0,\"unk\":0}",
+			capture(new SM_INSTANCE_STAGE_INFO(0, 0, 0))));
+		writeFixture(outDir.resolve("SM_INSTANCE_STAGE_INFO.json"), "SM_INSTANCE_STAGE_INFO", null, smInstanceStageInfo);
+
+		List<Case> smFortressInfo = new ArrayList<>();
+		smFortressInfo.add(new Case("teleportOn",
+			"{\"locationId\":1011,\"teleportStatus\":true}",
+			capture(new SM_FORTRESS_INFO(1011, true))));
+		smFortressInfo.add(new Case("teleportOff",
+			"{\"locationId\":1221,\"teleportStatus\":false}",
+			capture(new SM_FORTRESS_INFO(1221, false))));
+		writeFixture(outDir.resolve("SM_FORTRESS_INFO.json"), "SM_FORTRESS_INFO", null, smFortressInfo);
+
+		List<Case> smLeaveGroupMember = new ArrayList<>();
+		smLeaveGroupMember.add(new Case("leave",
+			"{}",
+			capture(new SM_LEAVE_GROUP_MEMBER())));
+		writeFixture(outDir.resolve("SM_LEAVE_GROUP_MEMBER.json"), "SM_LEAVE_GROUP_MEMBER", null, smLeaveGroupMember);
+
+		List<Case> smShieldEffect = new ArrayList<>();
+		smShieldEffect.add(new Case("empty",
+			"{\"locations\":[]}",
+			capture(new SM_SHIELD_EFFECT(new java.util.ArrayList<com.aionemu.gameserver.model.siege.SiegeLocation>()))));
+		writeFixture(outDir.resolve("SM_SHIELD_EFFECT.json"), "SM_SHIELD_EFFECT", null, smShieldEffect);
 	}
 
 	/** Capture the payload bytes a packet's writeImpl produces (no opcode, no crypt). */
