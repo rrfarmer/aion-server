@@ -482,6 +482,59 @@ public class GoldenPacketFixtureGeneratorTest {
 			"{\"locations\":[]}",
 			capture(new SM_SHIELD_EFFECT(new java.util.ArrayList<com.aionemu.gameserver.model.siege.SiegeLocation>()))));
 		writeFixture(outDir.resolve("SM_SHIELD_EFFECT.json"), "SM_SHIELD_EFFECT", null, smShieldEffect);
+
+		// ---- SM_TOLL_INFO(long): writeQ(tollCount). Pure scalar. ----
+		List<Case> smTollInfo = new ArrayList<>();
+		smTollInfo.add(new Case("zero",
+			"{\"tollCount\":0}",
+			capture(new SM_TOLL_INFO(0L))));
+		smTollInfo.add(new Case("typical",
+			"{\"tollCount\":123456789}",
+			capture(new SM_TOLL_INFO(123456789L))));
+		smTollInfo.add(new Case("large",
+			"{\"tollCount\":9223372036854775807}",
+			capture(new SM_TOLL_INFO(9223372036854775807L))));
+		writeFixture(outDir.resolve("SM_TOLL_INFO.json"), "SM_TOLL_INFO", null, smTollInfo);
+
+		// ---- SM_INSTANCE_COUNT_INFO(int,int): writeD(mapId) writeD(instanceId) writeD(1). Pure scalar. ----
+		List<Case> smInstanceCountInfo = new ArrayList<>();
+		smInstanceCountInfo.add(new Case("default",
+			"{\"mapId\":300100000,\"instanceId\":7}",
+			capture(new SM_INSTANCE_COUNT_INFO(300100000, 7))));
+		writeFixture(outDir.resolve("SM_INSTANCE_COUNT_INFO.json"), "SM_INSTANCE_COUNT_INFO", null, smInstanceCountInfo);
+
+		// ---- SM_STATS_STATUS_UNK(int lvl,int points): lvl==50 conditional branch. Pure scalar. ----
+		List<Case> smStatsStatusUnk = new ArrayList<>();
+		smStatsStatusUnk.add(new Case("level50",
+			"{\"lvl\":50,\"points\":12}",
+			capture(new SM_STATS_STATUS_UNK(50, 12))));
+		smStatsStatusUnk.add(new Case("other",
+			"{\"lvl\":65,\"points\":3}",
+			capture(new SM_STATS_STATUS_UNK(65, 3))));
+		writeFixture(outDir.resolve("SM_STATS_STATUS_UNK.json"), "SM_STATS_STATUS_UNK", null, smStatsStatusUnk);
+
+		// ---- SM_PACKAGE_INFO_NOTIFY(): constant payload. ----
+		List<Case> smPackageInfoNotify = new ArrayList<>();
+		smPackageInfoNotify.add(new Case("constant",
+			"{}",
+			capture(new SM_PACKAGE_INFO_NOTIFY())));
+		writeFixture(outDir.resolve("SM_PACKAGE_INFO_NOTIFY.json"), "SM_PACKAGE_INFO_NOTIFY", null, smPackageInfoNotify);
+
+		// ---- SM_ACTION_ANIMATION(int,ActionAnimation,int): writeD(target) writeH(animId) writeD(levelOrObjectId). ----
+		List<Case> smActionAnimation = new ArrayList<>();
+		smActionAnimation.add(new Case("levelUp",
+			"{\"targetObjectId\":700001,\"actionAnimation\":\"LEVEL_UP\",\"levelOrObjectId\":50}",
+			capture(new SM_ACTION_ANIMATION(700001,
+				com.aionemu.gameserver.model.animations.ActionAnimation.LEVEL_UP, 50))));
+		smActionAnimation.add(new Case("bindKisk",
+			"{\"targetObjectId\":800002,\"actionAnimation\":\"BIND_KISK\",\"levelOrObjectId\":0}",
+			capture(new SM_ACTION_ANIMATION(800002,
+				com.aionemu.gameserver.model.animations.ActionAnimation.BIND_KISK))));
+		smActionAnimation.add(new Case("craftLevelUp",
+			"{\"targetObjectId\":900003,\"actionAnimation\":\"CRAFT_LEVEL_UP\",\"levelOrObjectId\":12345}",
+			capture(new SM_ACTION_ANIMATION(900003,
+				com.aionemu.gameserver.model.animations.ActionAnimation.CRAFT_LEVEL_UP, 12345))));
+		writeFixture(outDir.resolve("SM_ACTION_ANIMATION.json"), "SM_ACTION_ANIMATION", null, smActionAnimation);
 	}
 
 	/** Capture the payload bytes a packet's writeImpl produces (no opcode, no crypt). */

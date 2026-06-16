@@ -47,6 +47,41 @@ public class GoldenFormulaFixtureGeneratorTest {
 		generateAbyssGetRankForPoints(outDir);
 		generateAbyssGetRankById(outDir);
 		generateLimit(outDir);
+		generateAbyssRankTableGetters(outDir);
+	}
+
+	// AbyssRankEnum per-rank table getters — each reads ONLY the enum constant's own immutable fields
+	// (no Player/Race/config/random). Captures every rank for each getter so the entire abyss-rank
+	// table is pinned bilaterally. The 'rank' input is the enum NAME; the C# side resolves it via
+	// Enum.Parse<AbyssRankEnum> and calls the matching extension getter.
+	// NOTE: getGpLossPerDay()/getQuota() are intentionally EXCLUDED — they read RankingConfig static
+	// maps (not pure), which would make the fixture config-dependent.
+	private static void generateAbyssRankTableGetters(Path outDir) throws IOException {
+		String[][] getters = {
+			{ "getId",          "AbyssRankEnum.getId",          "int getId()" },
+			{ "getPointsLost",  "AbyssRankEnum.getPointsLost",  "int getPointsLost()" },
+			{ "getPointsGained","AbyssRankEnum.getPointsGained","int getPointsGained()" },
+			{ "getRequiredAP",  "AbyssRankEnum.getRequiredAP",  "int getRequiredAP()" },
+			{ "getRequiredGP",  "AbyssRankEnum.getRequiredGP",  "int getRequiredGP()" },
+		};
+		for (String[] g : getters) {
+			List<Case> cases = new ArrayList<>();
+			for (AbyssRankEnum r : AbyssRankEnum.values()) {
+				Map<String, Object> args = new LinkedHashMap<>();
+				args.put("rank", quote(r.name()));
+				long value;
+				switch (g[0]) {
+					case "getId": value = r.getId(); break;
+					case "getPointsLost": value = r.getPointsLost(); break;
+					case "getPointsGained": value = r.getPointsGained(); break;
+					case "getRequiredAP": value = r.getRequiredAP(); break;
+					case "getRequiredGP": value = r.getRequiredGP(); break;
+					default: throw new IllegalStateException(g[0]);
+				}
+				cases.add(Case.ofLong(args, value));
+			}
+			writeFixture(outDir.resolve(g[1] + ".json"), g[1], g[2], cases);
+		}
 	}
 
 	// StatFunctions.limit(StatEnum, float) — Math.min(StatCapUtil.getDifferenceLimit(stat), value).
