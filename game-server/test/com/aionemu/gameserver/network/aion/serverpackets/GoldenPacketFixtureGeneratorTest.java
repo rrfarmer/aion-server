@@ -325,6 +325,98 @@ public class GoldenPacketFixtureGeneratorTest {
 			"{\"recipeIds\":[]}",
 			capture(new SM_RECIPE_LIST(new java.util.LinkedHashSet<>()))));
 		writeFixture(outDir.resolve("SM_RECIPE_LIST.json"), "SM_RECIPE_LIST", null, smRecipeList);
+
+		// ----- Batch 3: faithful SM_* packets (AionServerPacket writeImpl reads only ctor args) -----
+
+		List<Case> smUseObject = new ArrayList<>();
+		smUseObject.add(new Case("use",
+			"{\"playerObjId\":1001,\"targetObjId\":2002,\"time\":3000,\"actionType\":1}",
+			capture(new SM_USE_OBJECT(1001, 2002, 3000, 1))));
+		smUseObject.add(new Case("stop",
+			"{\"playerObjId\":4004,\"targetObjId\":0,\"time\":0,\"actionType\":0}",
+			capture(new SM_USE_OBJECT(4004, 0, 0, 0))));
+		writeFixture(outDir.resolve("SM_USE_OBJECT.json"), "SM_USE_OBJECT", null, smUseObject);
+
+		List<Case> smPong = new ArrayList<>();
+		smPong.add(new Case("pong",
+			"{}",
+			capture(new SM_PONG())));
+		writeFixture(outDir.resolve("SM_PONG.json"), "SM_PONG", null, smPong);
+
+		List<Case> smPingResponse = new ArrayList<>();
+		smPingResponse.add(new Case("ping",
+			"{}",
+			capture(new SM_PING_RESPONSE())));
+		writeFixture(outDir.resolve("SM_PING_RESPONSE.json"), "SM_PING_RESPONSE", null, smPingResponse);
+
+		List<Case> smPositionSelf = new ArrayList<>();
+		smPositionSelf.add(new Case("position",
+			"{\"x\":1234.5,\"y\":6789.0,\"z\":250.25,\"heading\":60}",
+			capture(new SM_POSITION_SELF(1234.5f, 6789.0f, 250.25f, (byte) 60))));
+		smPositionSelf.add(new Case("origin",
+			"{\"x\":0.0,\"y\":0.0,\"z\":0.0,\"heading\":0}",
+			capture(new SM_POSITION_SELF(0.0f, 0.0f, 0.0f, (byte) 0))));
+		writeFixture(outDir.resolve("SM_POSITION_SELF.json"), "SM_POSITION_SELF", null, smPositionSelf);
+
+		List<Case> smSummonUseSkill = new ArrayList<>();
+		smSummonUseSkill.add(new Case("useSkill",
+			"{\"summonId\":700001,\"skillId\":1601,\"skillLvl\":5,\"targetId\":800002}",
+			capture(new SM_SUMMON_USESKILL(700001, 1601, 5, 800002))));
+		writeFixture(outDir.resolve("SM_SUMMON_USESKILL.json"), "SM_SUMMON_USESKILL", null, smSummonUseSkill);
+
+		List<Case> smIconInfo = new ArrayList<>();
+		smIconInfo.add(new Case("display",
+			"{\"buffId\":12345,\"display\":true}",
+			capture(new SM_ICON_INFO(12345, true))));
+		smIconInfo.add(new Case("hide",
+			"{\"buffId\":0,\"display\":false}",
+			capture(new SM_ICON_INFO(0, false))));
+		writeFixture(outDir.resolve("SM_ICON_INFO.json"), "SM_ICON_INFO", null, smIconInfo);
+
+		List<Case> smAscensionMorph = new ArrayList<>();
+		smAscensionMorph.add(new Case("morph",
+			"{\"inascension\":1}",
+			capture(new SM_ASCENSION_MORPH(1))));
+		smAscensionMorph.add(new Case("none",
+			"{\"inascension\":0}",
+			capture(new SM_ASCENSION_MORPH(0))));
+		writeFixture(outDir.resolve("SM_ASCENSION_MORPH.json"), "SM_ASCENSION_MORPH", null, smAscensionMorph);
+
+		List<Case> smQuestRepeat = new ArrayList<>();
+		smQuestRepeat.add(new Case("multiple",
+			"{\"repeatableQuests\":[15001,15002,15003]}",
+			capture(new SM_QUEST_REPEAT(java.util.Arrays.asList(15001, 15002, 15003)))));
+		smQuestRepeat.add(new Case("empty",
+			"{\"repeatableQuests\":[]}",
+			capture(new SM_QUEST_REPEAT(new java.util.ArrayList<>()))));
+		writeFixture(outDir.resolve("SM_QUEST_REPEAT.json"), "SM_QUEST_REPEAT", null, smQuestRepeat);
+
+		List<Case> smSecurityToken = new ArrayList<>();
+		smSecurityToken.add(new Case("token",
+			"{\"token\":[1,2,3,4,255]}",
+			capture(new SM_SECURITY_TOKEN(new byte[] { 1, 2, 3, 4, (byte) 255 }))));
+		writeFixture(outDir.resolve("SM_SECURITY_TOKEN.json"), "SM_SECURITY_TOKEN", null, smSecurityToken);
+
+		List<Case> smMotion = new ArrayList<>();
+		smMotion.add(new Case("add",
+			"{\"ctor\":\"motionId_remainingTime\",\"motionId\":1001,\"remainingTime\":3600}",
+			capture(new SM_MOTION((short) 1001, 3600))));
+		smMotion.add(new Case("set",
+			"{\"ctor\":\"motionId_type\",\"motionId\":1002,\"type\":3}",
+			capture(new SM_MOTION((short) 1002, (byte) 3))));
+		smMotion.add(new Case("remove",
+			"{\"ctor\":\"motionId\",\"motionId\":1003}",
+			capture(new SM_MOTION((short) 1003))));
+		writeFixture(outDir.resolve("SM_MOTION_SCALAR.json"), "SM_MOTION", null, smMotion);
+
+		List<Case> smMacroResult = new ArrayList<>();
+		smMacroResult.add(new Case("created",
+			"{\"code\":0}",
+			capture(SM_MACRO_RESULT.SM_MACRO_CREATED)));
+		smMacroResult.add(new Case("deleted",
+			"{\"code\":1}",
+			capture(SM_MACRO_RESULT.SM_MACRO_DELETED)));
+		writeFixture(outDir.resolve("SM_MACRO_RESULT.json"), "SM_MACRO_RESULT", null, smMacroResult);
 	}
 
 	/** Capture the payload bytes a packet's writeImpl produces (no opcode, no crypt). */
