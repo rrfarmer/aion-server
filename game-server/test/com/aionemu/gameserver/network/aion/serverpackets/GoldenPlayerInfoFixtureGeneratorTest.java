@@ -142,6 +142,73 @@ public class GoldenPlayerInfoFixtureGeneratorTest {
 		writeFixture(outDir.resolve("SM_PLAYER_INFO.json"), "SM_PLAYER_INFO", cases);
 	}
 
+	/**
+	 * Player-only SCALAR SM_* packets whose writeImpl reads ONLY deterministic, fixed HarnessPlayer fields (objectId,
+	 * pinned robotId, null target -> 0, empty inventory -> no ticket). No DataManager/World/singletons/time/Rnd/live
+	 * Knownlist beyond the fixed harness. Reuses the exact SM_PLAYER_INFO HarnessPlayer construction. Java is the oracle.
+	 *
+	 * <ul>
+	 * <li>SM_PLAYER_STANCE: writeD(objId) + writeC(state) — state is a constructor scalar.</li>
+	 * <li>SM_RIDE_ROBOT: writeD(objId) + writeD(robotId) — robotId is an explicit constructor scalar.</li>
+	 * <li>SM_PLASTIC_SURGERY: writeD(objId) + writeC(hasTicket?1:2) + writeC(isGenderSwitch?1:0). hasTicket is computed
+	 *     from checkOrRemoveTicket(player,..,false) which only reads getInventory().getItemCountByItemId(); the harness
+	 *     inventory is empty -> hasTicket deterministically false on both sides.</li>
+	 * <li>SM_TARGET_UPDATE: writeD(objId) + writeD(target==null?0:target.objId). The harness never sets a target, so
+	 *     getTarget() (a plain VisibleObject field default null) yields 0 deterministically — no controller needed.</li>
+	 * </ul>
+	 */
+	@Test
+	public void generateGoldenPlayerScalarPacketFixtures() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installIntegrationSeam();
+
+		writeFixture(outDir.resolve("SM_PLAYER_STANCE.json"), "SM_PLAYER_STANCE", List.of(
+			scalarCase("stanceOff", scalarSpec(), p -> "{\"objectId\":" + p.getObjectId() + ",\"state\":0}", p -> new SM_PLAYER_STANCE(p, 0)),
+			scalarCase("stanceFlight", scalarSpec(), p -> "{\"objectId\":" + p.getObjectId() + ",\"state\":1}", p -> new SM_PLAYER_STANCE(p, 1)),
+			scalarCase("stanceStationary", scalarSpec(), p -> "{\"objectId\":" + p.getObjectId() + ",\"state\":2}", p -> new SM_PLAYER_STANCE(p, 2))));
+
+		writeFixture(outDir.resolve("SM_RIDE_ROBOT.json"), "SM_RIDE_ROBOT", List.of(
+			scalarCase("rideRobotMount", scalarSpec(), p -> "{\"objectId\":" + p.getObjectId() + ",\"robotId\":700123}", p -> new SM_RIDE_ROBOT(p, 700123)),
+			scalarCase("rideRobotDismount", scalarSpec(), p -> "{\"objectId\":" + p.getObjectId() + ",\"robotId\":0}", p -> new SM_RIDE_ROBOT(p, 0))));
+
+		writeFixture(outDir.resolve("SM_PLASTIC_SURGERY.json"), "SM_PLASTIC_SURGERY", List.of(
+			scalarCase("plasticSurgeryAppearance", scalarSpec(), p -> "{\"objectId\":" + p.getObjectId() + ",\"isGenderSwitch\":false}", p -> new SM_PLASTIC_SURGERY(p, false)),
+			scalarCase("plasticSurgeryGenderSwitch", scalarSpec(), p -> "{\"objectId\":" + p.getObjectId() + ",\"isGenderSwitch\":true}", p -> new SM_PLASTIC_SURGERY(p, true))));
+
+		writeFixture(outDir.resolve("SM_TARGET_UPDATE.json"), "SM_TARGET_UPDATE", List.of(
+			scalarCase("targetUpdateNoTarget", scalarSpec(), p -> "{\"objectId\":" + p.getObjectId() + "}", p -> new SM_TARGET_UPDATE(p))));
+	}
+
+	/** A single deterministic Elyos warrior spec reused for every scalar Player packet (identical fixed fields). */
+	private static PlayerSpec scalarSpec() {
+		TreeMap<StatEnum, Integer> stats = new TreeMap<>();
+		stats.put(StatEnum.MAXHP, 1200);
+		stats.put(StatEnum.MAXMP, 800);
+		stats.put(StatEnum.FLY_TIME, 60);
+		stats.put(StatEnum.MAXDP, 4000);
+		PlayerSpec spec = new PlayerSpec(100777, (byte) 10, Race.ELYOS, Gender.MALE, PlayerClass.WARRIOR, stats);
+		spec.name = "Scalarharness";
+		spec.note = "";
+		spec.dp = 0;
+		spec.currentHp = 1200;
+		spec.currentMp = 800;
+		spec.currentFp = 60;
+		spec.mapId = 220020000;
+		spec.x = 100.5f;
+		spec.y = 200.25f;
+		spec.z = 300.75f;
+		spec.heading = (byte) 30;
+		return spec;
+	}
+
+	private static Case scalarCase(String name, PlayerSpec spec, java.util.function.Function<Player, String> inputs,
+			java.util.function.Function<Player, AionServerPacket> build) {
+		HarnessPlayer player = new HarnessPlayer(spec);
+		return new Case(name, inputs.apply(player), capture(build.apply(player), null));
+	}
+
 	// ---- integration seam ----
 
 	private void installIntegrationSeam() {
