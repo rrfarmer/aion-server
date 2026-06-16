@@ -2,7 +2,73 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
-## PART A VERDICT — SPAWNS_DATA: NPC spawning is SILENTLY BROKEN (0 regular NPCs spawn at boot)
+## RESOLVED — NpcSpawnTable dead-island retired (commit ec289dc00, 2026-06-16)
+
+SPAWNS_DATA is now live-loaded (commit ae2e25a54), so the reworked spawn projection was orphaned and is
+DELETED: `NpcSpawnTable`/`NpcRiftSpawnTable`/`NpcVortexSpawnTable` + their `*Summary` records +
+`TemporarySpawnSchedule` (NpcSpawnTable.cs gone), the 4 spawn builder classes (StaticData.Builders.cs),
+the StaticData streaming-spawn reader blocks (spawn_map/spawn/spot/rift_spawn/vortex_spawn/state_type/
+temporary_spawn) + their ctor params / properties / build-call / locals, the now-orphaned
+`ReadVortexStateTypeAttribute` helper (StaticData.Helpers.cs), and the slop `TemporarySpawnScheduleTests`.
+0-consumer proof: grep PascalCase whole tree found only the island's own definition/builder/reader/test.
+`VortexStateType` (Model/Vortex, faithful) and the generic Read*Attribute helpers were KEPT (shared).
+Build 0, golden 167/167, bootstrap 7/7, RealStaticDataLoad green. 1140 deletions.
+
+## PART B VERDICT — Housing SmHouse* subsystem = DEAD-ISLAND, clean-deletable NEXT TICK
+
+Same shape as the proven NpcTemplateSummary / SkillTemplateSummary / ItemTemplateSummary / NpcSpawnTable
+dead-islands: a reworked golden-blind projection running in parallel to a fully faithful pillar that is the
+live path. Verified READ-ONLY (grep PascalCase whole src+tests).
+
+### Per-element 0-consumer proof
+- **Reworked SmHouse* packets** (PascalCase): `SmHouseRegistry`, `SmHouseBids`, `SmHouseEdit`,
+  `SmObjectUseUpdate` — NONE are in the opcode table; ZERO external `new SmHouse*()` senders.
+  `SmHouseRegistry.CreateRegisteredObjects`/`SmHouseBids.*`/`SmHouseEdit`/`SmObjectUseUpdate` are referenced
+  only inside their own files (self-recursive factories). The FAITHFUL SCREAMING_CASE packets own the
+  opcodes and are the live senders, 1:1 with Java:
+  - `SM_HOUSE_EDIT` (opcode 82) — sent by CM_HOUSE_EDIT, CM_HOUSE_DECORATE, HouseObject, DyeAction.
+  - `SM_HOUSE_REGISTRY` (opcode 116) — sent by CM_HOUSE_EDIT.
+  - `SM_HOUSE_BIDS` (opcode 256) — sent by CM_GET_HOUSE_BIDS.
+  - `SM_OBJECT_USE_UPDATE` (opcode 264) — sent by PostboxObject, StorageObject, UseableItemObject.
+- **`HousingObjectTemplateTable` / `HousingObjectTemplateSummary`**: built in StaticData (ctor param :48,
+  property :186, list :789, reader :1636-, build-call :2229) but `.HousingObjectTemplates` has ZERO readers.
+  Faithful `DataManager.HOUSING_OBJECT_DATA => SD.HousingObjectDataDh` (HousingObjectData) is the live path.
+- **`IHousingRepository` / `MySqlHousingRepository` / `EmptyHousingRepository`** (Data/HousingRepository.cs):
+  DI-registered in Program.cs:97 (`AddSingleton<IHousingRepository, MySqlHousingRepository>`) but NO
+  injection point anywhere — no ctor param, no `GetService<IHousingRepository>`, no field. Its async
+  LoadWorld*/etc. methods have 0 live callers. Faithful `PlayerRegisteredItemsDAO` (Dao/) is the live
+  registry persistence path (used by faithful HouseRegistry/House/HouseObjectFactory).
+- **`HouseRegistryEntries`** (Model/GameObjects): read by NOTHING outside itself; its `GetSpawnedObjects`/
+  `GetNotSpawnedObjects` take the reworked `PlayerHouse` record. The live faithful path is
+  `HousingService.FindPlayerHouses` -> `List<House>` (faithful House/HouseRegistry), called by
+  Player.Part4.cs:362.
+- **`PlayerHouse`** (reworked record): referenced only by HouseRegistryEntries + itself. Faithful `House`
+  is the live type.
+- **Support summary types** `RegisteredHouseObjectSummary` / `HouseRegistrySummary` /
+  `PlacedHouseObjectSummary`: referenced only within the island (SmHouse*/HouseRegistryEntries/PlayerHouse/
+  HousingObjectTemplateTable) + ONE bleed: faithful `HousingTemplateTable.GetDecorIds(int, HouseRegistrySummary?)`
+  — but `GetDecorIds` itself has 0 callers, so that method is island-coupled dead code.
+
+### Clean-delete file/edit list (safe to execute next tick, all-green-or-revert)
+- DELETE: `Network/Aion/ServerPackets/SmHouseRegistry.cs`, `SmHouseBids.cs`, `SmHouseEdit.cs`,
+  `SmObjectUseUpdate.cs` (+ check `SmHousePayRent.cs`/`SmHouseObjects.cs`/`SmHouseAcquire.cs` —
+  same PascalCase pattern, grep senders before deleting each).
+- DELETE: `Dataholders/HousingObjectTemplateTable.cs` (+ `HousingObjectTemplateSummary` + the support
+  summary records if co-located).
+- DELETE: `Data/HousingRepository.cs` (IHousingRepository + Empty + MySql) + remove Program.cs:97 DI line.
+- DELETE: `Model/GameObjects/HouseRegistryEntries.cs` + `Model/GameObjects/PlayerHouse.cs`.
+- EDIT (relocate-or-remove, ItemStatModifier precedent): remove the `housing_objects` reader block +
+  `HousingObjectTemplateTable` ctor-param/property/list/build-call from StaticData.cs/.Builders.cs/.Helpers.cs;
+  remove `HousingTemplateTable.GetDecorIds(int, HouseRegistrySummary?)` (0-caller, island-coupled). KEEP
+  faithful HousingTemplateTable/HousingService/HouseController/HouseRegistry/House/HouseData/
+  PlayerRegisteredItemsDAO/HousingObjectData and ALL SM_HOUSE_*/SM_OBJECT_USE_UPDATE faithful packets.
+- DELETE any slop-test-of-slop for these (grep tests/ for the reworked type names before executing).
+
+VERDICT: **DEAD-ISLAND — do-next-tick clean delete, no user go-ahead required.** No live consumer; faithful
+pillar already owns every opcode + the registry persistence + the template data. One care-point: scope the
+StaticData/HousingTemplateTable edits to the island-coupled members only (the file itself is faithful/live).
+
+## (historical) SPAWNS_DATA: NPC spawning was SILENTLY BROKEN (0 regular NPCs spawn at boot) — now FIXED upstream
 
 `SpawnEngine.SpawnAll()` IS wired at boot (GameServerBootstrapService, after RiftService.InitRiftLocations,
 before InitRifts) and is a faithful 1:1 port of Java spawnAll. It iterates `DataManager.WORLD_MAPS_DATA`
@@ -93,4 +159,5 @@ DEFERRED:
 2. **CronJobService cron-config-transform** — port SiegeConfig cron-schedule property transform so
    CronJobService can be wired faithfully.
 3. **DatabaseCleaningService thread-1 utility-init seam** — only if a faithful pre-boot utility phase is added.
-4. **Housing SmHouse* subsystem** — (pre-existing gate, unchanged).
+4. **Housing SmHouse* subsystem** — RESOLVED to DEAD-ISLAND (see PART B VERDICT above). Clean-delete
+   next tick, NO user go-ahead needed; all-green-or-revert.
