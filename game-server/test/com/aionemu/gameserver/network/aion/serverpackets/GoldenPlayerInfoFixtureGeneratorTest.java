@@ -181,6 +181,89 @@ public class GoldenPlayerInfoFixtureGeneratorTest {
 			scalarCase("targetUpdateNoTarget", scalarSpec(), p -> "{\"objectId\":" + p.getObjectId() + "}", p -> new SM_TARGET_UPDATE(p))));
 	}
 
+	/**
+	 * More Player SM_* packets that read a bounded amount of extra deterministic state on top of the scalar HarnessPlayer.
+	 * Each pins ONLY the exact fields its writeImpl reads (identical fixed values on both sides); no DataManager lookups
+	 * beyond the existing harness, no World/Knownlist/singletons/time/Rnd.
+	 *
+	 * <ul>
+	 * <li>SM_ABYSS_RANK_UPDATE(action, player): writeC(action) + writeD(objId) + (action 0 -> getAbyssRank().getRank().getId()
+	 *     == 1 for the pinned GRADE9_SOLDIER; action 1 -> getCurrentTeamId() == 0 with no team; action 2 -> isMentor()?1:0,
+	 *     a plain bool field default false). Fully deterministic with the existing harness; no con.</li>
+	 * <li>SM_ABYSS_RANK(player, rankingListPosition): reads ONLY the AbyssRank's plain scalar fields (ap/gp/rank/kills) plus
+	 *     the explicit rankingListPosition (passed in -> no AbyssRankingCache singleton). We pin a fixed set of AbyssRank
+	 *     scalar fields identically on both sides for a non-trivial payload; no con.</li>
+	 * <li>SM_PLAYER_SEARCH(players): reads con.getActivePlayer() (the same uninitialized-connection seam SM_PLAYER_INFO
+	 *     uses) and per-player scalar fields (world/pos/class/gender/level, group-status flags default false, getName(true)
+	 *     -> pcd name). A single-element list of the scalar HarnessPlayer.</li>
+	 * </ul>
+	 */
+	@Test
+	public void generateGoldenPlayerExtraPacketFixtures() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installIntegrationSeam();
+
+		writeFixture(outDir.resolve("SM_ABYSS_RANK_UPDATE.json"), "SM_ABYSS_RANK_UPDATE", List.of(
+			scalarCase("abyssRankUpdateRank", scalarSpec(), p -> "{\"objectId\":" + p.getObjectId() + ",\"action\":0}", p -> new SM_ABYSS_RANK_UPDATE(0, p)),
+			scalarCase("abyssRankUpdateTeam", scalarSpec(), p -> "{\"objectId\":" + p.getObjectId() + ",\"action\":1}", p -> new SM_ABYSS_RANK_UPDATE(1, p)),
+			scalarCase("abyssRankUpdateMentor", scalarSpec(), p -> "{\"objectId\":" + p.getObjectId() + ",\"action\":2}", p -> new SM_ABYSS_RANK_UPDATE(2, p))));
+
+		writeFixture(outDir.resolve("SM_ABYSS_RANK.json"), "SM_ABYSS_RANK", List.of(
+			abyssRankCase("abyssRankPinned", 12345)));
+
+		writeFixture(outDir.resolve("SM_PLAYER_SEARCH.json"), "SM_PLAYER_SEARCH", List.of(
+			playerSearchCase("playerSearchSingle")));
+	}
+
+	/** Fixed AbyssRank scalar pins (identical on both sides), explicit rankingListPosition -> no AbyssRankingCache. */
+	private static Case abyssRankCase(String name, int rankingListPosition) {
+		HarnessPlayer player = new HarnessPlayer(scalarSpec());
+		pinAbyssRankScalars(player.getAbyssRank());
+		String inputs = "{\"objectId\":" + player.getObjectId() + ",\"rankingListPosition\":" + rankingListPosition + "}";
+		return new Case(name, inputs, capture(new SM_ABYSS_RANK(player, rankingListPosition), null));
+	}
+
+	/** Pin a fixed, non-trivial set of AbyssRank scalar fields the packet reads; identical values on the C# side. */
+	private static void pinAbyssRankScalars(AbyssRank rank) {
+		setAbyssIntField(rank, "currentAp", 1000000);
+		setAbyssIntField(rank, "currentGp", 50000);
+		setAbyssIntField(rank, "allKill", 1234);
+		setAbyssIntField(rank, "maxRank", 7);
+		setAbyssIntField(rank, "dailyKill", 12);
+		setAbyssIntField(rank, "dailyAP", 3000);
+		setAbyssIntField(rank, "dailyGP", 400);
+		setAbyssIntField(rank, "weeklyKill", 56);
+		setAbyssIntField(rank, "weeklyAP", 80000);
+		setAbyssIntField(rank, "weeklyGP", 9000);
+		setAbyssIntField(rank, "lastKill", 7);
+		setAbyssIntField(rank, "lastAP", 200);
+		setAbyssIntField(rank, "lastGP", 30);
+	}
+
+	private static void setAbyssIntField(AbyssRank rank, String name, int value) {
+		try {
+			Field f = AbyssRank.class.getDeclaredField(name);
+			f.setAccessible(true);
+			f.setInt(rank, value);
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to pin AbyssRank." + name, e);
+		}
+	}
+
+	/** Single-element player-search list on the same uninitialized-connection seam SM_PLAYER_INFO uses. */
+	private static Case playerSearchCase(String name) {
+		PlayerSpec spec = scalarSpec();
+		HarnessPlayer found = new HarnessPlayer(spec);
+		HarnessPlayer activePlayer = new HarnessPlayer(spec.activePlayerSpec());
+		AionConnection con = newConnectionWithActivePlayer(activePlayer);
+		List<Player> players = new ArrayList<>();
+		players.add(found);
+		String inputs = "{\"objectId\":" + found.getObjectId() + "}";
+		return new Case(name, inputs, capture(new SM_PLAYER_SEARCH(players), con));
+	}
+
 	/** A single deterministic Elyos warrior spec reused for every scalar Player packet (identical fixed fields). */
 	private static PlayerSpec scalarSpec() {
 		TreeMap<StatEnum, Integer> stats = new TreeMap<>();
