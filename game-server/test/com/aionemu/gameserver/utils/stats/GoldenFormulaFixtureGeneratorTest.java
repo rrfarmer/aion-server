@@ -12,6 +12,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import com.aionemu.gameserver.model.stats.calc.StatCapUtil;
 import com.aionemu.gameserver.model.stats.container.StatEnum;
 import com.aionemu.gameserver.model.templates.npc.NpcRating;
 
@@ -48,6 +49,88 @@ public class GoldenFormulaFixtureGeneratorTest {
 		generateAbyssGetRankById(outDir);
 		generateLimit(outDir);
 		generateAbyssRankTableGetters(outDir);
+		generateXpRewardPercent(outDir);
+		generateDropRewardPercent(outDir);
+		generateXpLossTableGetters(outDir);
+		generateStatCapDifferenceLimit(outDir);
+	}
+
+	// XPRewardEnum.rewardPercent() — per-constant immutable field getter (no config/state). Pins the whole table.
+	private static void generateXpRewardPercent(Path outDir) throws IOException {
+		List<Case> cases = new ArrayList<>();
+		for (XPRewardEnum e : XPRewardEnum.values()) {
+			Map<String, Object> args = new LinkedHashMap<>();
+			args.put("entry", quote(e.name()));
+			cases.add(Case.ofLong(args, e.rewardPercent()));
+		}
+		writeFixture(outDir.resolve("XPRewardEnum.rewardPercent.json"),
+			"XPRewardEnum.rewardPercent",
+			"int rewardPercent()",
+			cases);
+	}
+
+	// DropRewardEnum.rewardPercent() — per-constant immutable field getter (no config/state). Pins the whole table.
+	private static void generateDropRewardPercent(Path outDir) throws IOException {
+		List<Case> cases = new ArrayList<>();
+		for (DropRewardEnum e : DropRewardEnum.values()) {
+			Map<String, Object> args = new LinkedHashMap<>();
+			args.put("entry", quote(e.name()));
+			cases.add(Case.ofLong(args, e.rewardPercent()));
+		}
+		writeFixture(outDir.resolve("DropRewardEnum.rewardPercent.json"),
+			"DropRewardEnum.rewardPercent",
+			"int rewardPercent()",
+			cases);
+	}
+
+	// XPLossEnum.getLevel() (int) + getParam() (double) — per-constant immutable field getters (no config/state).
+	private static void generateXpLossTableGetters(Path outDir) throws IOException {
+		List<Case> levelCases = new ArrayList<>();
+		List<Case> paramCases = new ArrayList<>();
+		for (XPLossEnum e : XPLossEnum.values()) {
+			Map<String, Object> levelArgs = new LinkedHashMap<>();
+			levelArgs.put("entry", quote(e.name()));
+			levelCases.add(Case.ofLong(levelArgs, e.getLevel()));
+
+			Map<String, Object> paramArgs = new LinkedHashMap<>();
+			paramArgs.put("entry", quote(e.name()));
+			paramCases.add(Case.ofDouble(paramArgs, e.getParam()));
+		}
+		writeFixture(outDir.resolve("XPLossEnum.getLevel.json"),
+			"XPLossEnum.getLevel",
+			"int getLevel()",
+			levelCases);
+		writeFixture(outDir.resolve("XPLossEnum.getParam.json"),
+			"XPLossEnum.getParam",
+			"double getParam()",
+			paramCases);
+	}
+
+	// StatCapUtil.getDifferenceLimit(StatEnum) — reads only the arg + the immutable static diff-limit table.
+	// Covers every distinct bucket (500/900/300/400/2900/Integer.MAX_VALUE).
+	private static void generateStatCapDifferenceLimit(Path outDir) throws IOException {
+		List<Case> cases = new ArrayList<>();
+		StatEnum[] stats = {
+			StatEnum.BLOCK,                // 500
+			StatEnum.PHYSICAL_CRITICAL,    // 500
+			StatEnum.MAGICAL_CRITICAL,     // 500
+			StatEnum.MAGICAL_RESIST,       // 900
+			StatEnum.EVASION,              // 300
+			StatEnum.PARRY,                // 400
+			StatEnum.BOOST_MAGICAL_SKILL,  // 2900
+			StatEnum.MAXHP,                // Integer.MAX_VALUE (no entry)
+			StatEnum.SPEED,                // Integer.MAX_VALUE (no entry)
+			StatEnum.PHYSICAL_ATTACK,      // Integer.MAX_VALUE (no entry)
+		};
+		for (StatEnum stat : stats) {
+			Map<String, Object> args = new LinkedHashMap<>();
+			args.put("statEnum", quote(stat.name()));
+			cases.add(Case.ofLong(args, StatCapUtil.getDifferenceLimit(stat)));
+		}
+		writeFixture(outDir.resolve("StatCapUtil.getDifferenceLimit.json"),
+			"StatCapUtil.getDifferenceLimit",
+			"int getDifferenceLimit(StatEnum stat)",
+			cases);
 	}
 
 	// AbyssRankEnum per-rank table getters — each reads ONLY the enum constant's own immutable fields
@@ -323,26 +406,34 @@ public class GoldenFormulaFixtureGeneratorTest {
 		final Long numericResult;     // for int/long-returning methods
 		final String nameResult;      // for enum-returning methods (serialized by name)
 		final Integer floatBitsResult; // for float-returning methods (raw IEEE-754 bits)
+		final Long doubleBitsResult;   // for double-returning methods (raw IEEE-754 bits)
 
-		private Case(Map<String, Object> inputs, Long numericResult, String nameResult, Integer floatBitsResult) {
+		private Case(Map<String, Object> inputs, Long numericResult, String nameResult, Integer floatBitsResult, Long doubleBitsResult) {
 			this.inputs = inputs;
 			this.numericResult = numericResult;
 			this.nameResult = nameResult;
 			this.floatBitsResult = floatBitsResult;
+			this.doubleBitsResult = doubleBitsResult;
 		}
 
 		static Case ofLong(Map<String, Object> inputs, long result) {
-			return new Case(inputs, result, null, null);
+			return new Case(inputs, result, null, null, null);
 		}
 
 		static Case ofName(Map<String, Object> inputs, String name) {
-			return new Case(inputs, null, name, null);
+			return new Case(inputs, null, name, null, null);
 		}
 
 		// Float result serialized as raw IEEE-754 bits inside a tagged object so the C# reader
 		// can distinguish it from a plain numeric/enum result.
 		static Case ofFloat(Map<String, Object> inputs, float result) {
-			return new Case(inputs, null, null, Float.floatToRawIntBits(result));
+			return new Case(inputs, null, null, Float.floatToRawIntBits(result), null);
+		}
+
+		// Double result serialized as raw IEEE-754 bits (a JSON long) inside a tagged object so the
+		// C# reader can rebuild it BIT-EXACT via BitConverter.Int64BitsToDouble.
+		static Case ofDouble(Map<String, Object> inputs, double result) {
+			return new Case(inputs, null, null, null, Double.doubleToRawLongBits(result));
 		}
 
 		String resultJson() {
@@ -350,6 +441,8 @@ public class GoldenFormulaFixtureGeneratorTest {
 				return "\"result\": \"" + nameResult + "\"";
 			if (floatBitsResult != null)
 				return "\"result\": { \"floatBits\": " + floatBitsResult + " }";
+			if (doubleBitsResult != null)
+				return "\"result\": { \"doubleBits\": " + doubleBitsResult + " }";
 			return "\"result\": " + numericResult;
 		}
 	}

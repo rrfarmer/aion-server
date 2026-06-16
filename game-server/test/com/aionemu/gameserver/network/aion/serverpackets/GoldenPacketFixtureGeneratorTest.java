@@ -535,6 +535,117 @@ public class GoldenPacketFixtureGeneratorTest {
 			capture(new SM_ACTION_ANIMATION(900003,
 				com.aionemu.gameserver.model.animations.ActionAnimation.CRAFT_LEVEL_UP, 12345))));
 		writeFixture(outDir.resolve("SM_ACTION_ANIMATION.json"), "SM_ACTION_ANIMATION", null, smActionAnimation);
+
+		// ----- Batch 6: faithful pure value-ctor SM_* packets (writeImpl reads only ctor-stored scalars/strings/enums) -----
+
+		// SM_GAMEGUARD(int size): writeD(size) writeB(new byte[size]). Pure scalar.
+		List<Case> smGameguard = new ArrayList<>();
+		smGameguard.add(new Case("typical",
+			"{\"size\":16}",
+			capture(new SM_GAMEGUARD(16))));
+		smGameguard.add(new Case("zero",
+			"{\"size\":0}",
+			capture(new SM_GAMEGUARD(0))));
+		writeFixture(outDir.resolve("SM_GAMEGUARD.json"), "SM_GAMEGUARD", null, smGameguard);
+
+		// SM_CAPTCHA: type 1 (count,data) and type 3 (isCorrect,banTime). Pure scalars/bytes.
+		List<Case> smCaptcha = new ArrayList<>();
+		smCaptcha.add(new Case("challenge",
+			"{\"ctor\":\"count_data\",\"count\":2,\"data\":[10,20,255,0]}",
+			capture(new SM_CAPTCHA(2, new byte[] { 10, 20, (byte) 255, 0 }))));
+		smCaptcha.add(new Case("resultCorrect",
+			"{\"ctor\":\"isCorrect_banTime\",\"isCorrect\":true,\"banTime\":3000}",
+			capture(new SM_CAPTCHA(true, 3000))));
+		smCaptcha.add(new Case("resultWrong",
+			"{\"ctor\":\"isCorrect_banTime\",\"isCorrect\":false,\"banTime\":0}",
+			capture(new SM_CAPTCHA(false, 0))));
+		writeFixture(outDir.resolve("SM_CAPTCHA.json"), "SM_CAPTCHA", null, smCaptcha);
+
+		// SM_MEGAPHONE(FactionLabel, senderName, message, itemId): writeS/writeS/writeD/writeC(faction.id).
+		// faction.id is derived from Race.getRaceId() (immutable enum) on both sides.
+		List<Case> smMegaphone = new ArrayList<>();
+		smMegaphone.add(new Case("elyos",
+			"{\"faction\":\"ELYOS\",\"senderName\":\"Nezekan\",\"message\":\"Hello Atreia\",\"itemId\":188052612}",
+			capture(new SM_MEGAPHONE(SM_MEGAPHONE.FactionLabel.ELYOS, "Nezekan", "Hello Atreia", 188052612))));
+		smMegaphone.add(new Case("asmodians",
+			"{\"faction\":\"ASMODIANS\",\"senderName\":\"Siel\",\"message\":\"For Asmodae\",\"itemId\":0}",
+			capture(new SM_MEGAPHONE(SM_MEGAPHONE.FactionLabel.ASMODIANS, "Siel", "For Asmodae", 0))));
+		smMegaphone.add(new Case("none",
+			"{\"faction\":\"NONE\",\"senderName\":\"System\",\"message\":\"Notice\",\"itemId\":1}",
+			capture(new SM_MEGAPHONE(SM_MEGAPHONE.FactionLabel.NONE, "System", "Notice", 1))));
+		writeFixture(outDir.resolve("SM_MEGAPHONE.json"), "SM_MEGAPHONE", null, smMegaphone);
+
+		// SM_QUESTIONNAIRE(messageId, chunk, count, html): writeD/writeC/writeC/writeH(len*2)/writeS. Pure.
+		List<Case> smQuestionnaire = new ArrayList<>();
+		smQuestionnaire.add(new Case("survey",
+			"{\"messageId\":1300000,\"chunk\":0,\"count\":1,\"html\":\"<html>Q</html>\"}",
+			capture(new SM_QUESTIONNAIRE(1300000, (byte) 0, (byte) 1, "<html>Q</html>"))));
+		smQuestionnaire.add(new Case("empty",
+			"{\"messageId\":0,\"chunk\":0,\"count\":0,\"html\":\"\"}",
+			capture(new SM_QUESTIONNAIRE(0, (byte) 0, (byte) 0, ""))));
+		writeFixture(outDir.resolve("SM_QUESTIONNAIRE.json"), "SM_QUESTIONNAIRE", null, smQuestionnaire);
+
+		// SM_FORCED_MOVE(creature, objectId, x, y, z): writeD(creature.getObjectId()) writeD(objectId) writeC(16) + xyz.
+		// Only creature.getObjectId() is read from the harness creature; the rest are ctor scalars.
+		List<Case> smForcedMove = new ArrayList<>();
+		smForcedMove.add(new Case("moveBack",
+			"{\"creatureObjectId\":700001,\"objectId\":800002,\"x\":1234.5,\"y\":6789.0,\"z\":250.25}",
+			capture(new SM_FORCED_MOVE(harnessCreature(700001), 800002, 1234.5f, 6789.0f, 250.25f))));
+		writeFixture(outDir.resolve("SM_FORCED_MOVE.json"), "SM_FORCED_MOVE", null, smForcedMove);
+
+		// SM_WEATHER(WeatherEntry[]): writeC(0) writeC(len) + writeC(entry.getCode()) each. Pure (entry code only).
+		List<Case> smWeather = new ArrayList<>();
+		smWeather.add(new Case("multiple",
+			"{\"codes\":[1,2,7]}",
+			capture(new SM_WEATHER(new com.aionemu.gameserver.model.templates.world.WeatherEntry[] {
+				new com.aionemu.gameserver.model.templates.world.WeatherEntry(0, 1),
+				new com.aionemu.gameserver.model.templates.world.WeatherEntry(0, 2),
+				new com.aionemu.gameserver.model.templates.world.WeatherEntry(0, 7) }))));
+		smWeather.add(new Case("empty",
+			"{\"codes\":[]}",
+			capture(new SM_WEATHER(new com.aionemu.gameserver.model.templates.world.WeatherEntry[0]))));
+		writeFixture(outDir.resolve("SM_WEATHER.json"), "SM_WEATHER", null, smWeather);
+
+		// SM_GROUP_LOOT(groupId, playerId, itemId, itemCount, lootCorpseId, distributionId, luck, index): pure scalars.
+		List<Case> smGroupLoot = new ArrayList<>();
+		smGroupLoot.add(new Case("roll",
+			"{\"groupId\":1001,\"playerId\":2002,\"itemId\":188000001,\"itemCount\":3,\"lootCorpseId\":3003,\"distributionId\":1,\"luck\":777,\"index\":5}",
+			capture(new SM_GROUP_LOOT(1001, 2002, 188000001, 3, 3003, 1, 777L, 5))));
+		writeFixture(outDir.resolve("SM_GROUP_LOOT.json"), "SM_GROUP_LOOT", null, smGroupLoot);
+
+		// SM_WINDSTREAM_ANNOUNCE(bidirectional, mapId, streamId, state): writeD/writeD/writeD/writeC. Pure scalars.
+		List<Case> smWindstreamAnnounce = new ArrayList<>();
+		smWindstreamAnnounce.add(new Case("open",
+			"{\"bidirectional\":1,\"mapId\":210050000,\"streamId\":3,\"state\":1}",
+			capture(new SM_WINDSTREAM_ANNOUNCE(1, 210050000, 3, 1))));
+		smWindstreamAnnounce.add(new Case("close",
+			"{\"bidirectional\":0,\"mapId\":220070000,\"streamId\":0,\"state\":0}",
+			capture(new SM_WINDSTREAM_ANNOUNCE(0, 220070000, 0, 0))));
+		writeFixture(outDir.resolve("SM_WINDSTREAM_ANNOUNCE.json"), "SM_WINDSTREAM_ANNOUNCE", null, smWindstreamAnnounce);
+	}
+
+	// Minimal deterministic Creature for packets that only read creature.getObjectId() in writeImpl.
+	private static com.aionemu.gameserver.model.gameobjects.Creature harnessCreature(int objectId) {
+		return new HarnessObjectIdCreature(objectId);
+	}
+
+	/** Minimal deterministic Creature: only objectId matters (set via the base ctor). */
+	static final class HarnessObjectIdCreature extends com.aionemu.gameserver.model.gameobjects.Creature {
+		HarnessObjectIdCreature(int objectId) {
+			super(objectId, null, null, new com.aionemu.gameserver.model.templates.npc.NpcTemplate(), null, false);
+		}
+
+		@Override
+		public byte getLevel() { return 1; }
+
+		@Override
+		public com.aionemu.gameserver.model.Race getRace() { return com.aionemu.gameserver.model.Race.NPC; }
+
+		@Override
+		public com.aionemu.gameserver.model.stats.container.CreatureGameStats<? extends com.aionemu.gameserver.model.gameobjects.Creature> getGameStats() { return null; }
+
+		@Override
+		public com.aionemu.gameserver.model.gameobjects.player.Player getActingCreature() { return null; }
 	}
 
 	/** Capture the payload bytes a packet's writeImpl produces (no opcode, no crypt). */
