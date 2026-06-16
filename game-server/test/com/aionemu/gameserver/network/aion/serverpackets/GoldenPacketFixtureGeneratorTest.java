@@ -641,6 +641,90 @@ public class GoldenPacketFixtureGeneratorTest {
 		smSkillRemove.add(mkSkillRemove.apply(new int[] { 40009, 100, 0 }, "morphSkill"));         // isMorphSkill -> flag 1
 		smSkillRemove.add(mkSkillRemove.apply(new int[] { 40001, 300, 0 }, "craftingSkill"));      // crafting -> flag currentXp=0
 		writeFixture(outDir.resolve("SM_SKILL_REMOVE.json"), "SM_SKILL_REMOVE", null, smSkillRemove);
+
+		// ----- Batch 7: faithful pure value-ctor / harness-objId SM_* packets (non-Player vein) -----
+
+		// SM_RESURRECT(Creature[, skillId]): writeImpl reads ctor-stored name (creature.getName(), null for a bare
+		// NpcTemplate) + skillId. Only creature.getName() is touched at ctor time; nothing live. Pure.
+		List<Case> smResurrect = new ArrayList<>();
+		smResurrect.add(new Case("noSkill",
+			"{\"name\":null,\"skillId\":0}",
+			capture(new SM_RESURRECT(harnessCreature(700001)))));
+		smResurrect.add(new Case("withSkill",
+			"{\"name\":null,\"skillId\":1601}",
+			capture(new SM_RESURRECT(harnessCreature(700002), 1601))));
+		writeFixture(outDir.resolve("SM_RESURRECT.json"), "SM_RESURRECT", null, smResurrect);
+
+		// SM_TRANSFORM custom (testing) ctor: writeImpl reads creature.getObjectId() + creature.getState()
+		// (state defaults to CreatureState.ACTIVE.getId()=1 on the harness) and ctor scalars + TransformType.getId(). Pure.
+		List<Case> smTransform = new ArrayList<>();
+		smTransform.add(new Case("avatar",
+			"{\"objectId\":700100,\"modelId\":12345,\"unk7\":1,\"type\":\"AVATAR\",\"unk1\":1,\"unk2\":0,\"unk3\":1,\"unk4\":0,\"unk5\":1,\"unk6\":0,\"panelId\":4012}",
+			capture(new SM_TRANSFORM(harnessCreature(700100), 12345, 1,
+				com.aionemu.gameserver.skillengine.model.TransformType.AVATAR, 1, 0, 1, 0, 1, 0, 4012))));
+		smTransform.add(new Case("form1",
+			"{\"objectId\":700101,\"modelId\":0,\"unk7\":0,\"type\":\"FORM1\",\"unk1\":0,\"unk2\":0,\"unk3\":0,\"unk4\":0,\"unk5\":0,\"unk6\":0,\"panelId\":0}",
+			capture(new SM_TRANSFORM(harnessCreature(700101), 0, 0,
+				com.aionemu.gameserver.skillengine.model.TransformType.FORM1, 0, 0, 0, 0, 0, 0, 0))));
+		writeFixture(outDir.resolve("SM_TRANSFORM.json"), "SM_TRANSFORM", null, smTransform);
+
+		// SM_CRAFT_UPDATE(skillId, ItemTemplate, success, failure, action, executionSpeed, delay):
+		// reads item.getTemplateId() (0 for a bare ItemTemplate) + item.getL10n() (null via ChatUtil.l10n(0)) at
+		// ctor time, then ctor scalars. skillId 40009 forces delay=1000. Pure (no DataManager/singletons). Covers
+		// action 0/init (msg+param), 1/normal (msg 0, null param), 5/success (msg+param).
+		List<Case> smCraftUpdate = new ArrayList<>();
+		java.util.function.Supplier<com.aionemu.gameserver.model.templates.item.ItemTemplate> bareItem =
+			com.aionemu.gameserver.model.templates.item.ItemTemplate::new;
+		smCraftUpdate.add(new Case("init",
+			"{\"skillId\":40001,\"itemId\":0,\"success\":100,\"failure\":50,\"action\":0,\"executionSpeed\":1500,\"delay\":3000}",
+			capture(new SM_CRAFT_UPDATE(40001, bareItem.get(), 100, 50, 0, 1500, 3000))));
+		smCraftUpdate.add(new Case("normalUpdate",
+			"{\"skillId\":40002,\"itemId\":0,\"success\":80,\"failure\":40,\"action\":1,\"executionSpeed\":1200,\"delay\":2000}",
+			capture(new SM_CRAFT_UPDATE(40002, bareItem.get(), 80, 40, 1, 1200, 2000))));
+		smCraftUpdate.add(new Case("morphForcesDelay1000",
+			"{\"skillId\":40009,\"itemId\":0,\"success\":100,\"failure\":0,\"action\":5,\"executionSpeed\":900,\"delay\":1000}",
+			capture(new SM_CRAFT_UPDATE(40009, bareItem.get(), 100, 0, 5, 900, 9999))));
+		writeFixture(outDir.resolve("SM_CRAFT_UPDATE.json"), "SM_CRAFT_UPDATE", null, smCraftUpdate);
+
+		// SM_CONQUEROR_PROTECTOR(type, buffLvl, cooldown): writeD(type) writeD(1) writeD(1) then for type 0/1/7/8:
+		// writeH(1) writeD(buffLvl) writeD(cooldown). Pure scalars.
+		List<Case> smConquerorProtector = new ArrayList<>();
+		smConquerorProtector.add(new Case("conqueror",
+			"{\"type\":1,\"buffLvl\":3,\"cooldown\":60}",
+			capture(new SM_CONQUEROR_PROTECTOR(1, 3, 60))));
+		smConquerorProtector.add(new Case("protector",
+			"{\"type\":8,\"buffLvl\":5,\"cooldown\":120}",
+			capture(new SM_CONQUEROR_PROTECTOR(8, 5, 120))));
+		writeFixture(outDir.resolve("SM_CONQUEROR_PROTECTOR.json"), "SM_CONQUEROR_PROTECTOR", null, smConquerorProtector);
+
+		// SM_LEGION_EDIT: writeC(type) then per-type. (int type) ctor -> type 0x07 writes nothing extra;
+		// (int type, int unixTime) ctor -> type 0x06 writes writeD(unixTime). Both pure scalars.
+		List<Case> smLegionEdit = new ArrayList<>();
+		smLegionEdit.add(new Case("recover",
+			"{\"type\":7}",
+			capture(new SM_LEGION_EDIT(0x07))));
+		smLegionEdit.add(new Case("disband",
+			"{\"type\":6,\"unixTime\":1700000000}",
+			capture(new SM_LEGION_EDIT(0x06, 1700000000))));
+		writeFixture(outDir.resolve("SM_LEGION_EDIT.json"), "SM_LEGION_EDIT", null, smLegionEdit);
+
+		// SM_UPGRADE_ARCADE: writeC(action) then per-action. Deterministic action branches:
+		// action 0 (boolean showIcon) -> writeD(showIcon?1:0); action 2 (no-arg) -> writeC(1);
+		// action 6 (int itemId,long count) -> writeD(itemId) writeQ(count); action 7 (int frenzy) -> writeD(frenzy). Pure.
+		List<Case> smUpgradeArcade = new ArrayList<>();
+		smUpgradeArcade.add(new Case("showIcon",
+			"{\"action\":0,\"showIcon\":true}",
+			capture(new SM_UPGRADE_ARCADE(true))));
+		smUpgradeArcade.add(new Case("open",
+			"{\"action\":2}",
+			capture(new SM_UPGRADE_ARCADE())));
+		smUpgradeArcade.add(new Case("rewardItem",
+			"{\"action\":6,\"rewardItemId\":188052612,\"rewardItemCount\":99}",
+			capture(new SM_UPGRADE_ARCADE(188052612, 99L))));
+		smUpgradeArcade.add(new Case("frenzyTime",
+			"{\"action\":7,\"frenzyDurationSeconds\":3600}",
+			capture(new SM_UPGRADE_ARCADE(3600))));
+		writeFixture(outDir.resolve("SM_UPGRADE_ARCADE.json"), "SM_UPGRADE_ARCADE", null, smUpgradeArcade);
 	}
 
 	// Minimal deterministic Creature for packets that only read creature.getObjectId() in writeImpl.
