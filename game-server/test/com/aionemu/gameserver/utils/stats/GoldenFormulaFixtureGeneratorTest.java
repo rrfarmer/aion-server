@@ -53,6 +53,17 @@ public class GoldenFormulaFixtureGeneratorTest {
 		generateDropRewardPercent(outDir);
 		generateXpLossTableGetters(outDir);
 		generateStatCapDifferenceLimit(outDir);
+		generateStatCapElementalDefenseBaseValue(outDir);
+	}
+
+	// StatCapUtil.getElementalDefenseBaseValue() — pure constant (no arg, no state). Pins the elemental-defense base.
+	private static void generateStatCapElementalDefenseBaseValue(Path outDir) throws IOException {
+		List<Case> cases = new ArrayList<>();
+		cases.add(Case.ofLong(new LinkedHashMap<>(), StatCapUtil.getElementalDefenseBaseValue()));
+		writeFixture(outDir.resolve("StatCapUtil.getElementalDefenseBaseValue.json"),
+			"StatCapUtil.getElementalDefenseBaseValue",
+			"int getElementalDefenseBaseValue()",
+			cases);
 	}
 
 	// XPRewardEnum.rewardPercent() — per-constant immutable field getter (no config/state). Pins the whole table.

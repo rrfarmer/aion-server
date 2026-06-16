@@ -622,6 +622,25 @@ public class GoldenPacketFixtureGeneratorTest {
 			"{\"bidirectional\":0,\"mapId\":220070000,\"streamId\":0,\"state\":0}",
 			capture(new SM_WINDSTREAM_ANNOUNCE(0, 220070000, 0, 0))));
 		writeFixture(outDir.resolve("SM_WINDSTREAM_ANNOUNCE.json"), "SM_WINDSTREAM_ANNOUNCE", null, smWindstreamAnnounce);
+
+		// SM_SKILL_REMOVE(PlayerSkillEntry): writeH(skillId) writeC(level/professionFlag) writeC(type).
+		// The (skillId, skillLvl, skillType, persistentState) ctor stores everything directly — no DataManager.
+		// writeImpl/getProfessionFlag read ONLY skillId/skillLevel/skillType (+ currentXp=0 default). Pure.
+		// Covers: normal skill (level sent), normal stigma (type 1), linked stigma (type 3), tapping profession
+		// (professionFlag=1), morph 40009 (professionFlag=1), crafting (professionFlag=currentXp default 0).
+		List<Case> smSkillRemove = new ArrayList<>();
+		java.util.function.BiFunction<int[], String, Case> mkSkillRemove = (in, name) -> new Case(name,
+			"{\"skillId\":" + in[0] + ",\"skillLvl\":" + in[1] + ",\"skillType\":" + in[2] + "}",
+			capture(new com.aionemu.gameserver.network.aion.serverpackets.SM_SKILL_REMOVE(
+				new com.aionemu.gameserver.model.skill.PlayerSkillEntry(in[0], in[1], in[2],
+					com.aionemu.gameserver.model.gameobjects.Persistable.PersistentState.NOACTION))));
+		smSkillRemove.add(mkSkillRemove.apply(new int[] { 1001, 5, 0 }, "normalSkill"));          // <30000, type 0 -> level sent
+		smSkillRemove.add(mkSkillRemove.apply(new int[] { 31001, 12, 1 }, "normalStigma"));        // type 1
+		smSkillRemove.add(mkSkillRemove.apply(new int[] { 31002, 9, 3 }, "linkedStigma"));         // type 3
+		smSkillRemove.add(mkSkillRemove.apply(new int[] { 30001, 250, 0 }, "tappingProfession"));  // isTappingSkill -> flag 1
+		smSkillRemove.add(mkSkillRemove.apply(new int[] { 40009, 100, 0 }, "morphSkill"));         // isMorphSkill -> flag 1
+		smSkillRemove.add(mkSkillRemove.apply(new int[] { 40001, 300, 0 }, "craftingSkill"));      // crafting -> flag currentXp=0
+		writeFixture(outDir.resolve("SM_SKILL_REMOVE.json"), "SM_SKILL_REMOVE", null, smSkillRemove);
 	}
 
 	// Minimal deterministic Creature for packets that only read creature.getObjectId() in writeImpl.

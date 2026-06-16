@@ -167,6 +167,59 @@ public class GoldenLivePacketFixtureGeneratorTest {
 			"{\"action\":\"SPECIAL_FUNCTION\",\"specialFunction\":\"AUTOSELL\",\"active\":false,\"npcObjId\":0}",
 			capture(new SM_PET(PetSpecialFunction.AUTOSELL, false))));
 		writeFixture(outDir.resolve("SM_PET.json"), "SM_PET", null, smPet);
+
+		// ---- SM_MANTRA_EFFECT(creature, subEffectId): writeD(0) writeD(effector.objId) writeH(subEffectId). ----
+		// writeImpl reads ONLY effector.getObjectId() (ctor-stored) + the ctor subEffectId. Fully deterministic.
+		List<Case> smMantraEffect = new ArrayList<>();
+		{
+			HarnessCreature c = creature(910001, (byte) 50, new TreeMap<>());
+			smMantraEffect.add(new Case("basic",
+				"{\"objectId\":910001,\"subEffectId\":1234}",
+				capture(new SM_MANTRA_EFFECT(c, 1234))));
+		}
+		{
+			HarnessCreature c = creature(910002, (byte) 50, new TreeMap<>());
+			smMantraEffect.add(new Case("zeroSub",
+				"{\"objectId\":910002,\"subEffectId\":0}",
+				capture(new SM_MANTRA_EFFECT(c, 0))));
+		}
+		{
+			HarnessCreature c = creature(910003, (byte) 50, new TreeMap<>());
+			smMantraEffect.add(new Case("maxShort",
+				"{\"objectId\":910003,\"subEffectId\":65535}",
+				capture(new SM_MANTRA_EFFECT(c, 65535))));
+		}
+		writeFixture(outDir.resolve("SM_MANTRA_EFFECT.json"), "SM_MANTRA_EFFECT", null, smMantraEffect);
+
+		// ---- SM_DELETE(visibleObject[, animation|inRange]): writeD(objId) writeC(animationId). ----
+		// writeImpl reads ONLY the ctor-stored objectId + the ctor-resolved animationId. The animationId is
+		// inRange ? animation.getId() : NONE.getId(). Covers each public ctor + the inRange=false NONE branch.
+		List<Case> smDelete = new ArrayList<>();
+		{
+			HarnessCreature c = creature(920001, (byte) 50, new TreeMap<>());
+			smDelete.add(new Case("defaultFadeOut", // SM_DELETE(obj) -> FADE_OUT, inRange true -> id 1
+				"{\"objectId\":920001,\"animationId\":1}",
+				capture(new SM_DELETE(c))));
+		}
+		{
+			HarnessCreature c = creature(920002, (byte) 50, new TreeMap<>());
+			smDelete.add(new Case("outOfRangeNone", // SM_DELETE(obj, false) -> inRange false -> NONE id 0
+				"{\"objectId\":920002,\"animationId\":0}",
+				capture(new SM_DELETE(c, false))));
+		}
+		{
+			HarnessCreature c = creature(920003, (byte) 50, new TreeMap<>());
+			smDelete.add(new Case("jumpIn", // SM_DELETE(obj, JUMP_IN) -> id 11
+				"{\"objectId\":920003,\"animationId\":11}",
+				capture(new SM_DELETE(c, ObjectDeleteAnimation.JUMP_IN))));
+		}
+		{
+			HarnessCreature c = creature(920004, (byte) 50, new TreeMap<>());
+			smDelete.add(new Case("delayed", // SM_DELETE(obj, DELAYED) -> id 19
+				"{\"objectId\":920004,\"animationId\":19}",
+				capture(new SM_DELETE(c, ObjectDeleteAnimation.DELAYED))));
+		}
+		writeFixture(outDir.resolve("SM_DELETE.json"), "SM_DELETE", null, smDelete);
 	}
 
 	private static HarnessCreature creature(int objectId, byte level, TreeMap<StatEnum, Integer> statMap) {
