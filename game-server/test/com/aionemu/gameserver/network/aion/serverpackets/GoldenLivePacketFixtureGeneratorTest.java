@@ -220,6 +220,60 @@ public class GoldenLivePacketFixtureGeneratorTest {
 				capture(new SM_DELETE(c, ObjectDeleteAnimation.DELAYED))));
 		}
 		writeFixture(outDir.resolve("SM_DELETE.json"), "SM_DELETE", null, smDelete);
+
+		// ---- Position-reading packets: give the harness creature a DETERMINISTIC WorldPosition. ----
+		// The fixed values below MUST match the C# side exactly (GoldenPacketFixtureTests.HARNESS_*).
+		// A bare WorldPosition(mapId, x, y, z, h) needs NO live World/MapRegion (mapRegion stays null;
+		// getInstanceId() returns 1), so the harness creature's getX/getY/getZ/getHeading are reproducible.
+
+		// ---- SM_HEADING_UPDATE(visibleObject): writeD(objectId) writeC(heading). Reads only objId + position.heading. ----
+		List<Case> smHeadingUpdate = new ArrayList<>();
+		{
+			HarnessCreature c = positioned(700101);
+			smHeadingUpdate.add(new Case("heading",
+				"{\"objectId\":700101,\"heading\":" + HARNESS_HEADING + "}",
+				capture(new SM_HEADING_UPDATE(c))));
+		}
+		writeFixture(outDir.resolve("SM_HEADING_UPDATE.json"), "SM_HEADING_UPDATE", null, smHeadingUpdate);
+
+		// ---- SM_POSITION(object): writeD(objId) writeF(x) writeF(y) writeF(z) writeC(heading). ----
+		List<Case> smPosition = new ArrayList<>();
+		{
+			HarnessCreature c = positioned(700102);
+			smPosition.add(new Case("position",
+				"{\"objectId\":700102,\"x\":" + HARNESS_X + ",\"y\":" + HARNESS_Y + ",\"z\":" + HARNESS_Z
+					+ ",\"heading\":" + HARNESS_HEADING + "}",
+				capture(new SM_POSITION(c))));
+		}
+		writeFixture(outDir.resolve("SM_POSITION.json"), "SM_POSITION", null, smPosition);
+
+		// ---- SM_LOOKATOBJECT(visibleObject): writeD(objId) writeD(targetId) writeC(heading). ----
+		// targetObjectId = target == null ? 0 : target.getObjectId(); heading from position.
+		// The harness creature has a null controller, so setTarget() (which calls controller.onTargetChanged)
+		// can't be exercised; the no-target branch (targetObjectId == 0) is fully deterministic.
+		List<Case> smLookAtObject = new ArrayList<>();
+		{
+			HarnessCreature c = positioned(700103); // no target -> targetObjectId 0
+			smLookAtObject.add(new Case("noTarget",
+				"{\"objectId\":700103,\"targetObjectId\":0,\"heading\":" + HARNESS_HEADING + "}",
+				capture(new SM_LOOKATOBJECT(c))));
+		}
+		writeFixture(outDir.resolve("SM_LOOKATOBJECT.json"), "SM_LOOKATOBJECT", null, smLookAtObject);
+	}
+
+	// Deterministic fixed WorldPosition values. MUST be mirrored exactly on the C# side.
+	static final int HARNESS_WORLD_ID = 210010000;
+	static final float HARNESS_X = 100.0f;
+	static final float HARNESS_Y = 200.0f;
+	static final float HARNESS_Z = 300.0f;
+	static final byte HARNESS_HEADING = (byte) 0;
+
+	/** Harness creature with a deterministic WorldPosition (no live World/MapRegion required). */
+	private static HarnessCreature positioned(int objectId) {
+		HarnessCreature c = creature(objectId, (byte) 50, new TreeMap<>());
+		c.setPosition(new com.aionemu.gameserver.world.WorldPosition(
+			HARNESS_WORLD_ID, HARNESS_X, HARNESS_Y, HARNESS_Z, HARNESS_HEADING));
+		return c;
 	}
 
 	private static HarnessCreature creature(int objectId, byte level, TreeMap<StatEnum, Integer> statMap) {
