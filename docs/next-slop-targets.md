@@ -14,7 +14,35 @@ temporary_spawn) + their ctor params / properties / build-call / locals, the now
 `VortexStateType` (Model/Vortex, faithful) and the generic Read*Attribute helpers were KEPT (shared).
 Build 0, golden 167/167, bootstrap 7/7, RealStaticDataLoad green. 1140 deletions.
 
-## PART B VERDICT — Housing SmHouse* subsystem = DEAD-ISLAND, clean-deletable NEXT TICK
+## RESOLVED — Housing SmHouse* dead-island retired (commit pending, 2026-06-16)
+
+The housing registry-summary dead-island is DELETED. 0-consumer re-confirmed (PascalCase grep whole
+src+tests): every reference to the reworked types lived inside the island's own files; the faithful
+SCREAMING_CASE pillar (SM_HOUSE_EDIT/REGISTRY/BIDS + SM_OBJECT_USE_UPDATE, House/HouseObject/
+HousingService/HousingBidService/HOUSING_OBJECT_DATA/PlayerRegisteredItemsDAO) owns every opcode +
+registry persistence + template data and is untouched/live.
+
+DELETED (16 files + edits): ServerPackets SmHouseRegistry/SmHouseBids/SmHouseEdit/SmHouseObjects/
+SmHouseObject/SmHouseAcquire/SmHousePayRent/SmObjectUseUpdate + HouseObjectPacketWriter;
+Model/GameObjects HouseRegistryEntries (all *Summary records: RegisteredHouseObjectSummary/
+RegisteredHouseDecorationSummary/HouseRegistrySummary/PlacedHouseObjectSummary) + PlayerHouse +
+HouseAuctionBid (HouseAuctionBidPage/Summary/Context — island-only, consumed solely by SmHouseBids);
+Dataholders/HousingObjectTemplateTable (+ HousingObjectTemplateSummary); Data/HousingRepository
+(IHousingRepository/Empty/MySql). EDITS: Program.cs DI line removed; StaticData ctor-param/assignment/
+property/list-decl/two housing_objects reader blocks/build-call removed; StaticData.Builders
+IsHousingObjectTemplateElement + GetHousingObjectTypeId helpers removed (island-only);
+HousingTemplateTable.GetDecorIds(int, HouseRegistrySummary?) overload removed (0-caller, island-coupled).
+KEPT: the rest of faithful HousingTemplateTable (incl. GetPart/TryGetDecorPacketIndex public surface),
+faithful PlayerHouse readers live via HousingService.FindPlayerHouses -> List<House> (faithful House is
+the live type; reworked PlayerHouse record was island-only and deleted). InventoryItem DTO untouched.
+Verify: build 0, golden 167/167, bootstrap 7/7, RealStaticDataLoad green.
+
+ALL dead-island slop is now retired (NpcTemplateSummary/SkillTemplateSummary/ItemTemplateSummary/
+NpcSpawnTable/Housing-SmHouse*). The big slop-retirement/correctness arc is COMPLETE. Remaining work
+is NOT slop — it is the 2 peripheral service deferrals below (CronJobService cron-config-transform,
+DatabaseCleaningService thread-1 seam) + the gated SPAWNS_DATA re-port, all requiring a user decision.
+
+## (historical) PART B VERDICT — Housing SmHouse* subsystem = DEAD-ISLAND, clean-deletable NEXT TICK
 
 Same shape as the proven NpcTemplateSummary / SkillTemplateSummary / ItemTemplateSummary / NpcSpawnTable
 dead-islands: a reworked golden-blind projection running in parallel to a fully faithful pillar that is the
@@ -159,5 +187,5 @@ DEFERRED:
 2. **CronJobService cron-config-transform** — port SiegeConfig cron-schedule property transform so
    CronJobService can be wired faithfully.
 3. **DatabaseCleaningService thread-1 utility-init seam** — only if a faithful pre-boot utility phase is added.
-4. **Housing SmHouse* subsystem** — RESOLVED to DEAD-ISLAND (see PART B VERDICT above). Clean-delete
-   next tick, NO user go-ahead needed; all-green-or-revert.
+4. **Housing SmHouse* subsystem** — RESOLVED + DELETED (see RESOLVED section at top, 2026-06-16).
+   Dead-island retired; faithful pillar is the sole live path.
