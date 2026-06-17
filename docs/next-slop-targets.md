@@ -2,6 +2,25 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## DEFERRED FIDELITY BUG #1 (RiftManager instance fan-out) — RESOLVED & VERIFIED (2026-06-17, HEAD cc67e1fe6)
+
+Re-assessed the long-deferred `RiftManagerService` instance fan-out bug (old failing
+`SpawnRift_FansOutPortalPairsAcrossWorldMapInstances`: Position.InstanceId expected [1,2,3], reworked path
+produced [1,1,1]). **CLOSED, no source change needed.** The reworked `RiftManagerService` (parallel
+single-path reimpl that built `WorldPosition` directly with no MapRegion, so InstanceId always defaulted to 1)
+is **deleted** — retired by pillar-a; grep finds 0 source/test files, only docs reference it. Its slop test
+was deleted with it. The faithful `Services/Rift/RiftManager.cs` (1:1 Java RiftManager.java) is the sole live
+path: wired via `SpawnEngine.cs:174` (AddRiftSpawnTemplate at boot), `RiftService.cs:222` (SpawnRift),
+`VortexService.cs:83` (SpawnVortex). Its fan-out loop `for i=1..instanceCount { SpawnInstance(i,...) }`
+(RiftManager.cs:64-88 == Java RiftManager.java:63-82) threads `i` through
+`World.SetPosition(npc, worldId, instance=i, ...)` -> `CreatePosition(...,instance)` -> resolves the REAL
+`map.GetWorldMapInstance(instanceId).GetRegion(x,y,z)` MapRegion (World.cs:236-257), so Position.InstanceId
+derives from the real per-instance region -> distinct [1,2,3]. Pillar-a making the live
+World/WorldMapInstance/CreatePosition graph available is what closed it. Boot-time fan-out is exercised by the
+DB-backed `GameServerBootstrapTests` full-boot (RiftService.InitRifts -> SpawnRift on real maps); no flaky
+standalone test re-added. Of the two deferred src fidelity bugs, #1 is closed; #2 (packet dual-serialization,
+packet-base-unification) remains.
+
 ## GOLDEN SUITE 167 -> 169 (2026-06-17, commit e1a37ea13)
 
 Added 2 NEW Java-derived pure-formula parity cases via the existing mvn oracle
