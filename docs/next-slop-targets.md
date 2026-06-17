@@ -2,6 +2,30 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## Sm* DUPLICATE-PACKET RETIREMENT — zero-consumer dead-island sweep DONE (2026-06-17, 5 commits rrfarmer)
+
+Java has NO `Sm*` packets — the faithful family is `SM_*` (underscore), registered in ServerPacketsOpcodes.cs. The 126 reworked
+PascalCase `Sm*` were duplicate twins of an `SM_*` (golden proved 138/142 byte-identical), consumed by the now-retired
+WorldNpc/Kisk/Rift/drop slop. **Retired ALL 68 zero-consumer dead-islands this run (126 -> 58 remaining).** Each verified to have a
+faithful `SM_*` twin registered at the same opcode (`Sm*` inline `const int PacketOpCode = N` == `AddPacketOpcode(N, typeof(SM_FOO))`;
+`Sm*` are not themselves registered), 0 production+test refs, then deleted. All-green-or-revert each batch (build 0 / golden 196 /
+full 483). Batches: B1 (12) B2 (15) B3 (15) B4 (19) B5 (7 final).
+
+**REMAINING 58 Sm* — ALL have >=1 LIVE consumer (faithful repoint required, NOT dead-island delete):**
+- **Test-only consumers (~8)** — golden harness reconstructs them via the C#-only SerializeFrame path (GoldenPacketFixtureTests:
+  SmBindPointTeleport/SmCloseQuestionWindow/SmFlyTime/...; GameCryptTests: SmKey/SmPong; SmWeatherPacketTests). Migration needs the
+  golden harness to serialize a faithful `AionServerPacket` via the Write seam (the documented uninitialized-AionConnection harness
+  gap; precedent SM_PLAYER_INFO/SM_STATS_INFO), OR repoint + re-baseline the fixture.
+- **Low-count (1-2) production-service consumers** — straightforward faithful repoint `new SmFoo(args)` -> `new SM_FOO(args)` after
+  verifying ctor args + byte-identical Write/WriteImpl, then delete. E.g. SmAbyssRankUpdate<-AbyssPointsService,
+  SmActionAnimation<-ClassChangeService, SmAutoGroup<-PeriodicInstanceRegistrationService.
+- **Heavy live webs (do LAST)** — SmDialogWindow (109), SmSystemMessage (67), SmItemUsageAnimation (54), SmAttackStatus (51),
+  SmEmotion (11). NOTE SmAttackStatusEnums.cs is NOT a packet (enum file SmAttackStatusType/SmAttackStatusLog) consumed by
+  SmAttackStatus.cs — retire it together with SmAttackStatus.
+
+NEXT BATCH RECOMMENDATION: the ~8 test-only + the 1-2-count production-service repoints (small byte-verify-then-repoint units), then
+the 5 heavy-consumer packets.
+
 ## GOLDEN SUITE 194 -> 195 (2026-06-17) — equippable seam REUSE: ENCHANT_INFO SUB-OBJECT writers (socketed ManaStone + GodStone)
 
 Extended the equippable-item/ItemInfoBlob seam from per-type-blob coverage to the FIRST populated-sub-object path. **Byte-exact
