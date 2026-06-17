@@ -2,9 +2,21 @@
 
 The single rolling state doc. Updated **in place** every Unit of Work — keep it lean: detail only the most recent round, collapse older batches to one-liners (git history holds the rest), but **never drop a TODO/backlog/blocker**. Must be usable with zero prior conversation. Read after the canonical docs in `csharp-port.md`.
 
-Last updated: 2026-06-14 (3-server stack boots; GS↔LS bridge stable incl. keep-alive)
+Last updated: **2026-06-17** (object-spine big-bang + slop retirement COMPLETE; content 100%; deep-analysis parity backlog written)
 
-## ⏯️ RESUME HERE (cold-start — read this first)
+## ⏯️ RESUME HERE (2026-06-17 — current truth; the 2026-06-14 section below is SUPERSEDED history)
+
+**STATUS: the object-spine big-bang + reworked-slop retirement program is COMPLETE.** Branch `feature/object-spine-bigbang` @ `f8a08c00c`. Build **0** (all 4 projects + tests) · golden **196/196 byte-exact** vs the Java mvn oracle · full suite **459/0** · bootstrap **9/9** · full DB-backed boot validated end-to-end.
+
+- **De-slop DONE:** 126→0 reworked duplicate `Sm*` packets (`GameServerPacket`/`SerializeFrame` dual-path dropped; one faithful `AionServerPacket` hierarchy); object store unified to single `World._allObjects` (`_objects` deleted); WorldNpc/Kisk/Rift/drop/DP/HP/combat slop webs retired; all 8 reworked `*Summary`/`*Table` StaticData holder projections + WorldMapSummary + NpcSpawnTable + FlightZone retired; Housing subsystem confirmed retired; `GameServerConnection` god-class gone. `check_fidelity.py` baseline = **0/0**. **3 latent runtime fidelity bugs found+fixed during de-slop** (RiftManager fan-out, SM_DIALOG_WINDOW flat-write, abyss silent-no-send).
+- **Content DONE:** quests **1035/1035**, AI **462**, instance **37/37**, zone **3/3**, chat commands done. DataManager hollow-holders all wired (load real XML at boot). ~92% of Java types (2269/2456) have an exact-name C# file.
+- **THE BACKLOG IS NOW `Full-Parity-Backlog.md`** (read it for the next unit). Remaining to full parity (skip nothing), in order: **(A)** golden the ~103 un-golden'd live-object `SM_*` packets via an integration harness — the #1 provable-parity vein; **(B)** triage the 14 `NotImplementedException` files + port the real gaps (Legion warehouse); **(C)** wire the config framework (`ConfigurableProcessor` + `.properties` load — restores operator-override fidelity, a hard contract); **(D)** editor/admin-save TODOs; **(E)** hygiene (2 stray slop-named files; teach the audit tools to index `data/handlers/`); **(G)** verify no DataManager holder is still an empty placeholder. **(F) [USER-GATED] the live-client enter-world test — needs the user's Aion 4.8 client; the only step the loop cannot do.**
+- **Note on TODOs:** of 277 `TODO`s in C# src, the large majority are faithful verbatim mirrors of Java-source TODOs (= parity, keep). Only the C#-specific subset (config framework, "port the rest") are real gaps — see backlog §C.
+- **Commit discipline unchanged:** branch `feature/object-spine-bigbang`, author `rrfarmer <ryanfarmer@mac.com>`, no AI co-author; keep all builds 0 + golden green per change (all-green-or-revert).
+
+---
+
+## ⏯️ RESUME HERE (cold-start — read this first) — ⚠️ 2026-06-14, SUPERSEDED by the 2026-06-17 block above (history only)
 
 **STATUS 2026-06-14: the object-spine big-bang CONVERGED. The branch is GREEN.** The detailed Tier-0–4 / F1–F7 convergence plan below is DONE — kept only for history. Current state and the *new* direction:
 
