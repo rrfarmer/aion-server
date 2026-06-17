@@ -2,6 +2,33 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## GOLDEN SUITE 189 -> 190 (2026-06-17) — FIRST item/ItemInfoBlob seam (SM_INVENTORY_UPDATE_ITEM, GENERAL_INFO blob)
+
+Built the deferred **item/ItemInfoBlob integration-harness increment** — the first golden driving a packet through a
+live `Item` game-object + the `ItemInfoBlob` blob-writer family. **Byte-exact on first capture, 0 fidelity bugs**
+(SM_INVENTORY_UPDATE_ITEM.cs + ItemInfoBlob.cs + GeneralInfoBlobEntry.cs + Item.cs all faithful 1:1):
+- **SM_INVENTORY_UPDATE_ITEM** (1 fixture / 2 cases: with-creator "Daeva" / null-creator). Default ctor uses
+  `ItemUpdateType.DEC_ITEM_USE` -> `ItemInfoBlob.getFullBlob(player,item)`. Pinning the template to **`ItemGroup.NONE`**
+  (`getValidEquipmentSlots()==0`, isWeapon/isArmor/isTwoHandWeapon false), no fusion, packCount 0, not STIGMA_SHARD ->
+  getFullBlob adds EXACTLY ONE entry: **GENERAL_INFO**, which reads ONLY Item+ItemTemplate scalars
+  (mask / count / creator / secondsUntilExpiration [expireTime 0 -> 0, no clock] / temporaryExchangeTimeRemaining [0] /
+  itemId) + `DataManager.ITEM_CLEAN_UP.hasAccountOrLegionWhStorabilityDisabled` (empty bplist -> false -> writeH 0). Host
+  packet also writes objectId + `template.getL10n()` (= `ChatUtil.l10n(desc)`, pure scalar) + the DEC_ITEM_USE mask 0x16.
+
+Seam details (both sides identical): the simple `Item(objId, template)` ctor is deterministic (expireTime 0 / enchantType
+0 / improvement null -> no ChargeInfo, no clock). **`canTune()` = `maxTuneCount != 0` and the field default is -1**, so a
+reflectively-built template (no JAXB afterUnmarshal) would have canTune true — pinned `maxTuneCount = 0` both sides (what
+afterUnmarshal sets for a slot-0 item; GENERAL_INFO doesn't read it anyway). **NEW bounded seam: ITEM_CLEAN_UP** =
+`ItemRestrictionCleanupData` with an EMPTY (non-null) `bplist` (the method does `bplist.stream()/.Any()` which NPEs on the
+null default — the uninitialized-StaticData C# bridge skips field initializers). NO live Player deref (player arg null
+both sides), NO World/stones/enchant/godstone cascade, NO DataManager beyond ITEM_CLEAN_UP.
+
+**REUSABLE** for the item family's GENERAL_INFO-only path (SM_INVENTORY_ADD_ITEM single non-equip item, SM_WAREHOUSE_*).
+The **EQUIPPABLE path** (weapon/armor/accessory/wing/plume/shield) is the heavier next item increment: getFullBlob adds
+EQUIPPED_SLOT + per-type blob + ENCHANT_INFO + PREMIUM_OPTION, whose blob-writers read enchant/manastone/godstone/idian/
+conditioning state on the Item (needs those sub-objects populated 1:1 both sides). Build 0, golden 190, suite 477/0,
+bootstrap 9/9.
+
 ## GOLDEN SUITE 187 -> 189 (2026-06-17) — real-Npc-ctor seam reuse (SM_MOVE + SM_SELL_ITEM); Npc-reader family EXHAUSTED
 
 Reused the bounded real-`Npc(controller,spawn,template)` ctor seam (SM_NPC_INFO) for the LAST TWO not-yet-golden'd

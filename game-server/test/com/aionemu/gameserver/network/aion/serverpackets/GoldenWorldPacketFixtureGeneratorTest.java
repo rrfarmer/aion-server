@@ -23,12 +23,17 @@ import com.aionemu.gameserver.controllers.NpcController;
 import com.aionemu.gameserver.controllers.movement.MovementMask;
 import com.aionemu.gameserver.dataholders.DataManager;
 import com.aionemu.gameserver.dataholders.HouseData;
+import com.aionemu.gameserver.dataholders.ItemRestrictionCleanupData;
 import com.aionemu.gameserver.dataholders.NpcSkillData;
 import com.aionemu.gameserver.dataholders.QuestsData;
 import com.aionemu.gameserver.dataholders.SkillData;
 import com.aionemu.gameserver.dataholders.TradeListData;
 import com.aionemu.gameserver.dataholders.WorldMapsData;
 import com.aionemu.gameserver.model.CreatureType;
+import com.aionemu.gameserver.model.gameobjects.Item;
+import com.aionemu.gameserver.model.templates.item.ItemTemplate;
+import com.aionemu.gameserver.model.templates.item.enums.ItemGroup;
+import com.aionemu.gameserver.services.item.ItemPacketService.ItemUpdateType;
 import com.aionemu.gameserver.model.animations.TeleportAnimation;
 import com.aionemu.gameserver.model.gameobjects.AionObject;
 import com.aionemu.gameserver.model.gameobjects.Npc;
@@ -477,6 +482,93 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 			tabs.add(tradeTab(id));
 		setField(t, "tradeTablist", tabs);
 		return t;
+	}
+
+	// ---- item / ItemInfoBlob seam (SM_INVENTORY_UPDATE_ITEM) ----
+	//
+	// The FIRST golden seam that drives a packet through a live Item game-object + the ItemInfoBlob blob-writer family.
+	// SM_INVENTORY_UPDATE_ITEM(player, item) defaults to ItemUpdateType.DEC_ITEM_USE -> ItemInfoBlob.getFullBlob(player,
+	// item). The seam pins the item template to a NON-EQUIPPABLE group (ItemGroup.NONE -> getValidEquipmentSlots()==0,
+	// isWeapon()/isArmor() false, isTwoHandWeapon() false) with no fusion / packCount 0 / not STIGMA_SHARD, so getFullBlob
+	// adds EXACTLY ONE blob entry: GENERAL_INFO. That entry reads ONLY Item + ItemTemplate scalars
+	// (getItemMask()->template.getMask(), getItemCount(), getItemCreator(), secondsUntilExpiration() [expireTime 0 -> 0,
+	// no clock], getTemporaryExchangeTimeRemaining() [0], getItemId()->template.getTemplateId()) plus
+	// DataManager.ITEM_CLEAN_UP.hasAccountOrLegionWhStorabilityDisabled(itemId) (empty bplist -> false). The host packet
+	// additionally writes item.getObjectId() + template.getL10n() (ChatUtil.l10n(desc), pure scalar) + the DEC_ITEM_USE
+	// mask. NO live Player deref (getFullBlob only stashes the player as blob owner; GENERAL_INFO never reads it), NO
+	// World/Knownlist/stones/enchant/godstone cascade, NO DataManager beyond the bounded ITEM_CLEAN_UP holder seam.
+	//
+	// Why the simple Item(objId, template) ctor is deterministic: expireTime==0 (no System.currentTimeMillis), getEnchantType()==0
+	// (isAmplified false), getImprovement()==null (calculateMaxChargeLevel 0 -> no ChargeInfo). maxTuneCount is pinned to 0
+	// (mirrors what afterUnmarshal would set for a slot-0 item) so canTune() is false on BOTH sides identically.
+	private static final int ITEM_OBJECT_ID = 268500001;
+	private static final int ITEM_TEMPLATE_ID = 161000001;
+	private static final int ITEM_MASK = 0x1A2B; // arbitrary mask scalar -> GENERAL_INFO writeH
+	private static final int ITEM_DESC_L10N = 350123; // desc -> getL10n() = ChatUtil.l10n(350123)
+	private static final long ITEM_COUNT = 7L;
+	private static final String ITEM_CREATOR = "Daeva";
+
+	@Test
+	public void generateGoldenInventoryUpdateItemFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installItemCleanupSeam();
+
+		List<Case> cases = new ArrayList<>();
+		// Non-equippable item with a creator name + count 7 -> single GENERAL_INFO blob (DEC_ITEM_USE mask written).
+		cases.add(inventoryUpdateItemCase("invUpdateGeneralWithCreator", ITEM_CREATOR));
+		// Same item with a null creator -> getItemCreator() returns "" (empty writeS), exercising the size-0-creator path.
+		cases.add(inventoryUpdateItemCase("invUpdateGeneralNullCreator", null));
+
+		writeFixture(outDir.resolve("SM_INVENTORY_UPDATE_ITEM.json"), "SM_INVENTORY_UPDATE_ITEM", cases);
+	}
+
+	private static Case inventoryUpdateItemCase(String name, String creator) {
+		Item item = buildSimpleItem(ITEM_OBJECT_ID, ITEM_TEMPLATE_ID, ITEM_MASK, ITEM_DESC_L10N, ITEM_COUNT, creator);
+		String inputs = "{\"objectId\":" + ITEM_OBJECT_ID + ",\"itemId\":" + ITEM_TEMPLATE_ID + ",\"mask\":" + ITEM_MASK
+			+ ",\"desc\":" + ITEM_DESC_L10N + ",\"itemCount\":" + ITEM_COUNT + ",\"itemCreator\":"
+			+ (creator == null ? "null" : "\"" + creator + "\"") + ",\"updateType\":\"DEC_ITEM_USE\"}";
+		// player arg null: getFullBlob only stashes it as blob owner; GENERAL_INFO never dereferences it.
+		return new Case(name, inputs, capture(new SM_INVENTORY_UPDATE_ITEM(null, item, ItemUpdateType.DEC_ITEM_USE), null));
+	}
+
+	/**
+	 * Build a minimal non-equippable Item via the simple Item(objId, itemTemplate) ctor. The template is directly
+	 * constructed (no JAXB) with itemId/mask/desc set, itemGroup NONE (no equip slots) and maxTuneCount pinned to 0 (what
+	 * afterUnmarshal would set for a slot-0 item). The objectId is passed to the ctor directly (no IDFactory). Mirrored
+	 * 1:1 on the C# asserter side.
+	 */
+	private static Item buildSimpleItem(int objectId, int itemId, int mask, int desc, long itemCount, String creator) {
+		try {
+			ItemTemplate template = new ItemTemplate();
+			setField(template, "itemId", itemId);
+			setField(template, "mask", mask);
+			setField(template, "description", desc);
+			setField(template, "itemGroup", ItemGroup.NONE);
+			setField(template, "maxTuneCount", 0); // canTune() == false (deterministic, identical both sides)
+			Item item = new Item(objectId, template);
+			item.setItemCount(itemCount);
+			item.setItemCreator(creator);
+			return item;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to build simple Item", e);
+		}
+	}
+
+	/**
+	 * Seed DataManager.ITEM_CLEAN_UP with an empty (non-null) cleanup list so
+	 * hasAccountOrLegionWhStorabilityDisabled(itemId) streams an empty list -> false (no NPE on the null default). The
+	 * bounded holder seam (mirrors the WORLD_MAPS/SKILL/QUEST/TRADE_LIST seams).
+	 */
+	private void installItemCleanupSeam() {
+		try {
+			ItemRestrictionCleanupData data = new ItemRestrictionCleanupData();
+			setField(data, "bplist", new ArrayList<>());
+			DataManager.ITEM_CLEAN_UP = data;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to install ITEM_CLEAN_UP seam", e);
+		}
 	}
 
 	/** Seed an empty HouseData so the TownService singleton ctor's getLands() loop is a no-op (no DB, no NPC_DATA). */
