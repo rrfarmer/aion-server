@@ -2,6 +2,77 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## RESOLVED — Second-pass + trailing main services wired (commits 5fdff6c10 / 5a2fe74c4 / 334a07ef4 / 3fc0b0857 / f44838a62, 2026-06-16)
+
+Drained the bounded boot-init long tail across GameServer.main. All in exact Java order, each gated on the
+GameServerBootstrapTests (7/7) safety net (wire -> ~Bootstrap -> revert+defer if it NREs). Per-class verify
+all-green every commit: build 0, bootstrap 7/7, golden 167/167, RealStaticDataLoad green.
+
+NOW WIRED (in main order):
+- DropRegistrationService.getInstance() (main:108) — empty ctor; drop-table singleton.
+- HousingService block (main:119-123) — DEFERRED (no-DB edge, see below).
+- ChallengeTaskService.getInstance() (main:124) — empty task maps.
+- LimitedItemTradeService.getInstance().start() (main:136) — limited-trade NPC collection + reset crons (empty data => no-op).
+- PlayerLimitService.getInstance().scheduleUpdate() (main:137-138, guarded LIMITS_ENABLED) — daily sell-limit reset cron.
+- SiegeService.initSieges() (main:142) — DEFERRED (fixture data gap, see below).
+- BaseService.getInstance().initBases() (main:144) — starts casual/stained/panesterra bases.
+- WorldRaidService.getInstance().initWorldRaids() (main:146) — schedules world raids via cron.
+- ConquerorAndProtectorService.getInstance().init() (main:148) — registers CP worlds + kills-decrease task.
+- AnnouncementService.getInstance() (main:150) — loads announcements (DAO-guarded).
+- WeatherService.getInstance() (main:152) — per-zone weather state/rotation.
+- BrokerService.getInstance() (main:153) — auction broker load + expiry/save schedules.
+- Influence.getInstance() (main:154) — abyss influence ratios.
+- ExchangeService.getInstance() (main:155) — empty ctor.
+- PeriodicSaveService (main:156) — DEFERRED (reworked DI GameEngine, not faithful 1:1, see below).
+- AtreianPassportService.getInstance() (main:157) — passport expire + daily-09:00 reset cron.
+- AbyssRankingCache.getInstance() (main:164) — ranking-window packet cache (DAO-guarded).
+- AbyssRankUpdateService.scheduleUpdate() (main:165) — rank-update + daily-GP-loss crons.
+- PeriodicInstanceManager.getInstance() (main:166) — DEFERRED (AUTO_GROUP_DATA fixture gap, see below).
+- EventService.getInstance().start() (main:167) — active-event collection + 5-min check cron.
+- AdminService.getInstance() (main:169) — item-restriction list (IOException-guarded).
+- CommandsAccessService.loadAccesses() (main:170) — command ACLs (DAO-guarded).
+- PlayerTransferService.getInstance() (main:172) — REMOVE_SKILL_LIST '*' default no-op.
+- CustomInstanceService.getInstance() (main:177) — empty ctor.
+
+NULL-DEP / FIDELITY FIXES (Java @Property defaults as field initializers via CronExpressions.GetOrCreate, OR
+XmlSerializer member public-ization; no invented values):
+- SiegeSchedules + WorldRaidSchedules: [XmlElement]/[XmlAttribute] PRIVATE fields -> widened to public (XmlSerializer
+  binds public members only; were returning null lists => InitSieges/InitWorldRaids foreach NRE). Real deser bug.
+- RankingConfig.TOP_RANKING_UPDATE_RULE='0 0 0 ? * *', TOP_RANKING_DAILY_GP_LOSS_TIME='0 0 12 ? * *'.
+- AutoGroupConfig.{DREDGION,KAMAR_BATTLEFIELD,ENGULFED_OPHIDAN_BRIDGE,IRON_WALL_WARFRONT,IDGEL_DOME}_TIMES =
+  1-element CronExpression[] (ArrayTransformer splits on commas OUTSIDE quotes => quote-wrapped default = 1 element).
+- HousingConfig.HOUSE_AUCTION_END_TIME='0 0 12 ? * SUN', AUCTION_AUTO_FILL_TIME / HOUSE_MAINTENANCE_TIME='0 0 0 ? * MON'.
+- CustomConfig.LIMITS_UPDATE='0 0 0 ? * *'.
+- EventsConfig.DISABLED_EVENTS = empty set (Java @Property no defaultValue but events.properties is empty =>
+  CommaSeparatedValueTransformer('') => empty set, not null).
+- EventData.events = new() (empty-but-non-null when timed_events XML absent; matches BaseData.baseTemplates convention).
+
+STILL DEFERRED (each faithful 1:1 — blocked ONLY by a bootstrap test-fixture data gap or a reworked type, NOT a
+port defect; the real server has the data/DB and these run):
+1. **SiegeService.initSieges() (main:142)** — UpdateFortressNextState() does GetSiegeLocation(scheduledLocId).SetNextState
+   with no null guard (Java has none either). The fixture loads EMPTY SIEGE_LOCATION_DATA while siege_schedule.xml
+   is the full real file => GetSiegeLocation returns null => NRE. Wire once the fixture seeds matching siege location data.
+2. **HousingService + HousingBidService + AuctionEndTask/AuctionAutoFillTask/MaintenanceTask (main:119-123)** —
+   HousingService ctor does new HashSet<int>(PlayerDAO.GetUsedIDs()); GetUsedIDs returns NULL on DB failure (Java
+   NPEs identically). No-DB fixture => ArgumentNullException. Wire once the harness provides a DB (or GetUsedIDs
+   returns empty on no-DB). The 3 auction-task cron DEFAULTS are already populated (fix stands).
+3. **PeriodicInstanceManager.getInstance() (main:166)** — ScheduleRegistration log line -> AutoGroupType.GetTemplate()
+   -> data[self].Template needs AUTO_GROUP_DATA (absent in fixture). Cron-array hazard already fixed. Wire once the
+   fixture seeds AUTO_GROUP_DATA.
+4. **HTMLCache.getInstance() (main:163)** — ctor ParseDir('./data/static_data/HTML/') throws DirectoryNotFoundException
+   (Java NPEs on null listFiles too). Fixture ships no HTML/ dir or html.cache. Wire once the fixture seeds an HTML dir.
+5. **PvpMapService.getInstance().init() (main:176)** — unconditional InstanceService.GetNextAvailableInstance(301220000,...)
+   needs that world map; fixture loads empty WORLD_MAPS_DATA. Wire once the fixture carries the pvp-map world.
+6. **PeriodicSaveService (main:156)** — the C# type is a reworked DI-constructed GameEngine (only schedules a
+   server-last-run variable), NOT a faithful 1:1 of Java's singleton (player/legion periodic saves). Needs a DI
+   instance + faithful re-port; out of scope for a bounded getInstance() wire.
+
+RECOMMENDED NEXT: the 5 fixture-data-gap deferrals (#1-5) all unblock with the SAME move — enrich the
+GameServerBootstrapTests StaticDataFixture (or add a DB-backed harness) so SIEGE_LOCATION_DATA / AUTO_GROUP_DATA /
+WORLD_MAPS(pvp-map) / an HTML dir / a (test) DB are present, then flip each deferred wire on and re-gate. #6
+(PeriodicSaveService faithful re-port) is a separate scoped task. All remaining boot-init GAPs are now either wired
+or one of these 6 documented deferrals — the boot-init long tail is drained to its data/DB/reworked floor.
+
 ## RESOLVED — Location-init cluster wired (commit pending, 2026-06-16)
 
 The boot location-init cluster (GameServer.main lines 111-117 + TownService :127) is now WIRED in
@@ -98,8 +169,7 @@ main (post-utility):
 - QuestEngine/AIEngine/InstanceEngine/ChatProcessor/ZoneService/GeoService init (parallel) — DONE (engine list).
 - World.getInstance() — DONE (LoadWorldMaps + RegisterInstance).
 - GameTimeService.getInstance() — DONE.
-- DropRegistrationService.getInstance() — GAP (drop-table registration; live consumers = loot on NPC death.
-  Bounded singleton-touch; likely next bounded wire — needs DropRegistrationService ported/verified first).
+- DropRegistrationService.getInstance() — DONE (wired 2026-06-16; empty ctor, bounded singleton touch).
 - BaseService.getInstance() — DONE (base location registry; wired 2026-06-16 location-init cluster).
 - SiegeService.getInstance() — DONE (siege location data; wired 2026-06-16).
 - WorldRaidService.initWorldRaidLocations() — DONE (world-raid locations; wired 2026-06-16).
@@ -108,43 +178,44 @@ main (post-utility):
 - LegionDominionService.initLocations() — DONE (legion-territory locations; wired 2026-06-16).
 - HousingService.getInstance() — GAP? (faithful HousingService exists + runs per-instance on spawn; explicit
   boot getInstance() touch not in StartAsync — verify it self-inits via spawn path; likely effectively DONE).
-- HousingBidService / AuctionEndTask / AuctionAutoFillTask / MaintenanceTask — GAP (housing auction tasks).
-- ChallengeTaskService.getInstance() — GAP.
+- HousingService/HousingBidService/AuctionEndTask/AuctionAutoFillTask/MaintenanceTask — DEFERRED (no-DB edge:
+  HousingService ctor new HashSet(PlayerDAO.GetUsedIDs()) NREs when GetUsedIDs returns null on no-DB; cron defaults fixed).
+- ChallengeTaskService.getInstance() — DONE (wired 2026-06-16; empty task maps).
 - SpawnEngine.spawnAll() — DONE.
 - TownService.getInstance() — DONE (town registry; wired 2026-06-16). NOTE: town NPC SPAWNING still depends on
   the gated SPAWNS_DATA/TOWN_SPAWNS path (#1); this wire restores the town-level/points registry only.
 - FlyRingService.getInstance() — DONE.
 - RiftService.initRifts() — DONE.
 - ratio-limitation block (GSConfig.ENABLE_RATIO_LIMITATION) — N/A by default (config-gated off).
-- LimitedItemTradeService.start() — GAP.
-- PlayerLimitService.scheduleUpdate() (CustomConfig.LIMITS_ENABLED) — GAP (config-gated).
-- SiegeService.initSieges() — GAP (second-pass: despawns spawn-engine NPCs + spawns siege NPCs + schedules
-  fortress sieges through CronService. getInstance() prereq now DONE; this is the next bounded second-pass wire,
-  gated on confirming the SpawnNpcs/DeSpawnNpcs path + SiegeSchedules.Load don't NRE on unported deps).
-- BaseService.initBases() — GAP (second-pass: starts casual/stained/panesterra bases. getInstance() prereq DONE).
-- WorldRaidService.initWorldRaids() — GAP (second-pass: schedules raids via CronService. getInstance() prereq DONE).
-- ConquerorAndProtectorService.init() — GAP.
-- AnnouncementService.getInstance() — GAP.
+- LimitedItemTradeService.start() — DONE (wired 2026-06-16; empty data => no-op).
+- PlayerLimitService.scheduleUpdate() (CustomConfig.LIMITS_ENABLED) — DONE (wired 2026-06-16; LIMITS_UPDATE cron default fixed).
+- SiegeService.initSieges() — DEFERRED (fixture gap: UpdateFortressNextState NREs on null GetSiegeLocation when
+  SIEGE_LOCATION_DATA empty but siege_schedule.xml full).
+- BaseService.initBases() — DONE (wired 2026-06-16; starts casual/stained/panesterra bases).
+- WorldRaidService.initWorldRaids() — DONE (wired 2026-06-16; schedules raids via cron).
+- ConquerorAndProtectorService.init() — DONE (wired 2026-06-16).
+- AnnouncementService.getInstance() — DONE (wired 2026-06-16; DAO-guarded).
 - DebugService.getInstance() — DONE.
-- WeatherService.getInstance() — GAP (weather scheduling). Live consumers: zone weather.
-- BrokerService.getInstance() — GAP (auction broker). Live consumers: broker UI/persistence.
-- Influence.getInstance() — GAP (abyss influence ratio).
-- ExchangeService.getInstance() — GAP (player trade).
-- PeriodicSaveService.getInstance() — GAP (periodic player/legion save scheduling). Notable: real persistence.
-- AtreianPassportService.getInstance() — GAP.
+- WeatherService.getInstance() — DONE (wired 2026-06-16; per-zone weather state/rotation).
+- BrokerService.getInstance() — DONE (wired 2026-06-16; broker load + schedules).
+- Influence.getInstance() — DONE (wired 2026-06-16; abyss influence ratios).
+- ExchangeService.getInstance() — DONE (wired 2026-06-16; empty ctor).
+- PeriodicSaveService.getInstance() — DEFERRED (reworked DI GameEngine, not faithful 1:1; needs re-port).
+- AtreianPassportService.getInstance() — DONE (wired 2026-06-16; expire + daily reset cron).
 - CronJobService.getInstance() — DONE (this tick).
 - CuringZoneService.getInstance() (guarded !GEO_MATERIALS_ENABLE; default off) — DONE (guarded, matches Java).
 - RoadService.getInstance() — DONE.
-- HTMLCache.getInstance() — GAP (HTML dialog cache). Live consumers: NPC dialog HTML.
-- AbyssRankingCache / AbyssRankUpdateService.scheduleUpdate() — GAP.
-- PeriodicInstanceManager.getInstance() — GAP.
-- EventService.start() — GAP (event spawns/schedules).
-- AdminService.getInstance() — GAP.
-- CommandsAccessService.loadAccesses() — GAP (admin command ACLs). Live consumers: chat command auth.
-- PlayerTransferService.getInstance() — GAP.
+- HTMLCache.getInstance() — DEFERRED (fixture gap: no HTML/ dir, ParseDir DirectoryNotFoundException).
+- AbyssRankingCache.getInstance() — DONE (wired 2026-06-16; DAO-guarded). AbyssRankUpdateService.scheduleUpdate() —
+  DONE (wired 2026-06-16; ranking cron defaults fixed).
+- PeriodicInstanceManager.getInstance() — DEFERRED (fixture gap: AutoGroupType.GetTemplate needs AUTO_GROUP_DATA; cron-array fixed).
+- EventService.start() — DONE (wired 2026-06-16; empty EVENT_DATA => no-op, DISABLED_EVENTS/events null-fixes).
+- AdminService.getInstance() — DONE (wired 2026-06-16; IOException-guarded file read).
+- CommandsAccessService.loadAccesses() — DONE (wired 2026-06-16; DAO-guarded).
+- PlayerTransferService.getInstance() — DONE (wired 2026-06-16; '*' default no-op).
 - GameTimeService.startClock() — DONE.
-- PvpMapService.init() — GAP.
-- CustomInstanceService.getInstance() — GAP.
+- PvpMapService.init() — DEFERRED (fixture gap: needs world map 301220000 in WORLD_MAPS_DATA).
+- CustomInstanceService.getInstance() — DONE (wired 2026-06-16; empty ctor).
 - DataManager.waitForValidationToFinishAndShutdownOnFail() — DONE (ValidationTask await).
 - System.gc() — N/A.
 - VersionInfo/SystemInfo logAll — N/A (logging).
