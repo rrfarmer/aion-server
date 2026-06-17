@@ -2,6 +2,31 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## INSTANCE-HANDLER PORT — batch 1 (2026-06-16)
+
+Java instance handlers live in `game-server/data/handlers/instance/*.java` = **37 total** (not ~78). Base
+`GeneralInstanceHandler` + `[InstanceID(n)]` attribute + `InstanceHandlerClassListener` (reflection scan via
+`InstanceEngine.AddInstanceHandlerClass`) are ALL already ported. Port shape = same as quest/AI scripts:
+`public class XxxInstance : GeneralInstanceHandler { ctor base(instance); [InstanceID(n)]; override On*/Handle* }`.
+Ported into `dotnetConversion/src/Aion.GameServer/Handlers/Instance/`.
+
+**Batch 1 done (13 handlers, all green):** Haramel, FireTemple, AdmaStronghold, TheobomosLab, DraupnirCave,
+KromedesTrial, PadmarashkasCave, DanuarSanctuary, DanuarMysticarium, DanuarReliquary (base) + DanuarReliquary_L
++ InfernalDanuarReliquary, LowerUdasTemple. **Running total 13/37.**
+
+**Gotchas:** `SkillEngine.GetInstance()` collides with the `Aion.GameServer.SkillEngine` namespace when imported
+— fully-qualify `Aion.GameServer.SkillEngine.SkillEngine.GetInstance()` (same for SpawnEngine, already qualified
+in the base). `PlayerClass` needs `using Aion.GameServer.Model`. AtomicBoolean/AtomicInteger → `int` +
+`Interlocked.CompareExchange`/`Increment` + `Volatile.Write` (per threadpool-async-idiom memory). `Future<?>` →
+`ScheduledTask` (`IsCancelled` property, `Cancel(bool)`). AiEventType ns = `Aion.GameServer.Ai.Event`,
+AbnormalState ns = `Aion.GameServer.SkillEngine.Effects`. Java arrow-switch → C# switch statement/expression.
+
+**Recommended next batch (next simplest, all deps confirmed-portable shape):** OphidanBridge (+ _L subclass),
+SeizedDanuarSanctuary, Beshmundir, InfinityShard, AturamSkyFortress, SauroSupplyBase, RentusBase,
+OccupiedRentusBase, RaksangRuins, TalocsHollow. **Deferred (heavy):** ShugoImperialTomb (1329 lines, WalkManager/
+NpcAI/sp-helper), StonespearReach (925), EternalBastion (867), DrakenspireDepths (593), TheShugoEmperorsVault
+(574) — verify sp/WalkManager surface first.
+
 ## CAPSTONE FIDELITY RE-SURVEY — 2026-06-16 (commit e3e1b1184)
 
 Final comprehensive read-only sweep of the whole src tree across the 6 slop/silent-gap categories. Two real
