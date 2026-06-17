@@ -2,6 +2,64 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## RESOLVED — 2 of the 6 boot-init deferrals unblocked via fixture enrichment (commits 2c05275b8 / 713fef10a, 2026-06-16)
+
+Enriched the GameServerBootstrapTests StaticDataFixture to seed the SPECIFIC REAL static_data files each
+deferred service needs at init (copied verbatim from game-server/data/static_data via a FindRepoRoot walk;
+never invented; skipped when the repo data tree is absent). The fixture's LoadLeafHoldersFromFiles reads each
+holder from a fixed sub-path of the temp static_data dir, so dropping the real file there populates exactly that
+holder and leaves every other holder empty (minimal). Then flipped each gated wire on at its Java-correct boot
+site and re-gated on the 7/7 bootstrap test (all-green-or-revert). Per-class verify each commit: build 0,
+bootstrap 7/7, golden 167/167, RealStaticDataLoad green.
+
+NOW WIRED:
+- **#3 PeriodicInstanceManager.getInstance() (main:166)** — UNBLOCKED. Fixture seeds the real
+  auto_group/auto_group.xml (every static-init AutoGroupType maskId 1,2,3,21-45,101-103,107,108,109,111 is
+  present), so the ctor's GetAGTByMaskId -> GetTemplate resolves non-null templates and schedules the
+  dredgion/kamar/ophidan/iron-wall/idgel registration crons. Commit 2c05275b8.
+- **#4 HTMLCache.getInstance() (main:163)** — UNBLOCKED. Fixture copies the real static_data/HTML tree to a
+  temp dir and points HTMLConfig.HTML_ROOT/HTML_CACHE_FILE at temp paths, so the ctor's Reload(false) ->
+  ParseDir caches the real .xhtml files instead of throwing DirectoryNotFoundException. Commit 713fef10a.
+
+STILL DEFERRED after attempt (precise blockers, each faithful 1:1 — NOT a port defect):
+- **#1 SiegeService.initSieges() (main:142)** — ATTEMPTED + REVERTED. Seeding siege/siege_locations.xml fixes
+  the original UpdateFortressNextState null-GetSiegeLocation NRE, but initSieges goes DEEPER: it StartSiege()s
+  every standalone artifact, and ArtifactSiege.OnSiegeStart -> Siege.InitSiegeBoss throws
+  `SiegeException: Siege Boss not found for siege 1012` because the artifact boss NPC is not spawned (empty
+  SPAWNS_DATA => GetSiegeSpawnsByLocId null => SpawnNpcs no-op; no siege spawns, no artifact world map).
+  Faithful (Java throws SiegeException there too without the boss spawn). BLOCKER = HEAVY-DATA/SPAWN: needs the
+  full SPAWNS_DATA siege-spawn dir + the siege/artifact world maps loaded into World, not a leaf-holder seed —
+  i.e. a real spawn/world boot, which the minimal bootstrap fixture deliberately does not load. Defer to a
+  spawn-data-backed harness.
+- **#5 PvpMapService.getInstance().init() (main:176)** — NOT ATTEMPTED-to-green (analysis defer). Init ->
+  InstanceService.GetNextAvailableInstance(301220000) needs world map 301220000 (=> the full real world_maps.xml
+  loaded into World.LoadWorldMaps) AND PvpMapHandler.OnInstanceCreate actively SPAWNS keymasters/treasure
+  chests/NPCs (Spawn/BringIntoWorld) — needing NPC_DATA + spawn infra, AND it materializes world objects which
+  would break the bootstrap's empty-world invariant (Assert.Equal(0, world.ObjectCount) after stop). BLOCKER =
+  HEAVY-DATA/SPAWN + invariant-conflict: same floor as #1. Defer to a spawn-data-backed harness.
+- **#2 Housing (main:119-123)** — CONFIRMED DB-HARNESS-GATED (checked Java). Java PlayerDAO.getUsedIDs()
+  returns NULL on SQLException (no DB), and revokeOwnershipOfDeletedPlayers does IntStream.of(null) -> Java
+  NPEs identically. Java is DB-REQUIRED here; it does NOT guard null. Per the hard rule (DB-required init that
+  Java can't run without a DB -> defer to a DB harness, don't fake), NOT wired and NO un-faithful guard added.
+  Defer to a DB harness.
+- **#6 PeriodicSaveService (main:156)** — RE-PORT SCOPED + DEFERRED. The faithful Java is a singleton
+  (getInstance/SingletonHolder) with TWO PeriodicSaveTasks: LegionWarehouseSaveTask
+  (LegionService.getCachedLegions -> InventoryDAO.store + ItemStoneListDAO.save, DB writes) and
+  ServerRunTimeSaveTask (ServerVariablesDAO.store). The C# type is a reworked DI GameEngine doing only the
+  server-runtime task via an IServerVariablesRepository abstraction, DI-registered in Program.cs:74/77 AND
+  consumed by a dedicated passing test (PeriodicSaveService_StoresServerLastRunPeriodicallyAndOnShutdown). A
+  faithful re-port = convert to a Java singleton (drop DI), add the legion-warehouse DB-write task, switch to
+  ServerVariablesDAO.store, re-wire Program.cs engine list, AND rework the existing DI-coupled test — a
+  coordinated re-port touching the DI graph + an existing green test + DB-write tasks, NOT a bounded
+  fixture-seed-and-wire. Defer as a scoped re-port task.
+
+SUMMARY: 2/6 deferrals unblocked (the two pure leaf-holder/dir reads: AUTO_GROUP, HTML). The other 4 sit at a
+real floor — #1/#5 need the heavy SPAWNS_DATA + world-map boot (and #5 also conflicts with the empty-world
+invariant), #2 is DB-required (no Java guard to faithfully port), #6 is a coordinated DI->singleton re-port.
+RECOMMENDED NEXT: (a) a spawn-data-backed bootstrap harness (load the real spawns/ + world_maps.xml into a
+test World) would unblock BOTH #1 and #5 at once; (b) a DB-backed test harness unblocks #2; (c) the #6
+PeriodicSaveService faithful re-port is a separate scoped task.
+
 ## RESOLVED — Second-pass + trailing main services wired (commits 5fdff6c10 / 5a2fe74c4 / 334a07ef4 / 3fc0b0857 / f44838a62, 2026-06-16)
 
 Drained the bounded boot-init long tail across GameServer.main. All in exact Java order, each gated on the
@@ -205,10 +263,10 @@ main (post-utility):
 - CronJobService.getInstance() — DONE (this tick).
 - CuringZoneService.getInstance() (guarded !GEO_MATERIALS_ENABLE; default off) — DONE (guarded, matches Java).
 - RoadService.getInstance() — DONE.
-- HTMLCache.getInstance() — DEFERRED (fixture gap: no HTML/ dir, ParseDir DirectoryNotFoundException).
+- HTMLCache.getInstance() — DONE (wired 2026-06-16, commit 713fef10a; fixture seeds real HTML dir).
 - AbyssRankingCache.getInstance() — DONE (wired 2026-06-16; DAO-guarded). AbyssRankUpdateService.scheduleUpdate() —
   DONE (wired 2026-06-16; ranking cron defaults fixed).
-- PeriodicInstanceManager.getInstance() — DEFERRED (fixture gap: AutoGroupType.GetTemplate needs AUTO_GROUP_DATA; cron-array fixed).
+- PeriodicInstanceManager.getInstance() — DONE (wired 2026-06-16, commit 2c05275b8; fixture seeds real AUTO_GROUP_DATA).
 - EventService.start() — DONE (wired 2026-06-16; empty EVENT_DATA => no-op, DISABLED_EVENTS/events null-fixes).
 - AdminService.getInstance() — DONE (wired 2026-06-16; IOException-guarded file read).
 - CommandsAccessService.loadAccesses() — DONE (wired 2026-06-16; DAO-guarded).
