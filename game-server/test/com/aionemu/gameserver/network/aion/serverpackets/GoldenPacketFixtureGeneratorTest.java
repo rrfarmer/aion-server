@@ -1010,6 +1010,112 @@ public class GoldenPacketFixtureGeneratorTest {
 		writeFixture(outDir.resolve("SM_GM_SHOW_PLAYER_SKILLS.json"), "SM_GM_SHOW_PLAYER_SKILLS", null, smGmSkills);
 	}
 
+	/**
+	 * Batch 14: con-null-safe DTO/scalar packets reachable now (no con, no live World, no live singleton).
+	 *   SM_NPC_ASSEMBLER (AssembledNpc/AssembledNpcPart plain DTOs; getTimeOnMap() uses System.currentTimeMillis so
+	 *     the cached packet field {@code timeOnMap} is reflect-pinned to a fixed value AFTER construction -> deterministic;
+	 *     the null-assembledNpc despawn case writes only writeD(0)).
+	 *   SM_GATHER_UPDATE (ctor caches scalars from GatherableTemplate/Material; writeImpl reads only those + the
+	 *     SM_SYSTEM_MESSAGE STR_EXTRACT_GATHER_* catalog ids (static constants) + ChatUtil.l10n() (pure: "$"+2-char
+	 *     encoding of nameid<<1|1). GatherableTemplate.harvestSkill + Material.nameid/itemid reflect-set (bypass JAXB).
+	 *   mvn -q -pl game-server -am test -Dtest=GoldenPacketFixtureGeneratorTest#generateGoldenScalarBatch14Fixtures -Dmaven.test.skip=false -Dsurefire.failIfNoSpecifiedTests=false
+	 */
+	@Test
+	public void generateGoldenScalarBatch14Fixtures() throws Exception {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		// SM_NPC_ASSEMBLER: if assembledNpc != null -> writeD(size) + per-part writeD(routeId) writeD(objectId)
+		// writeD(npcId) writeD(staticId) writeQ(timeOnMap); else writeD(0). timeOnMap pinned to 5000L for determinism.
+		List<Case> smNpcAssembler = new ArrayList<>();
+		java.util.List<com.aionemu.gameserver.model.assemblednpc.AssembledNpcPart> parts = new ArrayList<>();
+		parts.add(assembledPart(900001, 219501, 41));
+		parts.add(assembledPart(900002, 219502, 42));
+		com.aionemu.gameserver.model.assemblednpc.AssembledNpc npc =
+			new com.aionemu.gameserver.model.assemblednpc.AssembledNpc(7, 320070000, 60000, parts);
+		com.aionemu.gameserver.network.aion.serverpackets.SM_NPC_ASSEMBLER asmPacket =
+			new com.aionemu.gameserver.network.aion.serverpackets.SM_NPC_ASSEMBLER(npc);
+		setLongField(asmPacket, "timeOnMap", 5000L); // pin cached time -> deterministic wire bytes
+		smNpcAssembler.add(new Case("twoPartsRoute7",
+			"{\"routeId\":7,\"timeOnMap\":5000,\"parts\":[[900001,219501,41],[900002,219502,42]]}",
+			capture(asmPacket)));
+		smNpcAssembler.add(new Case("despawnNull",
+			"{\"assembledNpc\":null}",
+			capture(new com.aionemu.gameserver.network.aion.serverpackets.SM_NPC_ASSEMBLER(null))));
+		writeFixture(outDir.resolve("SM_NPC_ASSEMBLER.json"), "SM_NPC_ASSEMBLER", null, smNpcAssembler);
+
+		// SM_GATHER_UPDATE: writeH(skillId) writeC(action) writeD(itemId) writeD(success) writeD(failure)
+		// writeD(executionSpeed) writeD(delay) + per-action writeSystemMsgInfo(msgId): writeD(msgId) writeS(msgId==0?null:l10n).
+		// l10n = ChatUtil.l10n(material.nameid). actions 0/1/6/7/8 cover both msgId!=0 (writeS l10n) and msgId==0 (writeS null).
+		List<Case> smGatherUpdate = new ArrayList<>();
+		com.aionemu.gameserver.model.templates.gather.GatherableTemplate tmpl = newGatherableTemplate(30001);
+		com.aionemu.gameserver.model.templates.gather.Material mat = newMaterial(152000001, 350001);
+		smGatherUpdate.add(new Case("actionInit",
+			"{\"skillId\":30001,\"action\":0,\"itemId\":152000001,\"nameId\":350001,\"success\":3,\"failure\":1,\"executionSpeed\":1500,\"delay\":2000}",
+			capture(new com.aionemu.gameserver.network.aion.serverpackets.SM_GATHER_UPDATE(tmpl, mat, 3, 1, 0, 1500, 2000))));
+		smGatherUpdate.add(new Case("actionUpdate",
+			"{\"skillId\":30001,\"action\":1,\"itemId\":152000001,\"nameId\":350001,\"success\":3,\"failure\":1,\"executionSpeed\":1500,\"delay\":2000}",
+			capture(new com.aionemu.gameserver.network.aion.serverpackets.SM_GATHER_UPDATE(tmpl, mat, 3, 1, 1, 1500, 2000))));
+		smGatherUpdate.add(new Case("actionSuccess",
+			"{\"skillId\":30001,\"action\":6,\"itemId\":152000001,\"nameId\":350001,\"success\":3,\"failure\":1,\"executionSpeed\":1500,\"delay\":2000}",
+			capture(new com.aionemu.gameserver.network.aion.serverpackets.SM_GATHER_UPDATE(tmpl, mat, 3, 1, 6, 1500, 2000))));
+		smGatherUpdate.add(new Case("actionFail",
+			"{\"skillId\":30001,\"action\":7,\"itemId\":152000001,\"nameId\":350001,\"success\":3,\"failure\":1,\"executionSpeed\":1500,\"delay\":2000}",
+			capture(new com.aionemu.gameserver.network.aion.serverpackets.SM_GATHER_UPDATE(tmpl, mat, 3, 1, 7, 1500, 2000))));
+		smGatherUpdate.add(new Case("actionOccupied",
+			"{\"skillId\":30001,\"action\":8,\"itemId\":152000001,\"nameId\":350001,\"success\":3,\"failure\":1,\"executionSpeed\":1500,\"delay\":2000}",
+			capture(new com.aionemu.gameserver.network.aion.serverpackets.SM_GATHER_UPDATE(tmpl, mat, 3, 1, 8, 1500, 2000))));
+		writeFixture(outDir.resolve("SM_GATHER_UPDATE.json"), "SM_GATHER_UPDATE", null, smGatherUpdate);
+	}
+
+	/** AssembledNpcPart with object id + reflect-set template npcId/staticId (bypass XML). */
+	private static com.aionemu.gameserver.model.assemblednpc.AssembledNpcPart assembledPart(int objectId, int npcId, int staticId) throws Exception {
+		com.aionemu.gameserver.model.templates.assemblednpc.AssembledNpcTemplate.AssembledNpcPartTemplate pt =
+			new com.aionemu.gameserver.model.templates.assemblednpc.AssembledNpcTemplate.AssembledNpcPartTemplate();
+		setIntField(pt, "npcId", npcId);
+		setIntField(pt, "staticId", staticId);
+		return new com.aionemu.gameserver.model.assemblednpc.AssembledNpcPart(objectId, pt);
+	}
+
+	/** GatherableTemplate with reflect-set harvestSkill (only field SM_GATHER_UPDATE reads from it). */
+	private static com.aionemu.gameserver.model.templates.gather.GatherableTemplate newGatherableTemplate(int harvestSkill) throws Exception {
+		com.aionemu.gameserver.model.templates.gather.GatherableTemplate t =
+			new com.aionemu.gameserver.model.templates.gather.GatherableTemplate();
+		setIntField(t, "harvestSkill", harvestSkill);
+		return t;
+	}
+
+	/** Material with reflect-set itemid/nameid (the two fields SM_GATHER_UPDATE reads: getItemId()/getL10n()). */
+	private static com.aionemu.gameserver.model.templates.gather.Material newMaterial(int itemId, int nameId) throws Exception {
+		com.aionemu.gameserver.model.templates.gather.Material m =
+			new com.aionemu.gameserver.model.templates.gather.Material();
+		setIntField(m, "itemid", itemId);
+		setIntField(m, "nameid", nameId);
+		return m;
+	}
+
+	private static void setIntField(Object o, String name, int value) throws Exception {
+		java.lang.reflect.Field f = findField(o.getClass(), name);
+		f.setAccessible(true);
+		f.setInt(o, value);
+	}
+
+	private static void setLongField(Object o, String name, long value) throws Exception {
+		java.lang.reflect.Field f = findField(o.getClass(), name);
+		f.setAccessible(true);
+		f.setLong(o, value);
+	}
+
+	private static java.lang.reflect.Field findField(Class<?> c, String name) throws NoSuchFieldException {
+		for (Class<?> k = c; k != null; k = k.getSuperclass()) {
+			try {
+				return k.getDeclaredField(name);
+			} catch (NoSuchFieldException ignore) {
+			}
+		}
+		throw new NoSuchFieldException(name);
+	}
+
 	// Harness Creature for SM_ATTACK: deterministic objectId + life-stats (currentHp / maxHp -> getHpPercentage()).
 	private static com.aionemu.gameserver.model.gameobjects.Creature harnessAttackCreature(int objectId, int maxHp, int currentHp) {
 		return new HarnessAttackCreature(objectId, maxHp, currentHp);
