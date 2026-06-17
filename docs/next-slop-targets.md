@@ -2,6 +2,16 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## Sm* DUPLICATE-PACKET RETIREMENT — BATCH 14: SmSystemMessage FULLY RETIRED (the deferred last file) (2026-06-17, 1 commit 5c27bc8ef rrfarmer). 13 -> 12 remaining.
+
+Closed the single seam left from batch 13. The last consumer `Services/PeriodicInstanceRegistrationService.cs` was un-reworked FAITHFULLY to the live `SM_SYSTEM_MESSAGE` (no reworked `.MessageId` accessor — Java has no such getter):
+- `CreateOpeningMessageForMaskId(int) : SM_SYSTEM_MESSAGE?` now returns the faithful catalog factories `SM_SYSTEM_MESSAGE.STR_MSG_INSTANCE_OPEN_IDAB1_DREADGION()` / `_IDDREADGION_02/03()` / `_IDKamar()` / `_IDLDF5_Under_01_War()` / `_IDF5_TD_war()` / `_IDLDF5_Fortress_Re()` for mask ids 1/2/3/107/108/109/111 — byte-verified msgIds 1400252/1400628/1401398/1401730/1401947/1402032/1402192 IDENTICAL to the deleted reworked friendly factories. Matches Java `PeriodicInstanceManager` ctor which passes exactly these `SM_SYSTEM_MESSAGE.STR_MSG_INSTANCE_OPEN_*()` objects to `scheduleRegistration`.
+- All 4 `SmSystemMessage?` param/field types -> `SM_SYSTEM_MESSAGE?` (faithful IS-A `AionServerPacket`, so the existing `List<AionServerPacket>` broadcast path is unchanged).
+- The reworked record `PeriodicInstanceRegistrationScheduleEntry.OpeningMessageId` now derives from `openingMessage.GetId()` (faithful packet's `GetId()` returns `msgId`, == the deleted `.MessageId`).
+Then DELETED `SmSystemMessage.cs` (grep-confirmed 0 remaining C# refs; not DI-registered; no slop test). Build0/golden196 byte-exact/full475/bootstrap9. **The opcode-25 heavy web is fully CLOSED.**
+
+**SmAbyssRank RE-ASSESSED THIS TICK -> still DEFER (NOT bounded to one commit).** Reworked `SmAbyssRank(PlayerAbyssRank)` is fed a `PlayerAbyssRank` record — a parallel reworked abyss-rank MODEL (carries `AddAp`/`AddGp` rank-math + the `AbyssRanks` table + `GetRankL10n`, NO single Java counterpart class), not a mere packet snapshot. Faithful `SM_ABYSS_RANK(Player)` reads the LIVE `player.GetAbyssRank()` (faithful `AbyssRank`) + `AbyssRankingCache.GetInstance().GetRankingListPosition(player)`. Consumers `AbyssPointsService`/`GloryPointsService` mutate via the immutable `PlayerAbyssRank` record + reward-plan DTOs (AbyssPointsService L40 `PlayerAbyssRank.FromAbyssRank(rank)` -> L51 `new SmAbyssRank(updatedRank)`), so retiring `SmAbyssRank` requires migrating those whole services off the `PlayerAbyssRank` record onto direct `AbyssRank.addAp/addGp` LIVE mutation (the Java way) = the **abyss points-service big-bang**, not a packet repoint. EXACT blocker: the `PlayerAbyssRank` projection-vs-live-`AbyssRank` seam spans 3 prod files (`AbyssPointsService`, `GloryPointsService`, `PlayerAbyssRank`) + reward-plan DTOs — un-bounded for one all-green commit. Left `SmAbyssRank.cs` alive.
+
 ## Sm* DUPLICATE-PACKET RETIREMENT — BATCH 13: retired the 3 remaining heavy webs SmDialogWindow + SmItemUsageAnimation (FULLY) + SmSystemMessage (all but 1 file) (2026-06-17, 4 commits rrfarmer). 15 -> 13 remaining.
 
 All 3 had a SEPARATE faithful `SM_*` twin registered at the same opcode (60 / 183 / 25) — CLASSIFIED DUPLICATE (not faithful-content).
