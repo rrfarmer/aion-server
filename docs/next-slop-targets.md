@@ -2,6 +2,28 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## ✅ 8 reworked StaticData holder projections — 7/8 RETIRED (2026-06-17, commit 02dc02c30 rrfarmer). 1 deferred (WorldMapSummary, exact seam below).
+
+The 8 reworked `*Table`/`*Summary` projections paralleling faithful DataManager holders. 7 were **dead-islands** (0 live consumers — only StaticData ctor/prop/builder/reader self-references); their faithful holder/template was already LOADED at boot, so the projections were pure parser slop. Retired in the proven per-table shape: strip ctor param + assignment + property + StaticData-ctor-call arg + the interwoven reader branches in the streaming parser + the Builders.cs builder + any now-orphaned Helpers + delete the table file:
+- **PetTemplateTable** (PetTemplateSummary/PetFunctionSummary) — faithful PET_DATA/PetData live (pets/pets.xml). Orphaned helper `ReadPetFunctionTypeAttribute` deleted.
+- **RecipeTemplateTable** (RecipeTemplateSummary/RecipeComponent*) — faithful RECIPE_DATA/RecipeData live (recipe/recipe_templates.xml). Kept separate WorkOrderRecipeTable.
+- **StorageExpansionTemplateTable** (cube+warehouse, StorageExpansionTemplateSummary/Price) — faithful CubeExpandData/WarehouseExpandData live (storage_expander/*.xml).
+- **TitleTemplateTable** (TitleTemplateSummary) + dead `DataManager.TITLE_TEMPLATE_TABLE` accessor — faithful TITLE_DATA/TitleData live (player_titles.xml). Kept shared ItemStatModifier + IsStatModifierElement.
+- **WalkerTemplateTable** (WalkerTemplateSummary/WalkerRouteStepSummary) — faithful WALKER_DATA/WalkerData live (npc_walker/). KEPT WalkerVersionTable (live via DataManager.WALKER_VERSIONS_DATA → InstanceWalkerFormations/WalkerTemplate) + its walk_parent/version reader; renamed file WalkerTemplateTable.cs → WalkerVersionTable.cs.
+- **HousingTemplateTable** (HousingAddress/Building/PartSummary + HousingDecorLine) — faithful HOUSE_DATA + HOUSING_OBJECT_DATA live. Orphaned helpers GetHouseTypeId/GetDefaultBuildingId/IsHousingBuildingPartElement/SplitHousePartTags + HousingBuildingBuilder deleted. Largest (land/building/address/sale/fee/part reader blocks).
+- **PlayerBrokerSettlementSummary** — standalone orphan record (0 consumers, not in parser).
+
+−1283 lines. Build 0, golden 196/196 byte-exact, full suite 459/0, bootstrap 9/9.
+
+### DEFERRED (1/8): WorldMapSummary — live coordinated runtime-instance seam, NOT a bounded reader delete.
+`WorldMapSummary` (+ the `WorldZoneAttributes [Flags]` enum it owns, in the same file Dataholders/WorldMapSummary.cs) is the **data-spine of a reworked runtime world-instance subsystem**, not a dead projection:
+- Built by the StaticData streaming parser (StaticData.cs ~750 `var worldMaps = new List<WorldMapSummary>()`, ~1054 `worldMaps.Add(new WorldMapSummary(...))` via WorldMapSummary.ParseFlags) → stored as `StaticData.WorldMaps`.
+- Consumed LIVE by: `WorldMapRuntimeState(WorldMapSummary summary)` (World/WorldMapRuntimeState.cs — the per-map worldOptions/instance-lifecycle runtime: SetWorldOption/GetNextInstanceId/AddWorldMapInstance/WorldMapInstanceRuntimeState) → `WorldMapRuntimeStateTable` (World/WorldMapRuntimeStateTable.cs) → `GameServerRuntimeContext.WorldMapStates` (Services/GameServerRuntimeContext.cs:12,20) → consumed by `World/Zone/ZoneInstance.cs`, `Handlers/AdminCommands/Zone.cs`; and `FlightZoneTable.CanFly/CanGlide(WorldMapSummary, WorldZoneAttributes)` (Dataholders/FlightZoneTable.cs:40,48 — ShouldUseWorldMapOption/HasOverriddenOption flight/glide resolution).
+- Faithful counterpart EXISTS + is LOADED at boot: `WORLD_MAPS_DATA`/`WorldMapsData`/`WorldMapTemplate` (DataManager.cs:89 → SD.WorldMaps2, StaticData.cs:596 TryLoadWorldMaps from world_maps.xml; already consumed by SpawnsData). But the reworked runtime runs on the parallel `WorldMapSummary` data + the faithful `WorldMap`/`WorldMapInstance` world-instance model is NOT yet the live runtime.
+- **EXACT SEAM to retire (multi-file big-bang, NOT one commit):** migrate the runtime world-instance state (`WorldMapRuntimeState`/`WorldMapRuntimeStateTable`/`WorldMapInstanceRuntimeState`/`IInstanceLifecycleHandler`/`GameServerRuntimeContext.WorldMapStates`) onto the faithful `WorldMap`/`WorldMapInstance` model fed by `WORLD_MAPS_DATA`/`WorldMapTemplate`; repoint `FlightZoneTable.CanFly/CanGlide` + ZoneInstance + Zone admin command to read `WorldMapTemplate` flags via the faithful WorldMap.worldOptions; then drop the StaticData `worldMaps`/`WorldMapSummary` reader branch + StaticData.WorldMaps property + the WorldMapSummary.cs file (relocating WorldZoneAttributes if the faithful side needs it, or mapping to the faithful ZoneAttributes). Coordinated world-runtime seam — defer to a dedicated world-instance-model increment.
+
+---
+
 ## ✅ GameServerPacket BASE-UNIFICATION — COMPLETE (BATCH 21, 2026-06-17, 1 commit c7067d74d rrfarmer). PACKET-FRONT OBJECT-SPINE BIG-BANG DONE.
 
 **SmPet + SmPetEmote RETIRED; `GameServerPacket` base + `SerializeFrame`/`WritePayload` DROPPED. grep `: GameServerPacket` in `src/Aion.GameServer/Network/Aion/ServerPackets` = 0.** Every GS->client packet now extends faithful `AionServerPacket : BaseServerPacket`; the dual-serialization-path slop debt is fully retired (the live client wire was ALWAYS faithful-only — `GameServerPacket.SerializeFrame` was a C#-test-only invention, never on the wire).
