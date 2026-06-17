@@ -2,6 +2,46 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## GOLDEN SUITE 182 -> 183 (2026-06-17) — integration-harness INCREMENT 1: the bounded WORLD_MAPS_DATA holder seam (SM_TELEPORT_LOC)
+
+First step of the deferred integration-harness sub-project. Golden'd **SM_TELEPORT_LOC** (1 fixture / 3 cases:
+regular-map / instance-map / regular-NONE-anim) via a NEW bounded **DataManager.WORLD_MAPS_DATA holder seam** —
+the first golden that drives a packet through a World-family DataManager holder rather than only scalar/ctor state.
+New Java generator `GoldenWorldPacketFixtureGeneratorTest` + C# `GoldenWorldPacketFixtureTests` (both join the
+GoldenDataManager non-parallel collection). **Byte-exact on FIRST capture, 0 fidelity bugs** (SM_TELEPORT_LOC.cs is
+faithful 1:1). Seam: a WorldMapsData carrying exactly TWO templates (one `instance=false` Morheim 220020000, one
+`instance=true` Draupnir Cave 320080000), built identically both sides — C# via an uninitialized StaticData with the
+`WorldMaps2` backing field set + the DataManager test ctor; Java via `DataManager.WORLD_MAPS_DATA` reflectively
+populated (mapsById index, no JAXB/file). SM_TELEPORT_LOC.writeImpl is pure scalar; its ONLY non-ctor read is the
+ctor's `WORLD_MAPS_DATA.getTemplate(mapId).isInstance()` branch (selects instanceId vs mapId for the channel field) —
+so the two templates exercise both branches. `isInstance()` reads the raw `instance` field (NO twin-clamp), so
+WorldConfig is irrelevant here.
+
+**IMPORTANT — the LIVE-World seam (SM_PLAYER_SPAWN / SM_DIE) is NOT bounded this tick; exact blocker documented:**
+SM_PLAYER_SPAWN.writeImpl reads `World.getInstance().getWorldMap(worldId).getTemplate().getBeginnerTwinCount()` and
+SM_DIE reads `player.getWorldMapInstance().getInstanceHandler()`. The blocker is ALL on the **Java** side: Java's
+`World` is a `static final SingletonHolder.instance = new World()` (World.java:345-347). It CANNOT be reflectively
+overridden (Unsafe.allocateInstance + setting the static-final field is blocked, and just touching `SingletonHolder`
+triggers the real `new World()` which NPEs on the unset `DataManager.WORLD_MAPS_DATA`). To make the real
+`World.getInstance()` usable in the harness you MUST let the real `World()` ctor run, which:
+(1) needs `DataManager.WORLD_MAPS_DATA` populated, then (2) builds a real `new WorldMap(template)` whose ctor runs the
+instance-creation loop (getInstanceCount() >= 1 always), each iteration calling
+`WorldMapInstanceFactory.createWorldMapInstance` -> `new WorldMapInstance(...)` whose ctor calls
+`ZoneService.getInstance().getZoneInstancesByWorldId(mapId)` (ZoneService's instance field eagerly reads
+`DataManager.ZONE_DATA.getZones()`, and getZoneInstancesByWorldId builds WorldZoneTemplate/PolyArea/ZoneInstance +
+getNewZoneHandler) and `InstanceEngine.getInstance().getNewInstanceHandler`. So the live-World seam unavoidably pulls
+in real `WORLD_MAPS_DATA` + `ZONE_DATA` + the zone/instance-handler graph = the heavier integration harness.
+**What the live-World seam needs (for a later tick):** populate `DataManager.WORLD_MAPS_DATA` (one template, twin
+clamps pinned identically both sides since `getBeginnerTwinCount()` is WorldConfig-clamped — Java generator leaves
+`WORLD_MAX_TWINS_BEGINNER` at the uninitialized `0` => raw value, C# defaults it to `-1` => 0, so they DIVERGE unless
+pinned) + `DataManager.ZONE_DATA` (at least an empty `ZoneData` so `ZoneService.getInstance()` doesn't NPE) + init
+`ZoneService`/`InstanceEngine`, then either (a) Java: pre-populate those holders before the FIRST `World.getInstance()`
+so the real `new World()` builds, or (b) build a real `World` via the C# `RegisterInstance` bridge equivalent and find
+a Java equivalent (the static-final SingletonHolder is the crux — may need `--add-opens`/Unsafe.putObjectVolatile on
+the holder's static field AFTER forcing its init with WORLD_MAPS_DATA already set, which still runs the real ctor).
+Net: SM_PLAYER_SPAWN/SM_DIE remain the live-World integration-harness increment; SM_TELEPORT_LOC (this tick) is the
+bounded holder-only down-payment. Build 0, golden 183, suite 470/0, bootstrap 9/9.
+
 ## DEFERRED FIDELITY BUG #2 (packet dual-serialization) — RE-ASSESSED: NOT a wire bug (2026-06-17, HEAD 1ad63f41c)
 
 Re-assessed deferred fidelity bug #2 (packet-base-unification / dual serialization path). **It is NOT a
