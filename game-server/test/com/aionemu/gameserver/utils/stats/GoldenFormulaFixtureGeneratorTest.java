@@ -12,7 +12,10 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import com.aionemu.gameserver.model.SkillElement;
 import com.aionemu.gameserver.model.stats.calc.StatCapUtil;
+import com.aionemu.gameserver.model.stats.container.CombatMode;
+import com.aionemu.gameserver.model.stats.container.RatioType;
 import com.aionemu.gameserver.model.stats.container.StatEnum;
 import com.aionemu.gameserver.model.templates.npc.NpcRating;
 
@@ -54,6 +57,69 @@ public class GoldenFormulaFixtureGeneratorTest {
 		generateXpLossTableGetters(outDir);
 		generateStatCapDifferenceLimit(outDir);
 		generateStatCapElementalDefenseBaseValue(outDir);
+		generateStatCapLimitValueForPvpOrPveStat(outDir);
+		generateSkillElementGetStatForElement(outDir);
+	}
+
+	// StatCapUtil.limitValueForPvpOrPveStat(CombatMode, RatioType, int) — reads ONLY its args (no state/config/random).
+	// Math.clamp over the four (mode,type) cap buckets: PVP/ATTACK [-900,1000], PVP/DEFENSE [-1000,900],
+	// PVE/ATTACK [-900,5000], PVE/DEFENSE [-5000,900]. Covers below-min, in-range, above-max + both edges per bucket.
+	// This is the post-aggregation ratio cap applied in StatFunctions.adjustDamageByPvpOrPveModifiers.
+	private static void generateStatCapLimitValueForPvpOrPveStat(Path outDir) throws IOException {
+		List<Case> cases = new ArrayList<>();
+		Object[][] inputs = {
+			// mode,                  type,                  value
+			{ CombatMode.PVP, RatioType.ATTACK,  -2000 },  // below min -> -900
+			{ CombatMode.PVP, RatioType.ATTACK,  -900 },   // == min    -> -900
+			{ CombatMode.PVP, RatioType.ATTACK,  0 },       // in range  -> 0
+			{ CombatMode.PVP, RatioType.ATTACK,  1000 },   // == max    -> 1000
+			{ CombatMode.PVP, RatioType.ATTACK,  3000 },   // above max -> 1000
+			{ CombatMode.PVP, RatioType.DEFENSE, -2000 },  // below min -> -1000
+			{ CombatMode.PVP, RatioType.DEFENSE, 500 },     // in range  -> 500
+			{ CombatMode.PVP, RatioType.DEFENSE, 900 },     // == max    -> 900
+			{ CombatMode.PVP, RatioType.DEFENSE, 2000 },   // above max -> 900
+			{ CombatMode.PVE, RatioType.ATTACK,  -1000 },  // below min -> -900
+			{ CombatMode.PVE, RatioType.ATTACK,  2500 },   // in range  -> 2500
+			{ CombatMode.PVE, RatioType.ATTACK,  5000 },   // == max    -> 5000
+			{ CombatMode.PVE, RatioType.ATTACK,  9999 },   // above max -> 5000
+			{ CombatMode.PVE, RatioType.DEFENSE, -6000 },  // below min -> -5000
+			{ CombatMode.PVE, RatioType.DEFENSE, -5000 },  // == min    -> -5000
+			{ CombatMode.PVE, RatioType.DEFENSE, 0 },       // in range  -> 0
+			{ CombatMode.PVE, RatioType.DEFENSE, 900 },     // == max    -> 900
+			{ CombatMode.PVE, RatioType.DEFENSE, 12000 },  // above max -> 900
+		};
+		for (Object[] in : inputs) {
+			CombatMode mode = (CombatMode) in[0];
+			RatioType type = (RatioType) in[1];
+			int value = (Integer) in[2];
+			Map<String, Object> args = new LinkedHashMap<>();
+			args.put("mode", quote(mode.name()));
+			args.put("type", quote(type.name()));
+			args.put("value", value);
+			cases.add(Case.ofLong(args, StatCapUtil.limitValueForPvpOrPveStat(mode, type, value)));
+		}
+		writeFixture(outDir.resolve("StatCapUtil.limitValueForPvpOrPveStat.json"),
+			"StatCapUtil.limitValueForPvpOrPveStat",
+			"int limitValueForPvpOrPveStat(CombatMode mode, RatioType type, int value)",
+			cases);
+	}
+
+	// SkillElement.getStatForElement() — pure per-constant immutable mapping (no state/config/random).
+	// NONE -> null (no backing resistance stat); each element -> its *_RESISTANCE StatEnum. Result serialized
+	// by NAME; the null case is serialized as the literal name "null" (C# side resolves null -> "null").
+	// Pins the elemental-defense stat lookup used in StatFunctions.reduceDamageByElementalDefense.
+	private static void generateSkillElementGetStatForElement(Path outDir) throws IOException {
+		List<Case> cases = new ArrayList<>();
+		for (SkillElement e : SkillElement.values()) {
+			Map<String, Object> args = new LinkedHashMap<>();
+			args.put("element", quote(e.name()));
+			StatEnum stat = e.getStatForElement();
+			cases.add(Case.ofName(args, stat == null ? "null" : stat.name()));
+		}
+		writeFixture(outDir.resolve("SkillElement.getStatForElement.json"),
+			"SkillElement.getStatForElement",
+			"StatEnum getStatForElement()",
+			cases);
 	}
 
 	// StatCapUtil.getElementalDefenseBaseValue() — pure constant (no arg, no state). Pins the elemental-defense base.
