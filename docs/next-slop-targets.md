@@ -21,11 +21,28 @@ in the base). `PlayerClass` needs `using Aion.GameServer.Model`. AtomicBoolean/A
 `ScheduledTask` (`IsCancelled` property, `Cancel(bool)`). AiEventType ns = `Aion.GameServer.Ai.Event`,
 AbnormalState ns = `Aion.GameServer.SkillEngine.Effects`. Java arrow-switch → C# switch statement/expression.
 
-**Recommended next batch (next simplest, all deps confirmed-portable shape):** OphidanBridge (+ _L subclass),
-SeizedDanuarSanctuary, Beshmundir, InfinityShard, AturamSkyFortress, SauroSupplyBase, RentusBase,
-OccupiedRentusBase, RaksangRuins, TalocsHollow. **Deferred (heavy):** ShugoImperialTomb (1329 lines, WalkManager/
-NpcAI/sp-helper), StonespearReach (925), EternalBastion (867), DrakenspireDepths (593), TheShugoEmperorsVault
-(574) — verify sp/WalkManager surface first.
+**Batch 2 done (11 handlers, all green, commit 3b2221a2b):** OphidanBridge (+ _L subclass), SeizedDanuarSanctuary,
+Beshmundir, InfinityShard, AturamSkyFortress, SauroSupplyBase, RentusBase, OccupiedRentusBase, RaksangRuins,
+TalocsHollow. **Running total 24/37.** Made base `GeneralInstanceHandler.IsBoss(Npc)` `virtual` (Java has no
+`final`; InfinityShard/Sauro/Rentus/OccupiedRentus override it) — interface-free, no other change. Batch-2
+gotchas confirmed: `WalkManager.StartWalking((NpcAI)npc.GetAi())` (StartWalking returns bool, just call it; NpcAI
+ns `Aion.GameServer.Ai`, manager ns `Aion.GameServer.Ai.Manager`); `SM_ATTACK_STATUS.TYPE.HP/MP` + `LOG.REGULAR`
+→ `using TYPE = ...ServerPackets.SmAttackStatus.TYPE; using LOG = ...SmAttackStatus.LOG;` (class is `SmAttackStatus`
+but SM_PLAY_MOVIE/SM_QUEST_ACTION/SM_EMOTION/SM_SYSTEM_MESSAGE keep SCREAMING names); `ItemService` ns is
+`Aion.GameServer.Services.**Items**` (plural); `ZoneName.Get(...)` static + `zone.GetAreaTemplate().GetZoneName()` /
+`zone.GetZoneTemplate().GetName()`; `Rnd.Get(int[])`/`NextInt`/`NextBoolean`/`NextFloat`; Java `scheduleAtFixedRate`
+→ `ThreadPoolManager.GetInstance().ScheduleAtFixedRateTask(_ => {...; return ValueTask.CompletedTask;}, TimeSpan.Zero,
+TimeSpan.FromMilliseconds(delay))` (returns ScheduledTask w/ Cancel); FlyRing via `new FlyRing(new FlyRingTemplate(
+name, mapId, Point3D(double…)×3, radius), instance.GetInstanceId()).Spawn()`; `Math.toRadians` → `Math.PI/180.0 * x`;
+`SummonsService.DoMode(SummonMode.RELEASE, summon, UnsummonType.UNSPECIFIED)`; `Item.GetItemId()` (Item =
+`Model.GameObjects.Item`, base `IsRestrictedToInstance(Item)` override matches). Java arrow-switch w/ multi-int
+labels → C# switch w/ explicit `break;` per group.
+
+**Recommended next batch:** AnguishedDragonLordsRefuge (236), TiamatStrongHold (265), DarkPoeta (301),
+DragonLordsRefuge (348), NightmareCircus (361), IlluminaryObelisk (395) + InfernalIlluminaryObelisk (161) +
+LinkgateFoundry (117) — mid-size, same shape (verify InstanceScore/score-board surface for the Refuge/Obelisk
+pair, and NightmareCircus minigame deps, before porting). **Deferred (heavy):** ShugoImperialTomb (1329 lines),
+StonespearReach (925), EternalBastion (867), DrakenspireDepths (593), TheShugoEmperorsVault (574).
 
 ## CAPSTONE FIDELITY RE-SURVEY — 2026-06-16 (commit e3e1b1184)
 
