@@ -2,6 +2,84 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## CAPSTONE FIDELITY RE-SURVEY — 2026-06-16 (commit e3e1b1184)
+
+Final comprehensive read-only sweep of the whole src tree across the 6 slop/silent-gap categories. Two real
+bounded null-config bugs found + fixed (faithful, all-green); the rest confirmed clean OR scoped as the known
+LARGER porting frontier (instance/quest/AI handlers). Build 0, full suite 454/0, golden 167/167, bootstrap 9/9.
+
+### Survey results by category
+1. **Hollow DataManager holders** — CLEAN. Zero `= new()` / `=> new()` static holders. All ~120 `*_DATA`
+   accessors delegate to the live `StaticData` instance (`SD.*`) bound at boot via RegisterInstance. The 13
+   wired holders confirmed still wired; no straggler.
+2. **Reworked `*Summary`/`*Table` parallel projections** — CLEAN. The retired shadows (NpcTemplateSummary/
+   SkillTemplateSummary/ItemTemplateSummary/Tempering/CustomNpcDrop/Housing/NpcSpawn) are gone (grep = 0). The
+   remaining ~50 `*Summary` records all live inside `*Table` types that StaticData actually builds + exposes
+   (the faithful cache-deserialized loader model, model A) — consumed, not dead-island shadows.
+3. **Invented `*Service` micro-fragments** — 14 services lack an exact `<Name>.java`. Of these: 4 are legit
+   idiomatic infra (GameServerBootstrapService/GameServerHostedService/OutboundLinkHostedService/
+   StaticDataService — allowed per the infra-idiomatic principle). The other 10 are a REWORKED-SUBSTITUTE
+   cluster standing in for UNPORTED faithful instance handlers — SCOPED as LARGER below (NOT bounded deletes:
+   they're DI-live in Program.cs and deleting them without porting the handler leaves a gap).
+4. **Reworked `Sm*` shadowing faithful `SM_*`** — the Npc/House/Loot/Kisk/Rift shadows are retired (grep = 0).
+   ONE pair survives: `SmPet`/`SmPetEmote` (snapshot-DTO reworked, NotSupportedException stubs) shadow the
+   faithful `SM_PET`/`SM_PET_EMOTE` (17 production consumers). SCOPED below (tied to a design-scaffold test +
+   Phase-6 design doc; not a clean 0-consumer delete).
+5. **Null Config statics / boot-init** — **2 REAL BUGS FOUND + FIXED** (commit e3e1b1184):
+   `MembershipConfig.MEMBERSHIP_TYPES` (null -> NRE on the LIVE enter-world path in PlayerEnterWorldService for
+   any membership>0 account; Java loads `{"Premium"}` from membership.properties) and
+   `HousingConfig.HOUSE_AUCTION_REGISTER_DAYS` (null -> NRE in HousingBidService `[0]`/`[1]`; Java loads `{1,5}`
+   from housing.properties). Both initialized as field initializers to the shipped property-file values
+   (faithful, no invented values). All CronExpression statics confirmed initialized (incl. the prior
+   PVP_MAP_RANDOM_BOSS_SCHEDULE fix); `ShutdownConfig.RESTART_SCHEDULE = null` is FAITHFUL (Java @Property has
+   no default + empty properties => null, and Java's ShutdownHook null-guards it).
+6. **Production NotImplemented/TODO in gameplay paths** — CLEAN. All ~35 NotSupportedException are faithful 1:1
+   of Java UnsupportedOperationException (LegionWarehouse-behind-proxy, SiegeService cron-convert, InstanceService
+   invalid-call, EffectTemplate unhandled-hoptype, etc.). All ~30 TODO/FIXME comments are verbatim carry-overs of
+   TODOs in the Java source (correct fidelity, not invented stubs). The only non-faithful stubs are the SmPet
+   shadow's (scoped in #4).
+
+### Bounded fix applied
+- **commit e3e1b1184** — category 5, the two null-config NREs above. Build 0, full suite 454/0, golden 167/167,
+  bootstrap 9/9. The MEMBERSHIP_TYPES fix in particular removes a latent crash directly on the Front-A
+  enter-world frontier (any premium account would have NRE'd on enter-world).
+
+### LARGER items scoped (NOT forced — each is the documented handler-porting frontier, not a bounded slop delete)
+- **Instance-handler AP-reward reworked services (category 3).** 6 `*ApRewardService`
+  (Aturam/EternalBastion/Stonespear + Pvp/PvpArena/PvpInstance) + the timing/scheduler/registration services are
+  DI-registered reworked stand-ins for UNPORTED faithful instance handlers. Java has 78 instance handlers under
+  game-server/data/handlers/instance; only 8 are ported in C#. E.g. AturamSkyFortressApRewardService is a
+  Service+Result-record+Status-enum blow-up of AturamSkyFortressInstance.onDie's 2-line `AbyssPointsService.addAp
+  (player, 540)`. FAITHFUL RESOLUTION = port the instance handlers 1:1 (extend the faithful instance-handler base,
+  override onDie/onEnterInstance) and retire the services — same family/effort class as the 1,035 quest + 503 AI
+  script port (memory: content-handler-scope). NOT a bounded all-green delete.
+- **SmPet/SmPetEmote reworked shadow + its design-scaffold test (category 4).** `SmPet.cs`/`SmPetEmote.cs` are a
+  reworked snapshot-DTO pet-packet design with NotSupportedException stubs; production uses the faithful
+  `SM_PET`/`SM_PET_EMOTE` (17 consumers, golden-tested). The ONLY consumer of the shadow is
+  `PetJavaVectorArtifactReaderTests` — a documented Phase-6 design scaffold (docs/Phase-6-BindPointTeleport-
+  KnownListPetGoldenVectorDesign.md; the test self-reports "Java known-list pet vector artifacts are not present
+  yet"). FAITHFUL RESOLUTION = either complete the Phase-6 known-list-pet golden-vector work against the faithful
+  SM_PET (preferred), or retire the shadow + scaffold test together. Held (don't discard documented in-progress
+  design work as a "clean delete").
+
+### DEFINITIVE VERDICT
+The autonomous IN-MEMORY + DB-ctor fidelity arc is **COMPLETE** for the slop-retirement / hollow-holder /
+boot-init / null-config frontier. After this capstone sweep: hollow holders 0, shadow-Summary/Table 0, live
+shadow-Sm packets reduced to 1 scaffold-only pair, invented infra services are either legit-idiomatic or the
+known handler-port frontier, null-config boot bugs 0 (2 last ones fixed here). The remaining work is NOT
+"slop to retire" — it is two well-bounded categories of GENUINE PORTING (78-8=70 instance handlers; the
+Phase-6 pet golden-vector design) plus the user-environment-gated **Front-A real-client enter-world test**.
+The MEMBERSHIP_TYPES fix notably de-risks that Front-A test (it was a guaranteed enter-world NRE for premium
+accounts).
+
+### Honest final fidelity assessment
+The boot/data/config/packet-base spine is faithful and green end-to-end (DB-backed full boot validated, golden
+parity 167/167, 454/0 suite). The HONEST gap is gameplay BREADTH, not boot fidelity: ~70 instance handlers and
+the long tail of content handlers remain to port (consistent with the parity-state memory's ~15-25%
+full-gameplay estimate). Nothing invented or orphaned was left behind by this sweep; the two fixes are strict
+property-file-faithful. There is no remaining un-blocked autonomous *slop/config* work — the next moves are
+deliberate content-handler porting batches (instance/quest/AI) and the environment-gated client test.
+
 ## RESOLVED 2026-06-16 — full-suite test-isolation (one-process `dotnet test` now 454/0)
 
 The suite passed per-class but flaked 2-4 tests in a single process. Three failures, all diagnosed + fixed
