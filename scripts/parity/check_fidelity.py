@@ -29,6 +29,12 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 JAVA_ROOT = REPO / "game-server" / "src" / "com" / "aionemu" / "gameserver"
+# Faithfully-ported content scripts (quests/AI/instances/zones/chat commands) live in the Java
+# data/handlers tree, NOT under src/. They have exact-name C# counterparts under Handlers/. Index
+# both Java roots so their real class names (e.g. OphidanBridgeInstance, TheImprisonedExecutor,
+# ScaldingExecutorAI) are recognized as faithful 1:1 ports and not mis-flagged as invented slop.
+JAVA_HANDLERS_ROOT = REPO / "game-server" / "data" / "handlers"
+JAVA_ROOTS = [JAVA_ROOT, JAVA_HANDLERS_ROOT]
 CS_ROOT = REPO / "dotnetConversion" / "src" / "Aion.GameServer"
 BASELINE = Path(__file__).resolve().parent / "fidelity-baseline.json"
 
@@ -61,13 +67,16 @@ def normalize(name: str) -> str:
 
 def java_type_norms() -> set[str]:
     norms: set[str] = set()
-    for path in JAVA_ROOT.rglob("*.java"):
-        norms.add(normalize(path.stem))
-        try:
-            for t in JAVA_TYPE_RE.findall(path.read_text(encoding="utf-8", errors="ignore")):
-                norms.add(normalize(t))
-        except OSError:
-            pass
+    for root in JAVA_ROOTS:
+        if not root.exists():
+            continue
+        for path in root.rglob("*.java"):
+            norms.add(normalize(path.stem))
+            try:
+                for t in JAVA_TYPE_RE.findall(path.read_text(encoding="utf-8", errors="ignore")):
+                    norms.add(normalize(t))
+            except OSError:
+                pass
     return norms
 
 
@@ -99,9 +108,12 @@ def java_oversized_norms() -> set[str]:
     Exempting these encodes the 1:1 rule; it does NOT exempt true fusions (e.g. GameServerConnection),
     which have no large Java counterpart of the same name."""
     norms: set[str] = set()
-    for path in JAVA_ROOT.rglob("*.java"):
-        if line_count(path) > GODCLASS_LINE_THRESHOLD:
-            norms.add(normalize(path.stem))
+    for root in JAVA_ROOTS:
+        if not root.exists():
+            continue
+        for path in root.rglob("*.java"):
+            if line_count(path) > GODCLASS_LINE_THRESHOLD:
+                norms.add(normalize(path.stem))
     return norms
 
 

@@ -48,7 +48,6 @@ import com.aionemu.gameserver.services.event.EventService;
 import com.aionemu.gameserver.services.instance.PeriodicInstanceManager;
 import com.aionemu.gameserver.services.player.PlayerLimitService;
 import com.aionemu.gameserver.services.transfers.PlayerTransferService;
-import com.aionemu.gameserver.services.toypet.PetFeedUnusualStorageArtifactCapture;
 import com.aionemu.gameserver.spawnengine.SpawnEngine;
 import com.aionemu.gameserver.taskmanager.tasks.housing.AuctionAutoFillTask;
 import com.aionemu.gameserver.taskmanager.tasks.housing.AuctionEndTask;
@@ -182,8 +181,6 @@ public class GameServer {
 		VersionInfo.logAll(versionInfo, GSConfig.TIME_ZONE_ID);
 		SystemInfo.logAll();
 
-		// Java parity artifact seam: disabled by default, installed only when capture config is explicitly enabled.
-		PetFeedUnusualStorageArtifactCapture.installIfEnabled();
 		nioServer = initNioServer();
 		Runtime.getRuntime().addShutdownHook(ShutdownHook.getInstance());
 		log.info("Game server started in " + (System.currentTimeMillis() / 1000 - START_TIME_SECONDS) + " seconds.");

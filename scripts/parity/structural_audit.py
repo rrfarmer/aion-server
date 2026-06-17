@@ -24,6 +24,11 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 JAVA_ROOT = REPO / "game-server" / "src" / "com" / "aionemu" / "gameserver"
+# Faithfully-ported content scripts (quests/AI/instances/zones/chat commands) live in the Java
+# data/handlers tree, NOT under src/. Their exact-name C# counterparts live under Handlers/. Index
+# both Java roots so the ~1700 content scripts are recognized as faithful ports, not orphan/invented.
+JAVA_HANDLERS_ROOT = REPO / "game-server" / "data" / "handlers"
+JAVA_ROOTS = [JAVA_ROOT, JAVA_HANDLERS_ROOT]
 CS_ROOT = REPO / "dotnetConversion" / "src" / "Aion.GameServer"
 
 JAVA_TYPE_RE = re.compile(
@@ -61,17 +66,26 @@ def stem(name: str, n: int = 2) -> str:
 
 
 def collect_java() -> dict[str, dict]:
-    """Map Java simple class name -> {area, path, lines}. First definition wins."""
+    """Map Java simple class name -> {area, path, lines}. First definition wins.
+
+    Indexes both the engine src/ tree and the data/handlers content-script tree so faithfully-ported
+    quests/AI/instances are recognized as 1:1 (and excluded from the orphan/missing tables). Content
+    scripts are bucketed under a `handlers/...` area so they do not pollute the engine-gap buckets."""
     classes: dict[str, dict] = {}
-    for path in JAVA_ROOT.rglob("*.java"):
-        rel = path.relative_to(JAVA_ROOT)
-        area = rel.parts[0] if len(rel.parts) > 1 else "(root)"
-        text = path.read_text(encoding="utf-8", errors="ignore")
-        names = JAVA_TYPE_RE.findall(text)
-        primary = path.stem  # file name == primary public type by Java convention
-        for nm in ([primary] + names):
-            classes.setdefault(nm, {"area": area, "path": str(rel).replace("\\", "/"),
-                                    "lines": line_count(path)})
+    for root in JAVA_ROOTS:
+        if not root.exists():
+            continue
+        is_handlers = (root == JAVA_HANDLERS_ROOT)
+        for path in root.rglob("*.java"):
+            rel = path.relative_to(root)
+            area = ("handlers/" + rel.parts[0]) if is_handlers else (
+                rel.parts[0] if len(rel.parts) > 1 else "(root)")
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            names = JAVA_TYPE_RE.findall(text)
+            primary = path.stem  # file name == primary public type by Java convention
+            for nm in ([primary] + names):
+                classes.setdefault(nm, {"area": area, "path": str(rel).replace("\\", "/"),
+                                        "lines": line_count(path)})
     return classes
 
 
