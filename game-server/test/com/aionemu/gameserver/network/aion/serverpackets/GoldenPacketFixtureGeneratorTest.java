@@ -921,6 +921,33 @@ public class GoldenPacketFixtureGeneratorTest {
 			"{\"objectId\":700402,\"items\":[[188052612,5]]}",
 			capture(new SM_SECONDARY_SHOW_DECOMPOSABLE(700402, decomp2))));
 		writeFixture(outDir.resolve("SM_SECONDARY_SHOW_DECOMPOSABLE.json"), "SM_SECONDARY_SHOW_DECOMPOSABLE", null, smSecondDecomp);
+
+		// SM_HOUSE_SCRIPTS(houseAddress, List<PlayerScript>): writeD(addr) writeH(size)
+		// + per-script writeC(id); if hasData(): writeH(16+len) writeD(len+8) writeD(uncompressed) writeB(bytes) writeB(PADDING[8])
+		// else writeH(0). PlayerScript is a plain record (id,compressedBytes,uncompressedSize) -> fully deterministic with
+		// fixed compressedBytes (no CompressUtil). con never read.
+		List<Case> smHouseScripts = new ArrayList<>();
+		byte[] sc1 = new byte[] { 1, 2, 3, 4, 5 };
+		java.util.List<com.aionemu.gameserver.model.house.PlayerScript> ps1 = new ArrayList<>();
+		ps1.add(new com.aionemu.gameserver.model.house.PlayerScript(0, sc1, 20));
+		smHouseScripts.add(new Case("oneWithData",
+			"{\"houseAddress\":31001,\"scripts\":[{\"id\":0,\"compressedBytes\":[1,2,3,4,5],\"uncompressedSize\":20}]}",
+			capture(new SM_HOUSE_SCRIPTS(31001, ps1))));
+		java.util.List<com.aionemu.gameserver.model.house.PlayerScript> ps2 = new ArrayList<>();
+		ps2.add(new com.aionemu.gameserver.model.house.PlayerScript(2, new byte[0], 0));
+		smHouseScripts.add(new Case("oneNoData",
+			"{\"houseAddress\":31002,\"scripts\":[{\"id\":2,\"compressedBytes\":[],\"uncompressedSize\":0}]}",
+			capture(new SM_HOUSE_SCRIPTS(31002, ps2))));
+		java.util.List<com.aionemu.gameserver.model.house.PlayerScript> ps3 = new ArrayList<>();
+		ps3.add(new com.aionemu.gameserver.model.house.PlayerScript(1, new byte[] { 10, 20, 30 }, 7));
+		ps3.add(new com.aionemu.gameserver.model.house.PlayerScript(3, new byte[0], 0));
+		smHouseScripts.add(new Case("mixed",
+			"{\"houseAddress\":31003,\"scripts\":[{\"id\":1,\"compressedBytes\":[10,20,30],\"uncompressedSize\":7},{\"id\":3,\"compressedBytes\":[],\"uncompressedSize\":0}]}",
+			capture(new SM_HOUSE_SCRIPTS(31003, ps3))));
+		smHouseScripts.add(new Case("emptyNullCtor",
+			"{\"houseAddress\":31004,\"scripts\":[]}",
+			capture(new SM_HOUSE_SCRIPTS(31004, (com.aionemu.gameserver.model.house.PlayerScript) null))));
+		writeFixture(outDir.resolve("SM_HOUSE_SCRIPTS.json"), "SM_HOUSE_SCRIPTS", null, smHouseScripts);
 	}
 
 	/** Build a ResultedItem with itemId/minCount set via reflection (bypass JAXB afterUnmarshal -> no DataManager). */
