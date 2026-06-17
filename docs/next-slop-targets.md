@@ -2,6 +2,43 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## GOLDEN SUITE 183 -> 185 (2026-06-17) — holder-seam reuse: SKILL_DATA + QUEST_DATA single-template readers (SM_SKILL_COOLDOWN, SM_QUEST_ACTION)
+
+Reused the bounded DataManager-holder seam (introduced for SM_TELEPORT_LOC) for two MORE single-DataManager-template-reader
+SM_* packets, extending the SAME `GoldenWorldPacketFixtureGeneratorTest` (Java) + `GoldenWorldPacketFixtureTests` (C#)
+seam (both in the GoldenDataManager serial collection — the ONE bridge now seeds AbsoluteStatsData + PLAYER_EXPERIENCE_TABLE
++ WorldMaps2 + SkillDataDh + Quests so whichever serial class wins the singleton registration is fully populated).
+**Byte-exact on FIRST capture, 0 fidelity bugs** (both .cs faithful 1:1):
+
+- **SM_SKILL_COOLDOWN** (SKILL_DATA holder, 1 case): the scalar ctor `(int skillId, long expirationTimeMillis)`. With
+  `expirationTimeMillis = 0`, `getRemainingSeconds()` short-circuits to 0 (NO `System.currentTimeMillis()` read) so the
+  packet is deterministic; the only DataManager read is `getDurationMillis()` = `SKILL_DATA.getSkillTemplate(skillId)
+  .getCooldown() * 100`. Seam = a SkillData carrying ONE template (skillId 1968, raw cooldown 250 -> wire 25000), built
+  by reflectively populating the private `skillTemplateById` map both sides (no JAXB/file/AfterUnmarshal). The OTHER two
+  ctors (Player + cooldown map / Player + resettable ids) read a live Player skill list -> NOT golden'able this way.
+- **SM_QUEST_ACTION** (QUEST_DATA holder, 5 cases): the scalar ctors `(questId)`->UNK, `(questId,timer)`->TIMER,
+  `(questId,sharerId,shareInAlliance)`->SHARE (covers the UNK/TIMER/SHARE-alliance/SHARE-group switch branches) PLUS the
+  extra-category early-return (empty payload). Its ONLY DataManager read is `QUEST_DATA.getQuestById(questId)
+  .getExtraCategory()`; if `!= NONE` writeImpl returns before writing anything. Seam = a QuestsData carrying TWO templates
+  (id 1006 extraCategory=NONE -> full payload; id 1007 extraCategory=COIN_QUEST -> empty payload), built by reflectively
+  populating the private `questTemplates` map both sides. The 4th ctor `(ActionType, QuestState)` (ADD/UPDATE) needs a
+  live QuestState -> NOT golden'able with the scalar seam (ADD/UPDATE branches uncovered, deferred).
+
+**SINGLE-DATAMANAGER-TEMPLATE-READER VEIN NOW ESSENTIALLY EXHAUSTED.** Surveyed all DataManager-reading SM_*.cs
+(11 total). The clean single-holder-template + scalar readers are now ALL golden'd: SM_TELEPORT_LOC (WORLD_MAPS_DATA),
+SM_SKILL_COOLDOWN (SKILL_DATA), SM_QUEST_ACTION (QUEST_DATA). The remaining DataManager-reading packets ALL also pull in
+a LIVE object alongside the template, so they belong to the heavier integration-harness increments, not this bounded vein:
+- **SM_SELL_ITEM** -> TRADE_LIST_DATA template + a live `Npc` (getNpcId) and its tradelist items.
+- **SM_LOOT_ITEMLIST** -> ITEM_DATA template + live `DropNpc`/`DropItem`/`Player`.
+- **SM_SKILL_LIST** -> SKILL_DATA + live `Player.getSkillList()`.
+- **SM_TRADELIST** -> TRADE_LIST_DATA + live `Npc`/`Player`/price calc.
+- **SM_INSTANCE_INFO** -> INSTANCE_COOLTIME_DATA + live `Player`/activePlayer + `System.currentTimeMillis()`.
+- **SM_PET** -> PET_DATA + live `Pet`/`Player`. **SM_UPGRADE_ARCADE** -> 4 DataManager reads + live state.
+- **SM_L2AUTH_LOGIN_CHECK** -> account/login state (not a clean holder-template read).
+**NEXT VEIN = the deferred LIVE-WORLD integration increment** (SM_PLAYER_SPAWN/SM_DIE, blocked on the Java static-final
+World singleton — see the increment-1 section below for the exact blocker), OR the item/ItemInfoBlob + Npc seams that
+unlock SM_SELL_ITEM/SM_LOOT_ITEMLIST/SM_TRADELIST/SM_NPC_INFO. Build 0, golden 185, suite 472/0, bootstrap 9/9.
+
 ## GOLDEN SUITE 182 -> 183 (2026-06-17) — integration-harness INCREMENT 1: the bounded WORLD_MAPS_DATA holder seam (SM_TELEPORT_LOC)
 
 First step of the deferred integration-harness sub-project. Golden'd **SM_TELEPORT_LOC** (1 fixture / 3 cases:

@@ -18,11 +18,16 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 import com.aionemu.gameserver.dataholders.DataManager;
+import com.aionemu.gameserver.dataholders.QuestsData;
+import com.aionemu.gameserver.dataholders.SkillData;
 import com.aionemu.gameserver.dataholders.WorldMapsData;
 import com.aionemu.gameserver.model.animations.TeleportAnimation;
+import com.aionemu.gameserver.model.templates.QuestTemplate;
+import com.aionemu.gameserver.model.templates.quest.QuestExtraCategory;
 import com.aionemu.gameserver.model.templates.world.WorldMapTemplate;
 import com.aionemu.gameserver.network.aion.AionConnection;
 import com.aionemu.gameserver.network.aion.AionServerPacket;
+import com.aionemu.gameserver.skillengine.model.SkillTemplate;
 
 /**
  * INTEGRATION golden harness for the World-reading SM_* family — increment 1 of the deferred integration-harness
@@ -70,6 +75,130 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 			TeleportAnimation.NONE));
 
 		writeFixture(outDir.resolve("SM_TELEPORT_LOC.json"), "SM_TELEPORT_LOC", cases);
+	}
+
+	// The skill id + cooldown (raw cooldown attr, *100 = duration millis on the wire) the SM_SKILL_COOLDOWN fixture
+	// reads from the SKILL_DATA holder. Identical on both sides.
+	private static final int COOLDOWN_SKILL_ID = 1968;
+	private static final int COOLDOWN_RAW = 250; // getCooldown() raw; writeImpl writes cooldown*100 = 25000
+
+	@Test
+	public void generateGoldenSkillCooldownFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installSkillDataSeam();
+
+		List<Case> cases = new ArrayList<>();
+		// Scalar ctor (skillId, expirationTimeMillis). expiration 0 -> getRemainingSeconds()==0 (no System.currentTimeMillis),
+		// so the packet is deterministic; getDurationMillis() reads SKILL_DATA.getSkillTemplate(skillId).getCooldown()*100.
+		cases.add(skillCooldownCase("skillCooldownZeroExpiration", COOLDOWN_SKILL_ID, 0L));
+
+		writeFixture(outDir.resolve("SM_SKILL_COOLDOWN.json"), "SM_SKILL_COOLDOWN", cases);
+	}
+
+	private static Case skillCooldownCase(String name, int skillId, long expirationTimeMillis) {
+		String inputs = "{\"skillId\":" + skillId + ",\"expirationTimeMillis\":" + expirationTimeMillis + "}";
+		return new Case(name, inputs, capture(new SM_SKILL_COOLDOWN(skillId, expirationTimeMillis), null));
+	}
+
+	// The quest ids the SM_QUEST_ACTION fixture reads from the QUEST_DATA holder. One NONE-category quest (full
+	// payload written) and one extra-category quest (writeImpl early-returns -> empty payload). Identical both sides.
+	private static final int QUEST_ID_NONE = 1006;
+	private static final int QUEST_ID_EXTRA = 1007;
+
+	@Test
+	public void generateGoldenQuestActionFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installQuestDataSeam();
+
+		List<Case> cases = new ArrayList<>();
+		// Scalar ctors only (no live QuestState). UNK / TIMER / SHARE branches + the extra-category early-return.
+		cases.add(questActionUnkCase("questActionUnk", QUEST_ID_NONE));
+		cases.add(questActionTimerCase("questActionTimer", QUEST_ID_NONE, 900));
+		cases.add(questActionShareCase("questActionShareAlliance", QUEST_ID_NONE, 1234, true));
+		cases.add(questActionShareCase("questActionShareGroup", QUEST_ID_NONE, 1234, false));
+		// Extra-category quest: questTemplate.getExtraCategory() != NONE -> writeImpl returns early (empty payload).
+		cases.add(questActionUnkCase("questActionExtraCategoryEmpty", QUEST_ID_EXTRA));
+
+		writeFixture(outDir.resolve("SM_QUEST_ACTION.json"), "SM_QUEST_ACTION", cases);
+	}
+
+	private static Case questActionUnkCase(String name, int questId) {
+		String inputs = "{\"ctor\":\"unk\",\"questId\":" + questId + "}";
+		return new Case(name, inputs, capture(new SM_QUEST_ACTION(questId), null));
+	}
+
+	private static Case questActionTimerCase(String name, int questId, int timer) {
+		String inputs = "{\"ctor\":\"timer\",\"questId\":" + questId + ",\"timer\":" + timer + "}";
+		return new Case(name, inputs, capture(new SM_QUEST_ACTION(questId, timer), null));
+	}
+
+	private static Case questActionShareCase(String name, int questId, int sharerId, boolean shareInAlliance) {
+		String inputs = "{\"ctor\":\"share\",\"questId\":" + questId + ",\"sharerId\":" + sharerId
+			+ ",\"shareInAlliance\":" + shareInAlliance + "}";
+		return new Case(name, inputs, capture(new SM_QUEST_ACTION(questId, sharerId, shareInAlliance), null));
+	}
+
+	// ---- SKILL_DATA holder seam ----
+
+	/**
+	 * Populate DataManager.SKILL_DATA with exactly the one skill template SM_SKILL_COOLDOWN reads (id + raw cooldown).
+	 * Built WITHOUT JAXB by reflectively setting the skillTemplateById index, so no XML/file is touched — the bounded
+	 * holder seam (mirrors the WORLD_MAPS_DATA seam above).
+	 */
+	private void installSkillDataSeam() {
+		try {
+			SkillData data = new SkillData();
+			@SuppressWarnings("unchecked")
+			Map<Integer, SkillTemplate> byId = (Map<Integer, SkillTemplate>) getField(data, "skillTemplateById");
+			byId.clear();
+			byId.put(COOLDOWN_SKILL_ID, skillTemplate(COOLDOWN_SKILL_ID, COOLDOWN_RAW));
+			DataManager.SKILL_DATA = data;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to install SKILL_DATA seam", e);
+		}
+	}
+
+	private static SkillTemplate skillTemplate(int skillId, int cooldown) throws ReflectiveOperationException {
+		Constructor<SkillTemplate> ctor = SkillTemplate.class.getDeclaredConstructor();
+		ctor.setAccessible(true);
+		SkillTemplate t = ctor.newInstance();
+		setField(t, "skillId", skillId);
+		setField(t, "cooldown", cooldown);
+		return t;
+	}
+
+	// ---- QUEST_DATA holder seam ----
+
+	/**
+	 * Populate DataManager.QUEST_DATA with exactly the two quest templates SM_QUEST_ACTION reads (one NONE category,
+	 * one extra category). Built WITHOUT JAXB by reflectively setting the questTemplates index — the bounded holder seam.
+	 */
+	private void installQuestDataSeam() {
+		try {
+			QuestsData data = new QuestsData();
+			@SuppressWarnings("unchecked")
+			Map<Integer, QuestTemplate> byId = (Map<Integer, QuestTemplate>) getField(data, "questTemplates");
+			byId.clear();
+			byId.put(QUEST_ID_NONE, questTemplate(QUEST_ID_NONE, QuestExtraCategory.NONE));
+			byId.put(QUEST_ID_EXTRA, questTemplate(QUEST_ID_EXTRA, QuestExtraCategory.COIN_QUEST));
+			DataManager.QUEST_DATA = data;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to install QUEST_DATA seam", e);
+		}
+	}
+
+	private static QuestTemplate questTemplate(int id, QuestExtraCategory extraCategory)
+			throws ReflectiveOperationException {
+		Constructor<QuestTemplate> ctor = QuestTemplate.class.getDeclaredConstructor();
+		ctor.setAccessible(true);
+		QuestTemplate t = ctor.newInstance();
+		setField(t, "id", id);
+		setField(t, "extraCategory", extraCategory);
+		return t;
 	}
 
 	private static Case teleportCase(String name, int mapId, int instanceId, float x, float y, float z, byte heading,
