@@ -2,6 +2,29 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## QUEST SCRIPT PORT — 1035/1035 COMPLETE (2026-06-17, commit 8fac65d3c)
+
+The last 10 "deferred spawn-AI/flight" quests were ALL false-defers. The supposed blocker — "WalkManager /
+flying-ring engine threaded into quest-tasks" — was a PHANTOM gap: every dep was already ported.
+Verified present before porting: `WalkManager.StartWalking((NpcAI)npc.GetAi())`,
+`QuestTasks.NewFollowingToTargetCheckTask` (ZoneName / 3-float / int-npcTargetId overloads),
+`QuestEngine.RegisterOnPassFlyingRings` + `AbstractQuestHandler.OnPassFlyingRingEvent`, `SpawnInFrontOf`,
+`TaskId.QUEST_FOLLOW` + `CreatureController.AddTask`, `SpawnTemplate.SetWalkerId`,
+`AiEventType.FOLLOW_ME` + `OnCreatureEvent`, `SmEmotion(npc,EmotionType.CHANGE_SPEED,0,objId)`,
+`DefaultFollowEndEvent`, `GetLifeStats().IncreaseFp(SmAttackStatus.TYPE.FP_RINGS,7,0,SmAttackStatus.LOG.REGULAR)`,
+`SkillEngine.ApplyEffectDirectly`, `AIState.WALKING`/`SetStateIfNot`, `GetMoveController().MoveToTargetObject`,
+`KnownList.FindObject`. The 10: flight-ring (_1044TestingFlightSkills, _1354PraticalAerobatics,
+_2042TheLastCheckpoint), WalkManager-follow (_2333ARibbitOutOfWater, _2394ADyingWish,
+_3212TheMissingCubeCraftsman, _4212MissingSidrunerk, _24053TheMaulingoftheMau, _2634TheDraupnirRedemption),
+spawn-AI-walk (_14026ALoneDefense). Build 0, full suite 454/0, golden 167, bootstrap 9.
+Gotchas: SkillEngine class self-shadows its namespace -> fully-qualify
+`Aion.GameServer.SkillEngine.SkillEngine.GetInstance()`; `HandlerResult` is an ENUM -> use
+`HandlerResultExtensions.FromBoolean(...)`; `SmAttackStatus.TYPE`/`.LOG` are nested types;
+`WorldMapType.GetId()` is an extension method (needs `using Aion.GameServer.World`); `SM_DIALOG_WINDOW(objId,page)`;
+`SM_NPC_INFO(Npc,Player)`. **CONTENT-HANDLER SCRIPT PORT NOW FULLY COMPLETE: quests 1035/1035 + AI 462/462 +
+instance 37/37 + zone 3/3.** Next veins = runtime substrate pillars / golden-suite expansion / deferred
+chat-command long tail (genuine engine-reflection blockers).
+
 ## ZONE-HANDLER PORT — COMPLETE (2026-06-17, commit cec2fa559) — 3/3
 
 Java zone handlers live in `game-server/data/handlers/zone/*.java` = **3 total** (NOT a big set):
