@@ -2,6 +2,72 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## RESOLVED — spawn-backed integration test proves NPCs spawn end-to-end (commit pending, 2026-06-16)
+
+Added GameServerBootstrapTests.GameServerBootstrap_RealSpawnDataMaterializesNpcsIntoWorld — the END-TO-END
+NPC-spawn proof. It loads the REAL game-server/data + 147MB cache via DataManager.LoadAsync(repoRoot) (same
+real-data path as RealStaticDataLoadIntegrationTests), brings up the real boot machinery (DataManager + World
+maps + IDFactory + ThreadPool singleton bridges + the AIEngine/ZoneService/GeoService engines the spawn path
+needs), then drives the faithful SpawnEngine.SpawnObject path over Sanctum's (110010000) real SPAWNS_DATA spawn
+groups and asserts the World store materializes real Npc instances. RESULT: 357 Npc objects (360 spawn calls;
+delta = gatherables) materialized into Sanctum, incl. known NPC Euterpe (798173). Before the SPAWNS_DATA fix
+this was 0 (hollow SpawnsData singleton). Skips (returns) when the real cache is absent. Per-class GREEN:
+build 0, Bootstrap 8/8 (7 minimal + this), Golden 167/167, RealStaticDataLoad 1/1. (Combined-project run still
+shows the PRE-EXISTING GoldenStatsInfo DataManager-singleton flake — 2 failures on clean HEAD too, passes
+per-class; out of scope, gate per-class per the contract.)
+
+THREE FAITHFULNESS FIXES landed alongside (each a real port bug the spawn path surfaced, not test scaffolding):
+1. **GameServerBootstrapService engine-init ORDER** — the engine InitAsync block sat just before
+   SpawnEngine.SpawnAll(), i.e. AFTER the location-init cluster's spawning services (VortexService.
+   initVortexLocations spawns NPCs). Java (GameServer.main:101-102) inits the engines in PARALLEL right after
+   DataManager.getInstance() and BEFORE every spawn path. Moved the C# engine-init up to right after
+   DropRegistration-precursor (before the location-init cluster), matching Java. Every spawned Npc resolves its
+   AI via AIEngine.NewAI, so the AIEngine MUST be up before any spawn — this was an ordering bug invisible until
+   the spawn path ran with real data.
+2. **GameServerBootstrapService IDFactory singleton bridge** — StartAsync locked the IDFactory's ids but never
+   called IDFactory.RegisterInstance(_idFactory). Every VisibleObject ctor (Npc/Gatherable/...) takes its
+   objectId from IDFactory.GetInstance().NextId(), so the FIRST boot spawn NRE'd "IDFactory singleton bridge not
+   initialized" — a latent PRODUCTION boot bug (Program.cs didn't bind it either). Now bound right after LockIds,
+   mirroring the ThreadPoolManager/World/DataManager bridges. Faithful (Java IDFactory.getInstance() is the
+   singleton the spawn path uses).
+3. **AIName attribute Inherited=false** — Java @AIName is NOT @Inherited, so AIEngine.getAnnotation(AIName.class)
+   returns null for a subclass (SiegeNpcAI extends AggressiveNpcAI does NOT inherit "aggressive"). C# custom
+   attributes default to Inherited=true, so GetCustomAttribute<AIName>() on SiegeNpcAI returned the base's
+   "aggressive" and double-registered it ("Duplicate AIs with name aggressive"). Set
+   [AttributeUsage(..., Inherited = false)] to match Java exactly. Plus a defensive guard in
+   OnClassLoadUnloadListener.DoMethodInvoke: the C# ScriptManager scans EVERY loaded assembly (vs Java's source-
+   dir scan), so reflecting custom attributes on test-platform methods can raise TypeLoad/FileNotFound for an
+   unresolvable attribute type — skip those (never an Aion @OnClassLoad hook; production = game-server assemblies
+   only, so behaviour is identical).
+
+### Siege/PvP wire-flip: STILL DEFERRED (Java does NOT guard empty data; full SpawnAll needs a DB) — finding below
+- **#1 SiegeService.initSieges() (main:142)** and **#5 PvpMapService.init() (main:176)** were NOT flipped on in
+  the shared StartAsync. CONFIRMED via Java source: neither guards empty data. initSieges() guards only
+  !SIEGE_ENABLED; its updateFortressNextState() does getSiegeLocation(scheduledLocId).setNextState() with NO null
+  guard, and the FULL real siege_schedule.xml schedules SiegeStartRunnables even under the minimal fixture, so
+  with empty SIEGE_LOCATION_DATA getSiegeLocation(...) is null -> NRE (Java NPEs identically). PvpMapService.init()
+  unconditionally calls InstanceService.getNextAvailableInstance(301220000,...) — needs world map 301220000, absent
+  under the minimal fixture. Both run for ALL boots if wired into StartAsync, so flipping them on would break the
+  minimal-fixture bootstrap 7/7. Per the hard rule (no un-faithful guard Java lacks), they STAY deferred in
+  StartAsync. They can only be wired once the SHARED boot path carries spawn+world+siege data AND a DB.
+- **#2 Housing is the real blocker for a full-StartAsync spawn boot.** SpawnEngine.SpawnAll() -> per-instance
+  HousingService.SpawnHouses() -> HousingService ctor -> RevokeOwnershipOfDeletedPlayers() ->
+  new HashSet<int>(PlayerDAO.GetUsedIDs()); GetUsedIDs() returns null on no-DB (Java NPEs identically, no guard),
+  so the full SpawnAll REQUIRES a DB. The opt-in MySQL integration harness (3307, aion_gs, gated on
+  AION_GAMESERVER_DB_INTEGRATION=1) DOES satisfy HousingService — verified: with the DB up, the full StartAsync
+  boot ran SpawnAll past HousingService. BUT a SECOND whole-world-boot issue then surfaced (see RECOMMENDED NEXT).
+
+RECOMMENDED NEXT (whole-world full-StartAsync spawn boot, DB-backed): two pre-existing whole-world concerns block
+a full SpawnAll boot even WITH the DB, and both are FAITHFUL (Java does the same) so they need investigation, not
+a quick guard:
+  (a) **House double-spawn across twin instances.** SpawnAll iterates worldMap.forEach over ALL getInstanceCount()
+      instances (twin_count + beginner_twin_count; e.g. Heiron 210040000 = 4), and HousingService.spawnHouses
+      re-uses the SAME address-cached House object per instance -> BringIntoWorld(sameHouse) collides on the House
+      objectId in World.StoreObject (DuplicateAionObjectException). Java's worldMap.forEach + spawnHouses is
+      identical, so this is either a Java latent bug, or houses-bearing maps actually have twin_count such that
+      only one instance carries addresses — confirm against Java/real data before wiring full SpawnAll.
+  Once (a) is understood, a DB-backed full-StartAsync boot test + the siege/pvp wire-flip can land together.
+
 ## RESOLVED — 2 of the 6 boot-init deferrals unblocked via fixture enrichment (commits 2c05275b8 / 713fef10a, 2026-06-16)
 
 Enriched the GameServerBootstrapTests StaticDataFixture to seed the SPECIFIC REAL static_data files each
