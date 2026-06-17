@@ -2,6 +2,24 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## DEFERRED FIDELITY BUG #2 (packet dual-serialization) — RE-ASSESSED: NOT a wire bug (2026-06-17, HEAD 1ad63f41c)
+
+Re-assessed deferred fidelity bug #2 (packet-base-unification / dual serialization path). **It is NOT a
+runtime wire-fidelity bug.** The GameServer live client send path is exclusively the faithful
+`AionServerPacket.Write/WriteImpl` (via `AionConnection.WriteData`); `GameServerPacket.SerializeFrame/
+WritePayload` is a C#-test-only invention with no Java counterpart, called only by the golden harness + unit
+tests, never on the GS client wire. (The 184 `SerializeFrame/WritePayload` grep hits are the `Sm*` override
+declarations plus the SEPARATE LoginServer/ChatServer packet families, which legitimately frame on their own
+wires.) The skipped golden case `SM_GROUP_DATA_EXCHANGE` (a faithful `SM_*:AionServerPacket`) is skipped only
+because the harness serializes via `SerializeFrame`, which faithful-only packets lack — a test-harness gap,
+not a packet bug. Runtime wire-correctness is already faithful. Full unification (re-point ~138 duplicate-twin
+`Sm*` -> faithful `SM_*`, delete `Sm*`, drop `GameServerPacket`) is **gated on the reworked-worldnpc-spawn-
+cluster big-bang** (held for user go-ahead). **BOTH build-zero "real src fidelity bugs" are now resolved-or-
+understood: #1 (RiftManager fan-out) fixed by pillar-a; #2 (this) wire-faithful, only cosmetic slop debt.**
+Bounded non-gated follow-up available: extend the golden harness to serialize a faithful `AionServerPacket`
+via the `Write` path (un-skip `SM_GROUP_DATA_EXCHANGE`) — precedent exists (SM_PLAYER_INFO/SM_STATS_INFO
+uninitialized-AionConnection harness).
+
 ## DEFERRED FIDELITY BUG #1 (RiftManager instance fan-out) — RESOLVED & VERIFIED (2026-06-17, HEAD cc67e1fe6)
 
 Re-assessed the long-deferred `RiftManagerService` instance fan-out bug (old failing
