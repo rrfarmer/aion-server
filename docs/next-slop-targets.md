@@ -38,11 +38,29 @@ name, mapId, Point3D(double…)×3, radius), instance.GetInstanceId()).Spawn()`;
 `Model.GameObjects.Item`, base `IsRestrictedToInstance(Item)` override matches). Java arrow-switch w/ multi-int
 labels → C# switch w/ explicit `break;` per group.
 
-**Recommended next batch:** AnguishedDragonLordsRefuge (236), TiamatStrongHold (265), DarkPoeta (301),
-DragonLordsRefuge (348), NightmareCircus (361), IlluminaryObelisk (395) + InfernalIlluminaryObelisk (161) +
-LinkgateFoundry (117) — mid-size, same shape (verify InstanceScore/score-board surface for the Refuge/Obelisk
-pair, and NightmareCircus minigame deps, before porting). **Deferred (heavy):** ShugoImperialTomb (1329 lines),
-StonespearReach (925), EternalBastion (867), DrakenspireDepths (593), TheShugoEmperorsVault (574).
+## INSTANCE-HANDLER PORT — batch 3 (2026-06-16) — +8 → 32/37
+
+Ported: LinkgateFoundry (117), TiamatStrongHold (265), DarkPoeta (301), DragonLordsRefuge (348),
+AnguishedDragonLordsRefuge (236, `: DragonLordsRefuge`), NightmareCircus (361), IlluminaryObelisk (395),
+InfernalIlluminaryObelisk (161, `: IlluminaryObelisk`). All 1:1, all-green (build 0 / 454 / golden 167 / bootstrap 9).
+DarkPoeta scoreboard surface was ALL pre-ported (DarkPoetaScore/DarkPoetaScoreWriter/SM_INSTANCE_SCORE/
+InstanceProgressionType ext IsStartProgress·IsEndProgress / `(TemporaryPlayerTeam)instance.GetRegisteredTeam()` /
+`player.GetAbyssRank().GetRank().GetId() >= AbyssRankEnum.STAR1_OFFICER.GetId()`). NightmareCircus/Obelisk used only
+WalkManager + standard surface. **Bounded dep added** (only one needed): 3 IDTIAMAT countdown entries in
+`SM_SYSTEM_MESSAGE.cs` (COUNTDOWN_START 1401547 / DRAKAN_ON_DIE 1401551 / COUNTDOWN_OVER 1401563) — the C# catalog is a
+subset; ids copied verbatim from the Java oracle. **Batch-3 gotchas:** `PlayerReviveService` ns = `Services.Players`
+(plural); `ScheduleAtFixedRate` returns `Task` — use **`ScheduleAtFixedRateTask`** for a cancellable `ScheduledTask`,
+which has NO Action overload (pass `_ => {...; return ValueTask.CompletedTask;}` + `TimeSpan` args); `AIActions.UseSkill`/
+`TargetCreature` need `(NpcAI)npc.GetAi()` cast (GetAi() returns non-generic `AbstractAI`; AIActions wants
+`AbstractAI<T>`); `AtomicInteger.compareAndSet(exp,upd)` → `Interlocked.CompareExchange(ref, upd, exp) == exp`;
+`System.currentTimeMillis()` → `DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()`; `Race.GetRaceId` ext is in ns
+`Aion.GameServer.Model`; `instance.forEach` → `ForEachObject`; `.stream().allMatch` → `TrueForAll`; the protected
+7-arg walker `Spawn(id,x,y,z,h,delay,walkerId)` overload is distinct from base 5/6-arg Spawn.
+
+**Remaining 5 = the heavy-defers only:** ShugoImperialTomb (1329 lines), StonespearReach (925), EternalBastion (867),
+DrakenspireDepths (593), TheShugoEmperorsVault (574). Each pulls a larger subsystem (AP-reward reworked services /
+heavier scoreboard / siege / multi-stage). Recommend tackling EternalBastion or DrakenspireDepths next (smallest of
+the five) after verifying its ApReward/InstanceScore surface; the other 4 are genuine heavy ports.
 
 ## CAPSTONE FIDELITY RE-SURVEY — 2026-06-16 (commit e3e1b1184)
 
