@@ -43,6 +43,12 @@ import com.aionemu.gameserver.services.item.ItemPacketService.ItemUpdateType;
 import com.aionemu.gameserver.model.animations.TeleportAnimation;
 import com.aionemu.gameserver.model.gameobjects.AionObject;
 import com.aionemu.gameserver.model.gameobjects.Npc;
+import com.aionemu.gameserver.model.gameobjects.VisibleObject;
+import com.aionemu.gameserver.model.templates.VisibleObjectTemplate;
+import com.aionemu.gameserver.model.templates.gather.GatherableTemplate;
+import com.aionemu.gameserver.questEngine.model.QuestState;
+import com.aionemu.gameserver.questEngine.model.QuestStatus;
+import com.aionemu.gameserver.world.WorldPosition;
 import com.aionemu.gameserver.model.gameobjects.Persistable.PersistentState;
 import com.aionemu.gameserver.model.account.PlayerAccountData;
 import com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData;
@@ -179,6 +185,128 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 		String inputs = "{\"ctor\":\"share\",\"questId\":" + questId + ",\"sharerId\":" + sharerId
 			+ ",\"shareInAlliance\":" + shareInAlliance + "}";
 		return new Case(name, inputs, capture(new SM_QUEST_ACTION(questId, sharerId, shareInAlliance), null));
+	}
+
+	// ---- batch 15: SM_GATHERABLE_INFO (real VisibleObject seam) + SM_QUEST_COMPLETED_LIST (QUEST_DATA holder seam) ----
+
+	private static final int GATHER_OBJECT_ID = 0x12345678;
+	private static final int GATHER_STATIC_ID = 7700;
+	private static final int GATHER_TEMPLATE_ID = 700001;
+	private static final int GATHER_L10N_ID = 350123;
+	private static final float GATHER_X = 1234.5f;
+	private static final float GATHER_Y = 678.25f;
+	private static final float GATHER_Z = 91.5f;
+	private static final byte GATHER_HEADING = 42;
+	private static final int GATHER_MAP_ID = 210010000;
+
+	// Quest ids for SM_QUEST_COMPLETED_LIST. Both NON-time-based (repeatCycle == null -> isTimeBased() false ->
+	// canRepeat() never reads the clock). REPEATABLE has maxRepeatCount 255 -> canRepeat() == true (writeC 0);
+	// EXHAUSTED has completeCount(2) >= maxRepeatCount(1) && != 255 -> canRepeat() == false (writeC 1).
+	private static final int QC_REPEATABLE_ID = 2001;
+	private static final int QC_REPEATABLE_MAX = 255;
+	private static final int QC_REPEATABLE_COUNT = 3;
+	private static final int QC_EXHAUSTED_ID = 2002;
+	private static final int QC_EXHAUSTED_MAX = 1;
+	private static final int QC_EXHAUSTED_COUNT = 2;
+
+	/**
+	 * SM_GATHERABLE_INFO reads ONLY the VisibleObject's scalar/template state: getX/Y/Z (WorldPosition), getObjectId(),
+	 * getSpawn().getStaticId()/getHeading() (SpawnTemplate), getObjectTemplate().getTemplateId()/getL10nId(). The object
+	 * is NOT a StaticDoor -> writeH(1). No con, no live World/DataManager/time. Built through a minimal concrete
+	 * VisibleObject (the established harness precedent — like HarnessAttackCreature) so the ctor pulls in no
+	 * DataManager/IDFactory/KnownList cascade. Identical both sides; Java is the oracle.
+	 *
+	 * mvn -q -pl game-server -am test -Dtest=GoldenWorldPacketFixtureGeneratorTest#generateGoldenGatherableInfoFixture -Dmaven.test.skip=false -Dsurefire.failIfNoSpecifiedTests=false
+	 */
+	@Test
+	public void generateGoldenGatherableInfoFixture() throws Exception {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		VisibleObject obj = buildHarnessGatherable();
+
+		List<Case> cases = new ArrayList<>();
+		String inputs = "{\"objectId\":" + GATHER_OBJECT_ID + ",\"staticId\":" + GATHER_STATIC_ID + ",\"templateId\":"
+			+ GATHER_TEMPLATE_ID + ",\"l10nId\":" + GATHER_L10N_ID + ",\"x\":" + GATHER_X + ",\"y\":" + GATHER_Y + ",\"z\":"
+			+ GATHER_Z + ",\"heading\":" + GATHER_HEADING + "}";
+		cases.add(new Case("gatherable", inputs, capture(new SM_GATHERABLE_INFO(obj), null)));
+
+		writeFixture(outDir.resolve("SM_GATHERABLE_INFO.json"), "SM_GATHERABLE_INFO", cases);
+	}
+
+	/** Minimal concrete (non-StaticDoor) VisibleObject carrying the position / spawn / template the packet reads. */
+	private static VisibleObject buildHarnessGatherable() throws Exception {
+		GatherableTemplate template = new GatherableTemplate();
+		setField(template, "id", GATHER_TEMPLATE_ID);
+		setField(template, "nameId", GATHER_L10N_ID);
+		SpawnGroup spawnGroup = new SpawnGroup(GATHER_MAP_ID, 0, 0, null);
+		SpawnTemplate spawn = new SpawnTemplate(spawnGroup, GATHER_X, GATHER_Y, GATHER_Z, GATHER_HEADING, 0, null,
+			GATHER_STATIC_ID);
+		WorldPosition position = new WorldPosition(GATHER_MAP_ID, GATHER_X, GATHER_Y, GATHER_Z, GATHER_HEADING);
+		VisibleObject obj = new VisibleObject(GATHER_OBJECT_ID, null, spawn, (VisibleObjectTemplate) template, position, false) {
+		};
+		return obj;
+	}
+
+	/**
+	 * SM_QUEST_COMPLETED_LIST writeImpl: writeC(1) writeC(updateMode) writeH(-size & 0xFFFF) + per QuestState
+	 * writeD(getQuestId()) writeC(min(completeCount,255)) writeC(canRepeat() ? 0 : 1). canRepeat() reads
+	 * DataManager.QUEST_DATA.getQuestById(questId) -> the bounded QUEST_DATA holder seam (both quests NON-time-based so
+	 * no clock). Quests chosen to cover both canRepeat branches. Identical both sides; Java is the oracle.
+	 *
+	 * mvn -q -pl game-server -am test -Dtest=GoldenWorldPacketFixtureGeneratorTest#generateGoldenQuestCompletedListFixture -Dmaven.test.skip=false -Dsurefire.failIfNoSpecifiedTests=false
+	 */
+	@Test
+	public void generateGoldenQuestCompletedListFixture() throws Exception {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installQuestCompletedDataSeam();
+
+		java.util.List<QuestState> states = new ArrayList<>();
+		states.add(questState(QC_REPEATABLE_ID, QC_REPEATABLE_COUNT)); // canRepeat true -> writeC 0
+		states.add(questState(QC_EXHAUSTED_ID, QC_EXHAUSTED_COUNT));   // canRepeat false -> writeC 1
+
+		List<Case> cases = new ArrayList<>();
+		String inputs = "{\"updateMode\":0,\"quests\":[[" + QC_REPEATABLE_ID + "," + QC_REPEATABLE_COUNT + ",0],["
+			+ QC_EXHAUSTED_ID + "," + QC_EXHAUSTED_COUNT + ",1]]}";
+		cases.add(new Case("rewriteAll", inputs, capture(new SM_QUEST_COMPLETED_LIST(0, states), null)));
+		String inputsIns = "{\"updateMode\":1,\"quests\":[[" + QC_REPEATABLE_ID + "," + QC_REPEATABLE_COUNT + ",0],["
+			+ QC_EXHAUSTED_ID + "," + QC_EXHAUSTED_COUNT + ",1]]}";
+		cases.add(new Case("insert", inputsIns, capture(new SM_QUEST_COMPLETED_LIST(1, states), null)));
+
+		writeFixture(outDir.resolve("SM_QUEST_COMPLETED_LIST.json"), "SM_QUEST_COMPLETED_LIST", cases);
+	}
+
+	/** QuestState with the COMPLETE status + reflect-set completeCount (the only fields the packet reads). */
+	private static QuestState questState(int questId, int completeCount) throws Exception {
+		QuestState qs = new QuestState(questId, QuestStatus.COMPLETE, 0, 0, completeCount, null, null, null);
+		return qs;
+	}
+
+	/** Populate DataManager.QUEST_DATA with the two NON-time-based quest templates SM_QUEST_COMPLETED_LIST reads. */
+	private void installQuestCompletedDataSeam() {
+		try {
+			QuestsData data = new QuestsData();
+			@SuppressWarnings("unchecked")
+			Map<Integer, QuestTemplate> byId = (Map<Integer, QuestTemplate>) getField(data, "questTemplates");
+			byId.clear();
+			byId.put(QC_REPEATABLE_ID, questCompletedTemplate(QC_REPEATABLE_ID, QC_REPEATABLE_MAX));
+			byId.put(QC_EXHAUSTED_ID, questCompletedTemplate(QC_EXHAUSTED_ID, QC_EXHAUSTED_MAX));
+			DataManager.QUEST_DATA = data;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to install QUEST_DATA seam", e);
+		}
+	}
+
+	/** QuestTemplate with reflect-set id + maxRepeatCount; repeatCycle left null -> isTimeBased() false (no clock). */
+	private static QuestTemplate questCompletedTemplate(int id, int maxRepeatCount) throws ReflectiveOperationException {
+		Constructor<QuestTemplate> ctor = QuestTemplate.class.getDeclaredConstructor();
+		ctor.setAccessible(true);
+		QuestTemplate t = ctor.newInstance();
+		setField(t, "id", id);
+		setField(t, "maxRepeatCount", maxRepeatCount);
+		return t;
 	}
 
 	// ---- live-Npc object seam (SM_TRADE_IN_LIST) ----
