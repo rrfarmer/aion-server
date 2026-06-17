@@ -2,6 +2,12 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## Sm* DUPLICATE-PACKET RETIREMENT — BATCH 11: first heavy web SmEmotion retired (2026-06-17, 1 commit rrfarmer). 17 -> 16 remaining.
+
+**SmEmotion** (~11 prod sites, NO test/golden/DI consumers — reworked SmEmotion was wire-DEAD; only faithful SM_EMOTION registered at opcode 37) — RETIRED via straight production repoint. Byte-verified: `SM_EMOTION.WriteImpl` == `SmEmotion.WritePayload` IDENTICAL switch (all branches: DIE/loot/CHAIR/FLYTELEPORT/WINDSTREAM/RIDE/RESURRECT/EMOTE/CHANGE_SPEED/default); `(int)_emotionType` == `emotionType.GetTypeId()` (== `(int)type`). Consumers used only 2 of the reworked 6 ctor overloads, both 1:1 with the faithful twin and matching Java exactly: `(Creature,EmotionType)` and `(Creature,EmotionType,int emotion,int targetObjectId)` (Player IS-A Creature -> RideAction/Equipment/FlyController Player-calls bind the Creature ctor, same as Java `new SM_EMOTION(player, EmotionType, 0, 0/npcId)`). The 4 unused reworked overloads (5-arg int-snapshot, Player+speed-default, Player+coords+speed) were slop with no consumer — dropped with the file. 9 repoint sites: SummonsService, RideAction(x2), Equipment, FlyController(x3 STOP_GLIDE/LAND/FLY), AethericFieldBlaststoneAI, EternalBastionAssaulterNpcAI(x2), quest handlers (pandaemonium/sanctum/morheim x2/eltnen). Deleted SmEmotion.cs (no DI/test). Build0/golden196 byte-exact/full475/bootstrap9.
+
+**REMAINING 16:** SmAbyssRank/SmAutoGroup/SmLegionEdit/SmFindGroup/SmLegionDominionRank/SmLegionHistory/SmPet/SmPetEmote/SmGameTime/SmKey/SmPong (deferred-with-reason below) + 4 remaining heavy webs SmDialogWindow/SmSystemMessage/SmItemUsageAnimation/SmAttackStatus(+SmAttackStatusEnums).
+
 ## Sm* DUPLICATE-PACKET RETIREMENT — BATCH 10: 6 more survivors retired (2026-06-17, 2 commits rrfarmer). 23 -> 17 remaining.
 
 Production faithful repoints (byte-verified WriteImpl==WritePayload, opcodes confirmed in ServerPacketsOpcodes.cs):
@@ -22,7 +28,7 @@ Build0/golden196 byte-exact/full475/bootstrap9 each batch. No slop tests deleted
 - **SmPet / SmPetEmote** (test-only, PetJavaVectorArtifactReaderTests) — DEFER. Faithful `SM_PET` spawn ctors take a live `Pet`/`PetCommonData` and `SM_PET_EMOTE` takes a live `Pet`; the artifact test reconstructs from flat decoded fields (`SmPetSpawnSnapshot`/`SmPetEmoteSnapshot`) with no live Pet graph. The test is a REAL Java-captured-vector byte oracle (BodyHex/CanonicalPayloadHex), not slop — cannot orphan; needs the live-Pet graph.
 - **SmGameTime** — DEFER (singleton-vs-DI seam; faithful SM_GAME_TIME parameterless reads GameTimeService.GetInstance() singleton, reworked is DI-fed).
 - **SmKey / SmPong** — DEFER (GameCryptTests crypt-harness change; faithful SM_KEY/SM_PONG have no SerializeFrame, only Write(AionConnection)+Encrypt needing a live/uninitialized AionConnection).
-- **HEAVY WEBS (LAST):** SmDialogWindow / SmSystemMessage / SmItemUsageAnimation / SmAttackStatus(+SmAttackStatusEnums.cs enum file) / SmEmotion.
+- **HEAVY WEBS (LAST):** SmDialogWindow / SmSystemMessage / SmItemUsageAnimation / SmAttackStatus(+SmAttackStatusEnums.cs enum file). (SmEmotion RETIRED in batch 11.)
 
 ## Sm* DUPLICATE-PACKET RETIREMENT — BATCH 8-9: 14 more survivors retired (2026-06-17, 2 commits rrfarmer). 37 -> 23 remaining.
 
