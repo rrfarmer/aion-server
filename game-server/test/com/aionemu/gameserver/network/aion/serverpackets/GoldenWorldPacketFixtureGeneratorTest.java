@@ -17,13 +17,20 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import sun.misc.Unsafe;
+
 import com.aionemu.gameserver.dataholders.DataManager;
 import com.aionemu.gameserver.dataholders.QuestsData;
 import com.aionemu.gameserver.dataholders.SkillData;
 import com.aionemu.gameserver.dataholders.WorldMapsData;
 import com.aionemu.gameserver.model.animations.TeleportAnimation;
+import com.aionemu.gameserver.model.gameobjects.AionObject;
+import com.aionemu.gameserver.model.gameobjects.Npc;
 import com.aionemu.gameserver.model.templates.QuestTemplate;
 import com.aionemu.gameserver.model.templates.quest.QuestExtraCategory;
+import com.aionemu.gameserver.model.templates.tradelist.TradeListTemplate;
+import com.aionemu.gameserver.model.templates.tradelist.TradeListTemplate.TradeTab;
+import com.aionemu.gameserver.model.templates.tradelist.TradeNpcType;
 import com.aionemu.gameserver.model.templates.world.WorldMapTemplate;
 import com.aionemu.gameserver.network.aion.AionConnection;
 import com.aionemu.gameserver.network.aion.AionServerPacket;
@@ -140,6 +147,94 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 		String inputs = "{\"ctor\":\"share\",\"questId\":" + questId + ",\"sharerId\":" + sharerId
 			+ ",\"shareInAlliance\":" + shareInAlliance + "}";
 		return new Case(name, inputs, capture(new SM_QUEST_ACTION(questId, sharerId, shareInAlliance), null));
+	}
+
+	// ---- live-Npc object seam (SM_TRADE_IN_LIST) ----
+
+	// The live Npc objectId + the trade-in (sellback) list the SM_TRADE_IN_LIST fixture reads. Identical both sides.
+	// SM_TRADE_IN_LIST.writeImpl reads ONLY npc.getObjectId() from the live object (no template/stats/AI/World), plus
+	// the directly-constructed TradeListTemplate scalars — so the bounded live-Npc object is built WITHOUT the heavy
+	// Npc(controller,spawn,template) ctor (which would pull in setupStatContainers -> NpcGameStats/NpcLifeStats/AI):
+	// it is allocated uninitialized (Unsafe.allocateInstance, the established harness precedent) with only the final
+	// AionObject.objectId pinned. This is the FIRST golden seam that drives a packet through a live Npc game-object.
+	private static final int TRADE_NPC_OBJECT_ID = 700123;
+	private static final int TRADE_LIST_NPC_ID = 798001;
+
+	@Test
+	public void generateGoldenTradeInListFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		Npc npc = newUninitializedNpc(TRADE_NPC_OBJECT_ID);
+
+		List<Case> cases = new ArrayList<>();
+		// Full list: NORMAL type (index 1), 3 trade tabs -> full payload (objectId + type + modifiers + count + tab ids).
+		cases.add(tradeInListCase("tradeInListNormal", npc, TRADE_LIST_NPC_ID, TradeNpcType.NORMAL, 80,
+			new int[] { 1, 2, 3 }));
+		// Different npc type (ABYSS -> index 2) + a single tab + a different buy modifier.
+		cases.add(tradeInListCase("tradeInListAbyssSingleTab", npc, TRADE_LIST_NPC_ID, TradeNpcType.ABYSS, 100,
+			new int[] { 42 }));
+		// Guard: count == 0 (empty tab list) -> writeImpl early-returns (empty payload).
+		cases.add(tradeInListCase("tradeInListEmptyCount", npc, TRADE_LIST_NPC_ID, TradeNpcType.NORMAL, 80, new int[0]));
+		// Guard: npcId == 0 -> writeImpl early-returns (empty payload).
+		cases.add(tradeInListCase("tradeInListZeroNpcId", npc, 0, TradeNpcType.NORMAL, 80, new int[] { 1 }));
+
+		writeFixture(outDir.resolve("SM_TRADE_IN_LIST.json"), "SM_TRADE_IN_LIST", cases);
+	}
+
+	private static Case tradeInListCase(String name, Npc npc, int npcId, TradeNpcType type, int buyPriceModifier,
+			int[] tabIds) {
+		StringBuilder tabs = new StringBuilder("[");
+		for (int i = 0; i < tabIds.length; i++)
+			tabs.append(i > 0 ? "," : "").append(tabIds[i]);
+		tabs.append("]");
+		String inputs = "{\"objectId\":" + npc.getObjectId() + ",\"npcId\":" + npcId + ",\"npcType\":\"" + type.name()
+			+ "\",\"buyPriceModifier\":" + buyPriceModifier + ",\"tabIds\":" + tabs + "}";
+		TradeListTemplate tlist = tradeListTemplate(npcId, type, tabIds);
+		return new Case(name, inputs, capture(new SM_TRADE_IN_LIST(npc, tlist, buyPriceModifier), null));
+	}
+
+	private static TradeListTemplate tradeListTemplate(int npcId, TradeNpcType type, int[] tabIds) {
+		try {
+			TradeListTemplate t = new TradeListTemplate();
+			setField(t, "npcId", npcId);
+			setField(t, "tradeNpcType", type);
+			List<TradeTab> tabs = new ArrayList<>();
+			for (int id : tabIds)
+				tabs.add(tradeTab(id));
+			setField(t, "tradeTablist", tabs);
+			return t;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to build TradeListTemplate", e);
+		}
+	}
+
+	private static TradeTab tradeTab(int id) throws ReflectiveOperationException {
+		Constructor<TradeTab> ctor = TradeTab.class.getDeclaredConstructor();
+		ctor.setAccessible(true);
+		TradeTab tab = ctor.newInstance();
+		setField(tab, "id", id);
+		return tab;
+	}
+
+	/**
+	 * Allocate an Npc WITHOUT running any constructor (Unsafe.allocateInstance — the established harness precedent for
+	 * AionConnection/AbyssRank), then pin only the final AionObject.objectId. SM_TRADE_IN_LIST reads nothing else from
+	 * the live object, so no template/stats/AI/World graph is needed.
+	 */
+	private static Npc newUninitializedNpc(int objectId) {
+		try {
+			Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+			theUnsafe.setAccessible(true);
+			Unsafe unsafe = (Unsafe) theUnsafe.get(null);
+			Npc npc = (Npc) unsafe.allocateInstance(Npc.class);
+			Field idField = AionObject.class.getDeclaredField("objectId");
+			idField.setAccessible(true);
+			idField.set(npc, objectId);
+			return npc;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to allocate uninitialized Npc", e);
+		}
 	}
 
 	// ---- SKILL_DATA holder seam ----

@@ -2,6 +2,39 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## GOLDEN SUITE 185 -> 186 (2026-06-17) — FIRST live-Npc OBJECT seam (SM_TRADE_IN_LIST), uninitialized-Npc precedent
+
+Built the lightest bounded **live-Npc game-object golden seam** — the first golden that drives a packet through a live
+`Npc` instance rather than only scalar/holder/template state. Golden'd **SM_TRADE_IN_LIST** (1 fixture / 4 cases) by
+EXTENDING the same `GoldenWorldPacketFixtureGeneratorTest` (Java) + `GoldenWorldPacketFixtureTests` (C#) seam.
+**Byte-exact on FIRST capture, 0 fidelity bugs** (SM_TRADE_IN_LIST.cs faithful 1:1).
+
+- **Why SM_TRADE_IN_LIST is the LIGHTEST live-Npc reader:** `writeImpl` reads ONLY `npc.getObjectId()` from the live
+  object (NO template/stats/AI/World/Knownlist/MoveController/Spawn), plus a directly-constructed `TradeListTemplate`
+  (NOT a DataManager read — the template object is passed into the ctor). The other Npc-typed ctors all pull heavy
+  graphs: SM_NPC_INFO reads `npc.getType(player)` + `getMoveController()` + `getGameStats()` + `getLifeStats()` +
+  `TownService` + `getSpawn()` + `getNpcObjectType()`; SM_MESSAGE(Npc) `writeImpl` needs `con.getActivePlayer()`;
+  SM_SELL_ITEM pulls TRADE_LIST_DATA + tradelist items.
+- **The bounded live Npc = an UNINITIALIZED instance.** The heavy single `Npc(controller,spawn,template)` ctor
+  (BOTH sides — neither has an alternate ctor) runs `setupStatContainers()` -> `NpcLifeStats` ctor EAGERLY calls
+  `owner.getGameStats().getMaxHp()` -> `NpcGameStats.getStat` -> `owner.getAi().modifyOwnerStat(s)`, so a real Npc
+  needs a populated StatsTemplate AND a live AI. Since the packet reads ONLY objectId, the Npc is allocated WITHOUT a
+  ctor (Java `Unsafe.allocateInstance(Npc.class)` / C# `RuntimeHelpers.GetUninitializedObject(typeof(Npc))` — the
+  established AionConnection/AbyssRank harness precedent) with only the final `AionObject.objectId`/`_objectId` field
+  pinned. TradeListTemplate built by reflectively setting `npcId`/`tradeNpcType`/`tradeTablist` (TradeTab.id) both sides.
+- **4 cases cover both writeImpl branches:** full list (NORMAL type index 1, 3 tabs -> full payload), ABYSS single-tab
+  (type index 2, different buy modifier), count==0 empty-tab-list -> early-return (empty payload), npcId==0 ->
+  early-return (empty payload).
+
+**Reusable for the rest of the Npc family?** PARTIALLY. The uninitialized-Npc seam is reusable for ANY Npc-reading
+packet whose `writeImpl` reads ONLY pinnable scalar fields of the live object (objectId, and any field settable
+without running the ctor). It is NOT enough for the stat/AI/template-reading Npc packets (SM_NPC_INFO etc.) — those
+still need the real Npc ctor (StatsTemplate-populated NpcTemplate + a live/stub AI + NpcGameStats/NpcLifeStats), which
+is the next (heavier) live-Npc increment. **NEXT VEIN:** either (a) the real-Npc-ctor increment (populate an
+NpcTemplate with a StatsTemplate + stub the AI so NpcGameStats/NpcLifeStats build -> unlocks SM_NPC_INFO and the
+stat-reading Npc family), or (b) the still-blocked live-World increment (SM_PLAYER_SPAWN/SM_DIE — Java static-final
+World singleton, unchanged blocker below). Build 0, golden 186, suite 473/0, bootstrap 9/9.
+
 ## GOLDEN SUITE 183 -> 185 (2026-06-17) — holder-seam reuse: SKILL_DATA + QUEST_DATA single-template readers (SM_SKILL_COOLDOWN, SM_QUEST_ACTION)
 
 Reused the bounded DataManager-holder seam (introduced for SM_TELEPORT_LOC) for two MORE single-DataManager-template-reader
