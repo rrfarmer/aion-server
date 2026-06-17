@@ -41,7 +41,9 @@ import com.aionemu.gameserver.model.animations.TeleportAnimation;
 import com.aionemu.gameserver.model.gameobjects.AionObject;
 import com.aionemu.gameserver.model.gameobjects.Npc;
 import com.aionemu.gameserver.model.gameobjects.Persistable.PersistentState;
+import com.aionemu.gameserver.model.items.ChargeInfo;
 import com.aionemu.gameserver.model.items.GodStone;
+import com.aionemu.gameserver.model.items.ItemMask;
 import com.aionemu.gameserver.model.items.ManaStone;
 import com.aionemu.gameserver.model.templates.BoundRadius;
 import com.aionemu.gameserver.model.templates.QuestTemplate;
@@ -1055,6 +1057,143 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 	/** Seed DataManager.ITEM_DATA with an empty (non-null) ItemData so the ManaStone ctor's getItemTemplate(itemId) returns null. */
 	private void installItemDataSeam() {
 		DataManager.ITEM_DATA = new ItemData();
+	}
+
+	// ---- equippable item / ItemInfoBlob seam: more sub-object blob entries (CONDITIONING_INFO / COMPOSITE_ITEM / POLISH_INFO) ----
+	//
+	// Reuses the equippable-weapon seam (1H SWORD base -> SLOTS_WEAPON, already byte-validated) and POPULATES the three
+	// remaining BOUNDED sub-object blob entries that getFullBlob can add (one per case, distinct objectIds, in a NEW
+	// fixture file — never clobbers the weapon/armor/accessory/shield/wing/plume/manastone/godstone fixtures):
+	//   * CONDITIONING_INFO (getFullBlob adds it inside the equippable block when item.getConditioningInfo() != null, AFTER
+	//     ENCHANT_INFO): ConditioningInfoBlobEntry.writeThisBlob = writeD(ownerItem.getChargePoints()). The conditioningInfo
+	//     ChargeInfo is built directly (ChargeInfo(chargePoints, item); its ctor reads item.getImprovement() which is null on
+	//     the bare item -> attackBurn/defendBurn 0, deterministic) and pinned on the private Item.conditioningInfo field. The
+	//     writer reads ONLY getChargePoints() (== the ctor arg). So getFullBlob = EQUIPPED_SLOT + SLOTS_WEAPON + ENCHANT_INFO
+	//     + CONDITIONING_INFO + PREMIUM_OPTION + GENERAL_INFO.
+	//   * COMPOSITE_ITEM (getFullBlob adds it FIRST, before EQUIPPED_SLOT, when item.hasFusionedItem()): CompositeItemBlobEntry
+	//     .writeThisBlob = writeD(getFusionedItemId()) + writeFusionStones [no fusion stones -> skip MAX_BASIC_STONES*4 zero
+	//     bytes] + writeC(getFusionedItemOptionalSockets()) + writeC(getFusionedItemBonusStatsId()). setFusionedItem(template,
+	//     bonusStatsId=0, optionalSockets) wires the fusioned template; bonusStatsId 0 -> setFusionedItemBonusStats short-
+	//     circuits (NO fusionedItemTemplate.getStatBonusSetId() deref) -> getFusionedItemBonusStatsId() == 0. So getFullBlob =
+	//     COMPOSITE_ITEM + EQUIPPED_SLOT + SLOTS_WEAPON + ENCHANT_INFO + PREMIUM_OPTION + GENERAL_INFO.
+	//   * POLISH_INFO (getFullBlob adds it inside the equippable block when itemTemplate.isCanPolish(), i.e. the CAN_POLISH
+	//     mask bit (1<<17) is set, BEFORE PREMIUM_OPTION): PolishInfoBlobEntry.writeThisBlob = writeD(stone == null ? 0 :
+	//     stone.getPolishCharge()); idianStone is null (IdianStone is unbounded for the unit harness — its ctor NREs on an
+	//     empty ItemData), so it writes 0 deterministically WITHOUT an IdianStone. So getFullBlob = EQUIPPED_SLOT + SLOTS_WEAPON
+	//     + ENCHANT_INFO + POLISH_INFO + PREMIUM_OPTION + GENERAL_INFO.
+	// All other ENCHANT_INFO/SLOTS_WEAPON/PREMIUM_OPTION/GENERAL_INFO reads are identical to the weapon seam (no idian/dye/
+	// tempering/manastone/godstone). Bounded DataManager: the existing ITEM_CLEAN_UP seam (GENERAL_INFO) only. Mirrored 1:1
+	// on the C# asserter side. Java is the oracle.
+	private static final int EQ_COND_OBJECT_ID = 268700301; // weapon w/ conditioning (distinct)
+	private static final int EQ_COMP_OBJECT_ID = 268700302; // weapon w/ fusioned (composite) item (distinct)
+	private static final int EQ_POLISH_OBJECT_ID = 268700303; // weapon w/ CAN_POLISH mask, null idian (distinct)
+	private static final int EQ_SUBOBJ2_TEMPLATE_ID = 100000855; // same 1H sword template id as the weapon seam
+	private static final int EQ_SUBOBJ2_MASK = 0x2C4D; // base mask (no CAN_POLISH bit) -> GENERAL_INFO writeH
+	private static final int EQ_SUBOBJ2_DESC_L10N = 350456;
+	private static final int EQ_COND_CHARGE_POINTS = 432109; // getChargePoints() -> CONDITIONING_INFO writeD
+	private static final int EQ_COMP_FUSIONED_TEMPLATE_ID = 100000999; // fusioned item template id -> getFusionedItemId()
+	private static final int EQ_COMP_OPTIONAL_SOCKETS = 3; // getFusionedItemOptionalSockets() -> writeC
+	private static final int EQ_POLISH_MASK = 0x2C4D | ItemMask.CAN_POLISH; // CAN_POLISH bit set -> isCanPolish() true
+
+	@Test
+	public void generateGoldenInventoryAddItemSubObject2Fixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installItemCleanupSeam(); // GENERAL_INFO reads DataManager.ITEM_CLEAN_UP.hasAccountOrLegionWhStorabilityDisabled
+
+		List<Case> cases = new ArrayList<>();
+		// (a) Weapon with a conditioning (charge) info -> CONDITIONING_INFO blob (writeD chargePoints).
+		cases.add(conditioningCase("invAddEquippableWeaponConditioning", EQ_COND_OBJECT_ID, EQ_COND_CHARGE_POINTS));
+		// (b) Weapon with a fusioned (composite) item, bonusStatsId 0 -> COMPOSITE_ITEM blob (fusionedId + 24 zero bytes + sockets + 0).
+		cases.add(compositeCase("invAddEquippableWeaponComposite", EQ_COMP_OBJECT_ID, EQ_COMP_FUSIONED_TEMPLATE_ID,
+			EQ_COMP_OPTIONAL_SOCKETS));
+		// (c) Weapon with the CAN_POLISH mask bit + null idian stone -> POLISH_INFO blob (writeD 0).
+		cases.add(polishCase("invAddEquippableWeaponPolishNoIdian", EQ_POLISH_OBJECT_ID));
+
+		writeFixture(outDir.resolve("SM_INVENTORY_ADD_ITEM_SUBOBJECT2.json"), "SM_INVENTORY_ADD_ITEM", cases);
+	}
+
+	private static Case conditioningCase(String name, int objectId, int chargePoints) {
+		Item item = buildSubObject2Weapon(objectId, EQ_SUBOBJ2_MASK);
+		setConditioningInfo(item, chargePoints);
+		List<Item> items = new ArrayList<>();
+		items.add(item);
+		String inputs = "{\"objectId\":" + objectId + ",\"itemId\":" + EQ_SUBOBJ2_TEMPLATE_ID + ",\"mask\":" + EQ_SUBOBJ2_MASK
+			+ ",\"desc\":" + EQ_SUBOBJ2_DESC_L10N + ",\"itemCount\":1,\"itemCreator\":\"Smith\",\"itemGroup\":\"SWORD\""
+			+ ",\"subObject\":\"conditioning\",\"chargePoints\":" + chargePoints + ",\"addType\":\"BUY\"}";
+		return new Case(name, inputs, capture(new SM_INVENTORY_ADD_ITEM(items, null, ItemAddType.BUY), null));
+	}
+
+	private static Case compositeCase(String name, int objectId, int fusionedItemId, int optionalSockets) {
+		Item item = buildSubObject2Weapon(objectId, EQ_SUBOBJ2_MASK);
+		// setFusionedItem(template, bonusStatsId=0, optionalSockets): bonusStatsId 0 -> getFusionedItemBonusStatsId() == 0.
+		item.setFusionedItem(fusionedItemTemplate(fusionedItemId), 0, optionalSockets);
+		List<Item> items = new ArrayList<>();
+		items.add(item);
+		String inputs = "{\"objectId\":" + objectId + ",\"itemId\":" + EQ_SUBOBJ2_TEMPLATE_ID + ",\"mask\":" + EQ_SUBOBJ2_MASK
+			+ ",\"desc\":" + EQ_SUBOBJ2_DESC_L10N + ",\"itemCount\":1,\"itemCreator\":\"Smith\",\"itemGroup\":\"SWORD\""
+			+ ",\"subObject\":\"composite\",\"fusionedItemId\":" + fusionedItemId + ",\"optionalSockets\":" + optionalSockets
+			+ ",\"bonusStatsId\":0,\"addType\":\"BUY\"}";
+		return new Case(name, inputs, capture(new SM_INVENTORY_ADD_ITEM(items, null, ItemAddType.BUY), null));
+	}
+
+	private static Case polishCase(String name, int objectId) {
+		// CAN_POLISH mask bit set -> isCanPolish() true; idian stone left null -> writeD 0.
+		Item item = buildSubObject2Weapon(objectId, EQ_POLISH_MASK);
+		List<Item> items = new ArrayList<>();
+		items.add(item);
+		String inputs = "{\"objectId\":" + objectId + ",\"itemId\":" + EQ_SUBOBJ2_TEMPLATE_ID + ",\"mask\":" + EQ_POLISH_MASK
+			+ ",\"desc\":" + EQ_SUBOBJ2_DESC_L10N + ",\"itemCount\":1,\"itemCreator\":\"Smith\",\"itemGroup\":\"SWORD\""
+			+ ",\"subObject\":\"polish\",\"addType\":\"BUY\"}";
+		return new Case(name, inputs, capture(new SM_INVENTORY_ADD_ITEM(items, null, ItemAddType.BUY), null));
+	}
+
+	/**
+	 * Build a 1H-sword Item (same base as buildEquippableWeapon) with the given mask. itemGroup SWORD -> SLOTS_WEAPON;
+	 * maxTuneCount 0 (canTune() false -> isIdentified() true). No stones/godstone/idian/dye/tempering by default.
+	 */
+	private static Item buildSubObject2Weapon(int objectId, int mask) {
+		try {
+			ItemTemplate template = new ItemTemplate();
+			setField(template, "itemId", EQ_SUBOBJ2_TEMPLATE_ID);
+			setField(template, "mask", mask);
+			setField(template, "description", EQ_SUBOBJ2_DESC_L10N);
+			setField(template, "itemGroup", ItemGroup.SWORD);
+			setField(template, "maxTuneCount", 0); // canTune() == false -> isIdentified() == true (deterministic)
+			Item item = new Item(objectId, template);
+			item.setItemCount(1L);
+			item.setItemCreator("Smith");
+			return item;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to build sub-object2 weapon Item", e);
+		}
+	}
+
+	/**
+	 * Pin the private Item.conditioningInfo field to a ChargeInfo with the given chargePoints. The ChargeInfo ctor reads
+	 * item.getImprovement() (null on the bare item -> attackBurn/defendBurn 0); the CONDITIONING_INFO writer reads only
+	 * getChargePoints() (== the ctor arg). Mirrored 1:1 on the C# side.
+	 */
+	private static void setConditioningInfo(Item item, int chargePoints) {
+		try {
+			Field f = Item.class.getDeclaredField("conditioningInfo");
+			f.setAccessible(true);
+			f.set(item, new ChargeInfo(chargePoints, item));
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to set conditioningInfo", e);
+		}
+	}
+
+	/** Build a fusioned ItemTemplate carrying only the templateId (getFusionedItemId() reads getTemplateId()). */
+	private static ItemTemplate fusionedItemTemplate(int itemId) {
+		try {
+			ItemTemplate t = new ItemTemplate();
+			setField(t, "itemId", itemId);
+			return t;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to build fusioned ItemTemplate", e);
+		}
 	}
 
 	private static Case equippableVariantCase(String name, int objectId, int itemId, int mask, int desc, String creator,

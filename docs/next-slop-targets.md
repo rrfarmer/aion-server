@@ -19,18 +19,20 @@ tolerated; writer reads only ItemStone base scalars slot/itemId). GodStone ctor 
 reads only getItemId()) — DataManager-free. `setGodStone(non-null)` just assigns the field (DAO path is null-arg only). NEW
 bounded seam: empty ITEM_DATA (`DataManager.ITEM_DATA = new ItemData()` / `SetAutoProperty(...ItemDataDh, new ItemData())`).
 
-**REMAINING sub-object writers (next bounded item increments, no new substrate beyond noted):**
-- **CONDITIONING_INFO** — needs a `ChargeInfo` so `getConditioningInfo() != null`; the writer is `writeD(getChargePoints())`.
-  Likely the lightest next sub-object (one ChargeInfo construct).
-- **COMPOSITE_ITEM (fusion)** — BOUNDED-WITH-A-SECOND-TEMPLATE: `setFusionedItem(template,bonusStatsId=0,optionalSockets)` then
-  `HasFusionedItem()`; writer reads getFusionedItemId()/fusion-stones/optional-sockets/bonus-stats-id. Keep bonusStatsId 0
-  (bonusStatsId>0 derefs `fusionedItemTemplate.getStatBonusSetId()`). Fusion stones reuse the ManaStone seam.
-- **POLISH_INFO** — fires when `template.isCanPolish()` (a mask bit); writer is its own blob. Bounded (one mask bit).
-- **IdianStone (idian-polished, in ENCHANT_INFO)** — UNBOUNDED for the unit harness: ctor derefs
+**REMAINING sub-object writers — CONDITIONING/COMPOSITE/POLISH all GOLDEN'D 2026-06-17 (fixture SM_INVENTORY_ADD_ITEM_SUBOBJECT2.json, 3 cases, distinct objectIds 268700301-303, byte-exact first capture, 0 bugs):**
+- **CONDITIONING_INFO** — DONE. `getConditioningInfo() != null` via a `ChargeInfo(chargePoints,item)` pinned on the private
+  `conditioningInfo` field (ctor reads `getImprovement()`==null -> deterministic); writer = `writeD(getChargePoints())` (== ctor arg).
+- **COMPOSITE_ITEM (fusion)** — DONE. `setFusionedItem(fusionedTemplate, bonusStatsId=0, optionalSockets)` -> `hasFusionedItem()`;
+  bonusStatsId 0 short-circuits `setFusionedItemBonusStats` (NO `fusionedItemTemplate.getStatBonusSetId()` deref) so it's bounded
+  WITHOUT the StatBonusSet data. Writer = `writeD(getFusionedItemId())` + 24 zero fusion-stone bytes (no fusion stones) +
+  `writeC(optionalSockets)` + `writeC(0)`. Fusion stones (the populated branch) reuse the ManaStone seam if ever needed.
+- **POLISH_INFO** — DONE. Fires when `template.isCanPolish()` (CAN_POLISH mask bit 1<<17). Writer = `writeD(idian==null?0:getPolishCharge())`;
+  with a null idian stone it writes 0 deterministically — so POLISH_INFO is golden'able WITHOUT an IdianStone.
+- **IdianStone (idian-polished, in ENCHANT_INFO + the non-null POLISH path)** — STILL UNBOUNDED for the unit harness: ctor derefs
   `getItemTemplate(itemId).getActions().getPolishAction()` AND `template.getIdianAction().getBurnDefend()` -> NREs on an empty
   ItemData. Needs a populated ItemTemplate with IdianAction + PolishAction (a heavier ITEM_DATA seam). DEFER.
 
-After the bounded CONDITIONING/COMPOSITE/POLISH increments, the item/ItemInfoBlob vein is exhausted; NEXT major vein = the
+The bounded item/ItemInfoBlob sub-object vein is now EXHAUSTED (only IdianStone remains, unbounded). NEXT major vein = the
 live-World increment (SM_PLAYER_SPAWN / SM_DIE), still blocked on the Java static-final World singleton.
 
 ## GOLDEN SUITE 193 -> 194 (2026-06-17) — equippable seam REUSE: SHIELD + WING + PLUME per-type blobs + TEMPERED-plume ENCHANT_INFO branch
