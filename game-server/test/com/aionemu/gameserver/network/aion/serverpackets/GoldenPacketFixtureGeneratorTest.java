@@ -1095,6 +1095,58 @@ public class GoldenPacketFixtureGeneratorTest {
 		writeFixture(outDir.resolve("SM_GATHER_UPDATE.json"), "SM_GATHER_UPDATE", null, smGatherUpdate);
 	}
 
+	/**
+	 * Batch 23: login/account-flow con-null-safe deterministic SM_* packets. Own @Test for isolated regeneration.
+	 *   SM_LOGIN_QUEUE        — private no-arg ctor pins fixed scalars 5/60/50; writeImpl writeD x3; con never read.
+	 *   SM_SYSTEM_MESSAGE     — (int msgId, Object... params) ctor -> ChatType.GOLDEN_YELLOW(25)+null sender(objId 0);
+	 *                           writeImpl writeC(chatType) writeC(0) writeD(senderObjId) writeD(msgId) writeC(params.length)
+	 *                           per-param writeS(param.toString()) writeC(specialParams.length) per writeS. Integer.toString
+	 *                           == int.ToString. Scalar params only -> fully deterministic.
+	 *   SM_CREATE_CHARACTER   — non-OK branch: writeD(responseCode) then return (skips writePlayerInfo live graph).
+	 *                           Reconstruct with null PlayerAccountData + a non-OK responseCode -> deterministic.
+	 *   mvn -q -pl game-server -am test -Dtest=GoldenPacketFixtureGeneratorTest#generateGoldenLoginBatch23Fixtures -Dmaven.test.skip=false -Dsurefire.failIfNoSpecifiedTests=false
+	 */
+	@Test
+	public void generateGoldenLoginBatch23Fixtures() throws Exception {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		// SM_LOGIN_QUEUE: private no-arg ctor (waitingPosition=5, waitingTime=60, waitingCount=50); writeD x3.
+		java.lang.reflect.Constructor<SM_LOGIN_QUEUE> lqCtor = SM_LOGIN_QUEUE.class.getDeclaredConstructor();
+		lqCtor.setAccessible(true);
+		List<Case> smLoginQueue = new ArrayList<>();
+		smLoginQueue.add(new Case("fixedSample",
+			"{\"ctor\":\"private\"}",
+			capture(lqCtor.newInstance())));
+		writeFixture(outDir.resolve("SM_LOGIN_QUEUE.json"), "SM_LOGIN_QUEUE", null, smLoginQueue);
+
+		// SM_SYSTEM_MESSAGE(int msgId, Object... params): ChatType.GOLDEN_YELLOW (id 25), null sender (senderObjId 0).
+		List<Case> smSystemMessage = new ArrayList<>();
+		smSystemMessage.add(new Case("noParams",
+			"{\"ctor\":\"msgId\",\"msgId\":901354,\"params\":[]}",
+			capture(new SM_SYSTEM_MESSAGE(901354))));
+		smSystemMessage.add(new Case("intAndString",
+			"{\"ctor\":\"msgId\",\"msgId\":1200000,\"params\":[{\"i\":1234},{\"s\":\"Tiamat\"}]}",
+			capture(new SM_SYSTEM_MESSAGE(1200000, 1234, "Tiamat"))));
+		smSystemMessage.add(new Case("twoStringsOneInt",
+			"{\"ctor\":\"msgId\",\"msgId\":1200002,\"params\":[{\"s\":\"Pet\"},{\"i\":777},{\"s\":\"Mob\"}]}",
+			capture(new SM_SYSTEM_MESSAGE(1200002, "Pet", 777, "Mob"))));
+		writeFixture(outDir.resolve("SM_SYSTEM_MESSAGE.json"), "SM_SYSTEM_MESSAGE", null, smSystemMessage);
+
+		// SM_CREATE_CHARACTER(PlayerAccountData, responseCode): non-OK branch writes only writeD(responseCode).
+		List<Case> smCreateCharacter = new ArrayList<>();
+		smCreateCharacter.add(new Case("nameAlreadyUsed",
+			"{\"ctor\":\"nonOk\",\"responseCode\":10}",
+			capture(new SM_CREATE_CHARACTER(null, SM_CREATE_CHARACTER.RESPONSE_NAME_ALREADY_USED))));
+		smCreateCharacter.add(new Case("invalidName",
+			"{\"ctor\":\"nonOk\",\"responseCode\":5}",
+			capture(new SM_CREATE_CHARACTER(null, SM_CREATE_CHARACTER.RESPONSE_INVALID_NAME))));
+		smCreateCharacter.add(new Case("serverLimitExceeded",
+			"{\"ctor\":\"nonOk\",\"responseCode\":4}",
+			capture(new SM_CREATE_CHARACTER(null, SM_CREATE_CHARACTER.RESPONSE_SERVER_LIMIT_EXCEEDED))));
+		writeFixture(outDir.resolve("SM_CREATE_CHARACTER.json"), "SM_CREATE_CHARACTER", null, smCreateCharacter);
+	}
+
 	/** AssembledNpcPart with object id + reflect-set template npcId/staticId (bypass XML). */
 	private static com.aionemu.gameserver.model.assemblednpc.AssembledNpcPart assembledPart(int objectId, int npcId, int staticId) throws Exception {
 		com.aionemu.gameserver.model.templates.assemblednpc.AssembledNpcTemplate.AssembledNpcPartTemplate pt =
