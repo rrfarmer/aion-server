@@ -1,7 +1,44 @@
 # Port Fidelity & Remediation Plan
 
-Date: 2026-06-07
+Date: 2026-06-07 (original) · **Deep-analysis status update: 2026-06-17**
 Status: AUTHORITATIVE. This is the current loop driver for all game-server porting work. It supersedes the Phase-6 unit-of-work approach for *how* work is done (the phase roadmap in `csharp-port.md` still describes the macro sequence).
+
+---
+
+## 0. STATUS UPDATE — 2026-06-17 (deep analysis; supersedes §5–§8 progress markers)
+
+**Headline: Phases A, B, C are COMPLETE. Phase D (porting the missing surface) is structurally ~complete. The remaining frontier is RUNTIME-PARITY VALIDATION, not porting or de-slopping.**
+
+Branch `feature/object-spine-bigbang` @ HEAD `aee65eae1` · build **0 errors** (all 4 projects + tests) · golden **196/196 byte-exact** vs the Java mvn oracle · full test suite **459/0** · bootstrap **9/9** · full DB-backed boot validated end-to-end.
+
+### What changed since 2026-06-07 (measured)
+
+| Metric | 2026-06-07 (plan origin) | 2026-06-17 | Note |
+| --- | --- | --- | --- |
+| Fidelity guardrail (`check_fidelity.py`) baseline | 363 banned-vocab slop files + 6 god-classes | **0 / 0** (`fidelity-baseline.json` = `[]` / `{}`) | the ratchet was driven all the way down |
+| `GameServerConnection.cs` god-class | **22,907 lines** (≈200 fused packet handlers) | **gone** (GS class deleted; packets are 1 handler/class) | largest GS file now = faithful generated catalogs `SM_SYSTEM_MESSAGE.cs` / `DialogAction.cs`, which mirror equally-large Java files |
+| Java types with exact-name C# counterpart | 56 (first audit) → 2265 | **2269 / 2456 (~92%)** | the rest are nested enums, faithful renames, and CM_/SM_ naming-normalization artifacts |
+| Reworked duplicate `Sm*` packets | 142 (138 byte-identical twins of faithful `SM_*`) | **0** — `GameServerPacket`/`SerializeFrame` dual-serialization path **dropped**; one faithful `AionServerPacket` hierarchy | |
+| Top slop explosion clusters (FindGroup 101, BindPoint 38, WorldNpc 37, PlayerKnown 24, PlayerProtection 42) | all present | **all retired/collapsed to faithful** | |
+| Content scripts ported | partial | **quests 1035/1035 · AI 462 · instance 37/37 · zone 3/3 · chat done** | drove C# file count 2735 → 4124 |
+
+### Phase-by-phase
+
+- **Phase A (Foundation) — DONE.** Doctrine (A1), Java golden-capture harness (A2, now extended to formulas + live-object harness seams: Creature/Player/DataManager-holder/live-Npc/item-ItemInfoBlob), structural-audit tool (A3), and the guardrail ratchet (A4) all built. A4 baseline is now empty (zero tracked slop / zero god-classes) — the ratchet reached the floor.
+- **Phase B (Audit) — DONE.** `Structural-Audit-Scorecard.md` regenerated 2026-06-17. The 2026-06-07 explosion/orphan clusters are gone; the current scorecard's "orphan" table is now dominated by **false positives** (faithfully-ported quest/AI/instance content under `game-server/data/handlers/`, which the audit tool does not index as Java) plus the LoginServer/ChatServer packet families. See the scorecard's interpretive header.
+- **Phase C (Remediate / de-slop) — COMPLETE.** The whole object-spine big-bang landed: object store unified to a single faithful `World._allObjects` (`_objects` dual-store deleted); WorldNpc/Kisk/Rift/drop/DP/HP/combat slop webs retired; all 8 reworked StaticData `*Summary`/`*Table` holder projections + WorldMapSummary + NpcSpawnTable + FlightZone retired; Housing subsystem confirmed retired (faithful `House:VisibleObject`/`HousingService`/`SM_HOUSE_*` is the live path); 126→0 reworked duplicate packets; `GameServerConnection` god-class extracted. **3 latent runtime fidelity bugs were found and fixed during de-slop** (RiftManager instance fan-out, `SM_DIALOG_WINDOW` flat-write, abyss-points silent-no-send). DataManager hollow-holders all wired (NPC/ITEM/SKILL/SKILL_TREE/SPAWNS/etc. load real XML at boot). Both build-zero "real src fidelity bugs" resolved-or-understood.
+- **Phase D (Resume porting) — STRUCTURALLY ~COMPLETE.** The §8 missing-surface backlog (model, controllers, skillengine, ai, questEngine, data/handlers content, absent services) is essentially ported: ~92% exact-name parity; pillars complete per memory (clientpacket 190 CM_*, iteminfo 20 blob-writers, WorldMap, team-events, AI-behavior layer, DAO, quest/AI/instance/zone content). Engine/service classes with NO same-named C# file, measured 2026-06-17 = **6**, and all 6 are false positives: `AIState`/`AISubState`/`AIEventType` (nested enums inside AI base files), `CronExpressionTransformer` (faithful-renamed to `CronExpressions`), and `FindGroupMutationPostTraceCaptureHooks` + `PetFeedUnusualStorageArtifactCapture` (stray slop-named files to spot-check/delete — NOT real Aion engine classes).
+
+### What GENUINELY remains (all non-slop; mostly validation, some user-gated)
+
+1. **Runtime-parity validation depth (the real frontier).** Structural 1:1 ≠ proven runtime parity. Per `parity-state-modeled-vs-live`, end-to-end *live* gameplay actually exercised is still well short of 100% — the engine pillars exist and are golden-validated where harnessable, but the full live loop is not yet client-proven.
+   - **Golden coverage:** 196 cases byte-exact, **0 fidelity bugs across every probe**, but ~104 live-object `SM_*` packets remain un-golden'd because they need a heavier **integration harness** (live World/DB/connection/Player-graph). This is a bounded sub-project, ~1–2 packets/tick — diminishing returns given the 0-bug record, but it is the only path to maximal packet validation without a client.
+   - **Front-A live-client enter-world test:** the one test that proves the real loop. **Environment-gated — needs the user's actual Aion 4.8 client.** The autonomous loop cannot perform it.
+2. **Spot-clean 2 stray slop-named Java files** (`FindGroupMutationPostTraceCaptureHooks`, `PetFeedUnusualStorageArtifactCapture`) — confirm dead and delete; tiny.
+3. **Audit-tool hygiene (optional):** teach `structural_audit.py`/`check_fidelity.py` to index `game-server/data/handlers/` so faithfully-ported content scripts stop showing as "orphan" / tripping the banned-vocab heuristic (the 6 false-positive guardrail flags on `OphidanBridgeInstance`/`TheImprisonedExecutor`/`NewResearchPlan`/etc.).
+
+### Recommendation
+The de-slop + structural-port program defined by this plan is **delivered**. Further autonomous looping yields only the diminishing-return golden long-tail (#1 golden) or re-derives "done." The high-value next step is the **user-driven live-client enter-world test (#1 Front-A)**; absent that, pause or green-light the integration-harness sub-project. The original §5–§8 phase text below is retained for history; this §0 is the current truth.
 
 ---
 
