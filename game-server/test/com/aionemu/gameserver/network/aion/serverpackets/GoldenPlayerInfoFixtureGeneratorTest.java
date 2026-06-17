@@ -251,6 +251,66 @@ public class GoldenPlayerInfoFixtureGeneratorTest {
 				p -> new SM_RENAME(p, "OldHarnessName"))));
 	}
 
+	/**
+	 * More Player SM_* packets whose writeImpl reads ONLY the scalar HarnessPlayer's objectId/name/note/worldId/x/y/z and
+	 * ctor scalars/strings. No DataManager lookups beyond the existing harness, no World/Knownlist/singletons/time/Rnd.
+	 *
+	 * <ul>
+	 * <li>SM_UPDATE_NOTE(player): writeD(player.getObjectId()) + writeS(player.getCommonData().getNote()). The note is a
+	 *     plain pinned PlayerCommonData string; we pin a fixed non-empty note identically on both sides.</li>
+	 * <li>SM_GM_SEARCH(player): writeS("search " + getName() + " " + getWorldId() + " " + (int)getX/Y/Z()). All scalar:
+	 *     name pinned, getWorldId()==position.getMapId(), getX/Y/Z()==position coords. No con.</li>
+	 * <li>SM_TRANSFORM_IN_SUMMON(player, creatureObjectId): writeD(creatureObjectId) + writeS(getName()) +
+	 *     writeD(getObjectId()). The int-ctor overload avoids needing a live Creature. No con.</li>
+	 * <li>SM_SHOW_NPC_ON_MAP(player, npcid, worldid, x, y, z): writeD(npcid) + writeD(worldid) + writeD(instanceId) +
+	 *     3x writeF. instanceId is derived purely from the scalar WorldPosition: getMapId(), isInInstance()
+	 *     (== position.isInstanceMap() == false, no mapRegion), getInstanceId() (== 1, no mapRegion). No con.</li>
+	 * </ul>
+	 */
+	@Test
+	public void generateGoldenPlayerStringPacketFixtures() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installIntegrationSeam();
+
+		writeFixture(outDir.resolve("SM_UPDATE_NOTE.json"), "SM_UPDATE_NOTE", List.of(
+			scalarCase("updateNote", noteSpec("Harness friend note"),
+				p -> "{\"objectId\":" + p.getObjectId() + ",\"note\":\"" + p.getCommonData().getNote() + "\"}",
+				p -> new SM_UPDATE_NOTE(p)),
+			scalarCase("updateNoteEmpty", scalarSpec(),
+				p -> "{\"objectId\":" + p.getObjectId() + ",\"note\":\"" + p.getCommonData().getNote() + "\"}",
+				p -> new SM_UPDATE_NOTE(p))));
+
+		writeFixture(outDir.resolve("SM_GM_SEARCH.json"), "SM_GM_SEARCH", List.of(
+			scalarCase("gmSearch", scalarSpec(),
+				p -> "{\"name\":\"" + p.getName() + "\",\"worldId\":" + p.getWorldId() + ",\"x\":" + (int) p.getX()
+					+ ",\"y\":" + (int) p.getY() + ",\"z\":" + (int) p.getZ() + "}",
+				p -> new SM_GM_SEARCH(p))));
+
+		writeFixture(outDir.resolve("SM_TRANSFORM_IN_SUMMON.json"), "SM_TRANSFORM_IN_SUMMON", List.of(
+			scalarCase("transformInSummon", scalarSpec(),
+				p -> "{\"objectId\":" + p.getObjectId() + ",\"summonObject\":900111,\"name\":\"" + p.getName() + "\"}",
+				p -> new SM_TRANSFORM_IN_SUMMON(p, 900111))));
+
+		writeFixture(outDir.resolve("SM_SHOW_NPC_ON_MAP.json"), "SM_SHOW_NPC_ON_MAP", List.of(
+			// worldid == player's map -> instanceId = worldid + getInstanceId()(==1) - 1 == worldid.
+			scalarCase("showNpcSameMap", scalarSpec(),
+				p -> "{\"npcid\":215220,\"worldid\":" + p.getWorldId() + ",\"x\":123.5,\"y\":456.25,\"z\":78.125}",
+				p -> new SM_SHOW_NPC_ON_MAP(p, 215220, p.getWorldId(), 123.5f, 456.25f, 78.125f)),
+			// worldid != player's map -> instanceId stays == worldid (the default).
+			scalarCase("showNpcOtherMap", scalarSpec(),
+				p -> "{\"npcid\":700100,\"worldid\":210020000,\"x\":10.0,\"y\":20.0,\"z\":30.0}",
+				p -> new SM_SHOW_NPC_ON_MAP(p, 700100, 210020000, 10.0f, 20.0f, 30.0f))));
+	}
+
+	/** A scalar Elyos warrior spec with a fixed non-empty note (everything else identical to scalarSpec). */
+	private static PlayerSpec noteSpec(String note) {
+		PlayerSpec spec = scalarSpec();
+		spec.note = note;
+		return spec;
+	}
+
 	/** Fixed AbyssRank scalar pins (identical on both sides), explicit rankingListPosition -> no AbyssRankingCache. */
 	private static Case abyssRankCase(String name, int rankingListPosition) {
 		HarnessPlayer player = new HarnessPlayer(scalarSpec());

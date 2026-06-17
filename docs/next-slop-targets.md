@@ -103,6 +103,54 @@ SM_TARGET_SELECTED/SM_EMOTION/SM_ATTACK_STATUS). Increment-1 candidates that nee
 (HarnessSummon w/ game-stats), SM_DIE (HarnessPlayer), SM_CUSTOM_SETTINGS Player-ctor / SM_BIND_POINT_INFO Kisk-ctor
 (HarnessKisk w/ WorldPosition — PositionedHarness precedent). Build 0, golden 175/175, suite 462/0, bootstrap 9/9.
 
+## GOLDEN SUITE 178 -> 182 (2026-06-17) — 4 more scalar-HarnessPlayer string/position packets (NO new substrate)
+
+Mined 4 MORE Player-reading SM_* whose writeImpl reads ONLY the scalar HarnessPlayer state, reusing the SAME
+seam (Java `generateGoldenPlayerStringPacketFixtures` @Test + `noteSpec()`; C#
+`CsharpPlayerStringPacketMatchesJavaGoldenFixture` [Theory]). 6 fixture cases total across 4 packets.
+**Byte-exact on FIRST capture, 0 fidelity bugs** (all 4 .cs faithful 1:1):
+
+- **SM_UPDATE_NOTE**(player) [2 cases: non-empty + empty note]: writeD(`getObjectId()`) + writeS(`getCommonData().getNote()`).
+  Note is a plain pinned PlayerCommonData string (pin via `noteSpec()` Java / `SetNote()` C#).
+- **SM_GM_SEARCH**(player) [1 case]: writeS("search " + `getName()` + " " + `getWorldId()` + " " + (int)`getX/Y/Z()`).
+  `getWorldId()`==`position.getMapId()`, coords from the pinned WorldPosition — all scalar.
+- **SM_TRANSFORM_IN_SUMMON**(player, creatureObjectId) [1 case]: writeD(creatureObjectId) + writeS(`getName()`) +
+  writeD(`getObjectId()`). The **int-ctor overload** avoids needing a live Creature.
+- **SM_SHOW_NPC_ON_MAP**(player, npcid, worldid, x, y, z) [2 cases: same-map + other-map]: writeD(npcid)+writeD(worldid)+
+  writeD(instanceId)+3xwriteF. **instanceId is derived purely from the scalar WorldPosition**: `getPosition().getMapId()`,
+  `isInInstance()`==`position.isInstanceMap()`==false (no mapRegion), `getInstanceId()`==1 (no mapRegion). Same-map case
+  exercises `worldid + getInstanceId()(==1) - 1 == worldid`; other-map keeps the default `instanceId = worldid`.
+
+**SCALAR-HARNESS PLAYER VEIN now covers:** SM_PLAYER_STANCE/RIDE_ROBOT/PLASTIC_SURGERY/TARGET_UPDATE/ABYSS_RANK_UPDATE/
+ABYSS_RANK/PLAYER_SEARCH/PLAYER_REGION/RENAME + **UPDATE_NOTE/GM_SEARCH/TRANSFORM_IN_SUMMON/SHOW_NPC_ON_MAP**.
+
+**SCALAR VEIN STATUS — NEAR-EXHAUSTED.** Surveyed all remaining not-yet-golden'd SM_* (full list below). The pure
+scalar-Player-only readers are now drained; every remaining Player-reading SM_* pulls in MORE state than the scalar seam
+supplies. Confirmed exclusions (line-by-line):
+- **SM_DIE** -> `getWorldMapInstance().getInstanceHandler()` (World/instance) + `getKisk()`.
+- **SM_PLAYER_SPAWN** -> `World.getInstance().getWorldMap(...).getTemplate().getBeginnerTwinCount()` (World).
+- **SM_GM_SHOW_PLAYER_STATUS** -> `getInventory().getLimit()/.size()` + dozens of `pgs.getPower()/getHealth()/...`
+  (PlayerGameStats convenience getters the HarnessStats does NOT override -> real stat graph) + `pcd.getExpNeed()`/
+  repose. Heavy; needs the full PlayerGameStats integration path, not the thin HarnessStats. NOT scalar.
+- **SM_VIEW_PLAYER_DETAILS** -> `ItemInfoBlob.getFullBlob(player,item)` (item graph). NOT scalar.
+- **SM_UPDATE_PLAYER_APPEARANCE** -> `writeEquippedItems(items)` (item graph; no Player at all). NOT scalar.
+- **SM_GM_SHOW_PLAYER_SKILLS / SM_SKILL_LIST** -> skill graph. **SM_NPC_INFO/SM_MOVE/SM_OBJECT_USE_UPDATE** -> live
+  Creature/Npc/World. **SM_SUMMON_UPDATE/SM_SUMMON_PANEL/SM_PET_EMOTE** -> Summon/Pet graph. **SM_LEGION_*** -> Legion.
+  **SM_INVENTORY_*/SM_TRADELIST/SM_BROKER_SERVICE/SM_PRIVATE_STORE/SM_SELL_ITEM/SM_WAREHOUSE_*** -> item graph.
+  **SM_TELEPORT_LOC/SM_SKILL_COOLDOWN** -> DataManager. **SM_TIME_CHECK/SM_ITEM_COOLDOWN/SM_GAME_TIME** -> time/singleton.
+
+**RECOMMENDED NEXT VEIN: the deferred INTEGRATION-HARNESS sub-project** (the scalar vein is functionally exhausted).
+Bounded increments, each unlocking a packet family:
+1. **World/instance seam** (a live `World` with one `WorldMap`+`WorldMapInstance`+`InstanceHandler` resolvable for the
+   harness Player's mapId) -> unlocks **SM_DIE, SM_PLAYER_SPAWN, SM_SHOW_NPC_ON_MAP-instance-branch, SM_TELEPORT_LOC**.
+2. **Full PlayerGameStats seam** (drive the real stat graph, not the thin HarnessStats override) -> unlocks
+   **SM_GM_SHOW_PLAYER_STATUS** and the remaining stat-heavy player packets.
+3. **Item/ItemInfoBlob seam** (a live `Item` + equipment) -> unlocks **SM_VIEW_PLAYER_DETAILS,
+   SM_UPDATE_PLAYER_APPEARANCE, SM_INVENTORY_*, SM_TRADELIST, SM_SELL_ITEM, SM_WAREHOUSE_***.
+4. **Legion seam** -> **SM_LEGION_*** ; **Summon/Pet seam** -> **SM_SUMMON_*/SM_PET_*** ; **Skill-graph seam** ->
+   **SM_SKILL_LIST/SM_GM_SHOW_PLAYER_SKILLS/SM_CASTSPELL_RESULT**.
+Increment 1 (World/instance) is the highest-leverage next step. Build 0, golden 182, suite 469/0, bootstrap 9/9.
+
 ## GOLDEN SUITE 176 -> 178 (2026-06-17) — SM_PLAYER_REGION + SM_RENAME via the PROVEN scalar HarnessPlayer (NO new substrate)
 
 Golden'd **SM_PLAYER_REGION** (2 cases: NONE / `ELYSEA_NORTH`) + **SM_RENAME**(player ctor, 1 case) — the FIRST
