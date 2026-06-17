@@ -20,11 +20,13 @@ import org.junit.jupiter.api.Test;
 import sun.misc.Unsafe;
 
 import com.aionemu.gameserver.controllers.NpcController;
+import com.aionemu.gameserver.controllers.movement.MovementMask;
 import com.aionemu.gameserver.dataholders.DataManager;
 import com.aionemu.gameserver.dataholders.HouseData;
 import com.aionemu.gameserver.dataholders.NpcSkillData;
 import com.aionemu.gameserver.dataholders.QuestsData;
 import com.aionemu.gameserver.dataholders.SkillData;
+import com.aionemu.gameserver.dataholders.TradeListData;
 import com.aionemu.gameserver.dataholders.WorldMapsData;
 import com.aionemu.gameserver.model.CreatureType;
 import com.aionemu.gameserver.model.animations.TeleportAnimation;
@@ -360,6 +362,9 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 		setField(t, "height", NPC_INFO_HEIGHT);
 		setField(t, "attackSpeed", NPC_INFO_ATTACK_SPEED);
 		setField(t, "npcTemplateType", NpcTemplateType.FLAG); // isFlag() == true -> deterministic spawn-flag byte
+		// rating NORMAL -> getCongenitalSeeState() == NORMAL (id 0); needed by Npc.getSeeState() (SM_PLAYER_STATE) and
+		// harmless to SM_NPC_INFO (which reads getVisualState() only, never getRating()).
+		setField(t, "rating", com.aionemu.gameserver.model.templates.npc.NpcRating.NORMAL);
 		setField(t, "boundRadius", new BoundRadius(NPC_INFO_BR_FRONT, NPC_INFO_BR_SIDE, NPC_INFO_BR_UPPER));
 		setField(t, "statsTemplate", buildStatsTemplate());
 		// ai left null -> DummyAI (no AIEngine registration needed).
@@ -373,6 +378,105 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 		setField(s, "maxHp", NPC_INFO_MAX_HP);
 		// speeds left null -> getRunSpeed() == 0 -> getMovementSpeedFloat() == 0.0f (deterministic).
 		return s;
+	}
+
+	// ---- additional real-Npc-ctor packets (reuse the SM_NPC_INFO seam) ----
+	//
+	// Two more SM_* packets whose writeImpl reads ONLY the live Npc's scalar/base state (no live Player/World/Legion/
+	// Summon beyond what the SM_NPC_INFO seam already stubs), so they reuse buildRealNpc(...) verbatim:
+	//   * SM_MOVE      : objectId + x/y/z/heading (the un-spawned Npc's WorldPosition == 0) + movementMask; the
+	//                    NpcMoveController is a plain CreatureMoveController (pmc==null) so the POSITION|MANUAL branch
+	//                    writes getTargetX2/Y2/Z2 (TargetDest* default 0). No glide/vehicle bits set -> unreachable.
+	//   * SM_SELL_ITEM : objectId + the vendor purchase TradeListTemplate (npc type/buy-rate/trade tabs) from a bounded
+	//                    TRADE_LIST_DATA holder seam + the npc's CanSell/CanBuy/CanPurchase dialog-action flags + the
+	//                    PricesService vendor-sell config default (when no purchase template -> NORMAL/getVendorSellModifier).
+	// (SM_PLAYER_STATE/SM_SKILL_CANCEL/SM_EMOTION etc. are ALREADY golden'd via the PacketHarnessCreature harness — the
+	//  Npc/Creature-reading family is otherwise exhausted; see docs/next-slop-targets.md.)
+
+	@Test
+	public void generateGoldenMoveFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installDbStub();
+		installHouseDataSeam();
+		installNpcSkillDataSeam();
+		ensureIdFactory();
+
+		Npc npc = buildRealNpc(NPC_INFO_OBJECT_ID, CreatureType.PEACE);
+
+		List<Case> cases = new ArrayList<>();
+		// mask 0 -> only objectId + position + heading + mask byte (no position/glide/vehicle branch).
+		cases.add(moveCase("moveMaskZero", npc, (byte) 0));
+		// POSITION|MANUAL|ABSOLUTE -> pmc==null so the else branch writes getTargetX2/Y2/Z2 (TargetDest* default 0).
+		byte posManualAbs = (byte) (MovementMask.POSITION | MovementMask.MANUAL | MovementMask.ABSOLUTE);
+		cases.add(moveCase("movePositionManualAbsolute", npc, posManualAbs));
+
+		writeFixture(outDir.resolve("SM_MOVE.json"), "SM_MOVE", cases);
+	}
+
+	private static Case moveCase(String name, Npc npc, byte movementMask) {
+		String inputs = "{\"objectId\":" + NPC_INFO_OBJECT_ID + ",\"movementMask\":" + (movementMask & 0xFF) + "}";
+		return new Case(name, inputs, capture(new SM_MOVE(npc, movementMask), null));
+	}
+
+	// SM_SELL_ITEM purchase-template scalars (== C# side). The npc template carries NO talkInfo -> SupportsAction(..)
+	// is false -> canSell()/canBuy()/canPurchase() are all false (showBuyTab=showSellTab=0). A purchase template is
+	// installed under the npc id so tradeList != null -> tradeNpcType/buyPriceRate/tabs come from the template (the
+	// PricesService.getVendorSellModifier() config default is deliberately NOT reached, since config files aren't loaded).
+	private static final int SELL_BUY_PRICE_RATE = 115;
+
+	@Test
+	public void generateGoldenSellItemFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installDbStub();
+		installHouseDataSeam();
+		installNpcSkillDataSeam();
+		ensureIdFactory();
+		installTradeListDataSeam();
+
+		Npc npc = buildRealNpc(NPC_INFO_OBJECT_ID, CreatureType.PEACE);
+
+		List<Case> cases = new ArrayList<>();
+		String inputs = "{\"objectId\":" + NPC_INFO_OBJECT_ID + ",\"npcId\":" + NPC_INFO_NPC_ID + ",\"npcType\":\"NORMAL\""
+			+ ",\"buyPriceRate\":" + SELL_BUY_PRICE_RATE + ",\"tabIds\":[7,8],\"showBuyTab\":false,\"showSellTab\":false}";
+		cases.add(new Case("sellItemPurchaseTemplate", inputs, capture(new SM_SELL_ITEM(npc), null)));
+
+		writeFixture(outDir.resolve("SM_SELL_ITEM.json"), "SM_SELL_ITEM", cases);
+	}
+
+	/**
+	 * Populate DataManager.TRADE_LIST_DATA with one purchase template (npcId NPC_INFO_NPC_ID, NORMAL type,
+	 * SELL_BUY_PRICE_RATE, two trade tabs). Built WITHOUT JAXB by reflectively setting the npcPurchaseTemplateData index
+	 * — the bounded holder seam (mirrors WORLD_MAPS/SKILL/QUEST seams). The tradelist/trade-in indices stay empty.
+	 */
+	private void installTradeListDataSeam() {
+		try {
+			TradeListData data = new TradeListData();
+			@SuppressWarnings("unchecked")
+			Map<Integer, TradeListTemplate> purchase = (Map<Integer, TradeListTemplate>) getField(data,
+				"npcPurchaseTemplateData");
+			purchase.clear();
+			purchase.put(NPC_INFO_NPC_ID, purchaseTemplate(NPC_INFO_NPC_ID, SELL_BUY_PRICE_RATE, new int[] { 7, 8 }));
+			DataManager.TRADE_LIST_DATA = data;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to install TRADE_LIST_DATA seam", e);
+		}
+	}
+
+	private static TradeListTemplate purchaseTemplate(int npcId, int buyPriceRate, int[] tabIds)
+			throws ReflectiveOperationException {
+		TradeListTemplate t = new TradeListTemplate();
+		setField(t, "npcId", npcId);
+		setField(t, "tradeNpcType", TradeNpcType.NORMAL);
+		setField(t, "buyPriceRate", buyPriceRate);
+		List<TradeTab> tabs = new ArrayList<>();
+		for (int id : tabIds)
+			tabs.add(tradeTab(id));
+		setField(t, "tradeTablist", tabs);
+		return t;
 	}
 
 	/** Seed an empty HouseData so the TownService singleton ctor's getLands() loop is a no-op (no DB, no NPC_DATA). */

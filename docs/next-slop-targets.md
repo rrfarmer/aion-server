@@ -2,6 +2,33 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## GOLDEN SUITE 187 -> 189 (2026-06-17) — real-Npc-ctor seam reuse (SM_MOVE + SM_SELL_ITEM); Npc-reader family EXHAUSTED
+
+Reused the bounded real-`Npc(controller,spawn,template)` ctor seam (SM_NPC_INFO) for the LAST TWO not-yet-golden'd
+Npc/Creature-reading packets — **byte-exact on first capture, 0 fidelity bugs**:
+- **SM_MOVE** (1 fixture / 2 cases: mask 0; POSITION|MANUAL|ABSOLUTE=224). WriteImpl reads objectId + x/y/z/heading
+  (the un-spawned Npc's WorldPosition == 0, identical both sides) + movementMask; NpcMoveController is a plain
+  CreatureMoveController (`pmc==null`) so the POSITION|MANUAL branch writes getTargetX2/Y2/Z2 (TargetDest* default 0).
+  No glide/vehicle bits set -> those branches unreachable. Pure seam reuse, NO new stub.
+- **SM_SELL_ITEM** (1 fixture / 1 case). Added a bounded **TRADE_LIST_DATA holder seam** (one purchase template under
+  the npc id: NORMAL type / buyPriceRate 115 / two trade tabs, via the private npcPurchaseTemplateData index, mirrored
+  both sides). The npc template has NO talkInfo -> SupportsAction(..) false -> canSell/canBuy/canPurchase all false
+  (showBuyTab=showSellTab=0). The purchase template being present means tradeNpcType/buyPriceRate/tabs come from the
+  template, so `PricesService.getVendorSellModifier()` (config) is deliberately NOT reached — important because the
+  C# `PricesConfig.VENDOR_SELL_MODIFIER` has a field initializer (=20) while the Java field is config-loaded (==0 in a
+  no-config test), so the null-template path would be a HARNESS mismatch, not a real bug. Sidestepped by the template.
+
+Also added `rating = NORMAL` to the shared `buildNpcTemplate` (Npc.getSeeState() needs a non-null rating); verified
+SM_NPC_INFO bytes UNCHANGED (it reads getVisualState() only, never getRating()).
+
+**Npc/Creature-reading SM_* family is now EXHAUSTED on this seam.** Census: every ServerPacket whose ctor takes an
+Npc/Creature is golden'd — SM_PLAYER_STATE / SM_SKILL_CANCEL / SM_EMOTION / SM_FORCED_MOVE / SM_RESURRECT /
+SM_CASTSPELL / SM_ABNORMAL_EFFECT / SM_ATTACK / SM_MANTRA_EFFECT / SM_TARGET_UPDATE / SM_TRANSFORM via the older
+PacketHarnessCreature harness; SM_TRADE_IN_LIST (uninitialized-Npc); SM_NPC_INFO / SM_MOVE / SM_SELL_ITEM (real-Npc
+ctor). No Npc-reader remains that needs only the seam. The NEXT increment requires a live **Player** or live **World**
+graph (SM_PLAYER_SPAWN/SM_DIE et al., the Java static-final World singleton — the unchanged blocker below), OR the
+item/ItemInfoBlob seams (SM_TRADELIST/SM_LOOT_ITEMLIST). Build 0, golden 189, suite 476/0, bootstrap 9/9.
+
 ## GOLDEN SUITE 186 -> 187 (2026-06-17) — the REAL-Npc-ctor seam (SM_NPC_INFO), maximal Npc reader, 0 bugs
 
 Built the bounded **real `Npc(controller,spawn,template)` ctor golden** — the first golden driving a packet through a
