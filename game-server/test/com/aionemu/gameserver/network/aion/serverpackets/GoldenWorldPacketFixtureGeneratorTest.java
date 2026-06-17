@@ -19,15 +19,25 @@ import org.junit.jupiter.api.Test;
 
 import sun.misc.Unsafe;
 
+import com.aionemu.gameserver.controllers.NpcController;
 import com.aionemu.gameserver.dataholders.DataManager;
+import com.aionemu.gameserver.dataholders.HouseData;
+import com.aionemu.gameserver.dataholders.NpcSkillData;
 import com.aionemu.gameserver.dataholders.QuestsData;
 import com.aionemu.gameserver.dataholders.SkillData;
 import com.aionemu.gameserver.dataholders.WorldMapsData;
+import com.aionemu.gameserver.model.CreatureType;
 import com.aionemu.gameserver.model.animations.TeleportAnimation;
 import com.aionemu.gameserver.model.gameobjects.AionObject;
 import com.aionemu.gameserver.model.gameobjects.Npc;
+import com.aionemu.gameserver.model.templates.BoundRadius;
 import com.aionemu.gameserver.model.templates.QuestTemplate;
+import com.aionemu.gameserver.model.templates.npc.NpcTemplate;
+import com.aionemu.gameserver.model.templates.npc.NpcTemplateType;
 import com.aionemu.gameserver.model.templates.quest.QuestExtraCategory;
+import com.aionemu.gameserver.model.templates.spawns.SpawnGroup;
+import com.aionemu.gameserver.model.templates.spawns.SpawnTemplate;
+import com.aionemu.gameserver.model.templates.stats.StatsTemplate;
 import com.aionemu.gameserver.model.templates.tradelist.TradeListTemplate;
 import com.aionemu.gameserver.model.templates.tradelist.TradeListTemplate.TradeTab;
 import com.aionemu.gameserver.model.templates.tradelist.TradeNpcType;
@@ -235,6 +245,291 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 		} catch (ReflectiveOperationException e) {
 			throw new RuntimeException("Failed to allocate uninitialized Npc", e);
 		}
+	}
+
+	// ---- real-Npc-ctor object seam (SM_NPC_INFO) ----
+
+	// The real-Npc-ctor seam: SM_NPC_INFO is the maximal Npc-reading packet. Unlike SM_TRADE_IN_LIST (objectId only),
+	// its writeImpl reads the live Npc's stat containers (getLifeStats().getHpPercentage(), getGameStats().getMaxHp(),
+	// getGameStats().getMovementSpeedFloat()), the move controller (getTargetX2/Y2/Z2/getMovementMask), the
+	// NpcTemplate (templateId/l10nId/titleId/boundRadius/height/attackSpeed/level/npcTemplateType) and TownService.
+	// So this drives a REAL Npc(controller, spawn, template) ctor — the bounded next live-Npc increment.
+	//
+	// Why the real ctor is bounded (no World/Knownlist/SkillEngine/DataManager-cascade):
+	//   * Npc ctor -> Creature ctor -> AIEngine.newAI(aiName, this). With BOTH NpcTemplate.ai == null AND
+	//     SpawnTemplate.aiName == null, newAI(null) returns a DummyAI (no AIEngine registration needed). DummyAI's
+	//     modifyOwnerStat(Stat2) is the AbstractAI base no-op.
+	//   * setupStatContainers() -> NpcGameStats + NpcLifeStats. NpcLifeStats ctor eagerly reads
+	//     getGameStats().getMaxHp().getCurrent() -> CreatureGameStats.getStat(MAXHP, statsTemplate.getMaxHp()).
+	//     The stats function map is empty (no effects), so getStat returns the raw base value (no StatCapUtil pass,
+	//     no time, no random) and DummyAI.modifyOwnerStat is a no-op. So a populated StatsTemplate.maxHp is all that's
+	//     needed; movementSpeed reads statsTemplate.getRunSpeed() which is 0 when speeds == null (deterministic).
+	//   * NpcSkillList(this) reads DataManager.NPC_SKILL_DATA.getNpcSkillList(npcId); an empty holder returns null ->
+	//     empty skill list. TownService.getInstance().getTownIdByPosition(npc) returns 0 (npc not spawned, plain
+	//     SpawnTemplate), but the singleton ctor reads DataManager.HOUSE_DATA.getLands() -> seed an empty HouseData.
+	//   * objectId comes from IDFactory.nextId() (non-deterministic) -> overwrite the final AionObject.objectId field
+	//     with a pinned value after construction (mirrored on the C# side).
+	//   * getType(player) is computed in the ctor; pinning the npc.type field makes it deterministic and lets the
+	//     player arg be null (TribeRelationService never reached). isFlag()==true (FLAG template type) makes the
+	//     isNewSpawn() time-dependent byte unreachable (writeC writes 0x13).
+	private static final int NPC_INFO_OBJECT_ID = 740555;
+	private static final int NPC_INFO_NPC_ID = 215220; // npc_id / template id (hp-gauge + appearance refs)
+	private static final int NPC_INFO_WORLD_ID = 220020000;
+	private static final int NPC_INFO_NAME_ID = 350123; // l10nId
+	private static final int NPC_INFO_TITLE_ID = 4242;
+	private static final byte NPC_INFO_LEVEL = (byte) 55;
+	private static final int NPC_INFO_MAX_HP = 123456;
+	private static final int NPC_INFO_ATTACK_SPEED = 1500;
+	private static final float NPC_INFO_HEIGHT = 1.75f;
+	private static final float NPC_INFO_BR_FRONT = 1.25f;
+	private static final float NPC_INFO_BR_SIDE = 0.95f;
+	private static final float NPC_INFO_BR_UPPER = 2.5f;
+	private static final float NPC_INFO_X = 1450.5f;
+	private static final float NPC_INFO_Y = 1602.25f;
+	private static final float NPC_INFO_Z = 250.125f;
+	private static final byte NPC_INFO_HEADING = (byte) 60;
+
+	@Test
+	public void generateGoldenNpcInfoFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installDbStub();
+		installHouseDataSeam();
+		installNpcSkillDataSeam();
+		ensureIdFactory();
+
+		List<Case> cases = new ArrayList<>();
+		// PEACE-type FLAG npc: isFlag()==true -> the isNewSpawn() time-dependent byte is unreachable (writeC 0x13).
+		cases.add(npcInfoCase("npcInfoPeaceFlag", CreatureType.PEACE));
+		// ATTACKABLE-type FLAG npc: same packet shape, different creatureType id byte.
+		cases.add(npcInfoCase("npcInfoAttackableFlag", CreatureType.ATTACKABLE));
+
+		writeFixture(outDir.resolve("SM_NPC_INFO.json"), "SM_NPC_INFO", cases);
+	}
+
+	private static Case npcInfoCase(String name, CreatureType type) {
+		Npc npc = buildRealNpc(NPC_INFO_OBJECT_ID, type);
+		String inputs = "{\"objectId\":" + NPC_INFO_OBJECT_ID + ",\"npcId\":" + NPC_INFO_NPC_ID + ",\"worldId\":"
+			+ NPC_INFO_WORLD_ID + ",\"nameId\":" + NPC_INFO_NAME_ID + ",\"titleId\":" + NPC_INFO_TITLE_ID + ",\"level\":"
+			+ NPC_INFO_LEVEL + ",\"maxHp\":" + NPC_INFO_MAX_HP + ",\"attackSpeed\":" + NPC_INFO_ATTACK_SPEED
+			+ ",\"height\":" + NPC_INFO_HEIGHT + ",\"brFront\":" + NPC_INFO_BR_FRONT + ",\"brSide\":" + NPC_INFO_BR_SIDE
+			+ ",\"brUpper\":" + NPC_INFO_BR_UPPER + ",\"x\":" + NPC_INFO_X + ",\"y\":" + NPC_INFO_Y + ",\"z\":"
+			+ NPC_INFO_Z + ",\"heading\":" + NPC_INFO_HEADING + ",\"creatureType\":\"" + type.name() + "\"}";
+		// player arg is null: npc.type is pinned so getType(player) short-circuits without dereferencing the player.
+		return new Case(name, inputs, capture(new SM_NPC_INFO(npc, null), null));
+	}
+
+	/**
+	 * Build a REAL Npc through the full Npc(controller, spawn, template) ctor, then make it deterministic:
+	 * overwrite the IDFactory-assigned objectId with a pinned value and pin the npc.type field (so getType(player)
+	 * short-circuits). The template carries a populated StatsTemplate (maxHp) + FLAG type so the packet's
+	 * stat/template reads are deterministic. Mirrored 1:1 on the C# asserter side.
+	 */
+	private static Npc buildRealNpc(int objectId, CreatureType type) {
+		try {
+			NpcTemplate template = buildNpcTemplate();
+			SpawnGroup spawnGroup = new SpawnGroup(NPC_INFO_WORLD_ID, NPC_INFO_NPC_ID, 0, null);
+			// staticId 0 -> SM_NPC_INFO writes getSpawn().getStaticId() == 0.
+			SpawnTemplate spawn = new SpawnTemplate(spawnGroup, NPC_INFO_X, NPC_INFO_Y, NPC_INFO_Z, NPC_INFO_HEADING, 0,
+				null, 0);
+			NpcController controller = new NpcController();
+			Npc npc = new Npc(controller, spawn, template);
+			// Pin objectId (IDFactory-assigned is non-deterministic).
+			Field idField = AionObject.class.getDeclaredField("objectId");
+			idField.setAccessible(true);
+			idField.set(npc, objectId);
+			// Pin the npc.type field so getType(player) short-circuits (player can be null).
+			Field typeField = Npc.class.getDeclaredField("type");
+			typeField.setAccessible(true);
+			typeField.set(npc, type);
+			return npc;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to build real Npc", e);
+		}
+	}
+
+	private static NpcTemplate buildNpcTemplate() throws ReflectiveOperationException {
+		Constructor<NpcTemplate> ctor = NpcTemplate.class.getDeclaredConstructor();
+		ctor.setAccessible(true);
+		NpcTemplate t = ctor.newInstance();
+		setField(t, "npcId", NPC_INFO_NPC_ID);
+		setField(t, "nameId", NPC_INFO_NAME_ID);
+		setField(t, "titleId", NPC_INFO_TITLE_ID);
+		setField(t, "level", NPC_INFO_LEVEL);
+		setField(t, "height", NPC_INFO_HEIGHT);
+		setField(t, "attackSpeed", NPC_INFO_ATTACK_SPEED);
+		setField(t, "npcTemplateType", NpcTemplateType.FLAG); // isFlag() == true -> deterministic spawn-flag byte
+		setField(t, "boundRadius", new BoundRadius(NPC_INFO_BR_FRONT, NPC_INFO_BR_SIDE, NPC_INFO_BR_UPPER));
+		setField(t, "statsTemplate", buildStatsTemplate());
+		// ai left null -> DummyAI (no AIEngine registration needed).
+		return t;
+	}
+
+	private static StatsTemplate buildStatsTemplate() throws ReflectiveOperationException {
+		Constructor<StatsTemplate> ctor = StatsTemplate.class.getDeclaredConstructor();
+		ctor.setAccessible(true);
+		StatsTemplate s = ctor.newInstance();
+		setField(s, "maxHp", NPC_INFO_MAX_HP);
+		// speeds left null -> getRunSpeed() == 0 -> getMovementSpeedFloat() == 0.0f (deterministic).
+		return s;
+	}
+
+	/** Seed an empty HouseData so the TownService singleton ctor's getLands() loop is a no-op (no DB, no NPC_DATA). */
+	private void installHouseDataSeam() {
+		try {
+			HouseData data = new HouseData();
+			setField(data, "lands", new ArrayList<>());
+			DataManager.HOUSE_DATA = data;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to install HOUSE_DATA seam", e);
+		}
+	}
+
+	/** Seed an empty NpcSkillData so NpcSkillList(owner) finds no skills (getNpcSkillList(npcId) -> null). */
+	private void installNpcSkillDataSeam() {
+		DataManager.NPC_SKILL_DATA = new NpcSkillData();
+	}
+
+	/**
+	 * Force IDFactory singleton init (lazy SingletonHolder). The real IDFactory ctor reads PlayerDAO.getUsedIDs() etc;
+	 * the empty-ResultSet JDBC stub installed by installDbStub() makes each return an empty int[] (NOT null), so the
+	 * real ctor completes with 0 used IDs. The objectId nextId() returns is irrelevant (overwritten with a pinned value).
+	 */
+	private void ensureIdFactory() {
+		com.aionemu.gameserver.utils.idfactory.IDFactory.getInstance();
+	}
+
+	/**
+	 * Inject a stub DataSource into DatabaseFactory so DAOs invoked by the faithful Npc ctor path (IDFactory.getUsedIDs
+	 * across the player/inventory/legion/... tables, TownDAO.load) resolve a deterministic EMPTY ResultSet with no real
+	 * DB. getConnection() returns a Connection proxy whose PreparedStatement.executeQuery returns an empty ResultSet, so
+	 * getUsedIDs() yields int[0] (not null -> no NPE in IDFactory.lockIds) and TownDAO.load yields an empty map.
+	 * Java-test-only; never touches src DB code.
+	 */
+	private void installDbStub() {
+		try {
+			Class<?> dbFactory = Class.forName("com.aionemu.commons.database.DatabaseFactory");
+			Field dataSourceField = dbFactory.getDeclaredField("dataSource");
+			dataSourceField.setAccessible(true);
+			if (dataSourceField.get(null) == null) {
+				Object stub = java.lang.reflect.Proxy.newProxyInstance(
+					getClass().getClassLoader(),
+					new Class<?>[] { javax.sql.DataSource.class },
+					(proxy, method, args) -> {
+						switch (method.getName()) {
+							case "getConnection":
+								return emptyConnectionStub();
+							case "toString":
+								return "HarnessStubDataSource";
+							case "hashCode":
+								return System.identityHashCode(proxy);
+							case "equals":
+								return proxy == args[0];
+							default:
+								return defaultReturn(method.getReturnType());
+						}
+					});
+				dataSourceField.set(null, stub);
+			}
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to install DB stub", e);
+		}
+	}
+
+	/** A Connection proxy whose prepareStatement/createStatement yield Statements producing an empty ResultSet. */
+	private static java.sql.Connection emptyConnectionStub() {
+		return (java.sql.Connection) java.lang.reflect.Proxy.newProxyInstance(
+			GoldenWorldPacketFixtureGeneratorTest.class.getClassLoader(),
+			new Class<?>[] { java.sql.Connection.class },
+			(proxy, method, args) -> {
+				switch (method.getName()) {
+					case "prepareStatement":
+					case "createStatement":
+						return emptyStatementStub();
+					case "close":
+						return null;
+					case "toString":
+						return "HarnessStubConnection";
+					case "hashCode":
+						return System.identityHashCode(proxy);
+					case "equals":
+						return proxy == args[0];
+					default:
+						return defaultReturn(method.getReturnType());
+				}
+			});
+	}
+
+	/** A Statement/PreparedStatement proxy whose executeQuery yields an empty ResultSet. */
+	private static Object emptyStatementStub() {
+		return java.lang.reflect.Proxy.newProxyInstance(
+			GoldenWorldPacketFixtureGeneratorTest.class.getClassLoader(),
+			new Class<?>[] { java.sql.PreparedStatement.class },
+			(proxy, method, args) -> {
+				switch (method.getName()) {
+					case "executeQuery":
+						return emptyResultSetStub();
+					case "execute":
+						return false;
+					case "executeUpdate":
+						return 0;
+					case "close":
+						return null;
+					case "toString":
+						return "HarnessStubStatement";
+					case "hashCode":
+						return System.identityHashCode(proxy);
+					case "equals":
+						return proxy == args[0];
+					default:
+						return defaultReturn(method.getReturnType());
+				}
+			});
+	}
+
+	/** An empty ResultSet proxy: next()/last() return false, getRow() returns 0, beforeFirst() is a no-op. */
+	private static java.sql.ResultSet emptyResultSetStub() {
+		return (java.sql.ResultSet) java.lang.reflect.Proxy.newProxyInstance(
+			GoldenWorldPacketFixtureGeneratorTest.class.getClassLoader(),
+			new Class<?>[] { java.sql.ResultSet.class },
+			(proxy, method, args) -> {
+				switch (method.getName()) {
+					case "next":
+					case "last":
+					case "first":
+						return false;
+					case "getRow":
+						return 0;
+					case "close":
+					case "beforeFirst":
+						return null;
+					case "toString":
+						return "HarnessStubResultSet";
+					case "hashCode":
+						return System.identityHashCode(proxy);
+					case "equals":
+						return proxy == args[0];
+					default:
+						return defaultReturn(method.getReturnType());
+				}
+			});
+	}
+
+	private static Object defaultReturn(Class<?> rt) {
+		if (rt == boolean.class)
+			return false;
+		if (rt == int.class || rt == short.class || rt == byte.class)
+			return 0;
+		if (rt == long.class)
+			return 0L;
+		if (rt == float.class)
+			return 0f;
+		if (rt == double.class)
+			return 0d;
+		if (rt == char.class)
+			return (char) 0;
+		return null;
 	}
 
 	// ---- SKILL_DATA holder seam ----

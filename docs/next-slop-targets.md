@@ -2,6 +2,50 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## GOLDEN SUITE 186 -> 187 (2026-06-17) — the REAL-Npc-ctor seam (SM_NPC_INFO), maximal Npc reader, 0 bugs
+
+Built the bounded **real `Npc(controller,spawn,template)` ctor golden** — the first golden driving a packet through a
+fully-constructed live Npc with real stat containers (NpcGameStats/NpcLifeStats/NpcMoveController), vs the
+SM_TRADE_IN_LIST uninitialized-Npc. Golden'd **SM_NPC_INFO** (1 fixture / 2 cases: PEACE/ATTACKABLE FLAG npc) by
+EXTENDING the same `GoldenWorldPacketFixtureGeneratorTest` (Java) + `GoldenWorldPacketFixtureTests` (C#) seam.
+**Byte-exact on FIRST capture, 0 fidelity bugs** (SM_NPC_INFO.cs faithful 1:1).
+
+- **Why the real ctor is BOUNDED** (no World/Knownlist/SkillEngine/DataManager-cascade — the open question from the
+  SM_TRADE_IN_LIST tick): trace `Npc ctor -> setupStatContainers() -> NpcLifeStats ctor -> getGameStats().getMaxHp()
+  .getCurrent() -> NpcGameStats.getStat(MAXHP, statsTemplate.getMaxHp()) -> super.getStat (empty function map, no
+  StatCapUtil pass) + owner.getAi().modifyOwnerStat(s)`. The two crux deps resolve cheaply:
+  1. **AI = DummyAI.** With BOTH `NpcTemplate.ai == null` AND `SpawnTemplate.aiName == null`, the Creature ctor's
+     `AIEngine.newAI(null, this)` returns a `DummyAI` (the `name == null` branch) — NO AIEngine registration needed.
+     `DummyAI.modifyOwnerStat(Stat2)` is the AbstractAI base no-op. (Use the plain `SpawnGroup(worldId,npcId,0,null)` +
+     `SpawnTemplate(spawnGroup,x,y,z,h,0,null,0)` ctors; SpawnTemplate.aiName defaults null.)
+  2. **Stats = populated StatsTemplate.maxHp only.** The stats-function map is empty (no effects) so `getStat` returns
+     the raw base value with NO StatCapUtil/time/random. `getMovementSpeedFloat()` reads `statsTemplate.getRunSpeed()`
+     which is 0 when `speeds == null` (deterministic). So a StatsTemplate with just `maxHp` set is enough.
+- **The other live reads are all deterministically 0 / pinnable:** `NpcSkillList(this)` reads
+  `DataManager.NPC_SKILL_DATA.getNpcSkillList(npcId)` (empty holder -> null -> empty skill list);
+  `TownService.getInstance().getTownIdByPosition(npc)` returns 0 (npc not spawned, plain SpawnTemplate) but the
+  singleton ctor reads `DataManager.HOUSE_DATA.getLands()` -> seed an EMPTY HouseData (lands = empty list);
+  the Npc position is `new WorldPosition(spawnTemplate.getWorldId())` so x/y/z/heading are ALL 0 (spawn coords do NOT
+  reach the unspawned Npc) -> getX/Y/Z + mc.getTargetX2/Y2/Z2 + getHeading all write 0 (faithful, identical both sides).
+- **Determinism pins (mirrored both sides):** objectId from `IDFactory.nextId()` is non-deterministic -> OVERWRITE the
+  final `AionObject.objectId` field with a pinned value AFTER the ctor; `getType(player)` is computed in the SM_NPC_INFO
+  ctor -> pin the `npc.type` field so it short-circuits and the player arg can be **null** (TribeRelationService never
+  reached); FLAG template type -> `isFlag()`==true -> the time-dependent `isNewSpawn()` byte is unreachable (writeC 0x13).
+- **NEW Java DB stub (reusable):** the prior throwing-`getConnection` stub made `IDFactory.getUsedIDs()` return NULL ->
+  NPE in `lockIds`. Replaced with a **full empty-ResultSet JDBC proxy chain** (DataSource->Connection->PreparedStatement
+  ->ResultSet: next()/last()/first() false, getRow() 0, close()/beforeFirst() no-op) so `getUsedIDs()` returns int[0]
+  (the IDFactory lazy SingletonHolder ctor completes) and TownDAO.load returns empty maps. C# side:
+  `IDFactory.RegisterInstance(new IDFactory())` if unbound; the bridge now seeds `NpcSkillDataDh` + `HouseDataDh` empty
+  holders too (the uninitialized StaticData skips field initializers).
+
+**REUSABLE for the stat-reading Npc family — YES.** The real-Npc-ctor seam now constructs a deterministic live Npc with
+real NpcGameStats/NpcLifeStats/NpcMoveController + a populated StatsTemplate + DummyAI. Directly reusable for any
+Npc-reading packet that needs the live stat containers / move controller / template (the heavier Npc packets beyond
+objectId-only). To extend: populate the StatsTemplate attrs that packet reads + pin any extra Npc scalar (state/visual
+state/level via template/target/equipment). **NEXT VEIN:** (a) more Npc-family packets on this seam, or (b) the still-
+blocked live-World increment (SM_PLAYER_SPAWN/SM_DIE — Java static-final World singleton, unchanged blocker below).
+Build 0, golden 187, suite 474/0, bootstrap 9/9.
+
 ## GOLDEN SUITE 185 -> 186 (2026-06-17) — FIRST live-Npc OBJECT seam (SM_TRADE_IN_LIST), uninitialized-Npc precedent
 
 Built the lightest bounded **live-Npc game-object golden seam** — the first golden that drives a packet through a live
