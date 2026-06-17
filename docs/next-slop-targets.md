@@ -1794,6 +1794,18 @@ temporary_spawn) + their ctor params / properties / build-call / locals, the now
 `VortexStateType` (Model/Vortex, faithful) and the generic Read*Attribute helpers were KEPT (shared).
 Build 0, golden 167/167, bootstrap 7/7, RealStaticDataLoad green. 1140 deletions.
 
+## RESOLVED+VERIFIED — Housing subsystem 100% retired (re-confirmed 2026-06-17 @ HEAD 5403226ff)
+
+Depth-first re-assessment: ALL reworked Housing slop is GONE and COMMITTED (the "commit pending" note below
+was already committed). Grep (PascalCase, whole src+tests) for every reworked piece —
+HousingObjectTemplateSummary/HousingObjectTemplateTable/HousingWorldService/HousingVisibilityService/
+HousingRepository/IHousingRepository/WorldHouse/SmHouseUpdate/SmHouseRender/SmObjectUseUpdate/
+PlayerHouse(record)/HouseRegistryEntries/*Summary records/_housesBy* = ZERO .cs hits (only docs mentions).
+Faithful pillar is the sole live path (House:VisibleObject + HousingService.FindPlayerHouses->List<House> @
+Player.Part4.cs:362 + SM_HOUSE_* SCREAMING_CASE owning all opcodes + PlayerRegisteredItemsDAO +
+HOUSING_OBJECT_DATA). NO load-bearing remainder, NO deferred scoped plan needed. Housing is DONE.
+Gates: build 0, golden 196/196 byte-exact 0-skip, full suite 459/0. The two sections below are HISTORICAL.
+
 ## RESOLVED — Housing SmHouse* dead-island retired (commit pending, 2026-06-16)
 
 The housing registry-summary dead-island is DELETED. 0-consumer re-confirmed (PascalCase grep whole
