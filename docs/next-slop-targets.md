@@ -2,6 +2,39 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## ZONE-HANDLER PORT — COMPLETE (2026-06-17, commit cec2fa559) — 3/3
+
+Java zone handlers live in `game-server/data/handlers/zone/*.java` = **3 total** (NOT a big set):
+`_1012SensoryArea.java` (`: QuestZoneHandler`) + `pvpZones/PvPZone.java` (abstract `: AdvancedZoneHandler`) +
+`pvpZones/PvPAreaZone.java` (`: PvPZone`). Base + registration was ALL already ported (same recipe as
+instance/quest/AI): `ZoneNameAnnotation` attribute + `ZoneHandlerClassListener` (reflection scan) +
+`ZoneService.AddZoneHandlerClass` wired in `ZoneService.Init()` via `ScriptManager.Load(WorldConfig.ZONE_HANDLER_DIRECTORY)`.
+Bases present: `GeneralZoneHandler`, `QuestZoneHandler`, `AdvancedZoneHandler` (interface : IZoneHandler),
+`IZoneHandler`. Ported into `dotnetConversion/src/Aion.GameServer/Handlers/Zone/` (+ `Zone/PvpZones/`).
+All deps pre-present: `AbstractQuestZoneObserver` (override `OnMoved`, NOT onMoved), `PvPZoneInstance`,
+`CustomConfig.KEEP_BUFFS_IN_COLISEUM`, `PlayerEffectController.SetKeepBuffsOnDie`, `PlayerReviveService.DuelRevive`
+(ns Services.**Players**), `PacketSendUtility.BroadcastToZone`, the 4 PvP SM strings (STR_MSG_PvPZONE_MY_DEATH_TO_B/
+HOSTILE_DEATH_TO_ME/HOSTILE_DEATH_TO_B + STR_PvPZONE_OUT_MESSAGE), `TaskId.TELEPORT`, `GetController().AddTask/
+GetAndRemoveTask`, `ThreadPoolManager.Schedule(Action,long)`, `ZoneName.Get` (interned -> default ref `==` works).
+**Gotchas:** QuestState ns = `Aion.GameServer.QuestEngine.Model` (CAPITAL E, file dir is `Questengine/`);
+PlayerEffectController ns = `Controllers.Effects` (plural); `Player.GetEffectController()` does NOT override the
+covariant return (returns base `EffectController`) so cast `(PlayerEffectController)player.GetEffectController()`
+(Java relies on the covariant override; runtime type IS PlayerEffectController); Java anonymous
+`AbstractQuestZoneObserver{ onMoved }` -> C# nested private sealed class capturing `questId` in its ctor (C# can't
+extend anonymously). **ZONE-HANDLER SET: 3/3 COMPLETE**, build 0 / 454 / golden 167 / bootstrap 9.
+
+## *ApRewardService STAND-INS RETIRED (2026-06-17, commit after cec2fa559) — category 3 closed
+
+The 6 reworked `*ApRewardService` (PvpApRewardService/PvpInstanceApRewardService/PvpArenaApRewardService/
+AturamSkyFortressApRewardService/EternalBastionApRewardService/StonespearReachApRewardService) are DELETED. Verified
+dead-islands: each referenced ONLY by Program.cs DI + its own file (0 production/test consumers; every Result/Status
+type self-contained, grep = 0 external). NONE has a Java counterpart class (invented Service+Result+Status blow-ups).
+The faithful AP-reward logic now lives 1:1 in the ported instance handlers (Aturam/EternalBastion/Stonespear
+onDie -> AbyssPointsService.AddAp); the 3 Pvp* ones had no faithful counterpart at all. Removed the 6 DI lines from
+Program.cs (replaced with a retirement-note comment). Build 0 / 454 / golden 167 / bootstrap 9. **Capstone category 3
+"instance-handler AP-reward reworked services" is now fully CLOSED** (the instance-handler frontier that gated it is
+37/37 done).
+
 ## INSTANCE-HANDLER PORT — batch 1 (2026-06-16)
 
 Java instance handlers live in `game-server/data/handlers/instance/*.java` = **37 total** (not ~78). Base
