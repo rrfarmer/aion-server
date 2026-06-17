@@ -12,13 +12,23 @@ schema, loads the REAL DataManager via `DataManager.LoadAsync(repoRoot)` (147 MB
 AIEngine/ZoneService/GeoService (the spawn-critical engines, as the spawn-backed test does), and runs the FULL
 `GameServerBootstrapService.StartAsync` via a pass-through `IStaticDataLoader` + the real `MySqlUsedIdRepository`.
 
-### RESULT: THROWS — at SpawnEngine.SpawnAll() -> HousingService.SpawnHouses() -> World.StoreObject, the documented
-Java-latent house-twin `DuplicateAionObjectException` (AggregateException out of the parallel ForEachParalllel):
+### CORRECTED VERDICT (2026-06-16, root-cause re-investigation): VERDICT (a) — the house-twin throw was a REAL C#
+DIVERGENCE, now FIXED. The earlier "Java-latent" conclusion (below) was WRONG: it traced spawnAll/spawnHouses/
+storeObject faithfully but MISSED the twin-count clamp. Java's `WorldMapTemplate.getBeginnerTwinCount()` /
+`getTwinCount()` (WorldMapTemplate.java:96-108) clamp the raw XML attributes by `WorldConfig`:
+- `WORLD_MAX_TWINS_BEGINNER` default **-1** (disabled) => `getBeginnerTwinCount()` returns **0** (NOT the raw 3).
+- `WORLD_MAX_TWINS_USUAL` default **1** => `getTwinCount()` = min(1, 0) = 0 => WorldMap defaults to 1.
+So Java's `getInstanceCount()` for Heiron/Beluslan = **1**, not 4 — Java pre-creates ONE instance, SpawnHouses runs
+ONCE, NO collision. **The C# `WorldMapTemplate.GetTwinCount()/GetBeginnerTwinCount()` returned the RAW XML values
+(0 and 3) — skipping the WorldConfig clamp** (a TODO-backlog stub left from before WorldConfig was ported), giving
+instanceCount=4 and the twin re-spawn collision. FIX: ported the two clamp methods 1:1 to Java (commit below).
+RESULT after fix: the DB-backed full boot completes CLEANLY (IsStarted, world populated, StopAsync clean).
+
+### (superseded) ORIGINAL RESULT: THROWS — at SpawnEngine.SpawnAll() -> HousingService.SpawnHouses() ->
+World.StoreObject, a house-twin `DuplicateAionObjectException`:
 - **Heiron (mapId 210040000)**: House `HOUSE_6001` objectId **130885** re-spawned into a 2nd twin instance.
 - **Beluslan (mapId 220040000)**: House `HOUSE_7001` objectId **152343** re-spawned into a 2nd twin instance.
-These are EXACTLY the maps/mechanism the read-only analysis predicted (beginner_twin_count=3 => 4 instances; 9
-address-cached Houses each; instance #1 spawns clean, instance #2 collides on the cached House objectId). Faithful
-Java behavior — NO un-faithful guard added.
+This was the symptom of the missing twin-count clamp (instanceCount over-counted 4 vs Java's 1), NOT Java-latent.
 
 ### #2 Housing no-DB deferral is EMPIRICALLY LIFTED. With the live (empty) players table, `PlayerDAO.GetUsedIDs()`
 returned `int[0]` (not null), so the HousingService ctor's `RevokeOwnershipOfDeletedPlayers` did NOT throw
