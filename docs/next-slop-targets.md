@@ -2,6 +2,38 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## GOLDEN SUITE 190 -> 191 (2026-06-17) — EQUIPPABLE-item blob path (SM_INVENTORY_ADD_ITEM, weapon blob)
+
+Extended the item/ItemInfoBlob seam from the GENERAL_INFO-only path to the **EQUIPPABLE-item blob path** — the first
+golden driving the full equippable-weapon `ItemInfoBlob.getFullBlob` chain. **Byte-exact on first capture, 0 fidelity bugs**
+(SM_INVENTORY_ADD_ITEM.cs + ItemInfoBlob.cs + EquippedSlotBlobEntry.cs + WeaponInfoBlobEntry.cs + EnchantInfoBlobEntry.cs +
+PremiumOptionInfoBlobEntry.cs + GeneralInfoBlobEntry.cs + Item.cs all faithful 1:1):
+- **SM_INVENTORY_ADD_ITEM** (1 fixture / 1 case: equippable 1H sword bought from npc, `ItemAddType.BUY` mask 0x1C so the
+  ITEM_COLLECT slot branch is skipped). writeImpl writes objectId + templateId + `getL10n()`, then
+  `getFullBlob(player,item).writeMe()`, then `(equipmentSlot & 0xFFFF)` + `isCloth()?1:0`. Pinning the template to
+  **`ItemGroup.SWORD`** (ONE_HAND weapon: `getEquipType()==WEAPON`, isWeapon true, **isTwoHandWeapon false**, valid equip
+  slots = MAIN_OR_SUB), no fusion / no stones / packCount 0 / not STIGMA_SHARD, makes getFullBlob add EXACTLY:
+  **EQUIPPED_SLOT** (writeQ `isEquipped?equipmentSlot:0` -> 0, unequipped) + **SLOTS_WEAPON** (`getSlotsFor(MAIN_OR_SUB)` ->
+  [MAIN_HAND, SUB_HAND], length 2, non-2H else branch -> writeQ mask 1, writeQ mask 2) + **ENCHANT_INFO** + **PREMIUM_OPTION**
+  + **GENERAL_INFO**. NOT WING/SHIELD/PLUME/armor/accessory (no SLOTS_* variant), conditioningInfo null (no CONDITIONING_INFO),
+  mask has no CAN_POLISH bit (no POLISH_INFO), modifiers null (no STAT_BONUSES), not COMPOSITE (no fusion / not 2H).
+
+Seam details (both sides identical): every ENCHANT_INFO / PREMIUM_OPTION read is deterministic on the bare simple-ctor
+weapon (mirroring the GENERAL_INFO seam) — isSoulBound false, enchantLevel 0, `getItemSkinTemplate()==itemTemplate` (skin
+null) -> templateId, **isIdentified() true** (`maxTuneCount` pinned 0 -> tuneCount stays 0) -> optionalSockets / enchantBonus
+/ bonusStatsId / tuneCount all 0, hasManaStones false, godStoneId 0, `getColorTimeLeft()` 0 (colorExpireTime 0, no clock) ->
+writeDyeInfo(itemColor null), idianStone null, tempering 0 (not PLUME branch), isAmplified false (enchantType 0), buffSkill 0,
+isCloth false (weapon). Reuses the EXISTING ITEM_CLEAN_UP holder seam (GENERAL_INFO reads it). NO live Player deref (player
+arg null), NO manastone/godstone/idian/conditioning/fusion sub-object cascade triggered.
+
+**REUSABLE** for the rest of the equipped-item family: the per-type blob is the only thing that varies — armor adds
+`ArmorInfoBlobEntry` (writeQ slot + writeQ 0 + writeDyeInfo itemColor [null -> same dye bytes]), accessory/shield/wing/plume
+their own SLOTS_* variant; all read the SAME bare-item enchant/premium/general state already proven here. The heavier
+sub-paths (manastone-socketed / godstone / idian-polished / conditioned / fusioned / dyed / tempered-plume items) each
+populate one more Item sub-object 1:1 both sides — incremental, not a new substrate. Packets that reuse this seam directly:
+SM_VIEW_PLAYER_DETAILS / SM_INVENTORY_UPDATE_ITEM (EQUIP_UNEQUIP/CHARGE/POLISH single-blob branches) / SM_WAREHOUSE_*.
+Build 0, golden 191, suite 478/0, bootstrap 9/9.
+
 ## GOLDEN SUITE 189 -> 190 (2026-06-17) — FIRST item/ItemInfoBlob seam (SM_INVENTORY_UPDATE_ITEM, GENERAL_INFO blob)
 
 Built the deferred **item/ItemInfoBlob integration-harness increment** — the first golden driving a packet through a

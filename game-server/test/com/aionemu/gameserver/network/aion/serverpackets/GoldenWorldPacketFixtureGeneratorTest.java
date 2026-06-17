@@ -33,6 +33,7 @@ import com.aionemu.gameserver.model.CreatureType;
 import com.aionemu.gameserver.model.gameobjects.Item;
 import com.aionemu.gameserver.model.templates.item.ItemTemplate;
 import com.aionemu.gameserver.model.templates.item.enums.ItemGroup;
+import com.aionemu.gameserver.services.item.ItemPacketService.ItemAddType;
 import com.aionemu.gameserver.services.item.ItemPacketService.ItemUpdateType;
 import com.aionemu.gameserver.model.animations.TeleportAnimation;
 import com.aionemu.gameserver.model.gameobjects.AionObject;
@@ -726,6 +727,83 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 		if (rt == char.class)
 			return (char) 0;
 		return null;
+	}
+
+	// ---- equippable item / ItemInfoBlob seam (SM_INVENTORY_ADD_ITEM, weapon blob path) ----
+	//
+	// Extends the item/ItemInfoBlob seam to the EQUIPPABLE-item blob path. SM_INVENTORY_ADD_ITEM writes per-item
+	// item.getObjectId() + template.getTemplateId() + template.getL10n(), then ItemInfoBlob.getFullBlob(player, item).writeMe(),
+	// then (item.getEquipmentSlot() & 0xFFFF) + (template.isCloth() ? 1 : 0). For an EQUIPPABLE item
+	// (itemGroup.getValidEquipmentSlots() != 0) getFullBlob adds, in order:
+	//   EQUIPPED_SLOT (writeQ isEquipped ? equipmentSlot : 0) + the per-type blob + ENCHANT_INFO + PREMIUM_OPTION + GENERAL_INFO.
+	// The seam pins itemGroup to SWORD: a ONE_HAND weapon (getEquipType()==WEAPON, isWeapon()==true, isTwoHandWeapon()==false,
+	// no fusion) so the per-type blob is SLOTS_WEAPON (writeQ MAIN_HAND mask, writeQ SUB_HAND mask via getSlotsFor(MAIN_OR_SUB)
+	// -> [MAIN_HAND, SUB_HAND], two-slot non-2H else branch). It is NOT WING/SHIELD/PLUME/armor/accessory, so only SLOTS_WEAPON
+	// is added. conditioningInfo == null (no CONDITIONING_INFO), isCanPolish() false (mask has no CAN_POLISH bit -> no POLISH_INFO),
+	// modifiers null (no STAT_BONUSES), packCount 0 (no WRAP_INFO), not STIGMA_SHARD, not COMPOSITE (no fusion / not 2H).
+	//
+	// All ENCHANT_INFO / PREMIUM_OPTION reads are deterministic on the bare simple-ctor Item (mirroring the GENERAL_INFO seam):
+	// isSoulBound() false, getEnchantLevel() 0, getItemSkinTemplate()==itemTemplate (skin null) -> getTemplateId(),
+	// isIdentified() true (maxTuneCount 0 -> tuneCount stays 0) -> getOptionalSockets()/getEnchantBonus()/getBonusStatsId()/
+	// getTuneCount() all 0, hasManaStones() false, getGodStoneId() 0, getColorTimeLeft() 0 (colorExpireTime 0, no clock) ->
+	// writeDyeInfo(itemColor==null), getIdianStone() null, getTempering() 0 (not PLUME), isAmplified() false (enchantType 0),
+	// getBuffSkill() 0. isCloth() false (weapon, not armor). No live Player deref, no stones/godstone/idian/conditioning/fusion
+	// cascade. Mirrored 1:1 on the C# asserter side.
+	private static final int EQ_ITEM_OBJECT_ID = 268700001;
+	private static final int EQ_ITEM_TEMPLATE_ID = 100000855; // a 1H sword template id
+	private static final int EQ_ITEM_MASK = 0x2C4D; // arbitrary mask scalar (no CAN_POLISH bit) -> GENERAL_INFO writeH
+	private static final int EQ_ITEM_DESC_L10N = 350456; // desc -> getL10n() = ChatUtil.l10n(350456)
+	private static final long EQ_ITEM_COUNT = 1L;
+	private static final String EQ_ITEM_CREATOR = "Smith";
+
+	@Test
+	public void generateGoldenInventoryAddItemEquippableFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installItemCleanupSeam(); // GENERAL_INFO reads DataManager.ITEM_CLEAN_UP.hasAccountOrLegionWhStorabilityDisabled
+
+		List<Case> cases = new ArrayList<>();
+		// Equippable 1H sword (unequipped) bought from an npc (ItemAddType.BUY -> mask 0x1C, no ITEM_COLLECT slot branch).
+		cases.add(inventoryAddItemEquippableCase("invAddEquippableWeaponBuy", ItemAddType.BUY));
+
+		writeFixture(outDir.resolve("SM_INVENTORY_ADD_ITEM.json"), "SM_INVENTORY_ADD_ITEM", cases);
+	}
+
+	private static Case inventoryAddItemEquippableCase(String name, ItemAddType addType) {
+		Item item = buildEquippableWeapon(EQ_ITEM_OBJECT_ID, EQ_ITEM_TEMPLATE_ID, EQ_ITEM_MASK, EQ_ITEM_DESC_L10N,
+			EQ_ITEM_COUNT, EQ_ITEM_CREATOR);
+		List<Item> items = new ArrayList<>();
+		items.add(item);
+		String inputs = "{\"objectId\":" + EQ_ITEM_OBJECT_ID + ",\"itemId\":" + EQ_ITEM_TEMPLATE_ID + ",\"mask\":"
+			+ EQ_ITEM_MASK + ",\"desc\":" + EQ_ITEM_DESC_L10N + ",\"itemCount\":" + EQ_ITEM_COUNT + ",\"itemCreator\":\""
+			+ EQ_ITEM_CREATOR + "\",\"itemGroup\":\"SWORD\",\"addType\":\"" + addType.name() + "\"}";
+		// player arg null: getFullBlob only stashes it as blob owner; the weapon/equipped/enchant/premium/general writers
+		// never dereference it.
+		return new Case(name, inputs, capture(new SM_INVENTORY_ADD_ITEM(items, null, addType), null));
+	}
+
+	/**
+	 * Build a minimal EQUIPPABLE 1H-sword Item via the simple Item(objId, itemTemplate) ctor. The template is directly
+	 * constructed (no JAXB) with itemId/mask/desc set, itemGroup SWORD (ONE_HAND weapon, valid equip slots) and maxTuneCount
+	 * pinned to 0 (so canTune() false -> isIdentified() true). Item is left UNEQUIPPED with no stones/godstone/idian/dye/
+	 * tempering/fusion, so the equippable blob path is deterministic. Mirrored 1:1 on the C# asserter side.
+	 */
+	private static Item buildEquippableWeapon(int objectId, int itemId, int mask, int desc, long itemCount, String creator) {
+		try {
+			ItemTemplate template = new ItemTemplate();
+			setField(template, "itemId", itemId);
+			setField(template, "mask", mask);
+			setField(template, "description", desc);
+			setField(template, "itemGroup", ItemGroup.SWORD);
+			setField(template, "maxTuneCount", 0); // canTune() == false -> isIdentified() == true (deterministic)
+			Item item = new Item(objectId, template);
+			item.setItemCount(itemCount);
+			item.setItemCreator(creator);
+			return item;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to build equippable weapon Item", e);
+		}
 	}
 
 	// ---- SKILL_DATA holder seam ----
