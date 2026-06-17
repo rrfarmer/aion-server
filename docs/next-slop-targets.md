@@ -42,23 +42,92 @@ STILL DEFERRED after attempt (precise blockers, each faithful 1:1 — NOT a port
   NPEs identically. Java is DB-REQUIRED here; it does NOT guard null. Per the hard rule (DB-required init that
   Java can't run without a DB -> defer to a DB harness, don't fake), NOT wired and NO un-faithful guard added.
   Defer to a DB harness.
-- **#6 PeriodicSaveService (main:156)** — RE-PORT SCOPED + DEFERRED. The faithful Java is a singleton
-  (getInstance/SingletonHolder) with TWO PeriodicSaveTasks: LegionWarehouseSaveTask
-  (LegionService.getCachedLegions -> InventoryDAO.store + ItemStoneListDAO.save, DB writes) and
-  ServerRunTimeSaveTask (ServerVariablesDAO.store). The C# type is a reworked DI GameEngine doing only the
-  server-runtime task via an IServerVariablesRepository abstraction, DI-registered in Program.cs:74/77 AND
-  consumed by a dedicated passing test (PeriodicSaveService_StoresServerLastRunPeriodicallyAndOnShutdown). A
-  faithful re-port = convert to a Java singleton (drop DI), add the legion-warehouse DB-write task, switch to
-  ServerVariablesDAO.store, re-wire Program.cs engine list, AND rework the existing DI-coupled test — a
-  coordinated re-port touching the DI graph + an existing green test + DB-write tasks, NOT a bounded
-  fixture-seed-and-wire. Defer as a scoped re-port task.
+- **#6 PeriodicSaveService (main:156)** — RESOLVED (commit 62c408390, 2026-06-16). Re-ported the faithful Java
+  singleton 1:1: PeriodicSaveService.GetInstance() + SingletonHolder + the inner PeriodicSaveTask base and the
+  TWO tasks — LegionWarehouseSaveTask (period PeriodicSaveConfig.LEGION_ITEMS * 1000 ms = 1200*1000;
+  LegionService.GetInstance().GetCachedLegions() -> per-legion GetLegionWarehouse().GetItemsWithKinah() +
+  AddRange(GetDeletedItems()) -> InventoryDAO.Store(items, null, null, legionId) + ItemStoneListDAO.Save(items),
+  try/catch-logged) and ServerRunTimeSaveTask (period 2 min; ServerVariablesDAO.Store("serverLastRun", nowMillis)).
+  Scheduling uses ThreadPoolManager.GetInstance().ScheduleAtFixedRateTask (the faithful Future analogue,
+  returns ScheduledTask with Cancel(bool)); OnShutdown() stores+cancels each task. The intervals are the
+  PeriodicSaveConfig @Property defaults (LEGION_ITEMS=1200) + the literal TimeUnit.MINUTES.toMillis(2) — never
+  invented. The reworked DI GameEngine + its Program.cs:74/77 registration were RETIRED, and the slop-shape test
+  (PeriodicSaveService_StoresServerLastRunPeriodicallyAndOnShutdown, which exercised the IServerVariablesRepository
+  DI abstraction) was REPLACED with a faithful singleton test (PeriodicSaveService_GetInstanceSchedulesSaveTasks:
+  GetInstance() non-null + same-instance, OnShutdown no-throw with empty legion cache). Wired
+  PeriodicSaveService.GetInstance() at GameServer.main:156 in GameServerBootstrapService. Task bodies are
+  boot-safe: GetCachedLegions() is an in-memory empty map (no DB) and ServerVariablesDAO.Store is fully
+  try/catch-guarded (no-DB => logged false). Build 0, golden 167/167, bootstrap 7/7, RealStaticDataLoad green.
 
-SUMMARY: 2/6 deferrals unblocked (the two pure leaf-holder/dir reads: AUTO_GROUP, HTML). The other 4 sit at a
-real floor — #1/#5 need the heavy SPAWNS_DATA + world-map boot (and #5 also conflicts with the empty-world
-invariant), #2 is DB-required (no Java guard to faithfully port), #6 is a coordinated DI->singleton re-port.
+SUMMARY: 3/6 deferrals now unblocked (AUTO_GROUP + HTML leaf reads, and #6 PeriodicSaveService re-port). The
+remaining 3 sit at a real floor — #1/#5 need the heavy SPAWNS_DATA + world-map boot (and #5 also conflicts with
+the empty-world invariant), #2 is DB-required (no Java guard to faithfully port).
 RECOMMENDED NEXT: (a) a spawn-data-backed bootstrap harness (load the real spawns/ + world_maps.xml into a
-test World) would unblock BOTH #1 and #5 at once; (b) a DB-backed test harness unblocks #2; (c) the #6
-PeriodicSaveService faithful re-port is a separate scoped task.
+test World) would unblock BOTH #1 and #5 at once — scoped below; (b) a DB-backed test harness unblocks #2.
+
+## SCOPE — spawn-data-backed bootstrap harness for #1 SiegeService.initSieges + #5 PvpMapService (read-only assessment, 2026-06-16)
+
+GOAL: evolve GameServerBootstrapTests so the boot SpawnEngine.SpawnAll() actually populates the test World
+(siege/artifact bosses for #1, pvp keymasters/chests for #5), then flip #1/#5 on and change the empty-world
+assert (`Assert.Equal(0, world.ObjectCount)`) to an expected populated count.
+
+WHAT THE SUBSTRATE ALREADY GIVES US (no new loader work):
+- SPAWNS_DATA and WORLD_MAPS_DATA already load 1:1 from the real XML — proven green by
+  RealStaticDataLoadIntegrationTests (SpawnsDh.GetSpawnsByWorldId(110010000) non-empty incl. siege spawn maps;
+  WorldMaps2 from world_maps.xml). StaticData.LoadLeafHoldersFromFiles reads `spawns/` (TryLoadMergedHolder,
+  singleRootTag) + `world_maps.xml` from fixed sub-paths of the static_data dir.
+- SpawnEngine.SpawnAll() is already wired at boot (GameServerBootstrapService:165) and is faithful — it iterates
+  WORLD_MAPS_DATA -> per non-instance map SpawnInstance -> SPAWNS_DATA.GetSpawnsByWorldId. It is dormant in the
+  bootstrap test ONLY because the minimal StaticDataFixture seeds neither holder.
+- The fixture already has the exact mechanism: CopyRealFile(realStaticData, fixtureDir, relativePath) +
+  FindRepoRoot walk (used today for auto_group/auto_group.xml + the HTML tree). Same move seeds spawns + world maps.
+
+STEPS:
+1. Fixture seed (StaticDataFixture.Create): CopyRealFile the real `world_maps.xml`, and copy the `spawns/` dir
+   (every spawn_map file — it's a multi-file merged holder, so the whole dir, like the HTML tree copy). NPC_DATA
+   is also needed for SpawnEngine to resolve npc templates when bringing spawns into the world — seed npc_skills/
+   the npc data files too (verify which holder SpawnInstance actually dereferences; SpawnAll itself only needs
+   SPAWNS_DATA+WORLD_MAPS, but BringIntoWorld/VisibleObject may touch NPC_DATA). Skip-guard when repo data absent
+   (same `if (repoRoot != null)` pattern already there) so the test still runs in a data-less checkout.
+2. #1 SiegeService.initSieges(): with the siege spawn maps + siege/artifact world maps now in World, the
+   ArtifactSiege.OnSiegeStart -> Siege.InitSiegeBoss path finds its boss (no more `SiegeException: Siege Boss not
+   found for siege 1012`). Also seed siege_locations.xml (the original UpdateFortressNextState null-GetSiegeLocation
+   guard) — already identified. Then flip the initSieges() wire on at main:142.
+3. #5 PvpMapService.init(): InstanceService.GetNextAvailableInstance(301220000) needs world map 301220000 (now
+   loaded), and PvpMapHandler.OnInstanceCreate spawns keymasters/chests into that instance. Flip init() on at main:176.
+4. Assert evolution: SpawnAll + siege + pvp now populate World, so `Assert.Equal(0, world.ObjectCount)` after
+   StopAsync must become a populated expectation. Two options: (a) assert a STABLE lower-bound
+   (`Assert.True(world.ObjectCount > 0)` after StartAsync, before StopAsync) since the exact count is data-version
+   sensitive; (b) pin an exact count from a single known seeded world (e.g. assert N npc objects on map 110010000)
+   the way RealStaticDataLoad pins specific npc ids — more brittle but exact. Recommend (a) for the boot test +
+   keep the exact-id pins in RealStaticDataLoad. The post-StopAsync assert should verify the world is TORN DOWN
+   (objects despawned) rather than "never populated" — change it from `== 0 always` to `populated during run,
+   cleared on stop`.
+
+EFFORT: MEDIUM. No new deserialization/loader code (the holders + SpawnEngine are done). The work is fixture
+data-seeding (copy real spawns/ + world_maps.xml + NPC_DATA into the temp dir), flipping 2 wires, and reworking
+the world-count assertion. The siege-boss spawn dependency chain (artifact world map + siege spawn map both
+present) is the one thing to verify end-to-end — if a specific artifact's boss spawn lives in a spawn map the
+SpawnEngine doesn't reach (instance-only map, or a handler-gated spawn), initSieges may still throw and that
+artifact's siege must be confirmed against Java (Java also requires the spawn).
+
+RISK:
+- MEDIUM data-coupling: copying the full spawns/ dir + world_maps.xml makes the bootstrap test load a large
+  data set (slower; closer to a real boot). Mitigate by only seeding the maps the asserts touch if SpawnEngine
+  tolerates a partial WORLD_MAPS_DATA (it iterates whatever's present — a subset is fine and keeps the test fast).
+- LOW-MED test-pollution: RealStaticDataLoad already documented a DataManager static-singleton cross-test
+  pollution when run in the same process as the bootstrap test. Populating the bootstrap World from the same real
+  holders increases shared-static surface; keep per-class verification (the task contract) and watch the combined
+  filter.
+- LOW invariant churn: every other assert in GameServerBootstrap_LoadsDataInitializesWorldAndStartsGameTime keys
+  off the minimal fixture (e.g. GetElementCount("item")==1). Seeding more holders may change those counts — audit
+  each `Assert.Equal(1, ...)` against the enriched fixture or scope the seeding to a SEPARATE new test method
+  (recommended: add `GameServerBootstrap_SpawnsSiegeAndPvpWorld` rather than mutating the existing minimal test,
+  preserving the minimal-fixture invariants for the other asserts).
+
+RECOMMENDED: add a NEW bootstrap test (spawn-data-backed) seeded with spawns/ + world_maps.xml + NPC_DATA that
+asserts world populates + siege/pvp wire cleanly, leaving the existing minimal test (and its empty-world
+invariant) intact. This unblocks #1 + #5 together and is the highest-value remaining boot-init move.
 
 ## RESOLVED — Second-pass + trailing main services wired (commits 5fdff6c10 / 5a2fe74c4 / 334a07ef4 / 3fc0b0857 / f44838a62, 2026-06-16)
 
@@ -258,7 +327,8 @@ main (post-utility):
 - BrokerService.getInstance() — DONE (wired 2026-06-16; broker load + schedules).
 - Influence.getInstance() — DONE (wired 2026-06-16; abyss influence ratios).
 - ExchangeService.getInstance() — DONE (wired 2026-06-16; empty ctor).
-- PeriodicSaveService.getInstance() — DEFERRED (reworked DI GameEngine, not faithful 1:1; needs re-port).
+- PeriodicSaveService.getInstance() — DONE (wired 2026-06-16, commit 62c408390; faithful singleton re-port,
+  reworked DI GameEngine retired + slop test replaced).
 - AtreianPassportService.getInstance() — DONE (wired 2026-06-16; expire + daily reset cron).
 - CronJobService.getInstance() — DONE (this tick).
 - CuringZoneService.getInstance() (guarded !GEO_MATERIALS_ENABLE; default off) — DONE (guarded, matches Java).
