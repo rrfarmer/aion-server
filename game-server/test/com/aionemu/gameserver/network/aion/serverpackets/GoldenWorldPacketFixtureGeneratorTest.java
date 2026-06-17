@@ -44,6 +44,10 @@ import com.aionemu.gameserver.model.animations.TeleportAnimation;
 import com.aionemu.gameserver.model.gameobjects.AionObject;
 import com.aionemu.gameserver.model.gameobjects.Npc;
 import com.aionemu.gameserver.model.gameobjects.Persistable.PersistentState;
+import com.aionemu.gameserver.model.account.PlayerAccountData;
+import com.aionemu.gameserver.model.gameobjects.player.PlayerCommonData;
+import com.aionemu.gameserver.model.items.PendingTuneResult;
+import com.aionemu.gameserver.model.skill.PlayerSkillEntry;
 import com.aionemu.gameserver.model.items.ChargeInfo;
 import com.aionemu.gameserver.model.items.GodStone;
 import com.aionemu.gameserver.model.items.ItemMask;
@@ -1414,6 +1418,162 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 			return player;
 		} catch (ReflectiveOperationException e) {
 			throw new RuntimeException("Failed to allocate uninitialized Player", e);
+		}
+	}
+
+	// ---- SM_TUNE_RESULT (item / ItemInfoBlob EnchantInfoBlobEntry.writeInfo seam) ----
+	//
+	// SM_TUNE_RESULT.writeImpl reads: targetItem.getObjectId(), the scalar tuningScrollItemId, result.getStatBonusId()
+	// (PendingTuneResult is a pure DTO), then EnchantInfoBlobEntry.writeInfo(buf, targetItem, optionalSockets, enchantBonus)
+	// — the ALREADY byte-validated ENCHANT_INFO writer on a bare simple-ctor Item (no skin/dye/stones/godstone/idian/
+	// tempering) so every read is deterministic, and writeInfo's last two args come straight from the PendingTuneResult
+	// scalars (not from the item's identify state). Then writeC(showManastoneSlots?0:1) + writeC(tuneCancelPossible?0:1),
+	// both == !result.isAttributeOnly(). No con read, no live Player (the item-seam ITEM_CLEAN_UP is NOT touched —
+	// writeInfo does not call hasAccountOrLegionWhStorabilityDisabled). Mirrored 1:1 on the C# asserter side.
+	private static final int TUNE_ITEM_OBJECT_ID = 268520001;
+
+	@Test
+	public void generateGoldenTuneResultFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		List<Case> cases = new ArrayList<>();
+		// (a) attributeOnly=false -> showManastoneSlots/tuneCancelPossible true -> writeC(0)/writeC(0); sockets 2, bonus 5, statBonusId 3.
+		cases.add(tuneResultCase("tuneResultFull", 7551, 2, 5, 3, false));
+		// (b) attributeOnly=true -> both false -> writeC(1)/writeC(1); sockets 0, bonus 0, statBonusId 9.
+		cases.add(tuneResultCase("tuneResultAttributeOnly", 7552, 0, 0, 9, true));
+
+		writeFixture(outDir.resolve("SM_TUNE_RESULT.json"), "SM_TUNE_RESULT", cases);
+	}
+
+	private static Case tuneResultCase(String name, int tuningScrollItemId, int optionalSockets, int enchantBonus,
+			int statBonusId, boolean attributeOnly) {
+		Item item = buildSimpleItem(TUNE_ITEM_OBJECT_ID, ITEM_TEMPLATE_ID, ITEM_MASK, ITEM_DESC_L10N, ITEM_COUNT, ITEM_CREATOR);
+		PendingTuneResult result = new PendingTuneResult(optionalSockets, enchantBonus, statBonusId, attributeOnly);
+		String inputs = "{\"objectId\":" + TUNE_ITEM_OBJECT_ID + ",\"tuningScrollItemId\":" + tuningScrollItemId
+			+ ",\"optionalSockets\":" + optionalSockets + ",\"enchantBonus\":" + enchantBonus + ",\"statBonusId\":"
+			+ statBonusId + ",\"attributeOnly\":" + attributeOnly + "}";
+		return new Case(name, inputs, capture(new SM_TUNE_RESULT(item, tuningScrollItemId, result), null));
+	}
+
+	// ---- SM_SKILL_LIST (silent ctor, DataManager-free) ----
+	//
+	// SM_SKILL_LIST(List<PlayerSkillEntry>) is the silent ctor (silentUpdate=true, messageId=0) -> NO DataManager.SKILL_DATA
+	// read (only the (skill,messageId) ctor reads SKILL_DATA.getSkillTemplate). writeImpl: writeH(size), writeC(1), per entry
+	// SkillEntryWriter.writeSkillEntry (writeH skillId, writeH isNormalSkill?1:skillLevel, writeC 0, writeC professionSkillBarSize,
+	// writeD isProfessionSkill?professionFlag:getFlag(), writeC skillType), then writeD(0) (messageId 0 -> no trailer).
+	// Entries built via the DataManager-free PlayerSkillEntry(skillId, skillLvl, skillType, persistentState) ctor with skillType>0
+	// (STIGMA) so isNormalSkill()==false -> getFlag()==0 (NO System.currentTimeMillis clock) and isProfessionSkill()==false
+	// (skillId<30000) -> professionSkillBarSize 0. Fully deterministic. Mirrored 1:1 on the C# asserter side.
+	@Test
+	public void generateGoldenSkillListFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		List<Case> cases = new ArrayList<>();
+		// Two stigma entries (skillType 1 and 3) + one normal-but-stigma-typed entry: all skillType>0 -> getFlag()==0.
+		List<PlayerSkillEntry> skills = new ArrayList<>();
+		skills.add(new PlayerSkillEntry(1001, 5, 1, PersistentState.NOACTION)); // stigma
+		skills.add(new PlayerSkillEntry(1002, 12, 3, PersistentState.NOACTION)); // linked stigma
+		String inputs = "{\"skills\":[{\"skillId\":1001,\"skillLvl\":5,\"skillType\":1},"
+			+ "{\"skillId\":1002,\"skillLvl\":12,\"skillType\":3}]}";
+		cases.add(new Case("skillListSilentStigma", inputs, capture(new SM_SKILL_LIST(skills), null)));
+
+		writeFixture(outDir.resolve("SM_SKILL_LIST.json"), "SM_SKILL_LIST", cases);
+	}
+
+	// ---- SM_WAREHOUSE_ADD_ITEM (item / ItemInfoBlob seam, player == blob owner only) ----
+	//
+	// SM_WAREHOUSE_ADD_ITEM(item, warehouseType, player, addType).writeImpl reads ONLY: writeC(warehouseType),
+	// writeH(addType.getMask()) (enum scalar), writeH(items.size()), then per item writeD(objectId)+writeD(templateId)+
+	// writeC(0)+writeS(L10n)+getFullBlob(player,item).writeMe()+writeH(equipmentSlot&0xFFFF). The player is passed to
+	// getFullBlob ONLY as the blob owner (never dereferenced for the deterministic non-equippable item) -> player null.
+	// Same GENERAL_INFO-only item seam as SM_EXCHANGE_ADD_ITEM. Mirrored 1:1 on the C# asserter side.
+	private static final int WH_ADD_ITEM_OBJECT_ID = 268520002;
+
+	@Test
+	public void generateGoldenWarehouseAddItemFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+		installItemCleanupSeam();
+
+		int regularType = StorageType.REGULAR_WAREHOUSE.getId();
+		Item item = buildSimpleItem(WH_ADD_ITEM_OBJECT_ID, ITEM_TEMPLATE_ID, ITEM_MASK, ITEM_DESC_L10N, ITEM_COUNT, ITEM_CREATOR);
+
+		List<Case> cases = new ArrayList<>();
+		// ItemAddType.ALL_SLOT (mask 0x16) into a REGULAR_WAREHOUSE, single non-equippable item. player null (blob owner only).
+		cases.add(new Case("warehouseAddItemAllSlot",
+			"{\"warehouseType\":" + regularType + ",\"objectId\":" + WH_ADD_ITEM_OBJECT_ID + ",\"addType\":\"ALL_SLOT\"}",
+			capture(new SM_WAREHOUSE_ADD_ITEM(item, regularType, null, ItemAddType.ALL_SLOT), null)));
+
+		writeFixture(outDir.resolve("SM_WAREHOUSE_ADD_ITEM.json"), "SM_WAREHOUSE_ADD_ITEM", cases);
+	}
+
+	// ---- SM_INVENTORY_INFO (player-scalar seam: npc/quest/item expands) ----
+	//
+	// SM_INVENTORY_INFO(isFirstPacket, items, player).writeImpl reads: writeC(isFirstPacket?1:0), writeC(player.getNpcExpands()),
+	// writeC(player.getQuestExpands()), writeC(player.getItemExpands()), writeH(items.size()), then per item
+	// writeD(objectId)+writeD(templateId)+writeS(L10n)+getFullBlob(player,item).writeMe()+writeH(equipmentSlot&0xFFFF)+
+	// writeC(isCloth?1:0). The ONLY live-Player reads are the three int cube-expand scalars (via getCommonData() ->
+	// playerAccountData.getPlayerCommonData()); getFullBlob uses player only as blob owner. So the player is allocated
+	// uninitialized (the established harness precedent) with ONLY its playerAccountData field pinned to a PlayerAccountData
+	// whose playerCommonData carries the three pinned expand scalars. Non-equippable GENERAL_INFO-only item. Java is oracle.
+	private static final int INV_INFO_ITEM_OBJECT_ID = 268520003;
+	private static final int INV_INFO_NPC_EXPANDS = 3;
+	private static final int INV_INFO_QUEST_EXPANDS = 2;
+	private static final int INV_INFO_ITEM_EXPANDS = 4;
+
+	@Test
+	public void generateGoldenInventoryInfoFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+		installItemCleanupSeam();
+
+		Player player = newPlayerWithExpands(INV_INFO_NPC_EXPANDS, INV_INFO_QUEST_EXPANDS, INV_INFO_ITEM_EXPANDS);
+
+		List<Case> cases = new ArrayList<>();
+		// firstPacket true, one non-equippable item.
+		Item item = buildSimpleItem(INV_INFO_ITEM_OBJECT_ID, ITEM_TEMPLATE_ID, ITEM_MASK, ITEM_DESC_L10N, ITEM_COUNT, ITEM_CREATOR);
+		List<Item> oneItem = new ArrayList<>();
+		oneItem.add(item);
+		cases.add(new Case("inventoryInfoFirstOneItem",
+			"{\"firstPacket\":true,\"npcExpands\":" + INV_INFO_NPC_EXPANDS + ",\"questExpands\":" + INV_INFO_QUEST_EXPANDS
+				+ ",\"itemExpands\":" + INV_INFO_ITEM_EXPANDS + ",\"objectId\":" + INV_INFO_ITEM_OBJECT_ID + ",\"itemCount\":1}",
+			capture(new SM_INVENTORY_INFO(true, oneItem, player), null)));
+		// firstPacket false, empty item list (writeH 0).
+		cases.add(new Case("inventoryInfoNotFirstEmpty",
+			"{\"firstPacket\":false,\"npcExpands\":" + INV_INFO_NPC_EXPANDS + ",\"questExpands\":" + INV_INFO_QUEST_EXPANDS
+				+ ",\"itemExpands\":" + INV_INFO_ITEM_EXPANDS + ",\"itemCount\":0}",
+			capture(new SM_INVENTORY_INFO(false, new ArrayList<>(), player), null)));
+
+		writeFixture(outDir.resolve("SM_INVENTORY_INFO.json"), "SM_INVENTORY_INFO", cases);
+	}
+
+	/**
+	 * Allocate a Player WITHOUT running any constructor (Unsafe.allocateInstance — the established harness precedent), then
+	 * pin ONLY its playerAccountData field to a PlayerAccountData (also allocated uninitialized to dodge the appearance-
+	 * deref ctor) whose playerCommonData carries the three pinned cube-expand scalars. SM_INVENTORY_INFO reads nothing else
+	 * from the live Player. Mirrored 1:1 on the C# asserter side.
+	 */
+	private static Player newPlayerWithExpands(int npcExpands, int questExpands, int itemExpands) {
+		try {
+			Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+			theUnsafe.setAccessible(true);
+			Unsafe unsafe = (Unsafe) theUnsafe.get(null);
+
+			PlayerCommonData pcd = new PlayerCommonData(INV_INFO_ITEM_OBJECT_ID);
+			pcd.setNpcExpands(npcExpands);
+			pcd.setQuestExpands(questExpands);
+			pcd.setItemExpands(itemExpands);
+
+			PlayerAccountData accountData = (PlayerAccountData) unsafe.allocateInstance(PlayerAccountData.class);
+			setField(accountData, "playerCommonData", pcd);
+
+			Player player = (Player) unsafe.allocateInstance(Player.class);
+			setField(player, "playerAccountData", accountData);
+			return player;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to build Player with expands", e);
 		}
 	}
 
