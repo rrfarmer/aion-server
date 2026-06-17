@@ -2,6 +2,11 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## 🎉 OBJECT-SPINE BIG-BANG + REWORKED-SLOP RETIREMENT = COMPLETE (confirmed 2026-06-17, HEAD ba6a80160).
+Definitive source-level confirmation this tick: `World/World.cs` has a SINGLE object store `_allObjects` (ConcurrentDictionary<int,VisibleObject>, 1:1 Java `allObjects`) — NO `_objects`/`_housesByObjectId`/`_housesByAddress`/`TryAddObject` dual-store remnant. The object-spine is fully unified to the faithful spine; ZERO residual.
+Program scorecard: packet front 126→0 reworked duplicates (GameServerPacket + SerializeFrame dropped, faithful hierarchy unified on AionServerPacket); object store unified + `_objects` deleted; WorldNpc/Kisk/Rift/drop slop retired; ALL StaticData summary-projections retired (8 holders + WorldMapSummary + NpcSpawnTable + FlightZone); Housing subsystem retired; SPAWNS_DATA/CronJobService/DatabaseCleaningService confirmed faithful + wired; 3 latent runtime fidelity bugs fixed (RiftManager fan-out, SmDialogWindow flat-write, abyss silent-no-send). All-green + golden 196/196 byte-exact throughout ~27 batches.
+REMAINING = NOT slop, all user-gated: (a) integration-harness sub-project to golden the ~104 live-object SM_* packets (diminishing-return fidelity mining); (b) Front-A real-client enter-world test (needs the USER's Aion client — environment-gated); (c) any new user-directed goal. RECOMMEND: pause the loop, or pick (a)/(b)/(c).
+
 ## ✅ SPAWNS_DATA — ALREADY WIRED + LOADED + REGRESSION-GUARDED; NOT slop, NOT broken, NOT a placeholder (scoped 2026-06-17, PLAN-ONLY, no code change).
 
 **VERDICT: FINE. The memory hollow-holder-census "SPAWNS heavy/reworked" note is STALE.** `DataManager.SPAWNS_DATA` was wired to the faithful boot loader in commit **`ae2e25a54`** ("Wire SPAWNS_DATA boot loader: world NPCs now spawn (was hollow -> 0 NPCs)"), which followed `4cc039a41` (retyped the accessor off the reworked `*Summary` projection onto the faithful `dataholders/SpawnsData` + ported `GetNearestSpawnByNpcId`/`GetFirstSpawnByNpcId` 1:1 + repointed 13 spawn consumers). No reworked `SpawnsTable`/`SpawnsSummary` projection survives — grep finds none.
