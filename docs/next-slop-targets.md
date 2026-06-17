@@ -2,6 +2,33 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## Sm* DUPLICATE-PACKET RETIREMENT — BATCH 8-9: 14 more survivors retired (2026-06-17, 2 commits rrfarmer). 37 -> 23 remaining.
+
+Batch8 (9): repoint+delete the 9 lowest-consumer Sm* to faithful SM_* twins, byte-verified identical:
+SmQuitResponse SmDeleteWarehouseItem SmBlockResponse SmFriendResponse SmCloseQuestionWindow SmStatUpdateDp
+SmFriendNotify SmBindPointTeleport SmSkillCancel. Production repoints to Java forms: SocialService (SM_BLOCK_RESPONSE
+const codes / SM_FRIEND_RESPONSE.TARGET_ADDED|TARGET_REMOVED static factories / SM_FRIEND_NOTIFY.DELETED); FriendList
+(SM_FRIEND_NOTIFY.LOGIN|LOGOUT); AutoBan + PunishmentService (new SM_QUIT_RESPONSE() via Close(packet)); PlayerCommonData
+(new SM_STATUPDATE_DP(dp)). 9 golden fixtures migrated legacy-theory -> faithful-theory (SM_DELETE_WAREHOUSE_ITEM reuses
+ResolveItemDeleteType; SM_SKILL_CANCEL uses PacketHarnessCreature; SM_CLOSE_QUESTION_WINDOW faithful factories; SM_FRIEND_RESPONSE
+uses the (string,int) ctor). The legacy theory1 now holds only the 2 heavy webs SM_ITEM_USAGE_ANIMATION + SM_ATTACK_STATUS.
+Batch9 (5): retire 5 zero-prod test-only Sm* whose dedicated slop-tests merely re-assert the byte shape the golden faithful
+theory already validates against the Java oracle — SmPosition SmPositionSelf SmWeather SmLookAtObject SmForcedMove. Deleted
+the Sm*.cs (+ orphaned ObjectPositionSnapshot/PositionSelfSnapshot/LookAtObjectSnapshot/ForcedMoveSnapshot records) and the 4
+tests-of-slop (SmPositionPacketsTests/SmWeatherPacketTests/SmLookAtObjectPacketTests/SmForcedMovePacketTests). Suite 483->475
+(net -8 slop tests), golden stays 196 byte-exact. Build0/golden196/bootstrap9 each batch.
+
+**REMAINING 23 (SmAttackStatusEnums is the enum support file, not a packet):** low-count production repoints still to do —
+SmAbyssRank(3) SmAbyssRankUpdate(2) SmAutoGroup(7) SmIconInfo(2) SmShowBrand(2) SmTitleInfo(5) SmLegionEdit(2,static-factory)
+SmLegionDominionRank(1) SmLegionHistory(test-only) SmFindGroup(test-only) SmPet(test-only) SmPetEmote(test-only)
+SmMotion(5) SmQuestionWindow(6). DEFERRED this run: **SmKey + SmPong** — both test-only but bound to GameCryptTests, which
+tests `GameCrypt` server-side framing via the reworked `GameServerPacket.SerializeFrame(GameCrypt)` shortcut. The faithful
+SM_KEY/SM_PONG (AionServerPacket) have NO SerializeFrame — their only write path is `Write(AionConnection,ByteBuffer)` +
+`con.Encrypt`, which needs a live/uninitialized AionConnection the GameCrypt test harness doesn't build. Migrating these is a
+crypt-infra harness change (route GameCryptTests through the faithful Write seam), not a packet repoint — defer to that increment.
+**SmGameTime** still DEFERRED (singleton-vs-DI seam, unchanged below). HEAVY WEBS (LAST): SmDialogWindow / SmSystemMessage /
+SmItemUsageAnimation / SmAttackStatus(+SmAttackStatusEnums) / SmEmotion.
+
 ## Sm* DUPLICATE-PACKET RETIREMENT — BATCH 6-7: faithful repoint of 21 low-consumer survivors (2026-06-17, 2 commits dbcbfa32a + d10a34b75 rrfarmer). 58 -> 37 remaining.
 
 Batch6 (14, commit dbcbfa32a): 12 test-only golden-harness migrations (SmFlyTime SmWindstream SmUnwrapItem SmCraftAnimation SmGfWebshopTokenResponse SmDeleteHouse SmDeleteHouseObject SmDeleteCharacter SmRestoreCharacter SmNicknameCheckResponse SmStatUpdateHp SmStatUpdateMp) + 2 production repoints (SmActionAnimation<-ClassChangeService -> SM_ACTION_ANIMATION(ActionAnimation.CLASS_CHANGE), faithful per Java; SmCustomSettings<-TransformModel x2 -> SM_CUSTOM_SETTINGS).
