@@ -141,10 +141,32 @@ with `Rnd.Get(0,i)`; `IntStream.range(min,max+1)` → `Enumerable.Range(min, max
 `Future`→`ScheduledTask`, `.isCancelled()`→`.IsCancelled` (property), `.cancel(b)`→`Cancel(b)`; `startTime` `long?` →
 use `.Value` in the subtraction; `points.get(i)`→`points[i]`. Confirms again: heavy-by-line-count ≠ heavy-by-subsystem.
 
-**Remaining 1 = the heavy-defer:** ShugoImperialTomb (1329).
-Recommend **ShugoImperialTomb (1329)** next (the last one) — verify its ScoreWriter/InstanceScore subtype + any new
-SM strings the same way (grep PascalCase symbols + check base classes) before porting; given ALL of batch 4/5/6/7 were
-false-heavy-defers (volume only, deps pre-present), it is likely the same.
+## INSTANCE-HANDLER PORT — batch 8 (2026-06-17) — +1 → 37/37 — SET COMPLETE
+
+Ported **ShugoImperialTomb (1329 lines)** → `ShugoImperialTombInstance.cs`, `[InstanceID(300560000)]`, commit d2e7aab80.
+STRICT 1:1. **No bounded dep needed** — the LAST instance handler, and an 8th-of-8 false-heavy-defer. 3-stage
+tower-defense (Crown Prince / Empress / Emperor zones), each stage a PHASE_1 wave sequence → boss → PHASE_2 finale,
+plus bonus stages, exit portals and ~150 relic chests. **NO scoreboard at all** (no ScoreWriter/InstanceScore subtype) —
+pure staged spawn-wave timer logic. ALL deps pre-present: every `STR_IDEVENT01_*` string (`_S1_START/_S2_START/_S3_START`,
+`_PHASE/_PHASE02/_PHASE03/_PHASE04/_PHASE09/_PHASE10`) already in the catalog; `WalkManager.StartWalking((NpcAI)npc.GetAi())`,
+`CreatureState.ACTIVE/WALK_MODE`, `Creature.SetState(state,bool)`, `SM_EMOTION(npc,EmotionType.CHANGE_SPEED,0,objId)`,
+`SkillEngine.ApplyEffectDirectly(skillId,Creature,Creature)`, `TeleportService.MoveToInstanceExit`, base
+`Spawn`/`DeleteAliveNpcs`/`SendMsg`/`mapId`. **Batch-8 gotchas (all anticipated):** `SkillEngine.GetInstance()` collides
+with the `Aion.GameServer.SkillEngine` ns → fully-qualify `Aion.GameServer.SkillEngine.SkillEngine.GetInstance()`;
+`AtomicInteger stage.compareAndSet(exp,upd)` → `if (Interlocked.CompareExchange(ref stage,upd,exp) != exp) return;`
+(early-return predicate INVERTED vs Java `if (!cas) return;`); `stage.get()` in the transformation switch →
+`Volatile.Read(ref stage)`; `Future`→`ScheduledTask`, `.isDone()`→`.IsDone()` (METHOD), `.cancel(true)`→`Cancel(true)`;
+the `sp()` walker helper = `(Npc)Spawn(...)` cast + `GetSpawn().SetWalkerId(w)` + `WalkManager.StartWalking((NpcAI)npc.GetAi())`
++ ACTIVE-vs-WALK_MODE state + CHANGE_SPEED emotion broadcast. Confirms the rule one final time: heavy-by-line-count ≠
+heavy-by-subsystem.
+
+**INSTANCE-HANDLER SET: 37/37 COMPLETE.** All handlers in `game-server/data/handlers/instance/*.java` ported 1:1 & green
+(build 0 / 454 / golden 167 / bootstrap 9). The standing "instance-handler AP-reward reworked services" slop category
+(category 3 below) is now fully unblocked — those reworked `*ApRewardService` stand-ins can be retired in favor of the
+faithful handlers. **Next recommended vein:** zone handlers in `game-server/data/handlers/zone/` (apply the same
+extend-base + auto-register recipe; grep PascalCase + check base classes to avoid false-defers), OR the deferred ~10
+spawn-AI/flight quest scripts (need WalkManager/flying-ring threaded into quest tasks), OR golden-suite expansion to
+cover instance-handler runtime behavior. See content-handler-scope memory for the running tally.
 
 ## CAPSTONE FIDELITY RE-SURVEY — 2026-06-16 (commit e3e1b1184)
 
