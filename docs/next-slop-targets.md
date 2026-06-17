@@ -2,6 +2,22 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## GOLDEN SUITE 167 -> 169 (2026-06-17, commit e1a37ea13)
+
+Added 2 NEW Java-derived pure-formula parity cases via the existing mvn oracle
+(`GoldenFormulaFixtureGeneratorTest` -> `parity-artifacts/golden/formulas/*.json`, read by
+`GoldenFormulaFixtureTests.cs`):
+- `StatCapUtil.limitValueForPvpOrPveStat(CombatMode,RatioType,int)` — 18 sub-cases across all 4
+  (mode,type) cap buckets (PVP/PVE x ATTACK/DEFENSE) with below-min/in-range/at-edge/above-max
+  clamp inputs; the post-aggregation ratio cap used in `StatFunctions.adjustDamageByPvpOrPveModifiers`.
+- `SkillElement.getStatForElement()` — 7 sub-cases (NONE->null + 6 *_RESISTANCE); the elemental-defense
+  stat lookup in `reduceDamageByElementalDefense`. Both byte/value-exact on first capture, 0 fidelity bugs.
+RECIPE for the next pure-formula golden: pick a method that reads ONLY its args (no state/config/random),
+add a `generateXxx` in the Java generator (run mvn to emit the fixture), then add a dispatch case +
+`[InlineData]` in `GoldenFormulaFixtureTests.cs`. Remaining pure veins are thin (most StatFunctions read
+live Creature/Player/config); next golden leverage is the deferred integration harness (live World/DB/conn)
+for the ~210 object-reading SM_* packets — a sub-project, not a one-tick add. Build 0, golden 169, suite 456/0.
+
 ## QUEST SCRIPT PORT — 1035/1035 COMPLETE (2026-06-17, commit 8fac65d3c)
 
 The last 10 "deferred spawn-AI/flight" quests were ALL false-defers. The supposed blocker — "WalkManager /
