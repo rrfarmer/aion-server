@@ -11,6 +11,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +35,7 @@ import com.aionemu.gameserver.dataholders.WorldMapsData;
 import com.aionemu.gameserver.model.CreatureType;
 import com.aionemu.gameserver.model.gameobjects.Item;
 import com.aionemu.gameserver.model.gameobjects.player.Player;
+import com.aionemu.gameserver.model.items.storage.StorageType;
 import com.aionemu.gameserver.model.templates.item.ItemTemplate;
 import com.aionemu.gameserver.model.templates.item.enums.ItemGroup;
 import com.aionemu.gameserver.services.item.ItemPacketService.ItemAddType;
@@ -1267,6 +1270,131 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 		cases.add(new Case("viewPlayerDetailsWeaponAndArmor", inputs, capture(new SM_VIEW_PLAYER_DETAILS(items, player), null)));
 
 		writeFixture(outDir.resolve("SM_VIEW_PLAYER_DETAILS.json"), "SM_VIEW_PLAYER_DETAILS", cases);
+	}
+
+	// ---- item / ItemInfoBlob seam: more host packets (SM_EXCHANGE_ADD_ITEM, SM_WAREHOUSE_INFO/UPDATE_ITEM, SM_REPURCHASE) ----
+	//
+	// These four host packets wrap the SAME, already-byte-validated ItemInfoBlob seam (GENERAL_INFO on a non-equippable
+	// item, EQUIPPED/SLOTS_WEAPON/ENCHANT/PREMIUM/GENERAL on the equippable weapon). Each writeImpl was verified to read
+	// the Player ONLY as the getFullBlob blob owner (never dereferenced for these deterministic items) — NO con deref,
+	// NO live World/Legion/Group. SM_LOOT_ITEMLIST is EXCLUDED here: its writeImpl reads con.getActivePlayer() (T2 audit).
+	//   * SM_EXCHANGE_ADD_ITEM(action, item, player): writeC(action) + template id/objId + L10n + getFullBlob.writeMe.
+	//   * SM_WAREHOUSE_INFO(items, warehouseType, expandLvl, firstPacket, player): the warehouse header (type/firstPacket/
+	//     expand + REGULAR_WAREHOUSE-vs-other size prefix) then per item objId/templateId/writeC(0)/L10n/getFullBlob/
+	//     equipmentSlot. Two cases pin both header branches (REGULAR_WAREHOUSE id=1 with items -> writeC(1)+writeC(0);
+	//     other type -> writeH(0)).
+	//   * SM_WAREHOUSE_UPDATE_ITEM(player, item, warehouseType, updateType): objId + warehouseType + L10n + a GENERAL_INFO-
+	//     only blob (new ItemInfoBlob(player,item).addBlobEntry(GENERAL_INFO)) + (updateType.isSendable() ? writeH(mask)).
+	//     DEC_ITEM_USE -> sendable, mask 0x16 (deterministic).
+	//   * SM_REPURCHASE(player, npcId): its CTOR pulls the item collection from the RepurchaseService singleton, so the
+	//     packet is allocated uninitialized (Unsafe.allocateInstance — the SM_VIEW_PLAYER_DETAILS/SM_FIND_GROUP precedent)
+	//     and its final fields (player/targetObjectId/items) are reflectively pinned, dodging the singleton. writeImpl
+	//     writes targetObjId + writeD(1) + size, then per item objId/templateId/L10n/getFullBlob + writeQ(repurchasePrice).
+	// All built IDENTICALLY to the C# asserter side; Java is the oracle.
+	private static final int EXCHANGE_ITEM_OBJECT_ID = 268510001;
+	private static final int WH_INFO_ITEM_OBJECT_ID = 268510002;
+	private static final int WH_UPDATE_ITEM_OBJECT_ID = 268510003;
+	private static final int REPURCHASE_ITEM_OBJECT_ID = 268510004;
+	private static final int REPURCHASE_NPC_OBJECT_ID = 700100200;
+	private static final long REPURCHASE_PRICE = 123456789L;
+
+	@Test
+	public void generateGoldenExchangeAddItemFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+		installItemCleanupSeam();
+
+		List<Case> cases = new ArrayList<>();
+		// action 0 (self) + action 1 (other), non-equippable item -> single GENERAL_INFO blob. player null (blob owner only).
+		Item item = buildSimpleItem(EXCHANGE_ITEM_OBJECT_ID, ITEM_TEMPLATE_ID, ITEM_MASK, ITEM_DESC_L10N, ITEM_COUNT, ITEM_CREATOR);
+		cases.add(new Case("exchangeAddItemSelf",
+			"{\"action\":0,\"objectId\":" + EXCHANGE_ITEM_OBJECT_ID + ",\"itemId\":" + ITEM_TEMPLATE_ID + "}",
+			capture(new SM_EXCHANGE_ADD_ITEM(0, item, null), null)));
+		cases.add(new Case("exchangeAddItemOther",
+			"{\"action\":1,\"objectId\":" + EXCHANGE_ITEM_OBJECT_ID + ",\"itemId\":" + ITEM_TEMPLATE_ID + "}",
+			capture(new SM_EXCHANGE_ADD_ITEM(1, item, null), null)));
+
+		writeFixture(outDir.resolve("SM_EXCHANGE_ADD_ITEM.json"), "SM_EXCHANGE_ADD_ITEM", cases);
+	}
+
+	@Test
+	public void generateGoldenWarehouseInfoFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+		installItemCleanupSeam();
+
+		int regularType = StorageType.REGULAR_WAREHOUSE.getId();
+		int otherType = StorageType.ACCOUNT_WAREHOUSE.getId();
+
+		List<Case> cases = new ArrayList<>();
+		// (a) REGULAR_WAREHOUSE with one item -> header writeC(1)+writeC(0); firstPacket true, expand 3.
+		Item item = buildSimpleItem(WH_INFO_ITEM_OBJECT_ID, ITEM_TEMPLATE_ID, ITEM_MASK, ITEM_DESC_L10N, ITEM_COUNT, ITEM_CREATOR);
+		List<Item> oneItem = new ArrayList<>();
+		oneItem.add(item);
+		cases.add(new Case("warehouseInfoRegularOneItem",
+			"{\"warehouseType\":" + regularType + ",\"expandLvl\":3,\"firstPacket\":true,\"itemCount\":1}",
+			capture(new SM_WAREHOUSE_INFO(oneItem, regularType, 3, true, null), null)));
+		// (b) non-regular warehouse type, empty list -> header writeH(0); firstPacket false, expand 0.
+		cases.add(new Case("warehouseInfoOtherEmpty",
+			"{\"warehouseType\":" + otherType + ",\"expandLvl\":0,\"firstPacket\":false,\"itemCount\":0}",
+			capture(new SM_WAREHOUSE_INFO(new ArrayList<>(), otherType, 0, false, null), null)));
+
+		writeFixture(outDir.resolve("SM_WAREHOUSE_INFO.json"), "SM_WAREHOUSE_INFO", cases);
+	}
+
+	@Test
+	public void generateGoldenWarehouseUpdateItemFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+		installItemCleanupSeam();
+
+		int regularType = StorageType.REGULAR_WAREHOUSE.getId();
+		Item item = buildSimpleItem(WH_UPDATE_ITEM_OBJECT_ID, ITEM_TEMPLATE_ID, ITEM_MASK, ITEM_DESC_L10N, ITEM_COUNT, ITEM_CREATOR);
+
+		List<Case> cases = new ArrayList<>();
+		// DEC_ITEM_USE -> sendable, mask 0x16 -> trailing writeH(0x16). General-info-only blob. player null (blob owner only).
+		cases.add(new Case("warehouseUpdateItemDecUse",
+			"{\"warehouseType\":" + regularType + ",\"objectId\":" + WH_UPDATE_ITEM_OBJECT_ID + ",\"updateType\":\"DEC_ITEM_USE\"}",
+			capture(new SM_WAREHOUSE_UPDATE_ITEM(null, item, regularType, ItemUpdateType.DEC_ITEM_USE), null)));
+
+		writeFixture(outDir.resolve("SM_WAREHOUSE_UPDATE_ITEM.json"), "SM_WAREHOUSE_UPDATE_ITEM", cases);
+	}
+
+	@Test
+	public void generateGoldenRepurchaseFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+		installItemCleanupSeam();
+
+		Item item = buildSimpleItem(REPURCHASE_ITEM_OBJECT_ID, ITEM_TEMPLATE_ID, ITEM_MASK, ITEM_DESC_L10N, ITEM_COUNT, ITEM_CREATOR);
+		item.setRepurchasePrice(REPURCHASE_PRICE);
+
+		List<Case> cases = new ArrayList<>();
+		cases.add(new Case("repurchaseSingleItem",
+			"{\"targetObjectId\":" + REPURCHASE_NPC_OBJECT_ID + ",\"objectId\":" + REPURCHASE_ITEM_OBJECT_ID
+				+ ",\"repurchasePrice\":" + REPURCHASE_PRICE + ",\"itemCount\":1}",
+			capture(buildRepurchasePacket(REPURCHASE_NPC_OBJECT_ID, Collections.singletonList(item)), null)));
+
+		writeFixture(outDir.resolve("SM_REPURCHASE.json"), "SM_REPURCHASE", cases);
+	}
+
+	/**
+	 * Allocate SM_REPURCHASE WITHOUT running its ctor (whose body pulls items from the RepurchaseService singleton —
+	 * Unsafe.allocateInstance, the established harness precedent), then reflectively pin only the three final fields the
+	 * writeImpl reads (player blob-owner null, targetObjectId, items). Mirrored 1:1 on the C# asserter side.
+	 */
+	private static SM_REPURCHASE buildRepurchasePacket(int targetObjectId, Collection<Item> items) {
+		try {
+			Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+			theUnsafe.setAccessible(true);
+			Unsafe unsafe = (Unsafe) theUnsafe.get(null);
+			SM_REPURCHASE packet = (SM_REPURCHASE) unsafe.allocateInstance(SM_REPURCHASE.class);
+			setField(packet, "targetObjectId", targetObjectId);
+			setField(packet, "items", items);
+			return packet;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to allocate uninitialized SM_REPURCHASE", e);
+		}
 	}
 
 	/**
