@@ -62,6 +62,29 @@ DrakenspireDepths (593), TheShugoEmperorsVault (574). Each pulls a larger subsys
 heavier scoreboard / siege / multi-stage). Recommend tackling EternalBastion or DrakenspireDepths next (smallest of
 the five) after verifying its ApReward/InstanceScore surface; the other 4 are genuine heavy ports.
 
+## INSTANCE-HANDLER PORT — batch 4 (2026-06-16) — +1 → 33/37
+
+Ported the smallest heavy-defer: **TheShugoEmperorsVault (574 lines)** → `TheShugoEmperorsVaultInstance.cs`,
+`[InstanceID(301400000)]`, commit e7cfbdf89. STRICT 1:1. **No bounded dep needed** — all deps were already present
+and verified before porting: `NormalScore` (Model/Instance/Instancescore) + `TheShugoEmperorsVaultScoreWriter`
+(Network/Aion/Instanceinfo) both pre-ported; all SM strings present (`STR_IDSweep_Stage2_End` 24055 /
+`STR_MSG_GET_SCORE` / `STR_REBIRTH_MASSAGE_ME`); base `Spawn`/`SpawnAndSetRespawn`/`SendMsg`/`OnStartEffect`/
+`OnReviveEvent`/`GetInstanceScore` all on `GeneralInstanceHandler`; `InstanceProgressionType.IsPreparing/IsStartProgress`;
+`instance.SetDoorState/ForEachPlayer/ForEachNpc`; `SkillEngine.ApplyEffectDirectly`; `Rnd.Chance()/Get(int,int)`;
+`TaskId.DESPAWN` + `controller.AddTask`; `ItemService.AddItem` (ns Services.**Items**); `PlayerReviveService.Revive`
+(ns Services.**Players**); `TeleportService.TeleportTo/MoveToInstanceExit`. **Batch-4 gotchas:** `(byte) -29` negative
+heading → C# needs `unchecked((byte)-29)` (CS0221 otherwise; same convention as LinkgateFoundry); `ScheduledTask.IsDone()`
+is a **method** not a property; `schedule(r, 1, TimeUnit.MINUTES)` → `Schedule(r, 60000L)`; Java `synchronized` methods
+→ per-method `private readonly object xLock = new(); lock(xLock){...}`; `Set<Integer> + ConcurrentHashMap.add()` →
+`ConcurrentDictionary<int,byte>` + `TryAdd(k,0)`; `AtomicInteger stage` → `int` + `Interlocked.Increment` /
+`Volatile.Read`. So TheShugoEmperorsVault was actually NOT a heavy-subsystem defer — its scoreboard/score-writer
+pillar was already in place; it was just a large (574L) mechanical port.
+
+**Remaining 4 = the heavy-defers:** ShugoImperialTomb (1329), StonespearReach (925), EternalBastion (867),
+DrakenspireDepths (593). Recommend **DrakenspireDepths (593)** next — smallest remaining; verify its score/AP surface
+the same way (grep the ScoreWriter + InstanceScore subtype + any SM strings) before porting; it may likewise be a
+false-heavy-defer if its scoreboard pillar is pre-ported.
+
 ## CAPSTONE FIDELITY RE-SURVEY — 2026-06-16 (commit e3e1b1184)
 
 Final comprehensive read-only sweep of the whole src tree across the 6 slop/silent-gap categories. Two real
