@@ -2,6 +2,48 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## EMPIRICAL — DB-backed full-boot smoke RUN against the live MySQL container (2026-06-16)
+
+The prior read-only static analysis (sections below) is now CONFIRMED AT RUNTIME. New opt-in env-gated test
+`GameServerBootstrapTests.GameServerBootstrap_DbBackedFullBoot_RunsRealStartAsyncAgainstLiveMySql` (early-returns
+unless `AION_GAMESERVER_DB_INTEGRATION=1`, mirroring SystemMailRepositoryDatabaseIntegrationTests' DatabaseFactory/
+schema setup): points DatabaseFactory at 3307/aion_gs (root/aion), applies the real `game-server/sql/aion_gs.sql`
+schema, loads the REAL DataManager via `DataManager.LoadAsync(repoRoot)` (147 MB cache + game-server/data), inits
+AIEngine/ZoneService/GeoService (the spawn-critical engines, as the spawn-backed test does), and runs the FULL
+`GameServerBootstrapService.StartAsync` via a pass-through `IStaticDataLoader` + the real `MySqlUsedIdRepository`.
+
+### RESULT: THROWS — at SpawnEngine.SpawnAll() -> HousingService.SpawnHouses() -> World.StoreObject, the documented
+Java-latent house-twin `DuplicateAionObjectException` (AggregateException out of the parallel ForEachParalllel):
+- **Heiron (mapId 210040000)**: House `HOUSE_6001` objectId **130885** re-spawned into a 2nd twin instance.
+- **Beluslan (mapId 220040000)**: House `HOUSE_7001` objectId **152343** re-spawned into a 2nd twin instance.
+These are EXACTLY the maps/mechanism the read-only analysis predicted (beginner_twin_count=3 => 4 instances; 9
+address-cached Houses each; instance #1 spawns clean, instance #2 collides on the cached House objectId). Faithful
+Java behavior — NO un-faithful guard added.
+
+### #2 Housing no-DB deferral is EMPIRICALLY LIFTED. With the live (empty) players table, `PlayerDAO.GetUsedIDs()`
+returned `int[0]` (not null), so the HousingService ctor's `RevokeOwnershipOfDeletedPlayers` did NOT throw
+ArgumentNullException — the boot reached deep into SpawnAll and HousingService loaded + began SpawnHouses cleanly.
+This proves the ArgumentNullException deferral was purely a no-DB artifact, NOT a port defect. The HousingService
+`GetInstance()` block in StartAsync STAYS commented out anyway, because (a) enabling it does not change the SpawnAll
+house-twin boundary, and (b) the no-DB bootstrap fixture (empty WORLD_MAPS_DATA => SpawnAll iterates zero maps =>
+HousingService never reached) must stay green. The deferral comment in GameServerBootstrapService.cs:152-175 was
+updated to record this empirical finding.
+
+### Test disposition (faithful, not faked): the test captures StartAsync's outcome and, on throw, asserts the
+flattened exception chain contains the `DuplicateAionObjectException` (the documented house-twin boundary) — NOT an
+unrelated DAO/NRE regression. If StartAsync ever boots clean (e.g. seeded non-twin world_maps), the test asserts
+IsStarted + world populated + StopAsync. Green either way; faithfully asserts the documented-throw boundary today.
+
+### Genuine remaining frontier (post-empirical): the in-memory + DB-ctor floors are cleared. What remains is purely
+environment/spawn-harness gated, NOT porting gaps:
+1. **Whole-world clean SpawnAll** requires either seeding a non-twin world_maps subset OR mirroring the faithful
+   house-twin throw — there is NOTHING to fix (Java throws identically). To exercise SpawnAll past housing in a
+   single-map deterministic way, the spawn-backed test (SpawnObject per Sanctum template) already does this green.
+2. **#1 SiegeService.initSieges() + #5 PvpMapService.init()** — heavy SPAWNS_DATA/world-map harness needs (siege
+   boss spawns, world map 301220000), NOT DB-gated. The medium-effort spawn-data-backed harness scoped below.
+3. **Front-A real client -> enter-world** (memory three-server-stack-boots): needs the running server process +
+   populated DB, same class of environment-gated work, not more porting.
+
 ## RESOLVED — house-twin-spawn question: VERDICT (c) GENUINE JAVA LATENT BUG, C# mirrors faithfully, NO CODE CHANGE (read-only analysis, 2026-06-16)
 
 QUESTION: full-world SpawnEngine.SpawnAll re-spawns the same address-cached House objectId into each of a
