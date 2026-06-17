@@ -49,10 +49,44 @@ environment/spawn-harness gated, NOT porting gaps:
 1. **Whole-world clean SpawnAll** requires either seeding a non-twin world_maps subset OR mirroring the faithful
    house-twin throw — there is NOTHING to fix (Java throws identically). To exercise SpawnAll past housing in a
    single-map deterministic way, the spawn-backed test (SpawnObject per Sanctum template) already does this green.
-2. **#1 SiegeService.initSieges() + #5 PvpMapService.init()** — heavy SPAWNS_DATA/world-map harness needs (siege
-   boss spawns, world map 301220000), NOT DB-gated. The medium-effort spawn-data-backed harness scoped below.
+2. **#1 SiegeService.initSieges() + #5 PvpMapService.init()** — RESOLVED 2026-06-16 (see top section below).
+   Both now exercised+asserted in the DB-backed full-boot test and proven clean against real data; faithfully
+   kept OUT of the always-on minimal-fixture StartAsync path (Java does not guard for empty data). One real
+   port defect fixed en route (null CronExpression default). Boot tail is now CLOSED.
 3. **Front-A real client -> enter-world** (memory three-server-stack-boots): needs the running server process +
-   populated DB, same class of environment-gated work, not more porting.
+   populated DB, same class of environment-gated work, not more porting. THIS IS NOW THE SOLE REMAINING FRONTIER.
+
+## RESOLVED — boot tail CLOSED: SiegeService.initSieges() + PvpMapService.init() wired faithfully DB-gated (2026-06-16)
+
+The two final deferred GameServer.main wires are now closed.
+
+### Java guard analysis (source of truth)
+- **SiegeService.initSieges()** (SiegeService.java:99-101): `if (!isInitialized.compareAndSet(false,true) ||
+  !SiegeConfig.SIEGE_ENABLED) return;`. SIEGE_ENABLED defaults **true** (siege.properties
+  `gameserver.siege.enable = true`), so the guard does NOT no-op — the full body runs and REQUIRES populated
+  SIEGE_LOCATION_DATA. updateFortressNextState() does `getSiegeLocation(id).setNextState(...)` with NO null guard.
+- **PvpMapService.init()** (PvpMapService.java:27-30): NO guard at all — not even PVP_MAP_ENABLED (which defaults
+  false) is checked. Unconditionally calls `InstanceService.getNextAvailableInstance(301220000, ...)` which
+  REQUIRES world map 301220000 to exist. So it runs always and needs real WORLD_MAPS_DATA.
+
+### Disposition: both kept OUT of the always-on StartAsync, exercised+asserted in the DB-backed test (faithful)
+Neither Java path guards for empty/disabled data, so wiring them unconditionally in the StartAsync used by the
+minimal no-DB fixture (empty SIEGE_LOCATION_DATA / empty WORLD_MAPS_DATA) would NRE the 9/9 bootstrap gate. The
+HARD RULE forbids inventing a C# guard Java lacks. Faithful resolution: exercise+assert them in
+`GameServerBootstrap_DbBackedFullBoot_*` (real data) right after the clean StartAsync, with CWD pinned to
+game-server so siege_schedule.xml's relative path resolves. Both now run CLEAN against live data; test asserts no
+throw + PvpMapService handler registered (GetParticipantsSize()==0 live-handler path). The deferral comments in
+GameServerBootstrapService.cs were rewritten to "FAITHFUL DB-GATED" with the line-ref evidence.
+
+### Real port defect surfaced + fixed (1:1): null CronExpression default
+PvpMapService.Init() -> PvpMapHandler.OnInstanceCreate() -> StartRandomBossTask() schedules off
+`CustomConfig.PVP_MAP_RANDOM_BOSS_SCHEDULE`, which was left **null** in C# (CustomConfig.cs) — so
+CronService.Schedule NRE'd on `cronExpression.CronExpressionString`. Java declares it with @Property defaultValue
+`"0 30 14,18,21 ? * *"` (CustomConfig.java:264). Fixed faithfully by initializing the field inline via
+`CronExpressions.GetOrCreate("0 30 14,18,21 ? * *")` — the same default-init pattern AutoGroupConfig uses for its
+CronExpression[] fields. SiegeService.InitSieges() itself needed no fix (ran clean against real data first try).
+
+### Green gate after the change: build 0, Golden 167/167, Bootstrap 9/9 (minimal stays green), RealStaticDataLoad 1/1, DbBackedFullBoot 1/1.
 
 ## RESOLVED — house-twin-spawn question: VERDICT (c) GENUINE JAVA LATENT BUG, C# mirrors faithfully, NO CODE CHANGE (read-only analysis, 2026-06-16)
 
