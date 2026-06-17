@@ -2,6 +2,28 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## Sm* DUPLICATE-PACKET RETIREMENT — BATCH 10: 6 more survivors retired (2026-06-17, 2 commits rrfarmer). 23 -> 17 remaining.
+
+Production faithful repoints (byte-verified WriteImpl==WritePayload, opcodes confirmed in ServerPacketsOpcodes.cs):
+- **SmAbyssRankUpdate** (1 consumer, AbyssPointsService) -> `new SM_ABYSS_RANK_UPDATE(0, player)` (player is a faithful Player; action-0 path writes `player.GetAbyssRank().GetRank().GetId()` == the precomputed Sm* value). Also retyped the orphan plan-DTO field `RankUpdatePacket` to `SM_ABYSS_RANK_UPDATE?` (never read).
+- **SmIconInfo** (2, Legion.cs) -> `SM_ICON_INFO(int,bool)` — identical ctor + WriteImpl.
+- **SmShowBrand** (2, TemporaryPlayerTeam.cs) -> `SM_SHOW_BRAND(int,int)` + `SM_SHOW_BRAND(IDictionary<int,int>)` (ConcurrentDictionary boxes to IDictionary). Identical.
+- **SmTitleInfo** (5, NpcFactions.cs + TitleList.cs) -> `SM_TITLE_INFO` — used ctors `(int)`/`(Player,int)`/`(bool)`/`(Player,bool)`/`(int,int)` all present + byte-identical; the action-0 `IReadOnlyList<PlayerTitle>` ctor was unused.
+- **SmMotion** (5, MotionList.cs + AnimationAddAction.cs) -> `SM_MOTION` — the consuming MotionList is the FAITHFUL one using faithful `Motion`/`Dictionary<int,Motion>`/`GetActiveMotions():IDictionary<int,Motion>`, so the action-2/5/6/7 ctors line up exactly (PlayerMotion proxy was only on the Sm* side).
+- **SmQuestionWindow** (6, Equipment.Part4/NpcFactions/CubeExpandService + QuestionResponseRegistryTests) -> `SM_QUESTION_WINDOW`. Faithful ctor is `params object[]` (vs Sm* `params string[]`); consumers pass strings (l10n / ToString()) which box cleanly and WriteImpl calls `.ToString()` -> byte-identical. Reworked PascalCase alias consts `WarehouseExpandWarning`/`UnionInviteMe`/`BuddyListAddBuddyRequest` repointed to the FAITHFUL Java names `STR_WAREHOUSE_EXPAND_WARNING`/`STR_MSGBOX_UNION_INVITE_ME`/`STR_BUDDYLIST_ADD_BUDDY_REQUEST` (verified against Java SM_QUESTION_WINDOW.java). The registry test uses these only as opaque question-id ints (behavior test, not a byte test) — clean repoint, no orphan.
+
+Build0/golden196 byte-exact/full475/bootstrap9 each batch. No slop tests deleted this batch (all deletions were production-consumer packets).
+
+**REMAINING 17 — DEFERRED with exact reason (data-model seam or no-twin / heavy webs):**
+- **SmAbyssRank** (2 prod: AbyssPointsService/GloryPointsService) — DEFER. Consumers pass a reworked `PlayerAbyssRank.FromAbyssRank(rank)` PROJECTION record; faithful `SM_ABYSS_RANK(Player)` reads `player.GetAbyssRank()` directly. Crosses the reworked-projection-vs-faithful-AbyssRank data-model seam (would need the AbyssPointsService plan-service un-reworked). Not a clean repoint.
+- **SmAutoGroup** (3 calls in PeriodicInstanceRegistrationService) — DEFER. Consumer passes a reworked `AutoGroupSummary`; faithful `SM_AUTO_GROUP(int maskId,...)` re-derives mapId/messageId/titleId from `AutoGroupTypeExtensions.GetAGTByMaskId(maskId)` (the faithful AutoGroupType static table). Reworked-Summary-vs-faithful-table seam.
+- **SmLegionEdit** (1 prod static-factory AbyssPointsService.Contribution + dedicated test) — DEFER. Faithful `SM_LEGION_EDIT` has NO by-value contribution ctor; type 0x03 reads `legion.GetContributionPoints()` from a live `Legion`. The reworked `.Contribution(long)` precomputes the value. Value-vs-Legion seam.
+- **SmFindGroup / SmLegionDominionRank / SmLegionHistory** (test-only, dedicated *Tests files) — DEFER. Each uses flat snapshot records (`FindGroup*Snapshot` / `(int,legionId,participants)` / `LegionHistoryEntryRow`) while the faithful twins take live graph (`FindGroupEntry`/`Player`, `LegionDominionLocation`+`Legion`, `List<LegionHistoryEntry>`+enum Type). NO golden Java-oracle InlineData covers these opcodes, so the dedicated tests are the ONLY byte-coverage — deleting would orphan coverage; migrating needs building the live graph (data-model big-bang).
+- **SmPet / SmPetEmote** (test-only, PetJavaVectorArtifactReaderTests) — DEFER. Faithful `SM_PET` spawn ctors take a live `Pet`/`PetCommonData` and `SM_PET_EMOTE` takes a live `Pet`; the artifact test reconstructs from flat decoded fields (`SmPetSpawnSnapshot`/`SmPetEmoteSnapshot`) with no live Pet graph. The test is a REAL Java-captured-vector byte oracle (BodyHex/CanonicalPayloadHex), not slop — cannot orphan; needs the live-Pet graph.
+- **SmGameTime** — DEFER (singleton-vs-DI seam; faithful SM_GAME_TIME parameterless reads GameTimeService.GetInstance() singleton, reworked is DI-fed).
+- **SmKey / SmPong** — DEFER (GameCryptTests crypt-harness change; faithful SM_KEY/SM_PONG have no SerializeFrame, only Write(AionConnection)+Encrypt needing a live/uninitialized AionConnection).
+- **HEAVY WEBS (LAST):** SmDialogWindow / SmSystemMessage / SmItemUsageAnimation / SmAttackStatus(+SmAttackStatusEnums.cs enum file) / SmEmotion.
+
 ## Sm* DUPLICATE-PACKET RETIREMENT — BATCH 8-9: 14 more survivors retired (2026-06-17, 2 commits rrfarmer). 37 -> 23 remaining.
 
 Batch8 (9): repoint+delete the 9 lowest-consumer Sm* to faithful SM_* twins, byte-verified identical:
