@@ -68,13 +68,30 @@ Recipe (proven): add `capture(...)` to the Java `Golden*FixtureGeneratorTest`, r
 
 ---
 
-## B. Explicit `NotImplementedException` / `NotSupportedException` — triage all 14 files
+## B. Explicit `NotSupportedException` / `Unsupported*` throw sites — TRIAGE COMPLETE (2026-06-17)
 
-Each is either a faithful guard (matches a Java `abstract`/`throw`/unsupported-op — keep) or a real unported branch (port 1:1). Read each against Java; port the real ones.
+**CORRECTION:** there are ZERO `NotImplementedException` in src. The real stubs are `NotSupportedException` (C# idiom for Java's `UnsupportedOperationException`) + the custom `UnsupportedCollisionException` type. 14 throw-site files. **All 14 verified FAITHFUL GUARDS against their Java source — 0 real porting gaps, 0 fidelity bugs.** Each C# throw matches a Java `UnsupportedOperationException`/`CloneNotSupportedException` with identical message + condition. Breadcrumbed in place (comment-only); build 0, golden 221/221.
 
-- **Likely REAL gaps (port 1:1):** `Model/Team/Legion/LegionWarehouse.cs`, `Model/Items/Storage/LegionStorageProxy.cs` (legion warehouse storage ops).
-- **Likely FAITHFUL guards (verify vs Java, then leave + breadcrumb):** `GeoEngine/Collision/UnsupportedCollisionException.cs` (it IS a Java exception type), `GeoEngine/Scene/Node.cs`+`DespawnableNode.cs`, `GeoEngine/Math/FastMath.cs` (unsupported-op throw), `Instance/Handlers/GeneralInstanceHandler.cs`+`Services/Instance/InstanceService.cs` (abstract default-throw), `SkillEngine/Effect/EffectTemplate.cs`, `Network/Aion/Iteminfo/ItemInfoBlob.cs`, `Services/SiegeService.cs`, `Commons/Network/AcceptDispatcherImpl.cs`, `Taskmanager/Tasks/MoveTaskManager.cs`, `Handlers/Quest/pandaemonium/_2900NoEscapingDestiny.cs`.
-- Action: 1 tick to read+classify all 14; port the (likely 2–4) real ones depth-first, all-green-or-revert.
+Per-file verdict (all FAITHFUL-GUARD, [Java path]::method throws UnsupportedOperationException unless noted):
+- `Model/Team/Legion/LegionWarehouse.cs` — `model/team/legion/LegionWarehouse.java`: ~22 player-storage mutators throw "LWH should be used behind proxy" / SetOwner "LWH doesnt have owner" / SetLimit "Slot limit is controlled by the expansion level…". The proxy IS the impl (STRONG PRIOR confirmed).
+- `Model/Items/Storage/LegionStorageProxy.cs` — `model/items/storage/LegionStorageProxy.java`: quest-status decrease overloads throw "Quests should not update LWH!"; SetOwner "LWH doesnt have owner".
+- `GeoEngine/Collision/UnsupportedCollisionException.cs` — `geoEngine/collision/UnsupportedCollisionException.java` (jMonkeyEngine/Kirill): IS the Java exception type (extends UnsupportedOperationException → C# NotSupportedException).
+- `GeoEngine/Math/FastMath.cs` — `geoEngine/math/FastMath.java::convertFloatToHalf` throws "NaN to half conversion not supported!".
+- `GeoEngine/Scene/Node.cs` — `geoEngine/scene/Node.java::clone` throws CloneNotSupportedException (non-Geometry/Node child).
+- `GeoEngine/Scene/DespawnableNode.cs` — `geoEngine/scene/DespawnableNode.java` copy-ctor + clone throw CloneNotSupportedException (2 sites).
+- `GeoEngine/Bounding/BoundingBox.cs` — `geoEngine/bounding/BoundingBox.java::collideWith` throws UnsupportedCollisionException("With: "+simpleName).
+- `GeoEngine/Collision/Bih/BIHTree.cs` — `geoEngine/collision/bih/BIHTree.java::collideWith` throws UnsupportedCollisionException() (no-arg).
+- `GeoEngine/Math/Ray.cs` — `geoEngine/math/Ray.java::collideWith` throws UnsupportedCollisionException() (no-arg).
+- `Commons/Network/AcceptDispatcherImpl.cs` — `commons/.../network/AcceptDispatcherImpl.java::closeConnection` throws "This method should never be called!".
+- `Instance/Handlers/GeneralInstanceHandler.cs` — `instance/handlers/GeneralInstanceHandler.java::portToStartPosition` throws UnsupportedOperationException (default base impl).
+- `Services/Instance/InstanceService.cs` — `services/instance/InstanceService.java::getNextAvailableInstance` throws "Invalid call for next available instance  of …" (double-space preserved 1:1).
+- `Services/SiegeService.cs` — `services/SiegeService.java` cron transform: "…Preparation over midnight not supported." + catch(NumberFormatException→FormatException) rethrow.
+- `Network/Aion/Iteminfo/ItemInfoBlob.cs` — `network/aion/iteminfo/ItemInfoBlob.java::newBlobEntry` throws UnsupportedOperationException for STAT_BONUSES.
+- `SkillEngine/Effect/EffectTemplate.cs` — `skillengine/effect/EffectTemplate.java::calculateHate` default-arm throws "Unhandled effect type … for hate calculation".
+
+Note: `Taskmanager/Tasks/MoveTaskManager.cs` (listed earlier as a candidate) is NOT a throw site — it passes `new NotSupportedException()` as a log argument to LogWarning, a faithful mirror of the Java log call. No action.
+
+**§B remaining to triage: 0.** B is a documentation/breadcrumb pass — no real gaps existed (the backlog's "Legion warehouse" suspicion was wrong; it's the canonical proxy-guard pattern).
 
 ---
 
@@ -118,7 +135,7 @@ Reconcile `datamanager-data-placeholders` (noted QUEST_DATA + 4 holders once wir
 ## Recommended order (no client; skip nothing)
 
 1. **A1 integration harness + golden the ~103 live-object packets** — the main provable-parity vein; build the harness once, then grind packets (also re-confirms every live-object writer byte-exact, likely surfacing any remaining latent bugs as the 3 already found did).
-2. **B triage + port the real NotImplemented (Legion warehouse) gaps** — 1–2 ticks.
+2. ~~B triage~~ **DONE (2026-06-17): all 14 NotSupported throw sites verified FAITHFUL GUARDS vs Java — 0 real gaps, 0 bugs, breadcrumbed.**
 3. **C1 config framework** — systemic; restores `.properties` override fidelity (a hard contract).
 4. **G verify holders; D editor-save TODOs; E hygiene + audit-tool** — small, interleave.
 5. **C2/C3 TODO triage** — produce the honest faithful-vs-real split, resolve the reals.
