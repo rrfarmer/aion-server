@@ -2,6 +2,20 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## ✅ GameServerPacket BASE-UNIFICATION — COMPLETE (BATCH 21, 2026-06-17, 1 commit c7067d74d rrfarmer). PACKET-FRONT OBJECT-SPINE BIG-BANG DONE.
+
+**SmPet + SmPetEmote RETIRED; `GameServerPacket` base + `SerializeFrame`/`WritePayload` DROPPED. grep `: GameServerPacket` in `src/Aion.GameServer/Network/Aion/ServerPackets` = 0.** Every GS->client packet now extends faithful `AionServerPacket : BaseServerPacket`; the dual-serialization-path slop debt is fully retired (the live client wire was ALWAYS faithful-only — `GameServerPacket.SerializeFrame` was a C#-test-only invention, never on the wire).
+
+**The deferred "Pet data-model big-bang" turned out trivial — there was NO real Java pet byte oracle.** `PetJavaVectorArtifactReaderTests.cs` is a SCHEMA/GUARD test, not a byte oracle: its only artifact is an inline design-vector JSON with ALL hex fields (`bodyHex`/`canonicalPayloadHex`/`wireFrameHex`) = `null`, and `parity-artifacts/known-list-pet/java/` does not exist on disk (the disk-scan test early-returns "Needs Verification"). The two byte-compare methods iterate `Packets.Where(hex != null)` = EMPTY, so `CreateCSharpPacketFromArtifact` (the SOLE constructor of the reworked SmPet/SmPetEmote, via `SerializeFrame`) was DEAD CODE that never asserted a byte. The long-planned uninitialized-Pet + MoveController + PetCommonData/template/master fixture was NEVER NEEDED — nothing to byte-verify against, and faking bytes is forbidden.
+
+**Migration (faithful, no faked bytes):** the test's only load-bearing coupling was `SmPet.PacketOpCode` (101) / `SmPetEmote.PacketOpCode` (187); replaced with local `const int SmPetOpCode = 101 / SmPetEmoteOpCode = 187` (canonical NCSoft opcodes from `ServerPacketsOpcodes.AddPacketOpcode(101, typeof(SM_PET))` / `(187, typeof(SM_PET_EMOTE))`, identical values), kept the schema/semantics guard, deleted the dead `AssertGenerated*WhenPresent` / `CreateCSharpPacketFromArtifact` / `SerializeUnencryptedBody` / `SerializeCanonicalPayload` / `NormalizeHex` / `Required*` machinery (the last `SerializeFrame` callers). A doc-comment now points future real-oracle work at the `GoldenPacketFixtureTests.CaptureWriteImplPayload` path with an uninitialized-Pet fixture. Deleted `SmPet.cs` (+9 `SmPet*Snapshot` records) + `SmPetEmote.cs` (+`SmPetEmoteSnapshot`) + `GameServerPacket.cs`. 0 production consumers (grep-confirmed). The faithful `SM_PET`/`SM_PET_EMOTE : AionServerPacket` live 1:1 ports unchanged.
+
+**MASKING WARNING HEEDED:** `build-server shutdown` + `rm -rf` GameServer+Tests obj/bin, clean full-solution rebuild = 0 errors GENUINE (heterogeneous, not CS0115-homogeneous; test project also force-rebuilt `--no-incremental` = 0). golden 196/196 byte-exact 0-skipped / full 459/0 / bootstrap 9/9. NOTE: ChatServer/LoginServer `GameServerPacket`/`GsServerPacket`/`SerializeFrame` are SEPARATE base families on their own wires (different namespaces) — out of scope.
+
+**NEXT VEIN:** the 8 reworked holder projections (HousingTemplateTable / PetTemplateTable / RecipeTemplateTable / StorageExpansionTemplateTable / TitleTemplateTable / WalkerTemplateTable / WorldMapSummary / PlayerBrokerSettlementSummary) — separate StaticData-projection cleanup; OR faithful base-unification cleanup of residual reworked layers.
+
+---
+
 ## GameServerPacket -> AionServerPacket BASE-UNIFICATION — BATCH 20: SmLegionDominionRank + SmLegionHistory FULLY RETIRED (2026-06-17, 1 commit rrfarmer). 4 -> 2 GameServerPacket survivors.
 
 Both reworked packets were **dead flat-snapshot slop** — confirmed by grep: each was referenced ONLY in its own `.cs` + its dedicated `*Tests.cs` + docs. The faithful `SM_LEGION_DOMINION_RANK.cs` / `SM_LEGION_HISTORY.cs` ALREADY EXIST as 1:1 Java ports and ARE the live production path:
