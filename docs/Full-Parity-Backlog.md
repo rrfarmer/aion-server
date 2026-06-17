@@ -33,10 +33,10 @@ Triage key: **T1** = TIER-1 runtime-golden reachable now (writeImpl is `con`-nul
 - `SM_MACRO_LIST` — playerObjectId + `List<Macros.Macro>` (public record) + clearList; `writeH(-size)`. **[DONE batch 10]**
 - `SM_QUEST_COMPLETED_LIST` — updateMode + `List<QuestState>` (constructible ctor). **[DONE batch 10]**
 - `SM_FIRST_SHOW_DECOMPOSABLE` / `SM_SECONDARY_SHOW_DECOMPOSABLE` — objectId + `Collection<ResultedItem>` (XML DTO; reflect-set itemId/minCount both sides). **T1, next batch.**
-- `SM_ABYSS_RANKING_LEGIONS` / `SM_ABYSS_RANKING_PLAYERS` — `List<RankingListLegion/Player>` DTO ctor. **T1, next batch.**
-- `SM_GM_SHOW_PLAYER_SKILLS` — `List<PlayerSkillEntry>` DTO. **T1, next batch.**
-- `SM_GM_SHOW_LEGION_MEMBERLIST` — `List<LegionMember>` DTO. **T1, next batch (LegionMember constructibility TBD).**
-- `SM_TOWNS_LIST` — `Map<Integer,Town>`; Town DTO. **T1, next batch.**
+- `SM_ABYSS_RANKING_LEGIONS` / `SM_ABYSS_RANKING_PLAYERS` — `List<RankingListLegion/Player>` DTO ctor. **[DONE 2026-06-17 batch 11]** (records con-null-safe; byte-exact first capture.)
+- `SM_GM_SHOW_PLAYER_SKILLS` — `List<PlayerSkillEntry>` DTO. **[DONE batch 11]** (PlayerSkillEntry(skillId,skillLvl,skillType,state) ctor; only non-normal entries used so getFlag()'s System-time path never fires -> deterministic.)
+- `SM_GM_SHOW_LEGION_MEMBERLIST` — `List<LegionMember>` DTO. **[AUDITED 2026-06-17 batch 11 -> demoted T2]** writeLegionMember calls `PlayerService.getOrLoadPlayerCommonData` (live singleton/DB) -> audit-only breadcrumb, 1:1 confirmed.
+- `SM_TOWNS_LIST` — `Map<Integer,Town>`; Town DTO. **[AUDITED 2026-06-17 batch 11 -> demoted T2]** Town ctor (faithful 1:1) runs `spawnNewObjects()` (DataManager+SpawnEngine) + `GeoService.updateTown` -> not bounded-constructible -> audit-only breadcrumb, 1:1 confirmed.
 - `SM_MACRO_LIST` (paged) covered above.
 
 **T1-seam — reachable via an existing heavy seam (item/ItemInfoBlob, real-Npc, DataManager-holder), bounded:**

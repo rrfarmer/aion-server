@@ -936,6 +936,80 @@ public class GoldenPacketFixtureGeneratorTest {
 		return ri;
 	}
 
+	/**
+	 * Batch 11: con-null-safe scalar / simple-DTO list packets. Own @Test for isolated regeneration (no shared-DataSource
+	 * auto-commit flake). writeImpl reads ONLY ctor-stored scalars / strings / plain record-DTOs — no con, no DataManager,
+	 * no singletons, no time:
+	 *   SM_ABYSS_RANKING_LEGIONS (List&lt;RankingListLegion&gt; record), SM_ABYSS_RANKING_PLAYERS (List&lt;RankingListPlayer&gt; record),
+	 *   SM_GM_SHOW_PLAYER_SKILLS (List&lt;PlayerSkillEntry&gt; via SkillEntryWriter; only non-normal entries kept so getFlag()'s
+	 *   System time path is never hit -> deterministic).
+	 *   mvn -q -pl game-server -am test -Dtest=GoldenPacketFixtureGeneratorTest#generateGoldenScalarBatch11Fixtures -Dmaven.test.skip=false -Dsurefire.failIfNoSpecifiedTests=false
+	 */
+	@Test
+	public void generateGoldenScalarBatch11Fixtures() throws Exception {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		// SM_ABYSS_RANKING_LEGIONS: writeD(raceId) writeD(updateTime) writeD(clear?1:0)x2 writeH(size) + per-legion
+		// writeD(position) writeD(oldPosition) writeD(id) writeD(raceId) writeC(level) writeD(memberCount) writeQ(cp) writeS(name,40).
+		// RankingListLegion(position, oldPosition, id, name, race, level, contributionPoints, memberCount) record; race unused in row (packet uses ctor race).
+		List<Case> smAbyssLegions = new ArrayList<>();
+		java.util.List<com.aionemu.gameserver.dao.AbyssRankDAO.RankingListLegion> legions1 = new ArrayList<>();
+		legions1.add(new com.aionemu.gameserver.dao.AbyssRankDAO.RankingListLegion(
+			1, 2, 70001, "TopLegion", com.aionemu.gameserver.model.Race.ELYOS, 8, 123456789L, 47));
+		legions1.add(new com.aionemu.gameserver.dao.AbyssRankDAO.RankingListLegion(
+			2, 1, 70002, "RunnerUp", com.aionemu.gameserver.model.Race.ELYOS, 5, 9999L, 13));
+		smAbyssLegions.add(new Case("twoLegionsElyos",
+			"{\"updateTime\":1700000000,\"race\":\"ELYOS\",\"clear\":true,\"legions\":[[1,2,70001,8,47,123456789,\"TopLegion\"],[2,1,70002,5,13,9999,\"RunnerUp\"]]}",
+			capture(new SM_ABYSS_RANKING_LEGIONS(1700000000, legions1, com.aionemu.gameserver.model.Race.ELYOS))));
+		smAbyssLegions.add(new Case("emptyAsmodian",
+			"{\"updateTime\":1700000123,\"race\":\"ASMODIANS\",\"clear\":false,\"legions\":[]}",
+			capture(new SM_ABYSS_RANKING_LEGIONS(1700000123, com.aionemu.gameserver.model.Race.ASMODIANS))));
+		writeFixture(outDir.resolve("SM_ABYSS_RANKING_LEGIONS.json"), "SM_ABYSS_RANKING_LEGIONS", null, smAbyssLegions);
+
+		// SM_ABYSS_RANKING_PLAYERS: writeD(raceId) writeD(lastUpdate) writeD(page) writeD(end?0x7F:0) writeH(size) + per-player
+		// writeD(position) writeD(abyssRank) writeD(oldPosition) writeD(id) writeD(raceId) writeD(classId) writeC(genderId)
+		// writeC(0)x3 writeQ(ap) writeD(gp) writeH(level) writeS(name,CHARNAME_MAX_LENGTH) writeS(legionName,42).
+		// RankingListPlayer(position, oldPosition, id, name, race, level, abyssRank, ap, gp, title, playerClass, gender, legionName).
+		List<Case> smAbyssPlayers = new ArrayList<>();
+		java.util.List<com.aionemu.gameserver.dao.AbyssRankDAO.RankingListPlayer> players1 = new ArrayList<>();
+		players1.add(new com.aionemu.gameserver.dao.AbyssRankDAO.RankingListPlayer(
+			1, 3, 700001, "AceRanger", com.aionemu.gameserver.model.Race.ELYOS, 65, 9, 2500000, 18000, 0,
+			com.aionemu.gameserver.model.PlayerClass.RANGER, com.aionemu.gameserver.model.Gender.FEMALE, "AceLegion"));
+		players1.add(new com.aionemu.gameserver.dao.AbyssRankDAO.RankingListPlayer(
+			2, 1, 700002, "Gladi", com.aionemu.gameserver.model.Race.ELYOS, 60, 8, 1000000, 5000, 0,
+			com.aionemu.gameserver.model.PlayerClass.GLADIATOR, com.aionemu.gameserver.model.Gender.MALE, ""));
+		smAbyssPlayers.add(new Case("twoPlayersElyosPage0End",
+			"{\"lastUpdate\":1700000000,\"race\":\"ELYOS\",\"page\":0,\"isEndPacket\":true,\"players\":[[1,9,3,700001,5,1,2500000,18000,65,\"AceRanger\",\"AceLegion\"],[2,8,1,700002,1,0,1000000,5000,60,\"Gladi\",\"\"]]}",
+			capture(new SM_ABYSS_RANKING_PLAYERS(1700000000, players1, com.aionemu.gameserver.model.Race.ELYOS, 0, true))));
+		smAbyssPlayers.add(new Case("emptyAsmodian",
+			"{\"lastUpdate\":1700000999,\"race\":\"ASMODIANS\",\"page\":0,\"isEndPacket\":false,\"players\":[]}",
+			capture(new SM_ABYSS_RANKING_PLAYERS(1700000999, com.aionemu.gameserver.model.Race.ASMODIANS))));
+		writeFixture(outDir.resolve("SM_ABYSS_RANKING_PLAYERS.json"), "SM_ABYSS_RANKING_PLAYERS", null, smAbyssPlayers);
+
+		// SM_GM_SHOW_PLAYER_SKILLS: writeH(size) + per-entry SkillEntryWriter.writeSkillEntry:
+		// writeH(skillId) writeH(isNormalSkill?1:skillLevel) writeC(0) writeC(professionSkillBarSize)
+		// writeD(isProfessionSkill?professionFlag:flag) writeC(skillType).
+		// All entries are non-normal (stigma / linked-stigma / crafting) so getFlag()'s System.currentTimeMillis path is
+		// never reached -> deterministic. Crafting professionFlag = currentXp (0 default). PlayerSkillEntry(skillId,skillLvl,skillType,state).
+		List<Case> smGmSkills = new ArrayList<>();
+		java.util.List<com.aionemu.gameserver.model.skill.PlayerSkillEntry> skills1 = new ArrayList<>();
+		// stigma: skillType=1, skillId<30000 -> isNormalSkill=false, isProfessionSkill=false, flag=getFlag()=0, barSize=0
+		skills1.add(new com.aionemu.gameserver.model.skill.PlayerSkillEntry(11078, 5, 1, com.aionemu.gameserver.model.gameobjects.Persistable.PersistentState.NOACTION));
+		// linked stigma: skillType=3 -> flag=0, barSize=0
+		skills1.add(new com.aionemu.gameserver.model.skill.PlayerSkillEntry(12345, 10, 3, com.aionemu.gameserver.model.gameobjects.Persistable.PersistentState.NOACTION));
+		// crafting profession: skillType=0, skillId=40001 (>=30000 -> isNormalSkill=false), isProfessionSkill=true,
+		// professionFlag=currentXp=0, barSize=150/100=1
+		skills1.add(new com.aionemu.gameserver.model.skill.PlayerSkillEntry(40001, 150, 0, com.aionemu.gameserver.model.gameobjects.Persistable.PersistentState.NOACTION));
+		smGmSkills.add(new Case("stigmaLinkedCrafting",
+			"{\"skills\":[[11078,5,1],[12345,10,3],[40001,150,0]]}",
+			capture(new SM_GM_SHOW_PLAYER_SKILLS(skills1))));
+		smGmSkills.add(new Case("empty",
+			"{\"skills\":[]}",
+			capture(new SM_GM_SHOW_PLAYER_SKILLS(new ArrayList<>()))));
+		writeFixture(outDir.resolve("SM_GM_SHOW_PLAYER_SKILLS.json"), "SM_GM_SHOW_PLAYER_SKILLS", null, smGmSkills);
+	}
+
 	// Harness Creature for SM_ATTACK: deterministic objectId + life-stats (currentHp / maxHp -> getHpPercentage()).
 	private static com.aionemu.gameserver.model.gameobjects.Creature harnessAttackCreature(int objectId, int maxHp, int currentHp) {
 		return new HarnessAttackCreature(objectId, maxHp, currentHp);
