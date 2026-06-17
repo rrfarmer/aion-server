@@ -103,6 +103,37 @@ SM_TARGET_SELECTED/SM_EMOTION/SM_ATTACK_STATUS). Increment-1 candidates that nee
 (HarnessSummon w/ game-stats), SM_DIE (HarnessPlayer), SM_CUSTOM_SETTINGS Player-ctor / SM_BIND_POINT_INFO Kisk-ctor
 (HarnessKisk w/ WorldPosition — PositionedHarness precedent). Build 0, golden 175/175, suite 462/0, bootstrap 9/9.
 
+## GOLDEN SUITE 176 -> 178 (2026-06-17) — SM_PLAYER_REGION + SM_RENAME via the PROVEN scalar HarnessPlayer (NO new substrate)
+
+Golden'd **SM_PLAYER_REGION** (2 cases: NONE / `ELYSEA_NORTH`) + **SM_RENAME**(player ctor, 1 case) — the FIRST
+Player-reading SM_* family — by **REUSING the already-proven scalar HarnessPlayer seam** in
+`GoldenPlayerInfoFixtureGeneratorTest` (Java `scalarSpec()`/`scalarCase()`/`HarnessPlayer`) + `GoldenPlayerInfoFixtureTests`
+(C# `BuildScalarPlayer()`). **The previous section's "RECOMMENDED NEXT VEIN: minimal PacketHarnessPlayer" was solved the
+EASY way: no new harness type was needed** — the full HarnessPlayer integration seam from
+`GoldenStatsInfoFixtureTests`/`GoldenPlayerInfoFixtureTests` ALREADY runs the real faithful Player base ctor (with a DB-stub
+swallowing the PetList SQLException) and pins objectId + commonData name, which is everything these two writeImpls read.
+Added a new `generateGoldenPlayerZonePacketFixtures` @Test (Java) + `CsharpPlayerZonePacketMatchesJavaGoldenFixture`
+[Theory] (C#).
+
+- **SM_PLAYER_REGION**: writeD(`player.getObjectId()`) + 3x writeC(0) + writeD(`subZone.name().hashCode()`). subZone =
+  `ZoneName.NONE` / `ZoneName.createOrGet("ELYSEA_NORTH")` (immutable upper-cased name, interned both sides). The wire int
+  is Java's `String.hashCode`, reproduced C#-side by SM_PLAYER_REGION.cs's existing `JavaStringHashCode` helper
+  (see [[java-string-hashcode-on-wire]]).
+- **SM_RENAME**(player,oldName): writeD(0) writeD(0) writeD(`getObjectId()`) writeS(oldName) writeS(`getName()`).
+  `getName()` == `getCommonData().getName()` == "Scalarharness" (pinned). No con.
+
+**Byte-exact on FIRST capture, 0 fidelity bugs** (both .cs faithful 1:1). GOTCHA: the `generateGoldenPlayerInfoFixtures`
+family logs `PlayerPetsDAO ... SQLException: harness stub: no database` to the mvn console — these are the EXPECTED
+stub-swallowed DB errors (logged, caught, no-rows), NOT failures; `| tail` of the log shows the alarming stacktrace —
+read the surefire `Tests run: 4, Failures: 0, Errors: 0` summary instead.
+
+**SCALAR-HARNESS PLAYER VEIN now covers:** SM_PLAYER_STANCE/RIDE_ROBOT/PLASTIC_SURGERY/TARGET_UPDATE/ABYSS_RANK_UPDATE/
+ABYSS_RANK/PLAYER_SEARCH/PLAYER_REGION/RENAME. **RECOMMENDED NEXT VEIN:** (1) scan the remaining SM_* for any whose
+writeImpl reads ONLY the scalar HarnessPlayer state (objectId/name/level/race/position/abyssRank/gameStats/lifeStats) — a
+cheap continuation; then (2) the real integration-harness sub-project for the World/instance-reading
+(SM_DIE = `getWorldMapInstance().getInstanceHandler()`), Legion-reading (SM_RENAME-legion), and Summon/Pet/Skill-graph
+readers. Build 0, golden 178, suite 465/0, bootstrap 9/9.
+
 ## GOLDEN SUITE 175 -> 176 (2026-06-17) — SM_ATTACK, last Creature-only reader; existing-harness object vein EXHAUSTED
 
 Golden'd **SM_ATTACK** (1 fixture / 3 cases: normalHit / block / shieldProtect) — the FIRST non-trivial object-reading

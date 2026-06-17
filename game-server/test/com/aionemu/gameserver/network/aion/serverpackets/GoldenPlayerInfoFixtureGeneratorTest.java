@@ -43,6 +43,7 @@ import com.aionemu.gameserver.model.templates.stats.StatsTemplate;
 import com.aionemu.gameserver.network.aion.AionConnection;
 import com.aionemu.gameserver.network.aion.AionServerPacket;
 import com.aionemu.gameserver.world.WorldPosition;
+import com.aionemu.gameserver.world.zone.ZoneName;
 
 /**
  * INTEGRATION golden harness for SM_PLAYER_INFO — the enter-world visible-player definition packet (the single most
@@ -215,6 +216,39 @@ public class GoldenPlayerInfoFixtureGeneratorTest {
 
 		writeFixture(outDir.resolve("SM_PLAYER_SEARCH.json"), "SM_PLAYER_SEARCH", List.of(
 			playerSearchCase("playerSearchSingle")));
+	}
+
+	/**
+	 * Player SM_* packets that read ONLY the scalar HarnessPlayer's objectId/name plus ctor-stored scalars/strings/zone
+	 * names. No DataManager lookups beyond the existing harness, no World/Knownlist/singletons/time/Rnd.
+	 *
+	 * <ul>
+	 * <li>SM_PLAYER_REGION(player, subZone): writeD(player.getObjectId()) + 3x writeC(0) + writeD(subZone.name().hashCode()).
+	 *     subZone is a ZoneName.createOrGet(name) value (immutable upper-cased name); the wire int is the Java String
+	 *     hashCode of that name, which the C# packet reproduces via its JavaStringHashCode helper. Fully deterministic.</li>
+	 * <li>SM_RENAME(player, oldName): writeD(0) + writeD(0) + writeD(player.getObjectId()) + writeS(oldName) +
+	 *     writeS(player.getName()). getName() == getCommonData().getName() (pinned on the scalar spec). No con.</li>
+	 * </ul>
+	 */
+	@Test
+	public void generateGoldenPlayerZonePacketFixtures() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installIntegrationSeam();
+
+		writeFixture(outDir.resolve("SM_PLAYER_REGION.json"), "SM_PLAYER_REGION", List.of(
+			scalarCase("playerRegionNone", scalarSpec(),
+				p -> "{\"objectId\":" + p.getObjectId() + ",\"subZone\":\"NONE\"}",
+				p -> new SM_PLAYER_REGION(p, ZoneName.NONE)),
+			scalarCase("playerRegionNamed", scalarSpec(),
+				p -> "{\"objectId\":" + p.getObjectId() + ",\"subZone\":\"ELYSEA_NORTH\"}",
+				p -> new SM_PLAYER_REGION(p, ZoneName.createOrGet("ELYSEA_NORTH")))));
+
+		writeFixture(outDir.resolve("SM_RENAME.json"), "SM_RENAME", List.of(
+			scalarCase("renamePlayer", scalarSpec(),
+				p -> "{\"playerOrLegionId\":" + p.getObjectId() + ",\"oldName\":\"OldHarnessName\",\"newName\":\"" + p.getName() + "\"}",
+				p -> new SM_RENAME(p, "OldHarnessName"))));
 	}
 
 	/** Fixed AbyssRank scalar pins (identical on both sides), explicit rankingListPosition -> no AbyssRankingCache. */
