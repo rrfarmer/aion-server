@@ -725,6 +725,66 @@ public class GoldenPacketFixtureGeneratorTest {
 			"{\"action\":7,\"frenzyDurationSeconds\":3600}",
 			capture(new SM_UPGRADE_ARCADE(3600))));
 		writeFixture(outDir.resolve("SM_UPGRADE_ARCADE.json"), "SM_UPGRADE_ARCADE", null, smUpgradeArcade);
+
+		// ----- Batch 8: faithful pure value-ctor SM_* packets (writeImpl reads only ctor-stored scalars/strings/bytes) -----
+
+		// SM_GM_BOOKMARK_ADD(name, worldId, x, y, z): writeS(name) writeD(worldId) writeF(x/y/z). Pure.
+		List<Case> smGmBookmarkAdd = new ArrayList<>();
+		smGmBookmarkAdd.add(new Case("bookmark",
+			"{\"name\":\"Teleport Platz\",\"worldId\":120010000,\"x\":230.0,\"y\":250.0,\"z\":290.0}",
+			capture(new SM_GM_BOOKMARK_ADD("Teleport Platz", 120010000, 230.0f, 250.0f, 290.0f))));
+		smGmBookmarkAdd.add(new Case("origin",
+			"{\"name\":\"\",\"worldId\":0,\"x\":0.0,\"y\":0.0,\"z\":0.0}",
+			capture(new SM_GM_BOOKMARK_ADD("", 0, 0.0f, 0.0f, 0.0f))));
+		writeFixture(outDir.resolve("SM_GM_BOOKMARK_ADD.json"), "SM_GM_BOOKMARK_ADD", null, smGmBookmarkAdd);
+
+		// SM_ALLIANCE_READY_CHECK(playerObjectId, statusCode): writeD(playerObjectId) writeC(statusCode). Pure.
+		List<Case> smAllianceReadyCheck = new ArrayList<>();
+		smAllianceReadyCheck.add(new Case("ready",
+			"{\"playerObjectId\":700123,\"statusCode\":1}",
+			capture(new SM_ALLIANCE_READY_CHECK(700123, 1))));
+		smAllianceReadyCheck.add(new Case("notReady",
+			"{\"playerObjectId\":700124,\"statusCode\":0}",
+			capture(new SM_ALLIANCE_READY_CHECK(700124, 0))));
+		writeFixture(outDir.resolve("SM_ALLIANCE_READY_CHECK.json"), "SM_ALLIANCE_READY_CHECK", null, smAllianceReadyCheck);
+
+		// SM_BIND_POINT_INFO(mapId, x, y, z): obelisk ctor -> bindPointType 0, kiskObjId 0.
+		// writeC(0) writeC(1) writeD(mapId) writeF(x/y/z) writeD(0). Pure (no Kisk/WorldPosition read).
+		List<Case> smBindPointInfo = new ArrayList<>();
+		smBindPointInfo.add(new Case("obelisk",
+			"{\"mapId\":210010000,\"x\":1234.5,\"y\":6789.0,\"z\":250.25}",
+			capture(new SM_BIND_POINT_INFO(210010000, 1234.5f, 6789.0f, 250.25f))));
+		writeFixture(outDir.resolve("SM_BIND_POINT_INFO.json"), "SM_BIND_POINT_INFO", null, smBindPointInfo);
+
+		// SM_CHAT_INIT(byte[] token): writeD(token.length) writeB(token). Pure.
+		List<Case> smChatInit = new ArrayList<>();
+		smChatInit.add(new Case("token",
+			"{\"token\":[1,2,3,4,255]}",
+			capture(new SM_CHAT_INIT(new byte[] { 1, 2, 3, 4, (byte) 255 }))));
+		smChatInit.add(new Case("empty",
+			"{\"token\":[]}",
+			capture(new SM_CHAT_INIT(new byte[0]))));
+		writeFixture(outDir.resolve("SM_CHAT_INIT.json"), "SM_CHAT_INIT", null, smChatInit);
+
+		// SM_RECEIVE_BIDS(int unk): writeD(unk). Pure.
+		List<Case> smReceiveBids = new ArrayList<>();
+		smReceiveBids.add(new Case("notify",
+			"{\"unk\":1}",
+			capture(new SM_RECEIVE_BIDS(1))));
+		smReceiveBids.add(new Case("zero",
+			"{\"unk\":0}",
+			capture(new SM_RECEIVE_BIDS(0))));
+		writeFixture(outDir.resolve("SM_RECEIVE_BIDS.json"), "SM_RECEIVE_BIDS", null, smReceiveBids);
+
+		// SM_CUSTOM_SETTINGS(objectId, unk, display, deny): writeD(objectId) writeC(unk) writeH(display) writeH(deny). Pure.
+		List<Case> smCustomSettings = new ArrayList<>();
+		smCustomSettings.add(new Case("hideHelmet",
+			"{\"objectId\":700200,\"unk\":1,\"display\":4,\"deny\":0}",
+			capture(new SM_CUSTOM_SETTINGS(700200, 1, 4, 0))));
+		smCustomSettings.add(new Case("zero",
+			"{\"objectId\":0,\"unk\":0,\"display\":0,\"deny\":0}",
+			capture(new SM_CUSTOM_SETTINGS(0, 0, 0, 0))));
+		writeFixture(outDir.resolve("SM_CUSTOM_SETTINGS.json"), "SM_CUSTOM_SETTINGS", null, smCustomSettings);
 	}
 
 	// Minimal deterministic Creature for packets that only read creature.getObjectId() in writeImpl.

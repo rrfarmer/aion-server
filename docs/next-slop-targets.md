@@ -62,6 +62,47 @@ add a `generateXxx` in the Java generator (run mvn to emit the fixture), then ad
 live Creature/Player/config); next golden leverage is the deferred integration harness (live World/DB/conn)
 for the ~210 object-reading SM_* packets — a sub-project, not a one-tick add. Build 0, golden 169, suite 456/0.
 
+## GOLDEN SUITE 169 -> 175 (2026-06-17) — deterministic ctor-only packet vein ESSENTIALLY EXHAUSTED
+
+Added 6 NEW deterministic ctor-only SM_* packet goldens via the existing mvn oracle
+(`GoldenPacketFixtureGeneratorTest` batch 8 -> `parity-artifacts/golden/packets/*.json`, read by the
+`FaithfulCsharpPayloadMatchesJavaGoldenFixture` theory + `ReconstructFaithful` switch in
+`GoldenPacketFixtureTests.cs`):
+- **SM_GM_BOOKMARK_ADD** (name, worldId, x, y, z) — writeS/writeD/writeF×3
+- **SM_ALLIANCE_READY_CHECK** (playerObjectId, statusCode) — writeD/writeC
+- **SM_BIND_POINT_INFO** (mapId, x, y, z) — the OBELISK ctor (bindPointType 0, kiskObjId 0); NOT the Kisk ctor
+- **SM_CHAT_INIT** (byte[] token) — writeD(len)/writeB
+- **SM_RECEIVE_BIDS** (int unk) — writeD
+- **SM_CUSTOM_SETTINGS** (objectId, unk, display, deny) — the SCALAR ctor; NOT the Player ctor
+
+ALL byte-exact on FIRST capture, **0 fidelity bugs** (more evidence the faithful SM_* packet pillar is correct).
+
+**CRITICAL mvn GOTCHA (re-confirmed):** the Java poms set `maven.test.skip=true` globally (pom.xml:20), so the
+generator is SILENTLY SKIPPED ("Not compiling test sources", BUILD SUCCESS, NO fixture emitted) unless you pass
+**`-Dmaven.test.skip=false`**. Full cmd from repo root:
+`mvn -pl game-server -am test -Dtest=GoldenPacketFixtureGeneratorTest -Dmaven.test.skip=false -Dsurefire.failIfNoSpecifiedTests=false`.
+
+**DETERMINISTIC-PACKET SURVEY (precise):** of 240 faithful `SM_*.cs`, 130 were golden'd pre-tick. Of the 110
+NOT-yet-golden'd, the overwhelming majority read live `Player/Creature/Kisk/Pet/Summon`, singletons
+(`SiegeService/Influence/GameTimeService/TownService/Legion`), `DataManager` templates, `ItemInfoBlob`/
+`EnchantInfoBlob`, or `System.currentTimeMillis()`/JVM-uptime in their ctor or writeImpl. After this tick the
+EASY unit-golden'able ctor-only vein is **essentially exhausted**; the few stragglers are awkward:
+- `SM_CUSTOM_PACKET` — builder pattern, no plain value ctor.
+- `SM_LOGIN_QUEUE`, `SM_AFTER_SIEGE_LOCINFO_475` — no reachable public ctor (package-private/builder).
+- `SM_TELEPORT_LOC` — looked clean but its CTOR calls `DataManager.WORLD_MAPS_DATA.GetTemplate(mapId).IsInstance()`
+  (DataManager read) -> needs the integration harness, NOT unit-golden'able.
+- `SM_TIME_CHECK` — reads JVM uptime in ctor -> non-deterministic.
+
+**RECOMMENDED NEXT GOLDEN VEIN: the deferred INTEGRATION HARNESS (live World/DB/conn) for the ~110 object-reading
+SM_* packets.** The unit-harness precedent already exists and is reusable: `GoldenStatsInfoFixtureTests` /
+`GoldenPlayerInfoFixtureTests` (full-Player path: GameTime=0 DB-stub + raw-field-pinned PlayerCommonData + minimal
+PLAYER_EXPERIENCE_TABLE fixture + HarnessPlayer running the real faithful Player base ctor with no World/Knownlist)
+and the live-object `PacketHarnessCreature`/`PacketHarnessLifeStats` in `GoldenPacketFixtureTests.cs` (SM_PLAYER_STATE/
+SM_TARGET_SELECTED/SM_EMOTION/SM_ATTACK_STATUS). Increment-1 candidates that need only a HarnessCreature/HarnessPlayer
+(no new singleton stub): SM_PET LOAD/SPAWN branches (need DataManager.PET_DATA + live Pet), SM_SUMMON_UPDATE
+(HarnessSummon w/ game-stats), SM_DIE (HarnessPlayer), SM_CUSTOM_SETTINGS Player-ctor / SM_BIND_POINT_INFO Kisk-ctor
+(HarnessKisk w/ WorldPosition — PositionedHarness precedent). Build 0, golden 175/175, suite 462/0, bootstrap 9/9.
+
 ## QUEST SCRIPT PORT — 1035/1035 COMPLETE (2026-06-17, commit 8fac65d3c)
 
 The last 10 "deferred spawn-AI/flight" quests were ALL false-defers. The supposed blocker — "WalkManager /
