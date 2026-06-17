@@ -103,6 +103,41 @@ SM_TARGET_SELECTED/SM_EMOTION/SM_ATTACK_STATUS). Increment-1 candidates that nee
 (HarnessSummon w/ game-stats), SM_DIE (HarnessPlayer), SM_CUSTOM_SETTINGS Player-ctor / SM_BIND_POINT_INFO Kisk-ctor
 (HarnessKisk w/ WorldPosition — PositionedHarness precedent). Build 0, golden 175/175, suite 462/0, bootstrap 9/9.
 
+## GOLDEN SUITE 175 -> 176 (2026-06-17) — SM_ATTACK, last Creature-only reader; existing-harness object vein EXHAUSTED
+
+Golden'd **SM_ATTACK** (1 fixture / 3 cases: normalHit / block / shieldProtect) — the FIRST non-trivial object-reading
+SM_* beyond SM_PLAYER_STATE/SM_TARGET_SELECTED/SM_EMOTION/SM_ATTACK_STATUS, using **ONLY the existing
+`PacketHarnessCreature` + `PacketHarnessLifeStats`** harness types (NO new substrate). writeImpl reads attacker/target
+`getObjectId()`, BOTH `getLifeStats().getHpPercentage()`, `AttackTypeAnimation`/`AttackHandAnimation.getId()`, per-hit
+`AttackResult` scalar getters, and `AttackStatus.getId()/isCounterSkill()` — no DataManager/singleton/time/Rnd. The
+**target is a non-Player harness Creature**, so the two `instanceof Player` branches (criticalEffect skillId 8218 +
+setLastCounterSkill) are never taken, and `criticalEffect=null` skips the Effect read + x/y/z write. Cases exercise the
+status switch (NORMALHIT default->writeH(0), BLOCK->writeH(32)) and the shield-type switch (0/2 no-extra, 8 protect:
+protectorId/protectedDamage/protectedSkillId). `AttackResult` is a plain value object (setShieldType OR-accumulates),
+`AttackStatus`/`AttackTypeAnimation`/`AttackHandAnimation` are enums — all already ported 1:1, all constructible with no
+substrate. **Byte-exact on FIRST capture, 0 fidelity bugs** (SM_ATTACK.cs is faithful 1:1). Java harness:
+`HarnessAttackCreature` overriding `getLifeStats()` -> `HarnessAttackLifeStats` whose `getMaxHp()` returns fixture maxHp;
+C# reuses `PacketHarnessCreature` w/ `{StatEnum.MAXHP=maxHp}` + `PacketHarnessLifeStats(currentHp,0)` (same path
+SM_ATTACK_STATUS proved). GOTCHA: the Java `list.add(new Case(name,json,capture(new SM_FOO(...))))` needs **FOUR**
+trailing `)` (add/Case/capture/SM_FOO) — a missing one yields a misleading javac `')' or ',' expected` at the LAST arg line.
+
+**EXISTING-HARNESS OBJECT VEIN NOW EXHAUSTED.** SM_ATTACK was the LAST Creature-only (non-Player) reader cleanly
+golden'able with existing harness types. Every other not-yet-golden'd SM_* reads a **Player** (SM_DIE / SM_RENAME-player /
+SM_TRANSFORM_IN_SUMMON / SM_SHOW_NPC_ON_MAP / SM_PLAYER_REGION), a **Summon/Pet** w/ full gameStats (SM_SUMMON_UPDATE /
+SM_SUMMON_PANEL / SM_PET_EMOTE), a **HouseObject/Legion** (SM_OBJECT_USE_UPDATE / SM_RENAME-legion), a **Skill/Effect**
+graph (SM_CASTSPELL_RESULT), **DataManager** (SM_TELEPORT_LOC / SM_SKILL_COOLDOWN), or **System.currentTimeMillis**
+(SM_ITEM_COOLDOWN) — all need NEW substrate.
+
+**RECOMMENDED NEXT VEIN: a minimal `PacketHarnessPlayer` seam (smallest single increment).** SM_PLAYER_REGION is the
+ideal first target — its writeImpl reads ONLY `player.getObjectId()` (stored at ctor) + `subZone.name().hashCode()`
+(Java-string-hashcode-on-wire; SM_PLAYER_REGION.cs already has `JavaStringHashCode`). Needs only a Player whose
+`getObjectId()` works — a `PacketHarnessPlayer : Player` mirroring `PacketHarnessCreature` (run the Player base ctor w/
+null world/conn, override getLevel/getRace). ZoneName is interned both sides (`createOrGet`/`CreateOrGet`). If the Player
+base ctor is too heavy to run bare (it pulls PlayerCommonData/appearance/skill-list/effect-controller), fall back to the
+full HarnessPlayer integration seam already proven in `GoldenStatsInfoFixtureTests`/`GoldenPlayerInfoFixtureTests`
+(GameTime=0 DB-stub + raw-field-pinned PlayerCommonData + minimal PLAYER_EXPERIENCE_TABLE) — that unlocks the whole
+Player-reading SM_* family at once. Build 0, golden 176, suite 463/0, bootstrap 9/9.
+
 ## QUEST SCRIPT PORT — 1035/1035 COMPLETE (2026-06-17, commit 8fac65d3c)
 
 The last 10 "deferred spawn-AI/flight" quests were ALL false-defers. The supposed blocker — "WalkManager /

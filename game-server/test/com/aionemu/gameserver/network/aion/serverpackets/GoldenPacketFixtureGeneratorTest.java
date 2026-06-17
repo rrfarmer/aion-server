@@ -14,6 +14,10 @@ import java.lang.reflect.Method;
 
 import org.junit.jupiter.api.Test;
 
+import com.aionemu.gameserver.controllers.attack.AttackResult;
+import com.aionemu.gameserver.controllers.attack.AttackStatus;
+import com.aionemu.gameserver.model.animations.AttackHandAnimation;
+import com.aionemu.gameserver.model.animations.AttackTypeAnimation;
 import com.aionemu.gameserver.network.aion.AionConnection;
 import com.aionemu.gameserver.network.aion.AionServerPacket;
 
@@ -785,6 +789,95 @@ public class GoldenPacketFixtureGeneratorTest {
 			"{\"objectId\":0,\"unk\":0,\"display\":0,\"deny\":0}",
 			capture(new SM_CUSTOM_SETTINGS(0, 0, 0, 0))));
 		writeFixture(outDir.resolve("SM_CUSTOM_SETTINGS.json"), "SM_CUSTOM_SETTINGS", null, smCustomSettings);
+
+		// ----- Batch 9: SM_ATTACK (harness Creature attacker+target, plain AttackResult list) -----
+		//
+		// writeImpl reads ONLY existing-harness scalars: attacker/target getObjectId(),
+		// both getLifeStats().getHpPercentage() (PacketHarnessCreature + PacketHarnessLifeStats),
+		// AttackTypeAnimation/AttackHandAnimation getId(), AttackStatus getId()/isCounterSkill(),
+		// and per-hit AttackResult scalar getters. Target is a non-Player Creature so the
+		// `instanceof Player` branches (criticalEffect skill-id + setLastCounterSkill) are never taken.
+		// criticalEffect is null in every case -> no Effect read, no x/y/z write. No DataManager/singleton/time/Rnd.
+		List<Case> smAttack = new ArrayList<>();
+		// normalHit: NORMALHIT(10) -> default switch branch, criticalEffect null -> writeH(0); one hit, shieldType 0.
+		List<AttackResult> attackHits1 = new ArrayList<>();
+		attackHits1.add(new AttackResult(1500f, AttackStatus.NORMALHIT));
+		smAttack.add(new Case("normalHit",
+			"{\"attackerObjId\":700001,\"attackerMaxHp\":12000,\"attackerCurrentHp\":9000,\"targetObjId\":700002,\"targetMaxHp\":10000,\"targetCurrentHp\":5000,\"attackno\":1,\"time\":300,\"attackType\":\"MELEE\",\"attackHand\":\"MAIN_HAND\",\"hits\":[{\"damage\":1500,\"status\":\"NORMALHIT\",\"shieldType\":0}]}",
+			capture(new SM_ATTACK(harnessAttackCreature(700001, 12000, 9000), harnessAttackCreature(700002, 10000, 5000),
+				1, 300, AttackTypeAnimation.MELEE, AttackHandAnimation.MAIN_HAND, attackHits1))));
+		// block: BLOCK(4) -> writeH(32) branch; ranged/off-hand animation ids; one hit, shieldType 2 (no extra payload).
+		List<AttackResult> attackHits2 = new ArrayList<>();
+		AttackResult attackBlock = new AttackResult(800f, AttackStatus.BLOCK);
+		attackBlock.setShieldType(2);
+		attackHits2.add(attackBlock);
+		smAttack.add(new Case("block",
+			"{\"attackerObjId\":700003,\"attackerMaxHp\":8000,\"attackerCurrentHp\":8000,\"targetObjId\":700004,\"targetMaxHp\":6000,\"targetCurrentHp\":1500,\"attackno\":2,\"time\":250,\"attackType\":\"RANGED\",\"attackHand\":\"OFF_HAND\",\"hits\":[{\"damage\":800,\"status\":\"BLOCK\",\"shieldType\":2}]}",
+			capture(new SM_ATTACK(harnessAttackCreature(700003, 8000, 8000), harnessAttackCreature(700004, 6000, 1500),
+				2, 250, AttackTypeAnimation.RANGED, AttackHandAnimation.OFF_HAND, attackHits2))));
+		// shieldProtect: NORMALHIT default branch; two hits, second has shieldType 8 (writes protectorId/protectedDamage/protectedSkillId).
+		List<AttackResult> attackHits3 = new ArrayList<>();
+		attackHits3.add(new AttackResult(1200f, AttackStatus.NORMALHIT));
+		AttackResult attackProt = new AttackResult(300f, AttackStatus.NORMALHIT);
+		attackProt.setShieldType(8);
+		attackProt.setProtectorId(900001);
+		attackProt.setProtectedDamage(250);
+		attackProt.setProtectedSkillId(417);
+		attackHits3.add(attackProt);
+		smAttack.add(new Case("shieldProtect",
+			"{\"attackerObjId\":700005,\"attackerMaxHp\":15000,\"attackerCurrentHp\":12000,\"targetObjId\":700006,\"targetMaxHp\":20000,\"targetCurrentHp\":4000,\"attackno\":3,\"time\":275,\"attackType\":\"MELEE\",\"attackHand\":\"RANDOM\",\"hits\":[{\"damage\":1200,\"status\":\"NORMALHIT\",\"shieldType\":0},{\"damage\":300,\"status\":\"NORMALHIT\",\"shieldType\":8,\"protectorId\":900001,\"protectedDamage\":250,\"protectedSkillId\":417}]}",
+			capture(new SM_ATTACK(harnessAttackCreature(700005, 15000, 12000), harnessAttackCreature(700006, 20000, 4000),
+				3, 275, AttackTypeAnimation.MELEE, AttackHandAnimation.RANDOM, attackHits3))));
+		writeFixture(outDir.resolve("SM_ATTACK.json"), "SM_ATTACK", null, smAttack);
+	}
+
+	// Harness Creature for SM_ATTACK: deterministic objectId + life-stats (currentHp / maxHp -> getHpPercentage()).
+	private static com.aionemu.gameserver.model.gameobjects.Creature harnessAttackCreature(int objectId, int maxHp, int currentHp) {
+		return new HarnessAttackCreature(objectId, maxHp, currentHp);
+	}
+
+	/** Minimal deterministic Creature exposing objectId + getLifeStats().getHpPercentage() (== currentHp*100/maxHp). */
+	static final class HarnessAttackCreature extends com.aionemu.gameserver.model.gameobjects.Creature {
+		private final int maxHp;
+		private final int currentHp;
+		private com.aionemu.gameserver.model.stats.container.CreatureLifeStats<? extends com.aionemu.gameserver.model.gameobjects.Creature> lifeStats;
+
+		HarnessAttackCreature(int objectId, int maxHp, int currentHp) {
+			super(objectId, null, null, new com.aionemu.gameserver.model.templates.npc.NpcTemplate(), null, false);
+			this.maxHp = maxHp;
+			this.currentHp = currentHp;
+			this.lifeStats = new HarnessAttackLifeStats(this, maxHp, currentHp);
+		}
+
+		@Override
+		public byte getLevel() { return 1; }
+
+		@Override
+		public com.aionemu.gameserver.model.Race getRace() { return com.aionemu.gameserver.model.Race.NPC; }
+
+		@Override
+		public com.aionemu.gameserver.model.stats.container.CreatureGameStats<? extends com.aionemu.gameserver.model.gameobjects.Creature> getGameStats() { return null; }
+
+		@Override
+		public com.aionemu.gameserver.model.gameobjects.player.Player getActingCreature() { return null; }
+
+		@Override
+		public com.aionemu.gameserver.model.stats.container.CreatureLifeStats<? extends com.aionemu.gameserver.model.gameobjects.Creature> getLifeStats() { return lifeStats; }
+	}
+
+	/** Deterministic life-stats: getHpPercentage() computes from currentHp/maxHp like the real CreatureLifeStats. */
+	static final class HarnessAttackLifeStats extends com.aionemu.gameserver.model.stats.container.CreatureLifeStats<com.aionemu.gameserver.model.gameobjects.Creature> {
+		private final int maxHp;
+		HarnessAttackLifeStats(com.aionemu.gameserver.model.gameobjects.Creature owner, int maxHp, int currentHp) {
+			super(owner, currentHp, 0);
+			this.maxHp = maxHp;
+		}
+
+		@Override
+		public int getMaxHp() { return maxHp; }
+
+		@Override
+		public int getMaxMp() { return 0; }
 	}
 
 	// Minimal deterministic Creature for packets that only read creature.getObjectId() in writeImpl.
