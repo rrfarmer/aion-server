@@ -831,6 +831,111 @@ public class GoldenPacketFixtureGeneratorTest {
 		writeFixture(outDir.resolve("SM_ATTACK.json"), "SM_ATTACK", null, smAttack);
 	}
 
+	/**
+	 * Batch 10: pure scalar / simple-DTO con-null-safe SM_* packets. Kept in its OWN @Test so it can be
+	 * regenerated in isolation (no shared-DataSource auto-commit flake). writeImpl reads ONLY ctor-stored
+	 * scalars / strings / plain DTOs — no con, no DataManager, no singletons, no time.
+	 *   mvn -q -pl game-server -am test -Dtest=GoldenPacketFixtureGeneratorTest#generateGoldenScalarBatch10Fixtures -Dmaven.test.skip=false -Dsurefire.failIfNoSpecifiedTests=false
+	 */
+	@Test
+	public void generateGoldenScalarBatch10Fixtures() throws Exception {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		// SM_CHARACTER_SELECT: writeC(type); type==2 -> writeH(messageType) writeC(wrong>0?1:0) writeD(wrongCount)
+		// writeD(SecurityConfig.PASSKEY_WRONG_MAXCOUNT). type 0/1 write nothing extra. The config is not file-loaded in
+		// a unit test (default 0), but the faithful @Property default is value="5" (mirrored by the C# field initializer);
+		// pin it to 5 here so the golden reflects the REAL runtime default both sides (not the accidental un-loaded 0).
+		com.aionemu.gameserver.configs.main.SecurityConfig.PASSKEY_WRONG_MAXCOUNT = 5;
+		List<Case> smCharacterSelect = new ArrayList<>();
+		smCharacterSelect.add(new Case("newPasskeyWindow",
+			"{\"ctor\":\"type\",\"type\":0}",
+			capture(new SM_CHARACTER_SELECT(0))));
+		smCharacterSelect.add(new Case("passkeyWindow",
+			"{\"ctor\":\"type\",\"type\":1}",
+			capture(new SM_CHARACTER_SELECT(1))));
+		smCharacterSelect.add(new Case("messageRightPasskey",
+			"{\"ctor\":\"type_messageType_wrongCount\",\"type\":2,\"messageType\":0,\"wrongCount\":0}",
+			capture(new SM_CHARACTER_SELECT(2, (short) 0, 0))));
+		smCharacterSelect.add(new Case("messageWrongPasskey",
+			"{\"ctor\":\"type_messageType_wrongCount\",\"type\":2,\"messageType\":3,\"wrongCount\":2}",
+			capture(new SM_CHARACTER_SELECT(2, (short) 3, 2))));
+		writeFixture(outDir.resolve("SM_CHARACTER_SELECT.json"), "SM_CHARACTER_SELECT", null, smCharacterSelect);
+
+		// SM_AFTER_SIEGE_LOCINFO_475: constant payload writeH(0) writeC(0). Default ctor.
+		List<Case> smAfterSiege = new ArrayList<>();
+		smAfterSiege.add(new Case("constant",
+			"{}",
+			capture(new SM_AFTER_SIEGE_LOCINFO_475())));
+		writeFixture(outDir.resolve("SM_AFTER_SIEGE_LOCINFO_475.json"), "SM_AFTER_SIEGE_LOCINFO_475", null, smAfterSiege);
+
+		// SM_NEARBY_QUESTS(Map<Integer,Integer>): writeC(0) writeH(-size & 0xFFFF) + per-entry writeD(questId | (value>0?1<<17:0)).
+		// LinkedHashMap to fix iteration order (C# Dictionary preserves insertion order); inputs list mirrors that order.
+		List<Case> smNearbyQuests = new ArrayList<>();
+		java.util.LinkedHashMap<Integer, Integer> nq1 = new java.util.LinkedHashMap<>();
+		nq1.put(1006, 0);   // available
+		nq1.put(1007, 1);   // not-yet-available -> bit set
+		nq1.put(2914, 0);
+		smNearbyQuests.add(new Case("mixed",
+			"{\"entries\":[[1006,0],[1007,1],[2914,0]]}",
+			capture(new SM_NEARBY_QUESTS(nq1))));
+		smNearbyQuests.add(new Case("empty",
+			"{\"entries\":[]}",
+			capture(new SM_NEARBY_QUESTS(new java.util.LinkedHashMap<>()))));
+		writeFixture(outDir.resolve("SM_NEARBY_QUESTS.json"), "SM_NEARBY_QUESTS", null, smNearbyQuests);
+
+		// SM_MACRO_LIST(playerObjectId, List<Macros.Macro>, clearList): writeD(objId) writeC(clear?1:0) writeH(-size)
+		// + per-macro writeC(id) writeS(xml). Macros.Macro is a public record (id, xml). Pure.
+		List<Case> smMacroList = new ArrayList<>();
+		java.util.List<com.aionemu.gameserver.model.gameobjects.player.Macros.Macro> macros1 = new ArrayList<>();
+		macros1.add(new com.aionemu.gameserver.model.gameobjects.player.Macros.Macro(1, "<macro><name>Atk</name></macro>"));
+		macros1.add(new com.aionemu.gameserver.model.gameobjects.player.Macros.Macro(4, "<macro><name>Heal</name></macro>"));
+		smMacroList.add(new Case("withClear",
+			"{\"playerObjectId\":700300,\"clearList\":true,\"macros\":[[1,\"<macro><name>Atk</name></macro>\"],[4,\"<macro><name>Heal</name></macro>\"]]}",
+			capture(new SM_MACRO_LIST(700300, macros1, true))));
+		smMacroList.add(new Case("emptyNoClear",
+			"{\"playerObjectId\":700301,\"clearList\":false,\"macros\":[]}",
+			capture(new SM_MACRO_LIST(700301, new ArrayList<>(), false))));
+		writeFixture(outDir.resolve("SM_MACRO_LIST.json"), "SM_MACRO_LIST", null, smMacroList);
+
+		// SM_FIRST_SHOW_DECOMPOSABLE(objectId, Collection<ResultedItem>): writeD(objId) writeD(0) writeC(size)
+		// + per-item writeC(idx) writeD(itemId) writeD(minCount) writeC(0)x3 writeC(1). ResultedItem is XML-built;
+		// reflect-set itemId/minCount (skip afterUnmarshal -> no DataManager). Pure.
+		List<Case> smFirstDecomp = new ArrayList<>();
+		java.util.List<com.aionemu.gameserver.model.templates.item.ResultedItem> decomp1 = new ArrayList<>();
+		decomp1.add(resultedItem(188052612, 3));
+		decomp1.add(resultedItem(166000001, 1));
+		smFirstDecomp.add(new Case("twoItems",
+			"{\"objectId\":700400,\"items\":[[188052612,3],[166000001,1]]}",
+			capture(new SM_FIRST_SHOW_DECOMPOSABLE(700400, decomp1))));
+		smFirstDecomp.add(new Case("empty",
+			"{\"objectId\":700401,\"items\":[]}",
+			capture(new SM_FIRST_SHOW_DECOMPOSABLE(700401, new ArrayList<>()))));
+		writeFixture(outDir.resolve("SM_FIRST_SHOW_DECOMPOSABLE.json"), "SM_FIRST_SHOW_DECOMPOSABLE", null, smFirstDecomp);
+
+		// SM_SECONDARY_SHOW_DECOMPOSABLE: same writeImpl shape as SM_FIRST_SHOW_DECOMPOSABLE (different opcode).
+		List<Case> smSecondDecomp = new ArrayList<>();
+		java.util.List<com.aionemu.gameserver.model.templates.item.ResultedItem> decomp2 = new ArrayList<>();
+		decomp2.add(resultedItem(188052612, 5));
+		smSecondDecomp.add(new Case("oneItem",
+			"{\"objectId\":700402,\"items\":[[188052612,5]]}",
+			capture(new SM_SECONDARY_SHOW_DECOMPOSABLE(700402, decomp2))));
+		writeFixture(outDir.resolve("SM_SECONDARY_SHOW_DECOMPOSABLE.json"), "SM_SECONDARY_SHOW_DECOMPOSABLE", null, smSecondDecomp);
+	}
+
+	/** Build a ResultedItem with itemId/minCount set via reflection (bypass JAXB afterUnmarshal -> no DataManager). */
+	private static com.aionemu.gameserver.model.templates.item.ResultedItem resultedItem(int itemId, int minCount) throws Exception {
+		com.aionemu.gameserver.model.templates.item.ResultedItem ri =
+			new com.aionemu.gameserver.model.templates.item.ResultedItem();
+		java.lang.reflect.Field f = ri.getClass().getDeclaredField("itemId");
+		f.setAccessible(true);
+		f.setInt(ri, itemId);
+		java.lang.reflect.Field f2 = ri.getClass().getDeclaredField("minCount");
+		f2.setAccessible(true);
+		f2.setInt(ri, minCount);
+		return ri;
+	}
+
 	// Harness Creature for SM_ATTACK: deterministic objectId + life-stats (currentHp / maxHp -> getHpPercentage()).
 	private static com.aionemu.gameserver.model.gameobjects.Creature harnessAttackCreature(int objectId, int maxHp, int currentHp) {
 		return new HarnessAttackCreature(objectId, maxHp, currentHp);

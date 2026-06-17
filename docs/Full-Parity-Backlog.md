@@ -20,6 +20,45 @@ Structural 1:1 ≠ proven runtime parity. Absent the live client, the Java-oracl
 - **A2. Formula golden expansion.** 30 formula fixtures; remaining pure `StatFunctions`/`StatCapUtil`/calc methods that read only args are still capturable. Thin but non-zero.
 - **A3. Behavioral/runtime golden gaps** the unit harness can't reach (Rnd-based combat, time-dependent) — document as not-golden-able; they fall to §F (live client) for ultimate proof.
 
+### A1 per-packet triage (computed 2026-06-17, the authoritative un-golden'd list)
+
+Ground truth from disk: **240** faithful `SM_*.cs`; **165** distinct names covered by a golden fixture (`parity-artifacts/golden/packets/*.json`) or a dedicated faithful golden/byte test (`SmFindGroupTests`, `SmLegionDominionRankTests`, `SmLegionHistoryTests`, the `Golden*FixtureTests` families). NOTE: the earlier reconciliation note guessing SM_GAME_TIME/SM_AUTO_GROUP already had dedicated golden tests was WRONG — they do NOT; only SM_FIND_GROUP/SM_LEGION_DOMINION_RANK/SM_LEGION_HISTORY do (correctly excluded below). **Un-golden'd = 88.**
+
+Triage key: **T1** = TIER-1 runtime-golden reachable now (writeImpl is `con`-null-safe under `CaptureWriteImplPayload` and reads only scalars / simple DTOs / an existing-or-small-bounded seam); **T1-seam** = reachable via an existing heavy seam (item/ItemInfoBlob, real-Npc, DataManager-holder) — bounded but more work; **T2** = TIER-2 audit-only (writeImpl reads `con.getActivePlayer()`/`con.getAccount()`/`con.enableCryptKey()`, the Java static-final `World` singleton, a live `SiegeService`/`Influence`/`GameTimeService`/`LoginServer`/`GameServer` singleton, `System.currentTimeMillis`/JVM-uptime, or a full live Player/Legion/Group/Alliance graph the unit harness cannot bounded-build) — validate by line-by-line writeImpl audit + breadcrumb.
+
+**T1 — pure scalar / simple-DTO, con-null-safe (golden these first):**
+- `SM_CHARACTER_SELECT` — scalar type/messageType/wrongCount + `SecurityConfig.PASSKEY_WRONG_MAXCOUNT` const. **[DONE 2026-06-17 batch 10]**
+- `SM_AFTER_SIEGE_LOCINFO_475` — pure const writeImpl (writeH 0 / writeC 0), default ctor. **[DONE batch 10]**
+- `SM_NEARBY_QUESTS` — `Map<Integer,Integer>`; `-size&0xFFFF` + per-entry `questId|bit`. **[DONE batch 10]**
+- `SM_MACRO_LIST` — playerObjectId + `List<Macros.Macro>` (public record) + clearList; `writeH(-size)`. **[DONE batch 10]**
+- `SM_QUEST_COMPLETED_LIST` — updateMode + `List<QuestState>` (constructible ctor). **[DONE batch 10]**
+- `SM_FIRST_SHOW_DECOMPOSABLE` / `SM_SECONDARY_SHOW_DECOMPOSABLE` — objectId + `Collection<ResultedItem>` (XML DTO; reflect-set itemId/minCount both sides). **T1, next batch.**
+- `SM_ABYSS_RANKING_LEGIONS` / `SM_ABYSS_RANKING_PLAYERS` — `List<RankingListLegion/Player>` DTO ctor. **T1, next batch.**
+- `SM_GM_SHOW_PLAYER_SKILLS` — `List<PlayerSkillEntry>` DTO. **T1, next batch.**
+- `SM_GM_SHOW_LEGION_MEMBERLIST` — `List<LegionMember>` DTO. **T1, next batch (LegionMember constructibility TBD).**
+- `SM_TOWNS_LIST` — `Map<Integer,Town>`; Town DTO. **T1, next batch.**
+- `SM_MACRO_LIST` (paged) covered above.
+
+**T1-seam — reachable via an existing heavy seam (item/ItemInfoBlob, real-Npc, DataManager-holder), bounded:**
+- item/ItemInfoBlob seam: `SM_TUNE_RESULT`, `SM_EXCHANGE_ADD_ITEM`, `SM_INVENTORY_INFO`, `SM_WAREHOUSE_ADD_ITEM`, `SM_WAREHOUSE_INFO`, `SM_WAREHOUSE_UPDATE_ITEM`, `SM_PRIVATE_STORE`, `SM_MAIL_SERVICE`, `SM_BROKER_SERVICE`, `SM_REPURCHASE`, `SM_LOOT_ITEMLIST`, `SM_UPDATE_PLAYER_APPEARANCE` (several also touch `con.getActivePlayer` -> verify per-packet, may demote to T2).
+- real-Npc seam: `SM_GATHERABLE_INFO`, `SM_NPC_ASSEMBLER`, `SM_TRADELIST` (TRADELIST also reads getLegion/GOODSLIST_DATA -> heavier).
+- DataManager-holder seam: `SM_SKILL_LIST` (SKILL_DATA).
+- new bounded Pet/Summon seam: `SM_PET_EMOTE`, `SM_SUMMON_PANEL`, `SM_SUMMON_UPDATE`.
+- model-graph (Kisk/House — bounded model objects, no live World): `SM_KISK_UPDATE`, `SM_HOUSE_RENDER`, `SM_HOUSE_UPDATE`, `SM_HOUSE_OBJECTS`, `SM_HOUSE_SCRIPTS` (per-packet verify; `SM_HOUSE_OBJECT` reads con -> T2).
+
+**T2 — audit-only (writeImpl needs con / live World / live singleton / full live-Player graph / time):**
+- reads `con.getActivePlayer()`: `SM_PRICES`, `SM_PLAY_MOVIE`, `SM_DIALOG_WINDOW`, `SM_FRIEND_UPDATE`, `SM_CHALLENGE_LIST`, `SM_GROUP_INFO`, `SM_ALLIANCE_INFO`, `SM_HOUSE_OBJECT`, `SM_HOUSE_REGISTRY`, `SM_HOUSE_BIDS`, `SM_HOUSE_EDIT`, `SM_INSTANCE_INFO`, `SM_SIEGE_LOCATION_INFO`. **[SM_ALLIANCE_INFO, SM_GROUP_INFO audited batch 10]**
+- reads `con.getAccount()` / `con.enableCryptKey()`: `SM_ACCOUNT_PROPERTIES`, `SM_KEY`.
+- live World singleton (`World.getInstance()` / static-final): `SM_PLAYER_SPAWN`, `SM_DIE`.
+- live `SiegeService`/`Influence`/`GameTimeService`/`TownService`/`GameServer`/`LoginServer` singleton or `System.currentTimeMillis`/JVM-uptime: `SM_GAME_TIME`, `SM_TIME_CHECK`, `SM_VERSION_CHECK`, `SM_INFLUENCE_RATIO`, `SM_FORTRESS_STATUS`, `SM_LEGION_DOMINION_LOC_INFO`, `SM_IN_GAME_SHOP_CATEGORY_LIST`, `SM_IN_GAME_SHOP_ITEM`, `SM_IN_GAME_SHOP_LIST`, `SM_ITEM_COOLDOWN`, `SM_RECIPE_COOLDOWN`.
+- full live-Player/Legion/Group/Alliance graph: `SM_GM_SHOW_PLAYER_STATUS`, `SM_CHAT_WINDOW`, `SM_GROUP_MEMBER_INFO`, `SM_ALLIANCE_MEMBER_INFO`, `SM_LEGION_INFO`, `SM_LEGION_MEMBERLIST`, `SM_LEGION_ADD_MEMBER`, `SM_LEGION_UPDATE_MEMBER`, `SM_GM_SHOW_LEGION_INFO`, `SM_PRIVATE_STORE_NAME`, `SM_CASTSPELL_RESULT` (Skill/Effect graph), `SM_GATHER_UPDATE`, `SM_OBJECT_USE_UPDATE` (HouseObject), `SM_HOUSE_OWNER_INFO`, `SM_HOUSE_REGISTRY`, `SM_HOUSE_EDIT`.
+- login/account/character graph: `SM_CHARACTER_LIST`, `SM_CHARACTER_SELECT`(done T1), `SM_CREATE_CHARACTER`, `SM_L2AUTH_LOGIN_CHECK`, `SM_VERSION_CHECK`.
+- builder / no reachable plain-value public ctor: `SM_CUSTOM_PACKET`, `SM_LOGIN_QUEUE`.
+- `SM_SYSTEM_MESSAGE` — generated 28k-line catalog + ChatType/sender graph; audit-only.
+- abyss/fortress/instance status singleton readers: `SM_ABYSS_ARTIFACT_INFO3` (Collection ctor is T1 with a siege-template seam; `int loc` ctor reads SiegeService -> T2), `SM_FORTRESS_STATUS`, `SM_INSTANCE_SCORE`, `SM_ABYSS_RANKING_*` writeImpl is DTO-only (T1) — keep in T1.
+
+(The above is a living split; packets move T2->T1 as bounded seams are built and T1->done as golden'd. Re-derive the un-golden'd set with: build the covered-name set from `parity-artifacts/golden/packets/*.json` + every `SM_*` token in `tests/.../Golden*.cs` + `Sm*Tests.cs`, diff against `find src -path '*ServerPackets/SM_*.cs'`.)
+
 Recipe (proven): add `capture(...)` to the Java `Golden*FixtureGeneratorTest`, run `mvn -pl game-server -am test -Dtest=<Gen> -Dmaven.test.skip=false -Dsurefire.failIfNoSpecifiedTests=false`, add C# `[InlineData]`+Reconstruct+`CaptureWriteImplPayload`; **Java oracle bytes are truth, never tune to C#**; any mismatch = a real fidelity bug to fix in the C# packet.
 
 ---
