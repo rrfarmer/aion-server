@@ -120,9 +120,30 @@ conditions → `Volatile.Read(ref field)`, `.addAndGet(-2)`→`Interlocked.Add(r
 →`Interlocked.Decrement/Increment`; `AtomicBoolean.compareAndSet(false,true)`→`Interlocked.CompareExchange(ref
 isRaceSet,1,0)==0`. Confirms again: heavy-by-line-count ≠ heavy-by-subsystem.
 
-**Remaining 2 = the heavy-defers:** ShugoImperialTomb (1329), StonespearReach (925).
-Recommend **StonespearReach (925)** next — smaller remaining; verify its ScoreWriter/InstanceScore subtype + any new
-SM strings the same way (grep PascalCase symbols + check base classes) before porting; given ALL of batch 4/5/6 were
+## INSTANCE-HANDLER PORT — batch 7 (2026-06-17) — +1 → 36/37
+
+Ported **StonespearReach (925 lines)** → `StonespearReachInstance.cs`, `[InstanceID(301500000)]`, commit b24029fdc.
+STRICT 1:1. **No bounded dep needed** — ANOTHER false-heavy-defer (Legion Dominion siege defense, sibling of
+EternalBastion/IlluminaryObelisk). Scoreboard surface ALL pre-ported: `LegionDominionScore` (points/rank/finalGP/finalAP +
+4 reward item/count pairs), `LegionDominionScoreWriter : InstanceScoreWriter<LegionDominionScore>`, `InstanceScore`
+base (IsRewarded/IsStartProgress/IsPreparing/Set+GetInstanceProgressionType/Clear), `LegionDominionService.GetInstance()
+.OnFinishInstance(legion,points,time)`, ALL SM strings (`STR_MSG_GET_SCORE`, `STR_MSG_OBJ_Start/_Bomb/_Bomb_Die`,
+`STR_MSG_LEGION_DOMINION_MOVE_BIRTHAREA_FRIENDLY(name)`, `STR_MSG_CANT_INSTANCE_TOO_MANY_MEMBERS(num,mapId)`), every
+service (`ItemService.AddItem`, `GloryPointsService.AddGp`+`Rates.GP.CalcResult`, `AbyssPointsService.AddAp`,
+`PlayerReviveService.Revive`, `TeleportService.TeleportTo`(instance + worldId overloads)+`MoveToBindLocation`),
+`Legion.GetCurrentLegionDominion/GetLegionId`, `WorldPosition(mapId,x,y,z,h)`+GetX/Y/Z/Heading, `PositionUtil.GetDistance`,
+`Rnd.Get(min,max)`/`Rnd.NextFloat(bound)`, `instance.ForEachPlayer/ForEachNpc/GetPlayersInside/GetNpc/GetMapId`.
+**Batch-7 gotchas:** GloryPointsService AND AbyssPointsService each exist in BOTH `Services` and `Services.Abyss`
+(CS0104 ambiguous) — Java imports `services.abyss.*` so fully-qualify `Aion.GameServer.Services.Abyss.GloryPointsService`/
+`...AbyssPointsService` (LegionDominionService is the plain `Services` ns); Java `synchronized checkRank/canEnter` →
+per-instance `lock(@lock)` field (a real field, NOT `new object()` each call); `Collections.shuffle` → manual Fisher-Yates
+with `Rnd.Get(0,i)`; `IntStream.range(min,max+1)` → `Enumerable.Range(min, max+1-min)`; `Math.toRadians(d)` → `d*Math.PI/180.0`;
+`Future`→`ScheduledTask`, `.isCancelled()`→`.IsCancelled` (property), `.cancel(b)`→`Cancel(b)`; `startTime` `long?` →
+use `.Value` in the subtraction; `points.get(i)`→`points[i]`. Confirms again: heavy-by-line-count ≠ heavy-by-subsystem.
+
+**Remaining 1 = the heavy-defer:** ShugoImperialTomb (1329).
+Recommend **ShugoImperialTomb (1329)** next (the last one) — verify its ScoreWriter/InstanceScore subtype + any new
+SM strings the same way (grep PascalCase symbols + check base classes) before porting; given ALL of batch 4/5/6/7 were
 false-heavy-defers (volume only, deps pre-present), it is likely the same.
 
 ## CAPSTONE FIDELITY RE-SURVEY — 2026-06-16 (commit e3e1b1184)
