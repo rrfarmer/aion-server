@@ -31,6 +31,7 @@ import com.aionemu.gameserver.dataholders.TradeListData;
 import com.aionemu.gameserver.dataholders.WorldMapsData;
 import com.aionemu.gameserver.model.CreatureType;
 import com.aionemu.gameserver.model.gameobjects.Item;
+import com.aionemu.gameserver.model.gameobjects.player.Player;
 import com.aionemu.gameserver.model.templates.item.ItemTemplate;
 import com.aionemu.gameserver.model.templates.item.enums.ItemGroup;
 import com.aionemu.gameserver.services.item.ItemPacketService.ItemAddType;
@@ -803,6 +804,146 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 			return item;
 		} catch (ReflectiveOperationException e) {
 			throw new RuntimeException("Failed to build equippable weapon Item", e);
+		}
+	}
+
+	// ---- equippable item / ItemInfoBlob seam: more per-type variants (SM_INVENTORY_ADD_ITEM) ----
+	//
+	// Reuses the equippable-item seam above to cover the OTHER per-type blob writers selected by getFullBlob's itemGroup
+	// branch. Each is a DISTINCT fixture case with a DISTINCT objectId (so it never clobbers the weapon fixture):
+	//   * ARMOR (itemGroup PL_TORSO, a PLATE torso): isArmor()==true, armorType != ACCESSORY -> SLOTS_ARMOR. Its writer
+	//     writeThisBlob = writeQ(getSlotFor(getItemSlot()).getSlotIdMask()) [PL_TORSO -> ItemSlot.TORSO, single slot],
+	//     writeQ(0), writeDyeInfo(getItemColor()). Two armor cases: one UNDYED (itemColor null -> writeDyeInfo skips 4
+	//     zero bytes) and one DYED (itemColor pinned, colorExpireTime 0 so getColorTimeLeft()==0 -> NO clock read; the
+	//     dye-populated branch fires in BOTH the SLOTS_ARMOR writer AND ENCHANT_INFO's writeDyeInfo). isCloth()==true
+	//     for a non-accessory armor -> the host packet's trailing isCloth byte is 1.
+	//   * ACCESSORY (itemGroup RING): isArmor()==true, armorType == ACCESSORY -> SLOTS_ACCESSORY. Its writer reads
+	//     getSlotsFor(getItemSlot()) [RING -> RING_LEFT|RING_RIGHT, length 2] -> writeQ(slots[0]) + writeQ(slots[1])
+	//     (the two-slot branch). isCloth()==false (accessory) -> trailing isCloth byte 0.
+	// All other blob reads are identical to the weapon seam (ENCHANT_INFO/PREMIUM_OPTION/GENERAL_INFO deterministic on the
+	// bare simple-ctor Item; no live Player deref, no stones/godstone/idian/conditioning/fusion). Mirrored 1:1 on C#.
+	private static final int EQ_ARMOR_OBJECT_ID = 268700002; // distinct from the weapon EQ_ITEM_OBJECT_ID
+	private static final int EQ_ARMOR_TEMPLATE_ID = 110000777; // a plate torso template id
+	private static final int EQ_ARMOR_MASK = 0x33AA;
+	private static final int EQ_ARMOR_DESC_L10N = 350789;
+	private static final int EQ_ACCESSORY_OBJECT_ID = 268700003; // distinct
+	private static final int EQ_ACCESSORY_TEMPLATE_ID = 115000333; // a ring template id
+	private static final int EQ_ACCESSORY_MASK = 0x44BB;
+	private static final int EQ_ACCESSORY_DESC_L10N = 350790;
+	private static final int EQ_DYED_ARMOR_OBJECT_ID = 268700004; // distinct
+	private static final int EQ_DYED_ARMOR_COLOR = 0x3399CC; // r=0x33 g=0x99 b=0xCC (no alpha), colorExpireTime 0
+
+	@Test
+	public void generateGoldenInventoryAddItemEquippableVariantsFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installItemCleanupSeam(); // GENERAL_INFO reads DataManager.ITEM_CLEAN_UP.hasAccountOrLegionWhStorabilityDisabled
+
+		List<Case> cases = new ArrayList<>();
+		// (a) Plate torso armor (unequipped, undyed) -> SLOTS_ARMOR (single slot + 4 zero dye bytes), isCloth byte 1.
+		cases.add(equippableVariantCase("invAddEquippableArmorPlateUndyed", EQ_ARMOR_OBJECT_ID, EQ_ARMOR_TEMPLATE_ID,
+			EQ_ARMOR_MASK, EQ_ARMOR_DESC_L10N, "Armorsmith", ItemGroup.PL_TORSO, null, ItemAddType.BUY));
+		// (b) Ring accessory (unequipped) -> SLOTS_ACCESSORY (two-slot branch RING_LEFT|RING_RIGHT), isCloth byte 0.
+		cases.add(equippableVariantCase("invAddEquippableAccessoryRing", EQ_ACCESSORY_OBJECT_ID, EQ_ACCESSORY_TEMPLATE_ID,
+			EQ_ACCESSORY_MASK, EQ_ACCESSORY_DESC_L10N, "Jeweler", ItemGroup.RING, null, ItemAddType.BUY));
+		// (c) DYED plate torso armor (colorExpireTime 0 -> deterministic) -> dye-populated branch in SLOTS_ARMOR + ENCHANT_INFO.
+		cases.add(equippableVariantCase("invAddEquippableArmorPlateDyed", EQ_DYED_ARMOR_OBJECT_ID, EQ_ARMOR_TEMPLATE_ID,
+			EQ_ARMOR_MASK, EQ_ARMOR_DESC_L10N, "Armorsmith", ItemGroup.PL_TORSO, EQ_DYED_ARMOR_COLOR, ItemAddType.BUY));
+
+		writeFixture(outDir.resolve("SM_INVENTORY_ADD_ITEM_VARIANTS.json"), "SM_INVENTORY_ADD_ITEM", cases);
+	}
+
+	private static Case equippableVariantCase(String name, int objectId, int itemId, int mask, int desc, String creator,
+			ItemGroup itemGroup, Integer itemColor, ItemAddType addType) {
+		Item item = buildEquippableVariant(objectId, itemId, mask, desc, creator, itemGroup, itemColor);
+		List<Item> items = new ArrayList<>();
+		items.add(item);
+		String inputs = "{\"objectId\":" + objectId + ",\"itemId\":" + itemId + ",\"mask\":" + mask + ",\"desc\":" + desc
+			+ ",\"itemCount\":1,\"itemCreator\":\"" + creator + "\",\"itemGroup\":\"" + itemGroup.name() + "\",\"itemColor\":"
+			+ (itemColor == null ? "null" : itemColor) + ",\"addType\":\"" + addType.name() + "\"}";
+		return new Case(name, inputs, capture(new SM_INVENTORY_ADD_ITEM(items, null, addType), null));
+	}
+
+	/**
+	 * Build a minimal EQUIPPABLE non-weapon Item (armor or accessory) via the simple Item(objId, itemTemplate) ctor.
+	 * itemGroup selects the per-type blob (PL_TORSO -> SLOTS_ARMOR, RING -> SLOTS_ACCESSORY). maxTuneCount pinned to 0
+	 * (canTune() false -> isIdentified() true). Optionally dyed via setItemColor (colorExpireTime stays 0 ->
+	 * getColorTimeLeft() == 0, no clock read). No stones/godstone/idian/tempering/fusion. Mirrored 1:1 on the C# side.
+	 */
+	private static Item buildEquippableVariant(int objectId, int itemId, int mask, int desc, String creator,
+			ItemGroup itemGroup, Integer itemColor) {
+		try {
+			ItemTemplate template = new ItemTemplate();
+			setField(template, "itemId", itemId);
+			setField(template, "mask", mask);
+			setField(template, "description", desc);
+			setField(template, "itemGroup", itemGroup);
+			setField(template, "maxTuneCount", 0); // canTune() == false -> isIdentified() == true (deterministic)
+			Item item = new Item(objectId, template);
+			item.setItemCount(1L);
+			item.setItemCreator(creator);
+			if (itemColor != null)
+				item.setItemColor(itemColor); // colorExpireTime stays 0 -> getColorTimeLeft() == 0 (deterministic)
+			return item;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to build equippable variant Item", e);
+		}
+	}
+
+	// ---- SM_VIEW_PLAYER_DETAILS (reuse the equippable-item / ItemInfoBlob seam) ----
+	//
+	// SM_VIEW_PLAYER_DETAILS(items, player) is bounded by the SAME seam as SM_INVENTORY_ADD_ITEM: the ctor reads ONLY
+	// player.getObjectId() (a single AionObject scalar) + items.size(); writeImpl writes targetObjId + the constant 11 +
+	// itemSize, then per item: writeD(0) + template.getTemplateId() + template.getL10n() + ItemInfoBlob.getFullBlob(player,
+	// item).writeMe(). The player is passed to getFullBlob ONLY as the blob owner (the equippable weapon/armor/accessory/
+	// enchant/premium/general writers never dereference it for these deterministic items — identical to the existing
+	// SM_INVENTORY_ADD_ITEM seam). So no live Player/Legion/appearance/equipment-iteration is needed: the bounded live
+	// Player is allocated uninitialized (Unsafe.allocateInstance, the established harness precedent — see SM_REPURCHASE/
+	// SM_FIND_GROUP) with ONLY the final AionObject.objectId pinned. The items reuse the seam's exact builders, so the
+	// per-item bytes are byte-identical to the weapon/armor/accessory fixtures already validated. Java is the oracle.
+	private static final int VIEW_DETAILS_PLAYER_OBJECT_ID = 268900001;
+
+	@Test
+	public void generateGoldenViewPlayerDetailsFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installItemCleanupSeam(); // GENERAL_INFO reads DataManager.ITEM_CLEAN_UP.hasAccountOrLegionWhStorabilityDisabled
+
+		Player player = newUninitializedPlayer(VIEW_DETAILS_PLAYER_OBJECT_ID);
+
+		List<Case> cases = new ArrayList<>();
+		// Two-item view: the equippable 1H sword + the plate-torso armor (undyed), reusing the seam's exact builders, so
+		// the per-item blobs are byte-identical to the SM_INVENTORY_ADD_ITEM weapon/armor fixtures.
+		List<Item> items = new ArrayList<>();
+		items.add(buildEquippableWeapon(EQ_ITEM_OBJECT_ID, EQ_ITEM_TEMPLATE_ID, EQ_ITEM_MASK, EQ_ITEM_DESC_L10N,
+			EQ_ITEM_COUNT, EQ_ITEM_CREATOR));
+		items.add(buildEquippableVariant(EQ_ARMOR_OBJECT_ID, EQ_ARMOR_TEMPLATE_ID, EQ_ARMOR_MASK, EQ_ARMOR_DESC_L10N,
+			"Armorsmith", ItemGroup.PL_TORSO, null));
+		String inputs = "{\"playerObjectId\":" + VIEW_DETAILS_PLAYER_OBJECT_ID + ",\"itemCount\":2}";
+		cases.add(new Case("viewPlayerDetailsWeaponAndArmor", inputs, capture(new SM_VIEW_PLAYER_DETAILS(items, player), null)));
+
+		writeFixture(outDir.resolve("SM_VIEW_PLAYER_DETAILS.json"), "SM_VIEW_PLAYER_DETAILS", cases);
+	}
+
+	/**
+	 * Allocate a Player WITHOUT running any constructor (Unsafe.allocateInstance — the established harness precedent for
+	 * SM_REPURCHASE/SM_FIND_GROUP/SM_GROUP_MEMBER_INFO), then pin only the final AionObject.objectId. SM_VIEW_PLAYER_DETAILS
+	 * reads nothing else from the live Player (getFullBlob only stashes it as blob owner).
+	 */
+	private static Player newUninitializedPlayer(int objectId) {
+		try {
+			Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+			theUnsafe.setAccessible(true);
+			Unsafe unsafe = (Unsafe) theUnsafe.get(null);
+			Player player = (Player) unsafe.allocateInstance(Player.class);
+			Field idField = AionObject.class.getDeclaredField("objectId");
+			long offset = unsafe.objectFieldOffset(idField);
+			unsafe.putInt(player, offset, objectId);
+			return player;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to allocate uninitialized Player", e);
 		}
 	}
 

@@ -2,6 +2,34 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## GOLDEN SUITE 191 -> 193 (2026-06-17) — equippable seam REUSE: ARMOR + ACCESSORY per-type blobs + DYED branch + SM_VIEW_PLAYER_DETAILS
+
+Reused the equippable-item/ItemInfoBlob seam for the OTHER per-type blob writers + a 2nd packet, extending the SAME
+`GoldenWorldPacketFixtureGeneratorTest`+`GoldenWorldPacketFixtureTests`. **Byte-exact on first capture, 0 fidelity bugs**
+(ArmorInfoBlobEntry.cs + AccessoryInfoBlobEntry.cs + SM_VIEW_PLAYER_DETAILS.cs all faithful 1:1). Two NEW fixtures (distinct
+objectIds 268700002/3/4 + 268900001, no clobber of the weapon fixture):
+- **SM_INVENTORY_ADD_ITEM_VARIANTS.json** (3 cases): (a) **PL_TORSO armor undyed** -> **SLOTS_ARMOR** (isArmor, PLATE !=
+  ACCESSORY); writer = `writeQ(getSlotFor(getItemSlot()).getSlotIdMask())` [PL_TORSO -> ItemSlot.TORSO, single slot] +
+  `writeQ(0)` + `writeDyeInfo(getItemColor())` (null -> 4 zero bytes); isCloth() true -> host trailing byte 1. (b) **RING
+  accessory** -> **SLOTS_ACCESSORY**; reads `getSlotsFor(getItemSlot())` [RING -> RING_LEFT|RING_RIGHT, length 2] -> two-slot
+  branch writeQ(slots[0])+writeQ(slots[1]); isCloth false -> byte 0. (c) **PL_TORSO armor DYED** (itemColor 0x3399CC,
+  colorExpireTime stays 0 -> getColorTimeLeft()==0, NO clock) -> dye-populated branch fires in BOTH SLOTS_ARMOR AND
+  ENCHANT_INFO writeDyeInfo (`013399CC` appears twice, verified). `getItemSlot()` = `itemGroup.getValidEquipmentSlots()` so
+  ALL slot bytes derive from the pinned itemGroup (same principle as the SWORD weapon pin).
+- **SM_VIEW_PLAYER_DETAILS.json** (1 case, 2-item view: weapon + armor): ctor reads ONLY `player.getObjectId()` + items.size();
+  writeImpl = targetObjId + const 11 + itemSize + per-item (writeD(0) + templateId + getL10n() + getFullBlob(player,item).writeMe()).
+  Player passed to getFullBlob ONLY as blob owner (never dereferenced for deterministic items) -> NO live Player/Legion/
+  appearance/equipment graph. Allocate an UNINITIALIZED Player (Unsafe.allocateInstance / RuntimeHelpers.GetUninitializedObject,
+  the SM_REPURCHASE/SM_FIND_GROUP precedent) with ONLY AionObject.objectId pinned; items reuse the seam's EXACT weapon+armor
+  builders so per-item blobs are byte-identical to the SM_INVENTORY_ADD_ITEM fixtures.
+
+**REUSABLE**: the per-type-blob + dyed-branch seam now covers SLOTS_WEAPON/SLOTS_ARMOR/SLOTS_ACCESSORY + undyed/dyed.
+**SLOTS_SHIELD** (== armor writer, SHIELD group), **SLOTS_WING** (WingInfoBlobEntry), **PLUME_INFO** (PlumeInfoBlobEntry — note
+ENCHANT_INFO has a PLUME tempering>0 branch) are the remaining per-type variants, each one more itemGroup pin, no new substrate.
+The heavier sub-paths (socketed-manastone / godstone / idian-polished / conditioned / fusioned-composite / tempered-plume) each
+populate ONE more Item sub-object 1:1 both sides. The uninitialized-Player-as-blob-owner seam is reusable for any item-list
+packet reading only player.getObjectId() (SM_WAREHOUSE_*, etc.). Build 0, golden 193, suite 480/0, bootstrap 9/9.
+
 ## GOLDEN SUITE 190 -> 191 (2026-06-17) — EQUIPPABLE-item blob path (SM_INVENTORY_ADD_ITEM, weapon blob)
 
 Extended the item/ItemInfoBlob seam from the GENERAL_INFO-only path to the **EQUIPPABLE-item blob path** — the first
