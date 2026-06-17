@@ -80,9 +80,28 @@ is a **method** not a property; `schedule(r, 1, TimeUnit.MINUTES)` → `Schedule
 `Volatile.Read`. So TheShugoEmperorsVault was actually NOT a heavy-subsystem defer — its scoreboard/score-writer
 pillar was already in place; it was just a large (574L) mechanical port.
 
-**Remaining 4 = the heavy-defers:** ShugoImperialTomb (1329), StonespearReach (925), EternalBastion (867),
-DrakenspireDepths (593). Recommend **DrakenspireDepths (593)** next — smallest remaining; verify its score/AP surface
-the same way (grep the ScoreWriter + InstanceScore subtype + any SM strings) before porting; it may likewise be a
+## INSTANCE-HANDLER PORT — batch 5 (2026-06-16) — +1 → 34/37
+
+Ported **DrakenspireDepths (593 lines)** → `DrakenspireDepthsInstance.cs`, `[InstanceID(301390000)]`, commit afb7dc119.
+STRICT 1:1. **No bounded dep needed** — ANOTHER false-heavy-defer. This handler has **NO scoreboard at all** (no
+ScoreWriter, no InstanceScore subtype, no AP-reward path) — it is pure staged-event timer/spawn logic. All deps
+verified pre-present before porting: every `STR_MSG_IDSEAL_*` SM string already in the catalog (TWIN/IMMORTAL/WAVE/
+WAVE_BONUS/GUARDIAN/VRITRA_HUMAN — used by a sibling); `WalkManager.StartWalking((NpcAI)npc.GetAi())`;
+`RespawnService.ScheduleDecayTask(npc, 4000L)`; `npc.GetSpawn().GetStaticId()` + `SetWalkerId` on `SpawnTemplate`;
+`SM_EMOTION(npc, EmotionType.CHANGE_SPEED)` + `PacketSendUtility.BroadcastPacket`; `Rnd.Get(min,max)`;
+`instance.SetDoorState`; `Skill.UseSkill()` via `Aion.GameServer.SkillEngine.SkillEngine.GetInstance().GetSkill(...)`.
+**Batch-5 gotchas:** `AtomicReference<Race>` → `Race? race` field + per-field `lock` for the compareAndSet-null-guard
+in OnEnterInstance; the two `scheduleAtFixedRate(new Runnable(){ int count; run(){ switch(++count) }})` stateful
+inner classes → captured local `int count = 0;` + `ScheduleAtFixedRateTask(_ => { switch(++count){...}; return
+ValueTask.CompletedTask; }, TimeSpan.FromMilliseconds(initial), TimeSpan.FromMilliseconds(period))` (needs `using
+System.Threading.Tasks;`); ScheduleAtFixedRateTask has **no Action overload** (must return ValueTask + TimeSpan args),
+but plain `Schedule(()=>{...}, longMillis)` void-lambda binds the `Schedule(Action,long)` overload fine; `getAndSet`
+→ `Interlocked.Exchange`; `compareAndSet(exp,upd)` → `Interlocked.CompareExchange(ref,upd,exp)==exp`. Confirms the
+pattern: heavy-by-line-count ≠ heavy-by-subsystem.
+
+**Remaining 3 = the heavy-defers:** ShugoImperialTomb (1329), StonespearReach (925), EternalBastion (867).
+Recommend **EternalBastion (867)** next — smallest remaining; verify its ScoreWriter/InstanceScore subtype + any new
+SM strings the same way (grep PascalCase symbols + check base classes) before porting; it may likewise be a
 false-heavy-defer if its scoreboard pillar is pre-ported.
 
 ## CAPSTONE FIDELITY RE-SURVEY — 2026-06-16 (commit e3e1b1184)
