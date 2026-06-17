@@ -2,6 +2,147 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## RESOLVED — house-twin-spawn question: VERDICT (c) GENUINE JAVA LATENT BUG, C# mirrors faithfully, NO CODE CHANGE (read-only analysis, 2026-06-16)
+
+QUESTION: full-world SpawnEngine.SpawnAll re-spawns the same address-cached House objectId into each of a
+map's getInstanceCount() twin instances -> DuplicateAionObjectException. Is this a real Java latent bug (mirror
+it), or does Java avoid it (per-instance objectIds / instanceCount==1 for housing maps / spawnHouses keys off
+instanceId)?
+
+### VERDICT: (c) — Java genuinely double-spawns the SAME House object across twin instances and has NO guard.
+C# is a byte-for-byte faithful mirror. **NO fix applied** (the hard rule forbids inventing a guard Java lacks).
+NOT case (a) (Java does NOT mint a fresh objectId per twin — it reuses the cached House), NOT case (b) (housing
+maps DO have getInstanceCount() > 1 — twins happen).
+
+### Java evidence (line refs)
+- **SpawnEngine.spawnAll** (game-server SpawnEngine.java:119-126): `worldMap.forEach(instance -> spawnInstance(
+  instance, (byte)0, instance.getOwnerId()))` — iterates ALL instances (WorldMap implements Iterable over its
+  `instances` map, which holds getInstanceCount() entries created in the WorldMap ctor :31-36). Guarded only by
+  `if (!worldMap.isInstanceType())`.
+- **spawnInstance** (SpawnEngine.java:187-188): `if (eventTemplate == null) HousingService.getInstance().
+  spawnHouses(instance, ownerId);` — called once PER instance, with ownerId==0 at boot (so spawnHouses takes the
+  customHouses branch, not spawnStudio).
+- **HousingService.spawnHouses** (HousingService.java:149-175): for each HouseAddress on the map,
+  `House customHouse = customHouses.get(address.getId());` — **the cache is keyed by address.getId(), NOT by
+  instanceId**. First instance: customHouse==null -> `new House(address, instanceId)` (ONE IDFactory objectId,
+  House.java:59-60 `this(IDFactory.getInstance().nextId(), ...)`) -> stored in customHouses. Subsequent twin
+  instances: `customHouses.get(address.getId())` returns the SAME House -> `customHouse.setPosition(...)` (new
+  instance position) -> `SpawnEngine.bringIntoWorld(customHouse)` re-stores the SAME objectId.
+- **bringIntoWorld** (SpawnEngine.java:108-114) -> **World.storeObject** (World.java:75-82):
+  `allObjects.putIfAbsent(object.getObjectId(), object); if (oldObject != null) throw new
+  DuplicateAionObjectException(...)`. **NO `isInWorld(objId)` guard, no try/catch, no per-instance keying.** So on
+  instance #2 of a housing map, Java throws DuplicateAionObjectException — identically to C#.
+- **WorldMap.getInstanceCount** (WorldMap.java:125-131): `twinCount = twin_count; if (0) ->1; twinCount +=
+  beginner_twin_count; return twinCount`.
+
+### Housing-map instanceCount values (game-server/data/static_data/world_maps.xml + housing/houses.xml)
+houses.xml carries non-studio addresses on exactly 8 maps. Their world_maps.xml twin config + computed
+getInstanceCount():
+| map | name | twin_count | beginner_twin_count | instance? | getInstanceCount() | #addresses |
+|-----|------|-----------|--------------------|-----------|--------------------|-----------|
+| 210040000 | Heiron   | (none) | **3** | no  | **4** | 9 |
+| 220040000 | Beluslan | (none) | **3** | no  | **4** | 9 |
+| 210050000 | Inggison   | (none) | (none) | no | 1 | (addr present) |
+| 220070000 | Gelkmaros  | (none) | (none) | no | 1 | (addr present) |
+| 700010000 | Oriel (land)  | (none) | (none) | no | 1 | many |
+| 710010000 | Pernon (land) | (none) | (none) | no | 1 | many |
+| 720010000 | Oriel (personal)  | — | — | **instance=true** | (skipped by !isInstanceType) | — |
+| 730010000 | Pernon (personal) | — | — | **instance=true** | (skipped) | — |
+
+=> **Heiron (210040000) and Beluslan (220040000) are the trigger maps**: getInstanceCount()==4, NOT instance-type,
+9 cached Houses each. SpawnAll spawns instance #1 fine (9 Houses, 9 fresh objectIds), then DuplicateAionObjectException
+on instance #2. The note in the prior section's (a) claiming Heiron=4 is now CONFIRMED exact, and the trigger is
+the `beginner_twin_count="3"` (+1 base) = 4 instances, not `twin_count`.
+
+### C# parity audit (confirms faithful mirror, no divergence to fix)
+- HousingService.cs:151-176 SpawnHouses — identical: `customHouses.GetValueOrDefault(address.GetId())` (address-
+  keyed cache), create-if-null with `new House(address, instance.GetInstanceId())`, `SetPosition` +
+  `SpawnEngine.BringIntoWorld(customHouse)` re-store. 1:1.
+- WorldMap.cs:147-153 GetInstanceCount — `twinCount = GetTwinCount(); if 0 ->1; += GetBeginnerTwinCount()`. 1:1.
+- World.cs:70-78 StoreObject — `if (!_allObjects.TryAdd(objId, obj)) throw new DuplicateAionObjectException(...)`.
+  NO isInWorld guard. 1:1.
+- House objectId — `new House(HouseAddress, int)` -> `IDFactory.GetInstance().NextId()` once. 1:1 (no per-twin id).
+
+### Disposition
+No code change. This is a faithful reproduction of a Java latent bug. A full-world SpawnEngine.SpawnAll boot would
+DuplicateAionObjectException on Heiron/Beluslan instance #2 in BOTH Java and C#. The implication for the DB-backed
+full-StartAsync boot (Part 2 below): you CANNOT run an unmodified full SpawnAll over the real world_maps even WITH
+a DB — the housing twin-spawn would throw, faithfully, in Java too. **Real Java avoids the crash only because the
+live server does not run `spawnAll()` over a world where Heiron/Beluslan got 4 instances created AND houses spawned
+into >1 of them in the same boot** — i.e. in the real binary this path is reached but the DuplicateAionObjectException
+is a known faithful outcome; mirroring it (let it throw) is correct. Do NOT add an `if(!World.IsInWorld(objId))`
+guard — Java has none. If a future DB-backed full-boot test wants to exercise SpawnAll past housing, it must either
+(i) restrict the seeded world_maps to non-twin housing maps, or (ii) assert the DuplicateAionObjectException is the
+faithful Java behavior — NEVER patch HousingService/World to dedupe.
+
+## SCOPE — DB-backed full-StartAsync bootstrap harness (read-only assessment, 2026-06-16)
+
+GOAL: run a FULL GameServerBootstrapService.StartAsync against the opt-in MySQL container (3307 / aion_gs /
+root:aion, gated on AION_GAMESERVER_DB_INTEGRATION=1, the same env switch SystemMailRepositoryDatabaseIntegration
+Tests use) and flip on the DB-required wires.
+
+### What the DB unblocks (services that NRE/throw today only because PlayerDAO/etc. return null on no-DB)
+- **#2 HousingService block (main:119-123) — the primary DB-gated unblock.** HousingService ctor ->
+  RevokeOwnershipOfDeletedPlayers() -> `new HashSet<int>(PlayerDAO.GetUsedIDs())` (HousingService.cs:52;
+  PlayerDAO.cs:359). GetUsedIDs() returns null on no-DB (Java identical, no guard) -> ArgumentNullException. WITH
+  the DB up, GetUsedIDs returns the real (possibly empty) id array -> ctor completes -> HousingService.GetInstance()
+  can be wired at main:119. Also HousesDAO.LoadHouses (HousingService.cs:43) reads the houses table. The prior
+  section already CONFIRMED "with the DB up, the full StartAsync boot ran SpawnAll past HousingService" — so the DB
+  satisfies the ctor; the remaining blocker past it is the house-twin-spawn (Part 1, faithful — let it throw / seed
+  non-twin maps only).
+- **PlayerDAO.setAllPlayersOffline() (initUtilityServicesAndConfig)** (PlayerDAO.cs:424) — currently a boot GAP
+  (inert with no DB: UPDATE players SET online=0). With the DB it executes and flips the online flag for any
+  persisted rows. Cosmetic until real logins persist, but it becomes a real, observable boot step under a populated
+  players table.
+- **player-offline init / persisted-player-dependent reads** — any boot read keyed off a populated players/
+  legions/inventory table (LegionService.GetCachedLegions for PeriodicSaveService's LegionWarehouseSaveTask,
+  ServerVariablesDAO for ServerRunTimeSaveTask, BrokerService/AnnouncementService/CommandsAccessService DAO loads)
+  goes from "try/catch -> empty + logged" to actually returning seeded rows. None of these BLOCK boot today (all
+  DAO-guarded), but with the DB they exercise their real query paths (real DB-fidelity coverage, not just no-DB
+  no-op coverage).
+- **PeriodicSave task BODIES (main:156)** — already wired + boot-safe (commit 62c408390). With the DB, the
+  scheduled LegionWarehouseSaveTask (InventoryDAO.Store + ItemStoneListDAO.Save) and ServerRunTimeSaveTask
+  (ServerVariablesDAO.Store "serverLastRun") actually WRITE to the DB instead of try/catch-logging false — turns
+  the task-body assertions from "no-throw" into "row persisted".
+
+### What stays DEFERRED even WITH the DB (heavy SPAWN/world-map, NOT DB-gated)
+- **#1 SiegeService.initSieges() (main:142)** — needs the full SPAWNS_DATA siege-spawn dir + siege/artifact world
+  maps loaded into World so ArtifactSiege.OnSiegeStart -> Siege.InitSiegeBoss finds its boss (else SiegeException
+  "Siege Boss not found for siege 1012"). This is a SPAWN-DATA + world-map harness need (scoped in the spawn-data-
+  backed harness section below), NOT a DB need. A DB alone does not satisfy it.
+- **#5 PvpMapService.init() (main:176)** — needs world map 301220000 in WORLD_MAPS_DATA + spawns keymasters/chests
+  (and conflicts with the bootstrap empty-world invariant). SPAWN/world-map need, not DB.
+- **The house-twin-spawn (Part 1)** — faithful Java bug; even with the DB, a full SpawnAll over the real
+  world_maps throws DuplicateAionObjectException on Heiron/Beluslan instance #2. Not DB-fixable; must seed non-twin
+  housing maps or assert-the-throw. NEVER patch.
+
+### What flips green WITH the DB present
+- A new DB-gated test (`[Fact]` early-return unless AION_GAMESERVER_DB_INTEGRATION=1, mirroring
+  SystemMailRepositoryDatabaseIntegrationTests' InitializeDatabaseFactory/InitializeSchema/Seed pattern) can:
+  bring up DatabaseFactory against 3307, run StartAsync with HousingService wired at main:119-123, and assert the
+  boot reaches SpawnAll past HousingService (it does — confirmed). To get a CLEAN full-SpawnAll it must seed a
+  world_maps subset EXCLUDING the twin housing maps (210040000/220040000) OR expect the faithful
+  DuplicateAionObjectException. Everything else (the ~30 already-wired getInstance/init services) is already green
+  no-DB.
+
+### Honest frontier assessment
+**The autonomous IN-MEMORY work is essentially complete.** All bounded boot-init wires that can run without a DB
+or a heavy spawn/world-map load are wired (BOOT-COMPLETENESS CENSUS below: only #1/#2/#5 remain, each at a real
+data/DB floor). The three remaining frontiers are ALL user-environment-gated, NOT code gaps:
+1. **DB frontier (#2 Housing + setAllPlayersOffline + persisted-player reads)** — requires the 3307 MySQL
+   container RUNNING + AION_GAMESERVER_DB_INTEGRATION=1. The C# code is faithful and ready; only the environment
+   (a live DB) is missing. This is the SAME frontier as memory three-server-stack-boots' real-client
+   login->enter-world test (Front A): both need the populated DB + a running server process, not more porting.
+2. **Heavy-spawn/world-map frontier (#1 Siege + #5 Pvp)** — requires the spawn-data-backed harness (scoped below:
+   seed real spawns/ + world_maps.xml + NPC_DATA into the test World). Medium effort, IN-MEMORY-doable (no DB), but
+   it is a sizeable fixture-data + assert-evolution task, the highest-value remaining bounded in-memory move.
+3. **House-twin-spawn** — RESOLVED as faithful (Part 1); no work, just don't patch.
+
+CONCLUSION: there IS one remaining bounded IN-MEMORY-testable move — the spawn-data-backed bootstrap harness
+(unblocks #1 + #5 together, scoped in the existing section below). Beyond that, the frontier is genuinely
+DB-environment (the 3307 container) and real-client (Front A login->enter-world), both user-environment-gated. The
+porting/faithfulness arc has no remaining un-blocked autonomous code work other than that one spawn-harness task.
+
 ## RESOLVED — spawn-backed integration test proves NPCs spawn end-to-end (commit pending, 2026-06-16)
 
 Added GameServerBootstrapTests.GameServerBootstrap_RealSpawnDataMaterializesNpcsIntoWorld — the END-TO-END
