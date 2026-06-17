@@ -2,6 +2,26 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## RESOLVED 2026-06-16 — full-suite test-isolation (one-process `dotnet test` now 454/0)
+
+The suite passed per-class but flaked 2-4 tests in a single process. Three failures, all diagnosed + fixed
+test-infra-only (no production hack, no weakened assertion):
+- **GoldenStatsInfoFixtureTests.CsharpStatsInfoMatchesJavaGoldenFixture** (SM_STATS_INFO byte#4 = game-time D
+  = 0x2D vs Java 0) — POLLUTION. `GameServerBootstrapTests` constructs a `GameTimeService` (ctor unconditionally
+  sets the `_instance` singleton) and advances it to a non-zero game-minute (`WaitUntilAsync(GameMinutes>0)`),
+  racing the golden packet fixtures that read `GameTimeService.GetInstance().GetGameTime().GetTime()` and assert
+  time 0. FIX: (1) added `[Collection("GoldenDataManager")]` to GameServerBootstrapTests (serialize, no parallel
+  race); (2) the 3 golden fixtures' `EnsureGameTimeSingleton` now ALWAYS reconstructs a 0-minute instance instead
+  of skipping when one already exists, so it resets the singleton if a serialized sibling left it advanced.
+- **JaxbHolderLoaderTests.LoadFromFile_PopulatesWorldMapsDataFromRealXml** (twin counts 1/0 vs expected 5/6) —
+  REAL STALE EXPECTATION (failed isolated too). Stale vs the 2026-06-16 faithful twin-clamp fix (commit 4e0e872a7).
+  The test was asserting the clamping accessors `GetTwinCount()`/`GetBeginnerTwinCount()`; it actually verifies XML
+  binding, so it now asserts the raw deserialized fields `TwinCount`/`BeginnerTwinCount` (5/6), independent of the
+  mutable `WorldConfig` statics.
+- **GameServerOptionsTests.LoadDatabaseOptionsFromJavaConfig** (port 3306 vs 3307) — REAL STALE EXPECTATION
+  (failed isolated too). `mygs.properties` (loaded last, Java mygs-override-wins parity) points the DB at the local
+  Docker MySQL on 3307. Faithful behavior; test expectation corrected 3306 -> 3307.
+
 ## EMPIRICAL — DB-backed full-boot smoke RUN against the live MySQL container (2026-06-16)
 
 The prior read-only static analysis (sections below) is now CONFIRMED AT RUNTIME. New opt-in env-gated test
