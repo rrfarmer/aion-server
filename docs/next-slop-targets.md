@@ -11,14 +11,21 @@ WritePayload` is a C#-test-only invention with no Java counterpart, called only 
 tests, never on the GS client wire. (The 184 `SerializeFrame/WritePayload` grep hits are the `Sm*` override
 declarations plus the SEPARATE LoginServer/ChatServer packet families, which legitimately frame on their own
 wires.) The skipped golden case `SM_GROUP_DATA_EXCHANGE` (a faithful `SM_*:AionServerPacket`) is skipped only
-because the harness serializes via `SerializeFrame`, which faithful-only packets lack — a test-harness gap,
+because the harness serialized via `SerializeFrame`, which faithful-only packets lack — a test-harness gap,
 not a packet bug. Runtime wire-correctness is already faithful. Full unification (re-point ~138 duplicate-twin
 `Sm*` -> faithful `SM_*`, delete `Sm*`, drop `GameServerPacket`) is **gated on the reworked-worldnpc-spawn-
 cluster big-bang** (held for user go-ahead). **BOTH build-zero "real src fidelity bugs" are now resolved-or-
 understood: #1 (RiftManager fan-out) fixed by pillar-a; #2 (this) wire-faithful, only cosmetic slop debt.**
-Bounded non-gated follow-up available: extend the golden harness to serialize a faithful `AionServerPacket`
-via the `Write` path (un-skip `SM_GROUP_DATA_EXCHANGE`) — precedent exists (SM_PLAYER_INFO/SM_STATS_INFO
-uninitialized-AionConnection harness).
+
+**UN-SKIP DONE (2026-06-17):** `SM_GROUP_DATA_EXCHANGE` is no longer skipped. The bounded, test-tree-only
+faithful-`WriteImpl` seam `CaptureWriteImplPayload` (GoldenPacketFixtureTests.cs:448-460) mirrors the Java
+`capture()` (GoldenPacketFixtureGeneratorTest.java:755-771) 1:1 — `ByteBuffer.Allocate(8192).Order(LITTLE_ENDIAN)`
++ `SetBuf` + reflective `WriteImpl(null)` + read `Position()` bytes. NO uninitialized-AionConnection needed:
+this packet's `WriteImpl` reads only ctor args (action/unk2/byteData), so `con` is passed as `null`. The
+Java-oracle fixture (`parity-artifacts/golden/packets/SM_GROUP_DATA_EXCHANGE.json`, `"source":"Java"`, opcode
+178, generator entries lines 45-52) drives 2 byte-exact cases: `nearbyBroadcast`=`01030000000102FF`,
+`groupBroadcast`=`0207040000000A0B0C0D`. These are validated through the real faithful `SM_GROUP_DATA_EXCHANGE`
+(`AionServerPacket`) write path, NOT a C# snapshot. The skipped case is now an active passing golden case.
 
 ## DEFERRED FIDELITY BUG #1 (RiftManager instance fan-out) — RESOLVED & VERIFIED (2026-06-17, HEAD cc67e1fe6)
 
