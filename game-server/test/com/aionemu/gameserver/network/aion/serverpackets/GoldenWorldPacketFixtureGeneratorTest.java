@@ -854,6 +854,114 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 		writeFixture(outDir.resolve("SM_INVENTORY_ADD_ITEM_VARIANTS.json"), "SM_INVENTORY_ADD_ITEM", cases);
 	}
 
+	// ---- equippable item / ItemInfoBlob seam: per-type SHIELD / WING / PLUME blob writers (SM_INVENTORY_ADD_ITEM) ----
+	//
+	// Reuses the equippable-item seam above to cover the THREE per-type blob writers that getFullBlob selects BEFORE the
+	// isArmor()/isWeapon() branches (itemGroup == WING / SHIELD / PLUME). Each is a DISTINCT fixture case with a DISTINCT
+	// objectId in a NEW fixture file (never clobbers the weapon/armor/accessory fixtures):
+	//   * SHIELD (itemGroup SHIELD): getValidEquipmentSlots()==SUB_HAND mask -> getFullBlob adds EQUIPPED_SLOT + SLOTS_SHIELD
+	//     + ENCHANT_INFO + PREMIUM_OPTION + GENERAL_INFO. ShieldInfoBlobEntry.writeThisBlob = writeQ(getSlotFor(getItemSlot())
+	//     .getSlotIdMask()) [SHIELD -> ItemSlot.SUB_HAND, single slot], writeQ(0), writeDyeInfo(getItemColor()) [null -> 4 zero
+	//     bytes]. SHIELD subType -> ArmorType.GENERAL -> isArmor()==true, armorType != ACCESSORY, not BELT -> isCloth()==true ->
+	//     trailing isCloth byte 1.
+	//   * WING (itemGroup WING): getValidEquipmentSlots()==WINGS mask -> EQUIPPED_SLOT + SLOTS_WING + ENCHANT_INFO + ...
+	//     WingInfoBlobEntry.writeThisBlob = writeQ(getSlotFor(getItemSlot()).getSlotIdMask()) [WING -> ItemSlot.WINGS], writeQ(0)
+	//     (no dye). WING subType -> ArmorType.GENERAL -> isArmor()==true -> isCloth()==true -> trailing byte 1.
+	//   * PLUME (itemGroup PLUME): getValidEquipmentSlots()==PLUME mask -> EQUIPPED_SLOT + PLUME_INFO + ENCHANT_INFO + ...
+	//     PlumeInfoBlobEntry.writeThisBlob = writeQ(getSlotFor(getItemSlot()).getSlotIdMask()) [PLUME -> ItemSlot.PLUME],
+	//     writeQ(0x100000), writeD(0)x4. PLUME subType -> EquipType.PLUME (NOT armor) -> isArmor()==false -> isCloth()==false ->
+	//     trailing byte 0.
+	//
+	// Plus a TEMPERED-plume case to exercise the ENCHANT_INFO branch (item.getTempering() > 0 && itemGroup == PLUME): it reads
+	// getItemTemplate().getTemperingName() (".equals("TSHIRT_PHYSICAL") ? PLUM_PHISICAL_ATTACK : PLUM_BOOST_MAGICAL_SKILL"),
+	// then writes PLUM_HP.getId()/PLUM_HP.getBoostValue()*tempering for the 1st stat and stat.getId()/stat.getBoostValue()*
+	// tempering + getRndPlumeBonusValue() for the 2nd. Two sub-cases: temperingName "TSHIRT_PHYSICAL" (-> PLUM_PHISICAL_ATTACK)
+	// and a non-match name (-> PLUM_BOOST_MAGICAL_SKILL), each with a pinned tempering level + rndPlumeBonusValue, so BOTH
+	// PlumStatEnum branches are covered. All other blob reads are identical to the equippable seam (PREMIUM_OPTION/GENERAL_INFO
+	// deterministic; no live Player deref, no stones/godstone/idian/conditioning/fusion). Mirrored 1:1 on the C# asserter side.
+	private static final int EQ_SHIELD_OBJECT_ID = 268700101; // distinct from weapon/armor/accessory ids
+	private static final int EQ_SHIELD_TEMPLATE_ID = 120000111;
+	private static final int EQ_SHIELD_MASK = 0x55CC;
+	private static final int EQ_SHIELD_DESC_L10N = 350801;
+	private static final int EQ_WING_OBJECT_ID = 268700102; // distinct
+	private static final int EQ_WING_TEMPLATE_ID = 125000222;
+	private static final int EQ_WING_MASK = 0x66DD;
+	private static final int EQ_WING_DESC_L10N = 350802;
+	private static final int EQ_PLUME_OBJECT_ID = 268700103; // distinct
+	private static final int EQ_PLUME_TEMPLATE_ID = 130000333;
+	private static final int EQ_PLUME_MASK = 0x77EE;
+	private static final int EQ_PLUME_DESC_L10N = 350803;
+	private static final int EQ_PLUME_PHYS_OBJECT_ID = 268700104; // distinct (tempered, TSHIRT_PHYSICAL)
+	private static final int EQ_PLUME_MAGIC_OBJECT_ID = 268700105; // distinct (tempered, non-match name)
+	private static final int EQ_PLUME_TEMPERING = 5; // tempering level (> 0) -> ENCHANT_INFO plume branch
+	private static final int EQ_PLUME_RND_BONUS = 17; // getRndPlumeBonusValue() addend on the 2nd stat value
+
+	@Test
+	public void generateGoldenInventoryAddItemPerTypeFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installItemCleanupSeam(); // GENERAL_INFO reads DataManager.ITEM_CLEAN_UP.hasAccountOrLegionWhStorabilityDisabled
+
+		List<Case> cases = new ArrayList<>();
+		// (a) Shield (unequipped, undyed) -> SLOTS_SHIELD (SUB_HAND slot + writeQ(0) + 4 zero dye bytes), isCloth byte 1.
+		cases.add(equippableVariantCase("invAddEquippableShield", EQ_SHIELD_OBJECT_ID, EQ_SHIELD_TEMPLATE_ID,
+			EQ_SHIELD_MASK, EQ_SHIELD_DESC_L10N, "Smith", ItemGroup.SHIELD, null, ItemAddType.BUY));
+		// (b) Wing (unequipped) -> SLOTS_WING (WINGS slot + writeQ(0)), isCloth byte 1.
+		cases.add(equippableVariantCase("invAddEquippableWing", EQ_WING_OBJECT_ID, EQ_WING_TEMPLATE_ID,
+			EQ_WING_MASK, EQ_WING_DESC_L10N, "Tailor", ItemGroup.WING, null, ItemAddType.BUY));
+		// (c) Plume (unequipped, NOT tempered) -> PLUME_INFO (PLUME slot + writeQ(0x100000) + writeD(0)x4), isCloth byte 0.
+		cases.add(equippableVariantCase("invAddEquippablePlume", EQ_PLUME_OBJECT_ID, EQ_PLUME_TEMPLATE_ID,
+			EQ_PLUME_MASK, EQ_PLUME_DESC_L10N, "Plumer", ItemGroup.PLUME, null, ItemAddType.BUY));
+		// (d) TEMPERED plume, temperingName "TSHIRT_PHYSICAL" -> ENCHANT_INFO plume branch (PLUM_HP + PLUM_PHISICAL_ATTACK).
+		cases.add(temperedPlumeCase("invAddEquippablePlumeTemperedPhysical", EQ_PLUME_PHYS_OBJECT_ID, EQ_PLUME_TEMPLATE_ID,
+			EQ_PLUME_MASK, EQ_PLUME_DESC_L10N, "Plumer", "TSHIRT_PHYSICAL", EQ_PLUME_TEMPERING, EQ_PLUME_RND_BONUS));
+		// (e) TEMPERED plume, non-match temperingName -> ENCHANT_INFO plume branch (PLUM_HP + PLUM_BOOST_MAGICAL_SKILL).
+		cases.add(temperedPlumeCase("invAddEquippablePlumeTemperedMagical", EQ_PLUME_MAGIC_OBJECT_ID, EQ_PLUME_TEMPLATE_ID,
+			EQ_PLUME_MASK, EQ_PLUME_DESC_L10N, "Plumer", "TSHIRT_MAGICAL", EQ_PLUME_TEMPERING, EQ_PLUME_RND_BONUS));
+
+		writeFixture(outDir.resolve("SM_INVENTORY_ADD_ITEM_PERTYPE.json"), "SM_INVENTORY_ADD_ITEM", cases);
+	}
+
+	private static Case temperedPlumeCase(String name, int objectId, int itemId, int mask, int desc, String creator,
+			String temperingName, int tempering, int rndPlumeBonusValue) {
+		Item item = buildTemperedPlume(objectId, itemId, mask, desc, creator, temperingName, tempering, rndPlumeBonusValue);
+		List<Item> items = new ArrayList<>();
+		items.add(item);
+		String inputs = "{\"objectId\":" + objectId + ",\"itemId\":" + itemId + ",\"mask\":" + mask + ",\"desc\":" + desc
+			+ ",\"itemCount\":1,\"itemCreator\":\"" + creator + "\",\"itemGroup\":\"PLUME\",\"temperingName\":\""
+			+ temperingName + "\",\"tempering\":" + tempering + ",\"rndPlumeBonusValue\":" + rndPlumeBonusValue
+			+ ",\"addType\":\"BUY\"}";
+		return new Case(name, inputs, capture(new SM_INVENTORY_ADD_ITEM(items, null, ItemAddType.BUY), null));
+	}
+
+	/**
+	 * Build a minimal EQUIPPABLE TEMPERED plume Item via the simple Item(objId, itemTemplate) ctor. itemGroup PLUME (PLUME
+	 * slot, isArmor false) + temperingName set (so getTemperingName().equals(..) doesn't NPE) + tempering level + a random
+	 * plume bonus value, so the ENCHANT_INFO plume branch fires. maxTuneCount 0 (canTune() false -> isIdentified() true).
+	 * No stones/godstone/idian/dye/conditioning/fusion. Mirrored 1:1 on the C# asserter side.
+	 */
+	private static Item buildTemperedPlume(int objectId, int itemId, int mask, int desc, String creator,
+			String temperingName, int tempering, int rndPlumeBonusValue) {
+		try {
+			ItemTemplate template = new ItemTemplate();
+			setField(template, "itemId", itemId);
+			setField(template, "mask", mask);
+			setField(template, "description", desc);
+			setField(template, "itemGroup", ItemGroup.PLUME);
+			setField(template, "temperingName", temperingName);
+			setField(template, "maxTuneCount", 0); // canTune() == false -> isIdentified() == true (deterministic)
+			Item item = new Item(objectId, template);
+			item.setItemCount(1L);
+			item.setItemCreator(creator);
+			item.setTempering(tempering);
+			item.setRndPlumeBonusValue(rndPlumeBonusValue);
+			return item;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to build tempered plume Item", e);
+		}
+	}
+
 	private static Case equippableVariantCase(String name, int objectId, int itemId, int mask, int desc, String creator,
 			ItemGroup itemGroup, Integer itemColor, ItemAddType addType) {
 		Item item = buildEquippableVariant(objectId, itemId, mask, desc, creator, itemGroup, itemColor);

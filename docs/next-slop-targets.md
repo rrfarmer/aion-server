@@ -2,6 +2,31 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## GOLDEN SUITE 193 -> 194 (2026-06-17) — equippable seam REUSE: SHIELD + WING + PLUME per-type blobs + TEMPERED-plume ENCHANT_INFO branch
+
+Reused the SAME equippable-item/ItemInfoBlob seam for the THREE remaining per-type blob writers (selected BEFORE isArmor()/
+isWeapon() in `getFullBlob`) + the tempered-plume ENCHANT_INFO branch. **Byte-exact on first capture, 0 fidelity bugs**
+(ShieldInfoBlobEntry.cs + WingInfoBlobEntry.cs + PlumeInfoBlobEntry.cs + EnchantInfoBlobEntry.cs plume branch all faithful
+1:1). ONE NEW fixture **SM_INVENTORY_ADD_ITEM_PERTYPE.json** (5 cases, distinct objectIds 268700101-105, no clobber):
+- (a) **SHIELD** -> **SLOTS_SHIELD** = `writeQ(getSlotFor(getItemSlot()).getSlotIdMask())` [SHIELD -> ItemSlot.SUB_HAND] +
+  `writeQ(0)` + `writeDyeInfo(getItemColor())` (null -> 4 zero bytes). SHIELD subType -> ArmorType.GENERAL -> isArmor() true,
+  != ACCESSORY/BELT -> **isCloth() true** -> host trailing byte 1.
+- (b) **WING** -> **SLOTS_WING** = `writeQ(getSlotFor(getItemSlot()).getSlotIdMask())` [WING -> ItemSlot.WINGS] + `writeQ(0)`.
+  WING subType -> ArmorType.GENERAL -> isArmor() true -> **isCloth() true** -> byte 1.
+- (c) **PLUME (untempered)** -> **PLUME_INFO** = `writeQ(getSlotFor(getItemSlot()).getSlotIdMask())` [PLUME -> ItemSlot.PLUME] +
+  `writeQ(0x100000)` + `writeD(0)`x4. PLUME subType -> EquipType.PLUME (NOT armor) -> **isCloth() false** -> byte 0.
+- (d)(e) **TEMPERED PLUME** (`tempering>0 && itemGroup==PLUME`) exercising the **ENCHANT_INFO plume branch**: pins
+  `template.temperingName` (so `getTemperingName().equals("TSHIRT_PHYSICAL")` doesn't NPE) + `item.setTempering(5)` +
+  `setRndPlumeBonusValue(17)`. (d) name "TSHIRT_PHYSICAL" -> PLUM_PHISICAL_ATTACK (id 30, boost 4*5=20+17=37); (e) non-match
+  name -> PLUM_BOOST_MAGICAL_SKILL (id 35, boost 20*5=100+17=117). 1st stat always PLUM_HP (id 42, boost 150*5=750). Both
+  PlumStatEnum branches verified byte-exact.
+
+**Per-type blob coverage COMPLETE**: SLOTS_WEAPON + SLOTS_ARMOR + SLOTS_ACCESSORY + SLOTS_SHIELD + SLOTS_WING + PLUME_INFO +
+EQUIPPED_SLOT/ENCHANT_INFO(inc. dyed + tempered-plume)/PREMIUM_OPTION/GENERAL_INFO all golden'd via the bounded simple-ctor
+seam. Remaining heavier sub-paths (socketed-manastone / godstone / idian-polished / conditioned / fusioned-COMPOSITE) each
+populate ONE more Item sub-object 1:1 both sides — bounded but not yet golden'd. NEXT vein: the live-World increment
+(SM_PLAYER_SPAWN / SM_DIE) per the integration-harness plan.
+
 ## GOLDEN SUITE 191 -> 193 (2026-06-17) — equippable seam REUSE: ARMOR + ACCESSORY per-type blobs + DYED branch + SM_VIEW_PLAYER_DETAILS
 
 Reused the equippable-item/ItemInfoBlob seam for the OTHER per-type blob writers + a 2nd packet, extending the SAME
