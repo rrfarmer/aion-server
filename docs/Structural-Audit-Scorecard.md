@@ -17,46 +17,46 @@ with low `java_classes` is the slop signature (re-port fresh per the plan).
 
 | C# stem | C# files | C# lines | Java classes | Java lines | line ratio | Java match |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| SM | 246 | 37124 | 261 | 42787 | 1x | SM_DELETE_CHARACTER, SM_NPC_INFO… |
-| CM | 189 | 10717 | 203 | 11691 | 1x | CM_BUILDER_CONTROL, CM_POSITION_SELF… |
-| GlobalDrop | 21 | 367 | 21 | 655 | 1x | GlobalDropRating, GlobalDropMaps… |
-| EternalBastion | 16 | 1810 | 16 | 1721 | 1x | EternalBastionAssaulterNpcAI, EternalBastionBomberAI… |
-| CustomInstance | 14 | 1333 | 14 | 1238 | 1x | CustomInstanceScapiAI, CustomInstanceRank… |
-| LegionDominion | 14 | 1253 | 13 | 1113 | 1x | LegionDominionScore, LegionDominionInvasionRiftOpenAI… |
-| PlayerGroup | 14 | 746 | 9 | 574 | 1x | PlayerGroupMember, PlayerGroupStopMentoringEvent… |
-| NpcSkill | 12 | 966 | 11 | 867 | 1x | NpcSkillData, NpcSkillConditionTemplate… |
-| WorldRaid | 9 | 902 | 9 | 753 | 1x | WorldRaid, WorldRaidNpc… |
-| PlayerAlliance | 9 | 916 | 9 | 811 | 1x | PlayerAllianceUpdateEvent, PlayerAllianceService… |
-| StaticDoor | 8 | 481 | 7 | 427 | 1x | StaticDoorState, StaticDoorWorld… |
-| ShugoTomb | 8 | 518 | 8 | 507 | 1x | ShugoTombImperialObeliskAI, ShugoTombTransformationDeviceAI… |
-| ExpertExpertof | 8 | 642 | 8 | 570 | 1x | _1981ExpertExpertofAlchemy, _19053ExpertExpertofConstruction… |
-| FlyRing | 7 | 324 | 7 | 340 | 1x | FlyRingController, FlyRingTemplate… |
-| AutoGroup | 7 | 1200 | 6 | 1036 | 1x | AutoGroupUtility, AutoGroupService… |
-| DarkPoeta | 7 | 699 | 6 | 575 | 1x | DarkPoetaScore, DarkPoetaScoreWriter… |
-| ExpertPassionfor | 7 | 560 | 7 | 497 | 1x | _29052ExpertPassionforConstruction, _1976ExpertPassionforHandicrafting… |
+| SM | 246 | 37124 | 261 | 42787 | 1x | SM_ABYSS_RANKING_LEGIONS, SM_PRIVATE_STORE_NAME… |
+| CM | 189 | 10717 | 203 | 11691 | 1x | CM_LOOT_ITEM, CM_BLOCK_ADD… |
+| GlobalDrop | 21 | 367 | 21 | 655 | 1x | GlobalDropRating, GlobalDropTribe… |
+| EternalBastion | 16 | 1810 | 16 | 1721 | 1x | EternalBastionCommanderAI, EternalBastionDragonAI… |
+| CustomInstance | 14 | 1333 | 14 | 1238 | 1x | CustomInstanceTeleporter, CustomInstanceRankEnum… |
+| LegionDominion | 14 | 1253 | 13 | 1113 | 1x | LegionDominionIntruderUpdateTask, LegionDominionLocation… |
+| PlayerGroup | 14 | 746 | 9 | 574 | 1x | PlayerGroupStopMentoringEvent, PlayerGroupMember… |
+| NpcSkill | 12 | 966 | 11 | 867 | 1x | NpcSkillTemplates, NpcSkillList… |
+| WorldRaid | 9 | 902 | 9 | 753 | 1x | WorldRaidRunnable, WorldRaidLocation… |
+| PlayerAlliance | 9 | 916 | 9 | 811 | 1x | PlayerAllianceGroup, PlayerAllianceService… |
+| StaticDoor | 8 | 481 | 7 | 427 | 1x | StaticDoorWorld, StaticDoorSpawnManager… |
+| ShugoTomb | 8 | 518 | 8 | 507 | 1x | ShugoTombModoAI, ShugoTombBossAI… |
+| ExpertExpertof | 8 | 642 | 8 | 570 | 1x | _19053ExpertExpertofConstruction, _1979ExpertExpertofCooking… |
+| FlyRing | 7 | 324 | 7 | 340 | 1x | FlyRingPoint, FlyRingTemplate… |
+| AutoGroup | 7 | 1200 | 6 | 1036 | 1x | AutoGroup, AutoGroupData… |
+| DarkPoeta | 7 | 699 | 6 | 575 | 1x | _80219DarkPoetaFinale, _80218DarkPoetaEncore… |
+| ExpertPassionfor | 7 | 560 | 7 | 497 | 1x | _1976ExpertPassionforHandicrafting, _1980ExpertPassionforAlchemy… |
 | GameServer | 6 | 1694 | 2 | 362 | 5x | GameServer, GameServerError |
-| InGame | 6 | 611 | 6 | 545 | 1x | InGameShopDAO, InGameShopLogDAO… |
-| PvP | 6 | 713 | 8 | 1627 | 0x | PvPAttackRatioFunction, PvPArenaScore… |
-| BrigadeGeneral | 6 | 924 | 6 | 904 | 1x | BrigadeGeneralVashartiAI, BrigadeGeneralChantraAI… |
-| WorldMap | 5 | 1024 | 5 | 1063 | 1x | WorldMap, WorldMapInstanceFactory… |
-| KeyItem | 5 | 108 | 5 | 105 | 1x | _3220KeyItemHiddenQuest02, _4220KeyItemHiddenQuest02… |
-| ShieldGenerator | 5 | 377 | 5 | 353 | 1x | ShieldGeneratorNorthAI, ShieldGeneratorAI… |
-| GroupThe | 5 | 490 | 5 | 447 | 1x | _28407GroupTheGathering, _30303GroupTheFallofIsbariya… |
-| VisibleObject | 4 | 542 | 4 | 693 | 1x | VisibleObjectController, VisibleObjectTemplate… |
-| AbyssRank | 4 | 1033 | 5 | 1176 | 1x | AbyssRankEnum, AbyssRankUpdateType… |
-| PlayerSkill | 4 | 564 | 3 | 451 | 1x | PlayerSkillListDAO, PlayerSkillEntry… |
-| AtreianPassport | 4 | 551 | 3 | 449 | 1x | AtreianPassport, AtreianPassportService… |
-| BindPoint | 4 | 299 | 4 | 313 | 1x | BindPointData, BindPointTeleportService… |
+| InGame | 6 | 611 | 6 | 545 | 1x | InGameShopProperty, InGameShopLogDAO… |
+| PvP | 6 | 713 | 8 | 1627 | 0x | PvPArenaPlayerReward, PvPZone… |
+| BrigadeGeneral | 6 | 924 | 6 | 904 | 1x | BrigadeGeneralShebaAI, BrigadeGeneralTahabataAI… |
+| WorldMap | 5 | 1024 | 5 | 1063 | 1x | WorldMapInstanceFactory, WorldMap… |
+| KeyItem | 5 | 108 | 5 | 105 | 1x | _4220KeyItemHiddenQuest02, KeyItem… |
+| ShieldGenerator | 5 | 377 | 5 | 353 | 1x | ShieldGeneratorAI, ShieldGeneratorEastAI… |
+| GroupThe | 5 | 490 | 5 | 447 | 1x | _28407GroupTheGathering, _3937GroupTheDecorationsofSanctum… |
+| VisibleObject | 4 | 542 | 4 | 693 | 1x | VisibleObject, VisibleObjectSpawner… |
+| AbyssRank | 4 | 1033 | 5 | 1176 | 1x | AbyssRankEnum, AbyssRankDAO… |
+| PlayerSkill | 4 | 564 | 3 | 451 | 1x | PlayerSkillList, PlayerSkillEntry… |
+| AtreianPassport | 4 | 551 | 3 | 449 | 1x | AtreianPassportService, AtreianPassport… |
+| BindPoint | 4 | 299 | 4 | 313 | 1x | BindPointPosition, BindPointTemplate… |
 | ItemPurification | 4 | 272 | 3 | 220 | 1x | ItemPurificationTemplate, ItemPurificationData… |
-| PetDoping | 4 | 182 | 3 | 164 | 1x | PetDopingBag, PetDopingData… |
+| PetDoping | 4 | 182 | 3 | 164 | 1x | PetDopingBag, PetDopingEntry… |
 | PetFeed | 4 | 407 | 4 | 380 | 1x | PetFeedResult, PetFeedData… |
 | StaticData | 4 | 2827 | 2 | 471 | 6x | StaticData, StaticDataListener |
-| TradeList | 4 | 452 | 3 | 350 | 1x | TradeListData, TradeList… |
-| KillIn | 4 | 429 | 4 | 420 | 1x | KillInZoneData, KillInWorldData… |
-| ReportTo | 4 | 408 | 4 | 391 | 1x | ReportToData, ReportToManyData… |
+| TradeList | 4 | 452 | 3 | 350 | 1x | TradeListData, TradeListTemplate… |
+| KillIn | 4 | 429 | 4 | 420 | 1x | KillInZoneData, KillInWorld… |
+| ReportTo | 4 | 408 | 4 | 391 | 1x | ReportToMany, ReportToManyData… |
 | SmAccount | 4 | 110 | 0 | 0 | n/a | —(none) |
-| TheShugo | 4 | 901 | 4 | 815 | 1x | _3006TheShugoFugitive, TheShugoEmperorsVaultScoreWriter… |
-| PlayerTeam | 4 | 281 | 3 | 293 | 1x | PlayerTeamMember, PlayerTeamDistributionService… |
+| TheShugo | 4 | 901 | 4 | 815 | 1x | TheShugoEmperorsVaultScoreWriter, _3326TheShugoMenace… |
+| PlayerTeam | 4 | 281 | 3 | 293 | 1x | PlayerTeamCommandService, PlayerTeamDistributionService… |
 
 ## Orphan C# Stems (no Java counterpart — invented)
 
@@ -105,11 +105,7 @@ with low `java_classes` is the slop signature (re-port fresh per the plan).
 
 ## Missing High-Value Java (engine/services gaps)
 
-Java classes in ['ai', 'controllers', 'questEngine', 'services', 'skillengine'] with no exact-name C# file. Total: **27**.
+Java classes in ['ai', 'controllers', 'questEngine', 'services', 'skillengine'] with no exact-name C# file. Total: **0**.
 
 | area | missing classes |
 | --- | ---: |
-| services | 13 |
-| skillengine | 7 |
-| ai | 4 |
-| controllers | 3 |

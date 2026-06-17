@@ -38,6 +38,18 @@ JAVA_TYPE_RE = re.compile(
 )
 CAMEL_RE = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z][a-z0-9]*|[A-Z]+")
 
+# C# type declarations (top-level AND nested). Used ONLY to widen the recognized-name set for the
+# "missing Java" gap table: the faithful port keeps Java's one-file-many-types layout, so a Java
+# nested/secondary type (e.g. an inner enum/Runnable task) lands inside its parent C# file rather
+# than a same-name file. Indexing nested C# type names lets the gap table see those ports. This does
+# NOT touch the orphan/explosion slop heuristics (which key off file stems) — slop detection is unchanged.
+CS_TYPE_RE = re.compile(
+    r"^\s*(?:public\s+|internal\s+|private\s+|protected\s+|file\s+|static\s+|sealed\s+|abstract\s+|"
+    r"partial\s+|readonly\s+|new\s+)*"
+    r"(?:class|interface|enum|record(?:\s+struct)?|struct)\s+([A-Za-z_][A-Za-z0-9_]*)",
+    re.MULTILINE,
+)
+
 # Suffixes that are structural noise when deriving a stem for cluster matching.
 NOISE_TOKENS = {
     "Service", "Plan", "Bridge", "Adapter", "Composition", "Outcome",
@@ -97,9 +109,13 @@ def collect_cs() -> list[dict]:
             continue
         if path.name.endswith(".g.cs") or path.name == "AssemblyInfo.cs":
             continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        nested = set(CS_TYPE_RE.findall(text))
+        nested.discard(path.stem)
         files.append({"name": path.stem,
                       "path": str(path.relative_to(CS_ROOT)).replace("\\", "/"),
-                      "lines": line_count(path)})
+                      "lines": line_count(path),
+                      "nested": nested})
     return files
 
 
@@ -141,9 +157,16 @@ def main() -> None:
     exact = sorted(jn for jn in java_names if jn in cs_name_set)
 
     # Missing engine/service classes (high-value gaps).
+    # A Java type is "ported" if a C# type of the same name exists ANYWHERE — as a top-level file
+    # stem OR as a nested/secondary type inside another file — matched case-insensitively (the port
+    # PascalCases acronym names, e.g. Java AIState -> C# AiState). This recognizes the faithful
+    # one-file-many-types layout and case-rename convention so the gap table reflects only REAL gaps.
     GAP_AREAS = {"skillengine", "controllers", "ai", "questEngine", "services"}
+    cs_all_type_names = {f["name"].lower() for f in cs}
+    for f in cs:
+        cs_all_type_names.update(n.lower() for n in f["nested"])
     missing = [(jn, java[jn]) for jn in java_names
-               if java[jn]["area"] in GAP_AREAS and jn not in cs_name_set]
+               if java[jn]["area"] in GAP_AREAS and jn.lower() not in cs_all_type_names]
 
     # Orphan C# stems: stem matches no Java class stem at all.
     java_stems = {stem(jn) for jn in java_names}
