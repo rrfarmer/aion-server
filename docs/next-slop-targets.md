@@ -2,6 +2,37 @@
 
 Branch: feature/object-spine-bigbang. Faithful 1:1, all-green-or-revert.
 
+## GOLDEN SUITE 194 -> 195 (2026-06-17) — equippable seam REUSE: ENCHANT_INFO SUB-OBJECT writers (socketed ManaStone + GodStone)
+
+Extended the equippable-item/ItemInfoBlob seam from per-type-blob coverage to the FIRST populated-sub-object path. **Byte-exact
+on first capture, 0 fidelity bugs** (EnchantInfoBlobEntry.cs socketed-manastone + godstone branches + ManaStone/GodStone/
+ItemStone/Item all faithful 1:1). ONE NEW fixture **SM_INVENTORY_ADD_ITEM_SUBOBJECT.json** (3 cases, distinct objectIds
+268700201-203, no clobber), all on the proven 1H-SWORD base:
+- (a) **socketedManastones** — two ManaStones at slots 0 + 2 (distinct itemIds 167000001/167000002) via
+  `item.getItemStones().add(new ManaStone(objId,itemId,slot,NEW))`. The ENCHANT_INFO `createManastoneMap` -> slot->stone map;
+  the `Item.MAX_BASIC_STONES`(6) loop writes `stone.getItemId()` at populated slots, 0 elsewhere.
+- (b) **godStone** — `item.setGodStone(new GodStone(item,0,godStoneId,null,NEW))` -> `getGodStoneId()`==168000123.
+- (c) **manastonesAndGodStone** — BOTH branches on one item.
+
+**Why BOUNDED**: ManaStone ctor's only dep is `DataManager.ITEM_DATA.getItemTemplate(itemId)` (empty non-null ItemData -> null,
+tolerated; writer reads only ItemStone base scalars slot/itemId). GodStone ctor takes godstoneInfo DIRECTLY (null OK; writer
+reads only getItemId()) — DataManager-free. `setGodStone(non-null)` just assigns the field (DAO path is null-arg only). NEW
+bounded seam: empty ITEM_DATA (`DataManager.ITEM_DATA = new ItemData()` / `SetAutoProperty(...ItemDataDh, new ItemData())`).
+
+**REMAINING sub-object writers (next bounded item increments, no new substrate beyond noted):**
+- **CONDITIONING_INFO** — needs a `ChargeInfo` so `getConditioningInfo() != null`; the writer is `writeD(getChargePoints())`.
+  Likely the lightest next sub-object (one ChargeInfo construct).
+- **COMPOSITE_ITEM (fusion)** — BOUNDED-WITH-A-SECOND-TEMPLATE: `setFusionedItem(template,bonusStatsId=0,optionalSockets)` then
+  `HasFusionedItem()`; writer reads getFusionedItemId()/fusion-stones/optional-sockets/bonus-stats-id. Keep bonusStatsId 0
+  (bonusStatsId>0 derefs `fusionedItemTemplate.getStatBonusSetId()`). Fusion stones reuse the ManaStone seam.
+- **POLISH_INFO** — fires when `template.isCanPolish()` (a mask bit); writer is its own blob. Bounded (one mask bit).
+- **IdianStone (idian-polished, in ENCHANT_INFO)** — UNBOUNDED for the unit harness: ctor derefs
+  `getItemTemplate(itemId).getActions().getPolishAction()` AND `template.getIdianAction().getBurnDefend()` -> NREs on an empty
+  ItemData. Needs a populated ItemTemplate with IdianAction + PolishAction (a heavier ITEM_DATA seam). DEFER.
+
+After the bounded CONDITIONING/COMPOSITE/POLISH increments, the item/ItemInfoBlob vein is exhausted; NEXT major vein = the
+live-World increment (SM_PLAYER_SPAWN / SM_DIE), still blocked on the Java static-final World singleton.
+
 ## GOLDEN SUITE 193 -> 194 (2026-06-17) — equippable seam REUSE: SHIELD + WING + PLUME per-type blobs + TEMPERED-plume ENCHANT_INFO branch
 
 Reused the SAME equippable-item/ItemInfoBlob seam for the THREE remaining per-type blob writers (selected BEFORE isArmor()/

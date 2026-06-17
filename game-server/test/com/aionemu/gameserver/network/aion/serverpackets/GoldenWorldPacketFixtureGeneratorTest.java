@@ -23,6 +23,7 @@ import com.aionemu.gameserver.controllers.NpcController;
 import com.aionemu.gameserver.controllers.movement.MovementMask;
 import com.aionemu.gameserver.dataholders.DataManager;
 import com.aionemu.gameserver.dataholders.HouseData;
+import com.aionemu.gameserver.dataholders.ItemData;
 import com.aionemu.gameserver.dataholders.ItemRestrictionCleanupData;
 import com.aionemu.gameserver.dataholders.NpcSkillData;
 import com.aionemu.gameserver.dataholders.QuestsData;
@@ -39,6 +40,9 @@ import com.aionemu.gameserver.services.item.ItemPacketService.ItemUpdateType;
 import com.aionemu.gameserver.model.animations.TeleportAnimation;
 import com.aionemu.gameserver.model.gameobjects.AionObject;
 import com.aionemu.gameserver.model.gameobjects.Npc;
+import com.aionemu.gameserver.model.gameobjects.Persistable.PersistentState;
+import com.aionemu.gameserver.model.items.GodStone;
+import com.aionemu.gameserver.model.items.ManaStone;
 import com.aionemu.gameserver.model.templates.BoundRadius;
 import com.aionemu.gameserver.model.templates.QuestTemplate;
 import com.aionemu.gameserver.model.templates.npc.NpcTemplate;
@@ -960,6 +964,97 @@ public class GoldenWorldPacketFixtureGeneratorTest {
 		} catch (ReflectiveOperationException e) {
 			throw new RuntimeException("Failed to build tempered plume Item", e);
 		}
+	}
+
+	// ---- equippable item / ItemInfoBlob seam: ENCHANT_INFO SUB-OBJECT writers (socketed ManaStone / GodStone) ----
+	//
+	// Reuses the equippable-weapon seam (1H SWORD base -> SLOTS_WEAPON, already byte-validated) and POPULATES the
+	// ENCHANT_INFO sub-object slots that the bare-item seam left null/empty. Each is a DISTINCT case with a DISTINCT
+	// objectId in a NEW fixture file (never clobbers the weapon/armor/accessory/shield/wing/plume fixtures):
+	//   * socketedManastones: item.getItemStones() carries two ManaStones (slot 0 + slot 2, distinct itemIds).
+	//     EnchantInfoBlobEntry's createManastoneMap builds a slot->stone map; the Item.MAX_BASIC_STONES (6) loop writes
+	//     stone.getItemId() at the populated slots and 0 elsewhere. ManaStone(itemObjId, itemId, slot, NEW) ctor reads
+	//     DataManager.ITEM_DATA.getItemTemplate(itemId) (empty holder -> null, tolerated) -> only the ItemStone scalars
+	//     (slot/itemId) are read by the writer. No modifiers loaded.
+	//   * godStone: item.setGodStone(new GodStone(item, 0, godStoneId, null, NEW)) -> getGodStoneId() == godStoneId.
+	//     The GodStone ctor takes godstoneInfo directly (null OK; the writer only reads getItemId()), DataManager-free.
+	//   * manastonesAndGodStone: BOTH branches populated on one item (two manastones + a godstone).
+	// All other ENCHANT_INFO/SLOTS_WEAPON/PREMIUM_OPTION/GENERAL_INFO reads are identical to the weapon seam (no
+	// idian/dye/tempering/fusion). Bounded DataManager: ITEM_DATA seeded EMPTY (ManaStone ctor tolerance) + the existing
+	// ITEM_CLEAN_UP seam. Mirrored 1:1 on the C# asserter side. Java is the oracle.
+	private static final int EQ_MS_OBJECT_ID = 268700201; // weapon w/ socketed manastones (distinct)
+	private static final int EQ_GS_OBJECT_ID = 268700202; // weapon w/ godstone (distinct)
+	private static final int EQ_MSGS_OBJECT_ID = 268700203; // weapon w/ manastones + godstone (distinct)
+	private static final int EQ_SUBOBJ_TEMPLATE_ID = 100000855; // same 1H sword template id as the weapon seam
+	private static final int EQ_SUBOBJ_MASK = 0x2C4D;
+	private static final int EQ_SUBOBJ_DESC_L10N = 350456;
+	private static final int EQ_MS_SLOT0_ITEM_ID = 167000001; // manastone item id at socket slot 0
+	private static final int EQ_MS_SLOT2_ITEM_ID = 167000002; // manastone item id at socket slot 2
+	private static final int EQ_GS_ITEM_ID = 168000123; // godstone item id
+
+	@Test
+	public void generateGoldenInventoryAddItemSubObjectFixture() throws IOException {
+		Path outDir = repoRoot().resolve("parity-artifacts/golden/packets");
+		Files.createDirectories(outDir);
+
+		installItemCleanupSeam(); // GENERAL_INFO reads DataManager.ITEM_CLEAN_UP.hasAccountOrLegionWhStorabilityDisabled
+		installItemDataSeam(); // ManaStone ctor reads DataManager.ITEM_DATA.getItemTemplate(itemId) (empty -> null)
+
+		List<Case> cases = new ArrayList<>();
+		// (a) Weapon with two socketed manastones (slots 0 and 2).
+		cases.add(subObjectCase("invAddEquippableWeaponSocketedManastones", EQ_MS_OBJECT_ID, true, false));
+		// (b) Weapon with a godstone.
+		cases.add(subObjectCase("invAddEquippableWeaponGodStone", EQ_GS_OBJECT_ID, false, true));
+		// (c) Weapon with both manastones and a godstone.
+		cases.add(subObjectCase("invAddEquippableWeaponManastonesAndGodStone", EQ_MSGS_OBJECT_ID, true, true));
+
+		writeFixture(outDir.resolve("SM_INVENTORY_ADD_ITEM_SUBOBJECT.json"), "SM_INVENTORY_ADD_ITEM", cases);
+	}
+
+	private static Case subObjectCase(String name, int objectId, boolean withManastones, boolean withGodStone) {
+		Item item = buildSubObjectWeapon(objectId, withManastones, withGodStone);
+		List<Item> items = new ArrayList<>();
+		items.add(item);
+		String inputs = "{\"objectId\":" + objectId + ",\"itemId\":" + EQ_SUBOBJ_TEMPLATE_ID + ",\"mask\":" + EQ_SUBOBJ_MASK
+			+ ",\"desc\":" + EQ_SUBOBJ_DESC_L10N + ",\"itemCount\":1,\"itemCreator\":\"Smith\",\"itemGroup\":\"SWORD\""
+			+ ",\"withManastones\":" + withManastones + ",\"manastoneSlot0ItemId\":" + EQ_MS_SLOT0_ITEM_ID
+			+ ",\"manastoneSlot2ItemId\":" + EQ_MS_SLOT2_ITEM_ID + ",\"withGodStone\":" + withGodStone
+			+ ",\"godStoneItemId\":" + EQ_GS_ITEM_ID + ",\"addType\":\"BUY\"}";
+		return new Case(name, inputs, capture(new SM_INVENTORY_ADD_ITEM(items, null, ItemAddType.BUY), null));
+	}
+
+	/**
+	 * Build a 1H-sword Item (same base as buildEquippableWeapon) and POPULATE the ENCHANT_INFO sub-objects: optional
+	 * socketed manastones at slots 0/2 (via getItemStones().add(new ManaStone(...))) and/or a godstone (via
+	 * setGodStone(new GodStone(...))). The ManaStone ctor reads DataManager.ITEM_DATA.getItemTemplate(itemId) (empty
+	 * holder -> null, tolerated); the GodStone ctor takes godstoneInfo directly (null OK). Mirrored 1:1 on the C# side.
+	 */
+	private static Item buildSubObjectWeapon(int objectId, boolean withManastones, boolean withGodStone) {
+		try {
+			ItemTemplate template = new ItemTemplate();
+			setField(template, "itemId", EQ_SUBOBJ_TEMPLATE_ID);
+			setField(template, "mask", EQ_SUBOBJ_MASK);
+			setField(template, "description", EQ_SUBOBJ_DESC_L10N);
+			setField(template, "itemGroup", ItemGroup.SWORD);
+			setField(template, "maxTuneCount", 0); // canTune() == false -> isIdentified() == true (deterministic)
+			Item item = new Item(objectId, template);
+			item.setItemCount(1L);
+			item.setItemCreator("Smith");
+			if (withManastones) {
+				item.getItemStones().add(new ManaStone(objectId, EQ_MS_SLOT0_ITEM_ID, 0, PersistentState.NEW));
+				item.getItemStones().add(new ManaStone(objectId, EQ_MS_SLOT2_ITEM_ID, 2, PersistentState.NEW));
+			}
+			if (withGodStone)
+				item.setGodStone(new GodStone(item, 0, EQ_GS_ITEM_ID, null, PersistentState.NEW));
+			return item;
+		} catch (ReflectiveOperationException e) {
+			throw new RuntimeException("Failed to build sub-object weapon Item", e);
+		}
+	}
+
+	/** Seed DataManager.ITEM_DATA with an empty (non-null) ItemData so the ManaStone ctor's getItemTemplate(itemId) returns null. */
+	private void installItemDataSeam() {
+		DataManager.ITEM_DATA = new ItemData();
 	}
 
 	private static Case equippableVariantCase(String name, int objectId, int itemId, int mask, int desc, String creator,
