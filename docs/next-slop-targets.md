@@ -99,10 +99,31 @@ but plain `Schedule(()=>{...}, longMillis)` void-lambda binds the `Schedule(Acti
 → `Interlocked.Exchange`; `compareAndSet(exp,upd)` → `Interlocked.CompareExchange(ref,upd,exp)==exp`. Confirms the
 pattern: heavy-by-line-count ≠ heavy-by-subsystem.
 
-**Remaining 3 = the heavy-defers:** ShugoImperialTomb (1329), StonespearReach (925), EternalBastion (867).
-Recommend **EternalBastion (867)** next — smallest remaining; verify its ScoreWriter/InstanceScore subtype + any new
-SM strings the same way (grep PascalCase symbols + check base classes) before porting; it may likewise be a
-false-heavy-defer if its scoreboard pillar is pre-ported.
+## INSTANCE-HANDLER PORT — batch 6 (2026-06-16) — +1 → 35/37
+
+Ported **EternalBastion (867 lines)** → `EternalBastionInstance.cs`, `[InstanceID(300540000)]`, commit da0d6ff53.
+STRICT 1:1. **No bounded dep needed** — ANOTHER false-heavy-defer. This handler DOES have a scoreboard (NormalScore +
+EternalBastionScoreWriter + InstanceScore base), but ALL of it was pre-ported: `NormalScore` (full points/rank/AP +
+4 reward item/count pairs), `EternalBastionScoreWriter : InstanceScoreWriter<NormalScore>`, `InstanceScore.IsRewarded/
+Set+GetInstanceProgressionType`, `InstanceProgressionType` (PREPARING/START_PROGRESS/END_PROGRESS), all 15
+`STR_MSG_IDLDF5b_TD_*` SM strings (MainWave_01-06/AddWave_01-03/Notice_02/04/06), `STR_MSG_GET_SCORE(l10n,points)`,
+`SM_INSTANCE_SCORE(mapId, writer, time)`, every service (`AbyssPointsService.AddAp`, `ItemService.AddItem`,
+`PlayerReviveService.Revive`, `TeleportService.MoveToInstanceExit`+`TeleportTo`), `Rnd.NextBoolean`,
+`Point3D(x,y,z)`+GetX/Y/Z, `instance.ForEachDoor/ForEachNpc/ForEachPlayer/GetPlayersInside`,
+`door.SetOpen`, `npc.GetObjectTemplate().GetL10n()`, `Spawn(...).GetSpawn().SetWalkerId(w)`. Pure mechanical 1:1.
+**Batch-6 gotchas:** ItemService ns = `Services.Items`, PlayerReviveService ns = `Services.Players` (recurring traps);
+`log.LogInformation(...)` needs `using Microsoft.Extensions.Logging;` (base `log` is ILogger, the named-placeholder
+overload is an extension method — no prior instance handler had used it so the using was not transitively present);
+`ScheduleAtFixedRateTask` has only Runnable(interface — can't `new`) + `Func<CT,ValueTask>` overloads, so use
+`_=>{SpawnAssaultWave();return ValueTask.CompletedTask;}`+two `TimeSpan` args; AtomicInteger reads inside `if`
+conditions → `Volatile.Read(ref field)`, `.addAndGet(-2)`→`Interlocked.Add(ref,-2)`, `.decrementAndGet`/`.incrementAndGet`
+→`Interlocked.Decrement/Increment`; `AtomicBoolean.compareAndSet(false,true)`→`Interlocked.CompareExchange(ref
+isRaceSet,1,0)==0`. Confirms again: heavy-by-line-count ≠ heavy-by-subsystem.
+
+**Remaining 2 = the heavy-defers:** ShugoImperialTomb (1329), StonespearReach (925).
+Recommend **StonespearReach (925)** next — smaller remaining; verify its ScoreWriter/InstanceScore subtype + any new
+SM strings the same way (grep PascalCase symbols + check base classes) before porting; given ALL of batch 4/5/6 were
+false-heavy-defers (volume only, deps pre-present), it is likely the same.
 
 ## CAPSTONE FIDELITY RE-SURVEY — 2026-06-16 (commit e3e1b1184)
 
