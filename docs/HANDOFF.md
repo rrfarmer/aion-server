@@ -2,9 +2,21 @@
 
 The single rolling state doc. Updated **in place** every Unit of Work — keep it lean: detail only the most recent round, collapse older batches to one-liners (git history holds the rest), but **never drop a TODO/backlog/blocker**. Must be usable with zero prior conversation. Read after the canonical docs in `csharp-port.md`.
 
-Last updated: **2026-06-17** (object-spine big-bang + slop retirement COMPLETE; content 100%; deep-analysis parity backlog written)
+Last updated: **2026-06-17** (final-pass audit: backlog A–G done + chat-command content done; **instance handlers found 37/78 — ~40 unported**; docs/memory corrected)
 
-## ⏯️ RESUME HERE (2026-06-17 — current truth; the 2026-06-14 section below is SUPERSEDED history)
+## ⏯️ RESUME HERE (2026-06-17 FINAL-PASS — current truth; supersedes all blocks below)
+
+**STATUS: structural port + backlog A–G complete; chat-command content complete; the one remaining autonomous gap is the unported instance handlers.** Branch `feature/object-spine-bigbang` @ `a274c1843`. Build **0** (all 4 projects + tests) · golden **221/221 byte-exact** vs Java mvn oracle · GameServer suite **500/0** · Commons 55/55 · Login 122/122 · Chat 31/31 · bootstrap **9/9** · `check_fidelity` **0/0** · **0 fidelity bugs across the entire effort.**
+
+- **Backlog A–G DONE:** A (every `SM_*` golden'd or writeImpl-audited 1:1) · B (all `NotSupportedException` sites verified faithful guards) · C (config framework 100% faithful — `[Property]`/`ConfigurableProcessor`/transformers across game+commons+login+chat, `.properties` overrides honored) · D (SpawnsData admin-save + SM_PTRANSFER_CONTROL ported) · E (slop scaffold deleted; 27/27 "missing" classes false-positive) · G (audit tools index `data/handlers`; 0 hollow DataManager holders).
+- **Content DONE:** quests 1035/1035 · AI 462/462 · zone 3/3 · console 35/35 · player 16/16 · admin 103/103 (the last tail — Delete/SpawnNpc/SpawnUpdate/Send/Configure/Grant/Reload/Sys/Debug/Info/FixPath + playercommands Decompose/Preview — ported this session).
+- **⚠ REMAINING GAP (found this final pass): instance handlers 37/78.** The dir has **78** `.java`, not 37 (stale miscount). 37 PvE dungeons ported; **~40 PvP/arena/dredgion/barracks handlers UNPORTED** (37 `@InstanceID` leaves + `BasicPvpInstance`/`CrucibleInstance`/`DredgionInstance` bases + `AbstractInnerUpperAbyssInstance`/`PvPArenaInstance` abstract). Substrate exists (GeneralInstanceHandler/InstanceScore/PvpInstanceScore/PvpInstancePlayerReward/InstanceScoreWriter) → portable in **layered batches (bases→leaves)** per the proven instance/AI/quest recipe. **This is the next unit of work — Full-Parity-Backlog §H.**
+- **(F) [USER-GATED] live-client enter-world test** — needs the user's Aion 4.8 client; 3-server stack boots. The only non-autonomous step.
+- **Commit discipline:** branch `feature/object-spine-bigbang`, author `rrfarmer <ryanfarmer@mac.com>`, no AI co-author; all-green-or-revert per change.
+
+---
+
+## ⏯️ RESUME HERE (2026-06-17 — earlier truth; SUPERSEDED by the FINAL-PASS block above; the 2026-06-14 section below is older history)
 
 **STATUS: the object-spine big-bang + reworked-slop retirement program is COMPLETE.** Branch `feature/object-spine-bigbang` @ `f8a08c00c`. Build **0** (all 4 projects + tests) · golden **196/196 byte-exact** vs the Java mvn oracle · full suite **459/0** · bootstrap **9/9** · full DB-backed boot validated end-to-end.
 

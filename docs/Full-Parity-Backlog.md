@@ -6,7 +6,7 @@ Branch `feature/object-spine-bigbang` @ `5c3b84ffa`+batch14 · build 0 · golden
 
 ## Standing reality (so the backlog isn't misread)
 
-- **De-slop + structural port is DONE.** 126→0 reworked duplicate packets, `GameServerPacket` dropped, object store unified to single `World._allObjects`, all reworked `*Summary`/`*Table`/WorldNpc/Kisk/Rift/Housing slop retired, `GameServerConnection` god-class gone, guardrail baseline empty (0/0). ~92% of Java types (2269/2456) have an exact-name C# file; content scripts 100% (quests 1035 · AI 462 · instance 37 · zone 3 · chat).
+- **De-slop + structural port is DONE.** 126→0 reworked duplicate packets, `GameServerPacket` dropped, object store unified to single `World._allObjects`, all reworked `*Summary`/`*Table`/WorldNpc/Kisk/Rift/Housing slop retired, `GameServerConnection` god-class gone, guardrail baseline empty (0/0). ~92% of Java types (2269/2456) have an exact-name C# file. Content scripts: quests 1035/1035 · AI 462/462 · zone 3/3 · console 35/35 · player 16/16 · admin 103/103 — **all complete EXCEPT instance handlers: 37/78** (corrected 2026-06-17; the prior "instance 37" was a stale miscount — the Java instance dir has 78, not 37). **~40 PvP/arena/dredgion/barracks instance handlers remain unported — see §H below.**
 - **A faithful Java TODO is parity, not a gap.** Of 277 `TODO`/`FIXME` markers in C# src, the large majority are verbatim copies of TODOs in the Java source (e.g. "most retail npcs lose 364 hate. TODO: find formula"). The doctrine says mirror them; reproducing them *is* 1:1. Only the **C#-specific** subset (config framework, "port the rest") are real gaps — see §C.
 - **The only thing that cannot be done here is the live-client test (§F)** — it needs the user's Aion 4.8 client. Everything else in this backlog is workable now.
 
@@ -224,9 +224,26 @@ Reconcile `datamanager-data-placeholders` (noted QUEST_DATA + 4 holders once wir
 
 ---
 
+## H. Instance handlers — 37/78 (~40 UNPORTED) — found in 2026-06-17 final-pass audit
+
+The instance-handler set was long recorded as "37/37 complete," but a Java-vs-C# basename set-diff shows the Java `game-server/data/handlers/instance/` dir has **78 `.java`, not 37**. 37 PvE dungeon handlers are ported & green (Haramel … ShugoImperialTomb). **~40 remain unported:** 37 `@InstanceID` leaf handlers + 3 intermediate bases (`BasicPvpInstance`, `CrucibleInstance`, `DredgionInstance`) + 2 abstract bases (`AbstractInnerUpperAbyssInstance`, `PvPArenaInstance`). The set is dominated by PvP/competitive content:
+
+- **Dredgion:** Chantra / Baranath / Terath (+ `DredgionInstance` base)
+- **Crucible:** Crucible / CrucibleChallenge / EmpyreanCrucible (+ `CrucibleInstance` base)
+- **Arena:** ArenaOfChaos / Discipline / Glory / Harmony + Chaos/Discipline/Harmony TrainingGrounds (+ `PvPArenaInstance`, `BasicPvpInstance` bases)
+- **Barracks/Chamber:** Krotan/Kysis/Miren Barracks + Legions{Krotan,Kysis,Miren}Barracks + Krotan/Kysis/Miren Chamber + Left/RightWingChamber (+ `AbstractInnerUpperAbyssInstance` base)
+- **Other:** Kamar / IronWall / SulfurTreeNest / SteelRake(+Cabine) / Asteria / Roah / Esoterrace / IdgelDome / AbyssalSplinter / UnstableSplinterpath / TheHexway / EngulfedOphidanBridge / TheShugoEmperorsVault
+
+**Why this hid so long (tooling blind spot to fix):** `structural_audit.py`'s "Missing High-Value Java" scan is scoped to `['ai','controllers','questEngine','services','skillengine']` only — it indexes `data/handlers/` Java as *faithful-when-a-C#-file-exists* (the E2 fix) but never reports `data/handlers/` Java that has **no** C# counterpart. So unported content handlers are invisible to the audit. **Reliable detection = per-handler-dir basename set-diff:** `comm -23 <(find game-server/data/handlers/<area> -name '*.java' -exec basename {} .java \;|sort -u) <(find dotnetConversion/src/Aion.GameServer/Handlers/<Area> -name '*.cs' -exec basename {} .cs \;|sort -u)`. (Small tooling item: extend the audit to flag missing `data/handlers` counterparts so this can't recur.)
+
+**Portable now (substrate exists):** `GeneralInstanceHandler` base + `[InstanceID]`/`InstanceHandlerClassListener` registration, `InstanceScore`/`PvpInstanceScore`/`InstanceScoreType`, `PvpInstancePlayerReward`, `InstanceScoreWriter`/`PvpInstanceScoreWriter` are all present. Port recipe = same as the 37 done (extend base, `[InstanceID(n)]`, override `On*`/`Handle*`, auto-register), in **layered batches**: port the intermediate/abstract bases first (`BasicPvpInstance`→`PvPArenaInstance`/`DredgionInstance`/`CrucibleInstance`/`AbstractInnerUpperAbyssInstance`) to unblock the leaves, then the leaf handlers ~6-10/batch with all-green-or-revert. Watch for any PvP-score/reward or Dredgion/Arena-specific writer subtype that needs porting first (depth-first).
+
+---
+
 ## Recommended order (no client; skip nothing)
 
-1. **A1 integration harness + golden the ~103 live-object packets** — the main provable-parity vein; build the harness once, then grind packets (also re-confirms every live-object writer byte-exact, likely surfacing any remaining latent bugs as the 3 already found did).
+0. **H — port the ~40 unported instance handlers** (layered: bases → leaves; substrate exists). The single largest remaining content-parity gap, surfaced 2026-06-17.
+1. **A1 integration harness + golden the ~103 live-object packets** — the main provable-parity vein; build the harness once, then grind packets (also re-confirms every live-object writer byte-exact, likely surfacing any remaining latent bugs as the 3 already found did). *(A1 itself is now DONE — every SM_* golden'd or audited; see A1 status below.)*
 2. ~~B triage~~ **DONE (2026-06-17): all 14 NotSupported throw sites verified FAITHFUL GUARDS vs Java — 0 real gaps, 0 bugs, breadcrumbed.**
 3. **C1 config framework** — systemic; restores `.properties` override fidelity (a hard contract).
 4. **G verify holders; D editor-save TODOs; ~~E hygiene + audit-tool~~ E1/E2 DONE (2026-06-17): slop-scaffold deleted + audit tools index data/handlers, guardrail clean; E3 missing-class triage remains** — small, interleave.

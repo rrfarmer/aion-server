@@ -29,10 +29,10 @@ Do not read `PHASE-*-PROGRESS.md` or `PHASE-*-COMPLETION.md` during normal work 
 | 4 Chat server | COMPLETE | Protocol, channels, bridge, mixed-mode validated. |
 | 5 Game infrastructure | COMPLETE | Socket, bridges, bootstrap, ID factory, static data, char-select. |
 | 6 Game core | **COMPLETE — 2026-06-17** | Object-spine big-bang fully landed: build 0; slop eliminated (`check_fidelity` 0/0, was 363/6); object store unified to single `World._allObjects`; 126→0 reworked duplicate packets (`GameServerPacket` dropped); all `*Summary`/`*Table`/WorldNpc/Kisk/Rift/Housing slop retired; `GameServerConnection` god-class gone; engine pillars faithful at ~92% exact-name parity. Java-oracle golden: 196 cases byte-exact, **0 fidelity bugs ever** (3 latent runtime bugs found+fixed during de-slop). Full DB-backed boot validated. |
-| 7 Dynamic handlers | **COMPLETE — 2026-06-17** | All `data/handlers` content ported: quests 1035/1035, AI 462, instance 37/37, zone 3/3, chat commands done. |
-| 8 Replacement readiness | **THE FRONTIER** | Remaining work = runtime-parity VALIDATION + a few small real gaps — enumerated in **Full-Parity-Backlog.md**: golden the ~103 live-object packets (integration harness), triage/port real `NotImplemented` gaps (Legion warehouse), wire the config framework (`.properties` override fidelity), hygiene; then the **user-gated live-client enter-world test** (needs the user's Aion 4.8 client). |
+| 7 Dynamic handlers | **MOSTLY COMPLETE — 2026-06-17** | `data/handlers` content ported: quests 1035/1035, AI 462/462, zone 3/3, console 35/35, player 16/16, admin 103/103. **EXCEPTION (found 2026-06-17 final-pass audit): instance handlers 37/78 — ~40 PvP/arena/dredgion/barracks handlers UNPORTED** (the long-standing "37/37" was a stale Java-count miscount; the dir has 78). Substrate exists; portable in layered batches — see Full-Parity-Backlog §H. |
+| 8 Replacement readiness | **THE FRONTIER** | Remaining work: **port the ~40 unported instance handlers (Full-Parity-Backlog §H)**; runtime-parity VALIDATION (A1 golden — DONE, all SM_* golden'd/audited; config framework — DONE; B/E/G — DONE); then the **user-gated live-client enter-world test** (needs the user's Aion 4.8 client). |
 
-Phases 0–7 are done; treat them complete unless new evidence shows a mismatch. **The live backlog is `Full-Parity-Backlog.md`.**
+Phases 0–6 are done. Phase 7 is complete except the ~40 unported instance handlers (Full-Parity-Backlog §H). **The live backlog is `Full-Parity-Backlog.md`.**
 
 ## Hard contracts (never change during the port)
 
