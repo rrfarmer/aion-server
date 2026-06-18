@@ -14,6 +14,8 @@ Last updated: **2026-06-17** (final-pass audit: backlog A–G done + chat-comman
 - **(F) [USER-GATED] live-client enter-world test** — needs the user's Aion 4.8 client; 3-server stack boots. The only non-autonomous step.
 - **Commit discipline:** branch `feature/object-spine-bigbang`, author `rrfarmer <ryanfarmer@mac.com>`, no AI co-author; all-green-or-revert per change.
 
+**2026-06-18 — instance 78/78 ported (was 37) + cross-tree deep-discovery done.** Instance handlers fully ported (5 layered batches `2a40c1bab`→`6b25b98f6` + `Teleportto` `b9c908e25`); content parity now truly complete across all areas (quest 1035/ai 462/instance 78/zone 3/console 35/player 16/admin 103). A full Java→C# type set-diff (§I in Full-Parity-Backlog) found **no missing large gameplay subsystem**; the one real functional gap is **I1: the GS↔LS↔CS bridge admin/ops inbound flows** — the GS-side `LoginServer.cs` inline dispatch handles only register/auth/char-count/ping, so inbound ban/kick/hdd-macban/premium/ptransfer/control-response are unhandled, and the LS-side HDD/MAC-ban subsystem is absent. Next autonomous unit = I1 (handle those inbound opcodes 1:1 + port the LS ban subsystem). I2 = document the accepted idiomatic-infra divergences (script-compiler/Netty/JAXB/executor/logback — replaced idiomatically, not gaps). I3 = verify L10n completeness, close Chance/Polyline2D/transformers. HEAD `b9c908e25`, build 0, golden 221/221, GameServer 500/500.
+
 ---
 
 ## ⏯️ RESUME HERE (2026-06-17 — earlier truth; SUPERSEDED by the FINAL-PASS block above; the 2026-06-14 section below is older history)
