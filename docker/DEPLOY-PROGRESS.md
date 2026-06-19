@@ -60,8 +60,9 @@ docker/
 - [x] Recon (projects, SQL, config, ports, data footprint)
 - [x] `.env.example` (user config surface)
 - [x] `mysql/init/00-init.sh` (auto DB create + schema/seed load)
-- [ ] Dockerfiles (LS / GS / CS) — multi-stage .NET 10 build + runtime
-- [ ] entrypoints (env → `my{ls,gs,cs}.properties` override)
+- [x] Dockerfiles (LS / GS / CS) — multi-stage .NET 10 build (`sdk:10.0`) + `runtime:10.0`; build context = repo root; GS copies game-server/{config,data,cache}, LS/CS copy their config tree
+- [x] entrypoints (env → `my{ls,gs,cs}.properties` override; DB url→mysql, GS login→loginserver:9014/chat→chatserver:9021, client connect_address→SERVER_HOST)
+- [x] `.dockerignore` (exclude bin/obj/.git/target)
 - [ ] `docker-compose.yml` (mysql + 3 servers, healthchecks, depends_on)
 - [ ] `deploy.sh` / `deploy.ps1` (build + up) and `start`/`stop`
 - [ ] End-to-end verify: build images, `up`, confirm DB init + servers boot + GS↔LS bridge
