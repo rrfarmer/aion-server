@@ -14,10 +14,14 @@ services:
       - ../game-server/sql:/sql/game:ro
       - ../chat-server/sql:/sql/chat:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-aion}"]
+      # "healthy" must mean first-boot init is DONE: query over TCP (-h127.0.0.1, which the
+      # socket-only init phase rejects) for a row in the seeded gameservers table (loaded last).
+      # Otherwise the servers connect mid-init, fail, and crash-restart until init finishes.
+      test: ["CMD", "mysql", "-h127.0.0.1", "-uroot", "-p${DB_PASSWORD:-aion}", "-e", "SELECT 1 FROM aion_ls.gameservers LIMIT 1"]
       interval: 5s
       timeout: 5s
-      retries: 30
+      retries: 40
+      start_period: 60s
     restart: unless-stopped
 
   loginserver:

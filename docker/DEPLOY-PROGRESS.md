@@ -65,7 +65,13 @@ docker/
 - [x] `.dockerignore` (exclude bin/obj/.git/target)
 - [x] `docker-compose.yml` (mysql:8.4 + 3 servers; healthcheck; depends_on healthy; ports from .env; internal MySQL, no host clash with the 3307 dev DB)
 - [x] `deploy.sh` / `deploy.ps1` (auto-create .env, build + up) and `stop.sh` / `stop.ps1`
-- [ ] End-to-end verify: build images, `up`, confirm DB init + servers boot + GS↔LS bridge
+- [x] End-to-end verify (on this machine): all 3 images build; `up` → MySQL auto-init creates
+      aion_ls(9)/aion_gs(63)/aion_cs(1) tables + gameservers seed; **all 3 servers boot with 0
+      restarts**; GS↔LS bridge authenticates ("1 game servers registered"); listeners on
+      2106/7777/10241. Fixed during verify: init resilience (optional `update.sql` migrations no
+      longer abort the run) + MySQL healthcheck means "init done over TCP" (no startup crash-race).
+
+**PART 2 COMPLETE.**
 
 ## Usage (for the README later)
 ```

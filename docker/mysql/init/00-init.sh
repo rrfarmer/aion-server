@@ -8,7 +8,9 @@
 #   /sql/login  -> login-server/sql
 #   /sql/game   -> game-server/sql
 #   /sql/chat   -> chat-server/sql
-set -euo pipefail
+#
+# NOTE: no `set -e` — a failing migration must NOT abort the whole init (see load_optional).
+set -uo pipefail
 
 mysql_exec() { mysql --protocol=socket -uroot -p"${MYSQL_ROOT_PASSWORD}" "$@"; }
 
@@ -19,26 +21,38 @@ CREATE DATABASE IF NOT EXISTS aion_gs CHARACTER SET utf8mb4 COLLATE utf8mb4_gene
 CREATE DATABASE IF NOT EXISTS aion_cs CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 SQL
 
-load() { # load <db> <file>  (skips missing files gracefully)
+# Full, current schema + seed — these are authoritative for a fresh install and must load.
+load_strict() {
   local db="$1" file="$2"
   if [ -f "$file" ]; then
     echo "[aion-init] loading $file -> $db"
-    mysql_exec "$db" < "$file"
+    mysql_exec "$db" < "$file" || echo "[aion-init] !! ERROR loading $file -> $db"
   else
     echo "[aion-init] (skip, not found: $file)"
   fi
 }
 
-# Login server
-load aion_ls /sql/login/aion_ls.sql
-load aion_ls /sql/login/update.sql
-load aion_ls /sql/login/seed_gameservers.sql
+# Historical migration scripts. They target OLDER databases and do not apply cleanly to the
+# full current schema (e.g. DROP a table the fresh schema never created) — tolerate per-statement
+# errors with --force and never abort the init.
+load_optional() {
+  local db="$1" file="$2"
+  [ -f "$file" ] || return 0
+  echo "[aion-init] (optional) applying $file -> $db"
+  mysql_exec --force "$db" < "$file" 2>/dev/null \
+    || echo "[aion-init] (optional $file had errors — expected on a fresh install, ignored)"
+}
 
-# Game server
-load aion_gs /sql/game/aion_gs.sql
-load aion_gs /sql/game/update.sql
+# Full schemas (authoritative)
+load_strict aion_ls /sql/login/aion_ls.sql
+load_strict aion_gs /sql/game/aion_gs.sql
+load_strict aion_cs /sql/chat/aion_cs.sql
 
-# Chat server
-load aion_cs /sql/chat/aion_cs.sql
+# Seed: register the game server so the login server will authorize it
+load_strict aion_ls /sql/login/seed_gameservers.sql
+
+# Optional historical migrations (non-fatal)
+load_optional aion_ls /sql/login/update.sql
+load_optional aion_gs /sql/game/update.sql
 
 echo "[aion-init] done. Databases ready."
