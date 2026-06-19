@@ -37,3 +37,4 @@ login-server/target/
 /dotnetConversion/tools/Aion.PortParity/obj
 /dotnetConversion/tests/Aion.Commons.Tests/obj
 /dotnetConversion/src/Aion.Commons/bin
+docker/.env

@@ -1,0 +1,83 @@
+name: aion
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: aion-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-aion}
+      MYSQL_ROOT_HOST: "%"            # allow the server containers to connect as root
+    volumes:
+      - aion-mysql-data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro   # runs 00-init.sh on first boot
+      - ../login-server/sql:/sql/login:ro
+      - ../game-server/sql:/sql/game:ro
+      - ../chat-server/sql:/sql/chat:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-aion}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  loginserver:
+    build:
+      context: ..
+      dockerfile: docker/loginserver/Dockerfile
+    container_name: aion-loginserver
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-aion}
+    ports:
+      - "${LOGIN_CLIENT_PORT:-2106}:2106"
+    restart: unless-stopped
+
+  gameserver:
+    build:
+      context: ..
+      dockerfile: docker/gameserver/Dockerfile
+    container_name: aion-gameserver
+    depends_on:
+      mysql:
+        condition: service_healthy
+      loginserver:
+        condition: service_started
+    environment:
+      DB_HOST: mysql
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-aion}
+      SERVER_HOST: ${SERVER_HOST:-127.0.0.1}
+      GAME_CLIENT_PORT: ${GAME_CLIENT_PORT:-7777}
+      LOGIN_ADDRESS: loginserver:9014
+      CHAT_ADDRESS: chatserver:9021
+      RESPAWN_TIME_MULTIPLIER: ${RESPAWN_TIME_MULTIPLIER:-1.0}
+    ports:
+      - "${GAME_CLIENT_PORT:-7777}:7777"
+    restart: unless-stopped
+
+  chatserver:
+    build:
+      context: ..
+      dockerfile: docker/chatserver/Dockerfile
+    container_name: aion-chatserver
+    depends_on:
+      mysql:
+        condition: service_healthy
+      loginserver:
+        condition: service_started
+    environment:
+      DB_HOST: mysql
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-aion}
+      SERVER_HOST: ${SERVER_HOST:-127.0.0.1}
+      CHAT_CLIENT_PORT: ${CHAT_CLIENT_PORT:-10241}
+    ports:
+      - "${CHAT_CLIENT_PORT:-10241}:10241"
+    restart: unless-stopped
+
+volumes:
+  aion-mysql-data:

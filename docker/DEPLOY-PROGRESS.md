@@ -63,6 +63,15 @@ docker/
 - [x] Dockerfiles (LS / GS / CS) — multi-stage .NET 10 build (`sdk:10.0`) + `runtime:10.0`; build context = repo root; GS copies game-server/{config,data,cache}, LS/CS copy their config tree
 - [x] entrypoints (env → `my{ls,gs,cs}.properties` override; DB url→mysql, GS login→loginserver:9014/chat→chatserver:9021, client connect_address→SERVER_HOST)
 - [x] `.dockerignore` (exclude bin/obj/.git/target)
-- [ ] `docker-compose.yml` (mysql + 3 servers, healthchecks, depends_on)
-- [ ] `deploy.sh` / `deploy.ps1` (build + up) and `start`/`stop`
+- [x] `docker-compose.yml` (mysql:8.4 + 3 servers; healthcheck; depends_on healthy; ports from .env; internal MySQL, no host clash with the 3307 dev DB)
+- [x] `deploy.sh` / `deploy.ps1` (auto-create .env, build + up) and `stop.sh` / `stop.ps1`
 - [ ] End-to-end verify: build images, `up`, confirm DB init + servers boot + GS↔LS bridge
+
+## Usage (for the README later)
+```
+# Linux / macOS / WSL
+./docker/deploy.sh
+# Windows
+powershell -ExecutionPolicy Bypass -File docker\deploy.ps1
+```
+First run creates `docker/.env` — set `SERVER_HOST` (players' address), re-run. That's it.
